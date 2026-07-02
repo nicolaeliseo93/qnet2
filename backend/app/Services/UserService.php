@@ -1,0 +1,233 @@
+<?php
+
+namespace App\Services;
+
+use App\DataObjects\Shared\ForSelectQuery;
+use App\DataObjects\Shared\ForSelectResult;
+use App\DataObjects\Users\CreateUserData;
+use App\DataObjects\Users\ProfileData;
+use App\DataObjects\Users\UpdateUserData;
+use App\Models\User;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+
+class UserService
+{
+    public function __construct(
+        private readonly RoleAssignmentGuard $guard,
+        private readonly ProfileWriter $profileWriter,
+    ) {}
+
+    /**
+     * The privileged role that grants every ability via Gate::before. Kept as a
+     * back-compatible alias of the guard's constant: existing callers
+     * (RoleService, RolesTableDefinition, tests) reference UserService::PRIVILEGED_ROLE.
+     */
+    public const string PRIVILEGED_ROLE = RoleAssignmentGuard::PRIVILEGED_ROLE;
+
+    /**
+     * Role names the given actor is allowed to assign. Delegates to the shared
+     * RoleAssignmentGuard (single source of truth) — kept public because the user
+     * FormRequests and UsersTableDefinition call it.
+     *
+     * @return array<int, string>
+     */
+    public function assignableRoleNames(User $actor): array
+    {
+        return $this->guard->assignableRoleNames($actor);
+    }
+
+    /**
+     * Assignable roles as an id => name map (same authority as
+     * assignableRoleNames). The user FormRequests call it to validate submitted
+     * role IDS and resolve them to the names the service/guard operate on.
+     *
+     * @return array<int, string>
+     */
+    public function assignableRoleMap(User $actor): array
+    {
+        return $this->guard->assignableRoleMap($actor);
+    }
+
+    /**
+     * Create a new user, optionally assigning roles.
+     *
+     * The password is hashed automatically by the User model's `hashed` cast.
+     * Role sync and user creation run in a single transaction so a failed role
+     * assignment never leaves a half-provisioned user behind.
+     *
+     * The roles are re-filtered against $actor's assignable set (final authority
+     * against privilege escalation, even if the FormRequest is bypassed).
+     *
+     * When $profile is provided, the personal-data card and its contacts/
+     * addresses are persisted in the SAME transaction, so any failure rolls the
+     * user back too (no half-provisioned user — ADR 0012). A null $profile keeps
+     * the previous account-only behavior (backward compatible).
+     */
+    public function create(User $actor, CreateUserData $data, ?ProfileData $profile = null): User
+    {
+        if ($profile === null) {
+            // The StoreUserRequest guarantees a profile (it is the only source of
+            // the derived name); a null here is a programming error / bypass.
+            throw new InvalidArgumentException('A personal-data profile is required to create a user (its name is derived from the card).');
+        }
+
+        $user = DB::transaction(function () use ($actor, $data, $profile): User {
+            $attributes = $data->attributes();
+            // `users.name` is NOT NULL but the authoritative value is derived by
+            // the shared ProfileWriter from the card (single derivation point —
+            // ADR 0013). Seed only a non-null placeholder here to satisfy the
+            // constraint at INSERT; writeProfile() below sets the real name.
+            $attributes['name'] = '';
+
+            $user = User::create($attributes);
+
+            if ($data->hasRoles()) {
+                $user->syncRoles($this->guard->authorizedRoleNames($actor, $data->roles));
+            }
+
+            $this->writeProfile($user, $profile);
+
+            return $user;
+        });
+
+        return $user->load(['personalData.contacts', 'personalData.addresses']);
+    }
+
+    /**
+     * Update an existing user's attributes and, when provided, their roles and
+     * password. Only keys present in $data are touched, so partial (PATCH)
+     * updates leave untouched fields as-is. The password is hashed by the
+     * model cast.
+     *
+     * The roles are re-filtered against $actor's assignable set (final authority
+     * against privilege escalation, even if the FormRequest is bypassed).
+     *
+     * When $profile is provided, the personal-data card and its contacts/
+     * addresses are upserted/synced in the SAME transaction (ADR 0012). A null
+     * $profile leaves the card untouched (backward compatible).
+     */
+    public function update(User $actor, User $user, UpdateUserData $data, ?ProfileData $profile = null): User
+    {
+        $user = DB::transaction(function () use ($actor, $user, $data, $profile): User {
+            $attributes = $data->submittedAttributes();
+
+            if ($attributes !== []) {
+                $user->update($attributes);
+            }
+
+            if ($data->hasRoles()) {
+                $roles = $this->guard->authorizedRoleNames($actor, $data->roles);
+
+                $this->guard->guardLastSuperAdminRoleRemoval($user, $roles);
+
+                $user->syncRoles($roles);
+            }
+
+            $this->writeProfile($user, $profile);
+
+            return $user;
+        });
+
+        return $user->load(['personalData.contacts', 'personalData.addresses']);
+    }
+
+    /**
+     * Persist the nested personal-data profile through the shared ProfileWriter
+     * (single source of truth for the card upsert + authoritative contacts/
+     * addresses sync + users.name derivation), inside the caller's transaction.
+     * No-op when no profile was submitted (ADR 0013).
+     */
+    private function writeProfile(User $user, ?ProfileData $profile): void
+    {
+        $this->profileWriter->write($user, $profile);
+    }
+
+    /**
+     * Delete the given user, guarding against removing the last super-admin.
+     */
+    public function delete(User $user): void
+    {
+        $this->guard->guardLastSuperAdminDeletion($user);
+
+        $user->delete();
+    }
+
+    /**
+     * Searched + paginated + hydrated user list for the for-select endpoint
+     * (GET /api/users/for-select). Projects only the select fields and eager-
+     * loads the optional avatar relation to avoid N+1 when the resource emits
+     * `avatar_url`. Business logic for the for-select convention lives here, not
+     * in the controller (ADR 0011).
+     *
+     * `total` reflects only the searchable population; the hydrated `ids[]` are
+     * appended deduplicated AFTER the page, bypass the search filter, and do NOT
+     * inflate the total (edit-mode hydration).
+     */
+    public function forSelect(ForSelectQuery $query): ForSelectResult
+    {
+        $base = User::query()
+            ->select(['id', 'name', 'email'])
+            ->with('avatar');
+
+        if ($query->hasSearch()) {
+            $term = '%'.$query->search.'%';
+            $base->where(function ($q) use ($term): void {
+                $q->where('name', 'like', $term)
+                    ->orWhere('email', 'like', $term);
+            });
+        }
+
+        $total = (clone $base)->count();
+
+        /** @var Collection<int, User> $page */
+        $page = $base->orderBy('name')
+            ->orderBy('id')
+            ->offset($query->offset)
+            ->limit($query->limit)
+            ->get();
+
+        $items = $this->appendHydratedIds($page, $query);
+
+        return new ForSelectResult(
+            items: $items,
+            total: $total,
+            offset: $query->offset,
+            limit: $query->limit,
+        );
+    }
+
+    /**
+     * Append the explicitly-requested `ids[]` (edit-mode hydration) that are not
+     * already on the page, deduplicated. They bypass search and the same id/name/
+     * email projection applies. Total is unaffected.
+     *
+     * @param  Collection<int, User>  $page
+     * @return Collection<int, User>
+     */
+    private function appendHydratedIds(Collection $page, ForSelectQuery $query): Collection
+    {
+        if (! $query->hasIds()) {
+            return $page;
+        }
+
+        $presentIds = $page->pluck('id')->all();
+        $missingIds = array_values(array_diff($query->ids, $presentIds));
+
+        if ($missingIds === []) {
+            return $page;
+        }
+
+        /** @var Collection<int, User> $hydrated */
+        $hydrated = User::query()
+            ->select(['id', 'name', 'email'])
+            ->with('avatar')
+            ->whereIn('id', $missingIds)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+
+        return $page->concat($hydrated);
+    }
+}

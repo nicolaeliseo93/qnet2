@@ -1,0 +1,151 @@
+<?php
+
+namespace App\Http\Controllers\Table;
+
+use App\Http\Controllers\Abstract\BaseApiController;
+use App\Http\Requests\Table\TablePreferencesRequest;
+use App\Http\Requests\Table\TableRowsRequest;
+use App\Http\Resources\TableRowResource;
+use App\Models\User;
+use App\Services\TablePreferenceService;
+use App\Services\TableService;
+use App\Tables\TableDefinition;
+use App\Tables\TableRegistry;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Throwable;
+
+/**
+ * Generic, domain-driven Table endpoints (AG Grid SSRM).
+ *
+ * One pair of endpoints serves every domain. Thin controller: no business
+ * logic, no queries. Both endpoints resolve the TableDefinition for the
+ * {domain} route segment (unknown → 404), enforce the definition's viewAny
+ * server-side (deny → 403) and delegate to TableService.
+ *
+ * @see TableService
+ * @see docs/api/0002-generic-tables.md
+ */
+class TableController extends BaseApiController
+{
+    public function __construct(
+        private readonly TableRegistry $registry,
+        private readonly TableService $service,
+        private readonly TablePreferenceService $preferences,
+    ) {}
+
+    /**
+     * GET /api/tables/{domain}/columns — resolved table schema for the actor,
+     * with their saved column preferences (order/width/visibility) merged in.
+     */
+    public function columns(Request $request, string $domain): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->authorizeViewAny($definition->authorizeViewAny($actor));
+
+            return $this->ok($this->resolvedConfig($definition, $actor));
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * POST /api/tables/{domain}/preferences — upsert the current user's column
+     * layout for {domain}. Self-scoped (always auth user; the client never sends
+     * a user_id). Returns the freshly merged config. See ADR-0004.
+     */
+    public function savePreferences(TablePreferencesRequest $request, string $domain): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->authorizeViewAny($definition->authorizeViewAny($actor));
+
+            $this->preferences->save($definition, $actor, $request->columnsState());
+
+            return $this->ok($this->resolvedConfig($definition, $actor), 'Preferences saved');
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * DELETE /api/tables/{domain}/preferences — reset the current user's layout
+     * for {domain} to the PHP default (explicit user action; nothing else clears
+     * preferences). See ADR-0004.
+     */
+    public function resetPreferences(Request $request, string $domain): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->authorizeViewAny($definition->authorizeViewAny($actor));
+
+            $this->preferences->reset($definition, $actor);
+
+            return $this->noContent();
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * Resolve the definition's default config and merge the actor's preferences.
+     *
+     * @return array<string, mixed>
+     */
+    private function resolvedConfig(TableDefinition $definition, User $actor): array
+    {
+        return $this->preferences->applyTo(
+            $definition->resolveConfig($actor),
+            $definition,
+            $actor,
+        );
+    }
+
+    /**
+     * POST /api/tables/{domain}/rows — SSRM page of rows + total (paginated).
+     */
+    public function rows(TableRowsRequest $request, string $domain): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->authorizeViewAny($definition->authorizeViewAny($actor));
+
+            $result = $this->service->rows($definition, $actor, $request->validated());
+
+            return $this->paginatedResponse(
+                items: TableRowResource::collection($result->items),
+                total: $result->total,
+                offset: $result->offset,
+                limit: $result->limit,
+            );
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * Single enforcement point: deny → AuthorizationException → 403.
+     *
+     * @throws AuthorizationException
+     */
+    private function authorizeViewAny(bool $allowed): void
+    {
+        if (! $allowed) {
+            throw new AuthorizationException;
+        }
+    }
+}

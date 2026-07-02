@@ -1,0 +1,67 @@
+import type { PersonalDataPayload } from '@/features/personal-data/drafts'
+import type { PersonalDataCard } from '@/features/personal-data/types'
+
+export interface User {
+  id: number
+  /** Display name derived server-side from the personal-data card (read-only). */
+  name: string
+  email: string
+  /** Preferred UI language (e.g. "en", "it"), sourced from the backend. */
+  locale: string
+  /**
+   * Role memberships as {id, name} (UserResource shape). Role-based checks go
+   * through the abilities map (see AbilityMap.roles), not this field.
+   */
+  roles: { id: number; name: string }[]
+  /** Absolute URL to the authenticated avatar download endpoint, or null. */
+  avatar_url: string | null
+  /**
+   * The user's personal-data card (registry + contacts + addresses), or null
+   * when none has been created yet. Same shape as the Users module (ADR 0013).
+   */
+  personal_data?: PersonalDataCard | null
+  created_at: string | null
+}
+
+export interface LoginPayload {
+  email: string
+  password: string
+}
+
+export interface UpdateProfilePayload {
+  locale: string
+  /** Nested registry card + contacts + addresses (ADR 0013). */
+  personal_data?: PersonalDataPayload
+}
+
+export interface ChangePasswordPayload {
+  current_password: string
+  password: string
+  password_confirmation: string
+}
+
+export interface ForgotPasswordPayload {
+  email: string
+}
+
+export interface ResetPasswordPayload {
+  token: string
+  email: string
+  password: string
+  password_confirmation: string
+}
+
+export interface LoginResult {
+  token: string
+  token_type: string
+  user: User
+}
+
+/**
+ * Ability map returned by GET /auth/me/abilities.
+ * `permissions` maps every defined permission name to whether the user has it.
+ */
+export interface AbilityMap {
+  roles: string[]
+  permissions: Record<string, boolean>
+}

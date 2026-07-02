@@ -1,0 +1,132 @@
+<?php
+
+namespace App\Http\Controllers\Geo;
+
+use App\Http\Controllers\Abstract\BaseApiController;
+use App\Http\Requests\Geo\ListCitiesRequest;
+use App\Http\Requests\Geo\ListProvincesRequest;
+use App\Http\Requests\Geo\ListStatesRequest;
+use App\Http\Resources\CityResource;
+use App\Http\Resources\CountryResource;
+use App\Http\Resources\ProvinceResource;
+use App\Http\Resources\StateResource;
+use App\Models\City;
+use App\Models\Country;
+use App\Models\Province;
+use App\Models\State;
+use Illuminate\Http\JsonResponse;
+use Throwable;
+
+/**
+ * Read-only geo reference endpoints powering the address country → state → city
+ * cascade selects (ADR 0010).
+ *
+ * Deliberate architectural exception: the controller queries Eloquent directly
+ * instead of going through a Service. There is NO business logic here — only a
+ * bounded reference lookup (ordered list, required parent filter, optional name
+ * search, hard result cap) — so a GeoService would be an empty pass-through. The
+ * geo models are read-only reference data (Country / State / City): no Policy,
+ * no Factory-by-default, no activity log, and no per-resource permission. The
+ * only gate is auth:sanctum (plus a throttle on the route group).
+ *
+ * The required parent filter (country_id on states, state_id on provinces,
+ * province_id/state_id on cities) is enforced by the FormRequest → a missing/
+ * unknown parent is a 422, never an unbounded query. Each endpoint selects only
+ * the columns its Resource exposes, avoiding N+1 and over-fetching.
+ */
+class GeoController extends BaseApiController
+{
+    /**
+     * Maximum number of cities returned by a single search, to keep the
+     * reference lookup bounded regardless of the filter.
+     */
+    private const int CITY_RESULT_LIMIT = 50;
+
+    /**
+     * GET /api/countries — every country, ordered by name, for the first select.
+     */
+    public function countries(): JsonResponse
+    {
+        try {
+            $countries = Country::query()
+                ->select(['id', 'name', 'iso2'])
+                ->orderBy('name')
+                ->get();
+
+            return $this->ok(CountryResource::collection($countries));
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * GET /api/states?country_id={id} — states of a country, ordered by name.
+     */
+    public function states(ListStatesRequest $request): JsonResponse
+    {
+        try {
+            $states = State::query()
+                ->select(['id', 'name', 'country_id'])
+                ->where('country_id', $request->countryId())
+                ->orderBy('name')
+                ->get();
+
+            return $this->ok(StateResource::collection($states));
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * GET /api/provinces?state_id={id} — provinces of a state, ordered by name.
+     */
+    public function provinces(ListProvincesRequest $request): JsonResponse
+    {
+        try {
+            $provinces = Province::query()
+                ->select(['id', 'name', 'state_id'])
+                ->where('state_id', $request->stateId())
+                ->orderBy('name')
+                ->get();
+
+            return $this->ok(ProvinceResource::collection($provinces));
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * GET /api/cities?province_id={id}|state_id={id}&search={q} — cities of a
+     * province (preferred) or, failing that, of a state, ordered by name,
+     * optionally filtered by a name LIKE, capped at CITY_RESULT_LIMIT.
+     */
+    public function cities(ListCitiesRequest $request): JsonResponse
+    {
+        try {
+            $search = $request->search();
+            $provinceId = $request->provinceId();
+
+            $cities = City::query()
+                ->select(['id', 'name', 'state_id', 'province_id'])
+                ->when(
+                    $provinceId !== null,
+                    fn ($query) => $query->where('province_id', $provinceId),
+                    fn ($query) => $query->where('state_id', $request->stateId()),
+                )
+                ->when(
+                    $search !== null,
+                    // Escape the LIKE metacharacters (\ % _) so a search term
+                    // containing them matches literally instead of acting as a
+                    // wildcard; the trailing % stays the intended prefix match.
+                    fn ($query) => $query->where('name', 'like', addcslashes($search, '\\%_').'%')
+                )
+                ->orderBy('name')
+                ->limit(self::CITY_RESULT_LIMIT)
+                ->get();
+
+            return $this->ok(CityResource::collection($cities));
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+}

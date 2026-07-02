@@ -1,0 +1,120 @@
+<?php
+
+namespace App\Http\Requests\Table;
+
+use App\Http\Controllers\Abstract\BaseApiController;
+use App\Tables\TableDefinition;
+use App\Tables\TableRegistry;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
+
+/**
+ * Validates the AG Grid SSRM payload for POST /api/tables/{domain}/rows.
+ *
+ * The domain is unknown at boot, so the TableDefinition is resolved here from
+ * the {domain} route segment. An UNKNOWN domain surfaces as 404 BEFORE
+ * validation runs (TableRegistry::resolve throws ModelNotFoundException), never
+ * a misleading 422. The whitelist (sortable/filterable column ids) is sourced
+ * from the resolved definition — identical checks as the old users-specific
+ * request, just definition-driven.
+ *
+ * Authorization is intentionally NOT handled here (it stays in the controller
+ * via the definition's viewAny). This request only guarantees the payload is
+ * well-formed AND that every colId / filter key is within the server-side
+ * whitelist. Any out-of-whitelist key yields a 422 and never reaches the query.
+ */
+class TableRowsRequest extends FormRequest
+{
+    private ?TableDefinition $resolvedDefinition = null;
+
+    public function authorize(): bool
+    {
+        // Authorization handled in the controller via the definition's viewAny.
+        return true;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function rules(): array
+    {
+        $maxLimit = BaseApiController::MAX_LIMIT;
+        $definition = $this->definition();
+        $sortable = $definition->sortableColumnIds();
+
+        return [
+            'startRow' => ['required', 'integer', 'min:0'],
+            'endRow' => ['required', 'integer', 'max:'.($this->intInput('startRow') + $maxLimit)],
+
+            'sortModel' => ['sometimes', 'array'],
+            'sortModel.*' => ['array'],
+            'sortModel.*.colId' => ['required_with:sortModel.*', 'string', Rule::in($sortable)],
+            'sortModel.*.sort' => ['required_with:sortModel.*', 'string', Rule::in(['asc', 'desc'])],
+
+            'filterModel' => ['sometimes', 'array'],
+            // Whitelist the filter keys: every key must be a filterable column.
+            'filterModel.*' => ['array'],
+        ];
+    }
+
+    /**
+     * Cross-field / structural checks that Laravel rules can't express cleanly:
+     *  - endRow strictly greater than startRow;
+     *  - block size (endRow - startRow) within MAX_LIMIT;
+     *  - every filterModel key within the filterable whitelist.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $startRow = $this->intInput('startRow');
+            $endRow = $this->intInput('endRow');
+
+            if ($endRow <= $startRow) {
+                $validator->errors()->add('endRow', 'endRow must be greater than startRow.');
+            }
+
+            if (($endRow - $startRow) > BaseApiController::MAX_LIMIT) {
+                $validator->errors()->add(
+                    'endRow',
+                    'The requested block exceeds the maximum of '.BaseApiController::MAX_LIMIT.' rows.'
+                );
+            }
+
+            $filterModel = $this->input('filterModel');
+
+            if (is_array($filterModel)) {
+                $filterable = $this->definition()->filterableColumnIds();
+
+                foreach (array_keys($filterModel) as $columnId) {
+                    if (! in_array($columnId, $filterable, true)) {
+                        $validator->errors()->add(
+                            "filterModel.{$columnId}",
+                            "Filtering is not allowed on column [{$columnId}]."
+                        );
+                    }
+                }
+            }
+        });
+    }
+
+    private function intInput(string $key): int
+    {
+        return (int) $this->input($key, 0);
+    }
+
+    /**
+     * Resolve the TableDefinition for the route's {domain}. Unknown domain →
+     * ModelNotFoundException → 404 (before any validation runs). Resolved once
+     * per request.
+     */
+    private function definition(): TableDefinition
+    {
+        if ($this->resolvedDefinition === null) {
+            $domain = (string) $this->route('domain');
+            $this->resolvedDefinition = app(TableRegistry::class)->resolve($domain);
+        }
+
+        return $this->resolvedDefinition;
+    }
+}

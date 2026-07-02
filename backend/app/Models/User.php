@@ -1,0 +1,115 @@
+<?php
+
+namespace App\Models;
+
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasPersonalData;
+use App\Models\Concerns\LogsModelActivity;
+use App\Notifications\ResetPasswordNotification;
+use Database\Factories\UserFactory;
+use Illuminate\Contracts\Translation\HasLocalePreference;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\HasApiTokens;
+use Spatie\Activitylog\Traits\CausesActivity;
+use Spatie\Permission\Traits\HasRoles;
+
+#[Fillable(['name', 'email', 'password', 'locale'])]
+#[Hidden(['password', 'remember_token'])]
+class User extends Authenticatable implements HasLocalePreference
+{
+    /** @use HasFactory<UserFactory> */
+    use CausesActivity, HasApiTokens, HasAttachments, HasFactory, HasPersonalData, HasRoles, LogsModelActivity, Notifiable;
+
+    /**
+     * Attachment collection that holds the user's avatar. A user keeps at most
+     * one avatar: uploading a new one replaces the previous (see AvatarService).
+     */
+    public const string AVATAR_COLLECTION = 'avatar';
+
+    /**
+     * The user's current avatar (latest file in the avatar collection), if any.
+     * Eager-loadable to avoid N+1 when exposing avatars.
+     */
+    public function avatar(): MorphOne
+    {
+        return $this->morphOne(Attachment::class, 'attachable')
+            ->where('collection', self::AVATAR_COLLECTION)
+            ->latestOfMany();
+    }
+
+    /**
+     * Limit the query to users that own a personal-data card — i.e. the users
+     * that take part in the personal-data flow. The card is mandatory for these
+     * users, so this is the canonical way to target them (e.g. in seeders),
+     * instead of matching a hardcoded email.
+     */
+    #[Scope]
+    protected function withPersonalData(Builder $query): void
+    {
+        $query->whereHas('personalData');
+    }
+
+    /**
+     * The current avatar as an inline `data:` URI (base64), or null when unset.
+     *
+     * Embedding the image in the API resource lets the frontend render it
+     * directly in an <img>, without a second authenticated request to the
+     * private attachment download endpoint. Returns null if the file row is
+     * missing on disk so a broken reference never breaks the response.
+     */
+    public function avatarDataUri(): ?string
+    {
+        $avatar = $this->avatar;
+
+        if (! $avatar) {
+            return null;
+        }
+
+        $disk = Storage::disk($avatar->disk);
+
+        if (! $disk->exists($avatar->path)) {
+            return null;
+        }
+
+        return 'data:'.$avatar->mime_type.';base64,'.base64_encode($disk->get($avatar->path));
+    }
+
+    /**
+     * The user's preferred locale, used to localize every notification sent to
+     * them (Laravel switches locale automatically via HasLocalePreference).
+     */
+    public function preferredLocale(): ?string
+    {
+        return $this->locale;
+    }
+
+    /**
+     * Send the password reset link using the custom localized notification.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
+    }
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
+    }
+}

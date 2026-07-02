@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  TEMPLATE SPEC — contract-first, spec-driven.
+  Copia questo file in docs/specs/<NNN>-<nome-feature>.xml e compilalo.
+  La spec è POSSEDUTA DA TE: il modello propone, tu validi. È un file versionato.
+  Regole d'oro:
+    - <scope><out> esplicito → uccide il drift/scope-creep.
+    - <data_contract> congelato PRIMA del dispatch → backend e frontend lavorano
+      in parallelo contro la stessa shape senza comunicare.
+    - <acceptance_criteria> VERIFICABILI, mappati 1:1 su test → li esegue il verifier.
+  Dominio/naming in italiano; non mescolare le lingue dentro un identificatore.
+-->
+<spec id="NNN-nome-feature" status="draft" owner="tu" date="YYYY-MM-DD">
+
+  <goal>
+    <!-- 1-2 frasi: cosa deve fare la feature e per chi. Niente come, solo cosa. -->
+  </goal>
+
+  <context>
+    <!-- Vincoli rilevanti, decisioni già prese, file/moduli esistenti da rispettare.
+         Nomi reali (tabelle, model, componenti) verificati, non ipotizzati. -->
+  </context>
+
+  <scope>
+    <in>
+      <!-- Cosa è incluso. Una voce per riga. -->
+      <item></item>
+    </in>
+    <out>
+      <!-- Cosa è ESPLICITAMENTE fuori scope. Compila sempre: è la difesa anti-drift. -->
+      <item></item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Congela qui la shape. Backend implementa, frontend consuma, identica. -->
+    <endpoint method="GET|POST|PUT|DELETE" path="/api/...">
+      <request>
+        <!-- parametri / body. Tipi espliciti. -->
+      </request>
+      <response status="200">
+        <!-- envelope di progetto: { success, message, data } — shape esatta del data -->
+      </response>
+      <errors>
+        <!-- es. 403 senza permesso, 404 risorsa altrui, 422 validazione -->
+      </errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- Ogni criterio DEVE essere osservabile e mappare 1:1 su un test (Pest/Vitest).
+         Formato AC-NNN: dato/quando/allora. Il verifier li esegue uno per uno. -->
+    <criterion id="AC-001"><!-- Dato ... quando ... allora ... (verificabile) --></criterion>
+    <criterion id="AC-002"></criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <!-- Vincoli tecnici non negoziabili: librerie consentite, perf, sicurezza,
+         layering, authz server-side, nessuna nuova dipendenza senza autorizzazione. -->
+  </constraints>
+
+</spec>
