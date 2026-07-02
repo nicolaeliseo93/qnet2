@@ -43,8 +43,14 @@ it('exposes order and width on every column in the default config', function () 
 
     foreach (columnsConfig($this) as $column) {
         expect($column)->toHaveKeys(['id', 'visible', 'width', 'order'])
-            ->and($column['order'])->toBeInt()
-            ->and($column['width'])->toBeNull(); // no explicit default width for users
+            ->and($column['order'])->toBeInt();
+        // Columns default to no explicit width; the avatar column is the one
+        // exception (a narrow fixed default declared in the table definition).
+        if ($column['id'] === 'avatar_url') {
+            expect($column['width'])->toBe(56);
+        } else {
+            expect($column['width'])->toBeNull();
+        }
     }
 
     // Default order follows declaration order.

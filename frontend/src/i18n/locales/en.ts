@@ -25,6 +25,13 @@ export const en = {
     users: 'Users',
     roles: 'Roles',
     settings: 'Settings',
+    toggleSidebar: 'Toggle sidebar',
+  },
+  theme: {
+    toggle: 'Toggle theme',
+    light: 'Light',
+    dark: 'Dark',
+    system: 'System',
   },
   actions: {
     view: 'View',

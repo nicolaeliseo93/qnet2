@@ -21,7 +21,6 @@ import { resolveIcon } from '@/features/navigation/icon-map'
 import type { NavigationItem } from '@/features/navigation/types'
 
 export function NavMain({ items }: { items: NavigationItem[] }) {
-  const { t } = useTranslation()
   const topLevel = items.filter((item) => item.type !== 'section')
   const sections = items.filter((item) => item.type === 'section')
 
@@ -38,16 +37,27 @@ export function NavMain({ items }: { items: NavigationItem[] }) {
       )}
 
       {sections.map((section) => (
-        <SidebarGroup key={section.key}>
-          <SidebarGroupLabel>{t(section.label)}</SidebarGroupLabel>
-          <SidebarMenu>
-            {section.children.map((child) => (
-              <NavNode key={child.key} item={child} />
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+        <NavSection key={section.key} section={section} />
       ))}
     </>
+  )
+}
+
+// A section is a static labeled group: its children render as flat siblings.
+// A child that is itself a parent (has children) is rendered collapsible by
+// NavNode, so both behaviors coexist under the same section.
+function NavSection({ section }: { section: NavigationItem }) {
+  const { t } = useTranslation()
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{t(section.label)}</SidebarGroupLabel>
+      <SidebarMenu>
+        {section.children.map((child) => (
+          <NavNode key={child.key} item={child} />
+        ))}
+      </SidebarMenu>
+    </SidebarGroup>
   )
 }
 

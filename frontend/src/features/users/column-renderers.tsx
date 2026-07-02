@@ -31,7 +31,7 @@ function AvatarCell({ value, data }: ICellRendererParams) {
 
   return (
     <div className="flex h-full items-center">
-      <UserAvatar name={name} src={src} className="size-8" />
+      <UserAvatar name={name} src={src} size="sm" />
     </div>
   )
 }

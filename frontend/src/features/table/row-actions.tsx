@@ -11,10 +11,23 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   resolveActionIcon,
   type ActionIconMap,
 } from '@/features/table/action-icon-map'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
+
+/**
+ * Up to this many actions render as inline icon buttons; more than this and they
+ * all collapse into the overflow (three-dots) menu, keeping the actions column
+ * narrow regardless of how many actions a row exposes.
+ */
+const INLINE_ACTION_LIMIT = 3
 
 /** Fired when the user triggers an action on a row. */
 export type RowActionHandler = (
@@ -82,13 +95,49 @@ function RowActions({
     onAction(action, effectiveRow)
   }
 
+  // Few actions: render them inline as compact icon buttons (label in tooltip).
+  if (available.length <= INLINE_ACTION_LIMIT) {
+    return (
+      <div className="flex h-full items-center justify-end gap-0.5">
+        <TooltipProvider>
+          {available.map((action) => {
+            const Icon = resolveActionIcon(action.icon, iconMap)
+            const label = t(action.label)
+            return (
+              <Tooltip key={action.key}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={label}
+                    disabled={busy}
+                    onClick={() => handleSelect(action)}
+                    className={
+                      action.type === 'danger'
+                        ? 'text-destructive hover:text-destructive'
+                        : undefined
+                    }
+                  >
+                    <Icon aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </TooltipProvider>
+      </div>
+    )
+  }
+
+  // Many actions: collapse everything into the overflow (three-dots) menu.
   return (
     <div className="flex h-full items-center justify-end">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon-xs"
             aria-label={t('table.rowActions')}
             disabled={busy}
           >

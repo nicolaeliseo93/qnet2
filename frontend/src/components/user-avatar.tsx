@@ -17,13 +17,13 @@ interface UserAvatarProps {
  * it propagates everywhere; do not re-compose Avatar/AvatarImage/AvatarFallback
  * ad hoc elsewhere.
  */
-export function UserAvatar({ name, src, className }: UserAvatarProps) {
+export function UserAvatar({ name, src, size, className }: UserAvatarProps) {
   const color = avatarColor(name)
   return (
     // Keying by image-vs-fallback remounts the Radix root when the avatar is
     // removed, resetting its internal image-loading status so the initials
     // fallback shows immediately instead of leaving a blank circle.
-    <Avatar key={src ? 'image' : 'fallback'} className={className}>
+    <Avatar key={src ? 'image' : 'fallback'} size={size} className={className}>
       {src && <AvatarImage src={src} alt={name} />}
       <AvatarFallback
         className="font-medium"

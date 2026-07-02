@@ -23,6 +23,13 @@ export const it: TranslationResources = {
     users: 'Utenti',
     roles: 'Ruoli',
     settings: 'Impostazioni',
+    toggleSidebar: 'Apri/chiudi sidebar',
+  },
+  theme: {
+    toggle: 'Cambia tema',
+    light: 'Chiaro',
+    dark: 'Scuro',
+    system: 'Sistema',
   },
   actions: {
     view: 'Visualizza',

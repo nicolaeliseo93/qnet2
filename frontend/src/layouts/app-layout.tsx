@@ -1,29 +1,71 @@
 import { Outlet } from 'react-router-dom'
+import { ChevronLeft } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { AppSidebar } from '@/components/app-sidebar'
 import { AppPageTitle } from '@/routes/breadcrumbs'
+import { NavUserHeader } from '@/components/nav-user-header'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificationBell } from '@/features/notifications/notification-bell'
+import { useAuth } from '@/features/auth/use-auth'
 import { Separator } from '@/components/ui/separator'
 import {
   SidebarInset,
   SidebarProvider,
-  SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar'
+import { cn } from '@/lib/utils'
 
 export function AppLayout() {
+  const { user } = useAuth()
+
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-          <AppPageTitle />
-          <NotificationBell />
+        <header className="relative flex h-12 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
+          <SidebarSeamToggle />
+          <AppPageTitle className="pl-1 text-sm font-semibold" />
+          <div className="ml-auto flex items-center gap-0.5">
+            <NotificationBell />
+            <ThemeToggle />
+            <Separator
+              orientation="vertical"
+              className="mx-1 bg-sidebar-border data-[orientation=vertical]:h-5"
+            />
+            {user && <NavUserHeader user={user} />}
+          </div>
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4">
           <Outlet />
         </main>
       </SidebarInset>
     </SidebarProvider>
+  )
+}
+
+/**
+ * Circular collapse control that straddles the seam between the sidebar and the
+ * header. Anchored to the header's left edge (which always tracks the sidebar's
+ * right edge, even when collapsed) and lifted above the fixed sidebar via z-20.
+ */
+function SidebarSeamToggle() {
+  const { t } = useTranslation()
+  const { toggleSidebar, state } = useSidebar()
+
+  return (
+    <button
+      type="button"
+      onClick={toggleSidebar}
+      aria-label={t('navigation.toggleSidebar')}
+      className="absolute top-1/2 left-3 z-20 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-md transition-colors hover:bg-sidebar-accent md:left-0 md:-translate-x-1/2"
+    >
+      <ChevronLeft
+        className={cn(
+          'size-3.5 transition-transform duration-200',
+          state === 'collapsed' && 'rotate-180',
+        )}
+      />
+      <span className="sr-only">{t('navigation.toggleSidebar')}</span>
+    </button>
   )
 }

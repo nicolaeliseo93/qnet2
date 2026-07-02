@@ -136,6 +136,8 @@ class UsersTableDefinition extends AbstractTableDefinition
                 'sortable' => false,
                 'filterable' => false,
                 'filterType' => null,
+                // Narrow, fixed default: the cell only holds a small avatar.
+                'width' => 56,
             ],
             [
                 'id' => 'name',

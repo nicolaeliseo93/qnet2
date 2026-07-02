@@ -99,7 +99,7 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative ml-auto"
+          className="relative size-7 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg]:size-3.5"
           aria-label={t('notifications.open')}
         >
           <Bell />

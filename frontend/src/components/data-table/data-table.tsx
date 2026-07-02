@@ -24,8 +24,46 @@ import type { ColumnType, TableColumn } from '@/features/table/types'
 // Register enterprise modules + license once, at module load.
 setupAgGrid()
 
+/**
+ * Compact grid theme aligned to the app's design tokens. Colors reference the
+ * shared CSS variables (`--background`, `--foreground`, `--border`, `--muted*`)
+ * so the grid tracks the app palette and dark mode automatically. Sizing is
+ * tightened (smaller rows, smaller font) and cells/headers carry light borders
+ * in the app border color to match the reference layout.
+ */
+const dataTableTheme = themeQuartz.withParams({
+  fontFamily: 'inherit',
+  fontSize: 12,
+  rowHeight: 28,
+  headerHeight: 32,
+  headerFontSize: 10,
+  headerFontWeight: 600,
+  cellHorizontalPadding: 10,
+  backgroundColor: 'var(--background)',
+  foregroundColor: 'var(--foreground)',
+  borderColor: 'var(--border)',
+  headerBackgroundColor: 'var(--background)',
+  headerTextColor: 'var(--muted-foreground)',
+  rowHoverColor: 'var(--muted)',
+  wrapperBorder: true,
+  rowBorder: true,
+  columnBorder: true,
+  headerColumnBorder: true,
+  wrapperBorderRadius: 8,
+})
+
 /** Column id of the synthetic, right-pinned row-actions column. */
 export const ACTIONS_COLUMN_ID = '__actions'
+
+/** Default minimum width for data columns without an explicit backend width. */
+const DEFAULT_MIN_WIDTH = 120
+
+/**
+ * Fixed width of the row-actions column. Sized to hold up to three compact icon
+ * buttons; beyond that the actions collapse into a single overflow menu, so the
+ * column never needs to grow. Kept narrow because it only carries controls.
+ */
+const ACTIONS_COLUMN_WIDTH = 100
 
 /**
  * Per-cell loading placeholder shown while an SSRM block streams in. Because AG
@@ -176,6 +214,9 @@ export function DataTable({
         headerName: t(column.label),
         hide: !column.visible,
         width: hasWidth ? column.width! : undefined,
+        // Let an intentionally-narrow backend width take effect: without this the
+        // global DEFAULT_MIN_WIDTH would clamp it (e.g. the small avatar column).
+        minWidth: hasWidth ? Math.min(DEFAULT_MIN_WIDTH, column.width!) : undefined,
         flex: hasWidth ? 0 : undefined,
         sortable: column.sortable,
         filter: filterWidget,
@@ -205,6 +246,9 @@ export function DataTable({
         filter: false,
         resizable: false,
         pinned: 'right',
+        width: ACTIONS_COLUMN_WIDTH,
+        minWidth: ACTIONS_COLUMN_WIDTH,
+        flex: 0,
         cellRenderer: (params: ICellRendererParams) => renderRowActions(params),
       })
     }
@@ -245,6 +289,9 @@ export function DataTable({
     () => ({
       rowModelType: 'serverSide',
       serverSideDatasource: datasource,
+      // Reveal the header filter and column-menu buttons only while the pointer
+      // is over the column header; the v35 default keeps them always visible.
+      suppressMenuHide: false,
       cacheBlockSize: blockSize,
       // Show a column-shaped skeleton while each SSRM block loads: opting out of
       // the full-width loading row makes AG Grid render `loadingCellRenderer`
@@ -262,7 +309,7 @@ export function DataTable({
       defaultColDef: {
         resizable: true,
         flex: 1,
-        minWidth: 120,
+        minWidth: DEFAULT_MIN_WIDTH,
       },
     }),
     [datasource, blockSize],
@@ -271,7 +318,7 @@ export function DataTable({
   return (
     <div className="h-[600px] w-full">
       <AgGridReact
-        theme={themeQuartz}
+        theme={dataTableTheme}
         columnDefs={colDefs}
         localeText={localeText}
         onGridReady={onGridReady}
