@@ -9,6 +9,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { useNavigation } from '@/features/navigation/use-navigation'
+import { resolveIcon } from '@/features/navigation/icon-map'
+import type { NavigationItem } from '@/features/navigation/types'
 
 /**
  * Maps a URL path segment to an i18n label key. Segments not listed here fall
@@ -29,6 +32,23 @@ function humanize(segment: string): string {
   return segment
     .replace(/-/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+/** Depth-first lookup of the navigation node whose route matches `route`. */
+function findNavItemByRoute(
+  items: NavigationItem[],
+  route: string,
+): NavigationItem | null {
+  for (const item of items) {
+    if (item.route === route) {
+      return item
+    }
+    const nested = findNavItemByRoute(item.children, route)
+    if (nested) {
+      return nested
+    }
+  }
+  return null
 }
 
 /** Resolves the i18n label for a single URL segment, with a safe fallback. */
@@ -68,6 +88,7 @@ interface Crumb {
 export function AppBreadcrumbs() {
   const { t, i18n } = useTranslation()
   const { pathname } = useLocation()
+  const navigation = useNavigation()
 
   const segments = pathname.split('/').filter(Boolean)
 
@@ -82,20 +103,37 @@ export function AppBreadcrumbs() {
     return { label, href }
   })
 
+  // The module icon is the one the sidebar uses for the top-level crumb: match
+  // its route against the backend-driven navigation tree.
+  const moduleItem = navigation.data
+    ? findNavItemByRoute(navigation.data, crumbs[0].href)
+    : null
+  const ModuleIcon = moduleItem?.icon ? resolveIcon(moduleItem.icon) : null
+
   return (
     <Breadcrumb>
       <BreadcrumbList>
         {crumbs.map((crumb, index) => {
           const isLast = index === crumbs.length - 1
+          const icon =
+            index === 0 && ModuleIcon ? (
+              <ModuleIcon className="size-4 shrink-0" aria-hidden />
+            ) : null
 
           return (
             <Fragment key={crumb.href}>
               <BreadcrumbItem>
                 {isLast ? (
-                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                  <BreadcrumbPage className="flex items-center gap-1.5">
+                    {icon}
+                    {crumb.label}
+                  </BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink asChild>
-                    <Link to={crumb.href}>{crumb.label}</Link>
+                    <Link to={crumb.href} className="flex items-center gap-1.5">
+                      {icon}
+                      {crumb.label}
+                    </Link>
                   </BreadcrumbLink>
                 )}
               </BreadcrumbItem>

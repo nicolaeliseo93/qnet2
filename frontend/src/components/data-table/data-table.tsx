@@ -25,11 +25,12 @@ import type { ColumnType, TableColumn } from '@/features/table/types'
 setupAgGrid()
 
 /**
- * Compact grid theme aligned to the app's design tokens. Colors reference the
- * shared CSS variables (`--background`, `--foreground`, `--border`, `--muted*`)
- * so the grid tracks the app palette and dark mode automatically. Sizing is
- * tightened (smaller rows, smaller font) and cells/headers carry light borders
- * in the app border color to match the reference layout.
+ * Compact grid theme aligned to the app's design tokens. The grid sits on the
+ * white `--card` surface so it stands out against the grey `--background` body,
+ * while borders/hover/header text reference the shared CSS variables
+ * (`--border`, `--muted*`) so it tracks the app palette and dark mode
+ * automatically. Sizing is tightened (smaller rows, smaller font) and
+ * cells/headers carry light borders in the app border color.
  */
 const dataTableTheme = themeQuartz.withParams({
   fontFamily: 'inherit',
@@ -39,10 +40,10 @@ const dataTableTheme = themeQuartz.withParams({
   headerFontSize: 10,
   headerFontWeight: 600,
   cellHorizontalPadding: 10,
-  backgroundColor: 'var(--background)',
-  foregroundColor: 'var(--foreground)',
+  backgroundColor: 'var(--card)',
+  foregroundColor: 'var(--card-foreground)',
   borderColor: 'var(--border)',
-  headerBackgroundColor: 'var(--background)',
+  headerBackgroundColor: 'var(--card)',
   headerTextColor: 'var(--muted-foreground)',
   rowHoverColor: 'var(--muted)',
   wrapperBorder: true,

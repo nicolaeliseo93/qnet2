@@ -211,8 +211,8 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
         <div className="flex items-center justify-end gap-2">
           {isCustomized && (
             <Button
-              variant="ghost"
-              size="sm"
+              variant="secondary"
+              size="xs"
               onClick={() => void handleResetLayout()}
               disabled={resetPreferences.isPending}
             >

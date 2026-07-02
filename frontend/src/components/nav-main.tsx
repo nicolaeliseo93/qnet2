@@ -74,7 +74,7 @@ function NavNode({ item }: { item: NavigationItem }) {
       <Collapsible asChild defaultOpen={hasActiveChild} className="group/collapsible">
         <SidebarMenuItem>
           <CollapsibleTrigger asChild>
-            <SidebarMenuButton tooltip={label}>
+            <SidebarMenuButton tooltip={label} className="text-xs">
               {icon}
               <span>{label}</span>
               <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -84,7 +84,7 @@ function NavNode({ item }: { item: NavigationItem }) {
             <SidebarMenuSub>
               {item.children.map((child) => (
                 <SidebarMenuSubItem key={child.key}>
-                  <SidebarMenuSubButton asChild isActive={isActive(child, location.pathname)}>
+                  <SidebarMenuSubButton asChild isActive={isActive(child, location.pathname)} className="text-xs">
                     <NavLink to={child.route ?? '#'}>
                       <span>{t(child.label)}</span>
                     </NavLink>
@@ -103,7 +103,7 @@ function NavNode({ item }: { item: NavigationItem }) {
   if (!item.route) {
     return (
       <SidebarMenuItem>
-        <SidebarMenuButton tooltip={label} className="pointer-events-none opacity-70">
+        <SidebarMenuButton tooltip={label} className="text-xs pointer-events-none opacity-70">
           {icon}
           <span>{label}</span>
         </SidebarMenuButton>
@@ -113,7 +113,7 @@ function NavNode({ item }: { item: NavigationItem }) {
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip={label} isActive={isActive(item, location.pathname)}>
+      <SidebarMenuButton asChild tooltip={label} isActive={isActive(item, location.pathname)} className="text-xs">
         <NavLink to={item.route}>
           {icon}
           <span>{label}</span>

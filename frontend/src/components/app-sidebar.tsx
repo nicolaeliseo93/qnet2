@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { GalleryVerticalEnd, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -41,12 +41,15 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="pointer-events-none">
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <GalleryVerticalEnd className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{env.appNameSidebar}</span>
+            <SidebarMenuButton size="lg" className="pointer-events-none gap-0">
+              <img
+                src="/brands/logo_white.svg"
+                alt=""
+                aria-hidden
+                className="size-8 shrink-0 object-contain"
+              />
+              <div className="grid flex-1 text-left leading-tight">
+                <span className="truncate text-lg font-semibold">{env.appNameSidebar}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -70,6 +73,7 @@ export function AppSidebar() {
               asChild
               tooltip={t('navigation.settings')}
               isActive={location.pathname === SETTINGS_ROUTE}
+              className="text-xs"
             >
               <NavLink to={SETTINGS_ROUTE}>
                 <Settings />

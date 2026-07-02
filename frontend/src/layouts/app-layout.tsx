@@ -2,7 +2,6 @@ import { Outlet } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AppSidebar } from '@/components/app-sidebar'
-import { AppPageTitle } from '@/routes/breadcrumbs'
 import { NavUserHeader } from '@/components/nav-user-header'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificationBell } from '@/features/notifications/notification-bell'
@@ -24,7 +23,6 @@ export function AppLayout() {
       <SidebarInset>
         <header className="relative flex h-12 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
           <SidebarSeamToggle />
-          <AppPageTitle className="pl-1 text-sm font-semibold" />
           <div className="ml-auto flex items-center gap-0.5">
             <NotificationBell />
             <ThemeToggle />
