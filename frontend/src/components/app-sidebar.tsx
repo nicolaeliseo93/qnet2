@@ -14,7 +14,7 @@ import {
   SidebarMenuSkeleton,
   SidebarRail,
 } from '@/components/ui/sidebar'
-import { NavMain } from '@/components/nav-main'
+import { NavMain, NAV_ITEM_CLASS } from '@/components/nav-main'
 import { useNavigation } from '@/features/navigation/use-navigation'
 import { useAuth } from '@/features/auth/use-auth'
 import { env } from '@/config/env'
@@ -72,8 +72,9 @@ export function AppSidebar() {
             <SidebarMenuButton
               asChild
               tooltip={t('navigation.settings')}
+              size="sm"
               isActive={location.pathname === SETTINGS_ROUTE}
-              className="text-xs"
+              className={NAV_ITEM_CLASS}
             >
               <NavLink to={SETTINGS_ROUTE}>
                 <Settings />
