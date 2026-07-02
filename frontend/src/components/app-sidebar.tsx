@@ -41,15 +41,15 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="pointer-events-none gap-0">
+            <SidebarMenuButton className="pointer-events-none gap-0">
               <img
                 src="/brands/logo_white.svg"
                 alt=""
                 aria-hidden
-                className="size-8 shrink-0 object-contain"
+                className="size-6 shrink-0 object-contain"
               />
               <div className="grid flex-1 text-left leading-tight">
-                <span className="truncate text-lg font-semibold">{env.appNameSidebar}</span>
+                <span className="truncate text-sm font-semibold">{env.appNameSidebar}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
