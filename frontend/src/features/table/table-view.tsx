@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GridApi, GridReadyEvent } from 'ag-grid-community'
-import { RotateCcw } from 'lucide-react'
+import { FilterX, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -19,6 +19,7 @@ import {
   DataTable,
 } from '@/components/data-table/data-table'
 import { createSsrmDatasource } from '@/features/table/ssrm-datasource'
+import { FilterViewsControl } from '@/features/table/filter-views-control'
 import {
   createRowActionsRenderer,
   type RowActionHandler,
@@ -30,10 +31,17 @@ import {
   useResetTablePreferences,
   useSaveTablePreferences,
 } from '@/features/table/use-table-preferences'
+import {
+  useResetTableFilters,
+  useSaveTableFilters,
+} from '@/features/table/use-table-filters'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 
 /** Debounce window for persisting layout changes after the user stops editing. */
 const PERSIST_DEBOUNCE_MS = 500
+
+/** Stable empty filter model (module-level so its identity never changes). */
+const EMPTY_FILTER_MODEL: Record<string, unknown> = {}
 
 /** Imperative handle exposed by the generic table to its domain adapter. */
 export interface TableViewHandle {
@@ -52,11 +60,6 @@ interface TableViewProps extends RowActionsOptions {
    * (open sheet, run delete, …) belongs to the domain adapter.
    */
   onAction: RowActionHandler
-  /**
-   * Domain-specific toolbar controls (e.g. a "New user" button) rendered in the
-   * table toolbar, to the RIGHT of the generic "Reset layout" action.
-   */
-  toolbarActions?: ReactNode
 }
 
 /**
@@ -71,7 +74,7 @@ interface TableViewProps extends RowActionsOptions {
  */
 export const TableView = forwardRef<TableViewHandle, TableViewProps>(
   function TableView(
-    { domain, renderers, onAction, isBusy, decorateRow, iconMap, toolbarActions },
+    { domain, renderers, onAction, isBusy, decorateRow, iconMap },
     ref,
   ) {
     const { t } = useTranslation()
@@ -79,9 +82,12 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
 
     const savePreferences = useSaveTablePreferences(domain)
     const resetPreferences = useResetTablePreferences(domain)
+    const saveFilters = useSaveTableFilters(domain)
+    const resetFilters = useResetTableFilters(domain)
 
-    // Bumped on reset to force a clean grid remount with the refetched defaults,
-    // so AG Grid drops the user's in-memory column state deterministically.
+    // Bumped on reset (layout or filters) to force a clean grid remount with the
+    // refetched config, so AG Grid drops the user's in-memory column/filter state
+    // deterministically.
     const [layoutVersion, setLayoutVersion] = useState(0)
 
     // Reflects whether the user has changed columns THIS session, for immediate
@@ -90,6 +96,20 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
     // when the layout is customized.
     const [customizedLocally, setCustomizedLocally] = useState(false)
     const isCustomized = customizedLocally || (config?.customized ?? false)
+
+    // Same immediate-feedback pattern for the saved filter state: a "Reset
+    // filters" action shows whenever filters are active (this session or persisted).
+    const [filtersCustomizedLocally, setFiltersCustomizedLocally] =
+      useState(false)
+    const isFilterCustomized =
+      filtersCustomizedLocally || (config?.filtersCustomized ?? false)
+
+    // The saved filterModel replayed into the grid on mount. Stable identity per
+    // config load so it can seed the persisted-baseline ref below.
+    const initialFilterModel = useMemo(
+      () => config?.filterState ?? EMPTY_FILTER_MODEL,
+      [config?.filterState],
+    )
 
     // One datasource instance per domain; stable across re-renders.
     const datasource = useMemo(() => createSsrmDatasource(domain), [domain])
@@ -134,11 +154,42 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       }, PERSIST_DEBOUNCE_MS)
     }, [gridApi, savePreferences])
 
+    // Debounce filter persistence, and hold the last-persisted model (serialized)
+    // so the grid's own echo of the saved filters on mount is not re-saved.
+    const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const lastPersistedFilterRef = useRef<string>(JSON.stringify(EMPTY_FILTER_MODEL))
+    useEffect(() => {
+      lastPersistedFilterRef.current = JSON.stringify(initialFilterModel)
+    }, [initialFilterModel])
+
+    const handleFilterChanged = useCallback(() => {
+      if (!gridApi) {
+        return
+      }
+      const model = gridApi.getFilterModel()
+      const serialized = JSON.stringify(model)
+      // Skip echoes and no-op refires: only a real change is persisted.
+      if (serialized === lastPersistedFilterRef.current) {
+        return
+      }
+      lastPersistedFilterRef.current = serialized
+      setFiltersCustomizedLocally(Object.keys(model).length > 0)
+      if (filterDebounceRef.current) {
+        clearTimeout(filterDebounceRef.current)
+      }
+      filterDebounceRef.current = setTimeout(() => {
+        saveFilters.mutate(model)
+      }, PERSIST_DEBOUNCE_MS)
+    }, [gridApi, saveFilters])
+
     // Flush any pending debounce on unmount so the last change is not lost.
     useEffect(
       () => () => {
         if (debounceRef.current) {
           clearTimeout(debounceRef.current)
+        }
+        if (filterDebounceRef.current) {
+          clearTimeout(filterDebounceRef.current)
         }
       },
       [],
@@ -157,6 +208,25 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
         toast.error(t('table.layoutError'))
       }
     }, [resetPreferences, refetch, t])
+
+    const handleResetFilters = useCallback(async () => {
+      try {
+        // Drop any pending save so it can't re-persist the filters we are clearing.
+        if (filterDebounceRef.current) {
+          clearTimeout(filterDebounceRef.current)
+        }
+        await resetFilters.mutateAsync()
+        // Refetch BEFORE remounting so the grid mounts with an empty filterModel,
+        // then bump the key to rebuild it cleanly (SSRM re-queries unfiltered).
+        await refetch()
+        lastPersistedFilterRef.current = JSON.stringify(EMPTY_FILTER_MODEL)
+        setFiltersCustomizedLocally(false)
+        setLayoutVersion((version) => version + 1)
+        toast.success(t('table.filtersReset'))
+      } catch {
+        toast.error(t('table.filtersError'))
+      }
+    }, [resetFilters, refetch, t])
 
     const renderRowActions = useMemo(() => {
       if (!config) {
@@ -203,6 +273,8 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
           actionsHeaderLabel="table.actionsHeader"
           onGridReady={handleGridReady}
           onColumnStateChanged={handleColumnStateChanged}
+          initialFilterModel={initialFilterModel}
+          onFilterChanged={handleFilterChanged}
         />
       )
     }
@@ -210,6 +282,27 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
     return (
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-end gap-2">
+          {gridApi && config ? (
+            <FilterViewsControl
+              domain={domain}
+              currentFilters={gridApi.getFilterModel() ?? EMPTY_FILTER_MODEL}
+              onApply={(filters) => {
+                gridApi.setFilterModel(filters)
+                setFiltersCustomizedLocally(Object.keys(filters).length > 0)
+              }}
+            />
+          ) : null}
+          {isFilterCustomized && (
+            <Button
+              variant="secondary"
+              size="xs"
+              onClick={() => void handleResetFilters()}
+              disabled={resetFilters.isPending}
+            >
+              <FilterX aria-hidden="true" />
+              {t('table.resetFilters')}
+            </Button>
+          )}
           {isCustomized && (
             <Button
               variant="secondary"
@@ -221,7 +314,6 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
               {t('table.resetLayout')}
             </Button>
           )}
-          {toolbarActions}
         </div>
 
         {content}

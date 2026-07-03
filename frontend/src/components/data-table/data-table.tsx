@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AgGridReact } from 'ag-grid-react'
 import {
+  iconOverrides,
   themeQuartz,
   type ColDef,
   type ColumnMovedEvent,
@@ -9,6 +10,7 @@ import {
   type ColumnVisibleEvent,
   type GridOptions,
   type GridReadyEvent,
+  type GridState,
   type ICellRendererParams,
   type IServerSideDatasource,
 } from 'ag-grid-community'
@@ -27,6 +29,16 @@ import type { ColumnType, TableColumn } from '@/features/table/types'
 setupAgGrid()
 
 /**
+ * Funnel glyph for the column header filter button. The stock Quartz `filter`
+ * icon is three stacked lines, not a funnel; this replaces it with a funnel
+ * outline in the app's lucide icon language. The stroke color is irrelevant —
+ * `mask: true` uses only the shape's alpha, so the button keeps the theme's
+ * icon color (and tracks dark mode) automatically.
+ */
+const FILTER_FUNNEL_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>'
+
+/**
  * Compact grid theme aligned to the app's design tokens. The grid sits on the
  * white `--card` surface so it stands out against the grey `--background` body,
  * while borders/hover/header text reference the shared CSS variables
@@ -34,26 +46,35 @@ setupAgGrid()
  * automatically. Sizing is tightened (smaller rows, smaller font) and
  * cells/headers carry light borders in the app border color.
  */
-const dataTableTheme = themeQuartz.withParams({
-  fontFamily: 'inherit',
-  fontSize: 12,
-  rowHeight: 28,
-  headerHeight: 32,
-  headerFontSize: 10,
-  headerFontWeight: 600,
-  cellHorizontalPadding: 10,
-  backgroundColor: 'var(--card)',
-  foregroundColor: 'var(--card-foreground)',
-  borderColor: 'var(--border)',
-  headerBackgroundColor: 'var(--card)',
-  headerTextColor: 'var(--muted-foreground)',
-  rowHoverColor: 'var(--muted)',
-  wrapperBorder: true,
-  rowBorder: true,
-  columnBorder: true,
-  headerColumnBorder: true,
-  wrapperBorderRadius: 8,
-})
+const dataTableTheme = themeQuartz
+  .withParams({
+    fontFamily: 'inherit',
+    fontSize: 12,
+    rowHeight: 28,
+    headerHeight: 32,
+    headerFontSize: 10,
+    headerFontWeight: 600,
+    cellHorizontalPadding: 10,
+    backgroundColor: 'var(--card)',
+    foregroundColor: 'var(--card-foreground)',
+    borderColor: 'var(--border)',
+    headerBackgroundColor: 'var(--card)',
+    headerTextColor: 'var(--muted-foreground)',
+    rowHoverColor: 'var(--muted)',
+    wrapperBorder: true,
+    rowBorder: true,
+    columnBorder: true,
+    headerColumnBorder: true,
+    wrapperBorderRadius: 8,
+  })
+  // Swap the header filter button's three-line glyph for an actual funnel.
+  .withPart(
+    iconOverrides({
+      type: 'image',
+      mask: true,
+      icons: { filter: { svg: FILTER_FUNNEL_SVG } },
+    }),
+  )
 
 /** Column id of the synthetic, right-pinned row-actions column. */
 export const ACTIONS_COLUMN_ID = '__actions'
@@ -122,6 +143,19 @@ interface DataTableProps {
    * not read or store the state; the caller pulls it from the grid API.
    */
   onColumnStateChanged?: () => void
+  /**
+   * The user's saved filterModel, applied once at grid creation so the filters
+   * (and the first SSRM request) reflect the persisted state on mount. Passed
+   * through `initialState` — a later value has no effect without a remount, which
+   * is exactly how the caller drives a filter reset (bump the grid `key`).
+   */
+  initialFilterModel?: Record<string, unknown>
+  /**
+   * Fired when the user changes a column filter. The wrapper does not read or
+   * store the filter model; the caller pulls it from the grid API (debounced) to
+   * persist it. Forwarded verbatim from AG Grid's `onFilterChanged`.
+   */
+  onFilterChanged?: () => void
 }
 
 /** Default cell value formatter for the given column type. */
@@ -151,6 +185,8 @@ export function DataTable({
   actionsHeaderLabel,
   onGridReady,
   onColumnStateChanged,
+  initialFilterModel,
+  onFilterChanged,
 }: DataTableProps) {
   const { t, i18n } = useTranslation()
 
@@ -260,6 +296,16 @@ export function DataTable({
     [onColumnStateChanged],
   )
 
+  // Apply the saved filters once, at grid creation, so the first SSRM request is
+  // already filtered. Omitted when empty so a clean table starts unfiltered.
+  const initialState = useMemo<GridState | undefined>(
+    () =>
+      initialFilterModel && Object.keys(initialFilterModel).length > 0
+        ? { filter: { filterModel: initialFilterModel } }
+        : undefined,
+    [initialFilterModel],
+  )
+
   const gridOptions = useMemo<GridOptions>(
     () => ({
       rowModelType: 'serverSide',
@@ -296,10 +342,12 @@ export function DataTable({
         theme={dataTableTheme}
         columnDefs={colDefs}
         localeText={localeText}
+        initialState={initialState}
         onGridReady={onGridReady}
         onColumnResized={handleColumnResized}
         onColumnMoved={handleColumnMoved}
         onColumnVisible={handleColumnVisible}
+        onFilterChanged={onFilterChanged}
         {...gridOptions}
       />
     </div>

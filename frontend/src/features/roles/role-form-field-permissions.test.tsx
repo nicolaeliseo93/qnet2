@@ -83,9 +83,15 @@ function wrapper() {
   )
 }
 
+// A non-mandatory field is the toggling/default-state subject throughout this
+// suite (spec 0008 follow-up: `mandatory` fields render locked checked+disabled,
+// so they can no longer stand in for "unrestricted, toggable" assertions).
 const CATALOGUE: FieldCatalogue = {
   resources: [
-    { resource: 'users', fields: [{ key: 'email', type: 'email', group: null }] },
+    {
+      resource: 'users',
+      fields: [{ key: 'personal_data.tax_code', type: 'text', group: 'personal_data', mandatory: false }],
+    },
   ],
 }
 
@@ -119,11 +125,11 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
 
     // Default (no row yet) = unrestricted: visible + editable, not required.
     await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).toBeInTheDocument(),
+      expect(screen.getByRole('checkbox', { name: 'Tax code — Visible' })).toBeInTheDocument(),
     )
-    expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).toBeChecked()
-    expect(screen.getByRole('checkbox', { name: 'Email — Editable' })).toBeChecked()
-    expect(screen.getByRole('checkbox', { name: 'Email — Required' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Tax code — Visible' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Tax code — Editable' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Tax code — Required' })).not.toBeChecked()
   })
 
   it('AC12 — toggling a cell updates form state; submit includes the field_permissions array', async () => {
@@ -142,10 +148,10 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
     )
 
     await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).toBeInTheDocument(),
+      expect(screen.getByRole('checkbox', { name: 'Tax code — Visible' })).toBeInTheDocument(),
     )
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Email — Visible' }))
-    expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).not.toBeChecked()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Tax code — Visible' }))
+    expect(screen.getByRole('checkbox', { name: 'Tax code — Visible' })).not.toBeChecked()
 
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Support' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -153,7 +159,7 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
     await waitFor(() => expect(createRoleMock).toHaveBeenCalled())
     const payload = createRoleMock.mock.calls[0][0]
     expect(payload.field_permissions).toEqual([
-      { resource: 'users', field: 'email', visible: false, editable: true, required: false },
+      { resource: 'users', field: 'personal_data.tax_code', visible: false, editable: true, required: false },
     ])
   })
 
@@ -161,7 +167,7 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
     fetchFieldCatalogueMock.mockResolvedValue(CATALOGUE)
     const seeded = role({
       field_permissions: [
-        { resource: 'users', field: 'email', visible: false, editable: true, required: false },
+        { resource: 'users', field: 'personal_data.tax_code', visible: false, editable: true, required: false },
       ],
     })
     updateRoleMock.mockResolvedValue(seeded)
@@ -178,9 +184,9 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
 
     // Seeded from `role.field_permissions`: the visible flag was restricted.
     await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).not.toBeChecked(),
+      expect(screen.getByRole('checkbox', { name: 'Tax code — Visible' })).not.toBeChecked(),
     )
-    expect(screen.getByRole('checkbox', { name: 'Email — Editable' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Tax code — Editable' })).toBeChecked()
 
     // Submit unchanged: the matrix round-trips (payload omits the key,
     // mirroring the existing `permissions`/`users` diff convention).
@@ -222,15 +228,47 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
     )
 
     await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).toBeInTheDocument(),
+      expect(screen.getByRole('checkbox', { name: 'Tax code — Visible' })).toBeInTheDocument(),
     )
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Email — Visible' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Tax code — Visible' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(screen.getByText('field not editable')).toBeInTheDocument())
     expect(updateRoleMock).toHaveBeenCalledTimes(1)
 
     vi.restoreAllMocks()
+  })
+
+  it('a mandatory field (spec 0008) renders its three checkboxes checked and disabled', async () => {
+    fetchResourceMetaMock.mockResolvedValue(fullAccessMeta())
+    fetchFieldCatalogueMock.mockResolvedValue({
+      resources: [
+        {
+          resource: 'users',
+          fields: [{ key: 'email', type: 'email', group: null, mandatory: true }],
+        },
+      ],
+    })
+
+    render(
+      <RoleForm
+        mode={{ type: 'create' }}
+        permissionOptions={PERMISSION_OPTIONS}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: 'Email — Editable' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Email — Editable' })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: 'Email — Required' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Email — Required' })).toBeDisabled()
   })
 
   it('AC15 — the section is hidden when the role form metadata denies write access', () => {

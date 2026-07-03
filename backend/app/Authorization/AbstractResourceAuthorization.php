@@ -73,14 +73,39 @@ abstract class AbstractResourceAuthorization implements ResourceAuthorization
         }
 
         $dbConfig = $this->dbFieldConfig($actor);
+        $mandatory = $this->mandatoryFieldKeys();
 
         $merged = [];
 
         foreach ($ceiling as $field => $ceilingPermission) {
-            $merged[$field] = $this->mergeFieldPermission($ceilingPermission, $dbConfig->get("{$this->resource()}.{$field}"));
+            // Mandatory fields (spec 0008) are vital to creating the resource:
+            // the DB matrix may never narrow them, so they bypass the intersect
+            // and keep the full ceiling — the server-side twin of the locked,
+            // disabled checkboxes the Role matrix shows for them.
+            $merged[$field] = isset($mandatory[$field])
+                ? $ceilingPermission
+                : $this->mergeFieldPermission($ceilingPermission, $dbConfig->get("{$this->resource()}.{$field}"));
         }
 
         return $merged;
+    }
+
+    /**
+     * The `fields()` keys flagged `mandatory` (spec 0008), as a lookup set.
+     *
+     * @return array<string, true>
+     */
+    private function mandatoryFieldKeys(): array
+    {
+        $keys = [];
+
+        foreach ($this->fields() as $definition) {
+            if ($definition->mandatory) {
+                $keys[$definition->key] = true;
+            }
+        }
+
+        return $keys;
     }
 
     /**

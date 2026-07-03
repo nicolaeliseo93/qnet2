@@ -155,6 +155,19 @@ export interface TableConfig {
    * offer "reset to default" only when there is something to reset). See 0003.
    */
   customized: boolean
+  /**
+   * The user's saved AG Grid filterModel for this table, replayed on mount so
+   * filters survive a reload. `{}` (or absent) when none. Keys are filterable
+   * column ids; the backend restricts them to the same allow-list as the rows
+   * query.
+   */
+  filterState?: Record<string, unknown>
+  /**
+   * Whether the current user has saved filters for this table, so the UI can
+   * offer "reset filters" only when there is something to reset. Mirrors
+   * `customized` for the filter state.
+   */
+  filtersCustomized?: boolean
 }
 
 /**
@@ -215,4 +228,34 @@ export interface TableColumnValuesPayload {
 export interface TableColumnValuesResponse {
   values: string[]
   hasMore: boolean
+}
+
+/**
+ * Visibility of a saved filter view (spec 0007). A `private` view is visible
+ * only to its owner; a `shared` view is visible/appliable by every user who
+ * can view the domain's table.
+ */
+export type FilterViewVisibility = 'private' | 'shared'
+
+/**
+ * A saved filter view (`TableFilterViewResource`), returned by
+ * GET/POST/PUT /tables/{domain}/filter-views. `owned` mirrors
+ * `view.user_id === auth id`. `owner_name` is present only when the view is
+ * shared and NOT owned by the actor (so the UI can show "shared by X"); `null`
+ * otherwise. Never carries owner email/PII, display name only.
+ */
+export interface TableFilterView {
+  id: number
+  name: string
+  filters: Record<string, unknown>
+  visibility: FilterViewVisibility
+  owned: boolean
+  owner_name: string | null
+}
+
+/** Body sent to create/update a saved filter view. */
+export interface FilterViewInput {
+  name: string
+  filters: Record<string, unknown>
+  visibility: FilterViewVisibility
 }

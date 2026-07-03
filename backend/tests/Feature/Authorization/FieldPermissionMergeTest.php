@@ -39,20 +39,26 @@ if (! function_exists('actorWithFieldPermissionRole')) {
 
 // ---------------------------------------------------------------------------
 // AC 5 — merge: restriction works.
+//
+// NOTE (spec 0008 mandatory bypass): `email` is now a mandatory field, so the
+// DB matrix can no longer narrow it (AbstractResourceAuthorization::fieldPermissions()
+// bypasses the merge for mandatory keys) — retargeted onto the NON-mandatory
+// `personal_data.tax_code` so this test still exercises the merge itself. See
+// PersonalDataMandatoryFieldTest for the dedicated mandatory-bypass coverage.
 // ---------------------------------------------------------------------------
 
-it('a role config restricting users.email visible:false hides the field for a member', function () {
+it('a role config restricting users.personal_data.tax_code visible:false hides the field for a member', function () {
     $actor = actorWithFieldPermissionRole(
         ['view', 'update'],
-        ['resource' => 'users', 'field' => 'email', 'visible' => false, 'editable' => true, 'required' => false],
+        ['resource' => 'users', 'field' => 'personal_data.tax_code', 'visible' => false, 'editable' => true, 'required' => false],
     );
     $target = User::factory()->create();
     Sanctum::actingAs($actor);
 
-    $this->getJson("/api/users/{$target->id}")
-        ->assertOk()
-        ->assertJsonPath('permissions.fields.email.visible', false)
-        ->assertJsonPath('permissions.fields.email.hidden', true);
+    $field = $this->getJson("/api/users/{$target->id}")->assertOk()->json('permissions.fields')['personal_data.tax_code'];
+
+    expect($field['visible'])->toBeFalse()
+        ->and($field['hidden'])->toBeTrue();
 });
 
 // ---------------------------------------------------------------------------
@@ -91,20 +97,25 @@ it('DB editable:true has no effect when the actor lacks the base users.update ab
 
 // ---------------------------------------------------------------------------
 // AC 7 — union across roles.
+//
+// NOTE (spec 0008 mandatory bypass): retargeted from `email` (now mandatory,
+// so it bypasses the DB merge entirely and would pass this assertion
+// trivially regardless of either role's row) onto the non-mandatory
+// `personal_data.tax_code`, so this test still genuinely exercises the union.
 // ---------------------------------------------------------------------------
 
-it('union across roles: role A hides email, role B shows it — actor with both sees it visible', function () {
+it('union across roles: role A hides personal_data.tax_code, role B shows it — actor with both sees it visible', function () {
     foreach (['viewAny', 'view', 'update'] as $ability) {
         Permission::findOrCreate("users.{$ability}");
     }
 
-    $roleA = Role::create(['name' => 'hides-email']);
+    $roleA = Role::create(['name' => 'hides-tax-code']);
     $roleA->givePermissionTo(['users.view', 'users.update']);
-    $roleA->fieldPermissions()->create(['resource' => 'users', 'field' => 'email', 'visible' => false, 'editable' => true, 'required' => false]);
+    $roleA->fieldPermissions()->create(['resource' => 'users', 'field' => 'personal_data.tax_code', 'visible' => false, 'editable' => true, 'required' => false]);
 
-    $roleB = Role::create(['name' => 'shows-email']);
+    $roleB = Role::create(['name' => 'shows-tax-code']);
     $roleB->givePermissionTo(['users.view', 'users.update']);
-    $roleB->fieldPermissions()->create(['resource' => 'users', 'field' => 'email', 'visible' => true, 'editable' => true, 'required' => false]);
+    $roleB->fieldPermissions()->create(['resource' => 'users', 'field' => 'personal_data.tax_code', 'visible' => true, 'editable' => true, 'required' => false]);
 
     $actor = User::factory()->create();
     $actor->assignRole([$roleA->name, $roleB->name]);
@@ -112,9 +123,9 @@ it('union across roles: role A hides email, role B shows it — actor with both 
     $target = User::factory()->create();
     Sanctum::actingAs($actor);
 
-    $this->getJson("/api/users/{$target->id}")
-        ->assertOk()
-        ->assertJsonPath('permissions.fields.email.visible', true);
+    $field = $this->getJson("/api/users/{$target->id}")->assertOk()->json('permissions.fields')['personal_data.tax_code'];
+
+    expect($field['visible'])->toBeTrue();
 });
 
 // ---------------------------------------------------------------------------

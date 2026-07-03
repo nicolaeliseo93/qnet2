@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/page-header'
 import {
   Sheet,
   SheetContent,
@@ -141,14 +142,8 @@ export function RolesTable() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <TableView
-        ref={tableRef}
-        domain={ROLES_DOMAIN}
-        renderers={roleColumnRenderers}
-        onAction={handleAction}
-        isBusy={isBusy}
-        decorateRow={decorateRow}
-        toolbarActions={
+      <PageHeader
+        actions={
           <Can permission="roles.create">
             <Button onClick={() => setSheet({ kind: 'create' })}>
               <Plus aria-hidden="true" />
@@ -156,6 +151,15 @@ export function RolesTable() {
             </Button>
           </Can>
         }
+      />
+
+      <TableView
+        ref={tableRef}
+        domain={ROLES_DOMAIN}
+        renderers={roleColumnRenderers}
+        onAction={handleAction}
+        isBusy={isBusy}
+        decorateRow={decorateRow}
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>

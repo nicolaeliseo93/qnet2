@@ -13,6 +13,7 @@ import type {
   ContactDraft,
   PersonalDataCard,
   PersonalDataDraft,
+  PersonalDataFieldPermissionResolver,
   PersonalDataType,
 } from '@/features/personal-data/types'
 
@@ -123,19 +124,24 @@ export interface PersonalDataAddressPayload {
   is_primary: boolean
 }
 
-/** The nested `personal_data` object accepted by the user write endpoints. */
+/**
+ * The nested `personal_data` object accepted by the user write endpoints. Every
+ * key is optional so a gated payload (spec 0008, `omitNonEditableFields`) can
+ * drop the scalar fields/sections a resolver marks non-editable; `draftToPayload`
+ * itself always returns every key (full replace, unaffected by this widening).
+ */
 export interface PersonalDataPayload {
-  type: PersonalDataDraft['type']
-  title: string | null
-  first_name: string | null
-  last_name: string | null
-  company_name: string | null
-  tax_code: string | null
-  vat_number: string | null
-  sdi_code: string | null
-  birth_date: string | null
-  contacts: PersonalDataContactPayload[]
-  addresses: PersonalDataAddressPayload[]
+  type?: PersonalDataDraft['type']
+  title?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  company_name?: string | null
+  tax_code?: string | null
+  vat_number?: string | null
+  sdi_code?: string | null
+  birth_date?: string | null
+  contacts?: PersonalDataContactPayload[]
+  addresses?: PersonalDataAddressPayload[]
 }
 
 function contactToPayload(draft: ContactDraft): PersonalDataContactPayload {
@@ -182,4 +188,47 @@ export function draftToPayload(draft: PersonalDataDraft): PersonalDataPayload {
     contacts: draft.contacts.map(contactToPayload),
     addresses: draft.addresses.map(addressToPayload),
   }
+}
+
+/** The mapped payload's scalar keys, each gated by its own `personal_data.*` key. */
+const SCALAR_PAYLOAD_KEYS = [
+  'type',
+  'title',
+  'first_name',
+  'last_name',
+  'company_name',
+  'tax_code',
+  'vat_number',
+  'sdi_code',
+  'birth_date',
+] as const
+
+/**
+ * Strips the scalar fields and child sections a resolver marks non-editable
+ * from a mapped `personal_data` payload (spec 0008, defense in depth: the
+ * backend enforces the same rule with a CHANGE-based guard). Without a
+ * resolver, the payload is returned unchanged — the ungated behaviour required
+ * for the self-service profile form (AC-013).
+ */
+export function omitNonEditableFields(
+  payload: PersonalDataPayload,
+  fieldPermission?: PersonalDataFieldPermissionResolver,
+): PersonalDataPayload {
+  if (!fieldPermission) {
+    return payload
+  }
+
+  const gated: PersonalDataPayload = { ...payload }
+  for (const key of SCALAR_PAYLOAD_KEYS) {
+    if (!fieldPermission(`personal_data.${key}`).editable) {
+      delete gated[key]
+    }
+  }
+  if (!fieldPermission('personal_data.contacts').editable) {
+    delete gated.contacts
+  }
+  if (!fieldPermission('personal_data.addresses').editable) {
+    delete gated.addresses
+  }
+  return gated
 }

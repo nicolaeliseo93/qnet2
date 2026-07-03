@@ -238,6 +238,45 @@ it('422: a missing resource is flagged once by the base rule, with no crash from
     $this->assertDatabaseMissing('roles', ['name' => 'missing-resource']);
 });
 
+// ---------------------------------------------------------------------------
+// AC-003 (spec 0008) — the new personal_data.* keys are valid `users` catalogue
+// entries; an unknown key is still rejected.
+// ---------------------------------------------------------------------------
+
+it('spec 0008: field_permissions accepts users.personal_data.first_name (valid catalogue key)', function () {
+    $actor = actorWithRoleAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/roles', [
+        'name' => 'personal-data-matrix',
+        'field_permissions' => [
+            ['resource' => 'users', 'field' => 'personal_data.first_name', 'visible' => true, 'editable' => false, 'required' => false],
+        ],
+    ])->assertCreated();
+
+    $role = Role::where('name', 'personal-data-matrix')->firstOrFail();
+    $this->assertDatabaseHas('role_field_permissions', [
+        'role_id' => $role->id,
+        'resource' => 'users',
+        'field' => 'personal_data.first_name',
+        'editable' => false,
+    ]);
+});
+
+it('spec 0008: field_permissions rejects a non-existent users field (users.foo)', function () {
+    $actor = actorWithRoleAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/roles', [
+        'name' => 'bad-personal-data-field',
+        'field_permissions' => [
+            ['resource' => 'users', 'field' => 'foo', 'visible' => true, 'editable' => true, 'required' => false],
+        ],
+    ])->assertStatus(422)->assertJsonValidationErrors('field_permissions.0.field');
+
+    $this->assertDatabaseMissing('roles', ['name' => 'bad-personal-data-field']);
+});
+
 it('422: non-boolean flag', function () {
     $actor = actorWithRoleAbilities(['create']);
     Sanctum::actingAs($actor);

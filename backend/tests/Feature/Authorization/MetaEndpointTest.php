@@ -63,11 +63,20 @@ it('200: returns the field catalogue and the full permissions block (create-cont
         ->assertJsonPath('message', 'OK')
         ->assertJsonPath('permissions.resource.create', true);
 
+    // Spec 0008: the users field catalogue now also carries the 11
+    // personal_data.* keys (morph card + contacts/addresses sections).
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
-    expect($keys)->toEqualCanonicalizing(['email', 'locale', 'roles', 'password']);
+    expect($keys)->toEqualCanonicalizing([
+        'email', 'locale', 'roles', 'password',
+        'personal_data.type', 'personal_data.title', 'personal_data.first_name',
+        'personal_data.last_name', 'personal_data.company_name', 'personal_data.tax_code',
+        'personal_data.vat_number', 'personal_data.sdi_code', 'personal_data.birth_date',
+        'personal_data.contacts', 'personal_data.addresses',
+    ]);
 
+    // Spec 0008 follow-up: `mandatory` is a new flag on every catalogue entry.
     foreach ($response->json('data.fields') as $field) {
-        expect($field)->toHaveKeys(['key', 'type', 'group']);
+        expect($field)->toHaveKeys(['key', 'type', 'group', 'mandatory']);
     }
 
     foreach ($response->json('permissions.fields') as $field) {

@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0008 — Mappatura permessi per-campo su TUTTI i campi del form Utente
+  (inclusi i campi morph personal_data: card + contacts + addresses).
+  Contract-first. Estende 0004 (metadata authz) e 0006 (matrice DB per-ruolo),
+  senza cambiarne l'envelope. Dominio in italiano; identificatori in inglese.
+-->
+<spec id="0008-personal-data-field-permissions" status="draft" owner="architect" date="2026-07-03">
+
+  <goal>
+    Ogni campo mostrato nel form Utente — inclusi i campi anagrafici morph
+    (personal_data card, contatti, indirizzi) — deve avere un permesso per-campo
+    (visible/editable/required) risolto dal backend, configurabile nella matrice
+    "Permessi campi" del form Ruolo, gated nel frontend ed enforce-ato in scrittura.
+    Il form Ruolo e' gia' completo: nessun campo Ruolo nuovo.
+  </goal>
+
+  <context>
+    Fatti verificati nel repo (non ipotizzati):
+    - Fonte di verita' dei campi = metodo `fields()` della ResourceAuthorization
+      concreta. `UsersAuthorization::fields()` mappa oggi solo: email, locale,
+      roles, password. `RolesAuthorization::fields()` (name, permissions, users)
+      e' gia' completo.
+    - `FieldDefinition(key, type, group?)` — catalogo statico per campo.
+    - `FieldPermission` — sei flag; costruttori nominati visibleEditable(required),
+      visibleReadonly(), hidden(), disabled(). hidden/readonly sono DERIVATI.
+    - Merge 0006 e' FINAL in `AbstractResourceAuthorization::fieldPermissions()`
+      = intersect(fieldPermissionCeiling(), DB role_field_permissions), con bypass
+      super-admin. La DB puo' solo RESTRINGERE entro il ceiling.
+    - `GET /api/authorization/fields` (`FieldCatalogueController`) espone il
+      catalogo per ogni risorsa registrata in config/authorization.php: itera
+      `fields()`, quindi le nuove chiavi appaiono AUTOMATICAMENTE nella matrice.
+      Authz: roles.create OR roles.update.
+    - Write-path: `EnforcesFieldPermissions` (trait usato da Store/UpdateUserRequest
+      e Store/UpdateRoleRequest). Oggi e' PRESENCE-based: rifiuta con 422 ogni
+      chiave SUBMITTED non-editable (`$this->has($field)`).
+    - Il payload utente porta l'anagrafica ANNIDATA: `personal_data.{type,title,
+      first_name,last_name,company_name,tax_code,vat_number,sdi_code,birth_date}`,
+      `personal_data.contacts[]` (type,label,value,is_primary),
+      `personal_data.addresses[]` (label,line1,line2,postal_code,*_id,lat,long,
+      is_primary). Regole in `ValidatesUserProfile::profileRules()`.
+    - Frontend: `MetaField` (metadata-driven) avvolge i campi account del form.
+      I campi anagrafici NON sono in MetaField: vivono in `PersonalDataSection`
+      (componenti CONDIVISI owner-agnostici: PersonalDataCardForm, ContactsManager,
+      AddressesManager) come draft bufferizzato SEMPRE inviato per intero
+      (`user-form-payload.ts` non fa diff su personal_data).
+    - `fieldPermissionLabel(resource, field)` cerca l'etichetta i18n
+      `{resource}.form.{field}` con fallback humanize.
+
+    Decisioni prese (utente, in fase di plan):
+    - D1: contatti/indirizzi = CHIAVE-SEZIONE singola (non granulare per colonna).
+    - D2: enforcement = DIFESA IN PROFONDITA' — il FE omette i campi non-editable
+      dal payload E il BE applica un guard CHANGE-based (422 solo se il valore
+      inviato differisce da quello salvato; re-invio identico ammesso).
+    - D3: gating FE via RESOLVER iniettato per props nei componenti condivisi
+      (nessun accoppiamento alla risorsa 'users').
+    - D4: profilo self-service (auth/me, UpdateProfileRequest) FUORI scope.
+    - D5 (aggiunta post-approvazione): i campi VITALI per la creazione sono
+      "mandatory" — nella matrice del Ruolo la loro riga ha i 3 checkbox
+      (visible/editable/required) forzati ON e DISABILITATI, e il merge DB non
+      puo' mai restringerli (bypass server-side). Set mandatory: users →
+      email, locale, password, personal_data.type, personal_data.first_name,
+      personal_data.last_name, personal_data.company_name; roles → name.
+</context>
+
+  <scope>
+    <in>
+      <item>Estendere `UsersAuthorization::fields()` con 11 nuove chiavi (dot-path del payload): personal_data.type, .title, .first_name, .last_name, .company_name, .tax_code, .vat_number, .sdi_code, .birth_date, .contacts, .addresses.</item>
+      <item>Regole `fieldPermissionCeiling()` per le nuove chiavi (editable se l'actor puo' scrivere, altrimenti visibleReadonly; sezioni contacts/addresses idem).</item>
+      <item>`EnforcesFieldPermissions`: passaggio da presence-based a CHANGE-based, uniforme per tutte le risorse (scalari via dot-path; collezioni via confronto normalizzato).</item>
+      <item>Frontend: resolver di permessi opzionale iniettato in PersonalDataSection/CardForm/ContactsManager/AddressesManager; hide/disable/required per chiave; il form Utente passa il resolver 'users'.</item>
+      <item>Frontend: `user-form-payload.ts` omette dal draft i campi/sezioni non-editable secondo i permessi risolti.</item>
+      <item>i18n: etichette per le 11 nuove chiavi (`users.form.personal_data.*`) usate dalla matrice del Ruolo.</item>
+      <item>La matrice del Ruolo e la validazione `field_permissions.*.field` riconoscono automaticamente le nuove chiavi (verifica, nessuna modifica attesa).</item>
+      <item>(D5) `FieldDefinition` + flag `mandatory`, emesso nel catalogo/meta; `UsersAuthorization`/`RolesAuthorization` marcano il set mandatory; `AbstractResourceAuthorization::fieldPermissions()` bypassa il merge DB per i campi mandatory (restano al ceiling pieno).</item>
+      <item>(D5) Matrice del Ruolo: la riga di un campo mandatory ha i 3 checkbox forzati ON e disabilitati (`FieldDescriptor.mandatory`).</item>
+    </in>
+    <out>
+      <item>Profilo self-service (auth/me / UpdateProfileRequest): invariato (D4).</item>
+      <item>Granularita' per-colonna di contatti/indirizzi (D1: solo sezione).</item>
+      <item>Risorse diverse da `users`; il form Ruolo (gia' completo).</item>
+      <item>Nuovi endpoint o modifiche all'envelope 0004 { data, permissions } e ai sei flag.</item>
+      <item>Nuove dipendenze; nuovi primitivi components/ui.</item>
+      <item>Permessi per-campo dell'avatar (gia' coperti come action upload_avatar/delete_avatar).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Nessun endpoint nuovo. Estensioni additive su endpoint esistenti. -->
+
+    <endpoint method="GET" path="/api/authorization/fields">
+      <request>Auth sanctum; authz roles.create OR roles.update. Nessun parametro nuovo.</request>
+      <response status="200">
+        data.resources[] : per resource 'users', `fields[]` ora include, oltre a
+        email/locale/roles/password, le 11 chiavi:
+          { key: "personal_data.type",        type: "select",     group: "personal_data" }
+          { key: "personal_data.title",       type: "select",     group: "personal_data" }
+          { key: "personal_data.first_name",  type: "text",       group: "personal_data" }
+          { key: "personal_data.last_name",   type: "text",       group: "personal_data" }
+          { key: "personal_data.company_name",type: "text",       group: "personal_data" }
+          { key: "personal_data.tax_code",    type: "text",       group: "personal_data" }
+          { key: "personal_data.vat_number",  type: "text",       group: "personal_data" }
+          { key: "personal_data.sdi_code",    type: "text",       group: "personal_data" }
+          { key: "personal_data.birth_date",  type: "date",       group: "personal_data" }
+          { key: "personal_data.contacts",    type: "collection", group: "personal_data" }
+          { key: "personal_data.addresses",   type: "collection", group: "personal_data" }
+        (D5) OGNI field entry porta anche `mandatory: bool`. Set mandatory=true:
+        email, locale, password, personal_data.type, personal_data.first_name,
+        personal_data.last_name, personal_data.company_name (users); name (roles).
+        Tutti gli altri mandatory=false. Anche `GET /api/meta/{resource}` (data.fields)
+        emette `mandatory`.
+      </response>
+      <errors>401 senza auth; 403 senza roles.create/update.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/users/{user}  (e GET /api/meta/users)">
+      <request>Come 0004 (nessun cambiamento di parametri).</request>
+      <response status="200">
+        `permissions.fields` ora contiene le 11 nuove chiavi, ognuna con i sei flag.
+        Ceiling: se l'actor puo' scrivere -> visibleEditable (required=false; la
+        required per-tipo resta di competenza della validazione profilo esistente);
+        altrimenti visibleReadonly. Merge DB 0006 applicato invariato (intersect).
+        Envelope { data, permissions } immutato.
+      </response>
+      <errors>Come 0004.</errors>
+    </endpoint>
+
+    <endpoint method="POST|PUT|PATCH" path="/api/users  |  /api/users/{user}">
+      <request>Payload invariato (personal_data annidato). Il FE omette i campi/sezioni non-editable.</request>
+      <response status="200">Scrittura come oggi quando i campi inviati sono editabili.</response>
+      <errors>
+        422 CHANGE-based: una chiave non-editable il cui valore inviato DIFFERISCE
+        da quello salvato -> errore sul path del campo (es. "personal_data.first_name":
+        "field not editable"; "personal_data.contacts": "field not editable" per la
+        sezione, confronto normalizzato). Re-invio con valore IDENTICO -> nessun 422.
+        403 se manca l'ability base create/update (come oggi: il gate 422 non scatta
+        prima del 403 di Policy).
+      </errors>
+    </endpoint>
+
+    <endpoint method="POST|PUT" path="/api/roles  |  /api/roles/{role}  (field_permissions)">
+      <request>`field_permissions[].field` puo' ora referenziare le 11 nuove chiavi 'users'.</request>
+      <response status="200">Righe role_field_permissions persistite come 0006 (full-replace).</response>
+      <errors>422 se `field` non e' nel catalogo della risorsa (regola generica gia' esistente, ora ammette le nuove chiavi).</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- Backend (Pest) -->
+    <criterion id="AC-001">Dato GET /api/authorization/fields con un actor che gestisce i ruoli, allora `users.fields` contiene esattamente le 4 chiavi esistenti + le 11 nuove (key/type/group come da contratto).</criterion>
+    <criterion id="AC-002">Dato GET /api/users/{user} con actor che puo' aggiornare, allora `permissions.fields` include le 11 chiavi con i sei flag; ceiling editable per default (o readonly se l'actor non puo' scrivere).</criterion>
+    <criterion id="AC-003">Dato un create/update Ruolo con `field_permissions` che referenzia `users.personal_data.first_name` (chiave valida) la riga persiste; con una chiave inesistente (es. `users.foo`) -> 422.</criterion>
+    <criterion id="AC-004">Merge-restrizione (campo NON-mandatory): un ruolo con `users.personal_data.tax_code {visible:false}` -> per un utente che ha solo quel ruolo, GET /api/users/{user} espone `fields."personal_data.tax_code".visible=false` e `hidden=true`.</criterion>
+    <criterion id="AC-005">Merge-no-escalation: una riga DB `editable:true` su un campo che il ceiling blocca (actor senza users.update) NON rende editable il campo (ceiling vince).</criterion>
+    <criterion id="AC-006">Enforcement CHANGE-based (scalare, campo NON-mandatory): con `personal_data.tax_code {editable:false}` per il ruolo dell'actor: PATCH /api/users/{user} che INVIA `personal_data.tax_code` con valore DIVERSO da quello salvato -> 422 su quel path, nessuna scrittura; INVIO con valore IDENTICO -> 200, nessun 422.</criterion>
+    <criterion id="AC-007">Enforcement CHANGE-based (sezione): con `personal_data.contacts {editable:false}`, un PATCH che modifica l'insieme contatti (confronto normalizzato per type/value/label/is_primary) -> 422 su `personal_data.contacts`; insieme identico -> 200.</criterion>
+    <criterion id="AC-008">Bypass super-admin: un actor super-admin non e' influenzato da alcuna riga DB restrittiva sui campi personal_data (ceiling pieno).</criterion>
+    <criterion id="AC-009">Regressione: le suite 0004 e 0006 (Authorization + Users + Roles) restano verdi; l'assenza di righe DB per un campo lascia il comportamento identico a oggi.</criterion>
+
+    <!-- Frontend (Vitest + RTL) -->
+    <criterion id="AC-010">La matrice "Permessi campi" del form Ruolo mostra, sotto la risorsa `users`, righe per le 11 nuove chiavi con etichette i18n leggibili (non token grezzi) e tre toggle ciascuna.</criterion>
+    <criterion id="AC-011">Nel form Utente, un campo anagrafico con metadata `visible:false` non e' renderizzato; con `editable:false` e' disabilitato/readonly; `required` riflette il flag risolto. Vale anche per le sezioni contatti/indirizzi (`personal_data.contacts/addresses`).</criterion>
+    <criterion id="AC-012">Il payload builder del form Utente OMETTE dal draft i campi/sezioni non-editable secondo i permessi risolti (verificabile su unit test del builder).</criterion>
+    <criterion id="AC-013">I componenti personal-data condivisi restano usabili SENZA resolver (nessun gating) — il contesto che non passa il resolver ha il comportamento odierno (nessuna regressione sul profilo self-service).</criterion>
+    <criterion id="AC-014">tsc --noEmit, ESLint, Pint puliti; coverage >= 90% sul nuovo codice backend.</criterion>
+
+    <!-- D5 — Mandatory fields (aggiunta post-approvazione) -->
+    <criterion id="AC-015">`GET /api/authorization/fields` espone `mandatory` per ogni campo: true per email/locale/password/personal_data.type/first_name/last_name/company_name (users) e name (roles); false per gli altri.</criterion>
+    <criterion id="AC-016">Merge bypass: un ruolo con una riga DB restrittiva su un campo mandatory (es. `users.email` o `roles.name` visible:false/editable:false) → GET del dettaglio espone quel campo comunque `visible:true, editable:true` (ceiling pieno).</criterion>
+    <criterion id="AC-017">Enforcement: un campo mandatory con riga DB editable:false → un PATCH che ne cambia il valore NON da' 422 (resta editabile).</criterion>
+    <criterion id="AC-018">Matrice del Ruolo (frontend): una riga con `mandatory:true` mostra i 3 checkbox tutti spuntati e disabilitati; una riga non-mandatory resta configurabile.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie gia' presenti; nessuna nuova dipendenza; nessun nuovo primitivo components/ui.</item>
+    <item>Authz server-side invariata: il gate per-campo 422 non precede mai il 403 di Policy sull'ability base.</item>
+    <item>Invariante 0006 preservata: la DB puo' solo restringere entro il ceiling; il choke point resta `AbstractResourceAuthorization::fieldPermissions()` FINAL.</item>
+    <item>Identificatori in inglese; le chiavi di campo sono i dot-path del payload (`personal_data.*`) per non introdurre un layer di mapping nel trait generico.</item>
+    <item>La required per-tipo (individual/company) resta di competenza della validazione profilo esistente; il ceiling non duplica la logica di `type`.</item>
+    <item>Il passaggio del trait a CHANGE-based e' uniforme: se un test 0004/0006 asseriva il 422 su un re-invio no-op (presence), il requisito e' cambiato e va aggiornato dichiarandolo (no test-tampering silenzioso).</item>
+    <item>File entro 300/500 righe; niente dead code; commenti sul perche'.</item>
+  </constraints>
+
+</spec>

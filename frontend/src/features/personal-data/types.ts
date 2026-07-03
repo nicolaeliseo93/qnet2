@@ -182,6 +182,35 @@ export interface AddressDraft {
   is_primary: boolean
 }
 
+/* -------------------------------------------------------------------------- */
+/* Field-permission gating (spec 0008)                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Per-field/section gating for the shared personal-data components. Deliberately
+ * NOT `@/features/authorization`'s `FieldPermission`: these owner-agnostic
+ * components must stay decoupled from any specific resource (D3) — the caller
+ * (e.g. the users feature, via `useResourcePermissions()`) adapts its resolved
+ * permissions to this shape and injects it by prop. `hidden` is omitted: the
+ * components only ever need `visible` to decide whether to render at all.
+ */
+export interface PersonalDataFieldPermission {
+  visible: boolean
+  editable: boolean
+  required: boolean
+  disabled: boolean
+  readonly: boolean
+}
+
+/**
+ * Resolves a dot-path field or section key (e.g. `personal_data.first_name`,
+ * `personal_data.contacts`) to its gating. Optional on every consumer: omitting
+ * it entirely preserves today's ungated behaviour (self-service profile, AC-013).
+ */
+export type PersonalDataFieldPermissionResolver = (
+  fieldKey: string,
+) => PersonalDataFieldPermission
+
 /**
  * A buffered personal-data card with its owned contacts/addresses, owned by the
  * parent form. `null` (at the section level) means "no card entered".

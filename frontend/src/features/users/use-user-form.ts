@@ -10,7 +10,10 @@ import { applyServerValidationErrors } from '@/features/auth/form-errors'
 import { cardToDraft, emptyPersonalDataDraft } from '@/features/personal-data/drafts'
 import { buildPersonalDataSchema } from '@/features/personal-data/personal-data-schema'
 import { usePersonalDataByOwner } from '@/features/personal-data/use-personal-data'
-import type { PersonalDataDraft } from '@/features/personal-data/types'
+import type {
+  PersonalDataDraft,
+  PersonalDataFieldPermission,
+} from '@/features/personal-data/types'
 import {
   createUser,
   deleteUserAvatar,
@@ -57,7 +60,22 @@ interface UseUserFormArgs {
 export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { canAction } = useResourcePermissions()
+  const { canAction, field: fieldPermission } = useResourcePermissions()
+
+  // Adapts the resolved authorization metadata to the personal-data domain's
+  // own gating shape (spec 0008 D3): the shared PersonalDataSection/CardForm/
+  // ContactsManager/AddressesManager stay decoupled from `@/features/authorization`
+  // and only see `visible/editable/required/disabled/readonly` for a dot-path key.
+  const personalDataFieldPermission = (key: string): PersonalDataFieldPermission => {
+    const permission = fieldPermission(key)
+    return {
+      visible: permission.visible,
+      editable: permission.editable,
+      required: permission.required,
+      disabled: permission.disabled,
+      readonly: permission.readonly,
+    }
+  }
   // Selectable locales come from the backend bootstrap config (GET /api/config),
   // never hardcoded on the frontend. Loaded before the app renders (ADR 0009), so
   // it is populated by the time this form mounts.
@@ -175,14 +193,16 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
       if (mode.type === 'edit') {
         const saved = await updateUser(
           mode.user.id,
-          buildUpdatePayload(values, mode.user, profileDraft),
+          buildUpdatePayload(values, mode.user, profileDraft, personalDataFieldPermission),
         )
         toast.success(t('users.form.updated'))
         onSuccess(saved)
         return
       }
 
-      const created = await createUser(buildCreatePayload(values, profileDraft))
+      const created = await createUser(
+        buildCreatePayload(values, profileDraft, personalDataFieldPermission),
+      )
       toast.success(t('users.form.created'))
 
       // The user exists now; upload the deferred avatar before handing off.
@@ -243,6 +263,9 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
     onSubmit,
     handleAvatarUpload,
     handleAvatarRemove,
+    // Per-field gating for the personal-data section (spec 0008), adapted from
+    // this resource's resolved `ResourcePermissions` and injected by prop.
+    personalDataFieldPermission,
     // Metadata-gated (spec 0004): upload/remove-avatar actions, meaningful in
     // edit mode only (create mode defers the upload until the user exists).
     canUploadAvatar: canAction('upload_avatar'),

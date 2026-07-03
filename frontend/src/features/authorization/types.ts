@@ -41,6 +41,12 @@ export interface FieldDescriptor {
   /** Form control type hint, e.g. `text`, `email`, `select`, `multiselect`, `password`. */
   type: string
   group: string | null
+  /**
+   * Field vital to creating the resource (spec 0008): the Role matrix locks its
+   * checkboxes (visible/editable/required forced on, disabled) and the server
+   * refuses any role_field_permissions row that would narrow it.
+   */
+  mandatory: boolean
 }
 
 /** Response shape of `GET /meta/{resource}`, already unwrapped from the envelope. */

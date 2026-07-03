@@ -35,7 +35,7 @@ class RolesAuthorization extends AbstractResourceAuthorization
     public function fields(): array
     {
         return [
-            new FieldDefinition('name', 'text'),
+            new FieldDefinition('name', 'text', mandatory: true),
             new FieldDefinition('permissions', 'multiselect'),
             new FieldDefinition('users', 'multiselect'),
         ];

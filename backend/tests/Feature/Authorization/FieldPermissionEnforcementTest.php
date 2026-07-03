@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\PersonalData;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\RoleAssignmentGuard;
@@ -166,18 +167,22 @@ it('roles update: super-admin actor — metadata says editable, but guardSystemR
 // Spec 0006 AC 9 — the write path honors the DB field-permission matrix via
 // the SAME EnforcesFieldPermissions trait (no new code path): a role-level
 // `editable:false` row rejects the write exactly like a ceiling-level lock.
+//
+// NOTE (spec 0008 mandatory bypass): retargeted from `locale` (now mandatory,
+// so a DB row on it is bypassed entirely and could never 422) onto the
+// non-mandatory `personal_data.tax_code`, nested in the profile payload.
 // ---------------------------------------------------------------------------
 
-it('spec 0006: users.locale editable:false for the actor\'s role → 422 "field not editable", no write', function () {
+it('spec 0006: users.personal_data.tax_code editable:false for the actor\'s role → 422 "field not editable", no write', function () {
     foreach (['viewAny', 'view', 'update'] as $ability) {
         Permission::findOrCreate("users.{$ability}");
     }
 
-    $role = Role::create(['name' => 'locale-locked']);
+    $role = Role::create(['name' => 'tax-code-locked']);
     $role->givePermissionTo(['users.view', 'users.update']);
     $role->fieldPermissions()->create([
         'resource' => 'users',
-        'field' => 'locale',
+        'field' => 'personal_data.tax_code',
         'visible' => true,
         'editable' => false,
         'required' => false,
@@ -186,12 +191,15 @@ it('spec 0006: users.locale editable:false for the actor\'s role → 422 "field 
     $actor = User::factory()->create();
     $actor->assignRole($role);
 
-    $target = User::factory()->create(['locale' => 'en']);
+    $target = User::factory()->create();
+    PersonalData::factory()->individual()->for($target, 'personable')->create(['tax_code' => 'AAABBB11C22D333E']);
     Sanctum::actingAs($actor);
 
-    $this->patchJson("/api/users/{$target->id}", ['locale' => 'it'])
+    $this->patchJson("/api/users/{$target->id}", [
+        'personal_data' => ['type' => 'individual', 'first_name' => 'Ada', 'last_name' => 'Lovelace', 'tax_code' => 'ZZZYYY99X88W777V'],
+    ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors('locale');
+        ->assertJsonValidationErrors('personal_data.tax_code');
 
-    $this->assertDatabaseHas('users', ['id' => $target->id, 'locale' => 'en']);
+    $this->assertDatabaseHas('personal_data', ['personable_id' => $target->id, 'tax_code' => 'AAABBB11C22D333E']);
 });

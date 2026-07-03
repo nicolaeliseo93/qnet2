@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
 import { Can } from '@/features/auth/can'
-import { AppBreadcrumbs } from '@/routes/breadcrumbs'
 import { RolesTable } from '@/features/roles/roles-table'
 
 /**
@@ -20,8 +19,6 @@ export default function RolesPage() {
       }
     >
       <div className="flex flex-1 flex-col gap-6">
-        <AppBreadcrumbs />
-
         <RolesTable />
       </div>
     </Can>

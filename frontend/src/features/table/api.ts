@@ -64,6 +64,31 @@ export async function resetTablePreferences(domain: string): Promise<void> {
 }
 
 /**
+ * Persists the current user's applied AG Grid filterModel for a domain, so
+ * filters survive a reload. Self-scoped server-side (the user_id is never sent);
+ * an empty model clears the saved filters. Returns the freshly merged config so
+ * the cache can stay in sync.
+ */
+export async function saveTableFilters(
+  domain: string,
+  filterModel: Record<string, unknown>,
+): Promise<TableConfig> {
+  const { data } = await apiClient.post<ApiResponse<TableConfig>>(
+    `/tables/${domain}/filters`,
+    { filterModel },
+  )
+  return data.data
+}
+
+/**
+ * Resets the current user's saved filters for a domain by deleting the saved row
+ * (explicit user action; nothing else clears it).
+ */
+export async function resetTableFilters(domain: string): Promise<void> {
+  await apiClient.delete(`/tables/${domain}/filters`)
+}
+
+/**
  * Fetches the distinct values of one column for its Set Filter, restricted by
  * the filters currently active on the OTHER columns (Excel-like behavior; see
  * 0004). Called directly from the Set Filter's async `values` callback, not

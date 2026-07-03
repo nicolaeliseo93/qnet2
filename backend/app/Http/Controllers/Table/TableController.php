@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Table;
 
 use App\Http\Controllers\Abstract\BaseApiController;
+use App\Http\Requests\Table\TableFilterStateRequest;
 use App\Http\Requests\Table\TablePreferencesRequest;
 use App\Http\Requests\Table\TableRowsRequest;
 use App\Http\Requests\Table\TableValuesRequest;
 use App\Http\Resources\TableRowResource;
 use App\Models\User;
+use App\Services\TableFilterStateService;
 use App\Services\TablePreferenceService;
 use App\Services\TableService;
 use App\Tables\TableDefinition;
@@ -34,6 +36,7 @@ class TableController extends BaseApiController
         private readonly TableRegistry $registry,
         private readonly TableService $service,
         private readonly TablePreferenceService $preferences,
+        private readonly TableFilterStateService $filters,
     ) {}
 
     /**
@@ -100,17 +103,63 @@ class TableController extends BaseApiController
     }
 
     /**
-     * Resolve the definition's default config and merge the actor's preferences.
+     * POST /api/tables/{domain}/filters — upsert the current user's applied
+     * filterModel for {domain} so filters survive a reload. Self-scoped (always
+     * auth user). An empty model clears the saved state. Returns the merged config.
+     */
+    public function saveFilters(TableFilterStateRequest $request, string $domain): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->authorizeViewAny($definition->authorizeViewAny($actor));
+
+            $this->filters->save($definition, $actor, $request->filterModel());
+
+            return $this->ok($this->resolvedConfig($definition, $actor), 'Filters saved');
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * DELETE /api/tables/{domain}/filters — reset the current user's saved filters
+     * for {domain} (explicit user action; nothing else clears them).
+     */
+    public function resetFilters(Request $request, string $domain): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->authorizeViewAny($definition->authorizeViewAny($actor));
+
+            $this->filters->reset($definition, $actor);
+
+            return $this->noContent();
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * Resolve the definition's default config and merge the actor's preferences
+     * (column layout) and saved filter state.
      *
      * @return array<string, mixed>
      */
     private function resolvedConfig(TableDefinition $definition, User $actor): array
     {
-        return $this->preferences->applyTo(
+        $config = $this->preferences->applyTo(
             $definition->resolveConfig($actor),
             $definition,
             $actor,
         );
+
+        return $this->filters->applyTo($config, $definition, $actor);
     }
 
     /**

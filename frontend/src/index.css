@@ -137,3 +137,14 @@
 .ag-header-cell.ag-header-cell-filtered .ag-header-cell-filter-button {
   opacity: 1;
 }
+
+/* Column resize handle: its separator line is hidden until the pointer is over
+   the header, matching the hover-reveal of the filter/menu buttons. Only the
+   visual (`::after`) follows hover; the drag zone stays active the whole time. */
+.ag-header-cell-resize::after {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.ag-header-cell.ag-header-active .ag-header-cell-resize::after {
+  opacity: 1;
+}

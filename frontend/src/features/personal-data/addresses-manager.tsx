@@ -5,13 +5,23 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AddressForm } from '@/features/personal-data/address-form'
 import { nextDraftKey } from '@/features/personal-data/drafts'
-import type { AddressDraft } from '@/features/personal-data/types'
+import type {
+  AddressDraft,
+  PersonalDataFieldPermissionResolver,
+} from '@/features/personal-data/types'
 
 interface AddressesManagerProps {
   /** The buffered addresses owned by the parent form. */
   value: AddressDraft[]
   /** Emits the next buffer after any add/edit/remove. */
   onChange: (next: AddressDraft[]) => void
+  /**
+   * Resolves gating for the whole section (`personal_data.addresses`, spec
+   * 0008): `!visible` hides the section entirely; `!editable` makes it
+   * read-only (no add/edit/remove). Optional: omitting it keeps today's
+   * ungated behaviour (self-service profile, AC-013).
+   */
+  fieldPermission?: PersonalDataFieldPermissionResolver
 }
 
 /** `new` = the add form is open; a string = that address `_key` is being edited. */
@@ -24,9 +34,15 @@ type EditingState = 'new' | string | null
  * a single primary address per owner in the buffer, mirroring the backend
  * (ADR 0010); when none is primary, the first address becomes the default.
  */
-export function AddressesManager({ value, onChange }: AddressesManagerProps) {
+export function AddressesManager({ value, onChange, fieldPermission }: AddressesManagerProps) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState<EditingState>(null)
+  const permission = fieldPermission?.('personal_data.addresses')
+
+  if (permission && !permission.visible) {
+    return null
+  }
+  const readOnly = permission ? permission.disabled || !permission.editable : false
 
   /**
    * Normalizes the single-primary invariant: if a key is forced primary it wins
@@ -78,16 +94,18 @@ export function AddressesManager({ value, onChange }: AddressesManagerProps) {
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium">{t('personalData.addresses.title')}</h4>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setEditing('new')}
-          disabled={editing === 'new'}
-        >
-          <Plus aria-hidden="true" />
-          {t('personalData.addresses.add')}
-        </Button>
+        {!readOnly && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditing('new')}
+            disabled={editing === 'new'}
+          >
+            <Plus aria-hidden="true" />
+            {t('personalData.addresses.add')}
+          </Button>
+        )}
       </div>
 
       {value.length === 0 && editing !== 'new' && (
@@ -98,7 +116,7 @@ export function AddressesManager({ value, onChange }: AddressesManagerProps) {
 
       <ul className="flex flex-col gap-2">
         {value.map((address) =>
-          editing === address._key ? (
+          !readOnly && editing === address._key ? (
             <li key={address._key}>
               <AddressForm
                 address={address}
@@ -126,32 +144,34 @@ export function AddressesManager({ value, onChange }: AddressesManagerProps) {
                     .join(' · ')}
                 </span>
               </div>
-              <div className="flex shrink-0 gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t('personalData.addresses.editAction')}
-                  onClick={() => setEditing(address._key)}
-                >
-                  <Pencil aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t('personalData.addresses.deleteAction')}
-                  onClick={() => handleDelete(address._key)}
-                >
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </div>
+              {!readOnly && (
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t('personalData.addresses.editAction')}
+                    onClick={() => setEditing(address._key)}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t('personalData.addresses.deleteAction')}
+                    onClick={() => handleDelete(address._key)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+              )}
             </li>
           ),
         )}
       </ul>
 
-      {editing === 'new' && (
+      {!readOnly && editing === 'new' && (
         <AddressForm onSubmit={handleAdd} onCancel={() => setEditing(null)} />
       )}
     </section>

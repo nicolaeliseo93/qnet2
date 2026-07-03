@@ -6,13 +6,23 @@ import { Button } from '@/components/ui/button'
 import { ContactForm } from '@/features/personal-data/contact-form'
 import { nextDraftKey } from '@/features/personal-data/drafts'
 import { useEnumOptions } from '@/features/config/use-config'
-import type { ContactDraft } from '@/features/personal-data/types'
+import type {
+  ContactDraft,
+  PersonalDataFieldPermissionResolver,
+} from '@/features/personal-data/types'
 
 interface ContactsManagerProps {
   /** The buffered contacts owned by the parent form. */
   value: ContactDraft[]
   /** Emits the next buffer after any add/edit/remove. */
   onChange: (next: ContactDraft[]) => void
+  /**
+   * Resolves gating for the whole section (`personal_data.contacts`, spec
+   * 0008): `!visible` hides the section entirely; `!editable` makes it
+   * read-only (no add/edit/remove). Optional: omitting it keeps today's
+   * ungated behaviour (self-service profile, AC-013).
+   */
+  fieldPermission?: PersonalDataFieldPermissionResolver
 }
 
 /** `new` = the add form is open; a string = that contact `_key` is being edited. */
@@ -24,10 +34,16 @@ type EditingState = 'new' | string | null
  * the parent submits the buffer as part of the user payload (ADR 0012). Enforces
  * one primary contact per type in the buffer, mirroring the backend.
  */
-export function ContactsManager({ value, onChange }: ContactsManagerProps) {
+export function ContactsManager({ value, onChange, fieldPermission }: ContactsManagerProps) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState<EditingState>(null)
   const typeOptions = useEnumOptions('contact_type')
+  const permission = fieldPermission?.('personal_data.contacts')
+
+  if (permission && !permission.visible) {
+    return null
+  }
+  const readOnly = permission ? permission.disabled || !permission.editable : false
 
   /** Resolves a contact `type` enum value to its localized label. */
   const typeLabelOf = (type: string) =>
@@ -73,16 +89,18 @@ export function ContactsManager({ value, onChange }: ContactsManagerProps) {
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium">{t('personalData.contacts.title')}</h4>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setEditing('new')}
-          disabled={editing === 'new'}
-        >
-          <Plus aria-hidden="true" />
-          {t('personalData.contacts.add')}
-        </Button>
+        {!readOnly && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditing('new')}
+            disabled={editing === 'new'}
+          >
+            <Plus aria-hidden="true" />
+            {t('personalData.contacts.add')}
+          </Button>
+        )}
       </div>
 
       {value.length === 0 && editing !== 'new' && (
@@ -93,7 +111,7 @@ export function ContactsManager({ value, onChange }: ContactsManagerProps) {
 
       <ul className="flex flex-col gap-2">
         {value.map((contact) =>
-          editing === contact._key ? (
+          !readOnly && editing === contact._key ? (
             <li key={contact._key}>
               <ContactForm
                 contact={contact}
@@ -122,32 +140,34 @@ export function ContactsManager({ value, onChange }: ContactsManagerProps) {
                   {contact.label && <span className="truncate">{contact.label}</span>}
                 </span>
               </div>
-              <div className="flex shrink-0 gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t('personalData.contacts.editAction')}
-                  onClick={() => setEditing(contact._key)}
-                >
-                  <Pencil aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t('personalData.contacts.deleteAction')}
-                  onClick={() => handleDelete(contact._key)}
-                >
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </div>
+              {!readOnly && (
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t('personalData.contacts.editAction')}
+                    onClick={() => setEditing(contact._key)}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t('personalData.contacts.deleteAction')}
+                    onClick={() => handleDelete(contact._key)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+              )}
             </li>
           ),
         )}
       </ul>
 
-      {editing === 'new' && (
+      {!readOnly && editing === 'new' && (
         <ContactForm onSubmit={handleAdd} onCancel={() => setEditing(null)} />
       )}
     </section>

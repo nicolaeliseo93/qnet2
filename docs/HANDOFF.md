@@ -285,3 +285,272 @@ regressions).
 **Blocked/deferred:** `GET /api/authorization/fields` and `RoleResource.field_permissions` are
 backend work per this spec — frontend is written against the frozen shape with mocked responses;
 needs an end-to-end smoke test once the backend endpoint/column are live.
+
+## Feature — Per-user table filter persistence + "Reset filters" — GREEN (verified)
+
+Sibling of spec 0001 column-preferences, for the AG Grid filterModel (spec 0005 had left filter
+persistence out of scope). Filters the user applies survive a page reload, and a toolbar "Reset
+filters" button (icon `FilterX`) clears them, shown only when filters are active — mirroring the
+existing "Reset layout" button.
+
+Contract (FROZEN): new pair of endpoints alongside preferences, same throttle/auth group:
+- `POST /api/tables/{domain}/filters` body `{ filterModel }` → upsert; empty model clears the row;
+  returns the merged config. `DELETE /api/tables/{domain}/filters` → reset (204).
+- Config envelope now also carries `filterState` (object, `{}` when none) and `filtersCustomized`
+  (bool), attached in `TableController::resolvedConfig` via the new `TableFilterStateService::applyTo`,
+  chained after `TablePreferenceService::applyTo`.
+
+Backend (mirrors ADR-0004 preferences pattern):
+- `user_table_filters` table (`unique(user_id, domain)`, json `filters`), model `UserTableFilter`
+  (no Policy / no activity-log, self-scoped — same rationale as `UserTablePreference`).
+- `TableFilterStateService` (save/reset/applyTo) — keys restricted to `filterableColumnIds()` on
+  every read AND write (same allow-list the SSRM rows query enforces); NOT a sparse delta (filters
+  have no default) — stores the applied model whole; empty model deletes the row.
+- `TableFilterStateRequest` — `filterModel` `present|array`, keys 422'd against `filterableColumnIds()`
+  exactly like `TableRowsRequest::withValidator`.
+- Tests: `tests/Feature/Table/TableFilterStateTest.php` 11/11 (auth 401, unknown domain 404, missing
+  viewAny 403, persist+merge, non-filterable key 422, stale-key tolerance, empty-clears-row,
+  reset-removes-row, per-user isolation). Full `tests/Feature/Table` 99/99. Pint clean.
+
+Frontend:
+- `data-table.tsx`: new `initialFilterModel` (applied once via `initialState.filter.filterModel`, so
+  the first SSRM request is already filtered) + `onFilterChanged` passthrough.
+- `table-view.tsx`: `useSaveTableFilters`/`useResetTableFilters`; `handleFilterChanged` debounced 500ms
+  with a `lastPersistedFilterRef` (JSON) guard to skip the grid's mount echo and no-op refires;
+  `handleResetFilters` = mutate DELETE → refetch config → bump the SHARED `layoutVersion` remount
+  (grid rebuilds with empty `filterState`, SSRM re-queries unfiltered) — same remount mechanism as
+  layout reset. New `EMPTY_FILTER_MODEL` module const (stable identity).
+- `use-table-filters.ts` (hooks), `api.ts` (`saveTableFilters`/`resetTableFilters`), `types.ts`
+  (`TableConfig.filterState?`/`filtersCustomized?`), i18n `table.resetFilters/filtersReset/filtersError`.
+- Tests: `api.test.ts` extended (save posts wrapped model; reset DELETEs) 3/3. `tsc --noEmit` clean,
+  ESLint clean.
+
+Pre-existing/out-of-scope (NOT this feature): `cell-renderers.test.tsx` 3 failures — files unmodified
+(at HEAD), already failing from the concurrent 0005 table work. `secret-scan.sh` false-positive on the
+i18n locale files (`en.ts`/`it.ts`) persists.
+
+Not yet committed (working tree still commingled with 0004/0005/0006). Recommend a scoped commit of
+just the filter-persistence files.
+
+---
+
+## Feature 0008 — Personal-data field permissions — Frontend DONE
+
+Spec `docs/specs/0008-personal-data-field-permissions.xml` (contract FROZEN). Extends 0004/0006 to
+the personal-data morph fields (`personal_data.{type,title,first_name,last_name,company_name,
+tax_code,vat_number,sdi_code,birth_date,contacts,addresses}`). Backend work (ceiling rules,
+CHANGE-based `EnforcesFieldPermissions`) tracked separately — frontend implemented strictly against
+the frozen dot-path key contract, not blocked on it.
+
+Delivered:
+- `features/personal-data/types.ts`: new `PersonalDataFieldPermission` (visible/editable/required/
+  disabled/readonly — no `hidden`) and `PersonalDataFieldPermissionResolver = (key) => ...`. Deliberately
+  NOT `@/features/authorization`'s `FieldPermission` (decision D3): the shared personal-data
+  components must stay decoupled from any specific resource; the caller adapts and injects by prop.
+- `personal-data-section.tsx` / `personal-data-card-form.tsx` / `contacts-manager.tsx` /
+  `addresses-manager.tsx`: new **optional** `fieldPermission` prop, propagated section → children.
+  `!visible` → field/section not rendered; `!editable` → input disabled/readonly (card fields) or the
+  whole manager goes read-only (no add/edit/delete, contacts/addresses lists still shown); `required`
+  reflects the resolved flag. **Omitting the prop entirely preserves today's behaviour exactly**
+  (verified: `profile-form.test.tsx`, unmodified, still green — self-service `ProfileForm` never
+  passes it, AC-013).
+- `features/personal-data/drafts.ts`: `PersonalDataPayload`'s fields widened to optional (needed so a
+  gated payload can omit keys); new `omitNonEditableFields(payload, fieldPermission?)` — strips the
+  scalar/section keys the resolver marks non-editable, no-op without a resolver.
+- `features/users/use-user-form.ts`: adapts `useResourcePermissions().field` (6-flag
+  `FieldPermission`) into a `PersonalDataFieldPermissionResolver` (5-flag, drops `hidden`) exposed as
+  `personalDataFieldPermission`; wired into `PersonalDataSection` (via `user-form-body.tsx`) and into
+  both payload builders.
+- `features/users/user-form-payload.ts`: `buildCreatePayload`/`buildUpdatePayload` gained an optional
+  4th param `fieldPermission`; the nested `personal_data` tree is now built via
+  `omitNonEditableFields(draftToPayload(profileDraft), fieldPermission)` (defense in depth — the
+  backend enforces the same rule with a CHANGE-based guard, D2).
+- i18n: `personalDataFieldLabels` (module-level const, keyed by dot-path field name) in both
+  `en.ts`/`it.ts`, referenced from BOTH `users.form.personal_data.*` (new, read by
+  `fieldPermissionLabel('users', 'personal_data.<field>')` for the Role matrix) and the pre-existing
+  `personalData.form.*` card labels (now reference the same const — no string drift). No code change
+  needed in `permission-labels.ts`/`role-field-permissions.tsx`: `fieldPermissionLabel` already builds
+  `${resource}.form.${field}` and i18next's default `.` key-separator walks a dotted field key
+  (`personal_data.first_name`) through nested objects transparently.
+
+Tests (Vitest + RTL, all passing): `personal-data/personal-data-section.test.tsx` (new — AC-011
+visible/editable/required for card fields + contacts/addresses sections, AC-013 ungated baseline),
+`users/user-form-payload.test.ts` (new — AC-012, unit on the builders), `roles/permission-labels.test.ts`
++ `roles/role-field-permissions-personal-data.test.tsx` (new — AC-010, label resolution + full matrix
+render for the 11 keys). Existing `profile-form.test.tsx`/`user-form.test.tsx`/`contacts-manager.test.tsx`
+(baseline-failing, see below)/`addresses-manager.test.tsx` untouched and re-verified as regression
+evidence for AC-013.
+
+Verification: `npx vitest run src/features/personal-data src/features/users src/features/roles
+src/features/auth/profile-form.test.tsx` → 21 files / 99 tests, 95 passed, 4 failed (all in
+`contacts-manager.test.tsx`, pre-existing — see below, confirmed via `git stash` unrelated to this
+work). Full-repo `npx vitest run` → 236 tests, 229 passed, 7 failed = the same pre-existing
+`contacts-manager.test.tsx` (4) + `cell-renderers.test.tsx` (3), zero new regressions (counts
+identical stashed vs. not). `npx tsc --noEmit` clean except the pre-existing, unrelated
+`UserAvatarProps.size` error. `npx eslint` clean on every touched file.
+
+**Ambiguity/note for Backend:** the dot-path field keys in `omitNonEditableFields` are hardcoded
+(`personal_data.type` … `personal_data.addresses`), matching the frozen contract exactly. If the
+backend ever needs the FE to omit at finer granularity (e.g. per-contact-row) this file is the single
+place to extend — no change expected per D1 (section-level only).
+
+Pre-existing/out-of-scope (NOT this feature, confirmed via `git stash` against baseline HEAD before
+any 0008 change): `contacts-manager.test.tsx` (4 failures — `ContactsManager` calls `useEnumOptions`
+directly, needs a `QueryClientProvider` wrapper the test never had), `cell-renderers.test.tsx` (3
+failures — i18n language-state leak between test files), `UserAvatarProps.size` tsc error, and the
+`secret-scan.sh` false-positive on `frontend/src/i18n/locales/{en,it}.ts` (flags the pre-existing
+`password: 'Password'`-shaped translation entries as secrets; blocks every edit to these two files
+with a PostToolUse warning that does not roll back the edit — not in frontend ownership to fix).
+
+**Follow-up — `mandatory` field lock (post-run addition, test-only lane):** the coordinator added
+`FieldDescriptor.mandatory: boolean` (`features/authorization/types.ts`) and implemented the matrix
+lock in `role-field-permissions.tsx` directly (a mandatory row forces all three checkboxes
+checked+disabled, with a ` *` + `title` hint) — both are PRODUCTION code, not touched by this lane.
+Realistic mandatory set: `users` → `email`, `locale`, `password`, `personal_data.type`,
+`personal_data.first_name`, `personal_data.last_name`, `personal_data.company_name`; `roles` → `name`.
+Frontend test-only fixes:
+- `roles/role-field-permissions-personal-data.test.tsx`: every `FieldDescriptor` fixture now carries
+  a realistic `mandatory` value; "unrestricted default" assertions moved to the non-mandatory
+  `personal_data.tax_code` row; added a new test asserting a mandatory row (`personal_data.first_name`)
+  renders all three checkboxes checked+disabled.
+- `roles/role-form-field-permissions.test.tsx`: the shared `CATALOGUE` fixture's sole field changed
+  from `email` (now realistically mandatory, so no longer toggable) to `personal_data.tax_code`
+  (`mandatory: false`) — every "Email — …" label/assertion and the `field: 'email'` payload
+  expectations renamed to `Tax code`/`personal_data.tax_code` accordingly (AC11-14 unchanged in
+  intent, just re-subjected). Added a new test with its own one-off catalogue (`email`,
+  `mandatory: true`) asserting the locked checked+disabled state through the full `RoleForm`
+  integration (not just the bare `RoleFieldPermissions` component).
+- No other test file constructs a non-empty `FieldDescriptor`/`FieldCatalogueResource` array (checked
+  via grep across `*.test.tsx`/`*.test.ts`); `role-form-metadata.test.tsx`/`user-form-metadata.test.tsx`
+  only use `fields: []`/`fields: {}`, unaffected.
+
+Verification: `npx tsc --noEmit -p tsconfig.app.json` → clean except the pre-existing
+`UserAvatarProps.size` error. `npx vitest run src/features/roles src/features/personal-data
+src/features/users` → 20 files / 96 tests, 92 passed, 4 failed (same pre-existing
+`contacts-manager.test.tsx`, unrelated). Full-repo `npx vitest run` → 47 files / 251 tests, 244
+passed, 7 failed (same two pre-existing files as always: `contacts-manager.test.tsx` 4 +
+`cell-renderers.test.tsx` 3) — zero new regressions. `npx eslint` clean on both touched test files.
+
+## Feature 0007 — Saved filter views (private/shared) — GREEN (verifier-confirmed)
+
+Spec `docs/specs/0007-saved-filter-views.md` (FROZEN). Builds on the filter-persistence work.
+A user saves the current AG Grid filter set as a NAMED view (private or shared) and re-applies it
+from a toolbar dropdown. Implemented by two agents (backend/frontend, disjoint ownership) against the
+frozen contract; independently verified end-to-end.
+
+Contract: `GET/POST /api/tables/{domain}/filter-views`, `PUT/DELETE .../{filterView}` (throttle:60,1
+table group). Resource `{ id, name, filters, visibility, owned, owner_name }` — `owner_name` only when
+shared AND not owned (display name only, never PII). List = own (private+shared) + others' shared,
+owned-first then by name.
+
+Authz: list/create gated by the definition `authorizeViewAny`; update/delete by `TableFilterViewPolicy`
+(owner-only) PLUS the existing global `Gate::before` super-admin bypass in `AppServiceProvider`
+(NOT duplicated in the policy — single source of truth). Cross-domain bound `{filterView}` → 404
+BEFORE the Policy (no 403 leak). `filters` keys allow-listed against `filterableColumnIds()` on store
+AND update (mirror of `TableRowsRequest::withValidator`) and re-filtered on read — no whereRaw/dynamic
+SQL from stored JSON.
+
+Backend files (new): migration `create_table_filter_views_table`, `FilterViewVisibility` enum,
+`TableFilterView` model + factory, `TableFilterViewPolicy`, `TableFilterViewResource`,
+`TableFilterViewRequest`, `TableFilterViewService`, `TableFilterViewController`,
+`tests/Feature/Table/TableFilterViewsTest.php` (14 tests). Routes added to `routes/api.php`.
+
+Frontend files (new, `features/table/`): `filter-views-api.ts`, `use-filter-views.ts`
+(key `['table', domain, 'filter-views']`), `filter-views-control.tsx` (dropdown, My/Shared groups,
+apply via `gridApi.setFilterModel`, owned-only delete), `save-filter-view-sheet.tsx` +
+`save-filter-view-schema.ts` (Sheet + RHF/Zod, name + visibility Select), 3 test files. Modified:
+`types.ts` (+FilterView types), `table-view.tsx` (control wired into toolbar, gated on gridApi+config),
+i18n en/it.
+
+Verifier evidence: Backend `tests/Feature/Table` 113/113 (14 new), new files ~98.7% coverage, Pint
+clean. Frontend `tsc --noEmit` clean, `eslint src/features/table` clean, new vitest 13/13.
+Contract coherence BE↔FE confirmed 1:1 (routes, resource shape, envelope, query key). Zero new
+failures introduced.
+
+Pre-existing/out-of-scope (git-confirmed at `Initial commit`, NOT 0007): 7 vitest failures —
+`personal-data/contacts-manager.test.tsx` (4) and `table/cell-renderers.test.tsx` (3). Verifier
+diagnosed the cell-renderers ones as an i18n test-env default mismatch (tests assert English strings
+but the env renders Italian, e.g. "2 primary contacts" vs "2 contatti principali") — a test/config
+issue, not a code bug. Flag to the personal-data/i18n owner.
+
+Still uncommitted: working tree commingles 0004/0005/0006 + the two filter features (0007 + the
+filter-persistence pair). A scoped commit is still pending a go from the user.
+
+## Feature 0008 (personal-data field permissions) — mandatory-field increment — GREEN (lead-verified)
+
+Follow-up requirement after the initial 0008 build: fields VITAL to creating the record are
+"mandatory" — in the Role field-permission matrix their row has all three checkboxes
+(visible/editable/required) forced ON and DISABLED, and the server-side merge can never let a
+`role_field_permissions` row narrow them (bypass).
+
+Implemented by the lead (production) + both agents (tests):
+- `FieldDefinition` gains `mandatory` (bool, default false), emitted in `toArray()` →
+  `{key,type,group,mandatory}` (so `GET /api/authorization/fields` AND `GET /api/meta/{resource}`
+  and every `permissions.fields` consumer carry it).
+- `UsersAuthorization::fields()` mandatory=true: email, locale, password, personal_data.type,
+  personal_data.first_name, personal_data.last_name, personal_data.company_name.
+  `RolesAuthorization::fields()` mandatory=true: name.
+- `AbstractResourceAuthorization::fieldPermissions()` (FINAL): mandatory fields BYPASS the DB
+  intersect (`mandatoryFieldKeys()`), keeping the full ceiling — the server twin of the locked
+  disabled checkboxes. Super-admin branch is unchanged (returns ceiling before the mandatory check).
+- Frontend `FieldDescriptor.mandatory: boolean`; `role-field-permissions.tsx` locks mandatory rows
+  (3 checkboxes checked+disabled, ` *` marker, `title` = `roles.fieldPermissions.mandatory`);
+  i18n key added en/it.
+- Spec updated: `docs/specs/0008-personal-data-field-permissions.xml` — D5 decision, contract
+  (`mandatory` per field), AC-015..AC-018; AC-004/006 examples moved to a non-mandatory field.
+
+Lead final verification (run for real, XDEBUG off):
+- Backend: `tests/Feature/Authorization tests/Unit/Authorization tests/Feature/Users tests/Feature/Roles`
+  → 230/230 passed (1115 assertions). New backend code ≥96-100% coverage. Pint clean.
+- Frontend: scoped Vitest (roles/personal-data/users/authorization) → 100 passed; the only 4 failures
+  are the PRE-EXISTING `contacts-manager.test.tsx` "No QueryClient set" (git-confirmed on baseline HEAD,
+  NOT ours). `tsc --noEmit` clean except the pre-existing `UserAvatarProps.size` (feature 0005, out of
+  scope). ESLint clean on touched files.
+
+Test retargeting declared (requirement change, not tampering): the 0006 restriction/enforcement tests
+that used email/locale/first_name (now mandatory, thus un-restrictable) were moved onto the
+non-mandatory `personal_data.tax_code`; new tests added for the mandatory bypass (read + write) and the
+catalogue `mandatory` flag (`PersonalDataMandatoryFieldTest.php`).
+
+### Spec-number collision — RESOLVED (this feature renumbered 0007 → 0008)
+The two features had both grabbed 0007 (commingled working tree). Per the user's decision, THIS
+feature (personal-data field permissions) was renumbered to **0008**; the concurrent
+`0007-saved-filter-views.md` keeps 0007 and was left completely untouched (no override). Renumber
+scope (this feature's files only): spec file renamed to `0008-personal-data-field-permissions.xml`
+(+ internal id), all `spec 0007` code/test comments → `spec 0008`, and the two MINE-only `spec 0007`
+comment lines in the shared i18n `en.ts`/`it.ts`. Verified: zero `0007` left in this feature's files;
+`TableFilterView*` / `features/table/*` still reference 0007 as before. No functional code changed —
+comments/spec-id only.
+
+Not committed (per user): working tree still commingles 0004/0005/0006 + 0008 (this) + 0007
+(saved-filter-views) + the filter-persistence pair. A scoped commit of the 0008 files is available on
+request but was explicitly deferred by the user.
+
+## Feature 0007 — Filter-views SAVE moved inline into the dropdown (redesign) — GREEN
+
+Follow-up to 0007: the "save current filter" flow moved OUT of a Sheet/modal and INTO the
+`filter-views-control.tsx` dropdown panel itself (user request: "sempre nel drop", premium look).
+Research-grounded (Attio/Airtable "save query" inline pattern; segmented control for 2 mutually-
+exclusive options; always-show-active-filter rule).
+
+Changes (frontend only, no contract/backend change):
+- `filter-views-control.tsx` rewritten as a single self-contained panel: header (icon chip + title +
+  subtitle), grouped list (My/Shared) with a leading lock/people glyph per visibility + an ACTIVE
+  check on the currently-applied view (`sameFilters` order-independent compare), hover-revealed delete,
+  and an inline SAVE section (name Input + private/shared SEGMENTED control + full-width primary CTA;
+  swaps to a hint when there are no filters). Controlled `open`; resets the form on close. Radix Menu
+  keystroke/typeahead + Tab-close handled via `onKeyDown stopPropagation` (except Escape) on the save
+  block, Enter-to-save on the input. Trigger shows a count badge.
+- Deleted `save-filter-view-sheet.tsx` + `save-filter-view-schema.ts` (RHF/Zod no longer needed; name
+  validated by trim + native maxLength=80).
+- i18n: removed dead `saveCurrentFilter`/`saveCurrentFilterDescription`/`cancel`; added
+  `savedFiltersSubtitle`/`saveViewHeading`/`saveView`/`applyFilterToSaveHint`/`viewActive` (en+it).
+- `filter-views-control.test.tsx` updated: replaced the "opens sheet" test with inline-save tests
+  (disabled-until-named, save with chosen visibility) + a no-filters hint test.
+
+Verified: `tsc --noEmit` clean, `eslint` clean on changed files, `filter-views-control.test.tsx` 6/6,
+full `src/features/table` = 40 passed / 3 failed — the 3 are the SAME pre-existing `cell-renderers`
+failures (i18n test-env mismatch), zero new regressions.
+
+Visual preview artifact (static approximation of the real component, light+dark):
+https://claude.ai/code/artifact/89ccf38e-10c2-4bbb-8ed9-97656c39553b

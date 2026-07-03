@@ -2,6 +2,27 @@
  * English is the source language. Every user-facing string lives here as the
  * canonical key set; other locales mirror this structure.
  */
+
+/**
+ * Personal-data card/section field labels, keyed by the payload's dot-path
+ * field name. Shared between `personalData.form.*` (the card UI) and
+ * `users.form.personal_data.*` (the role field-permissions matrix, spec 0008)
+ * so both surfaces show identical wording without duplicating strings.
+ */
+const personalDataFieldLabels = {
+  type: 'Type',
+  title: 'Title',
+  first_name: 'First name',
+  last_name: 'Last name',
+  company_name: 'Company name',
+  tax_code: 'Tax code',
+  vat_number: 'VAT number',
+  sdi_code: 'SDI recipient code',
+  birth_date: 'Date of birth',
+  contacts: 'Contacts',
+  addresses: 'Addresses',
+}
+
 export const en = {
   common: {
     loading: 'Loading…',
@@ -47,6 +68,9 @@ export const en = {
     resetLayout: 'Reset layout',
     layoutReset: 'Table layout reset to default.',
     layoutError: 'Unable to update the table layout.',
+    resetFilters: 'Reset filters',
+    filtersReset: 'Table filters cleared.',
+    filtersError: 'Unable to reset the table filters.',
     filterValuesTruncated:
       'Showing only the first matching values. Use a filter condition to narrow further.',
     textFilters: 'Text Filters',
@@ -55,6 +79,28 @@ export const en = {
     primaryContactsCount: '{{count}} primary contacts',
     copy: 'Copy',
     copied: 'Copied',
+    savedFilters: 'Saved filters',
+    savedFiltersSubtitle: 'Reuse a filter set in one click.',
+    saveViewHeading: 'Save current view',
+    saveView: 'Save view',
+    applyFilterToSaveHint: 'Apply a filter first to save it as a view.',
+    viewActive: 'Active',
+    viewNamePlaceholder: 'View name',
+    visibility: 'Visibility',
+    visibilityPrivate: 'Private',
+    visibilityShared: 'Shared',
+    myViews: 'My views',
+    sharedViews: 'Shared',
+    sharedBy: 'Shared by {{name}}',
+    applyView: 'Apply view',
+    deleteView: 'Delete view',
+    save: 'Save',
+    viewSaved: 'Filter view saved.',
+    viewSaveError: 'Unable to save the filter view.',
+    viewDeleted: 'Filter view deleted.',
+    viewDeleteError: 'Unable to delete the filter view.',
+    duplicateViewName: 'You already have a view with this name.',
+    noSavedViews: 'No saved views yet.',
   },
   users: {
     title: 'Users',
@@ -117,6 +163,9 @@ export const en = {
       genericError: 'Something went wrong. Please try again.',
       deleteError: 'Unable to delete the user. Please try again.',
       deleteForbidden: 'You cannot delete this user.',
+      // The personal-data card fields/sections (spec 0008), read by the role
+      // field-permissions matrix (`fieldPermissionLabel('users', 'personal_data.*')`).
+      personal_data: personalDataFieldLabels,
     },
   },
   personalData: {
@@ -128,16 +177,16 @@ export const en = {
       incomplete: 'Complete the required personal data fields.',
     },
     form: {
-      type: 'Type',
-      title: 'Title',
+      type: personalDataFieldLabels.type,
+      title: personalDataFieldLabels.title,
       titleNone: 'None',
-      firstName: 'First name',
-      lastName: 'Last name',
-      companyName: 'Company name',
-      taxCode: 'Tax code',
-      vatNumber: 'VAT number',
-      sdiCode: 'SDI recipient code',
-      birthDate: 'Date of birth',
+      firstName: personalDataFieldLabels.first_name,
+      lastName: personalDataFieldLabels.last_name,
+      companyName: personalDataFieldLabels.company_name,
+      taxCode: personalDataFieldLabels.tax_code,
+      vatNumber: personalDataFieldLabels.vat_number,
+      sdiCode: personalDataFieldLabels.sdi_code,
+      birthDate: personalDataFieldLabels.birth_date,
       save: 'Save',
       saving: 'Saving…',
       create: 'Create card',
@@ -263,6 +312,7 @@ export const en = {
       required: 'Required',
       empty: 'No fields are available to configure.',
       loadError: 'Unable to load the field catalogue. Please try again.',
+      mandatory: 'Required to create the record — cannot be restricted by a role.',
     },
   },
   settings: {

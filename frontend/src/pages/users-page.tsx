@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
 import { Can } from '@/features/auth/can'
-import { AppBreadcrumbs } from '@/routes/breadcrumbs'
 import { UsersTable } from '@/features/users/users-table'
 
 /**
@@ -20,8 +19,6 @@ export default function UsersPage() {
       }
     >
       <div className="flex flex-1 flex-col gap-6">
-        <AppBreadcrumbs />
-
         <UsersTable />
       </div>
     </Can>

@@ -56,6 +56,7 @@ export function UserFormBody({
     handleAvatarRemove,
     canUploadAvatar,
     canRemoveAvatar,
+    personalDataFieldPermission,
   } = useUserForm({ mode, onSuccess, onAvatarChange })
 
   return (
@@ -223,7 +224,11 @@ export function UserFormBody({
                 </Button>
               </div>
             ) : (
-              <PersonalDataSection value={profileDraft} onChange={setProfileDraft} />
+              <PersonalDataSection
+                value={profileDraft}
+                onChange={setProfileDraft}
+                fieldPermission={personalDataFieldPermission}
+              />
             )}
           </div>
 

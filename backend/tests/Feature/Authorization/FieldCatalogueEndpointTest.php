@@ -74,7 +74,71 @@ it('200 with the catalogue for users and roles, keys matching each resolver\'s f
     $expectedRoleKeys = array_map(fn ($field) => $field->key, app(RolesAuthorization::class)->fields());
     expect($roleFieldKeys)->toEqualCanonicalizing($expectedRoleKeys);
 
+    // Spec 0008: `mandatory` is a new flag on every catalogue entry.
     foreach ($resources['users']['fields'] as $field) {
-        expect($field)->toHaveKeys(['key', 'type', 'group']);
+        expect($field)->toHaveKeys(['key', 'type', 'group', 'mandatory']);
     }
+});
+
+// ---------------------------------------------------------------------------
+// AC-001 (spec 0008) — the catalogue's `users` entry carries the 4 existing
+// keys AND the 11 personal_data.* keys, with the exact type/group contract.
+// ---------------------------------------------------------------------------
+
+it('spec 0008: users.fields contains exactly the 4 existing + 11 personal_data.* keys, with the contracted type/group', function () {
+    $actor = actorWithRoleAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/authorization/fields')->assertOk();
+    $usersFields = collect($response->json('data.resources'))->firstWhere('resource', 'users')['fields'];
+    $byKey = collect($usersFields)->keyBy('key');
+
+    expect($byKey->keys()->all())->toEqualCanonicalizing([
+        'email', 'locale', 'roles', 'password',
+        'personal_data.type', 'personal_data.title', 'personal_data.first_name',
+        'personal_data.last_name', 'personal_data.company_name', 'personal_data.tax_code',
+        'personal_data.vat_number', 'personal_data.sdi_code', 'personal_data.birth_date',
+        'personal_data.contacts', 'personal_data.addresses',
+    ]);
+
+    $expectedTypes = [
+        'personal_data.type' => 'select',
+        'personal_data.title' => 'select',
+        'personal_data.first_name' => 'text',
+        'personal_data.last_name' => 'text',
+        'personal_data.company_name' => 'text',
+        'personal_data.tax_code' => 'text',
+        'personal_data.vat_number' => 'text',
+        'personal_data.sdi_code' => 'text',
+        'personal_data.birth_date' => 'date',
+        'personal_data.contacts' => 'collection',
+        'personal_data.addresses' => 'collection',
+    ];
+
+    foreach ($expectedTypes as $key => $type) {
+        expect($byKey[$key]['type'])->toBe($type)
+            ->and($byKey[$key]['group'])->toBe('personal_data');
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Mandatory fields (spec 0008 follow-up) — the catalogue flags the fields
+// vital to creating the resource; `email`/`personal_data.first_name`/`roles.name`
+// are mandatory, `personal_data.tax_code` is not.
+// ---------------------------------------------------------------------------
+
+it('spec 0008: the catalogue flags mandatory fields — email/personal_data.first_name/roles.name true, personal_data.tax_code false', function () {
+    $actor = actorWithRoleAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/authorization/fields')->assertOk();
+    $resources = collect($response->json('data.resources'))->keyBy('resource');
+
+    $usersByKey = collect($resources['users']['fields'])->keyBy('key');
+    expect($usersByKey['email']['mandatory'])->toBeTrue()
+        ->and($usersByKey['personal_data.first_name']['mandatory'])->toBeTrue()
+        ->and($usersByKey['personal_data.tax_code']['mandatory'])->toBeFalse();
+
+    $rolesByKey = collect($resources['roles']['fields'])->keyBy('key');
+    expect($rolesByKey['name']['mandatory'])->toBeTrue();
 });

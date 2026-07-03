@@ -14,6 +14,7 @@ use App\Http\Controllers\PersonalData\PersonalDataController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RoleForSelectController;
 use App\Http\Controllers\Table\TableController;
+use App\Http\Controllers\Table\TableFilterViewController;
 use App\Http\Controllers\Users\UserController;
 use App\Http\Controllers\Users\UserForSelectController;
 use Illuminate\Support\Facades\Route;
@@ -92,6 +93,26 @@ Route::middleware('auth:sanctum')->group(function () {
         // docs/api/0003-table-preferences.md.
         Route::post('tables/{domain}/preferences', [TableController::class, 'savePreferences']);
         Route::delete('tables/{domain}/preferences', [TableController::class, 'resetPreferences']);
+
+        // Per-user filter state (the applied AG Grid filterModel): self-scoped,
+        // gated by the same definition viewAny, keys restricted to filterable
+        // columns. Save upserts the applied model; delete resets it. Mirrors the
+        // preferences pair so filters survive a page reload.
+        Route::post('tables/{domain}/filters', [TableController::class, 'saveFilters']);
+        Route::delete('tables/{domain}/filters', [TableController::class, 'resetFilters']);
+
+        // Saved filter views (spec 0007): named, savable AG Grid filter sets per
+        // domain, private or shared. List/create are gated by the same
+        // definition viewAny; update/delete are gated by TableFilterViewPolicy
+        // (owner only — a shared view is a real cross-user access surface). A
+        // bound {filterView} whose domain does not match {domain} 404s (never
+        // 403), so views never leak across domains.
+        Route::get('tables/{domain}/filter-views', [TableFilterViewController::class, 'index']);
+        Route::post('tables/{domain}/filter-views', [TableFilterViewController::class, 'store']);
+        Route::put('tables/{domain}/filter-views/{filterView}', [TableFilterViewController::class, 'update'])
+            ->scopeBindings();
+        Route::delete('tables/{domain}/filter-views/{filterView}', [TableFilterViewController::class, 'destroy'])
+            ->scopeBindings();
     });
 
     // Centralized, resource-driven authorization metadata (spec 0004): one

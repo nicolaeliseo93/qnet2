@@ -1,5 +1,25 @@
 import type { TranslationResources } from '@/i18n/locales/en'
 
+/**
+ * Personal-data card/section field labels, keyed by the payload's dot-path
+ * field name. Shared between `personalData.form.*` (the card UI) and
+ * `users.form.personal_data.*` (the role field-permissions matrix, spec 0008)
+ * so both surfaces show identical wording without duplicating strings.
+ */
+const personalDataFieldLabels = {
+  type: 'Tipo',
+  title: 'Titolo',
+  first_name: 'Nome',
+  last_name: 'Cognome',
+  company_name: 'Ragione sociale',
+  tax_code: 'Codice fiscale',
+  vat_number: 'Partita IVA',
+  sdi_code: 'Codice destinatario SDI',
+  birth_date: 'Data di nascita',
+  contacts: 'Contatti',
+  addresses: 'Indirizzi',
+}
+
 export const it: TranslationResources = {
   common: {
     loading: 'Caricamento…',
@@ -45,6 +65,9 @@ export const it: TranslationResources = {
     resetLayout: 'Ripristina layout',
     layoutReset: 'Layout della tabella ripristinato ai valori predefiniti.',
     layoutError: 'Impossibile aggiornare il layout della tabella.',
+    resetFilters: 'Azzera filtri',
+    filtersReset: 'Filtri della tabella azzerati.',
+    filtersError: 'Impossibile azzerare i filtri della tabella.',
     filterValuesTruncated:
       'Vengono mostrati solo i primi valori corrispondenti. Usa una condizione di filtro per restringere ulteriormente.',
     textFilters: 'Filtri testo',
@@ -53,6 +76,28 @@ export const it: TranslationResources = {
     primaryContactsCount: '{{count}} contatti principali',
     copy: 'Copia',
     copied: 'Copiato',
+    savedFilters: 'Filtri salvati',
+    savedFiltersSubtitle: 'Riapplica un set di filtri con un clic.',
+    saveViewHeading: 'Salva la vista corrente',
+    saveView: 'Salva vista',
+    applyFilterToSaveHint: 'Applica prima un filtro per salvarlo come vista.',
+    viewActive: 'Attiva',
+    viewNamePlaceholder: 'Nome vista',
+    visibility: 'Visibilità',
+    visibilityPrivate: 'Privata',
+    visibilityShared: 'Condivisa',
+    myViews: 'Le mie viste',
+    sharedViews: 'Condivise',
+    sharedBy: 'Condivisa da {{name}}',
+    applyView: 'Applica vista',
+    deleteView: 'Elimina vista',
+    save: 'Salva',
+    viewSaved: 'Vista dei filtri salvata.',
+    viewSaveError: 'Impossibile salvare la vista dei filtri.',
+    viewDeleted: 'Vista dei filtri eliminata.',
+    viewDeleteError: 'Impossibile eliminare la vista dei filtri.',
+    duplicateViewName: 'Hai già una vista con questo nome.',
+    noSavedViews: 'Nessuna vista salvata.',
   },
   users: {
     title: 'Utenti',
@@ -115,6 +160,9 @@ export const it: TranslationResources = {
       genericError: 'Si è verificato un errore. Riprova.',
       deleteError: "Impossibile eliminare l'utente. Riprova.",
       deleteForbidden: 'Non puoi eliminare questo utente.',
+      // The personal-data card fields/sections (spec 0008), read by the role
+      // field-permissions matrix (`fieldPermissionLabel('users', 'personal_data.*')`).
+      personal_data: personalDataFieldLabels,
     },
   },
   personalData: {
@@ -126,16 +174,16 @@ export const it: TranslationResources = {
       incomplete: 'Completa i campi obbligatori dei dati anagrafici.',
     },
     form: {
-      type: 'Tipo',
-      title: 'Titolo',
+      type: personalDataFieldLabels.type,
+      title: personalDataFieldLabels.title,
       titleNone: 'Nessuno',
-      firstName: 'Nome',
-      lastName: 'Cognome',
-      companyName: 'Ragione sociale',
-      taxCode: 'Codice fiscale',
-      vatNumber: 'Partita IVA',
-      sdiCode: 'Codice destinatario SDI',
-      birthDate: 'Data di nascita',
+      firstName: personalDataFieldLabels.first_name,
+      lastName: personalDataFieldLabels.last_name,
+      companyName: personalDataFieldLabels.company_name,
+      taxCode: personalDataFieldLabels.tax_code,
+      vatNumber: personalDataFieldLabels.vat_number,
+      sdiCode: personalDataFieldLabels.sdi_code,
+      birthDate: personalDataFieldLabels.birth_date,
       save: 'Salva',
       saving: 'Salvataggio…',
       create: 'Crea scheda',
@@ -259,6 +307,7 @@ export const it: TranslationResources = {
       required: 'Obbligatorio',
       empty: 'Nessun campo disponibile da configurare.',
       loadError: 'Impossibile caricare il catalogo dei campi. Riprova.',
+      mandatory: 'Obbligatorio per creare il record — non restringibile da un ruolo.',
     },
   },
   settings: {

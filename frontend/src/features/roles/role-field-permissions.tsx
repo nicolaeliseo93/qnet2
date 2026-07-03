@@ -61,6 +61,7 @@ export function RoleFieldPermissions({
                   visible={rowValue?.visible ?? true}
                   editable={rowValue?.editable ?? true}
                   required={rowValue?.required ?? false}
+                  mandatory={field.mandatory}
                   disabled={disabled}
                   onToggle={onToggle}
                 />
@@ -80,6 +81,7 @@ interface FieldRowProps {
   visible: boolean
   editable: boolean
   required: boolean
+  mandatory: boolean
   disabled: boolean
   onToggle: (resource: string, field: string, flag: FieldPermissionFlag, checked: boolean) => void
 }
@@ -92,30 +94,39 @@ function FieldRow({
   visible,
   editable,
   required,
+  mandatory,
   disabled,
   onToggle,
 }: FieldRowProps) {
   const { t } = useTranslation()
 
+  // Mandatory fields (spec 0008) are vital to creating the resource: a role can
+  // never restrict them, so all three checkboxes are forced on and disabled —
+  // the client twin of the server-side merge that ignores their DB config.
+  const locked = disabled || mandatory
+
   return (
     <>
-      <span className="truncate text-sm">{label}</span>
+      <span className="truncate text-sm" title={mandatory ? t('roles.fieldPermissions.mandatory') : undefined}>
+        {label}
+        {mandatory ? <span className="text-muted-foreground"> *</span> : null}
+      </span>
       <FieldToggle
-        checked={visible}
-        disabled={disabled}
+        checked={mandatory ? true : visible}
+        disabled={locked}
         label={`${label} — ${t('roles.fieldPermissions.visible')}`}
         onChange={(checked) => onToggle(resource, fieldKey, 'visible', checked)}
       />
       <FieldToggle
-        checked={editable}
-        disabled={disabled}
+        checked={mandatory ? true : editable}
+        disabled={locked}
         label={`${label} — ${t('roles.fieldPermissions.editable')}`}
         onChange={(checked) => onToggle(resource, fieldKey, 'editable', checked)}
       />
       <FieldToggle
         // `required` is only meaningful when `editable` (spec 0006 merge rule).
-        checked={required}
-        disabled={disabled || !editable}
+        checked={mandatory ? true : required}
+        disabled={locked || !editable}
         label={`${label} — ${t('roles.fieldPermissions.required')}`}
         onChange={(checked) => onToggle(resource, fieldKey, 'required', checked)}
       />

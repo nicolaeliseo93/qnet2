@@ -7,13 +7,19 @@ namespace App\Http\Requests\Concerns;
 use App\Authorization\AuthorizationRegistry;
 use App\Authorization\FieldPermission;
 use App\Models\User;
+use BackedEnum;
+use DateTimeInterface;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * Write-path counterpart of the `permissions` metadata (spec 0004): resolves
  * the resource's ResourceAuthorization and rejects, with a 422 validator
- * error, any SUBMITTED key that maps to a non-editable field for the current
+ * error, any submitted key that maps to a non-editable field for the current
  * actor + target model. The same resolver that computes the metadata a
  * FormRequest's caller sees also guards the write, so a manipulated frontend
  * cannot bypass it.
@@ -22,6 +28,14 @@ use Illuminate\Database\Eloquent\Model;
  * authorizationResource()/authorizationModel(), and call enforceFieldPermissions()
  * from their OWN withValidator() alongside their existing value-level rules —
  * this concern composes, it never replaces withValidator().
+ *
+ * CHANGE-based (spec 0008, replacing the former presence-based gate): a
+ * non-editable field is only rejected when the submitted value actually
+ * DIFFERS from what is currently persisted. A plain presence check would
+ * reject the shared personal-data form, which always re-submits its whole
+ * buffered `personal_data.*` object regardless of which parts changed; a
+ * value-diff lets an untouched, non-editable section pass through as a
+ * harmless no-op while still blocking a real change.
  */
 trait EnforcesFieldPermissions
 {
@@ -36,7 +50,8 @@ trait EnforcesFieldPermissions
     abstract protected function authorizationModel(): ?Model;
 
     /**
-     * Reject every submitted key mapped to a non-editable field.
+     * Reject every submitted key mapped to a non-editable field whose value
+     * actually changed.
      *
      * Skipped when the actor lacks the resource's base write ability
      * (create/update): in that case the base CRUD authorization (enforced in
@@ -60,9 +75,189 @@ trait EnforcesFieldPermissions
 
         foreach ($authorization->fieldPermissions($actor, $model) as $field => $permission) {
             /** @var FieldPermission $permission */
-            if (! $permission->editable && $this->has($field)) {
+            if ($permission->editable || ! $this->has($field)) {
+                continue;
+            }
+
+            if ($this->fieldValueChanged($field, $model)) {
                 $validator->errors()->add($field, 'field not editable');
             }
         }
+    }
+
+    /**
+     * Whether the value submitted at $field's dot-path differs from what is
+     * currently persisted on $model.
+     */
+    private function fieldValueChanged(string $field, ?Model $model): bool
+    {
+        $current = $this->currentFieldValue($model, $field);
+        $submitted = $this->projectSubmittedValue($this->input($field), $current);
+
+        return $this->normalize($submitted) !== $this->normalize($current);
+    }
+
+    /**
+     * The currently persisted value for $field, read generically off $model
+     * via its dot-path — no per-resource/per-field mapping lives here, so
+     * this stays correct for every ResourceAuthorization without coupling the
+     * trait to any concrete resource (e.g. `users`' morph `personal_data.*`):
+     *
+     *  - a bare key (no dot) reads either a plain attribute, or — when it
+     *    names a relation (e.g. `roles`) — the set of related keys (a
+     *    to-many reference field's identity is WHICH rows it points at);
+     *  - a dot-path walks each segment as an Eloquent relation (snake_case
+     *    key -> camelCase method) until the last segment, which is read as a
+     *    plain attribute UNLESS it is itself a relation, in which case an
+     *    owned child section (e.g. `personal_data.contacts`) is projected to
+     *    each related row's OWN `$fillable` attributes — the model's
+     *    mass-assignment surface doubles as the semantic comparison shape,
+     *    with no field list hardcoded here.
+     *
+     * On create ($model === null) there is nothing persisted yet, so every
+     * field reads as null — any non-empty submission of a non-editable field
+     * then counts as a change (spec 0008).
+     */
+    protected function currentFieldValue(?Model $model, string $field): mixed
+    {
+        if ($model === null) {
+            return null;
+        }
+
+        if (! str_contains($field, '.')) {
+            return $this->readTopLevel($model, $field);
+        }
+
+        return $this->readNestedPath($model, explode('.', $field));
+    }
+
+    /**
+     * A bare (non-dotted) field: a plain attribute, or — for a to-many
+     * relation (e.g. `roles`) — the related rows' identity (primary keys), a
+     * reference field's semantic value being WHICH rows it points at. No
+     * current catalogue field is a to-one top-level relation; add that branch
+     * if/when one is introduced (YAGNI).
+     */
+    private function readTopLevel(Model $model, string $key): mixed
+    {
+        $relationMethod = Str::camel($key);
+
+        if (! method_exists($model, $relationMethod) || ! $model->{$relationMethod}() instanceof Relation) {
+            return $model->getAttribute($key);
+        }
+
+        return $model->{$relationMethod}->map(static fn (Model $row): int|string => $row->getKey())->all();
+    }
+
+    /**
+     * @param  array<int, string>  $segments
+     */
+    private function readNestedPath(Model $model, array $segments): mixed
+    {
+        $key = array_shift($segments);
+        $relationMethod = Str::camel($key);
+        $isRelation = method_exists($model, $relationMethod) && $model->{$relationMethod}() instanceof Relation;
+
+        if (! $isRelation) {
+            return $segments === [] ? $model->getAttribute($key) : null;
+        }
+
+        $value = $model->{$relationMethod};
+
+        if ($segments === []) {
+            // The leaf of a nested dot-path is always a to-many owned SECTION
+            // in the current catalogue (e.g. `personal_data.contacts`); a
+            // to-one relation leaf would fall through unprojected (compares
+            // as a raw Model, i.e. conservatively "always changed" — no
+            // current field exercises that path, YAGNI).
+            return $value instanceof Collection
+                ? $value->map(fn (Model $row): array => $this->fillableAttributes($row))->all()
+                : $value;
+        }
+
+        return $value instanceof Model ? $this->readNestedPath($value, $segments) : null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fillableAttributes(Model $model): array
+    {
+        return collect($model->getFillable())
+            ->mapWithKeys(fn (string $attribute): array => [$attribute => $model->{$attribute}])
+            ->all();
+    }
+
+    /**
+     * When $current is a projected row-collection (a list of associative
+     * arrays — see readNestedPath()'s section branch), the raw submitted rows
+     * carry extra request-only keys (e.g. `id`) that are irrelevant to "did
+     * the content change". Projecting the submitted rows onto the SAME key
+     * set learned from $current's own first row keeps the comparison
+     * semantic and symmetric. A count mismatch (rows added/removed) already
+     * differs regardless of projection, so this only matters when $current is
+     * non-empty; nothing to project otherwise.
+     */
+    private function projectSubmittedValue(mixed $submitted, mixed $current): mixed
+    {
+        if (! is_array($current) || ! is_array($current[0] ?? null) || ! is_array($submitted)) {
+            return $submitted;
+        }
+
+        $keys = array_keys($current[0]);
+
+        return array_map(
+            static fn (mixed $row): array => array_merge(array_fill_keys($keys, null), Arr::only((array) $row, $keys)),
+            $submitted,
+        );
+    }
+
+    /**
+     * Scalar-friendly normalization so equivalent values compare equal
+     * regardless of representation: a backed enum vs its raw value, a
+     * DateTimeInterface vs a "Y-m-d" string, and an order-insensitive,
+     * key-order-insensitive shape for arrays/lists (row sections compare by
+     * content, not by submission order — spec 0008 AC-007).
+     */
+    private function normalize(mixed $value): mixed
+    {
+        if ($value instanceof BackedEnum) {
+            return $value->value;
+        }
+
+        if ($value instanceof DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        if (is_array($value)) {
+            $normalized = $this->normalizeArray($value);
+
+            // An empty section (no rows / no roles) is "nothing", same as
+            // null/'' — this matters when $model has no owned relation yet
+            // (e.g. no personal_data card): the current side reads as null,
+            // and a submission that adds no rows must still compare equal.
+            return $normalized === [] ? null : $normalized;
+        }
+
+        return $value === null || $value === '' ? null : $value;
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $value
+     * @return array<int|string, mixed>
+     */
+    private function normalizeArray(array $value): array
+    {
+        $normalized = array_map(fn (mixed $item): mixed => $this->normalize($item), $value);
+
+        if (! array_is_list($normalized)) {
+            ksort($normalized);
+
+            return $normalized;
+        }
+
+        usort($normalized, static fn (mixed $a, mixed $b): int => json_encode($a) <=> json_encode($b));
+
+        return $normalized;
     }
 }

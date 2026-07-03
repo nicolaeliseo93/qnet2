@@ -23,7 +23,10 @@ import {
   buildPersonalDataSchema,
   type PersonalDataFormValues,
 } from '@/features/personal-data/personal-data-schema'
-import type { PersonalDataDraft } from '@/features/personal-data/types'
+import type {
+  PersonalDataDraft,
+  PersonalDataFieldPermissionResolver,
+} from '@/features/personal-data/types'
 
 /** Sentinel for the "no title" option (Radix Select items need a non-empty value). */
 const TITLE_NONE = '__none__'
@@ -33,6 +36,41 @@ interface PersonalDataCardFormProps {
   value: PersonalDataDraft
   /** Emits the next card draft (fields only; children are managed separately). */
   onChange: (next: PersonalDataDraft) => void
+  /**
+   * Resolves gating for each card field by its `personal_data.*` key (spec
+   * 0008). Optional: omitting it keeps today's ungated behaviour (self-service
+   * profile, AC-013).
+   */
+  fieldPermission?: PersonalDataFieldPermissionResolver
+}
+
+interface FieldGate {
+  visible: boolean
+  disabled: boolean
+  readOnly: boolean
+  required: boolean
+}
+
+/**
+ * Resolves one field's render gating. Without a resolver, every field stays
+ * visible/editable and `required` falls back to this card's own (schema-driven)
+ * default, matching today's behaviour exactly.
+ */
+function resolveGate(
+  fieldPermission: PersonalDataFieldPermissionResolver | undefined,
+  key: string,
+  fallbackRequired: boolean,
+): FieldGate {
+  if (!fieldPermission) {
+    return { visible: true, disabled: false, readOnly: false, required: fallbackRequired }
+  }
+  const permission = fieldPermission(key)
+  return {
+    visible: permission.visible,
+    disabled: permission.disabled || !permission.editable,
+    readOnly: permission.readonly,
+    required: permission.required,
+  }
 }
 
 /**
@@ -46,6 +84,7 @@ interface PersonalDataCardFormProps {
 export function PersonalDataCardForm({
   value,
   onChange,
+  fieldPermission,
 }: PersonalDataCardFormProps) {
   const { t } = useTranslation()
   const typeOptions = useEnumOptions('personal_data_type')
@@ -72,6 +111,16 @@ export function PersonalDataCardForm({
   // this component on each change; `isCompany` toggles which fields render.
   const watched = useWatch({ control: form.control })
   const isCompany = watched.type === 'company'
+
+  const typeGate = resolveGate(fieldPermission, 'personal_data.type', true)
+  const titleGate = resolveGate(fieldPermission, 'personal_data.title', false)
+  const companyNameGate = resolveGate(fieldPermission, 'personal_data.company_name', true)
+  const firstNameGate = resolveGate(fieldPermission, 'personal_data.first_name', true)
+  const lastNameGate = resolveGate(fieldPermission, 'personal_data.last_name', true)
+  const taxCodeGate = resolveGate(fieldPermission, 'personal_data.tax_code', false)
+  const vatNumberGate = resolveGate(fieldPermission, 'personal_data.vat_number', false)
+  const sdiCodeGate = resolveGate(fieldPermission, 'personal_data.sdi_code', false)
+  const birthDateGate = resolveGate(fieldPermission, 'personal_data.birth_date', false)
 
   // Mirror the current field values into the parent buffer (in an effect, so the
   // parent update happens after this render rather than during it), preserving the
@@ -106,148 +155,215 @@ export function PersonalDataCardForm({
           form, so it must never nest a <form> nor own a submit. */}
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3">
-          <FormField
-            control={form.control}
-            name="type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel required>{t('personalData.form.type')}</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {typeOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {typeGate.visible && (
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required={typeGate.required}>
+                    {t('personalData.form.type')}
+                  </FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={typeGate.disabled}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {typeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
-          <FormField
-            control={form.control}
-            name="title"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('personalData.form.title')}</FormLabel>
-                <Select
-                  value={field.value ? field.value : TITLE_NONE}
-                  onValueChange={(value) =>
-                    field.onChange(value === TITLE_NONE ? '' : value)
-                  }
-                >
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value={TITLE_NONE}>
-                      {t('personalData.form.titleNone')}
-                    </SelectItem>
-                    {titleOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
+          {titleGate.visible && (
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required={titleGate.required}>
+                    {t('personalData.form.title')}
+                  </FormLabel>
+                  <Select
+                    value={field.value ? field.value : TITLE_NONE}
+                    onValueChange={(value) =>
+                      field.onChange(value === TITLE_NONE ? '' : value)
+                    }
+                    disabled={titleGate.disabled}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={TITLE_NONE}>
+                        {t('personalData.form.titleNone')}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                      {titleOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
         </div>
 
-        {isCompany ? (
-          <FormField
-            control={form.control}
-            name="company_name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel required>{t('personalData.form.companyName')}</FormLabel>
-                <FormControl>
-                  <Input autoComplete="organization" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+        {isCompany
+          ? companyNameGate.visible && (
+              <FormField
+                control={form.control}
+                name="company_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel required={companyNameGate.required}>
+                      {t('personalData.form.companyName')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        autoComplete="organization"
+                        disabled={companyNameGate.disabled}
+                        readOnly={companyNameGate.readOnly}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )
+          : (firstNameGate.visible || lastNameGate.visible) && (
+              <div className="grid grid-cols-2 gap-3">
+                {firstNameGate.visible && (
+                  <FormField
+                    control={form.control}
+                    name="first_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel required={firstNameGate.required}>
+                          {t('personalData.form.firstName')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            autoComplete="given-name"
+                            disabled={firstNameGate.disabled}
+                            readOnly={firstNameGate.readOnly}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {lastNameGate.visible && (
+                  <FormField
+                    control={form.control}
+                    name="last_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel required={lastNameGate.required}>
+                          {t('personalData.form.lastName')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            autoComplete="family-name"
+                            disabled={lastNameGate.disabled}
+                            readOnly={lastNameGate.readOnly}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
             )}
-          />
-        ) : (
+
+        {(taxCodeGate.visible || vatNumberGate.visible) && (
           <div className="grid grid-cols-2 gap-3">
-            <FormField
-              control={form.control}
-              name="first_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('personalData.form.firstName')}</FormLabel>
-                  <FormControl>
-                    <Input autoComplete="given-name" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="last_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('personalData.form.lastName')}</FormLabel>
-                  <FormControl>
-                    <Input autoComplete="family-name" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {taxCodeGate.visible && (
+              <FormField
+                control={form.control}
+                name="tax_code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel required={taxCodeGate.required}>
+                      {t('personalData.form.taxCode')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        autoComplete="off"
+                        disabled={taxCodeGate.disabled}
+                        readOnly={taxCodeGate.readOnly}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {vatNumberGate.visible && (
+              <FormField
+                control={form.control}
+                name="vat_number"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel required={vatNumberGate.required}>
+                      {t('personalData.form.vatNumber')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        autoComplete="off"
+                        disabled={vatNumberGate.disabled}
+                        readOnly={vatNumberGate.readOnly}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormField
-            control={form.control}
-            name="tax_code"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('personalData.form.taxCode')}</FormLabel>
-                <FormControl>
-                  <Input autoComplete="off" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="vat_number"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('personalData.form.vatNumber')}</FormLabel>
-                <FormControl>
-                  <Input autoComplete="off" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {isCompany && (
+        {isCompany && sdiCodeGate.visible && (
           <FormField
             control={form.control}
             name="sdi_code"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('personalData.form.sdiCode')}</FormLabel>
+                <FormLabel required={sdiCodeGate.required}>
+                  {t('personalData.form.sdiCode')}
+                </FormLabel>
                 <FormControl>
-                  <Input autoComplete="off" {...field} />
+                  <Input
+                    autoComplete="off"
+                    disabled={sdiCodeGate.disabled}
+                    readOnly={sdiCodeGate.readOnly}
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -255,15 +371,22 @@ export function PersonalDataCardForm({
           />
         )}
 
-        {!isCompany && (
+        {!isCompany && birthDateGate.visible && (
           <FormField
             control={form.control}
             name="birth_date"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('personalData.form.birthDate')}</FormLabel>
+                <FormLabel required={birthDateGate.required}>
+                  {t('personalData.form.birthDate')}
+                </FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <Input
+                    type="date"
+                    disabled={birthDateGate.disabled}
+                    readOnly={birthDateGate.readOnly}
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
