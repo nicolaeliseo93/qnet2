@@ -201,6 +201,14 @@ class TableService
      * own closure so it AND-combines with any active column filters instead of
      * widening them.
      *
+     * A DERIVED searchable column (no real DB column, e.g. `city`/`street` on
+     * `operational-sites` — spec 0011) is delegated FIRST to the definition's
+     * `applyDerivedSearch()` hook; only when it returns false does the generic
+     * plain `orWhere($column, 'like', $pattern)` run against the real column.
+     * Default (AbstractTableDefinition) is always false, so every domain that
+     * does not override the hook keeps this exact flat OR-LIKE behavior
+     * (retro-compatible — users/roles/business-functions/companies unchanged).
+     *
      * @param  Builder<Model>  $query
      */
     private function applySearch(TableDefinition $definition, Builder $query, ?string $search): void
@@ -219,8 +227,12 @@ class TableService
 
         $pattern = '%'.$this->filterApplier->escapeLike($term).'%';
 
-        $query->where(function (Builder $group) use ($columns, $pattern): void {
+        $query->where(function (Builder $group) use ($definition, $columns, $pattern): void {
             foreach ($columns as $column) {
+                if ($definition->applyDerivedSearch($group, $column, $pattern)) {
+                    continue;
+                }
+
                 $group->orWhere($column, 'like', $pattern);
             }
         });

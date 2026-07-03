@@ -7,9 +7,9 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
+use Spatie\Permission\Guard;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
-use Spatie\Permission\Guard;
 
 class RolePermissionSeeder extends Seeder
 {
@@ -49,6 +49,9 @@ class RolePermissionSeeder extends Seeder
                 'contacts' => ['viewAny', 'view'],
                 'addresses' => ['viewAny', 'view'],
                 'attachments' => ['viewAny', 'view'],
+                'companies' => ['viewAny', 'view', 'create', 'update'],
+                'operational-sites' => ['viewAny', 'view', 'create', 'update'],
+                'business-functions' => ['viewAny', 'view', 'create', 'update'],
             ],
         );
     }
@@ -63,6 +66,9 @@ class RolePermissionSeeder extends Seeder
                 'contacts' => ['viewAny', 'view', 'create', 'update'],
                 'addresses' => ['viewAny', 'view', 'create', 'update'],
                 'attachments' => ['viewAny', 'view', 'create', 'update'],
+                'companies' => ['viewAny', 'view'],
+                'operational-sites' => ['viewAny', 'view'],
+                'business-functions' => ['viewAny', 'view'],
             ],
         );
     }

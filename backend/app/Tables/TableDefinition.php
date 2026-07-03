@@ -123,10 +123,13 @@ interface TableDefinition
     public function filterableColumnIds(): array;
 
     /**
-     * Real DB column names whitelisted for the global quick-search OR-LIKE
-     * (spec 0009). MUST be real columns of the base table — the generic engine
-     * runs a bound `LIKE` on each; a derived key (no real column) would be an
-     * SQL error. Empty ⇒ the domain has no global search (no search box).
+     * Column ids whitelisted for the global quick-search OR-LIKE (spec 0009).
+     * Normally real columns of the base table (the generic engine runs a
+     * bound `LIKE` on each); a DERIVED id (no real column, e.g. a geo name
+     * resolved from a related address — spec 0011) is also allowed as long as
+     * the definition implements `applyDerivedSearch()` for it, so the generic
+     * fallback is never reached. Empty ⇒ the domain has no global search (no
+     * search box).
      *
      * @return array<int, string>
      */
@@ -197,4 +200,22 @@ interface TableDefinition
      * @return array<int, string>|null
      */
     public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array;
+
+    /**
+     * Hook for the global quick-search (spec 0009) on a DERIVED searchable
+     * column with no real DB column of its own (e.g. `city`/`street` on
+     * `operational-sites`, resolved from the primary address — spec 0011).
+     * `$query` is the OR-group builder TableService::applySearch() already
+     * opened, so an implementation adds its own `orWhere`/`orWhereHas` to stay
+     * part of the OR combination. `$pattern` is the already-escaped,
+     * `%…%`-wrapped bound LIKE value. Return true when handled; false to let
+     * the generic engine fall back to a plain `orWhere($columnId, 'like',
+     * $pattern)` against the real column `$columnId`.
+     *
+     * Default (AbstractTableDefinition): always false — every domain that
+     * does not override it keeps its unchanged flat OR-LIKE behavior.
+     *
+     * @param  Builder<Model>  $query
+     */
+    public function applyDerivedSearch(Builder $query, string $columnId, string $pattern): bool;
 }

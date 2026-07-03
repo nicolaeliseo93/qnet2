@@ -1,27 +1,15 @@
 /**
  * English is the source language. Every user-facing string lives here as the
  * canonical key set; other locales mirror this structure.
+ *
+ * Large, self-contained domains (`personalData`, `enums`) live in sibling
+ * `en-*.ts` files to keep this file within the engineering size limits
+ * (see `.claude/rules/engineering.md` §6); `en`'s public shape is unchanged.
  */
-
-/**
- * Personal-data card/section field labels, keyed by the payload's dot-path
- * field name. Shared between `personalData.form.*` (the card UI) and
- * `users.form.personal_data.*` (the role field-permissions matrix, spec 0008)
- * so both surfaces show identical wording without duplicating strings.
- */
-const personalDataFieldLabels = {
-  type: 'Type',
-  title: 'Title',
-  first_name: 'First name',
-  last_name: 'Last name',
-  company_name: 'Company name',
-  tax_code: 'Tax code',
-  vat_number: 'VAT number',
-  sdi_code: 'SDI recipient code',
-  birth_date: 'Date of birth',
-  contacts: 'Contacts',
-  addresses: 'Addresses',
-}
+import { personalData, personalDataFieldLabels } from './en-personal-data'
+import { enums } from './en-enums'
+import { companies } from './en-companies'
+import { operationalSites } from './en-operational-sites'
 
 export const en = {
   common: {
@@ -36,6 +24,8 @@ export const en = {
     confirm: 'Confirm',
     cancel: 'Cancel',
     confirmTitle: 'Are you sure?',
+    yes: 'Yes',
+    no: 'No',
   },
   config: {
     error: {
@@ -47,9 +37,12 @@ export const en = {
   },
   navigation: {
     dashboard: 'Dashboard',
-    management: 'Management',
     users: 'Users',
     roles: 'Roles',
+    companies: 'Companies',
+    businessFunctions: 'Business Functions',
+    operationalSites: 'Operational Sites',
+    faCompaniesServices: 'FA Companies & Services',
     settings: 'Settings',
     toggleSidebar: 'Toggle sidebar',
   },
@@ -203,84 +196,7 @@ export const en = {
       personal_data: personalDataFieldLabels,
     },
   },
-  personalData: {
-    section: {
-      title: 'Personal data',
-      subtitle: 'Registry card, contacts and addresses.',
-      loadError: 'Unable to load the personal data. Please try again.',
-      createHint: 'Save the card first to add contacts and addresses.',
-      incomplete: 'Complete the required personal data fields.',
-    },
-    form: {
-      type: personalDataFieldLabels.type,
-      title: personalDataFieldLabels.title,
-      titleNone: 'None',
-      firstName: personalDataFieldLabels.first_name,
-      lastName: personalDataFieldLabels.last_name,
-      companyName: personalDataFieldLabels.company_name,
-      taxCode: personalDataFieldLabels.tax_code,
-      vatNumber: personalDataFieldLabels.vat_number,
-      sdiCode: personalDataFieldLabels.sdi_code,
-      birthDate: personalDataFieldLabels.birth_date,
-      save: 'Save',
-      saving: 'Saving…',
-      create: 'Create card',
-      created: 'Personal data created successfully.',
-      updated: 'Personal data updated successfully.',
-      genericError: 'Something went wrong. Please try again.',
-      firstNameRequired: 'First name is required.',
-      lastNameRequired: 'Last name is required.',
-      companyNameRequired: 'Company name is required.',
-      birthDateFuture: 'The date of birth cannot be in the future.',
-    },
-    contacts: {
-      title: 'Contacts',
-      add: 'Add contact',
-      empty: 'No contacts yet.',
-      type: 'Type',
-      value: 'Value',
-      label: 'Label',
-      primary: 'Primary contact',
-      primaryBadge: 'Primary',
-      save: 'Save',
-      saving: 'Saving…',
-      cancel: 'Cancel',
-      created: 'Contact added successfully.',
-      updated: 'Contact updated successfully.',
-      deleted: 'Contact deleted successfully.',
-      genericError: 'Something went wrong. Please try again.',
-      typeRequired: 'Select a contact type.',
-      valueRequired: 'A value is required.',
-      valueEmail: 'Enter a valid email address.',
-      valueUrl: 'Enter a valid URL.',
-      valuePhone: 'Enter a valid phone number.',
-      editAction: 'Edit contact',
-      deleteAction: 'Delete contact',
-      deleteConfirm: 'Delete this contact?',
-    },
-    addresses: {
-      title: 'Addresses',
-      add: 'Add address',
-      empty: 'No addresses yet.',
-      label: 'Label',
-      line1: 'Address',
-      line2: 'Address line 2',
-      postalCode: 'Postal code',
-      primary: 'Primary address',
-      primaryBadge: 'Primary',
-      save: 'Save',
-      saving: 'Saving…',
-      cancel: 'Cancel',
-      created: 'Address added successfully.',
-      updated: 'Address updated successfully.',
-      deleted: 'Address deleted successfully.',
-      genericError: 'Something went wrong. Please try again.',
-      line1Required: 'The address is required.',
-      editAction: 'Edit address',
-      deleteAction: 'Delete address',
-      deleteConfirm: 'Delete this address?',
-    },
-  },
+  personalData,
   geo: {
     country: 'Country',
     state: 'Region',
@@ -363,6 +279,7 @@ export const en = {
       mandatory: 'Required to create the record — cannot be restricted by a role.',
     },
   },
+  companies,
   settings: {
     title: 'Settings',
     subtitle: 'Manage your account preferences.',
@@ -387,7 +304,7 @@ export const en = {
     newPassword: 'New password',
     confirmPassword: 'Confirm new password',
     changePassword: 'Update password',
-    changingPassword: 'Updating…',
+    changingPassword: 'In progress…',
     passwordChanged: 'Password updated successfully.',
     nameRequired: 'Name is required.',
     emailRequired: 'Email is required.',
@@ -427,7 +344,7 @@ export const en = {
     signInTitle: 'Sign in',
     signInSubtitle: 'Enter your credentials to access your account.',
     email: 'Email',
-    password: 'Password',
+    password: 'Your password',
     signIn: 'Sign in',
     signingIn: 'Signing in…',
     signOut: 'Sign out',
@@ -482,40 +399,75 @@ export const en = {
       personal_data: 'Personal data',
     },
   },
-  // Localized labels for backend domain enums. Keyed by the snake_case enum key
-  // (config/config.php → form_enums) then by the enum value. The frontend owns
-  // these labels; the backend only supplies which values/colors/icons exist.
-  enums: {
-    locale: {
-      en: 'English',
-      it: 'Italiano',
+  // Localized labels for backend domain enums (extracted to `en-enums.ts`).
+  enums,
+  businessFunctions: {
+    title: 'Business Functions',
+    subtitle: 'Browse, filter and manage the business functions of your organization.',
+    forbidden: "You don't have permission to view business functions.",
+    columns: {
+      name: 'Name',
+      is_business_unit: 'Business Unit',
+      is_business_service: 'Business Service',
+      manager: 'Responsible',
+      users: 'Associated users',
+      created_at: 'Created at',
     },
-    personal_data_type: {
-      individual: 'Individual',
-      company: 'Company',
+    detail: {
+      title: 'Business function details',
+      subtitle: 'Read-only view of the selected business function.',
+      loadError: 'Unable to load the business function. Please try again.',
+      name: 'Name',
+      type: 'Type',
+      manager: 'Responsible',
+      users: 'Associated users',
+      created_at: 'Created at',
     },
-    personal_title: {
-      mr: 'Mr',
-      mrs: 'Mrs',
-      ms: 'Ms',
-      dr: 'Dr',
-      prof: 'Prof',
-    },
-    contact_type: {
-      phone: 'Phone',
-      mobile: 'Mobile',
-      fax: 'Fax',
-      email: 'Email',
-      pec: 'Pec',
-      website: 'Website',
-    },
-    notification_level: {
-      info: 'Info',
-      success: 'Success',
-      warning: 'Warning',
-      error: 'Error',
+    form: {
+      newBusinessFunction: 'New business function',
+      createTitle: 'Create business function',
+      createSubtitle: 'Add a new business function to your organization.',
+      editTitle: 'Edit business function',
+      editSubtitle: 'Update the selected business function.',
+      name: 'Name',
+      manager: 'Responsible',
+      managerPlaceholder: 'Select a responsible…',
+      users: 'Associated users',
+      usersPlaceholder: 'Select users…',
+      usersSearch: 'Search users…',
+      usersEmpty: 'No users found.',
+      usersError: 'Unable to load users.',
+      usersRemove: 'Remove user',
+      type: {
+        label: 'Type',
+        businessUnit: 'Business Unit',
+        businessService: 'Business Service',
+        none: 'None',
+      },
+      save: 'Save',
+      saving: 'Saving…',
+      cancel: 'Cancel',
+      created: 'Business function created successfully.',
+      updated: 'Business function updated successfully.',
+      deleted: 'Business function deleted successfully.',
+      nameRequired: 'Name is required.',
+      nameMax: 'Name must be at most 191 characters.',
+      genericError: 'Something went wrong. Please try again.',
+      deleteError: 'Unable to delete the business function. Please try again.',
+      deleteForbidden: 'You cannot delete this business function.',
+      sections: {
+        identity: {
+          title: 'Details',
+          description: 'Name and type of the business function.',
+        },
+        assignment: {
+          title: 'Assignment',
+          description: 'Responsible and associated users.',
+        },
+      },
     },
   },
+  operationalSites,
 }
 
 export type TranslationResources = typeof en

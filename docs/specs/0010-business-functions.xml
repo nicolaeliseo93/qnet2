@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0010 — Business Functions module (Funzioni aziendali).
+  Contract-first. Mirrors the `users`/`roles` modules exactly: generic SSRM table
+  (AG Grid), backend-driven column/filter config, metadata-driven form (spec 0004),
+  field permissions (spec 0006), Policy authz server-side, response envelope
+  { success, message, data, permissions? }.
+
+  Naming decision (user-approved): greenfield, English identifiers per
+  engineering.md §1.2. Domain/route/resource/permission key = `business-functions`.
+  Model BusinessFunction, table `business_functions`.
+-->
+<spec id="0010-business-functions" status="draft" owner="tu" date="2026-07-03">
+
+  <goal>
+    Nuovo modulo "Funzioni aziendali" (business functions): una funzione aziendale ha un
+    nome, un tipo mutuamente esclusivo (business unit OPPURE business service OPPURE nessuno),
+    un responsabile opzionale (un singolo utente) e un insieme opzionale di utenti associati
+    (0..n). Il modulo deve essere IDENTICO a "Utenti" per il frontend: tabella AG Grid SSRM,
+    gestione permessi risorsa, permessi sui campi, filtri Excel-like, toolbar, form
+    metadata-driven. Responsabile e utenti associati sono mostrati come avatar con tooltip
+    (nome al passaggio del mouse).
+  </goal>
+
+  <context>
+    Verificato sul repo (nomi reali, non ipotizzati). Il modulo `users` è un adapter sottile
+    sopra framework generici già pronti che NON vanno modificati: `app/Tables/*` (registry),
+    `app/Authorization/*` (registry), `features/table/`, `features/authorization/`,
+    `features/for-select/`, `components/data-table/`, `components/user-avatar.tsx`,
+    `components/ui/async-paginated-multi-select.tsx`, `hooks/use-entity-detail.ts`.
+
+    Backend — pattern da replicare (registry-driven: 1 classe + 1 riga di config, nessuna
+    rotta generica nuova):
+    - Envelope: `App\Http\Controllers\Abstract\BaseApiController` → `ok`, `okWithPermissions`,
+      `paginatedResponse`, `noContent`, `fail`, `handleControllerException`.
+    - Policy: `App\Policies\Abstracts\BasePolicy` (abilities viewAny/view/create/update/delete/
+      export/import → permesso "{resource}.{ability}"). Auto-discovery Laravel.
+    - Table: `App\Tables\AbstractTableDefinition` (+ `TableDefinition` interface), registry
+      `App\Tables\TableRegistry` letto da `config/tables.php`. `authorizeViewAny` fail-closed
+      via `Gate::allows('viewAny', modelClass())`. Colonne derivate: hooks `optionsFor`,
+      `applyDerivedFilter`, `applyDerivedSort`, `distinctValues` (vedi `UsersTableDefinition`
+      per `roles`). Catalogo dichiarativo in una classe `*ColumnCatalog` (vedi
+      `App\Tables\Users\UserColumnCatalog`). Endpoint generici già montati:
+      `GET tables/{domain}/columns`, `POST tables/{domain}/rows|values`,
+      `POST|DELETE tables/{domain}/preferences|filters`, `tables/{domain}/filter-views`.
+    - Authorization metadata (spec 0004/0006): `App\Authorization\AbstractResourceAuthorization`
+      (fieldPermissions() FINAL = intersect(ceiling, DB matrix)), registry
+      `App\Authorization\AuthorizationRegistry` letto da `config/authorization.php`, endpoint
+      generico `GET meta/{resource}` (`MetaController`). Value objects `FieldDefinition`,
+      `FieldPermission`. Serializer `ResourcePermissionsBuilder`.
+    - Write-path field enforcement: trait `App\Http\Requests\Concerns\EnforcesFieldPermissions`
+      (422 sui campi non-editable modificati). Gestisce già relazioni to-many top-level
+      (es. `users`) e attributi scalari via dot-path.
+    - CRUD sottile: vedi `UserController`/`RoleController` (thin, try/catch →
+      handleControllerException, `okWithPermissions`). Sync belongsToMany: vedi
+      `RoleService::syncUsers` (`$model->users()->sync($ids)` in transaction).
+    - for-select utenti già esistente e riusabile: `GET /api/users/for-select`
+      (`UserForSelectController`, `UserForSelectResource` → { id, label:name, subtitle:email,
+      avatar_url }). Alimenta sia il select "responsabile" sia il multiselect "utenti associati".
+    - Navigation backend-driven: `config/navigation.php` (NavigationService filtra per permesso).
+    - Permessi creati da `php artisan permissions:sync` (legge navigation + Policy::permissions()).
+
+    Frontend — pattern da replicare (feature = adapter sottile):
+    - `features/users/` come reference: `api.ts`, `types.ts`, `*-schema.ts` (Zod factory con
+      `t`), `use-*-form-meta.ts`, `use-*-form.ts`, `*-form-payload.ts`, `*-form.tsx`,
+      `*-form-body.tsx`, `*-table.tsx` (adapter su `<TableView domain renderers onAction>`),
+      `*-detail.tsx`, `column-renderers.tsx`, `for-select-api.ts`.
+    - Metadata-driven form: `ResourcePermissionsProvider` + `useResourcePermissions()`
+      (`features/authorization/permissions.tsx`), `<MetaField>`, `useResourceMeta(resource)`.
+    - Multiselect utenti con avatar: `<AsyncPaginatedMultiSelect resource="users" showAvatar>`
+      (canonico in `features/roles/role-form-body.tsx`). NON esiste un single-select:
+      va aggiunta una modalità single (vedi scope).
+    - `UserAvatar` (`components/user-avatar.tsx`) NON ha tooltip: il tooltip nome va composto
+      col primitivo `@/components/ui/tooltip` nel renderer di cella (pattern in
+      `features/table/cell-renderers.tsx`). Dimensionare via `className` (NON via prop `size`,
+      non tipata nell'interfaccia — errore tsc pre-esistente noto, fuori scope).
+    - Routing: `routes/router.tsx` (lazy page figlia di ProtectedRoute→AppLayout). i18n:
+      `i18n/locales/en.ts` + `it.ts` (blocco per modulo). Voce sidebar = nodo backend
+      `/navigation` (label = chiave i18n).
+
+    Decisioni utente approvate: greenfield inglese; bu/bs mutuamente esclusivi (selettore
+    unico `type` nel form → mappato sulle due colonne bool); responsabile e utenti associati
+    entrambi opzionali.
+  </context>
+
+  <scope>
+    <in>
+      <item>Migrazione `business_functions` (id, name, is_business_unit, is_business_service, manager_id nullable FK→users, timestamps) + pivot `business_function_user` (business_function_id, user_id, unique).</item>
+      <item>Model `BusinessFunction` (fillable, cast bool, relazioni manager()/users(), LogsModelActivity) + factory.</item>
+      <item>Policy `BusinessFunctionPolicy extends BasePolicy` (resource() = 'business-functions').</item>
+      <item>CRUD: FormRequests Store/Update (con EnforcesFieldPermissions), DTOs, Resource (+ForSelect NO), Service, Controller, blocco rotte in routes/api.php.</item>
+      <item>`BusinessFunctionsTableDefinition` + `BusinessFunctionColumnCatalog` + derived filter/sort/distinct per manager e users; registrazione in config/tables.php.</item>
+      <item>`BusinessFunctionsAuthorization extends AbstractResourceAuthorization` (fields name/type/manager_id/users) + registrazione config/authorization.php.</item>
+      <item>Nodo navigazione in config/navigation.php + sync permessi business-functions.*.</item>
+      <item>Frontend feature `features/business-functions/` completa (table adapter, form metadata-driven, renderers avatar+tooltip, detail, schema Zod, payload builder).</item>
+      <item>Single-select utenti riusabile: modalità `single` / `maxSelected` su AsyncPaginatedMultiSelect (o AsyncPaginatedSelect) in components/ui/, con avatar.</item>
+      <item>Renderer di cella: manager = avatar singolo + tooltip nome; users = stack di avatar, ognuno con tooltip nome; colonne booleane = cella Sì/No.</item>
+      <item>Pagina + rotta React, blocco i18n en/it, icona sidebar.</item>
+      <item>Test: Pest (backend, ≥90% su Service/Policy/Authorization) + Vitest (frontend).</item>
+    </in>
+    <out>
+      <item>NESSUNA modifica ai framework generici (features/table, features/authorization, features/for-select, components/data-table, app/Tables/Abstract*, app/Authorization/Abstract*, TableController, MetaController, rotte generiche tables/meta).</item>
+      <item>NESSUN endpoint `business-functions/for-select` (il modulo non è selezionabile da altri moduli in questa spec).</item>
+      <item>NESSUNA gestione avatar propria della funzione aziendale (nessun upload avatar sull'entità).</item>
+      <item>NESSUNA migrazione dati dal legacy `gruppi_di_lavoro` (greenfield; import dati fuori scope).</item>
+      <item>NESSUN campo personal-data/geo (quelli sono specifici di users).</item>
+      <item>Fix dell'errore tsc pre-esistente `UserAvatarProps.size` (appartiene ad altro owner; i renderer nuovi usano `className`, non `size`).</item>
+      <item>bu/bs come due switch indipendenti (scartato: scelta = mutuamente esclusivi).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Dominio/risorsa/permesso: `business-functions`. Route-model binding {businessFunction}. -->
+
+    <!-- Tipo mutuamente esclusivo. Nel contratto di scrittura è UN valore `type`;
+         il backend lo mappa sulle due colonne booleane. In lettura si espongono ENTRAMBE
+         le colonne bool (per la griglia) e `type` (per il form). -->
+
+    <endpoint method="GET" path="/api/tables/business-functions/columns">
+      <request>Nessun body. Generico (registry). Auth: sanctum + throttle:60,1.</request>
+      <response status="200">
+        TableConfig con columns nell'ordine:
+        [
+          { id:'name', type:'text', sortable:true, filterable:true, filterType:'text', searchable:true, visible:true },
+          { id:'is_business_unit', type:'boolean', sortable:true, filterable:true, filterType:'set', visible:true },
+          { id:'is_business_service', type:'boolean', sortable:true, filterable:true, filterType:'set', visible:true },
+          { id:'manager', type:'text', sortable:true, filterable:true, filterType:'set', visible:true },   <!-- derived: nome responsabile -->
+          { id:'users', type:'tags', sortable:false, filterable:true, filterType:'set', visible:true },     <!-- derived: utenti associati -->
+          { id:'created_at', type:'datetime', sortable:true, filterable:true, filterType:'date', visible:true }
+        ]
+        + defaultSort [{columnId:'created_at', direction:'desc'}], defaultPagination {limit:25},
+        + actions [view(business-functions.view), edit(business-functions.update), delete(business-functions.delete)] filtrate per permesso,
+        + searchable ['name'].
+        Label = chiavi i18n `businessFunctions.columns.*`.
+      </response>
+      <errors>403 se manca business-functions.viewAny (fail-closed).</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/business-functions/rows">
+      <request>Payload SSRM generico (offset/limit/sortModel/filterModel/search). Whitelist sort/filter = colonne dichiarate.</request>
+      <response status="200">
+        { items: TableRow[], pagination:{ total, offset, limit, total_pages } } dove ogni row =
+        {
+          id:number, name:string,
+          is_business_unit:boolean, is_business_service:boolean,
+          manager: { id:number, name:string, avatar_url:string|null } | null,
+          users: Array&lt;{ id:number, name:string, avatar_url:string|null }&gt;,
+          created_at:string,
+          actions: string[]   <!-- sottoinsieme di ['view','edit','delete'] via Policy per-row -->
+        }
+        NB: nessun campo nascosto (nessuna password). Eager loading di manager+users (no N+1).
+      </response>
+      <errors>403 se manca business-functions.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/business-functions/values">
+      <request>{ columnId, search?, filterModel? } — allow-list columnId. Generico.</request>
+      <response status="200">Valori distinti per set-filter: `manager` → nomi responsabili distinti; `users` → nomi utenti distinti; `is_business_unit`/`is_business_service` → valori bool.</response>
+      <errors>403 senza viewAny; 422 columnId non in allow-list.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/meta/business-functions">
+      <request>Nessun body. Generico (registry). Contesto di creazione (model=null).</request>
+      <response status="200">
+        { success, message, data:{ fields: FieldDefinition[] }, permissions:{ resource, fields, actions } }
+        fields = [
+          { key:'name', type:'text', mandatory:true },
+          { key:'type', type:'select', mandatory:false },
+          { key:'manager_id', type:'select', mandatory:false },
+          { key:'users', type:'multiselect', mandatory:false }
+        ]
+        permissions.resource abilities = { view, create, update, delete, export, import }.
+        permissions.fields[k] = { visible, hidden, editable, readonly, required, disabled }.
+        permissions.actions = { delete, export, import }.
+      </response>
+      <errors>403 se manca business-functions.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/business-functions/{businessFunction}">
+      <request>Nessun body. Auth: sanctum + throttle:60,1.</request>
+      <response status="200">
+        okWithPermissions: { success, message, data, permissions } dove data =
+        {
+          id:number, name:string,
+          is_business_unit:boolean, is_business_service:boolean,
+          type: 'business_unit' | 'business_service' | null,
+          manager_id: number | null,
+          manager: { id:number, name:string, avatar_url:string|null } | null,   <!-- idratazione select -->
+          user_ids: number[],
+          users: Array&lt;{ id:number, name:string, avatar_url:string|null }&gt;,     <!-- idratazione multiselect -->
+          created_at:string
+        }
+        permissions = blocco spec 0004 contestuale al modello.
+      </response>
+      <errors>403 se manca business-functions.view; 404 id inesistente.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/business-functions">
+      <request>
+        {
+          name: string (required, max 191),
+          type: 'business_unit' | 'business_service' | null (optional),
+          manager_id: number | null (optional; exists:users,id),
+          users: number[] (optional; each exists:users,id, distinct)
+        }
+        Mappatura type → colonne: 'business_unit' ⇒ is_business_unit=true,is_business_service=false;
+        'business_service' ⇒ inverse; null/assente ⇒ entrambe false.
+      </request>
+      <response status="201">okWithPermissions(BusinessFunctionResource, permissions, 'Created', 201). Stessa shape di data del GET show.</response>
+      <errors>403 senza business-functions.create; 422 validazione (name mancante, type non valido, manager_id/users inesistenti); 422 campo non-editable modificato (EnforcesFieldPermissions).</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/business-functions/{businessFunction}">
+      <request>Come POST ma tutti i campi `sometimes` (PATCH parziale). `users` = full-replace sync. `manager_id:null` = rimuove il responsabile. `type` = ri-mappa le due colonne.</request>
+      <response status="200">okWithPermissions(BusinessFunctionResource, permissions). Shape di data del GET show.</response>
+      <errors>403 senza business-functions.update; 404; 422 validazione / campo non-editable.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/business-functions/{businessFunction}">
+      <request>Nessun body.</request>
+      <response status="204">No content. Il pivot business_function_user viene sganciato (cascade).</response>
+      <errors>403 senza business-functions.delete; 404.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- BACKEND -->
+    <criterion id="AC-001">Dato lo schema, quando eseguo la migrazione, allora esistono `business_functions` (name NOT NULL, is_business_unit/is_business_service BOOL default false, manager_id nullable FK→users con nullOnDelete, timestamps) e il pivot `business_function_user` (FK entrambe cascadeOnDelete, unique[business_function_id,user_id]); `down()` le rimuove. (test: migrazione + Schema::hasTable/hasColumns)</criterion>
+    <criterion id="AC-002">Dato il model `BusinessFunction`, quando ne ispeziono le relazioni, allora `manager()` è BelongsTo(User) e `users()` è BelongsToMany(User) sul pivot; is_business_unit/is_business_service sono cast a bool; LogsModelActivity attivo. (test: unit relazioni + cast)</criterion>
+    <criterion id="AC-003">Dato un utente con business-functions.viewAny, quando GET /tables/business-functions/columns, allora ricevo le 6 colonne nell'ordine e coi flag sortable/filterable dichiarati; senza il permesso → 403. (test: Table config + authz)</criterion>
+    <criterion id="AC-004">Date N funzioni con responsabile e utenti, quando POST /tables/business-functions/rows, allora ogni row espone manager {id,name,avatar_url}|null e users [{id,name,avatar_url}] e actions[] coerenti con la Policy per-row; nessun campo sensibile; nessun N+1 (query count costante). (test: rows shape + preventLazyLoading)</criterion>
+    <criterion id="AC-005">Data la richiesta /values su columnId='manager' o 'users', quando la invoco, allora ricevo i nomi distinti (rispettivamente dei responsabili e degli utenti associati) filtrati dalla search; columnId fuori allow-list → 422. (test: distinctValues)</criterion>
+    <criterion id="AC-006">Dato un utente con viewAny, quando GET /meta/business-functions, allora `data.fields` = [name(mandatory),type,manager_id,users] e `permissions` ha resource/fields/actions con i 6 flag per campo; senza viewAny → 403. (test: MetaEndpoint shape)</criterion>
+    <criterion id="AC-007">Dato un utente con business-functions.create, quando POST con {name,type,manager_id,users}, allora 201 + data con type mappato correttamente sulle due colonne, manager e users idratati; senza create → 403. (test: CRUD create + authz)</criterion>
+    <criterion id="AC-008">Dato POST/PATCH, quando type='business_unit' allora is_business_unit=true∧is_business_service=false; type='business_service' allora l'inverso; type=null/assente(create) allora entrambe false; type non ∈ {business_unit,business_service,null} → 422. (test: mappatura + validazione)</criterion>
+    <criterion id="AC-009">Data una funzione esistente, quando GET /business-functions/{id} con business-functions.view, allora data include manager_id, manager{...}|null, user_ids[], users[{...}] e il blocco permissions contestuale; senza view → 403; id inesistente → 404. (test: show + permissions)</criterion>
+    <criterion id="AC-010">Data una funzione, quando PATCH parziale (solo `users`), allora la relazione è sostituita (full-replace sync) e gli altri campi restano invariati; PATCH {manager_id:null} rimuove il responsabile. (test: update parziale + sync)</criterion>
+    <criterion id="AC-011">Dato un utente senza business-functions.update, quando PATCH un campo, allora 403 (base authz) prima di qualsiasi 422 di campo; dato un utente con update ma un campo reso non-editable dalla matrice DB, quando ne invia un valore CAMBIATO, allora 422 su quel campo. (test: EnforcesFieldPermissions parità con users)</criterion>
+    <criterion id="AC-012">Data una funzione con utenti associati, quando DELETE con business-functions.delete, allora 204 e le righe pivot sono rimosse; senza delete → 403. (test: destroy + pivot cleanup)</criterion>
+    <criterion id="AC-013">Dopo `permissions:sync`, quando ispeziono i permessi, allora esistono business-functions.{viewAny,view,create,update,delete,export,import}; il nodo navigazione `/business-functions` compare in GET /navigation solo per chi ha business-functions.view. (test: SyncPermissions + Navigation)</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-014">Data la pagina Funzioni aziendali, quando la visito senza business-functions.viewAny, allora `<Can>` mostra il fallback e non monta la tabella; con il permesso monta `<TableView domain="business-functions">`. (test: page gating)</criterion>
+    <criterion id="AC-015">Data una row con manager e users, quando renderizzo la griglia, allora la cella `manager` mostra un UserAvatar con Tooltip che rivela il nome all'hover, e la cella `users` mostra uno stack di avatar, ciascuno con Tooltip del nome. (test: renderer + tooltip aria/role)</criterion>
+    <criterion id="AC-016">Date le colonne booleane, quando renderizzo, allora `is_business_unit`/`is_business_service` mostrano una cella Sì/No (badge) leggibile e coerente col valore. (test: boolean cell)</criterion>
+    <criterion id="AC-017">Dato il form di creazione, quando lo apro, allora vedo i campi metadata-driven: name (MetaField, required), selettore `type` (business unit / business service / nessuno), select singola responsabile (avatar), multiselect utenti associati (avatar); il meta di create arriva da useResourceMeta('business-functions'). (test: form create + MetaField)</criterion>
+    <criterion id="AC-018">Dato il form di modifica, quando consuma detail.permissions, allora un campo `hidden` non è renderizzato, un campo `readonly` non è editabile, un campo `required` mostra l'asterisco, e un 422 dal server è mappato inline via applyServerValidationErrors. (test: form metadata edit)</criterion>
+    <criterion id="AC-019">Dato il submit, quando creo, allora il payload è {name,type,manager_id,users}; quando aggiorno, il builder PATCH include SOLO i campi cambiati rispetto all'originale. (test: payload builder create/update)</criterion>
+    <criterion id="AC-020">Dato il select responsabile (single), quando seleziono un utente, allora ne resta selezionato esattamente uno (una nuova scelta sostituisce la precedente) e posso svuotarlo; gli avatar sono mostrati sia nell'opzione sia nel valore. (test: single-select behavior)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm): solo librerie già presenti.</item>
+    <item>Authz server-side su OGNI endpoint (Policy/permessi). L'UI nasconde, il backend autorizza.</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/rotte/permessi/chiavi). Domain/resource = `business-functions`.</item>
+    <item>Envelope di progetto rispettato: { success, message, data, permissions? }. Mai model Eloquent raw: sempre via Resource.</item>
+    <item>Mass assignment: $fillable esplicito. Query via Eloquent/parametrizzate; filtri/sort SSRM SOLO da allow-list di colonne (mai input grezzo in *Raw).</item>
+    <item>Riuso obbligatorio dei framework generici e dei componenti esistenti (UserAvatar, AsyncPaginatedMultiSelect, MetaField, TableView, useResourceMeta, for-select `users`). Nessuna duplicazione di stile/logica.</item>
+    <item>File entro 300/500 righe; dead code zero; nessuna emoticon nel codice. Pint + ESLint + `tsc --noEmit` puliti.</item>
+    <item>Coverage per-layer: Policy/Authorization/Service ≥90%; controller/table ≥85%. Test ESEGUITI, non solo scritti.</item>
+    <item>Ownership file disgiunta tra teammate. Contratto qui congelato = punto di sincronizzazione: backend e frontend procedono in parallelo.</item>
+  </constraints>
+
+</spec>

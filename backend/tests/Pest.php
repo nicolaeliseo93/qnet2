@@ -48,3 +48,18 @@ function something()
 {
     // ..
 }
+
+/**
+ * Locate the "FA Società & Servizi" group nested inside the settings
+ * navigation section, given the `/api/navigation` `data` payload.
+ *
+ * @param  array<int, array<string, mixed>>  $data
+ * @return array<string, mixed>|null
+ */
+function navigationGroup(array $data): ?array
+{
+    $settings = collect($data)->firstWhere('key', 'settings');
+
+    return collect(data_get($settings, 'children', []))
+        ->firstWhere('key', 'fa-companies-services');
+}

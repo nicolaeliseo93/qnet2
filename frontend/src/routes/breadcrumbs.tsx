@@ -22,6 +22,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   dashboard: 'navigation.dashboard',
   users: 'navigation.users',
   roles: 'navigation.roles',
+  companies: 'navigation.companies',
+  'business-functions': 'navigation.businessFunctions',
   settings: 'navigation.settings',
   login: 'auth.signInTitle',
   'forgot-password': 'auth.forgotPasswordTitle',

@@ -1,0 +1,81 @@
+/**
+ * Business Functions CRUD types. The generic table types (columns/filters/
+ * actions/rows) live in `features/table/types.ts`; this file holds only what
+ * is genuinely business-functions-specific — the resource and its
+ * create/update payloads. Source of truth: spec 0010 frozen `data_contract`.
+ */
+
+import type { ResourcePermissions } from '@/features/authorization/types'
+
+/**
+ * Mutually exclusive domain type: the form exposes a single `type` selector
+ * (business unit / business service / none) which the backend maps onto the
+ * two boolean columns (`is_business_unit`/`is_business_service`).
+ */
+export const BUSINESS_FUNCTION_TYPES = ['business_unit', 'business_service'] as const
+
+export type BusinessFunctionType = (typeof BUSINESS_FUNCTION_TYPES)[number]
+
+/** A manager or associated-user reference as returned by the backend. */
+export interface BusinessFunctionMember {
+  id: number
+  name: string
+  avatar_url: string | null
+}
+
+/**
+ * Single business-function detail returned by GET/POST/PATCH
+ * /business-functions (envelope `data`). Matches `BusinessFunctionResource`.
+ */
+export interface BusinessFunctionDetail {
+  id: number
+  name: string
+  is_business_unit: boolean
+  is_business_service: boolean
+  type: BusinessFunctionType | null
+  manager_id: number | null
+  /** Hydrates the single-select responsabile control. */
+  manager: BusinessFunctionMember | null
+  user_ids: number[]
+  /** Hydrates the multiselect associated-users control. */
+  users: BusinessFunctionMember[]
+  created_at: string
+}
+
+/**
+ * A `BusinessFunctionDetail` carrying the actor's authorization metadata for
+ * this instance (spec 0004), as returned by `GET /business-functions/{id}`
+ * (`show`). Used to seed the edit form's `ResourcePermissionsProvider`
+ * without a second request.
+ */
+export interface BusinessFunctionDetailWithPermissions extends BusinessFunctionDetail {
+  permissions: ResourcePermissions
+}
+
+/** Payload for POST /business-functions (create). */
+export interface CreateBusinessFunctionPayload {
+  name: string
+  type: BusinessFunctionType | null
+  manager_id: number | null
+  users: number[]
+}
+
+/**
+ * Payload for PATCH /business-functions/{id} (partial update). Every field is
+ * optional so the request only carries what actually changed: `users` is a
+ * full-replace sync, `manager_id: null` clears the responsabile, `type`
+ * re-maps the two boolean columns.
+ */
+export type UpdateBusinessFunctionPayload = Partial<CreateBusinessFunctionPayload>
+
+/**
+ * Discriminated form mode shared by the form hook/meta-resolver and the
+ * (owned elsewhere) `BusinessFunctionForm` component. Defined here — rather
+ * than re-exported from a `business-function-form.tsx` module, as the
+ * `users`/`roles` convention does — because this microtask's ownership is
+ * split across teammates and the form component does not exist yet; the form
+ * component imports this type from here instead.
+ */
+export type BusinessFunctionFormMode =
+  | { type: 'create' }
+  | { type: 'edit'; businessFunction: BusinessFunctionDetailWithPermissions }

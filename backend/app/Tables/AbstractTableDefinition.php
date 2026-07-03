@@ -371,4 +371,17 @@ abstract class AbstractTableDefinition implements TableDefinition
     {
         return null;
     }
+
+    /**
+     * Default: no derived searchable column — let the generic engine's plain
+     * `orWhere($columnId, 'like', $pattern)` run against the real column.
+     * Concrete definitions override for a DERIVED searchable column (e.g.
+     * `city`/`street` on `operational-sites`, spec 0011).
+     *
+     * @param  Builder<Model>  $query
+     */
+    public function applyDerivedSearch(Builder $query, string $columnId, string $pattern): bool
+    {
+        return false;
+    }
 }

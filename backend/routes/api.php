@@ -4,12 +4,15 @@ use App\Http\Controllers\Addresses\AddressController;
 use App\Http\Controllers\Attachments\AttachmentController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Authorization\FieldCatalogueController;
+use App\Http\Controllers\BusinessFunctions\BusinessFunctionController;
+use App\Http\Controllers\Companies\CompanyController;
 use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\Contacts\ContactController;
 use App\Http\Controllers\Geo\GeoController;
 use App\Http\Controllers\Meta\MetaController;
 use App\Http\Controllers\Navigation\NavigationController;
 use App\Http\Controllers\Notifications\NotificationController;
+use App\Http\Controllers\OperationalSites\OperationalSiteController;
 use App\Http\Controllers\PersonalData\PersonalDataController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RoleForSelectController;
@@ -170,6 +173,42 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('roles', [RoleController::class, 'store']);
         Route::match(['put', 'patch'], 'roles/{role}', [RoleController::class, 'update']);
         Route::delete('roles/{role}', [RoleController::class, 'destroy']);
+    });
+
+    // Business functions CRUD backing the table row-actions (view/edit/delete)
+    // + create (spec 0010). Authorization (business-functions.view/create/
+    // update/delete) is enforced server-side in BusinessFunctionController via
+    // BusinessFunctionPolicy on every endpoint. No for-select endpoint: the
+    // manager/users pickers reuse the existing GET /api/users/for-select.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('business-functions/{businessFunction}', [BusinessFunctionController::class, 'show']);
+        Route::post('business-functions', [BusinessFunctionController::class, 'store']);
+        Route::match(['put', 'patch'], 'business-functions/{businessFunction}', [BusinessFunctionController::class, 'update']);
+        Route::delete('business-functions/{businessFunction}', [BusinessFunctionController::class, 'destroy']);
+    });
+
+    // Companies CRUD backing the table row-actions (view/edit/delete) + create
+    // (spec 0010). Authorization (companies.view/create/update/delete) is
+    // enforced server-side in CompanyController via CompanyPolicy on every
+    // endpoint. No for-select endpoint (companies are not referenced by other
+    // entities in this feature).
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('companies/{company}', [CompanyController::class, 'show']);
+        Route::post('companies', [CompanyController::class, 'store']);
+        Route::match(['put', 'patch'], 'companies/{company}', [CompanyController::class, 'update']);
+        Route::delete('companies/{company}', [CompanyController::class, 'destroy']);
+    });
+
+    // Operational sites CRUD backing the table row-actions (view/edit/delete)
+    // + create (spec 0011). Authorization (operational-sites.view/create/
+    // update/delete) is enforced server-side in OperationalSiteController via
+    // OperationalSitePolicy on every endpoint. No for-select endpoint (not
+    // referenced by other entities in this feature).
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('operational-sites/{operationalSite}', [OperationalSiteController::class, 'show']);
+        Route::post('operational-sites', [OperationalSiteController::class, 'store']);
+        Route::match(['put', 'patch'], 'operational-sites/{operationalSite}', [OperationalSiteController::class, 'update']);
+        Route::delete('operational-sites/{operationalSite}', [OperationalSiteController::class, 'destroy']);
     });
 
     // In-app user notifications (Laravel native `database` channel). Every

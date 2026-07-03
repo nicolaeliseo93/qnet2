@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0011 — Operational Sites module (Sedi operative).
+  Contract-first. Mirrors the `users` module exactly: generic SSRM table (AG Grid),
+  backend-driven column/filter config, metadata-driven form (spec 0004), field
+  permissions (spec 0006), Policy authz server-side, response envelope
+  { success, message, data, permissions? }.
+
+  Naming decision (user-approved): greenfield, English identifiers per
+  engineering.md §1.2. Domain/route/resource/permission key = `operational-sites`
+  (hyphen, exactly like `business-functions`). Model OperationalSite, table
+  `operational_sites`, morph alias `operational_site`, route binding {operationalSite}.
+
+  Domain decisions (user-approved, 2026-07-03):
+  - The address is stored via the EXISTING polymorphic `addresses` table (trait
+    HasAddresses), NOT as flat columns. Geo mapping already used by Users:
+    regione = State, provincia = Province, comune = City, via = line1, cap =
+    postal_code. `operational_sites` itself carries no address columns.
+  - The site has NO own name/label: it IS its address. Grid identity = comune + via.
+  - Exactly ONE address per site (is_primary = true). Created/updated inside the
+    site's own CRUD payload (single metadata-driven form), never via the generic
+    /addresses endpoint.
+-->
+<spec id="0011-operational-sites" status="draft" owner="tu" date="2026-07-03">
+
+  <goal>
+    Nuovo modulo "Sedi operative" (operational sites): una sede operativa è un luogo
+    fisico identificato dal suo indirizzo (comune, via, CAP, provincia, regione). Il
+    modulo deve essere IDENTICO a "Utenti" per il frontend: tabella AG Grid SSRM,
+    gestione permessi risorsa, permessi sui campi, filtri Excel-like, toolbar/search,
+    form metadata-driven. L'indirizzo è memorizzato nella tabella polimorfica
+    `addresses` esistente e riusa la geografia normalizzata (country → state(regione)
+    → province(provincia) → city(comune)); le colonne di griglia comune/via/cap/
+    provincia/regione sono derivate dall'indirizzo primario, esattamente come le
+    colonne geo già presenti nella tabella Utenti.
+  </goal>
+
+  <context>
+    Verificato sul repo (nomi reali, non ipotizzati). Il modulo `users` è un adapter
+    sottile sopra framework generici già pronti che NON vanno modificati: `app/Tables/*`
+    (registry), `app/Authorization/*` (registry), `features/table/`,
+    `features/authorization/`, `features/geo/`, `components/data-table/`,
+    `hooks/use-entity-detail`. Reference più recente e leggero: modulo
+    `business-functions` (spec 0010) — stesso pattern, appena aggiunto.
+
+    Indirizzo polimorfico (già production-ready, progettato come drop-in):
+    - Tabella `addresses` con `nullableMorphs('addressable')` + `is_primary` +
+      `line1`(via, NOT NULL), `line2`, `postal_code`(cap), `city_id`→cities,
+      `province_id`→provinces, `state_id`→states, `country_id`→countries, lat/lng.
+    - Model `App\Models\Address` (`morphTo addressable`; belongsTo country/state/
+      province/city; `$hidden = [line1,line2,latitude,longitude]`).
+    - Trait `App\Models\Concerns\HasAddresses` → `addresses(): MorphMany` + cascade
+      delete on owner delete. Basta `use HasAddresses` sul model, nessuna migrazione.
+    - `App\Services\AddressService`: `createFor(Model $owner, CreateAddress $data)`,
+      `update(Address, CreateAddress)`, `delete(Address)` — accetta QUALSIASI owner
+      polimorfico (già usato per PersonalData). Riusabile as-is.
+    - Geo reference read-only (Country/State/Province/City) POPOLATO in ambiente
+      (UserAddressSeeder pesca 400 città); cascade via `GeoController`
+      (GET /countries, /states?country_id, /provinces?state_id, /cities?province_id).
+      Nota chiave: nel modello geo, uno **State è la regione**, Province la provincia,
+      City il comune (vedi docstring di `App\Models\Province` e `UserGeoColumns`).
+    - Morph map STRETTO (`Relation::enforceMorphMap` in AppServiceProvider): ogni model
+      in una colonna morph deve essere registrato. Contiene già user/role/personal_data/
+      contact/address/attachment/user_table_preference/business_function/company.
+      → va aggiunto `operational_site => OperationalSite::class`.
+
+    Precedente diretto da COPIARE per le colonne di griglia derivate dall'indirizzo:
+    `App\Tables\Users\UserGeoColumns` espone country/region/province/city derivate
+    dall'indirizzo PRIMARIO (set-filter con opzioni = nomi distinti in uso, sort via
+    subquery correlata, filtro via whereHas su addresses.is_primary + whereHas(geo)).
+    La sola differenza: per Utenti l'indirizzo pende da `personal_data` (un hop in più);
+    per le sedi pende DIRETTAMENTE dal sito (`addressable_type='operational_site'`).
+    → nuovo collaboratore `OperationalSiteGeoColumns` (stesso disegno, join più corto).
+    `via` e `cap` seguono il pattern di `primary_address` (colonna testo derivata,
+    filtro text `contains` via whereHas, sort via subquery correlata su line1/postal_code).
+
+    Backend generico da riusare (registry-driven: 1 classe + 1 riga di config,
+    nessuna rotta generica nuova) — identico a spec 0010:
+    - Envelope: `BaseApiController` → `ok`, `okWithPermissions`, `noContent`, `fail`,
+      `handleControllerException`.
+    - Policy: `BasePolicy` (abilities viewAny/view/create/update/delete/export/import →
+      permesso "{resource}.{ability}"). Auto-discovery Laravel, nessuna registrazione.
+    - Table: `AbstractTableDefinition` (+ interface `TableDefinition`), registry
+      `TableRegistry` letto da `config/tables.php`. `authorizeViewAny` fail-closed di
+      default via Gate viewAny. Endpoint generici già montati:
+      GET tables/{domain}/columns, POST tables/{domain}/rows|values,
+      POST|DELETE tables/{domain}/preferences|filters, tables/{domain}/filter-views.
+    - Authorization metadata: `AbstractResourceAuthorization` (fieldPermissions() FINAL
+      = intersect(ceiling, matrice DB `role_field_permissions`, generica keyed by
+      resource — nessuna migrazione), registry `AuthorizationRegistry` letto da
+      `config/authorization.php`, endpoint generico GET meta/{resource} (`MetaController`).
+      Value objects `FieldDefinition`, `FieldPermission`, serializer
+      `ResourcePermissionsBuilder`.
+    - Write-path field enforcement: trait `EnforcesFieldPermissions` (422 sui campi
+      non-editable modificati) — richiede `authorizationResource()` + `authorizationModel()`.
+    - CRUD sottile: `UserController`/`BusinessFunctionController` (thin, try/catch →
+      handleControllerException, `okWithPermissions`).
+    - Search generico: `TableService::applySearch` fa un OR-LIKE PIATTO su colonne REALI
+      (`searchableColumnIds()`). Non esiste un hook per la ricerca su colonne DERIVATE
+      (mentre per il SORT esiste già `applyDerivedSort`). Poiché comune/via sono derivate
+      dall'indirizzo, la search richiede un hook simmetrico `applyDerivedSearch` (vedi
+      scope/in, punto isolato e retro-compatibile) — è l'UNICA estensione al framework
+      generico di questa spec.
+    - Permessi creati da `php artisan permissions:sync` (scansiona Policy + navigation).
+      Matrice ruolo→ability in `database/seeders/RolePermissionSeeder.php`.
+    - Navigazione backend-driven: `config/navigation.php` (NavigationService filtra per
+      permesso). Frontend: mapping icona in `features/navigation/icon-map.ts`.
+
+    Frontend generico da riusare (feature = adapter sottile) — identico a spec 0010:
+    - `features/users/` / `features/business-functions/` come reference: `api.ts`,
+      `types.ts`, `*-schema.ts` (Zod factory con `t`), `use-*-form-meta.ts`,
+      `use-*-form.ts`, `*-form-payload.ts`, `*-form.tsx`, `*-form-body.tsx`,
+      `*-table.tsx` (adapter su `<TableView domain renderers onAction>`), `*-detail.tsx`,
+      `column-renderers.tsx`.
+    - Metadata-driven form: `ResourcePermissionsProvider` + `useResourcePermissions()`,
+      `<MetaField control name metaKey>`, `useResourceMeta(resource)`.
+    - Cascade geo RIUSABILE già pronta: `features/geo/geo-select.tsx` + `use-geo.ts`
+      (+ `api.ts`, `query-keys.ts`, `types.ts`) e schema di riferimento
+      `features/personal-data/address-schema.ts`. Il form sede compone la cascata
+      country→regione→provincia→comune + via + CAP.
+    - Routing: `routes/router.tsx` (lazy page figlia di ProtectedRoute→AppLayout).
+      i18n: `i18n/locales/en.ts` + `it.ts` (blocco per modulo). Voce sidebar = nodo
+      backend `/navigation` (label = chiave i18n, filtrata server-side per permesso).
+    - Gating pagina: `<Can permission="operational-sites.viewAny">` + `useAbilities`.
+  </context>
+
+  <scope>
+    <in>
+      <item>Migrazione `operational_sites` (id, timestamps). NESSUNA colonna indirizzo: l'indirizzo vive nella tabella polimorfica `addresses` esistente.</item>
+      <item>Model `OperationalSite` (`use HasAddresses`, LogsModelActivity; helper `address()`/`primaryAddress()` per l'indirizzo primario) + `OperationalSiteFactory` (con stato che crea l'indirizzo primario per test/seed).</item>
+      <item>Registrazione morph alias `operational_site => OperationalSite::class` in `AppServiceProvider::enforceMorphMap`.</item>
+      <item>Policy `OperationalSitePolicy extends BasePolicy` (resource() = 'operational-sites'). Nessun override self-delete (non è un utente).</item>
+      <item>CRUD: FormRequests Store/Update (con EnforcesFieldPermissions), DTO `CreateOperationalSiteData`/`UpdateOperationalSiteData` (che incapsula anche i campi indirizzo), Resource `OperationalSiteResource`, `OperationalSiteService` (crea/aggiorna il sito + l'UNICO indirizzo primario via `AddressService.createFor`/`update`), `OperationalSiteController` (thin), blocco rotte in `routes/api.php`.</item>
+      <item>`OperationalSitesTableDefinition` extends `AbstractTableDefinition` + `OperationalSiteColumnCatalog` (dati dichiarativi) + `OperationalSiteGeoColumns` (collaboratore: options/filter/sort/distinct per city/province/region e text per street/postal_code, join diretto su addressable_type='operational_site' + is_primary). Registrazione in `config/tables.php`.</item>
+      <item>Search su colonne DERIVATE: hook generico `applyDerivedSearch(Builder, columnId, pattern): bool` — simmetrico all'esistente `applyDerivedSort`, default no-op nell'AbstractTableDefinition (retro-compatibile: nessun domain esistente cambia comportamento), invocato da `TableService::applySearch` PRIMA dell'OR-LIKE piatto e con fallback ad esso. `OperationalSitesTableDefinition` lo implementa per `city`(comune) + `street`(via). È l'UNICA modifica ai file generici.</item>
+      <item>`OperationalSitesAuthorization extends AbstractResourceAuthorization` (fields: country_id, state_id, province_id, city_id, line1, postal_code; mandatory: line1, city_id) + registrazione in `config/authorization.php`.</item>
+      <item>Nodo navigazione in `config/navigation.php` (gated `operational-sites.view`) + sync permessi `operational-sites.*` + righe matrice in `RolePermissionSeeder`. Mapping icona `map-pin` in `features/navigation/icon-map.ts`.</item>
+      <item>Frontend feature `features/operational-sites/` completa: `api.ts`, `types.ts`, `operational-site-schema.ts` (Zod cascade geo + via/cap), `column-renderers.tsx`, `operational-sites-table.tsx` (adapter), `operational-site-form.tsx`, `use-operational-site-form.ts`, `use-operational-site-form-meta.ts`, `operational-site-form-body.tsx` (compone `features/geo/geo-select`), `operational-site-form-payload.ts`, `operational-site-detail.tsx`.</item>
+      <item>`pages/operational-sites-page.tsx` + una lazy import + una route `operational-sites` in `routes/router.tsx`.</item>
+      <item>Blocco i18n `operationalSites` in `i18n/locales/en.ts` e `it.ts` (title/subtitle/forbidden, columns.*, form.*, detail.*, messaggi Zod).</item>
+      <item>Test: Pest backend (Model/Policy/Authorization/Service ≥90%, Table/Controller ≥85%) + Vitest frontend (form metadata, payload builder, renderers, page gating).</item>
+    </in>
+    <out>
+      <item>NESSUNA modifica ai framework generici ECCETTO l'hook isolato `applyDerivedSearch` sopra (TableDefinition interface + AbstractTableDefinition default no-op + una chiamata in TableService::applySearch). Nient'altro in features/table, features/authorization, features/geo, components/data-table, app/Tables/Abstract*, app/Authorization/Abstract*, TableController, MetaController, rotte generiche.</item>
+      <item>NESSUNA colonna `name`/`label` sul sito (decisione utente: la sede È il suo indirizzo).</item>
+      <item>NESSUNA gestione multi-indirizzo: esattamente UN indirizzo primario per sito. NESSUN riuso dell'endpoint generico `/addresses` né del componente `addresses-manager` (l'indirizzo è embedded nel form del sito).</item>
+      <item>NESSUN endpoint `operational-sites/for-select` (il modulo non è selezionabile da altri moduli in questa spec).</item>
+      <item>NESSUNA colonna flat comune/provincia/regione come stringhe libere (scartato: si usa la geografia normalizzata via FK).</item>
+      <item>NESSUN campo geolocation (lat/lng) nel form (restano nullable sull'indirizzo, non esposti in questa spec).</item>
+      <item>NESSUNA modifica al modulo Utenti / PersonalData / Address esistenti (solo riuso).</item>
+      <item>NESSUNA migrazione dati da eventuale legacy `sedi_operative`.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Dominio/risorsa/permesso: `operational-sites`. Route-model binding {operationalSite}.
+         Colonne di griglia (id inglesi, coerenti con le geo di Utenti):
+         city(comune), street(via), postal_code(cap), province(provincia),
+         region(regione, = State), created_at. Tutte DERIVATE dall'indirizzo primario
+         tranne created_at (colonna reale del sito). -->
+
+    <endpoint method="GET" path="/api/tables/operational-sites/columns">
+      <request>Nessun body. Generico (registry). Auth: sanctum + throttle:60,1.</request>
+      <response status="200">
+        TableConfig con columns nell'ordine:
+        [
+          { id:'id', type:'number', visible:false, sortable:true, filterable:true, filterType:'number' },
+          { id:'city', type:'text', sortable:true, filterable:true, filterType:'set', visible:true, searchable:true },        <!-- comune (nome City) -->
+          { id:'street', type:'text', sortable:true, filterable:true, filterType:'text', visible:true, searchable:true, hasFilterValues:false }, <!-- via (line1) -->
+          { id:'postal_code', type:'text', sortable:true, filterable:true, filterType:'text', visible:true, hasFilterValues:false }, <!-- cap -->
+          { id:'province', type:'text', sortable:true, filterable:true, filterType:'set', visible:true },   <!-- provincia (nome Province) -->
+          { id:'region', type:'text', sortable:true, filterable:true, filterType:'set', visible:true },     <!-- regione (nome State) -->
+          { id:'created_at', type:'datetime', sortable:true, filterable:true, filterType:'date', visible:true }
+        ]
+        + defaultSort [{columnId:'created_at', direction:'desc'}], defaultPagination {limit:25},
+        + actions [view(operational-sites.view), edit(operational-sites.update), delete(operational-sites.delete)] filtrate per permesso,
+        + searchable ['city','street'] (risolte via applyDerivedSearch).
+        Label = chiavi i18n `operationalSites.columns.*`.
+      </response>
+      <errors>403 se manca operational-sites.viewAny (fail-closed).</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/operational-sites/rows">
+      <request>Payload SSRM generico (offset/limit/sortModel/filterModel/search). Whitelist sort/filter/search = colonne dichiarate. Search matcha city(name) OR street(line1) via applyDerivedSearch.</request>
+      <response status="200">
+        { items: TableRow[], pagination:{ total, offset, limit, total_pages } } dove ogni row =
+        {
+          id:number,
+          city: string | null,          <!-- nome del comune (City) dell'indirizzo primario -->
+          street: string | null,        <!-- via (line1) -->
+          postal_code: string | null,   <!-- cap -->
+          province: string | null,      <!-- nome provincia (Province) -->
+          region: string | null,        <!-- nome regione (State) -->
+          created_at: string,
+          actions: string[]             <!-- sottoinsieme di ['view','edit','delete'] via Policy per-row -->
+        }
+        Eager loading dell'indirizzo primario + relazioni geo (no N+1): query count costante.
+      </response>
+      <errors>403 se manca operational-sites.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/operational-sites/values">
+      <request>{ columnId, search?, filterModel? } — allow-list columnId. Generico.</request>
+      <response status="200">
+        Valori distinti per set-filter, presi dai soli indirizzi con addressable_type='operational_site' AND is_primary:
+        `city` → nomi comuni distinti in uso; `province` → nomi province distinti; `region` → nomi regioni distinti.
+        (street/postal_code sono filtri TEXT: hasFilterValues=false → /values non chiamato.)
+      </response>
+      <errors>403 senza viewAny; 422 columnId non in allow-list.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/meta/operational-sites">
+      <request>Nessun body. Generico (registry). Contesto di creazione (model=null).</request>
+      <response status="200">
+        { success, message, data:{ fields: FieldDefinition[] }, permissions:{ resource, fields, actions } }
+        fields = [
+          { key:'country_id', type:'select', mandatory:false },
+          { key:'state_id',    type:'select', mandatory:false },   <!-- regione -->
+          { key:'province_id', type:'select', mandatory:false },
+          { key:'city_id',     type:'select', mandatory:true },    <!-- comune -->
+          { key:'line1',       type:'text',   mandatory:true },    <!-- via -->
+          { key:'postal_code', type:'text',   mandatory:false }    <!-- cap -->
+        ]
+        permissions.resource abilities = { view, create, update, delete, export, import }.
+        permissions.fields[k] = { visible, hidden, editable, readonly, required, disabled }.
+        permissions.actions = { delete, export, import }.
+      </response>
+      <errors>403 se manca operational-sites.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/operational-sites/{operationalSite}">
+      <request>Nessun body. Auth: sanctum + throttle:60,1.</request>
+      <response status="200">
+        okWithPermissions: { success, message, data, permissions } dove data =
+        {
+          id:number,
+          line1: string,                              <!-- via -->
+          postal_code: string | null,                <!-- cap -->
+          country_id: number | null, country: { id:number, name:string } | null,
+          state_id:   number | null, region:  { id:number, name:string } | null,   <!-- regione = State -->
+          province_id:number | null, province:{ id:number, name:string } | null,
+          city_id:    number | null, city:    { id:number, name:string } | null,   <!-- comune -->
+          created_at:string
+        }
+        (country_id/state_id/province_id/city_id + line1/postal_code idratano la cascade del form.)
+        permissions = blocco spec 0004 contestuale al modello.
+      </response>
+      <errors>403 se manca operational-sites.view; 404 id inesistente.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/operational-sites">
+      <request>
+        {
+          line1: string (required, max 255),
+          postal_code: string | null (optional, max 20),
+          country_id: number | null (optional; exists:countries,id),
+          state_id: number | null (optional; exists:states,id),
+          province_id: number | null (optional; exists:provinces,id),
+          city_id: number (required; exists:cities,id)
+        }
+        Il backend crea l'OperationalSite e il suo UNICO indirizzo primario
+        (is_primary=true) via AddressService.createFor($site, CreateAddress::fromValidated()).
+      </request>
+      <response status="201">okWithPermissions(OperationalSiteResource, permissions, 'Created', 201). Stessa shape di data del GET show.</response>
+      <errors>403 senza operational-sites.create; 422 validazione (line1/city_id mancanti, FK geo inesistenti); 422 campo non-editable modificato (EnforcesFieldPermissions).</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/operational-sites/{operationalSite}">
+      <request>Come POST ma tutti i campi `sometimes` (PATCH parziale). Aggiorna l'indirizzo primario esistente via AddressService.update (lo crea se assente). `postal_code:null` svuota il CAP.</request>
+      <response status="200">okWithPermissions(OperationalSiteResource, permissions). Shape di data del GET show.</response>
+      <errors>403 senza operational-sites.update; 404; 422 validazione / campo non-editable.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/operational-sites/{operationalSite}">
+      <request>Nessun body.</request>
+      <response status="204">No content. L'indirizzo primario viene rimosso (cascade di HasAddresses::bootHasAddresses).</response>
+      <errors>403 senza operational-sites.delete; 404.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- BACKEND -->
+    <criterion id="AC-001">Dato lo schema, quando eseguo la migrazione, allora esiste `operational_sites` (id, timestamps) e `down()` la rimuove; l'indirizzo NON aggiunge colonne al sito (vive su `addresses`). (test: migrazione + Schema::hasTable/hasColumns su operational_sites)</criterion>
+    <criterion id="AC-002">Dato il model `OperationalSite`, quando ne ispeziono le relazioni, allora `addresses()` è MorphMany(Address) (trait HasAddresses), l'helper indirizzo primario ritorna l'Address is_primary; `operational_site` è nel morph map; LogsModelActivity attivo. (test: unit relazione + getMorphClass + cascade delete)</criterion>
+    <criterion id="AC-003">Dato un utente con operational-sites.viewAny, quando GET /tables/operational-sites/columns, allora ricevo le colonne nell'ordine [id(hidden),city,street,postal_code,province,region,created_at] coi flag dichiarati (city/province/region=set, street/postal_code=text, created_at=date) e searchable=['city','street']; senza il permesso → 403. (test: Table config + authz)</criterion>
+    <criterion id="AC-004">Date N sedi con indirizzo primario, quando POST /tables/operational-sites/rows, allora ogni row espone city/street/postal_code/province/region derivati dall'indirizzo primario (nomi geo) e actions[] coerenti con la Policy per-row; nessun N+1 (query count costante indipendente dalle righe). (test: rows shape + preventLazyLoading)</criterion>
+    <criterion id="AC-005">Data /values su columnId='city'|'province'|'region', quando la invoco, allora ricevo i nomi distinti in uso tra i soli indirizzi delle sedi (addressable_type='operational_site', is_primary), filtrati dalla search; columnId fuori allow-list → 422. (test: distinctValues geo)</criterion>
+    <criterion id="AC-006">Dato un set-filter su region/province/city con una lista di nomi, quando POST /rows, allora ricevo solo le sedi il cui indirizzo primario ha quel geo (whereHas su addresses.is_primary + whereHas(geo).whereIn(name)); un ordinamento su city/street/postal_code/province/region ordina per il valore derivato (subquery correlata). (test: derived filter + derived sort)</criterion>
+    <criterion id="AC-007">Data la search generica con termine T, quando POST /rows, allora `applyDerivedSearch` matcha le sedi con comune (City.name) LIKE %T% OR via (line1) LIKE %T% (parametri bound, LIKE-escaped); l'hook è default no-op e NON cambia il comportamento di search di users/roles/business-functions (OR-LIKE piatto invariato). (test: search operational-sites + regressione search users)</criterion>
+    <criterion id="AC-008">Dato un utente con viewAny, quando GET /meta/operational-sites, allora `data.fields` = [country_id,state_id,province_id,city_id(mandatory),line1(mandatory),postal_code] e `permissions` ha resource/fields/actions coi 6 flag per campo; senza viewAny → 403. (test: MetaEndpoint shape)</criterion>
+    <criterion id="AC-009">Dato un utente con operational-sites.create, quando POST {line1,city_id,...}, allora 201 + viene creato il sito e UN indirizzo primario (is_primary=true, addressable=operational_site) con i campi geo, e data li idrata; senza create → 403; line1 o city_id mancanti → 422; FK geo inesistente → 422. (test: create + address creation + authz + validazione)</criterion>
+    <criterion id="AC-010">Data una sede esistente, quando GET /operational-sites/{id} con operational-sites.view, allora data include line1/postal_code + country_id/state_id/province_id/city_id + oggetti {id,name} country/region/province/city e il blocco permissions contestuale; senza view → 403; id inesistente → 404. (test: show + permissions)</criterion>
+    <criterion id="AC-011">Data una sede, quando PATCH parziale (es. solo line1), allora l'indirizzo primario esistente è aggiornato (nessun indirizzo duplicato) e gli altri campi restano invariati; PATCH {postal_code:null} svuota il CAP. (test: update parziale + AddressService.update)</criterion>
+    <criterion id="AC-012">Dato un utente senza operational-sites.update, quando PATCH un campo, allora 403 (base authz) prima di ogni 422 di campo; dato un utente con update ma un campo reso non-editable dalla matrice DB, quando ne invia un valore CAMBIATO, allora 422 su quel campo. (test: EnforcesFieldPermissions parità con users)</criterion>
+    <criterion id="AC-013">Data una sede con indirizzo, quando DELETE con operational-sites.delete, allora 204 e la riga `addresses` associata è rimossa (cascade HasAddresses); senza delete → 403; id inesistente → 404. (test: destroy + address cleanup)</criterion>
+    <criterion id="AC-014">Dopo `permissions:sync`, quando ispeziono i permessi, allora esistono operational-sites.{viewAny,view,create,update,delete,export,import}; il nodo navigazione `/operational-sites` compare in GET /navigation solo per chi ha operational-sites.view. (test: SyncPermissions + Navigation)</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-015">Data la pagina Sedi operative, quando la visito senza operational-sites.viewAny, allora `<Can>` mostra il fallback e non monta la tabella; con il permesso monta `<TableView domain="operational-sites">`. (test: page gating)</criterion>
+    <criterion id="AC-016">Data la griglia, quando renderizzo una row, allora le colonne comune/via/cap/provincia/regione mostrano i valori derivati (stringhe leggibili, con truncate/line-clamp dove serve); la toolbar/search/filtri Excel-like sono presenti come per Utenti (componenti generici, nessun restyle). (test: renderer + presenza toolbar)</criterion>
+    <criterion id="AC-017">Dato il form di creazione, quando lo apro, allora vedo i campi metadata-driven: cascade geo regione→provincia→comune (via `features/geo/geo-select`, ogni livello abilitato dal precedente), via (MetaField required), CAP (MetaField opzionale); il meta di create arriva da useResourceMeta('operational-sites'). (test: form create + MetaField + cascade)</criterion>
+    <criterion id="AC-018">Dato il form di modifica, quando consuma detail.permissions, allora un campo `hidden` non è renderizzato, un campo `readonly` non è editabile, un campo `required` mostra l'asterisco, un 422 dal server è mappato inline via applyServerValidationErrors, e la cascade è pre-idratata dai valori country/state/province/city della sede. (test: form metadata edit + idratazione)</criterion>
+    <criterion id="AC-019">Dato il submit, quando creo, allora il payload è {line1,postal_code,country_id,state_id,province_id,city_id}; quando aggiorno, il builder PATCH include SOLO i campi cambiati rispetto all'originale. (test: payload builder create/update)</criterion>
+    <criterion id="AC-020">Data la cascade geo, quando cambio la regione, allora provincia e comune si resettano e le opzioni di provincia si ricaricano per quella regione (GeoController); selezionando fino al comune, city_id/province_id/state_id risultano coerenti nel payload. (test: cascade behavior)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm): solo librerie già presenti.</item>
+    <item>Authz server-side su OGNI endpoint (Policy/permessi). L'UI nasconde, il backend autorizza.</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/rotte/permessi/chiavi). Domain/resource = `operational-sites`, model OperationalSite, tabella operational_sites, morph alias operational_site.</item>
+    <item>Envelope di progetto rispettato: { success, message, data, permissions? }. Mai model Eloquent raw: sempre via Resource.</item>
+    <item>Mass assignment: $fillable esplicito (Address già lo definisce). Query via Eloquent/whereHas parametrizzate; filtri/sort/search SSRM SOLO da allow-list di colonne (mai input grezzo in *Raw). Cardinalità WHERE IN dei set-filter limitata (difesa in profondità, come UserGeoColumns::MAX_FILTER_VALUES).</item>
+    <item>Riuso obbligatorio dei framework generici e dei componenti esistenti (AddressService, HasAddresses, GeoController, features/geo/geo-select, MetaField, TableView, useResourceMeta). Nessuna duplicazione di stile/logica. L'UNICA estensione generica ammessa è l'hook `applyDerivedSearch` (simmetrico a `applyDerivedSort`, default no-op, retro-compatibile).</item>
+    <item>File entro 300/500 righe; dead code zero; nessuna emoticon nel codice. Pint + ESLint + `tsc --noEmit` puliti.</item>
+    <item>Coverage per-layer: Policy/Authorization/Service ≥90%; controller/table ≥85%. Test ESEGUITI, non solo scritti.</item>
+    <item>Ownership file disgiunta tra teammate. Contratto qui congelato = punto di sincronizzazione: backend e frontend procedono in parallelo. L'hook generico `applyDerivedSearch` è un microtask GATE (tocca file generici) da chiudere prima che il frontend dipenda dalla search.</item>
+  </constraints>
+
+</spec>

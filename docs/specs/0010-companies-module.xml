@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0010 — Modulo "Società aziendali" (companies).
+  Contract-first. Identificatori in INGLESE (engineering.md §1.2); label esposte all'utente
+  in italiano via i18n. Il modulo replica 1:1 il pattern del modulo Utenti su tutta la pipeline
+  già esistente (TableRegistry, Authorization metadata, metadata-driven-forms, field permissions,
+  filtri excel, saved views, toolbar/search), aggiungendo SOLO le classi/righe di config del
+  nuovo dominio — nessun endpoint/controller generico nuovo.
+-->
+<spec id="0010-companies-module" status="draft" owner="tu" date="2026-07-03">
+
+  <goal>
+    Introdurre il modulo "Società aziendali" (resource key `companies`): un'entità aziendale
+    con denominazione e partita IVA e UN indirizzo (sulla tabella polimorfica `addresses`),
+    gestita con la stessa esperienza del modulo Utenti — tabella AG Grid SSRM (colonne, filtri
+    excel-like, valori distinti, toolbar/ricerca, viste filtro salvate, preferenze colonne),
+    CRUD, form metadata-driven (create/edit), permessi di risorsa e permessi sui campi per-ruolo,
+    voce di navigazione e i18n.
+  </goal>
+
+  <context>
+    Stack e convenzioni: CLAUDE.md + rules/. Naming DB in inglese (deroga NON concessa: si usa
+    `companies`/`denomination`/`vat_number`, la label UI "Società aziendali" vive in i18n).
+
+    Pipeline esistente riusata VERBATIM (verificata sul codice, non ipotizzata):
+    - Tabelle: `App\Tables\AbstractTableDefinition` + registrazione in `config/tables.php`.
+      Un solo controller generico (`TableController`) serve colonne/righe/valori/preferenze/
+      filtri/saved-views per ogni `{domain}`. Riferimento: `UsersTableDefinition` +
+      `UserColumnCatalog` + `UserGeoColumns` (colonne geo derivate dall'indirizzo primary).
+    - Authorization metadata (spec 0004/0006/0008): `App\Authorization\AbstractResourceAuthorization`
+      + registrazione in `config/authorization.php`. `GET /api/meta/{resource}` generico
+      (`MetaController`), `ResourcePermissionsBuilder` costruisce il blocco `{resource, fields, actions}`.
+      `fieldPermissions()` è FINAL = intersect(ceiling, DB matrix). Riferimento: `UsersAuthorization`.
+      `FieldDefinition(key,type,group,mandatory)`, `FieldPermission::{visibleEditable,visibleReadonly,hidden,disabled}`.
+    - Indirizzo polimorfico (ADR 0010): tabella `addresses` con `nullableMorphs('addressable')`,
+      `is_primary`, catena geo `country(country_id) → state/regione(state_id) → province(province_id)
+      → city/comune(city_id)` + `postal_code`(cap) + `line1/line2`. Trait `App\Models\Concerns\HasAddresses`
+      (morphMany + cascade on delete). `App\Services\AddressService` garantisce single-primary
+      (`createFor`, `update`). `AddressResource` emette gli id geo (NON i nomi).
+    - Cascata geo (read-only, no Policy): `GeoController` → `/api/countries|states|provinces|cities`.
+      NON esiste alcun lookup automatico CAP→comune: il comune si sceglie via cascata, il CAP è
+      un campo libero. Frontend: `features/geo/GeoSelect` (`GeoValue{country_id,state_id,province_id,city_id}`).
+    - Permessi: `App\Policies\Abstracts\BasePolicy` → abilities `{viewAny,view,create,update,delete,
+      export,import}`; policy auto-discovered (nessun AuthServiceProvider). Comando `permissions:sync`
+      (`SyncPermissions`) raccoglie i permessi da ogni `BasePolicy` (glob) + `config/navigation.php`.
+      Seeder `RolePermissionSeeder` assegna ai ruoli via matrice. `Gate::before` dà tutto a super-admin.
+    - MorphMap STRICT: `Relation::enforceMorphMap` in `AppServiceProvider::boot` — un nuovo model
+      polimorfico/audited DEVE avere l'alias o lancia.
+    - Envelope: `BaseApiController` → `ok`, `okWithPermissions`(`{success,message,data,permissions}`),
+      `created`, `noContent`, `handleControllerException` (403/404/422).
+    - Frontend: NESSUN barrel/registry. Un modulo = cartella `features/<domain>/`. Reuse verbatim:
+      `features/table/*` (TableView, SSRM, toolbar, excel filters, saved views), `features/authorization/*`
+      (`MetaField`, `ResourcePermissionsProvider`/`useResourcePermissions`, `useResourceMeta`),
+      `useEntityDetail`, `Can`, envelopes. Wiring centrale (3 punti): `routes/router.tsx`,
+      `routes/breadcrumbs.tsx` (`SEGMENT_LABELS`), `features/navigation/icon-map.ts`; + i18n
+      `i18n/locales/{en,it}.ts` (solo en+it). Menu è BACKEND-DRIVEN (`GET /navigation`).
+
+    Complessità Utenti che NON transita (esplicitamente esclusa): ruoli, avatar/attachments,
+    personal_data card, contacts, password, locale, for-select, self-delete guard.
+  </context>
+
+  <scope>
+    <in>
+      <item>Migrazione `create_companies_table` (id, denomination NOT NULL, vat_number NULLABLE, timestamps), reversibile.</item>
+      <item>Model `Company` (BaseModel) con `HasAddresses` + `LogsModelActivity`, `$fillable=['denomination','vat_number']`; alias morphMap `company`.</item>
+      <item>`CompanyFactory` (+ stato `withAddress`) e `AddressFactory` riusata per attach.</item>
+      <item>`CompanyPolicy extends BasePolicy` (resource `companies`), auto-discovered → permessi companies.* via `permissions:sync`.</item>
+      <item>Seeding: matrici ruolo in `RolePermissionSeeder` per `companies`; voce in `config/navigation.php` (permission `companies.view`).</item>
+      <item>`CompanyService` (create/update/delete in transazione; indirizzo singolo via `AddressService::createFor`/`update`).</item>
+      <item>DataObjects `CreateCompanyData`/`UpdateCompanyData` (+ riuso `CreateAddress`).</item>
+      <item>`StoreCompanyRequest`/`UpdateCompanyRequest` con `EnforcesFieldPermissions` e regole indirizzo annidato; `CompanyResource` (id, denomination, vat_number, address{id geo + NOMI, is_primary}, created_at); `CompanyController` (show/store/update/destroy con `okWithPermissions`); route in `routes/api.php`.</item>
+      <item>`CompaniesAuthorization extends AbstractResourceAuthorization` + riga in `config/authorization.php` → abilita `GET /api/meta/companies`, field-permission enforcement, field catalogue nella matrice Ruoli.</item>
+      <item>`CompaniesTableDefinition` + `CompanyColumnCatalog` + collaboratore `CompanyAddressColumns` (colonne derivate comune/provincia/regione/cap + country) + riga in `config/tables.php`.</item>
+      <item>Frontend `features/companies/`: api, types, schema Zod, use-company-form-meta, use-company-form, company-form-payload, company-form(+body con blocco indirizzo GeoSelect), company-detail, companies-table, column-renderers.</item>
+      <item>Wiring FE: `pages/companies-page.tsx`, route in `router.tsx`, `breadcrumbs.tsx` (`companies: 'navigation.companies'`), `navigation/icon-map.ts` (token icona), i18n en+it (`companies.*`, `navigation.companies`).</item>
+      <item>Test: BE (CRUD, security/authz, meta, field-permission enforcement, table rows/columns/values) + FE (form CRUD, form metadata, payload builders).</item>
+    </in>
+    <out>
+      <item>Lookup automatico CAP→comune (non esistono dati postali di riferimento): il comune si sceglie via cascata geo, il CAP resta campo libero.</item>
+      <item>Indirizzi multipli / gestione multi-primary per società: una società ha UN solo indirizzo (morphMany usato come singolo; primo indirizzo auto-primary).</item>
+      <item>Endpoint `companies/for-select` (le società non sono referenziate da altre entità in questa feature).</item>
+      <item>Avatar, ruoli, personal_data, contacts, password, locale, self-delete guard.</item>
+      <item>Colonna/enum di stato o tipo società (nessun `form_enums` nuovo).</item>
+      <item>Import/export effettivi (le abilities `export`/`import` esistono nel set standard ma la loro implementazione funzionale non è in scope qui).</item>
+      <item>Nuove dipendenze npm/composer.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- ============ CRUD companies (nuovo CompanyController) ============ -->
+    <endpoint method="GET" path="/api/companies/{company}">
+      <request>path: company id (int). auth:sanctum, throttle:60,1.</request>
+      <response status="200">
+        { success:true, message, data: Company, permissions: ResourcePermissions }
+        Company = {
+          id:int, denomination:string, vat_number:string|null,
+          address: {
+            id:int, label:string|null, line1:string, line2:string|null, postal_code:string|null,
+            country_id:int|null, state_id:int|null, province_id:int|null, city_id:int|null,
+            country:string|null, region:string|null, province:string|null, city:string|null,
+            is_primary:bool
+          } | null,
+          created_at:string|null
+        }
+        ResourcePermissions = {
+          resource: { view,create,update,delete,export,import : bool },
+          fields: { [key]: {visible,hidden,editable,readonly,required,disabled:bool} },
+          actions: { [key]: bool }
+        }
+        fields keys = denomination, vat_number, address
+        actions keys = delete, export, import
+      </response>
+      <errors>403 senza `companies.view`; 404 id inesistente.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/companies">
+      <request>
+        body: {
+          denomination:string (required, max:255),
+          vat_number?:string|null (max:50),
+          address?: {
+            label?:string|null, line1:string (required se address presente, max:255), line2?:string|null,
+            postal_code?:string|null (max:20),
+            country_id?:int|null (exists:countries), state_id?:int|null (exists:states),
+            province_id?:int|null (exists:provinces), city_id?:int|null (exists:cities)
+          }
+        }
+      </request>
+      <response status="201">{ success:true, message:'Created', data: Company, permissions }</response>
+      <errors>403 senza `companies.create`; 422 validazione (denomination mancante, geo id inesistente); 422 se inviato un campo non editable per l'attore (EnforcesFieldPermissions).</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/companies/{company}">
+      <request>body: come POST ma tutti i campi opzionali (PATCH diff); solo le chiavi presenti vengono scritte. `address` presente riscrive l'unico indirizzo della società (update se esiste, create se assente).</request>
+      <response status="200">{ success:true, message, data: Company, permissions }</response>
+      <errors>403 senza `companies.update`; 404; 422 validazione o campo non editable.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/companies/{company}">
+      <request>path: company id.</request>
+      <response status="204">no content</response>
+      <errors>403 senza `companies.delete`; 404.</errors>
+    </endpoint>
+
+    <!-- ============ Generici (NESSUN nuovo codice: solo config + Definition/Authorization) ============ -->
+    <endpoint method="GET" path="/api/meta/companies">
+      <request>auth:sanctum, throttle:60,1. Gate server-side: `companies.viewAny`.</request>
+      <response status="200">{ success:true, data:{ fields:[{key,type,group,mandatory}] }, permissions } — create-context (model null). fields = denomination(text,mandatory), vat_number(text), address(collection).</response>
+      <errors>403 senza `companies.viewAny`; 404 resource non registrato.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/tables/companies/columns">
+      <request>Gate: `companies.viewAny`.</request>
+      <response status="200">
+        { success, data:{ resource:'companies', columns:[...], filters:[...], actions:[...], defaultSort:[{columnId:'created_at',direction:'desc'}], defaultPagination:{limit:25}, searchable:['denomination','vat_number'] } }
+        columns (id/type/visible/sortable/filterable/filterType):
+          id(number,hidden,sortable,filter number),
+          denomination(text,visible,sortable,filter text,searchable),
+          vat_number(text,visible,sortable,filter text,searchable),
+          city[comune](text,hidden,sortable,filter set) — derivata da address primary,
+          province[provincia](text,hidden,sortable,filter set) — derivata,
+          region[regione](text,hidden,sortable,filter set) — derivata,
+          postal_code[cap](text,visible,sortable,filter text) — derivata,
+          country(text,hidden,sortable,filter set) — derivata,
+          created_at(datetime,visible,sortable,filter date)
+      </response>
+      <errors>403 senza `companies.viewAny`.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/companies/rows">
+      <request>payload SSRM standard (startRow/endRow, sortModel, filterModel, search). Gate `companies.viewAny`.</request>
+      <response status="200">{ success, data:{ rows:[{ id, denomination, vat_number, city, province, region, postal_code, country, created_at, actions:string[] }], rowCount } } — comune/provincia/regione/cap/country derivati dall'indirizzo primary della società; `actions` per riga via CompanyPolicy.</response>
+      <errors>403 senza `companies.viewAny`.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/companies/values">
+      <request>{ columnId (allow-list), search?, filterModel? }. Gate `companies.viewAny`.</request>
+      <response status="200">{ success, data:{ values:string[] } } — valori distinti in-uso per le colonne set (city/province/region/country).</response>
+      <errors>403; 422 columnId non consentito.</errors>
+    </endpoint>
+
+    <!-- preferences / filters / filter-views: identici al pattern generico, nessuna specifica aggiuntiva. -->
+  </data_contract>
+
+  <acceptance_criteria>
+    <criterion id="AC-001">Dato lo schema, quando gira la migrazione, allora esiste la tabella `companies` con `denomination` NOT NULL, `vat_number` nullable e timestamps; il rollback (`down`) la elimina. (Pest schema/migration test)</criterion>
+    <criterion id="AC-002">Dato un `Company` con un indirizzo polimorfico (`addressable_type='company'`), quando la società viene eliminata, allora l'indirizzo viene rimosso (cascade `HasAddresses`) e l'alias morphMap `company` risolve senza eccezioni. (Pest feature)</criterion>
+    <criterion id="AC-003">Dato un attore con `companies.view`, quando GET `/api/companies/{id}`, allora 200 con envelope `{data: Company(+address con id geo E nomi), permissions:{resource,fields,actions}}`; senza il permesso → 403; id inesistente → 404. (Pest)</criterion>
+    <criterion id="AC-004">Dato un attore con `companies.create`, quando POST `/api/companies` con denomination+address, allora 201 e la società è creata con UN indirizzo primary in un'unica transazione; senza permesso → 403; denomination mancante o geo id inesistente → 422. (Pest)</criterion>
+    <criterion id="AC-005">Dato un attore con `companies.update` e una società con indirizzo, quando PATCH con solo `denomination` e `address` modificato, allora vengono scritti solo i campi inviati e l'UNICO indirizzo è aggiornato (non duplicato); senza permesso → 403. (Pest)</criterion>
+    <criterion id="AC-006">Dato un attore con `companies.delete`, quando DELETE `/api/companies/{id}`, allora 204 e società+indirizzo eliminati; senza permesso → 403. (Pest)</criterion>
+    <criterion id="AC-007">Dato un attore per cui un campo è non-editable dal ceiling/matrice, quando invia quel campo in POST/PATCH modificandolo, allora 422 ("field not editable") e nessuna mutazione (EnforcesFieldPermissions). (Pest)</criterion>
+    <criterion id="AC-008">Dato `companies` registrato in `config/authorization.php`, quando GET `/api/meta/companies` con `companies.viewAny`, allora 200 con `fields=[denomination,vat_number,address]` (create-context) e blocco `permissions`; resource non registrato → 404; senza `viewAny` → 403. (Pest)</criterion>
+    <criterion id="AC-009">Dato `companies` in `config/tables.php`, quando GET `/api/tables/companies/columns` con `companies.viewAny`, allora colonne = denomination, vat_number, city(comune), province, region(regione), postal_code(cap), country, created_at con sortable/filterable/filterType attesi e `searchable=['denomination','vat_number']`; senza permesso → 403. (Pest)</criterion>
+    <criterion id="AC-010">Date società con indirizzi, quando POST `/api/tables/companies/rows` con sort/filterModel su city/province/region/postal_code, allora le righe riportano comune/provincia/regione/cap dall'indirizzo primary e l'ordinamento+filtro set su quelle colonne derivate funziona (subquery/whereHas, nessuna SQL injection, allow-list); `actions` per riga coerenti con CompanyPolicy. (Pest)</criterion>
+    <criterion id="AC-011">Quando POST `/api/tables/companies/values` per una colonna set (es. `province`), allora ritorna i valori distinti effettivamente in uso, filtrabili per search e limitati; columnId fuori allow-list → 422. (Pest)</criterion>
+    <criterion id="AC-012">Quando gira `permissions:sync`, allora esistono i permessi `companies.{viewAny,view,create,update,delete,export,import}`; il seeder li assegna alle matrici ruolo previste; super-admin bypassa via `Gate::before`. (Pest)</criterion>
+    <criterion id="AC-013">Dato il frontend, quando si apre `/companies` con `companies.viewAny`, allora `TableView domain="companies"` monta dietro `&lt;Can permission="companies.viewAny"&gt;`; le row-action view/edit/delete si dispatchano; il pulsante "nuova società" è dietro `&lt;Can permission="companies.create"&gt;`. (Vitest)</criterion>
+    <criterion id="AC-014">Dato il form metadata-driven, quando i `permissions.fields` marcano un campo hidden/readonly/required, allora il campo è rispettivamente assente/disabilitato/con label `*`; il blocco indirizzo usa `GeoSelect` (cascata country→state→province→city) + `postal_code` libero; il submit invia UNA sola `createCompany`/`updateCompany` con `{denomination, vat_number, address}`. (Vitest, mock api+meta)</criterion>
+    <criterion id="AC-015">Quando il backend risponde 422 su un campo, allora l'errore è mostrato inline via `applyServerValidationErrors`; un campo assente dai metadata usa il fallback permissivo (visible+editable) senza crash. (Vitest)</criterion>
+    <criterion id="AC-016">Dato `company-form-payload`, quando si costruisce il payload di create, allora include denomination/vat_number/address; in update il diff PATCH invia solo i campi cambiati e omette i campi non-editable. (Vitest)</criterion>
+    <criterion id="AC-017">Dato il wiring, quando si naviga, allora la voce menu "Società aziendali" appare (backend-driven) con icona mappata, la route `/companies` è lazy-loaded, il breadcrumb mostra la label i18n, e le chiavi `companies.*`/`navigation.companies` esistono in en.ts e it.ts. (Vitest/typecheck + ispezione)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie già in composer.json/package.json. Nessuna nuova dipendenza.</item>
+    <item>Identificatori in INGLESE (tabella/colonne/route/permessi/resource key/campi). Label utente in italiano solo via i18n.</item>
+    <item>Authz server-side su OGNI endpoint (CompanyPolicy + `authorize()`); l'UI nasconde ma non autorizza.</item>
+    <item>Nessun nuovo controller/route generico: tabella, meta, field-catalogue, saved-views, preferenze e filtri passano dalla pipeline esistente (config + Definition/Authorization).</item>
+    <item>Ordinamento/filtri derivati costruiti da allow-list di colonne e subquery/whereHas parametrizzati — mai `orderByRaw`/interpolazione su input.</item>
+    <item>`$fillable` esplicito; nessun raw model in output (solo `CompanyResource`); envelope `{success,message,data,permissions?}` rispettato.</item>
+    <item>Invariante single-address per società delegata ad `AddressService` (riuso, nessuna logica duplicata). `Company` nel morphMap strict o l'app lancia.</item>
+    <item>Coverage per-layer come da backend.md §8 (Policy/FormRequest ≥95/90, Service/Action ≥90, Controller ≥85). Test eseguiti davvero (Pest/Vitest), Pint + ESLint + `tsc --noEmit` puliti.</item>
+    <item>File ≤300 righe soft / 500 hard: split (Definition→ColumnCatalog+AddressColumns; form→body+hook+payload) come in Utenti.</item>
+  </constraints>
+
+</spec>

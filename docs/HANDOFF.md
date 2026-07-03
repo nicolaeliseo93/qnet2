@@ -2,6 +2,47 @@
 
 > Injected at session start. Update at every green state.
 
+## Feature 0010 — Companies module (Società aziendali) — GREEN (verifier-confirmed)
+
+Spec `docs/specs/0010-companies-module.xml` (contract FROZEN). New resource key `companies`,
+built through the EXISTING generic pipeline (no new generic controllers/routes), mirroring Users 1:1.
+
+Decisions: English identifiers (`companies`/`denomination`/`vat_number`); UI label "Società aziendali"
+via i18n. ONE polymorphic address per company (`HasAddresses` used as single; first-address
+auto-primary via `AddressService`). `vat_number` nullable + non-unique. Grid geo columns
+(city/province/region/country) hidden by default; postal_code/denomination/vat_number/created_at visible.
+Nav icon token `building` → lucide `Building2`. No CAP→comune lookup (comune via geo cascade, cap free).
+
+Names/contracts to respect:
+- Backend: `Company` model (morph alias `company` in `AppServiceProvider`), `CompanyPolicy`
+  (BasePolicy, no self-delete), `CompanyService` (single-address via `AddressService`),
+  `CompaniesAuthorization` (fields: denomination[mandatory]/vat_number/address; actions: delete/export/import)
+  + `config/authorization.php` entry, `CompaniesTableDefinition` + `Companies/{CompanyColumnCatalog,
+  CompanyAddressColumns}` + `config/tables.php` entry, `CompanyController` +
+  `Companies/{Store,Update}CompanyRequest` (EnforcesFieldPermissions) + `Company{,Address}Resource`
+  (address block emits geo ids AND names), routes `/api/companies(/{company})`.
+- Frontend: `features/companies/*` (mirrors users; no roles/avatar/password/locale/personal_data/contacts),
+  address = single embedded block via `GeoSelect` + free `postal_code`, all gated by the single `address`
+  field-permission key. i18n extracted to `en-companies.ts`/`it-companies.ts` (en.ts/it.ts hit the 500-line
+  hard limit). Wiring: `router.tsx`, `breadcrumbs.tsx`, `navigation/icon-map.ts`.
+
+Status — GREEN: backend `php artisan test` 725 passed / 1 pre-existing skip (62 companies tests),
+Pint clean on companies files; frontend 19/19 companies Vitest, `tsc --noEmit` + ESLint clean. Verifier
+mapped all 17 AC → PASS with real evidence; the 8 full-suite Vitest failures (`auth/profile-form`,
+`table/cell-renderers`) and the global Pint fail are PRE-EXISTING (confirmed via `git stash -u`), zero
+regressions from companies.
+
+Known non-blocking notes (recorded, safe):
+- `CompaniesAuthorization` uses default `actionPermissions` → `actions.delete` = `companies.delete`
+  unconditionally (not gated to `model!=null` like `BusinessFunctionsAuthorization`). Harmless (no self-ref).
+- `address` field-permission change-detection: since `address` is a top-level key with no `Company::address()`
+  relation, the shared `EnforcesFieldPermissions` reads current as null → if an admin locks `companies.address`
+  non-editable, resubmitting the SAME address is treated as changed → 422 (fail-closed/safe, UX rough edge).
+  Not fixed to avoid blast radius on the shared trait (Users/Roles/BusinessFunctions).
+
+Not committed. Working tree ALSO holds an unrelated concurrent `business-functions` module (another
+session) — a companies-scoped commit must exclude it. Awaiting user go for the scoped commit.
+
 ## Current work
 
 **Feature 0004 — Centralized backend-driven authorization metadata** (spec
@@ -689,3 +730,105 @@ both locales.
   `secret-scan` on locale files is a known false positive. `user-form-body.tsx` (343) and
   `role-form-body.tsx` (363) exceed the 300 soft limit (under 500 hard) — optional sub-component split.
 - Not committed (working tree commingled). A scoped commit of the redesign files is recommended.
+
+## Feature 0010 — Business Functions module (Funzioni aziendali) — GREEN (verifier-confirmed)
+
+Spec `docs/specs/0010-business-functions.xml` (contract FROZEN, user-approved). New module mirroring
+`users`/`roles` exactly: generic SSRM table, metadata-driven form (convention
+`docs/conventions/metadata-driven-forms.md`), field permissions, Policy authz server-side, envelope
+`{ success, message, data, permissions? }`.
+
+Naming decision (approved): greenfield ENGLISH. Model `App\Models\BusinessFunction`, table
+`business_functions` (`name`, `is_business_unit`, `is_business_service` booleans, `manager_id`
+nullable FK→users nullOnDelete) + pivot `business_function_user` (unique, cascadeOnDelete). Domain /
+resource / route / permission key = **`business-functions`** (permissions
+`business-functions.{viewAny,view,create,update,delete,export,import}`).
+
+Contract to respect (frozen):
+- Routes: `GET|POST|PATCH|DELETE /api/business-functions[/{businessFunction}]`; generic
+  `tables/business-functions/*` + `meta/business-functions` (registry-driven, no new generic code).
+  NO for-select for this module — it selects USERS via the existing `/api/users/for-select`.
+- bu/bs are MUTUALLY EXCLUSIVE: write payload carries a single `type: 'business_unit'|'business_service'|null`,
+  the Service maps it to the two boolean columns. Read exposes both booleans + `type`.
+- Responsible + associated users both OPTIONAL. `users` = full-replace `sync`. `manager_id:null` clears.
+- Resource/row `data` shape: `{ id, name, is_business_unit, is_business_service, type, manager_id,
+  manager:{id,name,avatar_url}|null, user_ids[], users:[{id,name,avatar_url}], created_at }` (+ permissions).
+- Table columns (order): `name, is_business_unit, is_business_service, manager, users, created_at`;
+  `manager`/`users` are DERIVED (whereHas set-filter + distinct; manager sortable via correlated
+  subquery) — bound params only, no `*Raw`.
+- "WOW" UI: manager + associated users rendered as AVATARS with hover/focus TOOLTIP (name) in the grid;
+  users cell is an avatar stack capped at 5 with a `+N` overflow chip. New reusable single-select
+  `components/ui/async-paginated-select.tsx` (`value:number|null`) added for the responsabile picker;
+  `AsyncPaginatedMultiSelect showAvatar` for associated users. Morph-map `'business_function'` added
+  to `AppServiceProvider` (required by `LogsModelActivity`).
+
+Verified (verifier, first-hand): backend module 58/58 (219 assert), full regression 725 passed / 1
+pre-existing skip, coverage 95-100% per new file (exceeds gates), Pint clean; frontend module 53/53
+across 7 files, `tsc --noEmit` clean, ESLint clean; all 20 acceptance criteria (AC-001..AC-020) have a
+mapped, executed, passing test. Scope respected (zero edits to generic framework files). i18n
+`common.clear/retry` confirmed present.
+
+Not committed — working tree is COMMINGLED with a concurrent session's `companies` module
+(spec 0010-companies-module, 0011-operational-sites) that shares the SAME modified files
+(`router.tsx`, `en.ts`/`it.ts`, `config/{tables,authorization,navigation}.php`, `AppServiceProvider.php`,
+`icon-map.ts`, `breadcrumbs.tsx`, `RolePermissionSeeder.php`). A cleanly-isolated 0010 commit is not
+possible without separating interleaved hunks; awaiting a decision on how to land the two modules.
+The pre-existing 8 frontend reds (`auth/profile-form`, `table/cell-renderers`) remain out-of-scope.
+
+### 0010 — Seeder & factory added (later)
+
+- `database/factories/BusinessFunctionFactory.php` enriched with states: `businessUnit()`,
+  `businessService()` (exclusive type), `withManager(?User)`, `withUsers(int, $users?)` (afterCreating attach).
+- `database/seeders/BusinessFunctionSeeder.php` (new): 15 curated demo functions (IT labels = UI content),
+  each with a manager + 2..8 associated users drawn from the seeded user pool; deterministic faker seed,
+  idempotent (firstOrNew by name + sync). Registered in `DatabaseSeeder` after `CompanySeeder`.
+- `RolePermissionSeeder`: added `business-functions` to the `manager` (viewAny/view/create/update) and
+  `operator` (viewAny/view) matrices, mirroring `companies`.
+- Verified: `tests/Feature/BusinessFunctions/BusinessFunctionSeederTest.php` 6/6 (seeder count/relations/
+  idempotency/users-less + factory states); full BusinessFunctions dir 64/64; Pint clean.
+
+## Feature 0011 — Operational Sites (Sedi operative) — GREEN (verifier, first-hand)
+
+Spec `docs/specs/0011-operational-sites.xml` (contract FROZEN). Mirrors `users`: generic SSRM table,
+metadata-driven form (0004), field permissions (0006), Policy authz, envelope `{data, permissions?}`.
+
+Domain decisions (user-approved): the site HAS NO own columns — it IS its address, stored via the
+EXISTING polymorphic `addresses` table (`use HasAddresses`, one `is_primary` row). Geo mapping (same as
+Users): regione=State, provincia=Province, comune=City, via=line1, cap=postal_code. No name/label field.
+
+- Domain/resource/permission/route = `operational-sites` (hyphen); model `OperationalSite`; table
+  `operational_sites` (id+timestamps only); morph alias `operational_site` (added to `enforceMorphMap`);
+  route binding `{operationalSite}`. Permissions `operational-sites.{viewAny,view,create,update,delete,
+  export,import}`.
+- Contract (FROZEN): grid columns order `[id, city, street, postal_code, province, region, created_at]`,
+  `searchable:['city','street']`, all address-DERIVED (set-filter geo city/province/region via whereHas +
+  distinct-in-use + correlated-subquery sort; street/postal_code = text filter). CRUD payload is FLAT
+  `{line1, postal_code, country_id, state_id, province_id, city_id}` (NO nested `address` object); `show`
+  data = flat ids + nested `{id,name}` for country/region(=State)/province/city. `GET /meta/operational-sites`
+  fields = `[country_id, state_id, province_id, city_id(mandatory), line1(mandatory), postal_code]`.
+- ONE controlled generic extension (user-approved): new hook `applyDerivedSearch(Builder,columnId,pattern)`
+  on `TableDefinition` + no-op default in `AbstractTableDefinition` + wired into `TableService::applySearch`
+  (symmetric to existing `applyDerivedSort`, backward-compatible). `OperationalSitesTableDefinition`
+  implements it for city+street. NO other generic file touched.
+- Service reuses `AddressService.createFor/update` (polymorphic owner). 6 public accessors on
+  `OperationalSite` (`line1/postalCode/countryId/...`) added so `EnforcesFieldPermissions` reads current
+  address-derived values (else every blocked-field submit would falsely read as "changed" → 422 mismatch
+  with Users). Factory `OperationalSiteFactory::withAddress(?City)`; seeder `OperationalSiteSeeder` (40 sites
+  on real cities, deterministic, idempotent) registered after `UserAddressSeeder`.
+
+Verified (verifier, first-hand): backend feature 60/60 (230 assert); full suite 791/792 (1 pre-existing
+skip); generic-hook regression 113/113 across all existing search/table tests (hook confirmed no-op by
+default via `git diff`); Pint clean on touched files. Frontend feature 44/44 across 6 files; `tsc --noEmit`
+clean; ESLint clean. AC-001..019 PASS with mapped executed tests; AC-020 (cascade reset) relies on the
+green dedicated test + reuse of existing `features/geo/geo-select` (not read line-by-line). Contract
+coherence BE↔FE confirmed (flat payload, column ids/order, permission keys, i18n keys). Scope respected.
+
+Correction to prior note: the pre-existing frontend red `auth/profile-form.test.tsx` root cause is a
+MISSING `ConfirmDialogProvider` in its test wrapper (`contacts-manager.tsx:52`), NOT the locale — confirmed
+reproducible on a clean stash. `table/cell-renderers.test.tsx` red IS the locale (it aria-label vs en
+assertion). Both pre-existing, out-of-scope, owner = auth/personal-data + table modules.
+
+Not committed — working tree is COMMINGLED across 0010-business-functions, companies, and 0011 sharing the
+SAME modified files (`config/{tables,authorization,navigation}.php`, `AppServiceProvider.php`, `router.tsx`,
+`en.ts`/`it.ts`, `icon-map.ts`, `breadcrumbs.tsx`, `RolePermissionSeeder.php`). A cleanly-isolated 0011-only
+commit is not possible without splitting interleaved hunks; awaiting a decision on how to land the modules.

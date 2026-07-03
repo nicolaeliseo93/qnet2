@@ -1,6 +1,10 @@
 import {
+  Briefcase,
+  Building2,
   Circle,
+  Layers,
   LayoutDashboard,
+  MapPin,
   ShieldCheck,
   Users,
   type LucideIcon,
@@ -14,6 +18,10 @@ const iconMap: Record<string, LucideIcon> = {
   'layout-dashboard': LayoutDashboard,
   users: Users,
   'shield-check': ShieldCheck,
+  briefcase: Briefcase,
+  building: Building2,
+  'map-pin': MapPin,
+  layers: Layers,
 }
 
 export function resolveIcon(name: string | null): LucideIcon {

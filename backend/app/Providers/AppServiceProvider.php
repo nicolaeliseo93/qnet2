@@ -5,7 +5,10 @@ namespace App\Providers;
 use App\Authorization\FieldPermissionRepository;
 use App\Models\Address;
 use App\Models\Attachment;
+use App\Models\BusinessFunction;
+use App\Models\Company;
 use App\Models\Contact;
+use App\Models\OperationalSite;
 use App\Models\PersonalData;
 use App\Models\Role;
 use App\Models\User;
@@ -53,6 +56,9 @@ class AppServiceProvider extends ServiceProvider
             'address' => Address::class,
             'attachment' => Attachment::class,
             'user_table_preference' => UserTablePreference::class,
+            'business_function' => BusinessFunction::class,
+            'company' => Company::class,
+            'operational_site' => OperationalSite::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

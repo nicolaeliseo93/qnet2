@@ -22,6 +22,9 @@ class DatabaseSeeder extends Seeder
         $this->call(PersonalDataSeeder::class);
         $this->call(UserContactSeeder::class);
         $this->call(UserAddressSeeder::class);
+        $this->call(OperationalSiteSeeder::class);
+        $this->call(CompanySeeder::class);
+        $this->call(BusinessFunctionSeeder::class);
         $this->call(NotificationSeeder::class);
     }
 }

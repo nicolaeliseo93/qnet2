@@ -1,5 +1,8 @@
 <?php
 
+use App\Authorization\BusinessFunctionsAuthorization;
+use App\Authorization\CompaniesAuthorization;
+use App\Authorization\OperationalSitesAuthorization;
 use App\Authorization\RolesAuthorization;
 use App\Authorization\UsersAuthorization;
 
@@ -27,6 +30,9 @@ return [
     'definitions' => [
         'users' => UsersAuthorization::class,
         'roles' => RolesAuthorization::class,
+        'business-functions' => BusinessFunctionsAuthorization::class,
+        'companies' => CompaniesAuthorization::class,
+        'operational-sites' => OperationalSitesAuthorization::class,
     ],
 
 ];

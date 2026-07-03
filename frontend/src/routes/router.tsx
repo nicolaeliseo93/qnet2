@@ -10,6 +10,9 @@ const ResetPasswordPage = lazy(() => import('@/pages/reset-password-page'))
 const DashboardPage = lazy(() => import('@/pages/dashboard-page'))
 const UsersPage = lazy(() => import('@/pages/users-page'))
 const RolesPage = lazy(() => import('@/pages/roles-page'))
+const CompaniesPage = lazy(() => import('@/pages/companies-page'))
+const BusinessFunctionsPage = lazy(() => import('@/pages/business-functions-page'))
+const OperationalSitesPage = lazy(() => import('@/pages/operational-sites-page'))
 const SettingsPage = lazy(() => import('@/pages/settings-page'))
 const NotFoundPage = lazy(() => import('@/pages/not-found-page'))
 
@@ -44,6 +47,18 @@ export const router = createBrowserRouter([
           {
             path: 'roles',
             element: <RolesPage />,
+          },
+          {
+            path: 'companies',
+            element: <CompaniesPage />,
+          },
+          {
+            path: 'business-functions',
+            element: <BusinessFunctionsPage />,
+          },
+          {
+            path: 'operational-sites',
+            element: <OperationalSitesPage />,
           },
           {
             path: 'settings',

@@ -1,5 +1,8 @@
 <?php
 
+use App\Tables\BusinessFunctionsTableDefinition;
+use App\Tables\CompaniesTableDefinition;
+use App\Tables\OperationalSitesTableDefinition;
 use App\Tables\RolesTableDefinition;
 use App\Tables\UsersTableDefinition;
 
@@ -28,6 +31,9 @@ return [
     'definitions' => [
         'users' => UsersTableDefinition::class,
         'roles' => RolesTableDefinition::class,
+        'business-functions' => BusinessFunctionsTableDefinition::class,
+        'companies' => CompaniesTableDefinition::class,
+        'operational-sites' => OperationalSitesTableDefinition::class,
     ],
 
 ];
