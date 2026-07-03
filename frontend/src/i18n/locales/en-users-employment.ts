@@ -1,0 +1,109 @@
+/**
+ * User employment profile strings (spec 0015: Profile / Contract / Contract
+ * data tabs). Extracted from `en.ts` to keep that file within the engineering
+ * size limits (see `.claude/rules/engineering.md` §6); merged into the
+ * `users.*` namespace from there.
+ */
+
+/**
+ * Short labels for the user form's tab strip. `contractData` is worded
+ * distinctly from `contract` (not just "Contract data") so the two tabs never
+ * share an accessible-name prefix — keeps role+name queries unambiguous.
+ */
+export const usersFormTabs = {
+  identity: 'Identity',
+  credentials: 'Credentials',
+  access: 'Access',
+  profile: 'Profile',
+  contract: 'Contract',
+  contractData: 'Contract details',
+  contacts: 'Contacts',
+  addresses: 'Addresses',
+  tabHasErrors: 'This tab has validation errors.',
+}
+
+/** `FormSection` header (title/description) for the three new employment tabs. */
+export const usersFormEmploymentSections = {
+  profile: {
+    title: 'Profile',
+    description: 'Organizational role, manager status and reporting line.',
+  },
+  contract: {
+    title: 'Contract',
+    description: 'Relationship type, company and operational site.',
+  },
+  contractData: {
+    title: 'Contract data',
+    description: 'Qualification, employment dates and daily durations.',
+  },
+}
+
+/** Field labels, placeholders and validation messages for `employment.*`. */
+export const usersFormEmployment = {
+  isManager: 'Manager',
+  isManagerDescription: 'This person manages other employees.',
+  jobDescription: 'Job description',
+  reportsTo: 'Reports to',
+  reportsToPlaceholder: 'Select a manager…',
+  reportsToSearch: 'Search users…',
+  reportsToEmpty: 'No users found.',
+  reportsToError: 'Unable to load users.',
+  businessFunction: 'Business function',
+  businessFunctionPlaceholder: 'Select a business function…',
+  businessFunctionSearch: 'Search business functions…',
+  businessFunctionEmpty: 'No business functions found.',
+  businessFunctionError: 'Unable to load business functions.',
+  relationshipType: 'Relationship type',
+  relationshipTypeNone: 'None',
+  company: 'Company',
+  companyPlaceholder: 'Select a company…',
+  companySearch: 'Search companies…',
+  companyEmpty: 'No companies found.',
+  companyError: 'Unable to load companies.',
+  operationalSite: 'Operational site',
+  operationalSitePlaceholder: 'Select an operational site…',
+  operationalSiteSearch: 'Search operational sites…',
+  operationalSiteEmpty: 'No operational sites found.',
+  operationalSiteError: 'Unable to load operational sites.',
+  qualificationType: 'Qualification',
+  qualificationTypeNone: 'None',
+  hiredAt: 'Hired at',
+  terminatedAt: 'Terminated at',
+  standardDailyMinutes: 'Standard daily duration',
+  breakDailyMinutes: 'Daily break duration',
+  hours: 'Hours',
+  minutes: 'Minutes',
+  jobDescriptionMax: 'Job description must be at most 255 characters.',
+  terminatedBeforeHiredAt: 'Termination date must be on or after the hire date.',
+}
+
+/** New grid columns for the users table (spec 0015). */
+export const usersColumnsEmployment = {
+  business_function: 'Business function',
+  company: 'Company',
+  operational_site: 'Operational site',
+  relationship_type: 'Relationship type',
+  qualification_type: 'Qualification',
+  is_manager: 'Manager',
+  reports_to: 'Reports to',
+  hired_at: 'Hired at',
+  terminated_at: 'Terminated at',
+}
+
+/** Read-only detail labels for the Employment section (spec 0015). */
+export const usersDetailEmployment = {
+  title: 'Employment',
+  isManager: 'Manager',
+  jobDescription: 'Job description',
+  reportsTo: 'Reports to',
+  businessFunction: 'Business function',
+  relationshipType: 'Relationship type',
+  company: 'Company',
+  operationalSite: 'Operational site',
+  qualificationType: 'Qualification',
+  hiredAt: 'Hired at',
+  terminatedAt: 'Terminated at',
+  standardDailyMinutes: 'Standard daily duration',
+  breakDailyMinutes: 'Daily break duration',
+  none: 'None',
+}

@@ -6,6 +6,7 @@ use App\DataObjects\Table\DistinctValuesResult;
 use App\DataObjects\Table\RowsResult;
 use App\Models\User;
 use App\Services\Table\FilterApplier;
+use App\Services\Table\TableQueryBuilder;
 use App\Tables\TableDefinition;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -19,10 +20,11 @@ use Illuminate\Database\Eloquent\Model;
  * filterModel against the definition's strict sortable/filterable whitelist
  * using bound query-builder calls only (never raw user input in SQL), cap
  * set-filter cardinality, paginate, then map each row + attach the per-row
- * actions[] via the definition's Policy hooks. Per-type filter branches
- * (text/number/boolean/date/set/multi/combined) live in the injected
- * FilterApplier collaborator (spec 0004) to keep this file focused on
- * orchestration.
+ * actions[] via the definition's Policy hooks. The filter/search/sort query
+ * construction itself is delegated to the injected TableQueryBuilder (spec
+ * 0014 query-refactor), shared verbatim with the generic export engine;
+ * per-type filter branches (text/number/boolean/date/set/multi/combined) live
+ * one level deeper in FilterApplier (spec 0004).
  *
  * It operates ONLY through the resolved TableDefinition (baseQuery, columns,
  * mapRow, actionsFor, applyDerivedFilter), so every domain inherits the exact
@@ -37,7 +39,10 @@ class TableService
      */
     private const int MAX_LIMIT = 100;
 
-    public function __construct(private readonly FilterApplier $filterApplier) {}
+    public function __construct(
+        private readonly TableQueryBuilder $queryBuilder,
+        private readonly FilterApplier $filterApplier,
+    ) {}
 
     /**
      * Execute the SSRM query and return the rows + total for the envelope.
@@ -51,12 +56,12 @@ class TableService
 
         $query = $definition->baseQuery();
 
-        $this->applyFilters($definition, $query, $payload['filterModel'] ?? []);
-        $this->applySearch($definition, $query, $payload['search'] ?? null);
+        $this->queryBuilder->applyFilters($definition, $query, $payload['filterModel'] ?? []);
+        $this->queryBuilder->applySearch($definition, $query, $payload['search'] ?? null);
 
         $total = (clone $query)->count();
 
-        $this->applySorting($definition, $query, $payload['sortModel'] ?? []);
+        $this->queryBuilder->applySorting($definition, $query, $payload['sortModel'] ?? []);
 
         /** @var array<int, Model> $models */
         $models = $query->offset($offset)->limit($limit)->get()->all();
@@ -121,7 +126,7 @@ class TableService
         $query = $definition->baseQuery();
 
         unset($filterModel[$columnId]); // Excel behaviour: never self-restrict.
-        $this->applyFilters($definition, $query, $filterModel);
+        $this->queryBuilder->applyFilters($definition, $query, $filterModel);
 
         $fetchLimit = $limit + 1;
         $resolved = $definition->distinctValues($actor, $columnId, $columnConfig, $search, $query, $fetchLimit);
@@ -155,141 +160,5 @@ class TableService
             ->pluck($column)
             ->map(static fn (mixed $value): string => (string) $value)
             ->all();
-    }
-
-    /**
-     * Apply whitelisted filters to the query.
-     *
-     * SECURITY: only keys present in the definition's filterable whitelist are
-     * honoured; every column is resolved to a real DB column name from the
-     * definition and every value is passed as a bound parameter via the query
-     * builder — never interpolated into SQL. Derived columns (e.g. `roles`) are
-     * delegated to the definition's applyDerivedFilter hook.
-     *
-     * @param  Builder<Model>  $query
-     * @param  array<string, array<string, mixed>>  $filterModel
-     */
-    private function applyFilters(TableDefinition $definition, Builder $query, array $filterModel): void
-    {
-        $filterable = $definition->filterableColumnMap();
-
-        foreach ($filterModel as $columnId => $filter) {
-            if (! array_key_exists($columnId, $filterable)) {
-                continue; // not whitelisted — ignore defensively (FormRequest already 422s)
-            }
-
-            if (! is_array($filter)) {
-                continue;
-            }
-
-            // Derived columns (no real DB column) are handled by the definition.
-            if ($definition->applyDerivedFilter($query, $columnId, $filterable[$columnId], $filter)) {
-                continue;
-            }
-
-            $this->filterApplier->apply($query, $columnId, $filterable[$columnId], $filter);
-        }
-    }
-
-    /**
-     * Apply the global quick-search (spec 0009): a single grouped OR-LIKE over
-     * the definition's `searchableColumnIds()` allow-list.
-     *
-     * SECURITY: the columns come exclusively from the definition's server-side
-     * allow-list (never from the request), and the term is a LIKE-escaped bound
-     * parameter — never interpolated into SQL. The OR group is wrapped in its
-     * own closure so it AND-combines with any active column filters instead of
-     * widening them.
-     *
-     * A DERIVED searchable column (no real DB column, e.g. `city`/`street` on
-     * `operational-sites` — spec 0011) is delegated FIRST to the definition's
-     * `applyDerivedSearch()` hook; only when it returns false does the generic
-     * plain `orWhere($column, 'like', $pattern)` run against the real column.
-     * Default (AbstractTableDefinition) is always false, so every domain that
-     * does not override the hook keeps this exact flat OR-LIKE behavior
-     * (retro-compatible — users/roles/business-functions/companies unchanged).
-     *
-     * @param  Builder<Model>  $query
-     */
-    private function applySearch(TableDefinition $definition, Builder $query, ?string $search): void
-    {
-        $term = $search === null ? '' : trim($search);
-
-        if ($term === '') {
-            return;
-        }
-
-        $columns = $definition->searchableColumnIds();
-
-        if ($columns === []) {
-            return;
-        }
-
-        $pattern = '%'.$this->filterApplier->escapeLike($term).'%';
-
-        $query->where(function (Builder $group) use ($definition, $columns, $pattern): void {
-            foreach ($columns as $column) {
-                if ($definition->applyDerivedSearch($group, $column, $pattern)) {
-                    continue;
-                }
-
-                $group->orWhere($column, 'like', $pattern);
-            }
-        });
-    }
-
-    /**
-     * Apply whitelisted sorting. Only columns flagged `sortable` in the
-     * definition are accepted; direction is constrained to asc/desc. Both are
-     * validated upstream by the FormRequest — this is defence in depth.
-     *
-     * @param  Builder<Model>  $query
-     * @param  array<int, array<string, mixed>>  $sortModel
-     */
-    private function applySorting(TableDefinition $definition, Builder $query, array $sortModel): void
-    {
-        $sortable = $definition->sortableColumnIds();
-        $applied = false;
-
-        foreach ($sortModel as $sort) {
-            $colId = $sort['colId'] ?? null;
-
-            if (! is_string($colId) || ! in_array($colId, $sortable, true)) {
-                continue;
-            }
-
-            $direction = ($sort['sort'] ?? null) === 'desc' ? 'desc' : 'asc';
-
-            // Derived columns (no real DB column, e.g. user_type/geo) are sorted
-            // by the definition; everything else is a plain ORDER BY.
-            if (! $definition->applyDerivedSort($query, $colId, $direction)) {
-                $query->orderBy($colId, $direction);
-            }
-
-            $applied = true;
-        }
-
-        if (! $applied) {
-            $this->applyDefaultSort($definition, $query, $sortable);
-        }
-    }
-
-    /**
-     * @param  Builder<Model>  $query
-     * @param  array<int, string>  $sortable
-     */
-    private function applyDefaultSort(TableDefinition $definition, Builder $query, array $sortable): void
-    {
-        foreach ($definition->defaultSort() as $sort) {
-            $colId = $sort['columnId'] ?? null;
-
-            if (is_string($colId) && in_array($colId, $sortable, true)) {
-                $direction = ($sort['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
-
-                if (! $definition->applyDerivedSort($query, $colId, $direction)) {
-                    $query->orderBy($colId, $direction);
-                }
-            }
-        }
     }
 }

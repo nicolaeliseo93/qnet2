@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spec 0015 — User employment profile (Profilo + Rapporto contrattuale + Dati contrattuali).
+  Contract-first. Decisioni utente congelate:
+    - Storage: tabella dedicata `employment_profiles` (hasOne su User), oggetto nested `employment`.
+    - Form: pattern a TAB (nuova primitiva components/ui/tabs, Radix via pacchetto `radix-ui` gia presente — nessuna nuova dipendenza).
+    - Durate: interi in MINUTI (smallint), non colonna TIME.
+  Nomi reali verificati nel repo al passo di grounding (non ipotizzati).
+-->
+<spec id="0015-user-employment-profile" status="draft" owner="architect" date="2026-07-03">
+
+  <goal>
+    Aggiungere all'entita User un profilo di impiego in tre sezioni (Profilo, Rapporto
+    contrattuale, Dati contrattuali) con relazioni searchable, enum, date e durate; il tutto
+    creato/aggiornato atomicamente insieme all'utente. Ridisegnare il form utente a tab.
+  </goal>
+
+  <context>
+    Stack e convenzioni: CLAUDE.md + rules/. Nomi reali verificati:
+    - User (app/Models/User.php): `#[Fillable]` via attributi; trait HasPersonalData (personalData morphOne
+      -> card + contacts/addresses); scrittura atomica via UserService (DB::transaction) + ProfileWriter;
+      DTO CreateUserData/UpdateUserData/ProfileData; UserResource; UserFactory (nessuno stato gerarchia).
+    - Scrittura utente: UserService::create(actor, CreateUserData, ?ProfileData)::108 e update(...)::111,
+      writeProfile()->ProfileWriter::write(). Controller App\Http\Controllers\Users\UserController
+      (store/update) + FormRequest StoreUserRequest/UpdateUserRequest con trait ValidatesUserProfile
+      (profileRules/validateProfile). Envelope via BaseApiController.
+    - Relazioni target esistenti: BusinessFunction (table business_functions, label = `name`),
+      Company (companies, label = `denomination`, `vat_number`), OperationalSite (operational_sites,
+      identita = indirizzo; accessor primaryAddress->line1). NESSUNA delle tre ha oggi un endpoint
+      for-select: vanno aggiunti sullo standard esistente (ForSelectResource abstract +
+      DataObjects/Shared/ForSelectQuery|ForSelectResult; template = UserService::forSelect +
+      App\Http\Controllers\Users\UserForSelectController + rotta `users/for-select` PRIMA del wildcard).
+    - Enum: pattern metadata `HasMeta` (#[Label]) come PersonalDataTypeEnum, oppure plain backed come
+      ImportStatus. Frontend localizza via namespace i18n `enums` (en-enums.ts/it-enums.ts) + enumKeyFor
+      nella TableDefinition (precedente `user_type` -> `personal_data_type`).
+    - Authz: BasePolicy (`users.{ability}`) + matrice field-permission via UsersAuthorization::fields()
+      (i campi personal_data.* sono FieldDefinition qui). I sotto-permessi indiretti NON diventano
+      resource-permission nel form ruoli: sono governati dalla matrice sul form utente.
+    - Tabella server-driven: UsersTableDefinition + Users\UserColumnCatalog + collaboratori
+      UserGeoColumns/UserPersonalDataColumns (baseQuery eager-load, mapRow, badgesFor, enumKeyFor).
+    - Frontend: features/users/{user-form.tsx,user-form-body.tsx,use-user-form.ts,user-schema.ts,
+      user-form-payload.ts,types.ts,api.ts,users-table.tsx,column-renderers.tsx,user-detail.tsx}.
+      Select searchable async gia pronti: components/ui/async-paginated-select.tsx (single, value:number|null
+      + selectedItem?:ForSelectItem) e async-paginated-multi-select.tsx, backed da features/for-select
+      (useForSelect, resource string, endpoint /{resource}/for-select). Primitive UI MANCANTI: tabs,
+      radio-group, textarea, date-picker. Presenti: switch, collapsible, select, input, form, badge.
+      i18n: en.ts/it.ts oggetto unico con sotto-moduli en-<domain>.ts; stringhe users inline sotto `users.*`.
+  </context>
+
+  <scope>
+    <in>
+      <item>Enum RelationshipTypeEnum (employee|self_employed|other) e QualificationTypeEnum (8 casi).</item>
+      <item>Tabella employment_profiles + Model EmploymentProfile + concern HasEmployment + User::employment (hasOne).</item>
+      <item>DTO EmploymentData + EmploymentWriter; UserService::create/update accettano ?EmploymentData; UserController pass-through.</item>
+      <item>Validazione nested `employment.*` (concern ValidatesEmployment) su Store/UpdateUserRequest; EmploymentResource + `employment` in UserResource.</item>
+      <item>Regola server: is_manager=true => reports_to_id forzato a null; reports_to_id != self; no self-reference.</item>
+      <item>Endpoint for-select x3: business-functions, companies, operational-sites (resource+controller+route+service+request).</item>
+      <item>UsersAuthorization::fields() estesa coi 12 campi employment.* (matrice field-permission).</item>
+      <item>Colonne grid utenti (inglese-first) via nuovo UserEmploymentColumns + UserColumnCatalog + baseQuery/mapRow/enumKeyFor.</item>
+      <item>EmploymentProfileFactory + UserFactory states (withEmployment, manager, reportsTo) + seeder con piccola gerarchia responsabili/sottoposti.</item>
+      <item>Frontend: primitiva components/ui/tabs.tsx; form utente ridisegnato a tab con badge errore; sezioni Profilo/Rapporto/Dati contrattuali; select searchable per le 4 relazioni; is_manager con reports_to condizionale; DurationInput (ore/min -> minuti); date.</item>
+      <item>Frontend for-select resource consts per le 3 nuove entita; schema Zod employment; payload; detail view; renderers colonne; i18n (users.* + enums.*).</item>
+      <item>Test Pest (BE) e Vitest (FE) mappati 1:1 sugli AC.</item>
+    </in>
+    <out>
+      <item>Nessun nuovo resource-permission/Policy per employment: e parte del "gestire l'utente" (come personal_data), governato dalla matrice field-permission.</item>
+      <item>Nessun endpoint CRUD standalone per employment.</item>
+      <item>Nessuna cycle-detection profonda sulla catena reports_to (solo no-self-reference); l'anti-ciclo multilivello e fuori scope.</item>
+      <item>Nessuna nuova dipendenza npm/composer (Radix Tabs via pacchetto `radix-ui` gia presente).</item>
+      <item>Nessuna modifica agli endpoint standalone di business-functions/companies/operational-sites oltre l'aggiunta for-select.</item>
+      <item>Nessun calcolo di ore lavorate/paghe: si persistono solo i dati.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- OGGETTO NESTED `employment` (snake_case), additivo al payload utente esistente. -->
+    <object name="employment (request, nested in POST/PUT users)">
+      is_manager: boolean (default false)
+      job_description: string|null (max 255)
+      reports_to_id: integer|null (exists:users,id; ignorato/nullato se is_manager=true; != user corrente)
+      business_function_id: integer|null (exists:business_functions,id)
+      relationship_type: "employee"|"self_employed"|"other"|null
+      company_id: integer|null (exists:companies,id)
+      operational_site_id: integer|null (exists:operational_sites,id)
+      qualification_type: enum|null ("employee_level_5"|"administrative"|"coordinator"|"iso_consultant"|"teacher_cococo"|"teacher_vat"|"trainee_cost"|"hourly_cost_me")
+      hired_at: date "Y-m-d"|null
+      terminated_at: date "Y-m-d"|null (after_or_equal:hired_at)
+      standard_daily_minutes: integer|null (0..1440)
+      break_daily_minutes: integer|null (0..1440)
+    </object>
+    <object name="employment (response, in UserResource.employment; null se assente)">
+      id, is_manager, job_description, relationship_type, qualification_type,
+      hired_at, terminated_at, standard_daily_minutes, break_daily_minutes,
+      reports_to_id, business_function_id, company_id, operational_site_id,
+      reports_to: {id,label}|null, business_function: {id,label}|null,
+      company: {id,label,subtitle?}|null, operational_site: {id,label,subtitle?}|null
+    </object>
+    <semantics>
+      Create: `employment` assente o null => nessuna riga employment. Presente => crea la riga (hasOne).
+      Update: `employment` assente => lascia invariato; presente => upsert; `null` esplicito => elimina la riga.
+      Tutto dentro la stessa DB::transaction dell'utente (rollback totale su errore).
+    </semantics>
+
+    <endpoint method="GET" path="/api/business-functions/for-select">
+      <request>search?:string(max255), offset?:int&gt;=0=0, limit?:int 1..100=25, ids[]?:int</request>
+      <response status="200">{ items:[{id, label:name}], export_link:null, pagination:{total,offset,limit,total_pages} }</response>
+      <errors>401 no auth; 403 senza business-functions.viewAny; 422 limit&gt;100</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/companies/for-select">
+      <request>idem</request>
+      <response status="200">{ items:[{id, label:denomination, subtitle:vat_number?}], export_link:null, pagination:{...} }</response>
+      <errors>401; 403 senza companies.viewAny; 422</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/operational-sites/for-select">
+      <request>idem</request>
+      <response status="200">{ items:[{id, label: "line1 - city"|line1, subtitle: postal_code?}], export_link:null, pagination:{...} }</response>
+      <errors>401; 403 senza operational-sites.viewAny; 422</errors>
+    </endpoint>
+
+    <endpoint method="POST|PUT|PATCH" path="/api/users">
+      <request>payload utente esistente + chiave nested `employment` come sopra</request>
+      <response status="201|200">UserResource con `employment` popolato (relazioni {id,label} caricate)</response>
+      <errors>403 senza users.create/update; 422 su employment.* invalido con chiavi nested; rollback totale (nessuna riga utente/employment)</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- BACKEND (Pest) -->
+    <criterion id="AC-001">POST users con `employment` completo (is_manager=false, tutte le FK valide) => 201; riga employment_profiles persistita 1:1; UserResource.employment popolato con reports_to/business_function/company/operational_site come {id,label}.</criterion>
+    <criterion id="AC-002">POST users senza `employment` => 201 e nessuna riga employment (back-compat).</criterion>
+    <criterion id="AC-003">POST users con is_manager=true e reports_to_id valorizzato => 201 con employment.reports_to_id = null (forzato server-side).</criterion>
+    <criterion id="AC-004">POST users con reports_to_id inesistente / operational_site_id inesistente / qualification_type fuori enum / terminated_at &lt; hired_at / standard_daily_minutes=1500 => 422 con chiavi errore nested `employment.*` e NESSUNA riga utente creata (rollback).</criterion>
+    <criterion id="AC-005">PUT users con `employment` assente => employment invariato; con `employment: null` => riga eliminata; con oggetto => upsert dei campi.</criterion>
+    <criterion id="AC-006">reports_to_id uguale all'utente aggiornato => 422 (no self-reference).</criterion>
+    <criterion id="AC-007">Authz: 403 senza users.create/users.update sul path con `employment`; nessun permesso employment.* richiesto.</criterion>
+    <criterion id="AC-008">GET business-functions/for-select: 401 no auth; 403 senza viewAny; 200 con shape {id,label} + pagination; search per name; ids[] appende senza gonfiare total; limit 101 => 422.</criterion>
+    <criterion id="AC-009">GET companies/for-select: come sopra, label=denomination, subtitle=vat_number quando presente.</criterion>
+    <criterion id="AC-010">GET operational-sites/for-select: come sopra, label composta dall'indirizzo (line1[- city]).</criterion>
+    <criterion id="AC-011">Grid utenti: le colonne employment (business_function, company, operational_site, relationship_type, qualification_type, is_manager, reports_to, hired_at, terminated_at) compaiono con id inglesi; sort/filtri costruiti da allow-list (nessun input grezzo in orderByRaw); enum localizzabili via enumKeyFor.</criterion>
+    <criterion id="AC-012">UsersAuthorization::fields() include i 12 `employment.*`; un ruolo con quel campo negato nella matrice non lo scrive (rispetto ceiling) e i valori pre-esistenti sono preservati.</criterion>
+    <criterion id="AC-013">Factory/seeder: EmploymentProfileFactory + stati; il seeder crea >=2 responsabili (is_manager=true, reports_to null) e >=1 sottoposto ciascuno (is_manager=false, reports_to_id = un responsabile); nessun sottoposto punta a se stesso.</criterion>
+    <!-- FRONTEND (Vitest + RTL) -->
+    <criterion id="AC-014">Il form utente renderizza le tab (Identita, Credenziali, Accesso, Profilo, Rapporto, Dati contrattuali, Contatti, Indirizzi); una tab con campo invalido mostra un badge errore; il submit resta bloccato coi campi obbligatori mancanti.</criterion>
+    <criterion id="AC-015">Toggle is_manager: quando responsabile, il campo "Risponde a" e nascosto e non inviato; quando non responsabile, e visibile e inviabile.</criterion>
+    <criterion id="AC-016">Le 4 relazioni usano AsyncPaginatedSelect sui resource corretti (business-functions, users per reports_to, companies, operational-sites); in edit il valore selezionato mostra il label senza fetch extra (selectedItem dal resource).</criterion>
+    <criterion id="AC-017">DurationInput: 8h 0m => payload standard_daily_minutes=480; in edit 480 => mostra 08:00; valori fuori 0..1440 bloccati/clampati client-side.</criterion>
+    <criterion id="AC-018">Il payload create/update include l'oggetto `employment` con le chiavi snake_case del contratto; 422 nested su `employment.*` mappato inline sui campi giusti.</criterion>
+    <criterion id="AC-019">i18n: label/tab in it/en; enum relationship_type e qualification_type localizzati dal namespace `enums` (nessuna stringa hardcoded nel JSX).</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie gia in composer.json/package.json. Radix Tabs via pacchetto `radix-ui` gia presente: nessuna nuova dipendenza.</item>
+    <item>Layering Laravel: Controller thin -> FormRequest -> Service/Writer -> DTO -> Resource; scrittura in DB::transaction; nessun model Eloquent raw in risposta.</item>
+    <item>$fillable esplicito su EmploymentProfile; cast enum/date/int; FK con onDelete coerente (reports_to/business_function/company/operational_site nullOnDelete; user_id cascadeOnDelete + unique).</item>
+    <item>SSRM/TableDefinition: sort e filtri employment SOLO da allow-list di colonne (mai orderByRaw/whereRaw da input). Eager-load per evitare N+1 (preventLazyLoading attivo).</item>
+    <item>Authz server-side su ogni endpoint (for-select => {resource}.viewAny). Field-permission ceiling rispettato su employment.*.</item>
+    <item>Frontend: server-state solo via TanStack Query/for-select esistente; niente useEffect+fetch; niente any; RHF+Zod single source; a11y (aria-invalid/aria-describedby, focus-visible, tab da tastiera); mobile-first, nessuna altezza fissa.</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/rotte/enum keys); label italiane solo via i18n. File entro 300/500 righe: se user-form-body/UsersAuthorization sforano, split in collaboratori.</item>
+    <item>Test eseguiti davvero (Pest/Vitest) + Pint + tsc --noEmit + ESLint puliti prima del verde.</item>
+  </constraints>
+
+</spec>

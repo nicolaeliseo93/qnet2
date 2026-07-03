@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\UserService;
 use App\Tables\Concerns\UnwrapsMultiFilter;
 use App\Tables\Users\UserColumnCatalog;
+use App\Tables\Users\UserEmploymentColumns;
 use App\Tables\Users\UserGeoColumns;
 use App\Tables\Users\UserPersonalDataColumns;
 use Illuminate\Database\Eloquent\Builder;
@@ -47,6 +48,7 @@ class UsersTableDefinition extends AbstractTableDefinition
         private readonly UserService $userService,
         private readonly UserGeoColumns $geoColumns,
         private readonly UserPersonalDataColumns $personalDataColumns,
+        private readonly UserEmploymentColumns $employmentColumns,
     ) {}
 
     public function domain(): string
@@ -90,6 +92,16 @@ class UsersTableDefinition extends AbstractTableDefinition
                 },
                 'personalData.contacts' => function ($query): void {
                     $query->where('is_primary', true);
+                },
+                // Employment profile (spec 0015) + its 4 relations, so mapRow
+                // reads every employment-derived column entirely from memory.
+                'employment.businessFunction',
+                'employment.company',
+                'employment.reportsTo',
+                'employment.operationalSite' => function ($query): void {
+                    $query->with(['addresses' => function ($addressQuery): void {
+                        $addressQuery->where('is_primary', true)->with('city:id,name');
+                    }]);
                 },
             ]);
     }
@@ -179,7 +191,7 @@ class UsersTableDefinition extends AbstractTableDefinition
      */
     protected function enumKeyFor(string $columnId, User $actor): ?string
     {
-        return $columnId === 'user_type' ? 'personal_data_type' : null;
+        return $columnId === 'user_type' ? 'personal_data_type' : $this->employmentColumns->enumKeyFor($columnId);
     }
 
     /**
@@ -210,7 +222,7 @@ class UsersTableDefinition extends AbstractTableDefinition
             'region' => $address?->state?->name,
             'province' => $address?->province?->name,
             'city' => $address?->city?->name,
-        ], $this->personalDataColumns->mapRow($card, $address));
+        ], $this->personalDataColumns->mapRow($card, $address), $this->employmentColumns->mapRow($row->employment));
     }
 
     /**
@@ -263,6 +275,12 @@ class UsersTableDefinition extends AbstractTableDefinition
             return true;
         }
 
+        if ($this->employmentColumns->isEmploymentColumn($columnId)) {
+            $this->employmentColumns->applyFilter($query, $columnId, $filter);
+
+            return true;
+        }
+
         return match ($columnId) {
             'roles' => $this->filterRoles($query, $filter),
             'user_type' => $this->applyPersonalDataFilter($query, fn (Builder $q): mixed => $this->personalDataColumns->applyTypeFilter($q, $filter)),
@@ -305,6 +323,18 @@ class UsersTableDefinition extends AbstractTableDefinition
     {
         if ($this->geoColumns->isGeoColumn($columnId)) {
             $query->orderBy($this->geoColumns->sortSubquery($columnId), $direction);
+
+            return true;
+        }
+
+        if ($this->employmentColumns->isEmploymentColumn($columnId)) {
+            $subquery = $this->employmentColumns->sortSubquery($columnId);
+
+            if ($subquery === null) {
+                return false;
+            }
+
+            $query->orderBy($subquery, $direction);
 
             return true;
         }
@@ -362,6 +392,10 @@ class UsersTableDefinition extends AbstractTableDefinition
 
         if ($this->geoColumns->isGeoColumn($columnId)) {
             return $this->geoColumns->distinctValues($columnId, $search, $limit);
+        }
+
+        if ($this->employmentColumns->isEmploymentColumn($columnId)) {
+            return $this->employmentColumns->distinctValues($query, $columnId, $search, $limit);
         }
 
         return null;

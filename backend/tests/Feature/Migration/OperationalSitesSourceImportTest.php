@@ -1,0 +1,184 @@
+<?php
+
+use App\Enums\MigrationStatus;
+use App\Jobs\RunMigrationJob;
+use App\Migrations\MigrationRegistry;
+use App\Models\City;
+use App\Models\Country;
+use App\Models\MigrationRun;
+use App\Models\OperationalSite;
+use App\Models\Role;
+use App\Models\State;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+
+uses(RefreshDatabase::class);
+
+if (! function_exists('fakeMigrationsBaseUrl')) {
+    function fakeMigrationsBaseUrl(): string
+    {
+        return 'https://external-crm.test';
+    }
+}
+
+if (! function_exists('seedMigrationsConfig')) {
+    function seedMigrationsConfig(): void
+    {
+        config([
+            'migrations.base_url' => fakeMigrationsBaseUrl(),
+            'migrations.token' => null,
+            'migrations.timeout' => 5,
+            'migrations.retry_times' => 1,
+            'migrations.retry_sleep_ms' => 1,
+            'migrations.import_batch_size' => 100,
+        ]);
+    }
+}
+
+if (! function_exists('migrationsSuperAdminActor')) {
+    function migrationsSuperAdminActor(): User
+    {
+        Role::query()->firstOrCreate(['name' => 'super-admin']);
+
+        $actor = User::factory()->create();
+        $actor->assignRole('super-admin');
+
+        return $actor;
+    }
+}
+
+if (! function_exists('runMigrationJobFor')) {
+    function runMigrationJobFor(MigrationRun $run): void
+    {
+        (new RunMigrationJob($run->id))->handle(app(MigrationRegistry::class));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// OperationalSitesSource — create + address (geo resolved by name)
+// ---------------------------------------------------------------------------
+
+it('creates a site with its address, resolving geo names to ids', function () {
+    seedMigrationsConfig();
+    $country = Country::factory()->create(['name' => 'Italy']);
+    $state = State::factory()->for($country)->create(['name' => 'Lazio']);
+    $city = City::factory()->forState($state)->create(['name' => 'Rome']);
+
+    Http::fake([
+        fakeMigrationsBaseUrl().'/operational-sites*' => Http::response([
+            'data' => [[
+                'id' => 1,
+                'country' => 'Italy',
+                'region' => 'Lazio',
+                'city' => 'Rome',
+                'street' => 'Via Roma 1',
+                'postal_code' => '00100',
+            ]],
+            'meta' => ['total' => 1],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $run = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'operational-sites']);
+
+    runMigrationJobFor($run);
+
+    $site = OperationalSite::query()->where('old_id', 1)->first();
+
+    expect($site)->not->toBeNull();
+
+    $address = $site->addresses()->first();
+    expect($address)->not->toBeNull()
+        ->and($address->line1)->toBe('Via Roma 1')
+        ->and($address->country_id)->toBe($country->id)
+        ->and($address->state_id)->toBe($state->id)
+        ->and($address->city_id)->toBe($city->id);
+
+    $fresh = $run->fresh();
+    expect($fresh->status)->toBe(MigrationStatus::Completed)
+        ->and($fresh->created_rows)->toBe(1)
+        ->and($fresh->report)->toBeNull();
+});
+
+it('creates the site with a warning when the region name cannot be resolved', function () {
+    seedMigrationsConfig();
+    Country::factory()->create(['name' => 'Italy']);
+
+    Http::fake([
+        fakeMigrationsBaseUrl().'/operational-sites*' => Http::response([
+            'data' => [[
+                'id' => 2,
+                'country' => 'Italy',
+                'region' => 'Unknown Region',
+                'street' => 'Via Milano 5',
+            ]],
+            'meta' => ['total' => 1],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $run = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'operational-sites']);
+
+    runMigrationJobFor($run);
+
+    $site = OperationalSite::query()->where('old_id', 2)->first();
+
+    expect($site)->not->toBeNull();
+
+    $fresh = $run->fresh();
+    expect($fresh->created_rows)->toBe(1)
+        ->and($fresh->report)->not->toBeNull()
+        ->and($fresh->report[0]['level'])->toBe('warning')
+        ->and($fresh->report[0]['message'])->toContain('Unknown Region');
+});
+
+it('isolates a failed row (missing street) without blocking the valid one', function () {
+    seedMigrationsConfig();
+    Http::fake([
+        fakeMigrationsBaseUrl().'/operational-sites*' => Http::response([
+            'data' => [
+                ['id' => 3],
+                ['id' => 4, 'street' => 'Via Torino 9'],
+            ],
+            'meta' => ['total' => 2],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $run = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'operational-sites']);
+
+    runMigrationJobFor($run);
+
+    expect(OperationalSite::query()->where('old_id', 4)->exists())->toBeTrue()
+        ->and(OperationalSite::query()->where('old_id', 3)->exists())->toBeFalse();
+
+    $fresh = $run->fresh();
+    expect($fresh->status)->toBe(MigrationStatus::Completed)
+        ->and($fresh->created_rows)->toBe(1)
+        ->and($fresh->failed_rows)->toBe(1)
+        ->and(collect($fresh->report)->firstWhere('level', 'error'))->not->toBeNull();
+});
+
+it('re-importing the same sites is idempotent (skip, no duplicate)', function () {
+    seedMigrationsConfig();
+    Http::fake([
+        fakeMigrationsBaseUrl().'/operational-sites*' => Http::response([
+            'data' => [['id' => 5, 'street' => 'Via Napoli 2']],
+            'meta' => ['total' => 1],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $firstRun = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'operational-sites']);
+    runMigrationJobFor($firstRun);
+
+    $secondRun = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'operational-sites']);
+    runMigrationJobFor($secondRun);
+
+    expect(OperationalSite::query()->where('old_id', 5)->count())->toBe(1);
+
+    $fresh = $secondRun->fresh();
+    expect($fresh->skipped_rows)->toBe(1)
+        ->and($fresh->created_rows)->toBe(0);
+});

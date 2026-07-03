@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
-import { Plus } from 'lucide-react'
+import { Plus, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,6 +13,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Can } from '@/features/auth/can'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import { useTableConfig } from '@/features/table/use-table-config'
@@ -27,6 +28,7 @@ import { roleColumnRenderers } from '@/features/roles/column-renderers'
 import { deleteRole, fetchRole } from '@/features/roles/api'
 import { RoleForm } from '@/features/roles/role-form'
 import { RoleDetailView } from '@/features/roles/role-detail'
+import { ImportDialog } from '@/features/imports/import-dialog'
 
 /** Domain key used to mount the generic table for roles. */
 const ROLES_DOMAIN = 'roles'
@@ -65,6 +67,7 @@ export function RolesTable() {
 
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
 
@@ -160,6 +163,26 @@ export function RolesTable() {
         onAction={handleAction}
         isBusy={isBusy}
         decorateRow={decorateRow}
+        importSlot={
+          <Can permission="roles.import">
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                setImportOpen(true)
+              }}
+            >
+              <Upload aria-hidden="true" />
+              {t('imports.action')}
+            </DropdownMenuItem>
+          </Can>
+        }
+      />
+
+      <ImportDialog
+        domain={ROLES_DOMAIN}
+        resource={ROLES_DOMAIN}
+        open={importOpen}
+        onOpenChange={setImportOpen}
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>

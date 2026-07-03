@@ -5,6 +5,7 @@ namespace App\Services;
 use App\DataObjects\Shared\ForSelectQuery;
 use App\DataObjects\Shared\ForSelectResult;
 use App\DataObjects\Users\CreateUserData;
+use App\DataObjects\Users\EmploymentData;
 use App\DataObjects\Users\ProfileData;
 use App\DataObjects\Users\UpdateUserData;
 use App\Models\User;
@@ -14,9 +15,29 @@ use InvalidArgumentException;
 
 class UserService
 {
+    /**
+     * Relations eager-loaded on the user returned by create()/update() so the
+     * UserResource can emit the nested personal-data and employment trees
+     * (with their {id,label} references) without a second request.
+     *
+     * @var array<int, string>
+     */
+    private const array WRITE_RESULT_RELATIONS = [
+        'personalData.contacts',
+        'personalData.addresses',
+        'employment.reportsTo',
+        'employment.businessFunction',
+        'employment.company',
+        // The operational-site label is "line1[- city]" (EmploymentResource),
+        // so its primary address and city must be eager-loaded too, or
+        // reading them would lazy-load (blocked outside production).
+        'employment.operationalSite.addresses.city',
+    ];
+
     public function __construct(
         private readonly RoleAssignmentGuard $guard,
         private readonly ProfileWriter $profileWriter,
+        private readonly EmploymentWriter $employmentWriter,
     ) {}
 
     /**
@@ -64,8 +85,13 @@ class UserService
      * addresses are persisted in the SAME transaction, so any failure rolls the
      * user back too (no half-provisioned user — ADR 0012). A null $profile keeps
      * the previous account-only behavior (backward compatible).
+     *
+     * When $employment is provided, the nested employment profile (spec 0015)
+     * is persisted in the SAME transaction via EmploymentWriter — a null
+     * $employment (the key was absent) leaves no row, matching the wire
+     * contract ("employment absent or null => no row" on create).
      */
-    public function create(User $actor, CreateUserData $data, ?ProfileData $profile = null): User
+    public function create(User $actor, CreateUserData $data, ?ProfileData $profile = null, ?EmploymentData $employment = null): User
     {
         if ($profile === null) {
             // The StoreUserRequest guarantees a profile (it is the only source of
@@ -73,7 +99,7 @@ class UserService
             throw new InvalidArgumentException('A personal-data profile is required to create a user (its name is derived from the card).');
         }
 
-        $user = DB::transaction(function () use ($actor, $data, $profile): User {
+        $user = DB::transaction(function () use ($actor, $data, $profile, $employment): User {
             $attributes = $data->attributes();
             // `users.name` is NOT NULL but the authoritative value is derived by
             // the shared ProfileWriter from the card (single derivation point —
@@ -88,11 +114,12 @@ class UserService
             }
 
             $this->writeProfile($user, $profile);
+            $this->employmentWriter->write($user, $employment);
 
             return $user;
         });
 
-        return $user->load(['personalData.contacts', 'personalData.addresses']);
+        return $user->load(self::WRITE_RESULT_RELATIONS);
     }
 
     /**
@@ -107,10 +134,15 @@ class UserService
      * When $profile is provided, the personal-data card and its contacts/
      * addresses are upserted/synced in the SAME transaction (ADR 0012). A null
      * $profile leaves the card untouched (backward compatible).
+     *
+     * When $employment is provided, the nested employment profile (spec 0015)
+     * is upserted/deleted in the SAME transaction via EmploymentWriter — a null
+     * $employment (the key was absent) leaves the row untouched; an explicit
+     * `employment: null` (EmploymentData::delete()) removes it.
      */
-    public function update(User $actor, User $user, UpdateUserData $data, ?ProfileData $profile = null): User
+    public function update(User $actor, User $user, UpdateUserData $data, ?ProfileData $profile = null, ?EmploymentData $employment = null): User
     {
-        $user = DB::transaction(function () use ($actor, $user, $data, $profile): User {
+        $user = DB::transaction(function () use ($actor, $user, $data, $profile, $employment): User {
             $attributes = $data->submittedAttributes();
 
             if ($attributes !== []) {
@@ -126,11 +158,12 @@ class UserService
             }
 
             $this->writeProfile($user, $profile);
+            $this->employmentWriter->write($user, $employment);
 
             return $user;
         });
 
-        return $user->load(['personalData.contacts', 'personalData.addresses']);
+        return $user->load(self::WRITE_RESULT_RELATIONS);
     }
 
     /**

@@ -40,6 +40,12 @@ class UserResource extends JsonResource
                 $this->relationLoaded('personalData') && $this->personalData !== null,
                 fn () => new PersonalDataResource($this->personalData),
             ),
+            // The nested employment tree (spec 0015), same discipline as
+            // personal_data: emitted only when loaded AND present.
+            'employment' => $this->when(
+                $this->relationLoaded('employment') && $this->employment !== null,
+                fn () => new EmploymentResource($this->employment),
+            ),
             'created_at' => $this->created_at,
         ];
     }

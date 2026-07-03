@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- renderer registry module: cells are AG Grid render functions, not route/page components */
 import type { ICellRendererParams } from 'ag-grid-community'
+import i18n from '@/i18n'
 import { UserAvatar } from '@/components/user-avatar'
 import {
   ContactsCell,
@@ -7,6 +8,26 @@ import {
   TagsCell,
 } from '@/features/table/cell-renderers'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
+
+/** Renders an employment `Y-m-d` date column, no time part (spec 0015). */
+function DateCell({ value }: ICellRendererParams) {
+  if (typeof value !== 'string' || value === '') {
+    return <span className="text-muted-foreground">—</span>
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return <span className="text-muted-foreground">—</span>
+  }
+  return <span>{new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' }).format(date)}</span>
+}
+
+/** Renders the `is_manager` boolean column as a localized yes/no label. */
+function IsManagerCell({ value }: ICellRendererParams) {
+  if (typeof value !== 'boolean') {
+    return <span className="text-muted-foreground">—</span>
+  }
+  return <span>{i18n.t(value ? 'common.yes' : 'common.no')}</span>
+}
 
 /** Renders an email as a mailto link (users-specific). */
 function EmailCell({ value }: ICellRendererParams) {
@@ -49,4 +70,10 @@ export const userColumnRenderers: TableRendererMap = {
   created_at: (params) => <DateTimeCell {...params} />,
   // All primary contacts (one per type): icon + label badges, value in tooltip.
   primary_contact: (params) => <ContactsCell {...params} />,
+  // Employment profile columns (spec 0015): relationship_type/qualification_type
+  // are `badge` columns, rendered generically by the table's own `BadgeCell`
+  // fallback (no entry needed here).
+  is_manager: (params) => <IsManagerCell {...params} />,
+  hired_at: (params) => <DateCell {...params} />,
+  terminated_at: (params) => <DateCell {...params} />,
 }

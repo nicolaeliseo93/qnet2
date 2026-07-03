@@ -58,6 +58,9 @@ it('exposes order and width on every column in the default config', function () 
     expect($ids)->toBe([
         'id', 'avatar_url', 'name', 'email', 'roles', 'locale', 'created_at',
         'user_type', 'primary_address', 'country', 'region', 'province', 'city', 'primary_contact',
+        // spec 0015 — the 9 employment-derived columns.
+        'business_function', 'company', 'operational_site', 'relationship_type',
+        'qualification_type', 'is_manager', 'reports_to', 'hired_at', 'terminated_at',
     ]);
 });
 

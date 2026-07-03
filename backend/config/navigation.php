@@ -17,6 +17,11 @@ return [
     |   - icon:       icon name the frontend maps to a component (nullable)
     |   - route:      frontend route (nullable for pure groups)
     |   - permission: required permission, or null = any authenticated user
+    |   - role:       (optional, spec 0013) required Spatie role name — item is
+    |                 visible ONLY to a user holding it (in ADDITION to the
+    |                 permission check above, if any). Omit for ordinary items;
+    |                 never used by SyncPermissions (it has nothing to do with
+    |                 the permission catalogue).
     |   - type:       'item' (default) or 'section'. A 'section' is a labeled
     |                 separator: the frontend renders its children as flat,
     |                 sibling links under a group label — NOT as a collapsible
@@ -92,6 +97,16 @@ return [
                     ],
                 ],
             ],
+        ],
+        [
+            'key' => 'migrations',
+            // Namespaced i18n key: `migrations` strings live in their own i18next
+            // namespace (see frontend i18n/index.ts), not the default bundle.
+            'label' => 'migrations:nav.label',
+            'icon' => 'database-zap',
+            'route' => '/migrations',
+            'permission' => null,
+            'role' => 'super-admin',
         ],
     ],
 

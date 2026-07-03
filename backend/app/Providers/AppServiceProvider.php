@@ -8,6 +8,7 @@ use App\Models\Attachment;
 use App\Models\BusinessFunction;
 use App\Models\Company;
 use App\Models\Contact;
+use App\Models\EmploymentProfile;
 use App\Models\OperationalSite;
 use App\Models\PersonalData;
 use App\Models\Role;
@@ -59,6 +60,7 @@ class AppServiceProvider extends ServiceProvider
             'business_function' => BusinessFunction::class,
             'company' => Company::class,
             'operational_site' => OperationalSite::class,
+            'employment_profile' => EmploymentProfile::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

@@ -55,12 +55,29 @@ function draft(overrides: Partial<PersonalDataDraft> = {}): PersonalDataDraft {
 /** Fixture password satisfying the schema's minimum length; not a real credential. */
 const TEST_PASSWORD = 'x'.repeat(12)
 
+/** Blank employment sub-form, mirroring `EMPTY_EMPLOYMENT` in `use-user-form.ts`. */
+const emptyEmployment: UserFormValues['employment'] = {
+  is_manager: false,
+  job_description: '',
+  reports_to_id: null,
+  business_function_id: null,
+  relationship_type: null,
+  company_id: null,
+  operational_site_id: null,
+  qualification_type: null,
+  hired_at: '',
+  terminated_at: '',
+  standard_daily_minutes: null,
+  break_daily_minutes: null,
+}
+
 const formValues: UserFormValues = {
   email: 'ada@example.com',
   locale: 'en',
   roles: [],
   password: TEST_PASSWORD,
   password_confirmation: TEST_PASSWORD,
+  employment: emptyEmployment,
 }
 
 function original(overrides: Partial<UserDetailWithPermissions> = {}): UserDetailWithPermissions {
@@ -143,5 +160,95 @@ describe('buildUpdatePayload — personal-data gating (spec 0008)', () => {
     expect(payload.personal_data).toBeDefined()
     expect('last_name' in (payload.personal_data ?? {})).toBe(false)
     expect(payload.personal_data?.first_name).toBe('Ada')
+  })
+})
+
+/** Spec 0015 AC-015/AC-018: the nested `employment` object, snake_case, upserted. */
+describe('buildCreatePayload — employment (spec 0015)', () => {
+  it('includes the employment object with snake_case contract keys', () => {
+    const payload = buildCreatePayload(
+      {
+        ...formValues,
+        employment: {
+          ...emptyEmployment,
+          business_function_id: 3,
+          relationship_type: 'employee',
+          company_id: 5,
+          operational_site_id: 8,
+          qualification_type: 'coordinator',
+          hired_at: '2026-01-15',
+          terminated_at: '',
+          standard_daily_minutes: 480,
+          break_daily_minutes: 30,
+          job_description: 'Backend engineer',
+        },
+      },
+      draft(),
+    )
+
+    expect(payload.employment).toEqual({
+      is_manager: false,
+      job_description: 'Backend engineer',
+      reports_to_id: null,
+      business_function_id: 3,
+      relationship_type: 'employee',
+      company_id: 5,
+      operational_site_id: 8,
+      qualification_type: 'coordinator',
+      hired_at: '2026-01-15',
+      terminated_at: null,
+      standard_daily_minutes: 480,
+      break_daily_minutes: 30,
+    })
+  })
+
+  it('AC-015 — force-nulls reports_to_id client-side when is_manager is true', () => {
+    const payload = buildCreatePayload(
+      {
+        ...formValues,
+        employment: { ...emptyEmployment, is_manager: true, reports_to_id: 42 },
+      },
+      draft(),
+    )
+
+    expect(payload.employment.is_manager).toBe(true)
+    expect(payload.employment.reports_to_id).toBeNull()
+  })
+
+  it('keeps reports_to_id when is_manager is false', () => {
+    const payload = buildCreatePayload(
+      {
+        ...formValues,
+        employment: { ...emptyEmployment, is_manager: false, reports_to_id: 42 },
+      },
+      draft(),
+    )
+
+    expect(payload.employment.reports_to_id).toBe(42)
+  })
+})
+
+describe('buildUpdatePayload — employment (spec 0015)', () => {
+  it('always includes the employment object (upsert semantics)', () => {
+    const payload = buildUpdatePayload(
+      { ...formValues, password: '', password_confirmation: '' },
+      original(),
+      draft(),
+    )
+
+    expect(payload.employment).toEqual({
+      is_manager: false,
+      job_description: null,
+      reports_to_id: null,
+      business_function_id: null,
+      relationship_type: null,
+      company_id: null,
+      operational_site_id: null,
+      qualification_type: null,
+      hired_at: null,
+      terminated_at: null,
+      standard_daily_minutes: null,
+      break_daily_minutes: null,
+    })
   })
 })

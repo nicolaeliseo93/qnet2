@@ -1,0 +1,89 @@
+<?php
+
+use App\Migrations\MigrationQuery;
+use App\Migrations\Sources\RolesSource;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+uses(TestCase::class, RefreshDatabase::class);
+
+if (! function_exists('fakeMigrationsBaseUrl')) {
+    function fakeMigrationsBaseUrl(): string
+    {
+        return 'https://external-crm.test';
+    }
+}
+
+if (! function_exists('seedMigrationsConfig')) {
+    function seedMigrationsConfig(): void
+    {
+        config([
+            'migrations.base_url' => fakeMigrationsBaseUrl(),
+            'migrations.token' => null,
+            'migrations.timeout' => 5,
+            'migrations.retry_times' => 1,
+            'migrations.retry_sleep_ms' => 1,
+        ]);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AC-007 — AbstractMigrationSource::preview: mapping + pagination + total
+// ---------------------------------------------------------------------------
+
+it('translates page/per_page and maps records to rows keyed by column id', function () {
+    seedMigrationsConfig();
+    Http::fake([
+        fakeMigrationsBaseUrl().'/roles*' => Http::response([
+            'data' => [
+                ['id' => 10, 'name' => 'operator'],
+                ['id' => 11, 'name' => 'reviewer'],
+            ],
+            'meta' => ['current_page' => 2, 'per_page' => 2, 'total' => 5],
+        ]),
+    ]);
+
+    $page = app(RolesSource::class)->preview(new MigrationQuery(page: 2, perPage: 2));
+
+    expect($page->rows)->toBe([
+        ['id' => 10, 'name' => 'operator'],
+        ['id' => 11, 'name' => 'reviewer'],
+    ])
+        ->and($page->page)->toBe(2)
+        ->and($page->perPage)->toBe(2)
+        ->and($page->total)->toBe(5)
+        ->and($page->hasMore)->toBeTrue(); // 2*2=4 < 5
+
+    Http::assertSent(fn ($request) => $request['page'] === 2 && $request['per_page'] === 2);
+});
+
+it('has_more is false once the last page is reached (known total)', function () {
+    seedMigrationsConfig();
+    Http::fake([
+        fakeMigrationsBaseUrl().'/roles*' => Http::response([
+            'data' => [['id' => 10, 'name' => 'operator']],
+            'meta' => ['total' => 1],
+        ]),
+    ]);
+
+    $page = app(RolesSource::class)->preview(new MigrationQuery(page: 1, perPage: 50));
+
+    expect($page->total)->toBe(1)
+        ->and($page->hasMore)->toBeFalse();
+});
+
+it('total is null when meta.total is absent (AC-007)', function () {
+    seedMigrationsConfig();
+    Http::fake([
+        fakeMigrationsBaseUrl().'/roles*' => Http::response([
+            'data' => [['id' => 10, 'name' => 'operator']],
+        ]),
+    ]);
+
+    $page = app(RolesSource::class)->preview(new MigrationQuery(page: 1, perPage: 50));
+
+    expect($page->total)->toBeNull()
+        // A single record on a 50-per-page request is clearly the last page.
+        ->and($page->hasMore)->toBeFalse();
+});

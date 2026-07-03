@@ -3,6 +3,15 @@ import { personalData, personalDataFieldLabels } from './it-personal-data'
 import { enums } from './it-enums'
 import { companies } from './it-companies'
 import { operationalSites } from './it-operational-sites'
+import { imports } from './it-imports'
+import { exports } from './it-exports'
+import {
+  usersColumnsEmployment,
+  usersDetailEmployment,
+  usersFormEmployment,
+  usersFormEmploymentSections,
+  usersFormTabs,
+} from './it-users-employment'
 
 export const it: TranslationResources = {
   common: {
@@ -12,7 +21,6 @@ export const it: TranslationResources = {
     notFound: 'Pagina non trovata',
     backToDashboard: 'Torna alla dashboard',
     comingSoon: 'Questa sezione non è ancora disponibile.',
-    soon: 'Presto',
     clear: 'Cancella',
     confirm: 'Conferma',
     cancel: 'Annulla',
@@ -120,13 +128,17 @@ export const it: TranslationResources = {
       province: 'Provincia',
       city: 'Città',
       primary_contact: 'Contatti principali',
+      ...usersColumnsEmployment,
     },
     detail: {
       title: 'Dettaglio utente',
       subtitle: "Visualizzazione in sola lettura dell'utente selezionato.",
       loadError: "Impossibile caricare l'utente. Riprova.",
+      // Sezione Rapporto di lavoro in sola lettura (spec 0015).
+      employment: usersDetailEmployment,
     },
     form: {
+      tabs: usersFormTabs,
       newUser: 'Nuovo utente',
       avatarLabel: 'Avatar',
       createTitle: 'Crea utente',
@@ -183,10 +195,13 @@ export const it: TranslationResources = {
           title: 'Indirizzi',
           description: 'Sedi e indirizzi di fatturazione.',
         },
+        ...usersFormEmploymentSections,
       },
       // The personal-data card fields/sections (spec 0008), read by the role
       // field-permissions matrix (`fieldPermissionLabel('users', 'personal_data.*')`).
       personal_data: personalDataFieldLabels,
+      // Campi del rapporto di lavoro (spec 0015): tab Profilo/Rapporto/Dati contrattuali.
+      employment: usersFormEmployment,
     },
   },
   personalData,
@@ -453,4 +468,6 @@ export const it: TranslationResources = {
     },
   },
   operationalSites,
+  imports,
+  exports,
 }

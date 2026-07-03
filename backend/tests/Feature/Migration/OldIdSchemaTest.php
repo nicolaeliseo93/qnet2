@@ -1,0 +1,147 @@
+<?php
+
+use App\Models\BusinessFunction;
+use App\Models\Company;
+use App\Models\OperationalSite;
+use App\Models\Role;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\MassAssignmentException;
+use Illuminate\Database\QueryException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+uses(RefreshDatabase::class);
+
+// Migration file per target table (spec 0013 — external data migration):
+// each is a purely additive `old_id` BIGINT UNSIGNED nullable + unique index,
+// used by the (not-yet-built) import engine for idempotence/remapping.
+dataset('old_id_tables', [
+    'users' => ['users', '2026_07_04_100000_add_old_id_to_users_table.php'],
+    'roles' => ['roles', '2026_07_04_100100_add_old_id_to_roles_table.php'],
+    'business_functions' => ['business_functions', '2026_07_04_100200_add_old_id_to_business_functions_table.php'],
+    'companies' => ['companies', '2026_07_04_100300_add_old_id_to_companies_table.php'],
+    'operational_sites' => ['operational_sites', '2026_07_04_100400_add_old_id_to_operational_sites_table.php'],
+]);
+
+/**
+ * A bare (unsaved) factory for the given target table, used to create rows
+ * without depending on each entity's own required-field business rules.
+ */
+function oldIdFactoryFor(string $table): Factory
+{
+    return match ($table) {
+        'users' => User::factory(),
+        'roles' => Role::factory(),
+        'business_functions' => BusinessFunction::factory(),
+        'companies' => Company::factory(),
+        'operational_sites' => OperationalSite::factory(),
+    };
+}
+
+// ---------------------------------------------------------------------------
+// AC-001 — schema, unique, nullable, up/down
+// ---------------------------------------------------------------------------
+
+it('adds a nullable old_id column', function (string $table) {
+    expect(Schema::hasColumn($table, 'old_id'))->toBeTrue();
+})->with('old_id_tables');
+
+it('down() drops the column and its unique index, up() recreates both', function (string $table, string $file) {
+    $migration = require database_path("migrations/{$file}");
+
+    $migration->down();
+    expect(Schema::hasColumn($table, 'old_id'))->toBeFalse();
+
+    $migration->up();
+    expect(Schema::hasColumn($table, 'old_id'))->toBeTrue();
+})->with('old_id_tables');
+
+it('allows NULL old_id for native (non-migrated) rows', function (string $table) {
+    oldIdFactoryFor($table)->count(2)->create();
+
+    expect(DB::table($table)->whereNull('old_id')->count())->toBeGreaterThanOrEqual(2);
+})->with('old_id_tables');
+
+it('rejects a duplicate non-null old_id on the same table', function (string $table) {
+    $factory = oldIdFactoryFor($table);
+
+    $factory->create(['old_id' => 42]);
+
+    expect(fn () => $factory->create(['old_id' => 42]))->toThrow(QueryException::class);
+})->with('old_id_tables');
+
+// ---------------------------------------------------------------------------
+// AC-002 — set-by-property persists, mass-assignment is guarded
+// ---------------------------------------------------------------------------
+
+it('persists old_id set by property assignment on User', function () {
+    $user = User::factory()->create();
+    $user->old_id = 501;
+    $user->save();
+
+    expect($user->fresh()->old_id)->toBe(501);
+});
+
+it('does not mass-assign old_id on User::create()', function () {
+    $user = User::create([
+        'name' => 'Jane Doe',
+        'email' => 'jane.doe@example.com',
+        'password' => 'a-secret-password',
+        'old_id' => 999,
+    ]);
+
+    expect($user->old_id)->toBeNull();
+});
+
+it('persists old_id set by property assignment on BusinessFunction', function () {
+    $function = BusinessFunction::factory()->create();
+    $function->old_id = 502;
+    $function->save();
+
+    expect($function->fresh()->old_id)->toBe(502);
+});
+
+it('does not mass-assign old_id on BusinessFunction::create()', function () {
+    $function = BusinessFunction::create(['name' => 'Legal', 'old_id' => 999]);
+
+    expect($function->old_id)->toBeNull();
+});
+
+it('persists old_id set by property assignment on Company', function () {
+    $company = Company::factory()->create();
+    $company->old_id = 503;
+    $company->save();
+
+    expect($company->fresh()->old_id)->toBe(503);
+});
+
+it('does not mass-assign old_id on Company::create()', function () {
+    $company = Company::create(['denomination' => 'Acme Srl', 'old_id' => 999]);
+
+    expect($company->old_id)->toBeNull();
+});
+
+it('persists old_id set by property assignment on OperationalSite', function () {
+    $site = OperationalSite::factory()->create();
+    $site->old_id = 504;
+    $site->save();
+
+    expect($site->fresh()->old_id)->toBe(504);
+});
+
+it('does not mass-assign old_id on OperationalSite::create()', function () {
+    // OperationalSite has an entirely empty $fillable (spec 0011: it has no
+    // own writable columns, only its address), so Eloquent's guard rejects
+    // ANY mass-assigned attribute outright rather than silently dropping it
+    // — a stricter, still-compliant form of "old_id is not mass-assignable".
+    expect(fn () => OperationalSite::create(['old_id' => 999]))
+        ->toThrow(MassAssignmentException::class);
+});
+
+it('does not mass-assign old_id on Role::create()', function () {
+    $role = Role::create(['name' => 'imported-role', 'guard_name' => 'web', 'old_id' => 999]);
+
+    expect($role->old_id)->toBeNull();
+});

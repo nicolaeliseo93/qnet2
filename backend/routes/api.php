@@ -5,14 +5,20 @@ use App\Http\Controllers\Attachments\AttachmentController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Authorization\FieldCatalogueController;
 use App\Http\Controllers\BusinessFunctions\BusinessFunctionController;
+use App\Http\Controllers\BusinessFunctions\BusinessFunctionForSelectController;
 use App\Http\Controllers\Companies\CompanyController;
+use App\Http\Controllers\Companies\CompanyForSelectController;
 use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\Contacts\ContactController;
+use App\Http\Controllers\Export\ExportController;
 use App\Http\Controllers\Geo\GeoController;
+use App\Http\Controllers\Import\ImportController;
 use App\Http\Controllers\Meta\MetaController;
+use App\Http\Controllers\Migration\MigrationController;
 use App\Http\Controllers\Navigation\NavigationController;
 use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\OperationalSites\OperationalSiteController;
+use App\Http\Controllers\OperationalSites\OperationalSiteForSelectController;
 use App\Http\Controllers\PersonalData\PersonalDataController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RoleForSelectController;
@@ -118,6 +124,69 @@ Route::middleware('auth:sanctum')->group(function () {
             ->scopeBindings();
     });
 
+    // Generic, domain-driven CSV import engine (spec 0012), mirroring
+    // tables/{domain}: one controller serves every domain; {domain} resolves
+    // the ImportDefinition (config/imports.php), unknown → 404. Authorization
+    // (the definition's {resource}.import ability) is enforced server-side in
+    // ImportController on every action; a bound {importRun} that does not
+    // belong to the actor OR whose resource != {domain} 404s. Upload/confirm
+    // are rate-limited tighter (throttle:10,1) as costly/queue-dispatching
+    // writes; template/show/errors stay at the standard throttle:60,1.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('imports/{domain}/template', [ImportController::class, 'template']);
+        Route::get('imports/{domain}/{importRun}', [ImportController::class, 'show']);
+        Route::get('imports/{domain}/{importRun}/errors', [ImportController::class, 'errors']);
+    });
+
+    Route::middleware('throttle:10,1')->group(function () {
+        Route::post('imports/{domain}', [ImportController::class, 'upload']);
+        Route::post('imports/{domain}/{importRun}/confirm', [ImportController::class, 'confirm']);
+    });
+
+    // Generic, domain-driven export engine (spec 0014), mirroring
+    // tables/{domain} / imports/{domain}: one controller serves every domain
+    // with a registered TableDefinition (config/tables.php) — no per-domain
+    // export definition needed, unlike imports. {domain} resolves via
+    // TableRegistry (unknown → 404). Authorization (the definition's
+    // modelClass() `{domain}.export` ability) is enforced server-side in
+    // ExportController on every action; a bound {exportRun} that does not
+    // belong to the actor OR whose resource != {domain} 404s. Store is
+    // rate-limited tighter (throttle:10,1) as a costly/queue-dispatching
+    // write; show/download stay at the standard throttle:60,1.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('exports/{domain}/{exportRun}', [ExportController::class, 'show'])->scopeBindings();
+        Route::get('exports/{domain}/{exportRun}/download', [ExportController::class, 'download'])->scopeBindings();
+    });
+
+    Route::middleware('throttle:10,1')->group(function () {
+        Route::post('exports/{domain}', [ExportController::class, 'store']);
+    });
+
+    // Generic, registry-driven external-data migration engine (spec 0013),
+    // mirroring tables/{domain} / imports/{domain}: one controller serves
+    // every source; {source} resolves the MigrationSource (config/
+    // migrations.php), unknown → 404. Authorization is a SINGLE hard gate for
+    // the whole group — the `super-admin` middleware alias (EnsureSuperAdmin,
+    // fail-closed via UserService::PRIVILEGED_ROLE): 401 anonymous, 403
+    // non-super-admin. A bound {migrationRun} that does not belong to the
+    // actor OR whose source != {source} 404s (never 403). Preview/import call
+    // the external system, so they get their own (tighter) throttles.
+    Route::middleware('super-admin')->group(function () {
+        Route::middleware('throttle:60,1')->group(function () {
+            Route::get('migrations', [MigrationController::class, 'index']);
+            Route::get('migrations/{source}/columns', [MigrationController::class, 'columns']);
+            Route::get('migrations/{source}/runs/{migrationRun}', [MigrationController::class, 'run']);
+        });
+
+        Route::middleware('throttle:30,1')->group(function () {
+            Route::get('migrations/{source}/preview', [MigrationController::class, 'preview']);
+        });
+
+        Route::middleware('throttle:6,1')->group(function () {
+            Route::post('migrations/{source}/import', [MigrationController::class, 'import']);
+        });
+    });
+
     // Centralized, resource-driven authorization metadata (spec 0004): one
     // generic endpoint per resource, registry-driven (config/authorization.php),
     // mirroring the tables/{domain} pattern. Authorization ({resource}.viewAny)
@@ -178,9 +247,16 @@ Route::middleware('auth:sanctum')->group(function () {
     // Business functions CRUD backing the table row-actions (view/edit/delete)
     // + create (spec 0010). Authorization (business-functions.view/create/
     // update/delete) is enforced server-side in BusinessFunctionController via
-    // BusinessFunctionPolicy on every endpoint. No for-select endpoint: the
-    // manager/users pickers reuse the existing GET /api/users/for-select.
+    // BusinessFunctionPolicy on every endpoint.
     Route::middleware('throttle:60,1')->group(function () {
+        // Minimal searchable/paginated business-function list for entity-backed
+        // selects (for-select standard, ADR 0011), feeding the spec 0015 user-
+        // form "function" select. Declared ABOVE business-functions/{businessFunction}
+        // so the literal `for-select` segment wins over the bound wildcard.
+        // Gated by business-functions.viewAny server-side in
+        // BusinessFunctionForSelectController.
+        Route::get('business-functions/for-select', BusinessFunctionForSelectController::class);
+
         Route::get('business-functions/{businessFunction}', [BusinessFunctionController::class, 'show']);
         Route::post('business-functions', [BusinessFunctionController::class, 'store']);
         Route::match(['put', 'patch'], 'business-functions/{businessFunction}', [BusinessFunctionController::class, 'update']);
@@ -190,9 +266,15 @@ Route::middleware('auth:sanctum')->group(function () {
     // Companies CRUD backing the table row-actions (view/edit/delete) + create
     // (spec 0010). Authorization (companies.view/create/update/delete) is
     // enforced server-side in CompanyController via CompanyPolicy on every
-    // endpoint. No for-select endpoint (companies are not referenced by other
-    // entities in this feature).
+    // endpoint.
     Route::middleware('throttle:60,1')->group(function () {
+        // Minimal searchable/paginated company list for entity-backed selects
+        // (for-select standard, ADR 0011), feeding the spec 0015 user-form
+        // "company" select. Declared ABOVE companies/{company} so the literal
+        // `for-select` segment wins over the bound wildcard. Gated by
+        // companies.viewAny server-side in CompanyForSelectController.
+        Route::get('companies/for-select', CompanyForSelectController::class);
+
         Route::get('companies/{company}', [CompanyController::class, 'show']);
         Route::post('companies', [CompanyController::class, 'store']);
         Route::match(['put', 'patch'], 'companies/{company}', [CompanyController::class, 'update']);
@@ -202,9 +284,16 @@ Route::middleware('auth:sanctum')->group(function () {
     // Operational sites CRUD backing the table row-actions (view/edit/delete)
     // + create (spec 0011). Authorization (operational-sites.view/create/
     // update/delete) is enforced server-side in OperationalSiteController via
-    // OperationalSitePolicy on every endpoint. No for-select endpoint (not
-    // referenced by other entities in this feature).
+    // OperationalSitePolicy on every endpoint.
     Route::middleware('throttle:60,1')->group(function () {
+        // Minimal searchable/paginated operational-site list for entity-backed
+        // selects (for-select standard, ADR 0011), feeding the spec 0015 user-
+        // form "site" select. Declared ABOVE operational-sites/{operationalSite}
+        // so the literal `for-select` segment wins over the bound wildcard.
+        // Gated by operational-sites.viewAny server-side in
+        // OperationalSiteForSelectController.
+        Route::get('operational-sites/for-select', OperationalSiteForSelectController::class);
+
         Route::get('operational-sites/{operationalSite}', [OperationalSiteController::class, 'show']);
         Route::post('operational-sites', [OperationalSiteController::class, 'store']);
         Route::match(['put', 'patch'], 'operational-sites/{operationalSite}', [OperationalSiteController::class, 'update']);

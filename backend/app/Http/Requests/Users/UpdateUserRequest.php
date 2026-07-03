@@ -6,6 +6,7 @@ use App\DataObjects\Users\UpdateUserData;
 use App\Enums\LocaleEnum;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ResolvesAssignableRoles;
+use App\Http\Requests\Concerns\ValidatesEmployment;
 use App\Http\Requests\Concerns\ValidatesUserProfile;
 use App\Models\User;
 use Illuminate\Contracts\Validation\Validator;
@@ -32,6 +33,7 @@ class UpdateUserRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
     use ResolvesAssignableRoles;
+    use ValidatesEmployment;
     use ValidatesUserProfile;
 
     public function authorize(): bool
@@ -65,7 +67,7 @@ class UpdateUserRequest extends FormRequest
             // super-admin cannot assign `super-admin` (privilege escalation), even
             // by id. Resolved back to names in toData() for the service/guard.
             'roles.*' => $this->assignableRoleIdRule(),
-        ], $this->profileRules());
+        ], $this->profileRules(), $this->employmentRules());
     }
 
     /**

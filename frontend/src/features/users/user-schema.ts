@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import { QUALIFICATION_TYPES, RELATIONSHIP_TYPES } from '@/features/users/types'
 
 /**
  * Zod schemas for the user create/edit form, built as factories so validation
@@ -10,7 +11,45 @@ import type { TFunction } from 'i18next'
 /** Minimum password length enforced client-side as an affordance. */
 const PASSWORD_MIN_LENGTH = 8
 
+/** Contract bound (spec 0015): a daily duration never exceeds a full day. */
+const MAX_DAILY_MINUTES = 1440
+
 const localeSchema = z.enum(['en', 'it'])
+
+/**
+ * Employment sub-schema (spec 0015). Text/date fields mirror the personal-data
+ * card convention: RHF holds `''` for "empty" (never `null`), converted to
+ * `null` at the payload boundary; relation ids and enums hold `null` directly
+ * (the AsyncPaginatedSelect/Select convention).
+ */
+function buildEmploymentSchema(t: TFunction) {
+  return z
+    .object({
+      is_manager: z.boolean(),
+      job_description: z.string().max(255, t('users.form.employment.jobDescriptionMax')),
+      reports_to_id: z.number().nullable(),
+      business_function_id: z.number().nullable(),
+      relationship_type: z.enum(RELATIONSHIP_TYPES).nullable(),
+      company_id: z.number().nullable(),
+      operational_site_id: z.number().nullable(),
+      qualification_type: z.enum(QUALIFICATION_TYPES).nullable(),
+      hired_at: z.string(),
+      terminated_at: z.string(),
+      standard_daily_minutes: z.number().int().min(0).max(MAX_DAILY_MINUTES).nullable(),
+      break_daily_minutes: z.number().int().min(0).max(MAX_DAILY_MINUTES).nullable(),
+    })
+    .superRefine((values, ctx) => {
+      if (values.hired_at && values.terminated_at && values.terminated_at < values.hired_at) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['terminated_at'],
+          message: t('users.form.employment.terminatedBeforeHiredAt'),
+        })
+      }
+    })
+}
+
+export type EmploymentFormValues = z.infer<ReturnType<typeof buildEmploymentSchema>>
 
 /**
  * Shared scalar fields common to create and edit. The user's display `name` is
@@ -26,6 +65,8 @@ function baseFields(t: TFunction) {
     locale: localeSchema,
     // Role IDS (for-select standard, ADR 0011): the picker submits ids.
     roles: z.array(z.number()),
+    // Employment profile (spec 0015): always present, upserted on submit.
+    employment: buildEmploymentSchema(t),
   }
 }
 

@@ -3,6 +3,8 @@
 namespace App\Tables\Users;
 
 use App\Enums\LocaleEnum;
+use App\Enums\QualificationTypeEnum;
+use App\Enums\RelationshipTypeEnum;
 
 /**
  * Declarative column/filter/action catalogue for the `users` domain.
@@ -180,6 +182,103 @@ final class UserColumnCatalog
                 'filterable' => true,
                 'filterType' => 'text',
             ],
+            [
+                // Employment profile (spec 0015), derived from employment.
+                // Related NAME columns (no static options, spec 0004/0005
+                // Set Filter resolved dynamically via distinctValues), mirror
+                // BusinessFunctionColumnCatalog's `manager`.
+                'id' => 'business_function',
+                'label' => 'users.columns.business_function',
+                'type' => 'text',
+                'visible' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
+                'id' => 'company',
+                'label' => 'users.columns.company',
+                'type' => 'text',
+                'visible' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
+                // Formatted "line1[- city]" (EmploymentResource label contract).
+                // CONDITIONS-ONLY, mirrors `primary_address` (spec 0005 UX
+                // decision): a composed address string has no clean single-
+                // column match.
+                'id' => 'operational_site',
+                'label' => 'users.columns.operational_site',
+                'type' => 'text',
+                'visible' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'text',
+                'hasFilterValues' => false,
+            ],
+            [
+                'id' => 'relationship_type',
+                'label' => 'users.columns.relationship_type',
+                'type' => 'enum',
+                'visible' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+                'options' => RelationshipTypeEnum::values(),
+            ],
+            [
+                'id' => 'qualification_type',
+                'label' => 'users.columns.qualification_type',
+                'type' => 'enum',
+                'visible' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+                'options' => QualificationTypeEnum::values(),
+            ],
+            [
+                'id' => 'is_manager',
+                'label' => 'users.columns.is_manager',
+                'type' => 'boolean',
+                'visible' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
+                'id' => 'reports_to',
+                'label' => 'users.columns.reports_to',
+                'type' => 'text',
+                'visible' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
+                // No real DB column (derived from employment): an enumerated
+                // checklist of exact hire dates is not a useful UX either, so
+                // this is CONDITIONS-ONLY like `operational_site`/`primary_address`.
+                'id' => 'hired_at',
+                'label' => 'users.columns.hired_at',
+                'type' => 'date',
+                'visible' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'date',
+                'hasFilterValues' => false,
+            ],
+            [
+                'id' => 'terminated_at',
+                'label' => 'users.columns.terminated_at',
+                'type' => 'date',
+                'visible' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'date',
+                'hasFilterValues' => false,
+            ],
         ];
     }
 
@@ -203,6 +302,15 @@ final class UserColumnCatalog
             ['columnId' => 'province', 'type' => 'set'],
             ['columnId' => 'city', 'type' => 'set'],
             ['columnId' => 'primary_contact', 'type' => 'text'],
+            ['columnId' => 'business_function', 'type' => 'set'],
+            ['columnId' => 'company', 'type' => 'set'],
+            ['columnId' => 'operational_site', 'type' => 'text'],
+            ['columnId' => 'relationship_type', 'type' => 'set', 'options' => RelationshipTypeEnum::values()],
+            ['columnId' => 'qualification_type', 'type' => 'set', 'options' => QualificationTypeEnum::values()],
+            ['columnId' => 'is_manager', 'type' => 'set'],
+            ['columnId' => 'reports_to', 'type' => 'set'],
+            ['columnId' => 'hired_at', 'type' => 'date'],
+            ['columnId' => 'terminated_at', 'type' => 'date'],
         ];
     }
 

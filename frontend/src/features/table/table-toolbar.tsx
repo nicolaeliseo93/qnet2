@@ -52,6 +52,20 @@ interface TableToolbarProps {
   onToggleFullscreen: () => void
   /** Saved-views control (rendered by the caller, which owns the grid API). */
   savedViewsSlot?: ReactNode
+  /**
+   * Import action (rendered by the caller, which owns the permission gate and
+   * the dialog), rendered as a `DropdownMenuItem` inside the options menu.
+   * Purely a slot: the toolbar renders it without knowing about domains,
+   * permissions or the import feature (spec 0012).
+   */
+  importSlot?: ReactNode
+  /**
+   * Export action (rendered by the caller, which owns the permission gate and
+   * the dialog), rendered as a `DropdownMenuItem` inside the options menu,
+   * next to `importSlot`. Purely a slot: the toolbar renders it without
+   * knowing about domains, permissions or the export feature (spec 0014).
+   */
+  exportSlot?: ReactNode
 }
 
 interface IconButtonProps {
@@ -87,7 +101,7 @@ function IconButton({ icon, label, onClick, disabled }: IconButtonProps) {
  * The unified table header (spec 0009): a single bar fused to the top of the
  * grid. Left holds the global quick-search + a live row counter; right holds the
  * icon controls — floating-filter toggle, reset-filters, saved views, an options
- * menu (export, reset layout) and fullscreen. Purely presentational: every piece
+ * menu (import, export, reset layout) and fullscreen. Purely presentational: every piece
  * of state and every handler is owned by the caller (TableView).
  */
 export function TableToolbar({
@@ -107,6 +121,8 @@ export function TableToolbar({
   fullscreen,
   onToggleFullscreen,
   savedViewsSlot,
+  importSlot,
+  exportSlot,
 }: TableToolbarProps) {
   const { t } = useTranslation()
 
@@ -190,12 +206,9 @@ export function TableToolbar({
               {t('table.options')}
             </DropdownMenuLabel>
 
-            <DropdownMenuItem disabled className="justify-between gap-2">
-              {t('table.export')}
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {t('common.soon')}
-              </span>
-            </DropdownMenuItem>
+            {importSlot}
+
+            {exportSlot}
 
             {layoutCustomized ? (
               <>

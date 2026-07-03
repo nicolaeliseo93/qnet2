@@ -7,7 +7,7 @@ Il confine con il frontend è il **contratto API**, documentato in [`../docs/api
 
 ## Stato
 
-- ✅ Laravel **13.x** installato (PHP 8.3)
+- ✅ Laravel **13.x** installato (PHP 8.4)
 - ✅ **API-only**: livello web rimosso (niente `routes/web.php`, niente Blade/asset pipeline). Solo `routes/api.php` + health check `GET /up`
 - ✅ **Laravel Sanctum** 4.x — auth API a token (`HasApiTokens` sul model `User`)
 - ✅ **Spatie Permission** 8.x — ruoli e permessi (`HasRoles` sul model `User`)
@@ -22,7 +22,7 @@ Il confine con il frontend è il **contratto API**, documentato in [`../docs/api
 
 ## Stack
 
-Laravel · PHP 8.3 · MySQL · Laravel Sanctum · Spatie Activitylog · Spatie Permission · Queue Jobs · Events & Listeners · Notifications · Policies
+Laravel · PHP 8.4 · MySQL · Laravel Sanctum · Spatie Activitylog · Spatie Permission · Queue Jobs · Events & Listeners · Notifications · Policies
 
 > Riferimento: [`../standards/architecture.md`](../standards/architecture.md).
 
@@ -41,7 +41,7 @@ Pattern di riferimento: **Laravel Layered Service Architecture**.
 
 ## Setup locale
 
-Prerequisiti: PHP 8.3+, Composer 2.x, MySQL/MariaDB.
+Prerequisiti: PHP 8.4+, Composer 2.x, MySQL/MariaDB.
 
 ```bash
 cd backend

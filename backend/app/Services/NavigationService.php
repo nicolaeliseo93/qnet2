@@ -82,12 +82,18 @@ class NavigationService
     }
 
     /**
-     * An item with no permission is public to authenticated users.
+     * An item with no permission is public to authenticated users. An
+     * additional, optional `role` (spec 0013) gates the item to users holding
+     * that Spatie role — combined with the permission check (both must pass).
      */
     private function isAllowed(array $item, User $user): bool
     {
         $permission = $item['permission'] ?? null;
+        $role = $item['role'] ?? null;
 
-        return $permission === null || $user->can($permission);
+        $permissionAllowed = $permission === null || $user->can($permission);
+        $roleAllowed = $role === null || $user->hasRole($role);
+
+        return $permissionAllowed && $roleAllowed;
     }
 }

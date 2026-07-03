@@ -5,9 +5,13 @@ namespace App\Services;
 use App\DataObjects\OperationalSites\CreateOperationalSiteData;
 use App\DataObjects\OperationalSites\UpdateOperationalSiteData;
 use App\DataObjects\PersonalData\CreateAddress;
+use App\DataObjects\Shared\ForSelectQuery;
+use App\DataObjects\Shared\ForSelectResult;
 use App\Models\Address;
 use App\Models\OperationalSite;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -63,6 +67,116 @@ class OperationalSiteService
     {
         // The owned address cascades away (HasAddresses::bootHasAddresses).
         $site->delete();
+    }
+
+    /**
+     * Minimal, searchable, paginated operational-site list for the for-select
+     * standard (spec 0015, ADR 0011), mirroring UserService::forSelect. A site
+     * has no own name column (identity = its address, mirroring
+     * OperationalSitesTableDefinition/OperationalSiteGeoColumns): search and
+     * order both read the PRIMARY address' `line1`/city name, ids[] hydrated
+     * without inflating total.
+     */
+    public function forSelect(ForSelectQuery $query): ForSelectResult
+    {
+        $base = $this->forSelectBaseQuery();
+
+        if ($query->hasSearch()) {
+            $term = '%'.$query->search.'%';
+            $base->whereHas('addresses', function (Builder $addressQuery) use ($term): void {
+                $addressQuery->where('is_primary', true)
+                    ->where(function (Builder $inner) use ($term): void {
+                        $inner->where('line1', 'like', $term)
+                            ->orWhereHas('city', function (Builder $cityQuery) use ($term): void {
+                                $cityQuery->where('name', 'like', $term);
+                            });
+                    });
+            });
+        }
+
+        $total = (clone $base)->count();
+
+        /** @var Collection<int, OperationalSite> $page */
+        $page = $base->orderBy($this->primaryLine1Subquery())
+            ->orderBy('id')
+            ->offset($query->offset)
+            ->limit($query->limit)
+            ->get();
+
+        $items = $this->appendHydratedIds($page, $query);
+
+        return new ForSelectResult(
+            items: $items,
+            total: $total,
+            offset: $query->offset,
+            limit: $query->limit,
+        );
+    }
+
+    /**
+     * Base for-select query: sites with their primary address (+ city name)
+     * eager-loaded, so OperationalSiteForSelectResource never N+1s.
+     *
+     * @return Builder<OperationalSite>
+     */
+    private function forSelectBaseQuery(): Builder
+    {
+        // The eager-load callback receives the Relation instance (not a
+        // Builder), so it is intentionally untyped — mirroring
+        // OperationalSitesTableDefinition::baseQuery.
+        return OperationalSite::query()->with([
+            'addresses' => function ($addressQuery): void {
+                $addressQuery->where('is_primary', true)->with('city:id,name');
+            },
+        ]);
+    }
+
+    /**
+     * Correlated subquery selecting the site's primary address `line1`, used
+     * as the ORDER BY key (no own column to sort on), mirroring
+     * OperationalSiteGeoColumns::textSortSubquery.
+     *
+     * @return Builder<Address>
+     */
+    private function primaryLine1Subquery(): Builder
+    {
+        return Address::query()
+            ->select('line1')
+            ->whereColumn('addresses.addressable_id', 'operational_sites.id')
+            ->where('addresses.addressable_type', (new OperationalSite)->getMorphClass())
+            ->where('addresses.is_primary', true)
+            ->limit(1);
+    }
+
+    /**
+     * Append the explicitly-requested `ids[]` (edit-mode hydration) that are not
+     * already on the page, deduplicated. They bypass search and the same
+     * primary-address projection applies. Total is unaffected.
+     *
+     * @param  Collection<int, OperationalSite>  $page
+     * @return Collection<int, OperationalSite>
+     */
+    private function appendHydratedIds(Collection $page, ForSelectQuery $query): Collection
+    {
+        if (! $query->hasIds()) {
+            return $page;
+        }
+
+        $presentIds = $page->pluck('id')->all();
+        $missingIds = array_values(array_diff($query->ids, $presentIds));
+
+        if ($missingIds === []) {
+            return $page;
+        }
+
+        /** @var Collection<int, OperationalSite> $hydrated */
+        $hydrated = $this->forSelectBaseQuery()
+            ->whereIn('id', $missingIds)
+            ->orderBy($this->primaryLine1Subquery())
+            ->orderBy('id')
+            ->get();
+
+        return $page->concat($hydrated);
     }
 
     /**

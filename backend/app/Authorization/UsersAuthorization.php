@@ -35,6 +35,11 @@ class UsersAuthorization extends AbstractResourceAuthorization
      * `contacts`/`addresses` sections as a SINGLE key each (D1 — no
      * per-column granularity for their child rows).
      *
+     * The 12 `employment.*` keys (spec 0015) mirror the nested employment
+     * object's own dot-path shape, the same way: no dedicated resource
+     * permission, governed entirely by this field-permission matrix (like
+     * personal_data).
+     *
      * @return array<int, FieldDefinition>
      */
     public function fields(): array
@@ -55,6 +60,18 @@ class UsersAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('personal_data.birth_date', 'date', 'personal_data'),
             new FieldDefinition('personal_data.contacts', 'collection', 'personal_data'),
             new FieldDefinition('personal_data.addresses', 'collection', 'personal_data'),
+            new FieldDefinition('employment.is_manager', 'boolean', 'employment'),
+            new FieldDefinition('employment.job_description', 'text', 'employment'),
+            new FieldDefinition('employment.reports_to_id', 'select', 'employment'),
+            new FieldDefinition('employment.business_function_id', 'select', 'employment'),
+            new FieldDefinition('employment.relationship_type', 'select', 'employment'),
+            new FieldDefinition('employment.company_id', 'select', 'employment'),
+            new FieldDefinition('employment.operational_site_id', 'select', 'employment'),
+            new FieldDefinition('employment.qualification_type', 'select', 'employment'),
+            new FieldDefinition('employment.hired_at', 'date', 'employment'),
+            new FieldDefinition('employment.terminated_at', 'date', 'employment'),
+            new FieldDefinition('employment.standard_daily_minutes', 'number', 'employment'),
+            new FieldDefinition('employment.break_daily_minutes', 'number', 'employment'),
         ];
     }
 
@@ -84,7 +101,7 @@ class UsersAuthorization extends AbstractResourceAuthorization
             'locale' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'password' => $mayWrite ? FieldPermission::visibleEditable(required: $isCreate) : FieldPermission::visibleReadonly(),
             'roles' => $this->rolesFieldPermission($actor, $model, $mayWrite),
-        ], $this->personalDataFieldPermissions($mayWrite));
+        ], $this->personalDataFieldPermissions($mayWrite), $this->employmentFieldPermissions($mayWrite));
     }
 
     /**
@@ -113,6 +130,33 @@ class UsersAuthorization extends AbstractResourceAuthorization
             'personal_data.birth_date' => $permission,
             'personal_data.contacts' => $permission,
             'personal_data.addresses' => $permission,
+        ];
+    }
+
+    /**
+     * Ceiling for the 12 `employment.*` keys: editable whenever the actor may
+     * write the user at all, else readonly — same write/read boundary as the
+     * personal_data section (no employment.* resource permission, spec 0015).
+     *
+     * @return array<string, FieldPermission>
+     */
+    private function employmentFieldPermissions(bool $mayWrite): array
+    {
+        $permission = $mayWrite ? FieldPermission::visibleEditable(required: false) : FieldPermission::visibleReadonly();
+
+        return [
+            'employment.is_manager' => $permission,
+            'employment.job_description' => $permission,
+            'employment.reports_to_id' => $permission,
+            'employment.business_function_id' => $permission,
+            'employment.relationship_type' => $permission,
+            'employment.company_id' => $permission,
+            'employment.operational_site_id' => $permission,
+            'employment.qualification_type' => $permission,
+            'employment.hired_at' => $permission,
+            'employment.terminated_at' => $permission,
+            'employment.standard_daily_minutes' => $permission,
+            'employment.break_daily_minutes' => $permission,
         ];
     }
 

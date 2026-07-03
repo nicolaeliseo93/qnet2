@@ -1,0 +1,43 @@
+import { useQuery } from '@tanstack/react-query'
+import {
+  fetchMigrationColumns,
+  fetchMigrationPreview,
+  fetchMigrationSources,
+} from '@/features/migrations/api'
+import { migrationKeys } from '@/features/migrations/query-keys'
+
+/** Default page size for the read-only external preview (fase 1). */
+export const MIGRATION_PREVIEW_PER_PAGE = 20
+
+/** The registered migration sources, populating the source selector. */
+export function useMigrationSources() {
+  return useQuery({
+    queryKey: migrationKeys.sources,
+    queryFn: fetchMigrationSources,
+  })
+}
+
+/** The columns exposed by the selected source, driving the preview table header. */
+export function useMigrationColumns(source: string | null) {
+  return useQuery({
+    queryKey: migrationKeys.columns(source ?? ''),
+    queryFn: () => fetchMigrationColumns(source as string),
+    enabled: source != null,
+  })
+}
+
+/** One page of the selected source's read-only external preview. */
+export function useMigrationPreview(
+  source: string | null,
+  page: number,
+  perPage: number = MIGRATION_PREVIEW_PER_PAGE,
+) {
+  return useQuery({
+    queryKey: migrationKeys.preview(source ?? '', page, perPage),
+    queryFn: () => fetchMigrationPreview(source as string, page, perPage),
+    enabled: source != null,
+    // Keeps the previous page's rows on screen while the next page loads,
+    // instead of flashing the loading skeleton on every prev/next click.
+    placeholderData: (previous) => previous,
+  })
+}

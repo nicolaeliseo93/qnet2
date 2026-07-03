@@ -249,15 +249,18 @@ it('resolves a DERIVED column (roles) via the definition, scoped to the actor\'s
         ->and($response->json('data.values'))->not->toContain('super-admin');
 });
 
-it('resolves a DERIVED column (permissions on the roles domain) via the definition', function () {
+it('resolves a DERIVED column (permissions on the roles domain) scoped to the assignable catalogue', function () {
     Permission::findOrCreate('roles.viewAny');
+    // Not a registered form-module resource: governed elsewhere, never offered
+    // as an assignable role permission.
     Permission::findOrCreate('widgets.publish');
     $actor = actorWithRoleAbilities(['viewAny']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/roles/values', ['columnId' => 'permissions'])->assertOk();
 
-    expect($response->json('data.values'))->toContain('roles.viewAny', 'widgets.publish');
+    expect($response->json('data.values'))->toContain('roles.viewAny')
+        ->and($response->json('data.values'))->not->toContain('widgets.publish');
 });
 
 it('resolves a set/enum column (locale) via its static options — non-regression', function () {

@@ -194,6 +194,47 @@ it('update: 200 renames and re-syncs permissions', function () {
     expect($target->fresh()->hasPermissionTo('users.view'))->toBeTrue();
 });
 
+it('update: preserves indirect permissions the form does not manage', function () {
+    // The Role form only manages assignable form-module permissions; indirect
+    // sub-entity permissions (addresses.*) a role already holds are governed via
+    // field-permissions and must survive a save that omits them.
+    foreach (['companies.view', 'companies.create', 'addresses.view'] as $name) {
+        Permission::findOrCreate($name);
+    }
+    $actor = userWithRoleAbilities(['update']);
+    $target = Role::create(['name' => 'mixed']);
+    $target->givePermissionTo('companies.view', 'addresses.view');
+    Sanctum::actingAs($actor);
+
+    // Submit only a form-module permission; the indirect one is not sent.
+    $this->patchJson("/api/roles/{$target->id}", [
+        'permissions' => ['companies.create'],
+    ])->assertOk();
+
+    $fresh = $target->fresh();
+    expect($fresh->hasPermissionTo('companies.create'))->toBeTrue()
+        // Re-synced within the assignable catalogue: the old form-module grant is gone.
+        ->and($fresh->hasPermissionTo('companies.view'))->toBeFalse()
+        // Preserved: never offered by the form, never dropped by the save.
+        ->and($fresh->hasPermissionTo('addresses.view'))->toBeTrue();
+});
+
+it('update: clearing permissions detaches only the assignable ones', function () {
+    foreach (['companies.view', 'addresses.view'] as $name) {
+        Permission::findOrCreate($name);
+    }
+    $actor = userWithRoleAbilities(['update']);
+    $target = Role::create(['name' => 'clearable']);
+    $target->givePermissionTo('companies.view', 'addresses.view');
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/roles/{$target->id}", ['permissions' => []])->assertOk();
+
+    $fresh = $target->fresh();
+    expect($fresh->hasPermissionTo('companies.view'))->toBeFalse()
+        ->and($fresh->hasPermissionTo('addresses.view'))->toBeTrue();
+});
+
 it('update: PATCH partial leaves permissions untouched', function () {
     Permission::findOrCreate('users.view');
     $actor = userWithRoleAbilities(['update']);

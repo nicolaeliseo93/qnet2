@@ -80,6 +80,15 @@ function labelFor(text: string): HTMLElement {
   )
 }
 
+/**
+ * Switches the active tab (spec 0015 tabbed redesign). Radix `TabsTrigger`
+ * activates on `mouseDown` (and focus, in automatic mode) rather than
+ * `click` — see `@radix-ui/react-tabs`.
+ */
+function switchTab(name: string) {
+  fireEvent.mouseDown(screen.getByRole('tab', { name }))
+}
+
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return ({ children }: { children: ReactNode }) => (
@@ -147,8 +156,12 @@ describe('UserForm — metadata-driven authorization (spec 0004)', () => {
       { wrapper: wrapper() },
     )
 
+    // Email/locale/password live on the Credentials tab (spec 0015 redesign).
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Credentials' })).toBeInTheDocument())
+    switchTab('Credentials')
+
     // AC11: the hidden field is absent from the DOM.
-    await waitFor(() => expect(screen.getByLabelText(/^Email/)).toBeInTheDocument())
+    expect(screen.getByLabelText(/^Email/)).toBeInTheDocument()
     expect(screen.queryByLabelText(/Roles/)).not.toBeInTheDocument()
 
     // AC12: the readonly/non-editable field renders disabled.
@@ -181,7 +194,10 @@ describe('UserForm — metadata-driven authorization (spec 0004)', () => {
       { wrapper: wrapper() },
     )
 
-    await waitFor(() => expect(screen.getByLabelText(/^Email/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Credentials' })).toBeInTheDocument())
+    switchTab('Credentials')
+
+    expect(screen.getByLabelText(/^Email/)).toBeInTheDocument()
     // No crash, and the field renders visible + editable (the graceful default).
     expect(screen.getByLabelText(/^Password/)).toBeEnabled()
   })
@@ -225,6 +241,9 @@ describe('UserForm — metadata-driven authorization (spec 0004)', () => {
       { wrapper: wrapper() },
     )
 
+    // The `email` 422 error renders inline in the Credentials tab: it must be
+    // mounted for the message to appear (spec 0015 redesign unmounts inactive tabs).
+    switchTab('Credentials')
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(screen.getByText('field not editable')).toBeInTheDocument())

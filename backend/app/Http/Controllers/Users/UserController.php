@@ -65,7 +65,7 @@ class UserController extends BaseApiController
         try {
             $this->authorize('create', User::class);
 
-            $user = $this->service->create($request->user(), $request->toData(), $request->toProfile());
+            $user = $this->service->create($request->user(), $request->toData(), $request->toProfile(), $request->toEmployment());
 
             return $this->okWithPermissions(
                 new UserResource($user),
@@ -86,7 +86,7 @@ class UserController extends BaseApiController
         try {
             $this->authorize('update', $user);
 
-            $user = $this->service->update($request->user(), $user, $request->toData(), $request->toProfile());
+            $user = $this->service->update($request->user(), $user, $request->toData(), $request->toProfile(), $request->toEmployment());
 
             return $this->okWithPermissions(new UserResource($user), $this->buildPermissions($request->user(), $user));
         } catch (Throwable $exception) {

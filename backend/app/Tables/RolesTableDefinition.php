@@ -2,6 +2,7 @@
 
 namespace App\Tables;
 
+use App\Authorization\AssignablePermissionCatalogue;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\UserService;
@@ -10,14 +11,14 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Guard;
-use Spatie\Permission\Models\Permission;
 
 /**
  * Table definition for the `roles` domain.
  *
  * Mirrors UsersTableDefinition: real Role columns (id, name, created_at) plus the
  * derived `permissions` tags column with a `set` filter whose options are the
- * full code-defined permission catalogue. mapRow exposes only safe fields, and
+ * assignable form-module permission catalogue (AssignablePermissionCatalogue —
+ * indirect sub-entity permissions are excluded). mapRow exposes only safe fields, and
  * actionsFor calls RolePolicy (view→view, update→edit, delete→delete) while
  * hiding edit/delete on the protected `super-admin` system role (affordance vs
  * the hard guard enforced in RoleService).
@@ -35,7 +36,10 @@ class RolesTableDefinition extends AbstractTableDefinition
      */
     private const int MAX_PERMISSION_FILTER_VALUES = 100;
 
-    public function __construct(private readonly RoleUsersCountColumn $usersCountColumn) {}
+    public function __construct(
+        private readonly RoleUsersCountColumn $usersCountColumn,
+        private readonly AssignablePermissionCatalogue $permissionCatalogue,
+    ) {}
 
     public function domain(): string
     {
@@ -202,20 +206,20 @@ class RolesTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Dynamic `permissions` options: the full code-defined permission catalogue,
-     * used both by the set filter and (read by the thin frontend adapter from the
-     * same config) to render the permission checkboxes in the role form. Single
-     * source of truth — the frontend never hardcodes permission names.
+     * Dynamic `permissions` options: the assignable (form-module) permission
+     * catalogue, used both by the set filter and (read by the thin frontend
+     * adapter from the same config) to render the permission checkboxes in the
+     * role form. Indirect sub-entity permissions (addresses.*, contacts.*, …)
+     * are governed via field-permissions, so they are never offered here
+     * (AssignablePermissionCatalogue is the single source of truth). The
+     * frontend never hardcodes permission names.
      *
      * @return array<int, scalar>|null
      */
     protected function optionsFor(string $columnId, User $actor): ?array
     {
         if ($columnId === 'permissions') {
-            /** @var array<int, string> $names */
-            $names = Permission::query()->orderBy('name')->pluck('name')->all();
-
-            return $names;
+            return $this->permissionCatalogue->names();
         }
 
         return null;
@@ -223,7 +227,7 @@ class RolesTableDefinition extends AbstractTableDefinition
 
     /**
      * Excel-like distinct values (spec 0004/0005) for the derived columns:
-     * `permissions` (the full code-defined permission catalogue) and
+     * `permissions` (the assignable form-module permission catalogue) and
      * `users_count` (the withCount aggregate, no real DB column). Every other
      * (real-column) filterable column falls through to the generic engine's
      * `SELECT DISTINCT` (return null).
@@ -235,14 +239,7 @@ class RolesTableDefinition extends AbstractTableDefinition
     public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
     {
         if ($columnId === 'permissions') {
-            /** @var array<int, string> $names */
-            $names = Permission::query()->orderBy('name')->pluck('name')->all();
-
-            $matches = $search === null || $search === ''
-                ? $names
-                : array_values(array_filter($names, static fn (string $name): bool => stripos($name, $search) !== false));
-
-            return array_slice($matches, 0, $limit);
+            return $this->permissionCatalogue->names($search, $limit);
         }
 
         if ($columnId === 'users_count') {

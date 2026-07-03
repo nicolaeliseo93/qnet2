@@ -6,10 +6,11 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.5",
+        "php": "^8.4",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",
+        "openspout/openspout": "^5.7",
         "spatie/laravel-activitylog": "^4.12",
         "spatie/laravel-permission": "^8.0"
     },

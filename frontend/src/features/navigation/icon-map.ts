@@ -2,6 +2,7 @@ import {
   Briefcase,
   Building2,
   Circle,
+  DatabaseZap,
   Layers,
   LayoutDashboard,
   MapPin,
@@ -22,6 +23,7 @@ const iconMap: Record<string, LucideIcon> = {
   building: Building2,
   'map-pin': MapPin,
   layers: Layers,
+  'database-zap': DatabaseZap,
 }
 
 export function resolveIcon(name: string | null): LucideIcon {

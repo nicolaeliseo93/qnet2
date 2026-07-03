@@ -65,6 +65,7 @@ it('200: returns the field catalogue and the full permissions block (create-cont
 
     // Spec 0008: the users field catalogue now also carries the 11
     // personal_data.* keys (morph card + contacts/addresses sections).
+    // Spec 0015 adds the 12 employment.* keys.
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
     expect($keys)->toEqualCanonicalizing([
         'email', 'locale', 'roles', 'password',
@@ -72,6 +73,10 @@ it('200: returns the field catalogue and the full permissions block (create-cont
         'personal_data.last_name', 'personal_data.company_name', 'personal_data.tax_code',
         'personal_data.vat_number', 'personal_data.sdi_code', 'personal_data.birth_date',
         'personal_data.contacts', 'personal_data.addresses',
+        'employment.is_manager', 'employment.job_description', 'employment.reports_to_id',
+        'employment.business_function_id', 'employment.relationship_type', 'employment.company_id',
+        'employment.operational_site_id', 'employment.qualification_type', 'employment.hired_at',
+        'employment.terminated_at', 'employment.standard_daily_minutes', 'employment.break_daily_minutes',
     ]);
 
     // Spec 0008 follow-up: `mandatory` is a new flag on every catalogue entry.

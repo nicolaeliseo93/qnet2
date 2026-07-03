@@ -1,0 +1,48 @@
+<?php
+
+use App\Migrations\MigrationRegistry;
+use App\Migrations\Sources\BusinessFunctionsSource;
+use App\Migrations\Sources\CompaniesSource;
+use App\Migrations\Sources\OperationalSitesSource;
+use App\Migrations\Sources\RolesSource;
+use App\Migrations\Sources\UsersSource;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+uses(TestCase::class, RefreshDatabase::class);
+
+// ---------------------------------------------------------------------------
+// AC-005 — registry resolve + unknown source
+// ---------------------------------------------------------------------------
+
+it('resolves a registered source to its class via the container (dependencies injected)', function () {
+    $source = app(MigrationRegistry::class)->resolve('roles');
+
+    expect($source)->toBeInstanceOf(RolesSource::class)
+        ->and($source->key())->toBe('roles');
+});
+
+it('throws ModelNotFoundException for an unregistered source (404 via BaseApiController)', function () {
+    expect(fn () => app(MigrationRegistry::class)->resolve('unknown-source'))
+        ->toThrow(ModelNotFoundException::class);
+});
+
+it('config/migrations.php registers every source (spec 0013 Increment 2)', function () {
+    expect(config('migrations.definitions'))->toBe([
+        'roles' => RolesSource::class,
+        'users' => UsersSource::class,
+        'business-functions' => BusinessFunctionsSource::class,
+        'companies' => CompaniesSource::class,
+        'operational-sites' => OperationalSitesSource::class,
+    ]);
+});
+
+it('all() resolves every registered source', function () {
+    $sources = app(MigrationRegistry::class)->all();
+
+    expect($sources)->toHaveCount(5)
+        ->and(array_map(fn ($source) => $source->key(), $sources))->toBe([
+            'roles', 'users', 'business-functions', 'companies', 'operational-sites',
+        ]);
+});

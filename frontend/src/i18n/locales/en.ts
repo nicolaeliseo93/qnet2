@@ -10,6 +10,15 @@ import { personalData, personalDataFieldLabels } from './en-personal-data'
 import { enums } from './en-enums'
 import { companies } from './en-companies'
 import { operationalSites } from './en-operational-sites'
+import { imports } from './en-imports'
+import { exports } from './en-exports'
+import {
+  usersColumnsEmployment,
+  usersDetailEmployment,
+  usersFormEmployment,
+  usersFormEmploymentSections,
+  usersFormTabs,
+} from './en-users-employment'
 
 export const en = {
   common: {
@@ -19,7 +28,6 @@ export const en = {
     notFound: 'Page not found',
     backToDashboard: 'Back to dashboard',
     comingSoon: 'This section is not available yet.',
-    soon: 'Soon',
     clear: 'Clear',
     confirm: 'Confirm',
     cancel: 'Cancel',
@@ -127,13 +135,17 @@ export const en = {
       province: 'Province',
       city: 'City',
       primary_contact: 'Primary contacts',
+      ...usersColumnsEmployment,
     },
     detail: {
       title: 'User details',
       subtitle: 'Read-only view of the selected user.',
       loadError: 'Unable to load the user. Please try again.',
+      // Read-only Employment section (spec 0015).
+      employment: usersDetailEmployment,
     },
     form: {
+      tabs: usersFormTabs,
       newUser: 'New user',
       avatarLabel: 'Avatar',
       createTitle: 'Create user',
@@ -190,10 +202,13 @@ export const en = {
           title: 'Addresses',
           description: 'Registered offices and billing addresses.',
         },
+        ...usersFormEmploymentSections,
       },
       // The personal-data card fields/sections (spec 0008), read by the role
       // field-permissions matrix (`fieldPermissionLabel('users', 'personal_data.*')`).
       personal_data: personalDataFieldLabels,
+      // Employment profile fields (spec 0015): Profile/Contract/Contract data tabs.
+      employment: usersFormEmployment,
     },
   },
   personalData,
@@ -468,6 +483,8 @@ export const en = {
     },
   },
   operationalSites,
+  imports,
+  exports,
 }
 
 export type TranslationResources = typeof en

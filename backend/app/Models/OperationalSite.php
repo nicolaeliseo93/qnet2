@@ -25,6 +25,15 @@ class OperationalSite extends BaseModel
     protected $fillable = [];
 
     /**
+     * Spec 0013 — external data migration: the source system's id for a
+     * migrated operational site, guarded (not in $fillable) so it is only
+     * ever set by property assignment post-create.
+     */
+    protected $casts = [
+        'old_id' => 'integer',
+    ];
+
+    /**
      * The site's single address, read off the `addresses` morph (first
      * primary row, falling back to any owned row). Convenience accessor for
      * callers that already eager-loaded `addresses`; does not itself trigger

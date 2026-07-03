@@ -1,0 +1,58 @@
+/**
+ * Localized strings for the generic per-table CSV import feature (spec 0012):
+ * the upload step, the validating/processing progress view, the
+ * awaiting_confirmation preview and the error messages surfaced by the
+ * frozen import contract.
+ *
+ * Extracted into its own module to keep `en.ts` within the engineering size
+ * limits (see `.claude/rules/engineering.md` §6). Public API of `en.ts` is
+ * unchanged.
+ */
+export const imports = {
+  /** Toolbar action label (opens the import dialog, gated by `{resource}.import`). */
+  action: 'Import',
+  title: 'Import data',
+  subtitle: 'Upload a CSV file to create new records from the fixed template.',
+  fields: {
+    file: 'CSV file',
+  },
+  buttons: {
+    downloadTemplate: 'Download template',
+    upload: 'Upload',
+    uploading: 'Uploading…',
+    confirm: 'Confirm',
+    confirming: 'Confirming…',
+    downloadErrorReport: 'Download error report',
+    close: 'Close',
+  },
+  status: {
+    validating: 'Validating',
+    awaiting_confirmation: 'Awaiting confirmation',
+    processing: 'Importing',
+    completed: 'Completed',
+    failed: 'Failed',
+  },
+  summary: {
+    total: 'Total rows',
+    valid: 'Valid rows',
+    invalid: 'Discarded rows',
+    imported: 'Imported rows',
+  },
+  preview: {
+    validSampleTitle: 'Valid rows (sample)',
+    invalidSampleTitle: 'Discarded rows',
+    rowNumber: 'Row',
+    values: 'Values',
+    reason: 'Reason',
+  },
+  errors: {
+    fileRequired: 'Please choose a CSV file.',
+    forbidden: "You don't have permission to import this data.",
+    validation: 'The uploaded file could not be validated. Check the format and try again.',
+    invalidState: 'This import can no longer be confirmed.',
+    generic: 'Something went wrong. Please try again.',
+    jobFailed: 'The import failed. Please try again.',
+    templateDownloadError: 'Unable to download the template. Please try again.',
+    reportDownloadError: 'Unable to download the error report. Please try again.',
+  },
+}

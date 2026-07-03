@@ -1,26 +1,17 @@
-import { IdCard, KeyRound, MapPin, Phone, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { AvatarUpload } from '@/components/avatar-upload'
-import { FormSection } from '@/components/form-section'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Form, FormControl, FormDescription } from '@/components/ui/form'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { AsyncPaginatedMultiSelect } from '@/components/ui/async-paginated-multi-select'
-import { MetaField } from '@/features/authorization/MetaField'
+import { Form } from '@/components/ui/form'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useResourcePermissions } from '@/features/authorization/permissions'
-import { ROLES_FOR_SELECT_RESOURCE } from '@/features/roles/for-select-api'
-import { AddressesManager } from '@/features/personal-data/addresses-manager'
-import { ContactsManager } from '@/features/personal-data/contacts-manager'
-import { PersonalDataCardForm } from '@/features/personal-data/personal-data-card-form'
+import {
+  AccessTabContent,
+  AddressesTabContent,
+  ContactsTabContent,
+  CredentialsTabContent,
+  IdentityTabContent,
+} from '@/features/users/user-form-account-tabs'
+import { ContractDataTabContent } from '@/features/users/user-form-contract-data-tab'
+import { ContractTabContent, ProfileTabContent } from '@/features/users/user-form-employment-tabs'
 import { useUserForm } from '@/features/users/use-user-form'
 import type { UserFormMode } from '@/features/users/user-form'
 import type { UserDetail } from '@/features/users/types'
@@ -32,24 +23,25 @@ interface UserFormBodyProps {
   onAvatarChange?: () => void
 }
 
+/** Small dot marking a tab that carries a validation error (AC-014). */
+function TabErrorDot({ label }: { label: string }) {
+  return (
+    <span className="size-1.5 shrink-0 rounded-full bg-destructive" role="img" aria-label={label} />
+  )
+}
+
 /**
- * The user create/edit form UI. Every field is wrapped in `MetaField` (spec
- * 0004): hidden fields are absent, non-editable fields render disabled/
- * read-only, `required` comes from the resolved `ResourcePermissions` — no
- * hardcoded permission logic lives here. All non-render logic lives in
- * `useUserForm`. Fields are grouped into `FormSection` cards (identity,
- * credentials, access, contacts, addresses) purely for presentation: the
- * personal-data card/contacts/addresses are composed here directly (instead
- * of through the shared `PersonalDataSection`) so the identity card can render
- * before the account fields, while `PersonalDataSection` itself stays
- * untouched for its other consumer (the self-service profile form).
+ * The user create/edit form UI, redesigned as a tabbed layout (spec 0015):
+ * Identity, Credentials, Access, Profile, Contract, Contract data, Contacts,
+ * Addresses. Every field is wrapped in `MetaField` (spec 0004): hidden fields
+ * are absent, non-editable fields render disabled/read-only, `required` comes
+ * from the resolved `ResourcePermissions` — no hardcoded permission logic
+ * lives here. All non-render logic lives in `useUserForm`; each tab's content
+ * lives in a sibling module (`user-form-account-tabs.tsx`,
+ * `user-form-employment-tabs.tsx`, `user-form-contract-data-tab.tsx`) so this
+ * orchestration file stays within the engineering size limits.
  */
-export function UserFormBody({
-  mode,
-  onSuccess,
-  onCancel,
-  onAvatarChange,
-}: UserFormBodyProps) {
+export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: UserFormBodyProps) {
   const { t } = useTranslation()
   const { field: fieldPermission } = useResourcePermissions()
   const {
@@ -61,7 +53,12 @@ export function UserFormBody({
     setProfileDraft,
     profileQuery,
     profileName,
+    profileValid,
     selectedRoleItems,
+    selectedBusinessFunctionItem,
+    selectedCompanyItem,
+    selectedOperationalSiteItem,
+    selectedReportsToItem,
     onSubmit,
     setPendingAvatar,
     handleAvatarUpload,
@@ -77,243 +74,195 @@ export function UserFormBody({
   const isProfileLoading = isEdit && profileQuery.isPending
   const isProfileError = isEdit && profileQuery.isError
 
-  // Whole-section visibility, read from the same authorization context
-  // `MetaField` uses: a container is only worth rendering if at least one of
-  // its fields is visible. `MetaField` still gates each field individually —
-  // this only decides whether the surrounding card is shown at all.
+  // Whole-tab visibility, read from the same authorization context `MetaField`
+  // uses: a tab is only worth rendering if at least one of its fields is
+  // visible. `MetaField` still gates each field individually — this only
+  // decides whether the surrounding tab is shown at all. Identity has no
+  // permission-gated field of its own, so it is always shown.
   const credentialsVisible =
     fieldPermission('email').visible ||
     fieldPermission('locale').visible ||
     fieldPermission('password').visible
-  const rolesVisible = fieldPermission('roles').visible
+  const accessVisible = fieldPermission('roles').visible
+  const profileVisible =
+    fieldPermission('employment.business_function_id').visible ||
+    fieldPermission('employment.is_manager').visible ||
+    fieldPermission('employment.job_description').visible ||
+    fieldPermission('employment.reports_to_id').visible
+  const contractVisible =
+    fieldPermission('employment.relationship_type').visible ||
+    fieldPermission('employment.company_id').visible ||
+    fieldPermission('employment.operational_site_id').visible
+  const contractDataVisible =
+    fieldPermission('employment.qualification_type').visible ||
+    fieldPermission('employment.hired_at').visible ||
+    fieldPermission('employment.terminated_at').visible ||
+    fieldPermission('employment.standard_daily_minutes').visible ||
+    fieldPermission('employment.break_daily_minutes').visible
   const contactsVisible = personalDataFieldPermission('personal_data.contacts').visible
   const addressesVisible = personalDataFieldPermission('personal_data.addresses').visible
+
+  // Per-tab error indicator (AC-014): RHF field errors for the tab's own
+  // fields, plus the buffered personal-data draft's own (schema-driven)
+  // validity for Identity, since that buffer lives outside RHF.
+  const errors = form.formState.errors
+  const tabHasErrorsLabel = t('users.form.tabs.tabHasErrors')
+  const identityHasError = !profileValid
+  const credentialsHasError = Boolean(
+    errors.email || errors.locale || errors.password || errors.password_confirmation,
+  )
+  const accessHasError = Boolean(errors.roles)
+  const profileHasError = Boolean(
+    errors.employment?.business_function_id ||
+      errors.employment?.is_manager ||
+      errors.employment?.job_description ||
+      errors.employment?.reports_to_id,
+  )
+  const contractHasError = Boolean(
+    errors.employment?.relationship_type ||
+      errors.employment?.company_id ||
+      errors.employment?.operational_site_id,
+  )
+  const contractDataHasError = Boolean(
+    errors.employment?.qualification_type ||
+      errors.employment?.hired_at ||
+      errors.employment?.terminated_at ||
+      errors.employment?.standard_daily_minutes ||
+      errors.employment?.break_daily_minutes,
+  )
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="flex flex-col gap-4 p-4"
+          className="flex flex-1 flex-col gap-4 p-4"
           noValidate
         >
-          <FormSection
-            icon={IdCard}
-            title={t('users.form.sections.identity.title')}
-            description={t('users.form.sections.identity.description')}
-          >
-            {mode.type === 'edit' ? (
-              <AvatarUpload
-                mode="immediate"
-                label={t('users.form.avatarLabel')}
-                name={profileName}
-                avatarUrl={mode.user.avatar_url}
-                onUpload={handleAvatarUpload}
-                onRemove={handleAvatarRemove}
-                canUpload={canUploadAvatar}
-                canRemove={canRemoveAvatar}
+          <Tabs defaultValue="identity" className="flex flex-1 flex-col gap-4">
+            <TabsList>
+              <TabsTrigger value="identity">
+                {t('users.form.tabs.identity')}
+                {identityHasError && <TabErrorDot label={tabHasErrorsLabel} />}
+              </TabsTrigger>
+              {credentialsVisible && (
+                <TabsTrigger value="credentials">
+                  {t('users.form.tabs.credentials')}
+                  {credentialsHasError && <TabErrorDot label={tabHasErrorsLabel} />}
+                </TabsTrigger>
+              )}
+              {accessVisible && (
+                <TabsTrigger value="access">
+                  {t('users.form.tabs.access')}
+                  {accessHasError && <TabErrorDot label={tabHasErrorsLabel} />}
+                </TabsTrigger>
+              )}
+              {profileVisible && (
+                <TabsTrigger value="profile">
+                  {t('users.form.tabs.profile')}
+                  {profileHasError && <TabErrorDot label={tabHasErrorsLabel} />}
+                </TabsTrigger>
+              )}
+              {contractVisible && (
+                <TabsTrigger value="contract">
+                  {t('users.form.tabs.contract')}
+                  {contractHasError && <TabErrorDot label={tabHasErrorsLabel} />}
+                </TabsTrigger>
+              )}
+              {contractDataVisible && (
+                <TabsTrigger value="contractData">
+                  {t('users.form.tabs.contractData')}
+                  {contractDataHasError && <TabErrorDot label={tabHasErrorsLabel} />}
+                </TabsTrigger>
+              )}
+              {!isProfileLoading && !isProfileError && contactsVisible && (
+                <TabsTrigger value="contacts">{t('users.form.tabs.contacts')}</TabsTrigger>
+              )}
+              {!isProfileLoading && !isProfileError && addressesVisible && (
+                <TabsTrigger value="addresses">{t('users.form.tabs.addresses')}</TabsTrigger>
+              )}
+            </TabsList>
+
+            <TabsContent value="identity" className="flex flex-col gap-4">
+              <IdentityTabContent
+                mode={mode}
+                profileName={profileName}
+                isLoading={isProfileLoading}
+                isError={isProfileError}
+                onRetry={() => profileQuery.refetch()}
+                profileDraft={profileDraft}
+                setProfileDraft={setProfileDraft}
+                personalDataFieldPermission={personalDataFieldPermission}
+                setPendingAvatar={setPendingAvatar}
+                handleAvatarUpload={handleAvatarUpload}
+                handleAvatarRemove={handleAvatarRemove}
+                canUploadAvatar={canUploadAvatar}
+                canRemoveAvatar={canRemoveAvatar}
               />
-            ) : (
-              <AvatarUpload
-                mode="deferred"
-                label={t('users.form.avatarLabel')}
-                name={profileName}
-                onFileSelected={setPendingAvatar}
-              />
+            </TabsContent>
+
+            {credentialsVisible && (
+              <TabsContent value="credentials" className="flex flex-col gap-4">
+                <CredentialsTabContent
+                  control={form.control}
+                  isEdit={isEdit}
+                  localeOptions={localeOptions}
+                />
+              </TabsContent>
             )}
 
-            {isProfileLoading ? (
-              <div className="flex flex-col gap-3" aria-hidden="true">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Skeleton className="h-9" />
-                  <Skeleton className="h-9" />
-                </div>
-                <Skeleton className="h-9" />
-              </div>
-            ) : isProfileError ? (
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm text-destructive" role="alert">
-                  {t('personalData.section.loadError')}
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => profileQuery.refetch()}
-                >
-                  {t('common.retry')}
-                </Button>
-              </div>
-            ) : (
-              <PersonalDataCardForm
-                value={profileDraft}
-                onChange={setProfileDraft}
-                fieldPermission={personalDataFieldPermission}
-              />
+            {accessVisible && (
+              <TabsContent value="access" className="flex flex-col gap-4">
+                <AccessTabContent control={form.control} selectedRoleItems={selectedRoleItems} />
+              </TabsContent>
             )}
-          </FormSection>
 
-          {credentialsVisible && (
-            <FormSection
-              icon={KeyRound}
-              title={t('users.form.sections.credentials.title')}
-              description={t('users.form.sections.credentials.description')}
-            >
-              <MetaField
-                control={form.control}
-                name="email"
-                metaKey="email"
-                label={t('users.form.email')}
-              >
-                {({ field, disabled, readOnly }) => (
-                  <FormControl>
-                    <Input
-                      type="email"
-                      autoComplete="email"
-                      disabled={disabled}
-                      readOnly={readOnly}
-                      {...field}
-                    />
-                  </FormControl>
-                )}
-              </MetaField>
+            {profileVisible && (
+              <TabsContent value="profile" className="flex flex-col gap-4">
+                <ProfileTabContent
+                  control={form.control}
+                  selectedBusinessFunctionItem={selectedBusinessFunctionItem}
+                  selectedReportsToItem={selectedReportsToItem}
+                />
+              </TabsContent>
+            )}
 
-              <MetaField
-                control={form.control}
-                name="locale"
-                metaKey="locale"
-                label={t('users.form.locale')}
-              >
-                {({ field, disabled }) => (
-                  <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {localeOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </MetaField>
+            {contractVisible && (
+              <TabsContent value="contract" className="flex flex-col gap-4">
+                <ContractTabContent
+                  control={form.control}
+                  selectedCompanyItem={selectedCompanyItem}
+                  selectedOperationalSiteItem={selectedOperationalSiteItem}
+                />
+              </TabsContent>
+            )}
 
-              <MetaField
-                control={form.control}
-                name="password"
-                metaKey="password"
-                label={t(isEdit ? 'users.form.newPassword' : 'users.form.password')}
-                description={
-                  isEdit ? (
-                    <FormDescription>{t('users.form.passwordEditHint')}</FormDescription>
-                  ) : undefined
-                }
-              >
-                {({ field, disabled, readOnly }) => (
-                  <FormControl>
-                    <Input
-                      type="password"
-                      autoComplete="new-password"
-                      disabled={disabled}
-                      readOnly={readOnly}
-                      {...field}
-                    />
-                  </FormControl>
-                )}
-              </MetaField>
+            {contractDataVisible && (
+              <TabsContent value="contractData" className="flex flex-col gap-4">
+                <ContractDataTabContent control={form.control} />
+              </TabsContent>
+            )}
 
-              <MetaField
-                control={form.control}
-                name="password_confirmation"
-                metaKey="password"
-                label={t('users.form.confirmPassword')}
-              >
-                {({ field, disabled, readOnly }) => (
-                  <FormControl>
-                    <Input
-                      type="password"
-                      autoComplete="new-password"
-                      disabled={disabled}
-                      readOnly={readOnly}
-                      {...field}
-                    />
-                  </FormControl>
-                )}
-              </MetaField>
-            </FormSection>
-          )}
+            {!isProfileLoading && !isProfileError && contactsVisible && (
+              <TabsContent value="contacts" className="flex flex-col gap-4">
+                <ContactsTabContent
+                  profileDraft={profileDraft}
+                  setProfileDraft={setProfileDraft}
+                  personalDataFieldPermission={personalDataFieldPermission}
+                />
+              </TabsContent>
+            )}
 
-          {rolesVisible && (
-            <FormSection
-              icon={ShieldCheck}
-              title={t('users.form.sections.access.title')}
-              description={t('users.form.sections.access.description')}
-            >
-              <MetaField
-                control={form.control}
-                name="roles"
-                metaKey="roles"
-                label={t('users.form.roles')}
-              >
-                {({ field, disabled }) => (
-                  <FormControl>
-                    <AsyncPaginatedMultiSelect
-                      resource={ROLES_FOR_SELECT_RESOURCE}
-                      value={field.value}
-                      onChange={field.onChange}
-                      selectedItems={selectedRoleItems}
-                      disabled={disabled}
-                      labels={{
-                        placeholder: t('users.form.rolesPlaceholder'),
-                        searchPlaceholder: t('users.form.rolesSearch'),
-                        empty: t('users.form.rolesEmpty'),
-                        error: t('users.form.rolesError'),
-                        retry: t('common.retry'),
-                        removeLabel: t('users.form.rolesRemove'),
-                        triggerLabel: t('users.form.roles'),
-                      }}
-                    />
-                  </FormControl>
-                )}
-              </MetaField>
-            </FormSection>
-          )}
-
-          {!isProfileLoading && !isProfileError && contactsVisible && (
-            <FormSection
-              icon={Phone}
-              title={t('users.form.sections.contacts.title')}
-              description={t('users.form.sections.contacts.description')}
-              aside={<Badge variant="secondary">{profileDraft.contacts.length}</Badge>}
-            >
-              <ContactsManager
-                value={profileDraft.contacts}
-                onChange={(contacts) => setProfileDraft({ ...profileDraft, contacts })}
-                fieldPermission={personalDataFieldPermission}
-                showHeader={false}
-              />
-            </FormSection>
-          )}
-
-          {!isProfileLoading && !isProfileError && addressesVisible && (
-            <FormSection
-              icon={MapPin}
-              title={t('users.form.sections.addresses.title')}
-              description={t('users.form.sections.addresses.description')}
-              aside={<Badge variant="secondary">{profileDraft.addresses.length}</Badge>}
-            >
-              <AddressesManager
-                value={profileDraft.addresses}
-                onChange={(addresses) => setProfileDraft({ ...profileDraft, addresses })}
-                fieldPermission={personalDataFieldPermission}
-                showHeader={false}
-              />
-            </FormSection>
-          )}
+            {!isProfileLoading && !isProfileError && addressesVisible && (
+              <TabsContent value="addresses" className="flex flex-col gap-4">
+                <AddressesTabContent
+                  profileDraft={profileDraft}
+                  setProfileDraft={setProfileDraft}
+                  personalDataFieldPermission={personalDataFieldPermission}
+                />
+              </TabsContent>
+            )}
+          </Tabs>
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">
@@ -331,9 +280,7 @@ export function UserFormBody({
               {t('users.form.cancel')}
             </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting
-                ? t('users.form.saving')
-                : t('users.form.save')}
+              {form.formState.isSubmitting ? t('users.form.saving') : t('users.form.save')}
             </Button>
           </div>
         </form>

@@ -6,6 +6,7 @@ use App\DataObjects\Users\CreateUserData;
 use App\Enums\LocaleEnum;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ResolvesAssignableRoles;
+use App\Http\Requests\Concerns\ValidatesEmployment;
 use App\Http\Requests\Concerns\ValidatesUserProfile;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,7 @@ class StoreUserRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
     use ResolvesAssignableRoles;
+    use ValidatesEmployment;
     use ValidatesUserProfile;
 
     public function authorize(): bool
@@ -60,7 +62,7 @@ class StoreUserRequest extends FormRequest
             // super-admin cannot assign `super-admin` (privilege escalation), even
             // by id. Resolved back to names in toData() for the service/guard.
             'roles.*' => $this->assignableRoleIdRule(),
-        ], $this->profileRules());
+        ], $this->profileRules(), $this->employmentRules());
     }
 
     /**

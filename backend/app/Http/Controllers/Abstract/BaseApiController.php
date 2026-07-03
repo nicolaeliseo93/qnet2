@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Abstract;
 
 use App\Enums\HttpStatusEnum;
+use App\Exceptions\ExternalApiException;
 use App\Services\TeamsWebhookService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -184,6 +185,10 @@ abstract class BaseApiController
         return match (true) {
             $exception instanceof AuthorizationException => HttpStatusEnum::FORBIDDEN->value,
             $exception instanceof ModelNotFoundException => HttpStatusEnum::NOT_FOUND->value,
+            // External migration source failure (spec 0013): 502 (connection/
+            // non-2xx) or 504 (timeout) — status carried on the exception
+            // itself, never inferred from a generic HttpExceptionInterface.
+            $exception instanceof ExternalApiException => $exception->status(),
             $exception instanceof HttpExceptionInterface => $exception->getStatusCode(),
             default => HttpStatusEnum::INTERNAL_SERVER_ERROR->value,
         };

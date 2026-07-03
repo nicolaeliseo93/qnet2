@@ -89,7 +89,7 @@ it('200 with the catalogue for users and roles, keys matching each resolver\'s f
 // keys AND the 11 personal_data.* keys, with the exact type/group contract.
 // ---------------------------------------------------------------------------
 
-it('spec 0008: users.fields contains exactly the 4 existing + 11 personal_data.* keys, with the contracted type/group', function () {
+it('spec 0008/0015: users.fields contains exactly the 4 existing + 11 personal_data.* + 12 employment.* keys, with the contracted type/group', function () {
     $actor = actorWithRoleAbilities(['create']);
     Sanctum::actingAs($actor);
 
@@ -103,6 +103,11 @@ it('spec 0008: users.fields contains exactly the 4 existing + 11 personal_data.*
         'personal_data.last_name', 'personal_data.company_name', 'personal_data.tax_code',
         'personal_data.vat_number', 'personal_data.sdi_code', 'personal_data.birth_date',
         'personal_data.contacts', 'personal_data.addresses',
+        // spec 0015 — the 12 employment.* keys.
+        'employment.is_manager', 'employment.job_description', 'employment.reports_to_id',
+        'employment.business_function_id', 'employment.relationship_type', 'employment.company_id',
+        'employment.operational_site_id', 'employment.qualification_type', 'employment.hired_at',
+        'employment.terminated_at', 'employment.standard_daily_minutes', 'employment.break_daily_minutes',
     ]);
 
     $expectedTypes = [

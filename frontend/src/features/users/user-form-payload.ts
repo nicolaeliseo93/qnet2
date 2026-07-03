@@ -5,10 +5,35 @@ import type {
 } from '@/features/personal-data/types'
 import type {
   CreateUserPayload,
+  EmploymentPayload,
   UpdateUserPayload,
   UserDetailWithPermissions,
 } from '@/features/users/types'
+import type { EmploymentFormValues } from '@/features/users/user-schema'
 import type { UserFormValues } from '@/features/users/use-user-form'
+
+/**
+ * Maps the employment form values to the nested wire payload (spec 0015).
+ * Text/date `''` sentinels become `null`; `reports_to_id` is force-nulled
+ * client-side when `is_manager` is true, mirroring the server-side rule
+ * (AC-003) as defense in depth.
+ */
+function buildEmploymentPayload(values: EmploymentFormValues): EmploymentPayload {
+  return {
+    is_manager: values.is_manager,
+    job_description: values.job_description || null,
+    reports_to_id: values.is_manager ? null : values.reports_to_id,
+    business_function_id: values.business_function_id,
+    relationship_type: values.relationship_type,
+    company_id: values.company_id,
+    operational_site_id: values.operational_site_id,
+    qualification_type: values.qualification_type,
+    hired_at: values.hired_at || null,
+    terminated_at: values.terminated_at || null,
+    standard_daily_minutes: values.standard_daily_minutes,
+    break_daily_minutes: values.break_daily_minutes,
+  }
+}
 
 /**
  * Builds the create payload, always including password + confirmation, plus the
@@ -28,6 +53,7 @@ export function buildCreatePayload(
     password: values.password,
     password_confirmation: values.password_confirmation,
     personal_data: omitNonEditableFields(draftToPayload(profileDraft), fieldPermission),
+    employment: buildEmploymentPayload(values.employment),
   }
 }
 
@@ -60,6 +86,7 @@ export function buildUpdatePayload(
     payload.password_confirmation = values.password_confirmation
   }
   payload.personal_data = omitNonEditableFields(draftToPayload(profileDraft), fieldPermission)
+  payload.employment = buildEmploymentPayload(values.employment)
 
   return payload
 }

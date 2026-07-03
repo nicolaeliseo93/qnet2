@@ -22,6 +22,55 @@ export interface UserRole {
   name: string
 }
 
+/** Employment relationship with the organization (spec 0015). */
+export const RELATIONSHIP_TYPES = ['employee', 'self_employed', 'other'] as const
+export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number]
+
+/** Employment qualification/role bucket, used for cost/payroll categorization (spec 0015). */
+export const QUALIFICATION_TYPES = [
+  'employee_level_5',
+  'administrative',
+  'coordinator',
+  'iso_consultant',
+  'teacher_cococo',
+  'teacher_vat',
+  'trainee_cost',
+  'hourly_cost_me',
+] as const
+export type QualificationType = (typeof QUALIFICATION_TYPES)[number]
+
+/** A related entity reference as returned inside `employment` ({id, label}). */
+export interface EmploymentRelationRef {
+  id: number
+  label: string
+  subtitle?: string | null
+}
+
+/**
+ * The user's employment profile (spec 0015), present only when the backend
+ * loaded it. `standard_daily_minutes`/`break_daily_minutes` are stored as
+ * plain minute counts (0..1440), not a TIME column.
+ */
+export interface EmploymentDetail {
+  id: number
+  is_manager: boolean
+  job_description: string | null
+  relationship_type: RelationshipType | null
+  qualification_type: QualificationType | null
+  hired_at: string | null
+  terminated_at: string | null
+  standard_daily_minutes: number | null
+  break_daily_minutes: number | null
+  reports_to_id: number | null
+  business_function_id: number | null
+  company_id: number | null
+  operational_site_id: number | null
+  reports_to: EmploymentRelationRef | null
+  business_function: EmploymentRelationRef | null
+  company: EmploymentRelationRef | null
+  operational_site: EmploymentRelationRef | null
+}
+
 /**
  * Single user detail returned by GET/POST/PATCH /users (envelope `data`).
  * Matches UserResource in the frozen API contract.
@@ -40,6 +89,8 @@ export interface UserDetail {
    * when the backend loaded it (whenLoaded). Absent/null when the user has none.
    */
   personal_data?: PersonalDataCard | null
+  /** The user's employment profile (spec 0015), null when the user has none. */
+  employment?: EmploymentDetail | null
   created_at: string | null
 }
 
@@ -50,6 +101,26 @@ export interface UserDetail {
  */
 export interface UserDetailWithPermissions extends UserDetail {
   permissions: ResourcePermissions
+}
+
+/**
+ * The nested `employment` object accepted by the user write endpoints
+ * (spec 0015), written atomically with the user in the same request. Always
+ * built and sent from the form (upsert semantics), mirroring `personal_data`.
+ */
+export interface EmploymentPayload {
+  is_manager: boolean
+  job_description: string | null
+  reports_to_id: number | null
+  business_function_id: number | null
+  relationship_type: RelationshipType | null
+  company_id: number | null
+  operational_site_id: number | null
+  qualification_type: QualificationType | null
+  hired_at: string | null
+  terminated_at: string | null
+  standard_daily_minutes: number | null
+  break_daily_minutes: number | null
 }
 
 /** Payload for POST /users (create). `password` is required here. */
@@ -66,6 +137,8 @@ export interface CreateUserPayload {
    * has no `name` field), so identity must always be present on create.
    */
   personal_data: PersonalDataPayload
+  /** The nested employment profile written atomically with the user (spec 0015). */
+  employment: EmploymentPayload
 }
 
 /**
@@ -84,4 +157,6 @@ export interface UpdateUserPayload {
    * leave the card untouched; present = card upsert plus authoritative child sync.
    */
   personal_data?: PersonalDataPayload
+  /** The nested employment profile written atomically with the user (spec 0015). */
+  employment?: EmploymentPayload
 }

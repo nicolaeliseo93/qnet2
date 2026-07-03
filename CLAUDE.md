@@ -6,7 +6,7 @@
 
 ## §0 — STACK (fonte di verità)
 
-**Backend:** PHP 8.3, Laravel 13, Sanctum, `spatie/laravel-permission`, `spatie/laravel-activitylog`, Pest 4, Pint, MySQL (prod) / SQLite (dev).
+**Backend:** PHP 8.4, Laravel 13, Sanctum, `spatie/laravel-permission`, `spatie/laravel-activitylog`, Pest 4, Pint, MySQL (prod) / SQLite (dev).
 **Frontend:** React 19, Vite, TypeScript, Tailwind 4, shadcn/ui (new-york, lucide), TanStack Query, React Hook Form + Zod, React Router 7, axios, i18next, AG Grid (SSRM).
 **Monorepo:** `backend/` · `frontend/` · `docs/`. Confini non sovrapposti.
 

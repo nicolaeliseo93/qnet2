@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0013 — External data migration (Migrazioni: import da API esterna con old_id).
+  Contract-first. Sezione "Migrazioni" visibile SOLO al super-admin che ATTINGE da un
+  sistema esterno via HTTP e IMPORTA i dati in qnet, a DUE FASI (anteprima read-only →
+  import). Ogni record importato conserva l'id di origine nella colonna `old_id` delle
+  tabelle di destinazione; l'`old_id` e la chiave di REMAPPING relazionale tra migrazioni:
+  quando un'entita figlia referenzia un'entita gia importata usando l'id ESTERNO, il
+  motore risolve il riferimento sul record qnet via `old_id`. Motore GENERICO
+  registry-driven (specchio di `config/tables.php`): 1 classe "source" + 1 riga di config
+  per risorsa. Base URL + token dell'API esterna da env. Riusabile per altri progetti
+  esterni cambiando l'env (stesso contratto) o aggiungendo nuove source.
+
+  Decisioni prodotto (approvate dall'utente, 2026-07-03):
+  - Flusso: DUE FASI. Fase 1 anteprima read-only dei dati esterni; Fase 2 import che
+    persiste i record in qnet con `old_id`, in BACKGROUND (queued) con polling dello stato.
+  - Entita importate (ricevono `old_id`): users, roles, business_functions, companies,
+    operational_sites.
+  - `old_id`: BIGINT UNSIGNED nullable, indicizzato, UNIQUE per tabella. NULL per i record
+    nativi qnet; valorizzato solo sui migrati; unique tra i migrati (un solo sistema
+    esterno per deploy).
+  - Re-import IDEMPOTENTE: una riga il cui `old_id` esiste gia nella tabella target →
+    SKIP (nessun duplicato, nessun update). Ri-lanciare l'import e sicuro.
+  - Auth esterna: TOKEN/API KEY da env (Bearer). Gate accesso: HARD GATE super-admin
+    (ruolo `super-admin` = `UserService::PRIVILEGED_ROLE`); nessun permesso granulare.
+  - Mapping: CONFIG STATICA per risorsa (registry `config/migrations.php`).
+
+  NOTA DI NAMING (flag): "migrations" collide semanticamente con le migration di schema
+  Laravel. Nessuna collisione tecnica: namespace `App\Migrations`, rotte `migrations/...`,
+  colonna `old_id`; le migration di schema che AGGIUNGONO `old_id` restano in
+  `database/migrations`. Si onora il termine dell'utente per la sezione/UI.
+
+  RELAZIONE con spec 0012 (generic CSV import, draft): stesso principio a due fasi e
+  riuso obbligatorio dei Service di creazione, ma sorgente HTTP (non CSV) e con
+  `old_id`/remapping. Se 0012 verra implementata, i due motori andranno fatti convergere;
+  qui 0013 e autocontenuto (0012 non e ancora a codice).
+-->
+<spec id="0013-external-data-migration" status="draft" owner="tu" date="2026-07-03">
+
+  <goal>
+    Dare al super-admin una sezione "Migrazioni" che, per ogni risorsa di un sistema
+    esterno, mostra un'anteprima read-only dei dati (fase 1) e poi li importa in qnet in
+    background (fase 2), creando i record via i Service esistenti e conservando l'id di
+    origine in `old_id`. L'`old_id` consente il remapping relazionale tra migrazioni: un
+    figlio che referenzia un genitore con l'id esterno viene collegato al record qnet
+    tramite `old_id`. Il motore e generico e riusabile: nuova risorsa = una classe source
+    + una riga di config; nuovo progetto esterno = ripuntare l'env.
+  </goal>
+
+  <context>
+    Verificato sul repo (nomi reali, non ipotizzati).
+
+    Gate super-admin GIA presente (riuso, nessuna duplicazione):
+    - `App\Providers\AppServiceProvider` registra `Gate::before` → ruolo `super-admin`
+      bypassa ogni ability. Nome ruolo centralizzato in `App\Services\UserService::
+      PRIVILEGED_ROLE` (= `App\Authorization\RoleAssignmentGuard::PRIVILEGED_ROLE`).
+    - Nessun middleware di ruolo registrato → questa spec introduce
+      `App\Http\Middleware\EnsureSuperAdmin` (fail-closed), applicato al gruppo rotte.
+
+    Schema attuale (verificato in `database/migrations`): NESSUNA colonna `old_id`/
+    `external_id`/`legacy_id` esiste. Tabelle target reali: `users`
+    (0001_01_01_000000), `roles` (spatie, `2026_06_12_063503_create_permission_tables`),
+    `business_functions` (2026_07_03_120000) con pivot `business_function_user`
+    (2026_07_03_120100), `companies` (2026_07_03_130000), `operational_sites`
+    (2026_07_03_140000). `personal_data` e `addresses` sono possedute dai loro parent
+    (nessun `old_id` proprio). → 5 migration ADDITIVE reversibili aggiungono
+    `old_id` BIGINT UNSIGNED nullable + indice UNIQUE alle 5 tabelle target; i Model
+    espongono `old_id` (guarded: settato per proprieta, non mass-assign).
+
+    Service di creazione da RIUSARE (verificati, nessuna modifica alla loro firma):
+    - `UserService::create(User $actor, CreateUserData $data, ?ProfileData $profile)` →
+      crea user + personal_data (flusso atomico spec 0003).
+    - `RoleService::create(User $actor, CreateRoleData $data)`.
+    - `BusinessFunctionService::create(User $actor, CreateBusinessFunctionData $data)`;
+      relazione `BusinessFunction::users()` = BelongsToMany (pivot business_function_user).
+    - `CompanyService::create(User $actor, CreateCompanyData $data)` → company + UNICO
+      indirizzo primario via `AddressService`.
+    - `OperationalSiteService::create(User $actor, CreateOperationalSiteData $data)`.
+    L'import costruisce il DTO dai valori esterni gia mappati, chiama il Service, poi
+    imposta `old_id` sul model creato e salva — nella stessa transazione per-riga.
+
+    Remapping via old_id (cuore della feature):
+    - Idempotenza/skip: prima di creare, `TargetModel::where('old_id', $externalId)
+      ->exists()` → se presente, SKIP.
+    - Risoluzione riferimenti: un campo esterno che referenzia un'altra entita con l'id
+      ESTERNO si risolve con `ParentModel::where('old_id', $externalRef)->value('id')`.
+      Un riferimento non risolvibile (genitore non ancora migrato) → warning di riga nel
+      report (non fatale), il record viene comunque creato senza quel collegamento.
+
+    Motore generico da SPECCHIARE (registry-driven, gia in produzione):
+    - `App\Tables\TableRegistry` + `config/tables.php` + un solo controller generico.
+      → interface `App\Migrations\MigrationSource`, base `App\Migrations\
+      AbstractMigrationSource`, registry `App\Migrations\MigrationRegistry`, config
+      `config/migrations.php`, controller unico `Http\Controllers\Migration\
+      MigrationController` montato su `migrations/...`.
+
+    HTTP esterno (greenfield: nessun `Http::` nel backend): `Illuminate\Support\Facades\
+    Http` (zero nuove dipendenze). Connessione/credenziali da env via `config/migrations
+    .php` (`EXTERNAL_MIGRATION_BASE_URL`, `EXTERNAL_MIGRATION_TOKEN`,
+    `EXTERNAL_MIGRATION_TIMEOUT`). Collaboratore `App\Migrations\Support\
+    ExternalApiClient` incapsula il client e normalizza gli errori (connessione/timeout/
+    non-2xx) in `App\Exceptions\ExternalApiException`. Il token NON e mai restituito/loggato.
+
+    Coda e storage GIA pronti (riuso, nessuna nuova infra): `config/queue.php`
+    (QUEUE_CONNECTION=database; tabelle jobs/job_batches/failed_jobs gia migrate);
+    disk `local` privato per l'eventuale report errori.
+
+    Envelope/helper (riuso, `BaseApiController`): `ok`, `created`, `fail`,
+    `handleControllerException` (AuthorizationException→403, ModelNotFound→404; con questa
+    spec `ExternalApiException`→502/504 senza leak URL/token/classi).
+
+    Navigation backend-driven: `config/navigation.php` + `App\Services\NavigationService`
+    filtra per `$user->can($permission)` (permission:null = ogni autenticato). NON supporta
+    il gate per ruolo → estensione ADDITIVA retro-compatibile: chiave opzionale `'role'`
+    valutata come `$user->hasRole($role)`. Voce `migrations` con `role: super-admin`.
+    `SyncPermissions` non impattato (item senza `permission`).
+
+    Frontend: `components/ui/*` (table, dialog, button, card, badge, progress, skeleton),
+    TanStack Query (query anteprima paginata + mutation import + query polling), axios,
+    i18next, `React.lazy` + guard. i18n: `en.ts`/`it.ts` al limite 500 righe → nuovo modulo
+    `en-migrations.ts`/`it-migrations.ts`. Nav icon token `database-zap` in
+    `navigation/icon-map.ts`.
+
+    Assunzioni (da confermare in review — il contratto esterno e ignoto):
+    - Il sistema esterno espone JSON paginato stile Laravel Resource
+      (`{data:[...],meta:{current_page,per_page,total}}`); `AbstractMigrationSource`
+      assume questo default ed e OVERRIDABILE per source. Ogni record esterno porta un
+      `id` (l'`old_id` per noi) e i riferimenti relazionali come id esterni.
+    - Roles: si importa `name` (+ `old_id`); i PERMESSI del ruolo NON si importano
+      (le abilities qnet sono generate dal codice via `permissions:sync`, non arbitrarie)
+      → out of scope. Se il `name` esterno coincide con un ruolo qnet gia esistente, l'import
+      ADOTTA l'`old_id` sul ruolo esistente (per abilitare il remapping) invece di duplicare.
+    - business_function_user e i ruoli-utente si popolano via remapping old_id; riferimenti
+      non risolti → warning non fatale.
+  </context>
+
+  <scope>
+    <in>
+      <item>5 migration ADDITIVE reversibili: `old_id` BIGINT UNSIGNED nullable + indice UNIQUE su `users`, `roles`, `business_functions`, `companies`, `operational_sites`. `down()` rimuove indice+colonna. Nessuna modifica alle colonne esistenti.</item>
+      <item>Esposizione `old_id` sui 5 Model (`App\Models\{User,BusinessFunction,Company,OperationalSite}` e il Role spatie via config/estensione): colonna guarded, settata per proprieta (mai mass-assign), inclusa nei `$casts` come integer dove sensato.</item>
+      <item>Tabella `migration_runs` + Model `App\Models\MigrationRun` (+ factory). Colonne: id, source(string), user_id(FK users), status(string enum), total_rows(uint default 0), created_rows(uint default 0), skipped_rows(uint default 0), failed_rows(uint default 0), report(json nullable: warning/errori per riga), timestamps. `down()` reversibile. Enum `App\Enums\MigrationStatus` (pending, processing, completed, failed).</item>
+      <item>Middleware `App\Http\Middleware\EnsureSuperAdmin` (fail-closed via `UserService::PRIVILEGED_ROLE`) + alias in `bootstrap/app.php`.</item>
+      <item>Motore generico: interface `App\Migrations\MigrationSource` (`key()`, `label()`, `columns():array`, `preview(MigrationQuery):MigrationPage`, `import(MigrationImportContext):void`), base `App\Migrations\AbstractMigrationSource` (usa `ExternalApiClient`; pagina l'esterno; mappa record→riga/DTO via field-map dichiarato; helper `resolveOldId(parentClass,$ext)` per il remapping; helper `existsByOldId(targetClass,$ext)` per lo skip), registry `App\Migrations\MigrationRegistry` (key→classe via container, null→404).</item>
+      <item>DTO immutabili `App\Migrations\MigrationQuery` (page, per_page), `App\Migrations\MigrationPage` (rows, page, per_page, total|null, has_more), `App\Migrations\MigrationImportContext` (run, actor).</item>
+      <item>Collaboratore `App\Migrations\Support\ExternalApiClient` (wrap `Http::baseUrl()->withToken()->timeout()->retry()`, normalizza errori) + eccezione `App\Exceptions\ExternalApiException` (status applicativo 502/504) mappata in `handleControllerException` senza leak.</item>
+      <item>`App\Services\MigrationService`: crea il `MigrationRun` (status=pending) e dispatcha `App\Jobs\RunMigrationJob`; il job (fase 2) scorre TUTTE le pagine esterne della source, per ogni riga in transazione: skip se `old_id` esiste, altrimenti crea via Service, imposta `old_id`, applica i remap relazionali (attach/assign via old_id), aggiorna created/skipped/failed e accumula warning/errori nel report; status→completed (o failed su eccezione non gestita).</item>
+      <item>Controller generico thin `App\Http\Controllers\Migration\MigrationController` (try/catch→handleControllerException): `index` (sources), `columns`, `preview` (fase 1, GET paginato), `import` (POST, avvia il run queued), `run` (GET, polling stato/summary). FormRequest `App\Http\Requests\Migration\MigrationPreviewRequest` (page/per_page bounded). Resource `App\Http\Resources\Migration\{MigrationSourceResource, MigrationRunResource}`. Blocco rotte `migrations` in `routes/api.php` sotto `auth:sanctum` + `EnsureSuperAdmin` + throttle. Ownership run: il {migrationRun} deve avere source==path e appartenere all'actor → altrimenti 404.</item>
+      <item>5 MigrationSource concrete + registrazione in `config/migrations.php`: `RolesSource` (name[+old_id], adozione su name esistente), `UsersSource` (user+personal_data via UserService/ProfileData; remap ruoli via old_id), `BusinessFunctionsSource` (bf + attach users via old_id sul pivot), `CompaniesSource` (company+indirizzo), `OperationalSitesSource` (sito+indirizzo). Ogni source dichiara endpoint, colonne, field-map e i remap relazionali.</item>
+      <item>`.env.example`: `EXTERNAL_MIGRATION_BASE_URL=`, `EXTERNAL_MIGRATION_TOKEN=`, `EXTERNAL_MIGRATION_TIMEOUT=15` (nessun valore reale).</item>
+      <item>Estensione ADDITIVA navigation: chiave opzionale `'role'` in `config/navigation.php` + `NavigationService::isAllowed`; voce menu `migrations` (`role: super-admin`, icona `database-zap`, route `/migrations`).</item>
+      <item>Frontend `features/migrations/`: `api.ts`, `types.ts`, `query-keys.ts`, `use-migrations.ts` (sources + columns + preview paginata + mutation import + polling run), `migrations-page.tsx` (selettore source + tabella anteprima read-only paginata), `import-dialog.tsx` (conferma import + progress/polling + summary created/skipped/failed + report warning), componenti di stato (loading/empty/error). Wiring: `router.tsx` (lazy+guard super-admin), `breadcrumbs.tsx`, `navigation/icon-map.ts`.</item>
+      <item>i18n: modulo `migrations` in `en-migrations.ts`/`it-migrations.ts` + indice.</item>
+      <item>Test: Pest backend (migration old_id + skip idempotente + remapping ≥90%; middleware/registry/client/source/job/controller ≥85-90%; `Http::fake`, `Queue::fake`, nessuna rete reale) + Vitest frontend (anteprima, import dialog+polling, stati, gating).</item>
+    </in>
+    <out>
+      <item>NESSUN import dei PERMESSI dei ruoli (le abilities qnet sono generate dal codice). RolesSource importa solo name+old_id.</item>
+      <item>NESSUN update/upsert dei record esistenti: re-import = SKIP idempotente per old_id. Nessuna sincronizzazione delta.</item>
+      <item>NESSUNA scrittura/azione verso il sistema esterno (solo GET). Nessun push di ritorno.</item>
+      <item>NESSUN mapping interattivo via UI ne discovery dinamica: mapping statico nella source.</item>
+      <item>NESSUN permesso granulare `migrations.*`: solo hard gate super-admin.</item>
+      <item>NESSUN discriminatore multi-sistema: `old_id` unique per tabella, un solo base URL esterno per deploy.</item>
+      <item>NESSUN AG Grid SSRM per l'anteprima (accoppiato al DB locale): tabella read-only paginata semplice. Nessuna modifica al framework Tables esistente.</item>
+      <item>NESSUNA modifica alle FIRME dei Service/DTO di creazione esistenti: l'`old_id` si imposta post-create. Nessuna modifica ai framework Authorization/Geo/AddressService.</item>
+      <item>NESSUN orchestratore automatico dell'ORDINE tra migrazioni: l'utente importa una source alla volta; i riferimenti a genitori non ancora migrati diventano warning non fatali (importa prima roles, poi users, ecc.).</item>
+      <item>NESSUNA cache persistente dei dati esterni ne storico multi-run consultabile: si osserva il run corrente via polling.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- {source} = key registrata in config/migrations.php (roles|users|business-functions|
+         companies|operational-sites). Authz OGNI endpoint: auth:sanctum + EnsureSuperAdmin
+         (403 se non super-admin, 401 se anonimo). {source} ignota → 404. Errore esterno →
+         502 (connessione/non-2xx) o 504 (timeout), senza leak URL/token/classi. Envelope
+         di progetto { success, message, data }. -->
+
+    <endpoint method="GET" path="/api/migrations">
+      <request>Nessun body. Auth: sanctum + EnsureSuperAdmin + throttle:60,1.</request>
+      <response status="200">
+        { success, message, data: { sources: Array&lt;{ key:string, label:string }&gt; } }
+      </response>
+      <errors>401; 403 non super-admin.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/migrations/{source}/columns">
+      <request>Nessun body. Auth: sanctum + EnsureSuperAdmin + throttle:60,1.</request>
+      <response status="200">
+        { success, message, data: { columns: Array&lt;{ id:string, label:string, type:'string'|'number'|'boolean'|'date' }&gt; } }
+      </response>
+      <errors>401; 403; 404 {source} ignota.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/migrations/{source}/preview">
+      <request>
+        FASE 1 (anteprima read-only). Query: `page` (int ≥1, default 1),
+        `per_page` (int 1..MIGRATIONS_MAX_PER_PAGE, default MIGRATIONS_DEFAULT_PER_PAGE).
+        Il server chiama l'esterno (GET) e normalizza. Auth: sanctum + EnsureSuperAdmin +
+        throttle:30,1.
+      </request>
+      <response status="200">
+        { success, message, data: {
+          rows: Array&lt;Record&lt;string, string|number|boolean|null&gt;&gt;,  <!-- chiavi = column id -->
+          pagination: { page:number, per_page:number, total:number|null, has_more:boolean }
+        } }
+      </response>
+      <errors>401; 403; 404 {source} ignota; 422 page/per_page; 502 errore esterno; 504 timeout.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/migrations/{source}/import">
+      <request>
+        FASE 2. Nessun body. Crea il MigrationRun (status=pending) e dispatcha
+        RunMigrationJob (import in background, idempotente per old_id). Auth: sanctum +
+        EnsureSuperAdmin + throttle:6,1 (operazione costosa/di scrittura).
+      </request>
+      <response status="201">
+        { success, message, data: { migration_run: {
+          id:number, source:string, status:'pending',
+          total_rows:0, created_rows:0, skipped_rows:0, failed_rows:0,
+          has_report:false, created_at:string
+        } } }
+      </response>
+      <errors>401; 403; 404 {source} ignota.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/migrations/{source}/runs/{migrationRun}">
+      <request>Nessun body. Polling. Auth: sanctum + EnsureSuperAdmin + throttle:60,1.</request>
+      <response status="200">
+        { success, message, data: { migration_run: {
+          id:number, source:string,
+          status:'pending'|'processing'|'completed'|'failed',
+          total_rows:number, created_rows:number, skipped_rows:number, failed_rows:number,
+          report: Array&lt;{ old_id:number|string|null, level:'warning'|'error', message:string }&gt; | null,
+          created_at:string
+        } } }
+      </response>
+      <errors>401; 403; 404 run inesistente, non dell'actor, o source != path.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- SCHEMA + old_id -->
+    <criterion id="AC-001">Date le 5 migration, quando le eseguo, allora `users`, `roles`, `business_functions`, `companies`, `operational_sites` hanno `old_id` BIGINT UNSIGNED nullable con indice UNIQUE, e `down()` rimuove indice+colonna; due record con lo stesso `old_id` non-null nella stessa tabella violano l'unique; `old_id` NULL e ammesso per i record nativi. (test: schema + unique + nullable, up/down)</criterion>
+    <criterion id="AC-002">Dato un Model target, quando imposto `old_id` per proprieta e salvo, allora persiste; `old_id` NON e mass-assignable (guarded) e un `create([...,'old_id'=>x])` non lo valorizza. (test: set per proprieta + protezione mass-assign)</criterion>
+    <criterion id="AC-003">Data la tabella `migration_runs`, quando la eseguo, allora esiste con le colonne dichiarate e `down()` la rimuove; `MigrationRun` belongsTo `user` e casta `status` a `MigrationStatus` e `report` ad array. (test: migrazione + cast + relazione)</criterion>
+
+    <!-- GATE + engine + client -->
+    <criterion id="AC-004">Dato `EnsureSuperAdmin`, quando la richiesta non ha ruolo super-admin, allora 403 (401 se anonimo); con super-admin passa. (test: middleware con/senza ruolo)</criterion>
+    <criterion id="AC-005">Dato `MigrationRegistry`, quando risolvo una source registrata, allora ottengo la classe via container; source non registrata → null → 404. (test: resolve + unknown)</criterion>
+    <criterion id="AC-006">Dato `ExternalApiClient` con `Http::fake`, quando l'esterno risponde 2xx → payload decodificato; non-2xx → `ExternalApiException`(502); connessione fallita → 502; timeout → 504; il messaggio NON contiene URL ne token. (test: fake 200/500/connection/timeout + no-leak)</criterion>
+    <criterion id="AC-007">Dato `AbstractMigrationSource` con field-map e risposta esterna paginata (Laravel-Resource), quando `preview(MigrationQuery)`, allora traduce page/per_page, mappa i record in righe con chiavi = column id, e produce `MigrationPage` con total/has_more corretti; `meta.total` assente → total=null. (test: mapping + paginazione + total assente)</criterion>
+
+    <!-- IMPORT + old_id + remapping (cuore) -->
+    <criterion id="AC-008">Dato un import di `users` (Http::fake di N record esterni con `id`), quando gira `RunMigrationJob`, allora per ogni riga crea l'utente via `UserService::create` con il suo personal_data, imposta `old_id` = id esterno, e created_rows=N; ri-eseguendo lo stesso import, tutte le righe risultano SKIP (skipped_rows=N, created_rows=0) — idempotenza per old_id, nessun duplicato. (test: create+old_id + re-import skip)</criterion>
+    <criterion id="AC-009">Dato `roles` gia importati (con old_id) e un import `users` in cui ogni utente esterno referenzia i ruoli con l'id ESTERNO, quando gira il job, allora ogni utente e collegato ai ruoli qnet risolti via `Role::where('old_id',ref)`; un ref di ruolo non risolvibile → warning nel report (non fatale), utente creato comunque. (test: remap ruoli via old_id + warning su ref mancante)</criterion>
+    <criterion id="AC-010">Dato un import `business-functions` in cui ogni bf esterna elenca gli utenti con id ESTERNO, quando gira il job, allora la bf e creata via `BusinessFunctionService` e gli utenti sono attaccati sul pivot `business_function_user` risolvendo `User::where('old_id',ref)`; ref non risolti → warning. (test: create bf + attach via old_id + warning)</criterion>
+    <criterion id="AC-011">Dato `RolesSource`, quando un `name` esterno coincide con un ruolo qnet esistente privo di old_id, allora l'import ADOTTA l'old_id sul ruolo esistente (nessun duplicato, name resta unico); un name nuovo → ruolo creato con old_id; i permessi NON sono importati. (test: adozione su name esistente + creazione nuovo + no-permessi)</criterion>
+    <criterion id="AC-012">Dato un errore a commit-time su una singola riga (es. vincolo), quando gira il job, allora quella riga e isolata in transazione, failed_rows si incrementa con un `error` nel report, e le altre righe valide procedono; status finale = completed. (test: fallimento isolato per-riga)</criterion>
+    <criterion id="AC-013">Dato un job che solleva un'eccezione non gestita, quando fallisce, allora il MigrationRun passa a status=failed (non resta in pending/processing). (test: failed su exception)</criterion>
+    <criterion id="AC-014">Dopo la feature, quando ispeziono i Service/DTO di creazione e i framework generici, allora le loro FIRME non sono cambiate (old_id impostato post-create dall'import); l'unica registrazione delle source e in `config/migrations.php`. (test: assenza regressioni suite esistente)</criterion>
+
+    <!-- ENDPOINTS + authz -->
+    <criterion id="AC-015">Dato un super-admin, quando GET /api/migrations, allora `data.sources` = lista {key,label}; non super-admin → 403; anonimo → 401. Nessun dato di connessione/token esposto. (test: index + authz)</criterion>
+    <criterion id="AC-016">Dato un super-admin e Http::fake, quando GET /api/migrations/{source}/preview?page&amp;per_page, allora 200 con rows normalizzate e pagination; page/per_page fuori range → 422; source ignota → 404; esterno 500 → 502; timeout → 504; non super-admin → 403. (test: preview happy + validazione + 404 + 502/504 + authz)</criterion>
+    <criterion id="AC-017">Dato un super-admin, quando POST /api/migrations/{source}/import, allora 201 con migration_run(status=pending) e `RunMigrationJob` dispatchato (Queue::fake); source ignota → 404; non super-admin → 403. (test: import + Queue::fake + authz)</criterion>
+    <criterion id="AC-018">Dato un migration_run dell'actor, quando GET /api/migrations/{source}/runs/{migrationRun}, allora ricevo stato e summary (created/skipped/failed + report); run di altro utente o source != path → 404; non super-admin → 403. (test: run status + ownership 404 + cross-source 404)</criterion>
+
+    <!-- NAV + FRONTEND -->
+    <criterion id="AC-019">Dato `NavigationService`, quando un item dichiara `role: super-admin`, allora e incluso SOLO per chi ha quel ruolo (hasRole) e assente per gli altri; gli item esistenti restano invariati; `SyncPermissions` non genera alcuna ability per migrations. (test: nav per ruolo + non-regressione permessi)</criterion>
+    <criterion id="AC-020">Data la pagina Migrazioni, quando carica, allora GET /api/migrations popola il selettore; scelta una source, GET columns + preview rendono una tabella READ-ONLY paginata (prev/next su has_more), senza controlli edit/delete/create. (test: render + fetch + paginazione, MSW)</criterion>
+    <criterion id="AC-021">Dato il dialog di import, quando confermo, allora POST import avvia il run, il dialog fa polling di GET runs/{id} finche status∈{completed,failed} mostrando progress e infine il summary created/skipped/failed + i warning; un errore server (403/502) mostra un messaggio i18n coerente senza dettagli interni; stringhe dal modulo i18n `migrations`. (test: import+polling+summary+error/i18n)</criterion>
+    <criterion id="AC-022">Data la navigation, quando l'utente NON e super-admin, allora la voce "Migrazioni" e assente (backend-filtrata) e la route `/migrations` non e raggiungibile; per il super-admin la voce e presente e la route rende la pagina. (test: gating voce + route guard)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm): HTTP con `Illuminate\Support\Facades\Http`; coda `database` gia configurata; frontend solo con librerie presenti.</item>
+    <item>Authz server-side su OGNI endpoint: `auth:sanctum` + `EnsureSuperAdmin` (fail-closed via `UserService::PRIVILEGED_ROLE`, nessuna stringa 'super-admin' sparsa) + ownership sul run. L'UI nasconde, il backend autorizza.</item>
+    <item>Scrittura SOLO via i Service esistenti (UserService/RoleService/BusinessFunctionService/CompanyService/OperationalSiteService) — nessuna duplicazione della logica di creazione/validazione. `old_id` impostato post-create per proprieta (guarded, mai mass-assign). Nessuna modifica a firme Service/DTO ne ai framework generici.</item>
+    <item>Idempotenza: skip per `old_id` esistente prima della create; import ripetibile senza duplicati. Ogni riga in transazione isolata (un fallimento non blocca le altre; run→failed solo su eccezione globale).</item>
+    <item>Remapping relazionale SOLO via lookup `old_id` parametrizzato (Eloquent), mai interpolazione SQL; riferimenti non risolti → warning non fatale nel report.</item>
+    <item>Segreti: base URL/token SOLO da env via `config/migrations.php`; mai hard-coded/committati (`.env.example` senza valori). Token mai serializzato in risposte/log/errori. Errori esterni normalizzati (502/504) senza leak.</item>
+    <item>Identificatori in INGLESE (namespace `App\Migrations`, tabella `migration_runs`, colonna `old_id`, rotte `migrations/...`). Stringhe UI (label "Migrazioni") via i18n.</item>
+    <item>Envelope { success, message, data }. Mai model Eloquent/payload esterno grezzo: Resource per sources e run; righe anteprima mappate sui column id.</item>
+    <item>Riuso del pattern registry (specchio `config/tables.php`): un controller generico, 1 classe + 1 riga di config per risorsa. Estensione a `NavigationService` limitata alla chiave additiva `role` (retro-compatibile, test di non-regressione).</item>
+    <item>Magic values → costanti/config: `MIGRATIONS_DEFAULT_PER_PAGE`, `MIGRATIONS_MAX_PER_PAGE`, `EXTERNAL_MIGRATION_TIMEOUT`, retry, batch size in `config/migrations.php`/costanti.</item>
+    <item>HTTP difensivo: timeout+retry bounded; per_page cap; nessuna URL da input utente (solo `{source}` da allow-list del registry → path dichiarato dalla source); query esterna parametrizzata.</item>
+    <item>File entro 300/500 righe; dead code zero; nessuna emoticon. Pint + ESLint + `tsc --noEmit` puliti. Test ESEGUITI (`Http::fake`/`Queue::fake`/MSW, nessuna rete reale).</item>
+    <item>Coverage per-layer: migration old_id + skip idempotente + remapping + source/job ≥90%; MigrationController ≥85%.</item>
+    <item>Ownership file disgiunta. Contratto qui = punto di sincronizzazione. File GATE (schema/models old_id, `config/migrations.php`, `routes/api.php`, `bootstrap/app.php`, `config/navigation.php`+`NavigationService`, `router.tsx`, indice i18n, `icon-map.ts`) chiusi prima delle lane parallele dipendenti.</item>
+  </constraints>
+
+</spec>

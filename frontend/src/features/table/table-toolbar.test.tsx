@@ -87,4 +87,18 @@ describe('TableToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Exit fullscreen' }))
     expect(onToggleFullscreen).toHaveBeenCalledTimes(1)
   })
+
+  it('renders importSlot inside the options menu, not as a standalone control', () => {
+    renderToolbar({ importSlot: <div role="menuitem">Import</div> })
+
+    expect(screen.queryByRole('menuitem', { name: 'Import' })).not.toBeInTheDocument()
+
+    // Radix' DropdownMenu trigger opens on `pointerdown`, not `click`.
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Table options' }), {
+      button: 0,
+      ctrlKey: false,
+    })
+
+    expect(screen.getByRole('menuitem', { name: 'Import' })).toBeInTheDocument()
+  })
 })

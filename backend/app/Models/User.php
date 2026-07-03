@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasEmployment;
 use App\Models\Concerns\HasPersonalData;
 use App\Models\Concerns\LogsModelActivity;
 use App\Notifications\ResetPasswordNotification;
@@ -27,7 +28,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements HasLocalePreference
 {
     /** @use HasFactory<UserFactory> */
-    use CausesActivity, HasApiTokens, HasAttachments, HasFactory, HasPersonalData, HasRoles, LogsModelActivity, Notifiable;
+    use CausesActivity, HasApiTokens, HasAttachments, HasEmployment, HasFactory, HasPersonalData, HasRoles, LogsModelActivity, Notifiable;
 
     /**
      * Attachment collection that holds the user's avatar. A user keeps at most
@@ -110,6 +111,10 @@ class User extends Authenticatable implements HasLocalePreference
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            // Spec 0013 — external data migration: the source system's id for
+            // a migrated user, guarded (not in $fillable) so it is only ever
+            // set by property assignment post-create, never mass-assigned.
+            'old_id' => 'integer',
         ];
     }
 }

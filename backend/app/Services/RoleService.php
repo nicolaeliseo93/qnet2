@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Authorization\AssignablePermissionCatalogue;
 use App\DataObjects\Roles\CreateRoleData;
 use App\DataObjects\Roles\UpdateRoleData;
 use App\DataObjects\Shared\ForSelectQuery;
@@ -22,7 +23,10 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class RoleService
 {
-    public function __construct(private readonly RoleAssignmentGuard $guard) {}
+    public function __construct(
+        private readonly RoleAssignmentGuard $guard,
+        private readonly AssignablePermissionCatalogue $permissionCatalogue,
+    ) {}
 
     /**
      * Create a new role, optionally syncing its permissions and members.
@@ -199,16 +203,28 @@ class RoleService
      * guard from the request: on an API (sanctum) call Spatie's name resolution
      * would look the permissions up on the `sanctum` guard, while the catalogue
      * lives on `web`. Resolving explicit models on the role's guard keeps roles
-     * and permissions resolvable regardless of the request's active guard. An empty
-     * list detaches every permission (explicit "remove all" semantics).
+     * and permissions resolvable regardless of the request's active guard.
+     *
+     * The Role form only manages the assignable (form-module) catalogue, so any
+     * indirect sub-entity permissions the role already holds (addresses.*,
+     * contacts.*, …, governed via field-permissions) are preserved: they are
+     * merged back in so a save never silently drops them. An empty submitted
+     * list therefore detaches every ASSIGNABLE permission while leaving the
+     * unmanaged ones intact.
      *
      * @param  array<int, string>  $names
      */
     private function syncPermissions(Role $role, array $names): void
     {
+        $preserved = $role->getPermissionNames()
+            ->reject(fn (string $name): bool => $this->permissionCatalogue->isAssignable($name))
+            ->all();
+
+        $wanted = array_values(array_unique([...$names, ...$preserved]));
+
         $permissions = Permission::query()
             ->where('guard_name', $role->guard_name)
-            ->whereIn('name', $names)
+            ->whereIn('name', $wanted)
             ->get();
 
         $role->syncPermissions($permissions);

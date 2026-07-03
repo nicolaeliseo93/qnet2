@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0012 — Generic per-table CSV import (Import generico per-tabella).
+  Contract-first. Motore di import generico registry-driven che SPECCHIA il pattern
+  già in produzione di `app/Tables/*` + `config/tables.php` (1 classe + 1 riga di
+  config per risorsa, un solo controller generico montato una volta). Collegato alle
+  permission/policy esistenti tramite l'ability `import` (già presente: BasePolicy::
+  import() → can('{resource}.import'), già sincronizzata da permissions:sync, già
+  esposta come booleano in permissions.actions). Primo wiring per i moduli
+  `business-functions`, `companies`, `operational-sites` (tutti già completi; manca
+  solo il verbo import).
+
+  Decisioni prodotto (approvate dall'utente, 2026-07-03):
+  - Formato: SOLO CSV nativo (SplFileObject/fgetcsv). ZERO nuove dipendenze (vincolo §0).
+  - Processing: QUEUED/background. Coda già configurata (QUEUE_CONNECTION=database;
+    tabelle jobs/job_batches/failed_jobs già migrate). Nessuna nuova infra di coda.
+  - Validazione: due fasi PREVIEW + PARZIALE. Fase 1 dry-run: valida e produce
+    anteprima + elenco righe scartate con motivo. Fase 2 commit: importa SOLO le righe
+    valide, con report errori finale scaricabile.
+  - Modalità: SOLO CREAZIONE. Nessun upsert/aggiornamento. Riga che collide con un
+    record esistente (per chiave naturale della definizione) o duplicata nel file →
+    scartata con motivo.
+  - Mapping colonne: TEMPLATE FISSO. Header con nomi colonna prestabiliti dalla
+    ImportDefinition; scaricabile come template. Nessun mapping interattivo.
+  - Storico: SOLO RUN CORRENTE. Il record `import_runs` esiste (serve per polling/
+    preview/report) ma NON c'è pagina "storico". L'UI espone solo il run in corso.
+-->
+<spec id="0012-generic-table-import" status="draft" owner="tu" date="2026-07-03">
+
+  <goal>
+    Consentire a un utente autorizzato (`{resource}.import`) di importare da file CSV
+    nuovi record di una tabella, con un flusso a due fasi: validazione dry-run con
+    anteprima e righe scartate motivate, poi conferma che importa in background solo le
+    righe valide. Il motore è generico e riusabile per qualunque tabella; questa spec lo
+    abilita per `business-functions`, `companies`, `operational-sites`.
+  </goal>
+
+  <context>
+    Verificato sul repo (nomi reali, non ipotizzati).
+
+    Plumbing autorizzazione GIÀ presente (nessuna modifica):
+    - `App\Policies\Abstracts\BasePolicy`: abilities() = [viewAny,view,create,update,
+      delete,export,import]; metodo import() → $user->can('{resource}.import').
+    - `php artisan permissions:sync` (SyncPermissions) genera già '{resource}.import'
+      per ogni Policy; `RolePermissionSeeder` assegna la matrice.
+    - `permissions.actions` (AbstractResourceAuthorization::actionPermissions,
+      MetaController GET /api/meta/{resource}, ResourcePermissionsBuilder) espone GIÀ il
+      booleano `import` per companies/business-functions/operational-sites/roles/users.
+
+    Nessuna implementazione import/export esiste oggi (greenfield). Il bottone "export"
+    in `features/table/table-toolbar.tsx` è un placeholder `disabled` "soon" (non toccato
+    da questa spec).
+
+    Pattern generico da SPECCHIARE (registry-driven):
+    - `App\Tables\TableDefinition` (interface) + `App\Tables\AbstractTableDefinition`
+      (base con resolution condivisa + authorizeViewAny fail-closed via Gate) +
+      `App\Tables\TableRegistry` (resolve domain→classe via container, 404 se ignoto) +
+      `config/tables.php` (map definitions). Controller generico unico
+      `App\Http\Controllers\Table\TableController` montato una volta su `tables/{domain}`.
+      → nuovo analogo `App\Imports\{ImportDefinition, AbstractImportDefinition,
+      ImportRegistry}` + `config/imports.php` + `App\Http\Controllers\Import\
+      ImportController` montato su `imports/{domain}`.
+
+    Envelope e helper (riuso, `App\Http\Controllers\Abstract\BaseApiController`):
+    `ok`, `okWithPermissions`, `created`, `noContent`, `fail`, `paginatedResponse`,
+    `handleControllerException` (mappa AuthorizationException→403, ModelNotFound→404).
+
+    Riuso obbligatorio per la creazione delle righe (NON duplicare la logica):
+    - `App\Services\BusinessFunctionService` (create name/description).
+    - `App\Services\CompanyService::create(User, CreateCompanyData)` → crea Company +
+      UNICO indirizzo primario via `App\Services\AddressService::createFor` in transazione.
+    - `App\Services\OperationalSiteService` (create sito + indirizzo primario, stesso pattern).
+    - DTO esistenti `App\DataObjects\Companies\CreateCompanyData` (e analoghi) come input
+      dei Service. La ImportDefinition costruisce il DTO dai valori di riga già risolti.
+
+    Geografia normalizzata (già production-ready, read-only): modelli
+    `App\Models\{Country,State,Province,City}` dove State=regione, Province=provincia,
+    City=comune (vedi docstring). L'indirizzo polimorfico `addresses` mappa
+    country_id/state_id/province_id/city_id + line1(via)/postal_code(cap). Per l'import,
+    il CSV porta NOMI geo → un collaboratore `GeoResolver` risolve nome→id (case-insensitive,
+    disambiguando city dentro la province indicata e province dentro lo state indicato);
+    nome inesistente/ambiguo → errore di riga.
+
+    Coda e storage (già pronti, nessuna nuova dipendenza/infra):
+    - `config/queue.php` con QUEUE_CONNECTION=database; migration
+      `0001_01_01_000002_create_jobs_table.php` crea jobs/job_batches/failed_jobs.
+    - `config/filesystems.php`: disk `local` (privato, storage_path('app/private')).
+
+    Frontend generico da riusare:
+    - `features/authorization`: `<Can permission=...>` + `useAbilities()` (abilities da
+      `GET /auth/me/abilities`) per il gating dell'azione import.
+    - `features/table/table-view.tsx` monta `features/table/table-toolbar.tsx`
+      (presentazionale). I 3 adapter `features/{business-functions,companies,
+      operational-sites}/*-table.tsx` compongono `<TableView>`.
+    - `components/ui/*` (dialog, button, dropzone via input file, table, progress, badge),
+      TanStack Query (mutation + polling query), axios client configurato, i18next.
+    - i18n: `en.ts`/`it.ts` sono già al limite 500 righe (companies estratte in
+      `en-companies.ts`) → nuovo modulo `en-imports.ts`/`it-imports.ts`.
+  </context>
+
+  <scope>
+    <in>
+      <item>Migrazione `import_runs` + Model `App\Models\ImportRun` (+ factory). Colonne: id, resource(string), user_id(FK users), status(string enum), original_filename(string), stored_path(string), total_rows(uint, default 0), valid_rows(uint, default 0), invalid_rows(uint, default 0), imported_rows(uint nullable), error_report_path(string nullable), preview(json nullable), timestamps. `down()` reversibile.</item>
+      <item>Enum `App\Enums\ImportStatus` (validating, awaiting_confirmation, processing, completed, failed).</item>
+      <item>Motore generico: interface `App\Imports\ImportDefinition`, base `App\Imports\AbstractImportDefinition` (resource()=domain(); authorizeImport(User) fail-closed via Gate 'import' sul modello; helper condivisi template/columns), registry `App\Imports\ImportRegistry` (resolve domain→classe via container, 404 se ignoto), config `config/imports.php` (map definitions).</item>
+      <item>Collaboratori generici: `App\Imports\Support\CsvReader` (parsing CSV nativo con header, cap righe/size), `App\Imports\Support\GeoResolver` (nome→id per country/state/province/city, disambiguazione gerarchica, riusabile dalle definizioni con indirizzo).</item>
+      <item>`App\Services\ImportService`: crea l'ImportRun (status=validating), memorizza il file caricato su disk `local`, dispatcha `ValidateImportJob`; su conferma valida lo stato (awaiting_confirmation) e dispatcha `ProcessImportJob`; genera il report CSV degli errori.</item>
+      <item>Queued jobs: `App\Jobs\ValidateImportJob` (fase 1: legge il file, valida ogni riga via la definizione, calcola total/valid/invalid, salva anteprima (campione righe valide + campione righe scartate con motivo), scrive il report errori, status→awaiting_confirmation; su eccezione status→failed) e `App\Jobs\ProcessImportJob` (fase 2: rilegge il file, ri-valida e crea via Service SOLO le righe valide in transazione per riga/batch, aggiorna imported_rows, rigenera il report errori con eventuali fallimenti a commit-time, status→completed; su eccezione status→failed).</item>
+      <item>Controller generico `App\Http\Controllers\Import\ImportController` (thin, try/catch→handleControllerException) con 5 azioni + `App\Http\Requests\Import\UploadImportRequest` (file: required, mimes csv/txt, max size). Blocco rotte `imports/{domain}` in `routes/api.php` (auth:sanctum + throttle). Ownership: il {importRun} deve appartenere all'actor e avere resource == domain, altrimenti 404.</item>
+      <item>3 definizioni concrete + registrazione in `config/imports.php`: `BusinessFunctionsImportDefinition` (colonne: name[req], type[opz: business_unit|business_service] — `description` NON esiste sul model, corretto in `type`, campo reale del DTO CreateBusinessFunctionData), `CompaniesImportDefinition` (denomination[req], vat_number, + indirizzo: country, region, province, city, street, postal_code — geo per nome via GeoResolver), `OperationalSitesImportDefinition` (solo indirizzo: country, region, province[req se richiesto dalla gerarchia], city[req], street[req], postal_code — geo per nome). Ogni definizione dichiara la chiave naturale per lo scarto dei duplicati (business-functions=name; companies=denomination; operational-sites=nessuna → solo dedup intra-file su city+street).</item>
+      <item>ESTENSIONE (approvata dall'utente): import anche per `users` e `roles`, stesso motore, registrati in `config/imports.php` (5 definizioni totali). `RolesImportDefinition` (colonne: name[req], permissions[opz] = lista pipe-delimited `|` di permessi ESISTENTI; dedup=name; createRow via RoleService). `UsersImportDefinition` (colonne: email[req], type[opz individual|company, blank→individual], first_name, last_name, company_name, locale[opz→default], roles[opz] = lista pipe-delimited di NOMI ruolo). Password: NON nel CSV — generata random (`Str::password(32)`, cast `hashed`) e resettabile via forgot-password. Profilo personal_data obbligatorio creato via CreatePersonalData/ProfileData (individual→first_name+last_name; company→company_name). SICUREZZA: i ruoli assegnati passano dal guard esistente (`UserService::assignableRoleNames`→`RoleAssignmentGuard`); un ruolo non assegnabile dall'attore (es. super-admin) fa SCARTARE la riga (nessun utente escalato). dedup=email.</item>
+      <item>Engine change retro-compatibile: `ImportRowContext` porta anche `actor` (l'assegnabilità ruoli dipende dall'attore); `ImportRowProcessor` e `ValidateImportJob` lo risolvono e lo passano; le altre definizioni lo ignorano.</item>
+      <item>Frontend feature generica `features/imports/`: `api.ts`, `types.ts`, `query-keys.ts`, `use-import.ts` (mutation upload + query di polling stato + mutation confirm), `import-dialog.tsx` (dropzone/file input CSV + download template), `import-preview.tsx` (campione righe valide + tabella righe scartate con motivo), `import-progress.tsx` (stato job + polling), `import-error-report-link.tsx` (download report). Un solo set di componenti, parametrizzato su `domain`.</item>
+      <item>Wiring azione import: l'azione Import vive DENTRO il menu opzioni della toolbar generica (`features/table/table-toolbar.tsx`, slot `importSlot` reso come `DropdownMenuItem` dentro il `DropdownMenuContent`, non come bottone esterno); i 5 adapter `*-table.tsx` (companies, business-functions, operational-sites, users, roles) iniettano l'item gated da `<Can permission="{resource}.import">` e aprono `<ImportDialog domain resource>`.</item>
+      <item>i18n: modulo `imports` in `i18n/locales/en-imports.ts` + `it-imports.ts` (titolo, step, pulsanti, stati, messaggi errore riga) e wiring nell'indice i18n.</item>
+      <item>Test: Pest backend (Policy/authz, ImportService/definizioni/GeoResolver/CsvReader ≥90%, ImportController/jobs ≥85%) + Vitest frontend (dialog, hook upload/polling/confirm, preview, gating).</item>
+    </in>
+    <out>
+      <item>NESSUN upsert/aggiornamento di record esistenti: solo creazione (v1). Nessuna chiave di match per update.</item>
+      <item>NESSUN mapping interattivo delle colonne: solo template a header fisso.</item>
+      <item>NESSUNA pagina/endpoint di storico import: solo il run corrente (il record esiste per polling/report, non è consultabile come lista).</item>
+      <item>NESSUN formato Excel/.xlsx: solo CSV. NESSUNA nuova dipendenza composer/npm.</item>
+      <item>NESSUNA funzionalità di export (il placeholder "export" in toolbar resta invariato).</item>
+      <item>NESSUNA modifica ai framework generici Tables/Authorization/Geo/AddressService esistenti né ai 3 moduli (Model/Controller/Service/TableDefinition): solo riuso. L'import è un modulo affiancato.</item>
+      <item>NESSUN assegnamento pivot (es. business_function_user) via import in questa spec: solo i campi propri del record + indirizzo.</item>
+      <item>NESSUNA gestione multi-indirizzo: le definizioni con indirizzo creano l'UNICO indirizzo primario via i Service esistenti.</item>
+      <item>NESSUNA notifica email/realtime di completamento: l'esito si osserva via polling dello stato del run.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Dominio {domain} = resource key esistente (business-functions|companies|
+         operational-sites). Autorizzazione su OGNI endpoint via ability import
+         (definizione::authorizeImport → Gate 'import' sul modello, fail-closed).
+         Ownership: {importRun} deve avere user_id == actor AND resource == {domain},
+         altrimenti 404. Envelope di progetto { success, message, data }. -->
+
+    <endpoint method="GET" path="/api/imports/{domain}/template">
+      <request>Nessun body. Auth: sanctum + throttle:60,1. {domain} sconosciuto → 404.</request>
+      <response status="200">
+        Download `text/csv` (Content-Disposition attachment, filename `{domain}-import-template.csv`)
+        con UNA riga header = gli id colonna dichiarati dalla ImportDefinition, es.
+        business-functions: `name,type`;
+        companies: `denomination,vat_number,country,region,province,city,street,postal_code`;
+        operational-sites: `country,region,province,city,street,postal_code`;
+        roles: `name,permissions` (permissions = lista pipe-delimited `|`);
+        users: `email,type,first_name,last_name,company_name,locale,roles` (roles = lista pipe-delimited `|`; nessuna colonna password).
+      </response>
+      <errors>403 senza {domain}.import; 404 domain ignoto.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/imports/{domain}">
+      <request>
+        multipart/form-data: `file` (required, mimes: csv,txt; max size = IMPORT_MAX_FILE_KB).
+        Crea l'ImportRun (status=validating), memorizza il file su disk `local`, dispatcha
+        ValidateImportJob. Auth: sanctum + throttle:10,1 (endpoint costoso).
+      </request>
+      <response status="201">
+        { success, message, data: { import_run: {
+          id:number, resource:string, status:'validating',
+          original_filename:string, total_rows:0, valid_rows:0, invalid_rows:0,
+          imported_rows:null, has_error_report:false, created_at:string
+        } } }
+      </response>
+      <errors>403 senza {domain}.import; 404 domain ignoto; 422 file mancante/tipo/size non validi.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/imports/{domain}/{importRun}">
+      <request>Nessun body. Polling dello stato. Auth: sanctum + throttle:60,1.</request>
+      <response status="200">
+        { success, message, data: {
+          import_run: {
+            id:number, resource:string,
+            status:'validating'|'awaiting_confirmation'|'processing'|'completed'|'failed',
+            original_filename:string,
+            total_rows:number, valid_rows:number, invalid_rows:number,
+            imported_rows:number|null,          <!-- null finché la fase 2 non completa -->
+            has_error_report:boolean,
+            created_at:string
+          },
+          preview: {                            <!-- presente da awaiting_confirmation in poi, altrimenti null -->
+            columns: string[],                  <!-- id colonne header (della definizione) -->
+            valid_sample: Array<Record<string,string>>,   <!-- prime IMPORT_PREVIEW_VALID righe valide -->
+            invalid_sample: Array<{ row_number:number, values:Record<string,string>, errors:string[] }>  <!-- prime IMPORT_PREVIEW_INVALID righe scartate -->
+          } | null
+        } }
+      </response>
+      <errors>403 senza {domain}.import; 404 se run non esiste, non è dell'actor, o resource != domain.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/imports/{domain}/{importRun}/confirm">
+      <request>
+        Nessun body. Valido SOLO se status==awaiting_confirmation (altrimenti 409/422).
+        Imposta status=processing e dispatcha ProcessImportJob. Auth: sanctum + throttle:10,1.
+      </request>
+      <response status="200">
+        { success, message, data: { import_run: { ...come GET, status:'processing', imported_rows:null } } }
+      </response>
+      <errors>403 senza {domain}.import; 404 ownership/domain; 422 se lo stato non è awaiting_confirmation.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/imports/{domain}/{importRun}/errors">
+      <request>Nessun body. Auth: sanctum + throttle:60,1.</request>
+      <response status="200">
+        Download `text/csv` (attachment, filename `{domain}-import-errors-{id}.csv`):
+        colonne = header originali + `row_number` + `errors` (motivi concatenati). Contiene
+        TUTTE le righe scartate (non solo il campione). Se non c'è report → 404.
+      </response>
+      <errors>403 senza {domain}.import; 404 ownership/domain o report assente.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- BACKEND: schema + engine -->
+    <criterion id="AC-001">Data la migrazione, quando la eseguo, allora esiste `import_runs` con le colonne dichiarate e `down()` la rimuove; `ImportRun` appartiene a un `user` (belongsTo) e casta `status` a `App\Enums\ImportStatus` e `preview` a array. (test: migrazione + cast + relazione)</criterion>
+    <criterion id="AC-002">Dato `ImportRegistry`, quando risolvo un domain registrato in `config/imports.php`, allora ottengo la ImportDefinition via container (dipendenze iniettate); un domain non registrato → null → 404 dal controller. (test: registry resolve + unknown)</criterion>
+    <criterion id="AC-003">Data `AbstractImportDefinition::authorizeImport`, quando l'actor non ha `{resource}.import`, allora ritorna false (fail-closed via Gate 'import' sul modello); con il permesso → true. (test: authorize per le 3 definizioni)</criterion>
+    <criterion id="AC-004">Dato `CsvReader` con un CSV valido, quando lo leggo, allora ottengo righe associate all'header dichiarato; header mancante/errato → errore; oltre IMPORT_MAX_ROWS righe → errore; separatore/quote gestiti; encoding e BOM gestiti. (test: parsing happy + header errato + cap righe)</criterion>
+    <criterion id="AC-005">Dato `GeoResolver`, quando risolvo nomi geo esistenti (case-insensitive) coerenti nella gerarchia country→region→province→city, allora ottengo gli id corretti; un nome inesistente o ambiguo (comune omonimo fuori dalla provincia indicata) → risoluzione fallita con motivo. (test: resolve ok + not-found + ambiguo)</criterion>
+
+    <!-- BACKEND: endpoints + authz -->
+    <criterion id="AC-006">Dato un utente con `business-functions.import`, quando GET /imports/business-functions/template, allora scarico un CSV con header [name,type]; senza il permesso → 403; domain ignoto → 404. (test: template + authz + 404)</criterion>
+    <criterion id="AC-007">Dato un utente con `{domain}.import`, quando POST /imports/{domain} con un file CSV, allora 201 con import_run(status=validating), il file è memorizzato su disk `local`, ed è dispatchato ValidateImportJob (Queue::fake assert); senza il permesso → 403; file mancante/tipo errato/oltre size → 422. (test: upload + Queue::fake + authz + validazione)</criterion>
+    <criterion id="AC-008">Dato un import_run dell'actor, quando GET /imports/{domain}/{importRun}, allora ricevo lo stato e (da awaiting_confirmation in poi) il blocco preview con columns/valid_sample/invalid_sample; un run di un altro utente o con resource!=domain → 404; senza permesso → 403. (test: status/preview + ownership 404 + cross-domain 404)</criterion>
+    <criterion id="AC-009">Dato un import_run in stato awaiting_confirmation dell'actor, quando POST .../confirm, allora status→processing ed è dispatchato ProcessImportJob (Queue::fake assert); un run in stato diverso → 422; ownership/domain errati → 404; senza permesso → 403. (test: confirm happy + stato errato 422 + authz)</criterion>
+    <criterion id="AC-010">Dato un import_run con report errori, quando GET .../errors, allora scarico un CSV con header originali + row_number + errors contenente TUTTE le righe scartate; report assente → 404; ownership/domain errati → 404; senza permesso → 403. (test: error report download + 404)</criterion>
+
+    <!-- BACKEND: jobs (fasi) + per-module -->
+    <criterion id="AC-011">Dato un CSV business-functions con righe valide e righe non valide (name mancante; name duplicato di un record esistente; name duplicato intra-file), quando gira ValidateImportJob, allora valid_rows/invalid_rows sono corretti, preview contiene il campione valido e le righe scartate col motivo, il report errori è scritto, status→awaiting_confirmation; NESSUN record è creato in questa fase. (test: dry-run counts + no writes)</criterion>
+    <criterion id="AC-012">Dato quell'import_run confermato, quando gira ProcessImportJob, allora vengono creati SOLO i business functions delle righe valide (via BusinessFunctionService), imported_rows è corretto, status→completed, e le righe non valide NON sono importate. (test: commit parziale + imported_rows)</criterion>
+    <criterion id="AC-013">Dato un CSV companies con indirizzo (nomi geo), quando gira il flusso, allora ogni riga valida crea una Company col suo UNICO indirizzo primario (via CompanyService→AddressService) e i nomi geo sono risolti in id da GeoResolver; una riga con denomination mancante, o geo inesistente/ambiguo, o denomination duplicata → scartata con motivo specifico. (test: create + address + geo resolution + scarti motivati)</criterion>
+    <criterion id="AC-014">Dato un CSV operational-sites (solo indirizzo), quando gira il flusso, allora ogni riga valida crea una OperationalSite col suo indirizzo primario (via OperationalSiteService); city/street mancanti o geo non risolvibile → riga scartata; dedup intra-file su city+street. (test: create sito + address + scarti)</criterion>
+    <criterion id="AC-015">Dato un errore a commit-time su una singola riga (es. violazione vincolo), quando gira ProcessImportJob, allora quella riga è isolata in transazione, non blocca le altre righe valide, ed è aggiunta al report errori finale; status→completed. (test: fallimento isolato per-riga)</criterion>
+    <criterion id="AC-016">Dato un job che solleva un'eccezione non gestita, quando fallisce, allora l'import_run passa a status=failed (non resta bloccato in validating/processing). (test: failed state su exception)</criterion>
+    <criterion id="AC-017">Dopo la feature, quando ispeziono i framework generici e i 3 moduli esistenti, allora NON sono stati modificati (Tables/Authorization/Geo/AddressService, Model/Controller/Service dei 3 moduli); l'unica registrazione è in `config/imports.php`. (test: assenza regressioni suite esistente)</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-018">Data la toolbar di una tabella, quando l'utente ha `{resource}.import`, allora è visibile il pulsante Import (gated da `<Can>`); senza il permesso il pulsante NON è renderizzato. (test: gating pulsante import)</criterion>
+    <criterion id="AC-019">Dato il dialog di import aperto, quando scarico il template e poi carico un CSV, allora l'upload chiama POST /imports/{domain}, il dialog entra in stato "validating" e fa polling di GET /imports/{domain}/{id} finché status=awaiting_confirmation. (test: upload + polling con MSW/mock)</criterion>
+    <criterion id="AC-020">Dato lo stato awaiting_confirmation, quando il dialog mostra la preview, allora vedo il campione di righe valide e la tabella delle righe scartate con motivo, un link di download del report errori, e i pulsanti Conferma/Annulla; Conferma chiama POST .../confirm e il dialog passa a "processing" con polling fino a completed/failed. (test: preview + confirm + polling esito)</criterion>
+    <criterion id="AC-021">Dato un submit con errore server (403/422), quando il dialog riceve la risposta, allora mostra un messaggio i18n coerente e non lascia lo stato inconsistente; le stringhe UI provengono dal modulo i18n `imports`. (test: error handling + i18n)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm): CSV con PHP nativo (SplFileObject/fgetcsv); solo librerie già presenti lato frontend.</item>
+    <item>Authz server-side su OGNI endpoint via ability `import` (definizione::authorizeImport → Gate fail-closed) + ownership sul run (user_id + resource). L'UI nasconde, il backend autorizza.</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/rotte/chiavi/costanti). Tabella `import_runs`, model `ImportRun`, namespace `App\Imports`, rotte `imports/{domain}`. Le stringhe UI passano per i18n.</item>
+    <item>Envelope di progetto rispettato: { success, message, data }. Mai model Eloquent raw in JSON: usa Resource per l'import_run. Errori senza leak di classi interne (handleControllerException).</item>
+    <item>Riuso obbligatorio dei Service esistenti per la creazione (BusinessFunctionService/CompanyService/OperationalSiteService via AddressService) e della geografia (Country/State/Province/City). Nessuna duplicazione di logica di creazione/validazione. Nessuna modifica ai framework generici né ai 3 moduli.</item>
+    <item>Magic values → costanti/config: IMPORT_MAX_FILE_KB, IMPORT_MAX_ROWS, IMPORT_PREVIEW_VALID, IMPORT_PREVIEW_INVALID, IMPORT_BATCH_SIZE in `config/imports.php` (o costanti dedicate). Nessun hard-coding sparso.</item>
+    <item>Sicurezza file: validazione mimes csv/txt + size; parsing difensivo (cap righe/size, nessuna esecuzione formule); file su disk `local` PRIVATO (mai `public`); path derivati da uuid, mai dall'input utente.</item>
+    <item>Query via Eloquent/parametrizzate (lookup geo e dedup): mai interpolazione SQL; dedup e chiave naturale su colonne reali.</item>
+    <item>Job idempotenti rispetto allo stato: un job che fallisce porta il run a `failed`; la fase 2 crea solo righe valide in transazione per riga (nessuno stato parziale sporco).</item>
+    <item>File entro 300/500 righe; dead code zero; nessuna emoticon nel codice. Pint + ESLint + `tsc --noEmit` puliti.</item>
+    <item>Coverage per-layer: Policy/authz + ImportService/definizioni/GeoResolver/CsvReader ≥90%; ImportController/jobs ≥85%. Test ESEGUITI, non solo scritti.</item>
+    <item>Ownership file disgiunta tra teammate. Contratto qui congelato = punto di sincronizzazione. I file generici toccati (`table-toolbar.tsx`, `routes/api.php`, `config/imports.php`, indice i18n) sono microtask GATE da chiudere prima delle lane parallele che vi dipendono.</item>
+  </constraints>
+
+</spec>

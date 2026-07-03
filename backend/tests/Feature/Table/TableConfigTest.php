@@ -171,6 +171,24 @@ it('exposes hasFilterValues=true for the roles users_count AGGREGATE column', fu
     expect($columns['users_count']['hasFilterValues'])->toBeTrue();
 });
 
+it('offers only assignable form-module permissions in the roles permissions catalogue', function () {
+    Permission::findOrCreate('roles.viewAny');
+    foreach (['companies.view', 'operational-sites.create', 'addresses.view', 'contacts.update'] as $name) {
+        Permission::findOrCreate($name);
+    }
+    $user = User::factory()->create();
+    $user->givePermissionTo('roles.viewAny');
+    Sanctum::actingAs($user);
+
+    $data = $this->getJson('/api/tables/roles/columns')->json('data');
+    $permissionsColumn = collect($data['columns'])->firstWhere('id', 'permissions');
+
+    // Form-module permissions are offered; indirect sub-entity ones are not
+    // (they are governed via the field-permission matrix on the parent form).
+    expect($permissionsColumn['options'])->toContain('companies.view', 'operational-sites.create')
+        ->and($permissionsColumn['options'])->not->toContain('addresses.view', 'contacts.update');
+});
+
 it('declares the new user_type/address/geo/contact columns with the right visibility', function () {
     $user = userWithUserAbilities(['viewAny']);
     Sanctum::actingAs($user);

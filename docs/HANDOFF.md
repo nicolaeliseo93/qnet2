@@ -2,6 +2,297 @@
 
 > Injected at session start. Update at every green state.
 
+## Feature 0015 — User employment profile (Profilo + Rapporto + Dati contrattuali) — GREEN (verifier-confirmed)
+
+Spec `docs/specs/0015-user-employment-profile.xml` (contract FROZEN). Adds a per-user employment
+profile in three UI sections, created/updated ATOMICALLY inside the existing user transaction, plus
+a redesigned TABBED user form. User decisions (2026-07-03): dedicated `employment_profiles` table
+(hasOne on User) with a nested `employment` object in the user payload (mirrors personal_data); form
+as TABS (new `components/ui/tabs.tsx`, Radix via the already-present `radix-ui` pkg — ZERO new deps);
+durations stored as INTEGER MINUTES (unsignedSmallInteger), not TIME.
+
+Names/contracts to respect:
+- Backend NEW: table `employment_profiles` + `App\Models\EmploymentProfile` + concern
+  `App\Models\Concerns\HasEmployment` (`User::employment(): HasOne`, orphan-cleanup on delete, mirrors
+  HasPersonalData). Columns: user_id (unique, cascade), is_manager (bool def false), job_description,
+  reports_to_id (FK users nullOnDelete), business_function_id/company_id/operational_site_id (FK
+  nullOnDelete), relationship_type, qualification_type, hired_at, terminated_at,
+  standard_daily_minutes, break_daily_minutes. Enums `App\Enums\{RelationshipTypeEnum
+  (employee|self_employed|other), QualificationTypeEnum (employee_level_5|administrative|coordinator|
+  iso_consultant|teacher_cococo|teacher_vat|trainee_cost|hourly_cost_me)}` (HasMeta, English #[Label]).
+  DTO `App\DataObjects\Users\EmploymentData` + `App\Services\EmploymentWriter` (wired into
+  `UserService::create/update(?EmploymentData)` in the SAME DB::transaction). Validation concern
+  `App\Http\Requests\Concerns\ValidatesEmployment` (merged into Store/UpdateUserRequest).
+  `App\Http\Resources\EmploymentResource` ({id,label[,subtitle]} for reports_to/business_function/
+  company/operational_site) + `employment` block on UserResource. `UsersAuthorization::fields()`
+  extended with the 12 `employment.*` FieldDefinitions (per-role field-permission matrix governs them;
+  NO new resource permission / policy). Grid: `App\Tables\Users\UserEmploymentColumns` collaborator +
+  UserColumnCatalog/UsersTableDefinition — 9 english column ids (`business_function, company,
+  operational_site, relationship_type, qualification_type, is_manager, reports_to, hired_at,
+  terminated_at`, default visible:false); enumKey strings `relationship_type`/`qualification_type`.
+  Sort/filter from injection-safe allow-list (`isEmploymentColumn()` membership), never raw input.
+  `EmploymentProfileFactory` (+states manager/reportsTo) + `UserFactory` states (withEmployment/manager/
+  reportsTo) + `EmploymentProfileSeeder` (>=2 managers, each >=1 subordinate, no self-report).
+  be-core also added a `employment_profile` morph-map alias in AppServiceProvider (2 lines).
+- SEMANTICS (create/update): `employment` absent => untouched; explicit `null` => delete row; object =>
+  upsert. Server rule: `is_manager=true` forces `reports_to_id=null` (EmploymentWriter, not client-trust);
+  `reports_to_id == self` => 422.
+- Backend NEW for-select: `GET /api/{business-functions,companies,operational-sites}/for-select`
+  (each declared BEFORE its `{wildcard}` in routes/api.php; authz `{resource}.viewAny`). Item shapes:
+  business-functions `{id,label:name}`; companies `{id,label:denomination,subtitle:vat_number?}`;
+  operational-sites `{id,label:"line1 - city"|line1,subtitle:postal_code?}`. Same query/pagination
+  envelope + ids[] hydration (no total inflation) as users/for-select. FE resource strings =
+  `'business-functions'`,`'companies'`,`'operational-sites'`.
+- Frontend NEW: `components/ui/tabs.tsx` (Radix wrappers, error-dot via free children). User form
+  rewritten to TABS (Identity/Credentials/Access/Profile/Contract/Contract details/Contacts/Addresses)
+  with per-tab error dot; split into `user-form-account-tabs.tsx` + `user-form-employment-tabs.tsx` +
+  `user-form-contract-data-tab.tsx` to stay under size limits. `duration-input.tsx` (minutes<->HH:MM,
+  clamp 0..1440). employment Zod sub-schema in user-schema.ts; `buildEmploymentPayload` (snake_case,
+  reports_to nulled when is_manager); EmploymentDetail/EmploymentPayload in types.ts; SERVER_ERROR_FIELDS
+  extended with the 12 `employment.*` dot-paths. for-select resource consts in
+  features/{business-functions,companies,operational-sites}/for-select-api.ts. i18n split files
+  `{en,it}-users-employment.ts` + enum labels in `{en,it}-enums.ts` under `relationship_type`/
+  `qualification_type`. Detail + column-renderers updated (enum columns use the generic BadgeCell).
+  RTL note: Radix TabsTrigger activates on `mouseDown` not click; EN tab "Contract data" renamed to
+  "Contract details" to avoid an accessible-name prefix collision with "Contract" (IT unaffected).
+
+Status — GREEN (verifier deep pass, real execution, php85 = Herd 8.5): backend FULL suite 1063 tests,
+1062 passed / 1 pre-existing skip / 0 failed; `--filter=Employment` 29/29, `--filter=ForSelect` 49/49;
+Pint clean on all 27 spec files. Frontend `tsc --noEmit` 0 NEW errors (13 pre-existing unrelated),
+`vitest run src/features/users` 36/36, full vitest 420 pass / 8 pre-existing baseline fail
+(auth/profile-form ×5, table/cell-renderers ×3 — unrelated), ESLint clean. All AC-001..AC-019 PASS 1:1.
+
+NOT COMMITTED. Working tree remains ENTANGLED with concurrent specs 0012 (import) / 0013 (migration) /
+0014 (export) — an 0015-scoped commit MUST exclude those (the `openspout` + `php:^8.4` composer.json
+change belongs to 0014's export lane, not 0015). Awaiting user go for the scoped commit.
+
+## Feature 0014 — Generic backend-driven Export (CSV + XLSX) — GREEN (verifier-confirmed)
+
+Spec `docs/specs/0014-generic-table-export.xml` (contract FROZEN). Backend is the single source
+of truth for data AND file structure. Export REUSES the existing table framework: unlike Import it
+needs ZERO per-module classes — every `TableDefinition` already exposes baseQuery/mapRow/columns +
+the injection-safe filterable/sortable/searchable allow-lists, so any table with a TableDefinition
+gets export for free. Auth was already wired (`BasePolicy::export` → `{domain}.export`).
+
+Product decisions (user, 2026-07-03): formats CSV (native, UTF-8 BOM) + XLSX (openspout/openspout —
+the ONE authorized new dependency, streaming write, low memory); delivery ASYNC/queued like Import
+(export_runs + GenerateExportJob + poll + download). Grouping/rowGroup OUT OF SCOPE (no server-side
+grouping in the SSRM contract; grid configures none). PDF deferred behind the same pluggable writer.
+
+Names/contracts to respect:
+- Backend: table `export_runs` (resource=string indexed, NOT FK; + format, json `state`, nullable
+  file_path/row_count); `App\Models\ExportRun` (extends Abstracts\BaseModel); enums
+  `App\Enums\{ExportStatus[Processing,Completed,Failed],ExportFormat[Csv,Xlsx] with extension()/contentType()}`;
+  pluggable writers `App\Exports\{ExportWriter (iface),CsvExportWriter,XlsxExportWriter,ExportWriterFactory,
+  ExportValueFormatter}` (service has NO per-format branch → factory from `config/exports.php` writers map);
+  CRITICAL shared extraction `App\Services\Table\TableQueryBuilder::build(def,state)` — `TableService::rows()`
+  now DELEGATES to it (behavior byte-identical, table suite green). `App\Services\ExportService` (start +
+  generate, streams via `query->lazy(chunk_size)`, caps `max_rows`); `App\Jobs\GenerateExportJob` (ctor int id,
+  findOrFail + try/catch → status=Failed). `CreateExportRequest` (authorize()=true; colId allow-listed to
+  columnIds(); header only a ≤255 string label, NEVER in query). `ExportRunResource` mirrors ImportRun
+  `resource`-column/$this->resource gotcha; `has_file` = file_path!==null && completed; raw file_path never
+  exposed. Controller `App\Http\Controllers\Export\ExportController` (authorizeExport → Gate 'export' on
+  modelClass → 403; assertOwnedRun user_id+resource → 404). Routes `exports/{domain}` (POST throttle:10,1;
+  GET show + GET download throttle:60,1, `{exportRun}` scopeBindings). `config/exports.php` (formats/disk/
+  directory/max_rows/chunk_size/writers, magic values via env). `lang/{en,it}/exports.php` (boolean labels).
+- Frontend: export wired GENERICALLY in `features/table/table-view.tsx` gated by `useAbilities().can(
+  `${domain}.export`)` → `exportSlot` DropdownMenuItem in `table-toolbar.tsx` (removed the old disabled "soon"
+  placeholder; also removed dead `common.soon`). `features/exports/*` (types/api/query-keys/use-export poll-
+  until-terminal/export-dialog Sheet/export-progress/build-export-grid-state payload builder from getColumnState+
+  getFilterModel+sortModel+getSearchTerm). Shared `lib/download.ts` (`saveBlob`+`filenameFromContentDisposition`
+  extracted from imports/api.ts, which now imports them). i18n `en-exports.ts`/`it-exports.ts` wired into en.ts/it.ts.
+  Per-module adapters (companies-table/business-functions-table) NOT touched for export.
+
+Status — GREEN (verifier, real evidence): Export suite 59 tests/125 assertions passed; table-framework
+regression 295 passed/1 skip/0 fail (AC-009, TableQueryBuilder extraction changed nothing); Pint clean;
+frontend Vitest 14 passed (export + import regression from download.ts extraction), tsc --noEmit + ESLint clean.
+All 11 AC PASS. Security: allow-list everywhere (no whereRaw/orderByRaw on input), file_path never exposed,
+openspout the only new dep.
+
+TOOLCHAIN: use `herd php` / `herd composer` (PHP 8.5) — bare `php` is a stale 8.3 shim. Not committed;
+concurrent teammate workstreams (Employment/OperationalSiteForSelect/Migrations/Users) are in the same
+working tree → a scoped commit must include only the Export files listed above. Awaiting user go.
+
+## Feature 0013 — External data migration (Migrazioni: import da API esterna + old_id) — GREEN (Increment 1, verifier-confirmed)
+
+Spec `docs/specs/0013-external-data-migration.xml` (contract FROZEN). Super-admin-only section
+that PULLS data from an external system via HTTP and IMPORTS it into qnet in two phases
+(read-only preview → queued import). Every imported record preserves the source id in `old_id`;
+`old_id` is the relational-remap key across migrations (a child referencing a parent by the
+EXTERNAL id is resolved to the qnet row via `old_id`). Generic registry-driven engine mirroring
+`config/tables.php`: 1 source class + 1 config line per resource. Base URL + token from env.
+
+Product decisions (user, 2026-07-03): two-phase preview+import; entities with `old_id` = users,
+roles, business_functions, companies, operational_sites; `old_id` = BIGINT UNSIGNED nullable
+UNIQUE; re-import = idempotent SKIP on existing `old_id`; hard super-admin gate (no granular perm);
+external auth = Bearer token from env; queued import; roles import name+old_id only (NO permissions;
+adopt old_id onto an existing same-name role); no order orchestrator (import roles→users→…; unresolved
+parent refs = non-fatal warnings in the run report).
+
+Names/contracts to respect:
+- Backend: migrations add `old_id` (unsignedBigInteger nullable + unique) to the 5 tables; it is
+  GUARDED on every model → set POST-create by property (`$m->old_id = $ext; $m->save()`), never
+  mass-assign. `migration_runs` table + `App\Models\MigrationRun` (belongsTo user; casts status→
+  `App\Enums\MigrationStatus` {Pending,Processing,Completed,Failed}, report→array). Engine
+  `App\Migrations\{MigrationSource,AbstractMigrationSource,MigrationRegistry}` + DTOs
+  `{MigrationQuery,MigrationPage,MigrationImportContext,MigrationRowOutcome}` + `Support\ExternalApiClient`
+  (static error messages, never leaks URL/token) + `Exceptions\ExternalApiException`→502/504 mapped in
+  `BaseApiController::resolveExceptionStatus`. Sources `App\Migrations\Sources\{RolesSource,UsersSource}`
+  registered in `config/migrations.php`. `App\Services\MigrationService` + `App\Jobs\RunMigrationJob`
+  (per-row `DB::transaction`, skip/create/set old_id/remap, counters + report). Middleware
+  `EnsureSuperAdmin` (alias `super-admin` in bootstrap/app.php, fail-closed via
+  `UserService::PRIVILEGED_ROLE`). Controller `Http\Controllers\Migration\MigrationController` +
+  `MigrationPreviewRequest` + `Resources\Migration\{MigrationSourceResource,MigrationRunResource}`.
+  NavigationService gains an additive optional `role` key; nav item `migrations` (`role: super-admin`).
+- Endpoints (auth:sanctum + `super-admin` + throttle 60/30/6): `GET /api/migrations`,
+  `GET /api/migrations/{source}/columns`, `GET .../preview?page&per_page`, `POST .../import` (201,
+  `has_report`), `GET .../runs/{migrationRun}` (`report:[]|null`). Unknown source 404; external
+  error 502/504 no-leak; run ownership user_id==actor AND source==path else 404.
+- Frontend `features/migrations/*`: read-only paginated preview table (plain `<table>`, NO AG Grid) +
+  two-step import `Sheet` wizard with polling (`refetchInterval` until completed|failed) + summary
+  (created/skipped/failed + warnings). Client route guard `MigrationRouteGuard` via
+  `useAbilities().hasRole('super-admin')` (UX-only; backend is the boundary). Wired in `router.tsx`,
+  `breadcrumbs.tsx`, `navigation/icon-map.ts` (`database-zap`→`DatabaseZap`).
+- i18n DEVIATION (accepted): `migrations` is its OWN i18next namespace (not merged into the default
+  `translation` bundle) because the pre-existing `secret-scan.sh` false-positive on `en.ts` blocks any
+  write to it. Registered EAGERLY at app init in `i18n/index.ts` (`resources.{en,it}.migrations`) so the
+  backend-driven nav label and breadcrumb resolve `migrations:nav.label` app-wide before the lazy feature
+  loads; `features/migrations/i18n.ts` still re-adds it (idempotent) for the feature's own render entry
+  points. Components use `useTranslation('migrations')`. `en.ts`/`it.ts` untouched by us. BUGFIX: the nav
+  item label was `navigation.migrations` (missing key → raw label in the sidebar); changed to
+  `migrations:nav.label` in `config/navigation.php` (nav renderer `nav-main.tsx` uses `t(item.label)`).
+
+Status — GREEN (verifier re-ran everything, php85): backend `--filter=Migration` 80 tests/168 assert;
+full suite 938 (937 passed / 1 pre-existing skip / 0 fail); Pint clean on touched files. Frontend
+`vitest src/features/migrations` 8/8; tsc + eslint clean. AC-001..009/011..013/015..022 PASS with named
+tests. Roles+users old_id remap proven end-to-end (idempotent skip + role-ref remap + non-fatal warning).
+
+DEFERRED to Increment 2 (next dispatch): `BusinessFunctionsSource` (pivot `business_function_user`
+remap via user old_id), `CompaniesSource`, `OperationalSitesSource` — engine is generic, each = 1 class
++ 1 config line. AC-010 and the full-source part of AC-014 belong here.
+
+ENV incident (recorded): during DB-1 verification an agent ran `migrate:fresh --env=testing`, but
+`.env.testing` does not exist, so it hit the REAL local MySQL `qnet2` and dropped tables; it immediately
+re-ran `php artisan db:seed` to restore the standard dev dataset. Any local data beyond the seeder is
+lost. All subsequent agents were told never to run migrate:fresh on the real DB (Pest runs on SQLite
+:memory:). Also: local PHP CLI defaults to 8.3 (Herd) but composer requires ^8.4 → use the
+`.../Herd/bin/php84` binary for artisan/pint.
+
+NOT committed. Working tree commingles 0013 with >=3 other in-flight features (permission-catalogue,
+spec 0012 imports, an exports feature, a table refactor) across shared files
+(`BaseApiController.php`, `routes/api.php`, `bootstrap/app.php`, `config/navigation.php`,
+`NavigationService.php`, `.env.example`, `router.tsx`, `en.ts`/`it.ts`) → a mechanically-clean scoped
+commit is NOT possible without interactive hunk staging. Awaiting user decision on commit strategy.
+
+## Feature 0012 — Generic per-table CSV import — GREEN (verifier-confirmed)
+
+Spec `docs/specs/0012-generic-table-import.xml` (contract FROZEN). Generic registry-driven
+import engine mirroring `app/Tables/*`+`config/tables.php` (1 class + 1 config line per resource),
+wired for `business-functions`, `companies`, `operational-sites`. Uses the ALREADY-EXISTING
+`import` ability (`BasePolicy::import()` → `can('{resource}.import')`, synced by `permissions:sync`,
+already in `permissions.actions`). Decisions (user): CSV-only native (zero new deps) · QUEUED
+(database queue already present) · two-phase PREVIEW+PARTIAL (validate dry-run → confirm → commit
+valid rows only, downloadable errors report) · CREATE-only · fixed-header template · current-run only.
+
+Names/contracts to respect:
+- Backend NEW: table `import_runs` + `App\Models\ImportRun` + `App\Enums\ImportStatus`
+  (validating/awaiting_confirmation/processing/completed/failed). Engine `App\Imports\`
+  {ImportDefinition, AbstractImportDefinition, ImportRegistry, ImportRowContext, ImportRowProcessor,
+  RowOutcome, ImportPreview} + `Support/{CsvReader, GeoResolver}`. `App\Services\ImportService`
+  (create run, store file on PRIVATE `local` disk, dispatch jobs, write errors CSV). Jobs
+  `App\Jobs\{ValidateImportJob, ProcessImportJob}`. `App\Http\Controllers\Import\ImportController`
+  (5 endpoints on `imports/{domain}`: template, upload, show, confirm, errors; ownership 404 =
+  user_id!=actor OR resource!=domain; confirm wrong-status 422) + `UploadImportRequest` +
+  `ImportRunResource`. `config/imports.php` (definitions map + knobs IMPORT_MAX_FILE_KB/MAX_ROWS/
+  PREVIEW_VALID/PREVIEW_INVALID/BATCH_SIZE). Routes in `routes/api.php` (throttle 60,1 reads /
+  10,1 upload+confirm).
+- ImportDefinition contract: `columns()` [{id,required}] doubles as the template header;
+  `validateRow(row, ctx): string[]` (empty = valid); `dedupKey(row): ?string` + `existsInDatabase(key)`
+  (create-only dedup vs existing + intra-file via ImportRowProcessor's per-run `seenKeys`);
+  `createRow(actor, row)` delegates to the existing domain Service (zero duplicated creation logic).
+  Address definitions resolve geo NAMES→ids via `GeoResolver` (case-insensitive, hierarchical
+  disambiguation; not-found/ambiguous → row error).
+- CORRECTION vs original spec: `BusinessFunction` has NO `description` column → business-functions
+  template header is `name,type` (type = business_unit|business_service, the real CreateBusinessFunctionData
+  field). Companies header `denomination,vat_number,country,region,province,city,street,postal_code`;
+  operational-sites `country,region,province,city,street,postal_code` (city+street required). Spec doc
+  updated to match.
+- Frontend NEW: generic `features/imports/*` (api.ts, types.ts, query-keys.ts, use-import.ts polling,
+  import-dialog.tsx built on `Sheet` — repo has no `Dialog` primitive — import-preview/progress/
+  error-report-link, upload schema). i18n `en-imports.ts`/`it-imports.ts` (+ wired into en.ts/it.ts;
+  key `imports.action` for the toolbar button). Toolbar wiring: `features/table/table-toolbar.tsx` +
+  `table-view.tsx` got an optional presentational `importSlot`; the 3 `*-table.tsx` adapters inject an
+  Upload button gated by `<Can permission="{resource}.import">` (Can lives at `@/features/auth/can`)
+  opening `<ImportDialog domain resource open onOpenChange>`.
+
+Status — GREEN (verifier deep pass, real execution): backend `php artisan test --filter=Import`
+71/71; full suite 897 tests 896 passed / 1 pre-existing skip / 0 failed (no regression, AC-017
+blast radius clean); Pint clean on import files. Frontend imports/adapters/toolbar Vitest green,
+`tsc --noEmit` + ESLint clean. All 21 acceptance criteria mapped 1:1 → PASS. Pre-existing 8 Vitest
+failures (`auth/profile-form` ×5, `table/cell-renderers` ×3) and their causes are unrelated to import.
+
+Non-blocking notes: (1) `business-functions-table.tsx` (339) and `operational-sites-table.tsx` (320)
+now slightly over the 300-line SOFT limit (hard 500 not breached) — future split = extract the
+View*/Edit* loaders per adapter. (2) `config('imports.batch_size')` reserved for a future chunked
+commit; current isolation unit is one DB::transaction per row. (3) A backend teammate ran a stray
+`git stash` in this SHARED tree mid-run, briefly reverting concurrent work; recovered, `stash@{0}`
+left as a safety net (droppable once everything is committed).
+
+EXTENSION (same feature, GREEN): import now ALSO covers `users` and `roles` (5 definitions total in
+`config/imports.php`), and the Import action was MOVED from a standalone toolbar button INTO the table
+options dropdown (`table-toolbar.tsx` renders `importSlot` as a `DropdownMenuItem` inside `DropdownMenuContent`;
+all 5 `*-table.tsx` adapters inject it gated by `<Can permission="{resource}.import">`). New:
+`RolesImportDefinition` (`name`,`permissions` pipe-`|`-delimited existing perms), `UsersImportDefinition`
+(`email,type,first_name,last_name,company_name,locale,roles`; NO password column — random `Str::password(32)`,
+`hashed` cast, forgot-password reset; individual+company profiles via CreatePersonalData/ProfileData).
+SECURITY: role assignment via user import goes through the existing `UserService::assignableRoleNames`→
+`RoleAssignmentGuard`; a non-assignable role (e.g. super-admin) REJECTS the row (no escalated user).
+Engine change (backward-compatible): `ImportRowContext` now also carries `actor` (role-assignability is
+actor-dependent); `ImportRowProcessor`/`ValidateImportJob` resolve+pass it; other definitions ignore it.
+Evidence: backend `php artisan test --filter=Import` 81/81 (301 assert), Pint clean; frontend scoped Vitest
+17/17 on the changed files, `tsc --noEmit` clean. NB: the shared tree now hosts SEVERAL concurrent sessions
+(Composer/Laravel live upgrade PHP 8.5→8.4 per updated CLAUDE.md §0; spec 0013 Migration tests SIGSEGV;
+an "employment fields"/`users.export` WIP failing user-form-payload + Table/Authorization tests) — all
+UNRELATED to import; the import surface is green in isolation.
+
+NOT COMMITTED. Working tree is ENTANGLED with a concurrent session's spec 0013 (external-data-migration:
+`MigrationRun`, `add_old_id_*` migrations, `old_id` casts on 4 models, RoleService/AuthorizationRegistry/
+RolesTableDefinition edits, `AssignablePermissionCatalogue`, FE migrations route/icon). An import-scoped
+commit MUST exclude those. Awaiting user go for the scoped commit.
+
+## Role form — permissions catalogue scoped to form-modules — GREEN
+
+Refactor: the Role form's RBAC permission matrix (and the roles table `permissions`
+set filter/values, same source) now offers ONLY assignable "form-module" permissions —
+those whose resource prefix is registered in `config/authorization.php`
+(`users`, `roles`, `business-functions`, `companies`, `operational-sites`). Indirect
+sub-entity permissions (`addresses.*`, `contacts.*`, `personal_data.*`, `attachments.*`)
+are excluded because they are governed via the field-permission matrix on the parent form.
+
+Decision (user): "Hide + preserve". Indirect permissions are NOT deleted from the system
+(their standalone Policies/endpoints still enforce them) — they are only removed from the
+Role form catalogue, and any a role already holds are PRESERVED on save (never wiped).
+
+Names/contracts:
+- New SSOT `App\Authorization\AssignablePermissionCatalogue` (depends on `AuthorizationRegistry`):
+  `isAssignable(string): bool`, `names(?search, ?limit): array`. Single source shared by
+  `RolesTableDefinition` (offered catalogue: `optionsFor`/`distinctValues` for `permissions`)
+  and `RoleService::syncPermissions` (preservation).
+- `AuthorizationRegistry::resourceKeys()` = `array_keys(config('authorization.definitions'))`
+  = the form-module prefixes.
+- `RoleService::syncPermissions` now merges submitted names with the role's held
+  NON-assignable permissions → empty submit clears only assignable ones, indirect intact.
+- Frontend UNCHANGED: the matrix renders only groups present in `permissionOptions` (now
+  filtered server-side); held indirect perms round-trip transparently through the form value.
+  Request validation stays `Rule::exists('permissions','name')` (accepts any existing perm, so
+  the round-trip never 422s). No i18n/component changes.
+
+Status — GREEN: backend full Pest 797 passed / 1 pre-existing skip / 0 fail; Pint clean on
+touched files. New tests: `AssignablePermissionCatalogueTest` (3), `RoleCrudTest` preserve +
+clear (2), `TableConfigTest` catalogue-scope (1); `TableValuesTest` permissions-values test
+updated to the new rule (requirement change, not tampering). Frontend `tsc --noEmit` clean,
+roles Vitest 43/43. Not committed.
+
 ## Feature 0010 — Companies module (Società aziendali) — GREEN (verifier-confirmed)
 
 Spec `docs/specs/0010-companies-module.xml` (contract FROZEN). New resource key `companies`,

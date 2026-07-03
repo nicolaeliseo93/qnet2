@@ -98,6 +98,15 @@ vi.mock('@/features/personal-data/use-personal-data', () => ({
 
 /* -------------------------------- helpers --------------------------------- */
 
+/**
+ * Switches the active tab (spec 0015 tabbed redesign). Radix `TabsTrigger`
+ * activates on `mouseDown` (and focus, in automatic mode) rather than
+ * `click` — see `@radix-ui/react-tabs`.
+ */
+function switchTab(name: string) {
+  fireEvent.mouseDown(screen.getByRole('tab', { name }))
+}
+
 function wrapper() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -206,6 +215,17 @@ describe('UserForm — atomic personal data', () => {
       { wrapper: wrapper() },
     )
 
+    // No account `name` field: identity comes only from the card. Fill the
+    // required individual fields (Identity is the default-active tab).
+    fireEvent.change(screen.getByLabelText(/^First name/), {
+      target: { value: 'Ada' },
+    })
+    fireEvent.change(screen.getByLabelText(/^Last name/), {
+      target: { value: 'Lovelace' },
+    })
+
+    // Credentials moved to their own tab (spec 0015 tabbed redesign).
+    switchTab('Credentials')
     fireEvent.change(screen.getByLabelText(/^Email/), {
       target: { value: 'ada@example.com' },
     })
@@ -214,15 +234,6 @@ describe('UserForm — atomic personal data', () => {
     })
     fireEvent.change(screen.getByLabelText(/^Confirm password/), {
       target: { value: 'secret123' },
-    })
-
-    // No account `name` field: identity comes only from the card. Fill the
-    // required individual fields (the user's name is derived server-side).
-    fireEvent.change(screen.getByLabelText(/^First name/), {
-      target: { value: 'Ada' },
-    })
-    fireEvent.change(screen.getByLabelText(/^Last name/), {
-      target: { value: 'Lovelace' },
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -252,6 +263,7 @@ describe('UserForm — atomic personal data', () => {
     )
 
     // All account fields valid, but the mandatory identity fields are left empty.
+    switchTab('Credentials')
     fireEvent.change(screen.getByLabelText(/^Email/), {
       target: { value: 'grace@example.com' },
     })
@@ -284,10 +296,13 @@ describe('UserForm — atomic personal data', () => {
       { wrapper: wrapper() },
     )
 
-    // Seeded card fields are present in the form.
+    // Seeded card fields are present in the form (Identity, the default tab).
     await waitFor(() =>
       expect(screen.getByLabelText(/^First name/)).toHaveValue('Ada'),
     )
+
+    // The seeded contact is present on its own tab (spec 0015 tabbed redesign).
+    switchTab('Contacts')
     expect(screen.getByText('ada@work.com')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))

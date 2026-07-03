@@ -40,4 +40,17 @@ class AuthorizationRegistry
 
         return $authorization;
     }
+
+    /**
+     * The registered resource keys — the "form-module" resources that own a
+     * form and authorization metadata (users, roles, business-functions, …).
+     * Single source of truth for which permission prefixes are directly
+     * assignable from the Role form (see AssignablePermissionCatalogue).
+     *
+     * @return array<int, string>
+     */
+    public function resourceKeys(): array
+    {
+        return array_keys(config('authorization.definitions', []));
+    }
 }

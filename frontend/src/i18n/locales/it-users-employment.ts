@@ -1,0 +1,105 @@
+/**
+ * User employment profile strings (spec 0015: tab Profilo / Rapporto / Dati
+ * contrattuali). Extracted from `it.ts` to keep that file within the
+ * engineering size limits (see `.claude/rules/engineering.md` §6); merged
+ * into the `users.*` namespace from there.
+ */
+
+/** Short labels for the user form's tab strip. */
+export const usersFormTabs = {
+  identity: 'Anagrafica',
+  credentials: 'Credenziali',
+  access: 'Accessi',
+  profile: 'Profilo',
+  contract: 'Rapporto',
+  contractData: 'Dati contrattuali',
+  contacts: 'Contatti',
+  addresses: 'Indirizzi',
+  tabHasErrors: 'Questa scheda contiene errori di validazione.',
+}
+
+/** `FormSection` header (title/description) for the three new employment tabs. */
+export const usersFormEmploymentSections = {
+  profile: {
+    title: 'Profilo',
+    description: 'Ruolo organizzativo, responsabile e linea di riporto.',
+  },
+  contract: {
+    title: 'Rapporto contrattuale',
+    description: 'Tipo di rapporto, società e sede operativa.',
+  },
+  contractData: {
+    title: 'Dati contrattuali',
+    description: 'Qualifica, date del rapporto e durate giornaliere.',
+  },
+}
+
+/** Field labels, placeholders e messaggi di validazione per `employment.*`. */
+export const usersFormEmployment = {
+  isManager: 'Responsabile',
+  isManagerDescription: 'Questa persona è responsabile di altri dipendenti.',
+  jobDescription: 'Mansione',
+  reportsTo: 'Risponde a',
+  reportsToPlaceholder: 'Seleziona un responsabile…',
+  reportsToSearch: 'Cerca utenti…',
+  reportsToEmpty: 'Nessun utente trovato.',
+  reportsToError: 'Impossibile caricare gli utenti.',
+  businessFunction: 'Funzione aziendale',
+  businessFunctionPlaceholder: 'Seleziona una funzione aziendale…',
+  businessFunctionSearch: 'Cerca funzioni aziendali…',
+  businessFunctionEmpty: 'Nessuna funzione aziendale trovata.',
+  businessFunctionError: 'Impossibile caricare le funzioni aziendali.',
+  relationshipType: 'Tipo di rapporto',
+  relationshipTypeNone: 'Nessuno',
+  company: 'Società',
+  companyPlaceholder: 'Seleziona una società…',
+  companySearch: 'Cerca società…',
+  companyEmpty: 'Nessuna società trovata.',
+  companyError: 'Impossibile caricare le società.',
+  operationalSite: 'Sede operativa',
+  operationalSitePlaceholder: 'Seleziona una sede operativa…',
+  operationalSiteSearch: 'Cerca sedi operative…',
+  operationalSiteEmpty: 'Nessuna sede operativa trovata.',
+  operationalSiteError: 'Impossibile caricare le sedi operative.',
+  qualificationType: 'Qualifica',
+  qualificationTypeNone: 'Nessuna',
+  hiredAt: 'Assunto il',
+  terminatedAt: 'Cessato il',
+  standardDailyMinutes: 'Durata giornaliera standard',
+  breakDailyMinutes: 'Durata pausa giornaliera',
+  hours: 'Ore',
+  minutes: 'Minuti',
+  jobDescriptionMax: 'La mansione può contenere al massimo 255 caratteri.',
+  terminatedBeforeHiredAt: 'La data di cessazione deve essere successiva o uguale a quella di assunzione.',
+}
+
+/** Nuove colonne della griglia utenti (spec 0015). */
+export const usersColumnsEmployment = {
+  business_function: 'Funzione aziendale',
+  company: 'Società',
+  operational_site: 'Sede operativa',
+  relationship_type: 'Tipo di rapporto',
+  qualification_type: 'Qualifica',
+  is_manager: 'Responsabile',
+  reports_to: 'Risponde a',
+  hired_at: 'Assunto il',
+  terminated_at: 'Cessato il',
+}
+
+/** Etichette in sola lettura per la sezione Rapporto di lavoro (spec 0015). */
+export const usersDetailEmployment = {
+  title: 'Rapporto di lavoro',
+  isManager: 'Responsabile',
+  jobDescription: 'Mansione',
+  reportsTo: 'Risponde a',
+  businessFunction: 'Funzione aziendale',
+  relationshipType: 'Tipo di rapporto',
+  company: 'Società',
+  operationalSite: 'Sede operativa',
+  qualificationType: 'Qualifica',
+  hiredAt: 'Assunto il',
+  terminatedAt: 'Cessato il',
+  standardDailyMinutes: 'Durata giornaliera standard',
+  breakDailyMinutes: 'Durata pausa giornaliera',
+  none: 'Nessuno',
+}

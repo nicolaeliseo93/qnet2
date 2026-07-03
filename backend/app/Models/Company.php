@@ -28,6 +28,10 @@ class Company extends BaseModel
     protected $casts = [
         'denomination' => 'string',
         'vat_number' => 'string',
+        // Spec 0013 — external data migration: the source system's id for a
+        // migrated company, guarded (not in $fillable) so it is only ever
+        // set by property assignment post-create.
+        'old_id' => 'integer',
     ];
 
     /**

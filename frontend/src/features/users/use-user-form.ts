@@ -14,6 +14,7 @@ import type {
   PersonalDataDraft,
   PersonalDataFieldPermission,
 } from '@/features/personal-data/types'
+import type { ForSelectItem } from '@/features/for-select/types'
 import {
   createUser,
   deleteUserAvatar,
@@ -25,9 +26,14 @@ import {
   buildCreateUserSchema,
   buildUpdateUserSchema,
   type CreateUserFormValues,
+  type EmploymentFormValues,
   type UpdateUserFormValues,
 } from '@/features/users/user-schema'
-import type { UserDetail, UserLocale } from '@/features/users/types'
+import type {
+  EmploymentRelationRef,
+  UserDetail,
+  UserLocale,
+} from '@/features/users/types'
 import type { UserFormMode } from '@/features/users/user-form'
 
 /**
@@ -40,9 +46,51 @@ const SEED_PENDING = Symbol('seed-pending')
 /**
  * Server-side field names mapped onto the form for 422 handling. `avatar` only
  * applies to the create flow's deferred upload; it is mapped to a form-level
- * error since the AvatarUpload control is not an RHF field.
+ * error since the AvatarUpload control is not an RHF field. The nested
+ * `employment.*` paths (spec 0015) match Laravel's flat dot-key error shape
+ * 1:1, so RHF resolves them onto the right nested field with no extra mapping.
  */
-const SERVER_ERROR_FIELDS = ['email', 'locale', 'roles', 'password'] as const
+const SERVER_ERROR_FIELDS = [
+  'email',
+  'locale',
+  'roles',
+  'password',
+  'employment.is_manager',
+  'employment.job_description',
+  'employment.reports_to_id',
+  'employment.business_function_id',
+  'employment.relationship_type',
+  'employment.company_id',
+  'employment.operational_site_id',
+  'employment.qualification_type',
+  'employment.hired_at',
+  'employment.terminated_at',
+  'employment.standard_daily_minutes',
+  'employment.break_daily_minutes',
+] as const
+
+/** A blank employment sub-form, used for both create and an edit user with no profile yet. */
+const EMPTY_EMPLOYMENT: EmploymentFormValues = {
+  is_manager: false,
+  job_description: '',
+  reports_to_id: null,
+  business_function_id: null,
+  relationship_type: null,
+  company_id: null,
+  operational_site_id: null,
+  qualification_type: null,
+  hired_at: '',
+  terminated_at: '',
+  standard_daily_minutes: null,
+  break_daily_minutes: null,
+}
+
+/** Maps a loaded `{id, label}` relation ref to the AsyncPaginatedSelect hydration prop. */
+function relationToForSelectItem(
+  ref: EmploymentRelationRef | null | undefined,
+): ForSelectItem | null {
+  return ref ? { id: ref.id, label: ref.label, subtitle: ref.subtitle ?? null } : null
+}
 
 export type UserFormValues = CreateUserFormValues & UpdateUserFormValues
 
@@ -125,12 +173,29 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
 
   const defaultValues = useMemo<UserFormValues>(() => {
     if (mode.type === 'edit') {
+      const employment = mode.user.employment
       return {
         email: mode.user.email,
         locale: mode.user.locale,
         roles: mode.user.roles.map((role) => role.id),
         password: '',
         password_confirmation: '',
+        employment: employment
+          ? {
+              is_manager: employment.is_manager,
+              job_description: employment.job_description ?? '',
+              reports_to_id: employment.reports_to_id,
+              business_function_id: employment.business_function_id,
+              relationship_type: employment.relationship_type,
+              company_id: employment.company_id,
+              operational_site_id: employment.operational_site_id,
+              qualification_type: employment.qualification_type,
+              hired_at: employment.hired_at ?? '',
+              terminated_at: employment.terminated_at ?? '',
+              standard_daily_minutes: employment.standard_daily_minutes,
+              break_daily_minutes: employment.break_daily_minutes,
+            }
+          : EMPTY_EMPLOYMENT,
       }
     }
     return {
@@ -139,6 +204,7 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
       roles: [],
       password: '',
       password_confirmation: '',
+      employment: EMPTY_EMPLOYMENT,
     }
   }, [mode, defaultLocale])
 
@@ -150,6 +216,32 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
       mode.type === 'edit'
         ? mode.user.roles.map((role) => ({ id: role.id, label: role.name }))
         : [],
+    [mode],
+  )
+
+  // EDIT: pre-known {id, label} for the employment relation selects (AC-016), so
+  // each picker shows its label immediately without an extra hydration fetch.
+  const selectedBusinessFunctionItem = useMemo(
+    () =>
+      mode.type === 'edit'
+        ? relationToForSelectItem(mode.user.employment?.business_function)
+        : null,
+    [mode],
+  )
+  const selectedCompanyItem = useMemo(
+    () => (mode.type === 'edit' ? relationToForSelectItem(mode.user.employment?.company) : null),
+    [mode],
+  )
+  const selectedOperationalSiteItem = useMemo(
+    () =>
+      mode.type === 'edit'
+        ? relationToForSelectItem(mode.user.employment?.operational_site)
+        : null,
+    [mode],
+  )
+  const selectedReportsToItem = useMemo(
+    () =>
+      mode.type === 'edit' ? relationToForSelectItem(mode.user.employment?.reports_to) : null,
     [mode],
   )
 
@@ -167,22 +259,27 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
           .filter(Boolean)
           .join(' ')
 
+  // The personal-data card is mandatory: block the save until the required
+  // identity fields (name + surname, or company name) are valid. The card form
+  // shows the field-level messages inline; this also drives the Identity tab's
+  // error indicator (spec 0015 AC-014), since the buffer lives outside RHF.
+  const profileValid = useMemo(
+    () =>
+      buildPersonalDataSchema(t).safeParse({
+        type: profileDraft.type,
+        title: profileDraft.title ?? undefined,
+        first_name: profileDraft.first_name ?? undefined,
+        last_name: profileDraft.last_name ?? undefined,
+        company_name: profileDraft.company_name ?? undefined,
+        tax_code: profileDraft.tax_code ?? undefined,
+        vat_number: profileDraft.vat_number ?? undefined,
+        birth_date: profileDraft.birth_date ?? undefined,
+      }).success,
+    [profileDraft, t],
+  )
+
   const onSubmit = async (values: UserFormValues) => {
     setServerError(null)
-
-    // The personal-data card is mandatory: block the save until the required
-    // identity fields (name + surname, or company name) are valid. The card form
-    // shows the field-level messages inline; this is the gate before the request.
-    const profileValid = buildPersonalDataSchema(t).safeParse({
-      type: profileDraft.type,
-      title: profileDraft.title ?? undefined,
-      first_name: profileDraft.first_name ?? undefined,
-      last_name: profileDraft.last_name ?? undefined,
-      company_name: profileDraft.company_name ?? undefined,
-      tax_code: profileDraft.tax_code ?? undefined,
-      vat_number: profileDraft.vat_number ?? undefined,
-      birth_date: profileDraft.birth_date ?? undefined,
-    }).success
 
     if (!profileValid) {
       setServerError(t('personalData.section.incomplete'))
@@ -259,7 +356,13 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
     setProfileDraft,
     profileQuery,
     profileName,
+    profileValid,
     selectedRoleItems,
+    // Employment relation selects hydration (spec 0015, AC-016).
+    selectedBusinessFunctionItem,
+    selectedCompanyItem,
+    selectedOperationalSiteItem,
+    selectedReportsToItem,
     onSubmit,
     handleAvatarUpload,
     handleAvatarRemove,

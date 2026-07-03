@@ -10,18 +10,22 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GridApi, GridReadyEvent } from 'ag-grid-community'
+import { Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import {
   ACTIONS_COLUMN_ID,
   DataTable,
 } from '@/components/data-table/data-table'
+import { useAbilities } from '@/features/auth/use-abilities'
 import { createSsrmDatasource } from '@/features/table/ssrm-datasource'
 import { FilterViewsControl } from '@/features/table/filter-views-control'
 import { TableToolbar } from '@/features/table/table-toolbar'
 import { useTableToolbarState } from '@/features/table/use-table-toolbar-state'
+import { ExportDialog } from '@/features/exports/export-dialog'
 import {
   createRowActionsRenderer,
   type RowActionHandler,
@@ -62,6 +66,12 @@ interface TableViewProps extends RowActionsOptions {
    * (open sheet, run delete, …) belongs to the domain adapter.
    */
   onAction: RowActionHandler
+  /**
+   * Import action, threaded through to the toolbar's `importSlot` (spec 0012).
+   * The adapter owns the permission gate (`<Can>`) and the dialog; TableView
+   * only forwards the node.
+   */
+  importSlot?: ReactNode
 }
 
 /**
@@ -80,11 +90,17 @@ interface TableViewProps extends RowActionsOptions {
  */
 export const TableView = forwardRef<TableViewHandle, TableViewProps>(
   function TableView(
-    { domain, renderers, onAction, isBusy, decorateRow, iconMap },
+    { domain, renderers, onAction, isBusy, decorateRow, iconMap, importSlot },
     ref,
   ) {
     const { t } = useTranslation()
     const { data: config, isPending, isError, refetch } = useTableConfig(domain)
+
+    // Export is generic (spec 0014): TableView owns the grid api, so it gates,
+    // builds and mounts the export affordance itself — no per-module wiring.
+    const { can } = useAbilities()
+    const canExport = can(`${domain}.export`)
+    const [exportOpen, setExportOpen] = useState(false)
 
     const savePreferences = useSaveTablePreferences(domain)
     const resetPreferences = useResetTablePreferences(domain)
@@ -332,44 +348,72 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
         />
       ) : null
 
-    return (
-      <div
-        className={cn(
-          'flex min-h-0 flex-col',
-          toolbar.fullscreen &&
-            'fixed inset-0 z-50 bg-background/80 p-3 backdrop-blur-sm sm:p-4',
-        )}
+    const exportSlot = canExport ? (
+      <DropdownMenuItem
+        onSelect={(event) => {
+          event.preventDefault()
+          setExportOpen(true)
+        }}
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <TableToolbar
-            searchEnabled={searchEnabled}
-            searchPlaceholder={searchPlaceholder}
-            searchInputRef={toolbar.searchInputRef}
-            searchValue={toolbar.searchInput}
-            onSearchChange={toolbar.setSearchInput}
-            searchShortcut={toolbar.searchShortcut}
-            rowCount={toolbar.rowCount}
-            filtersActive={isFilterCustomized}
-            onResetFilters={() => void handleResetFilters()}
-            resettingFilters={resetFilters.isPending}
-            layoutCustomized={isCustomized}
-            onResetLayout={() => void handleResetLayout()}
-            resettingLayout={resetPreferences.isPending}
-            fullscreen={toolbar.fullscreen}
-            onToggleFullscreen={toolbar.toggleFullscreen}
-            savedViewsSlot={savedViewsSlot}
-          />
+        <Download aria-hidden="true" />
+        {t('exports.action')}
+      </DropdownMenuItem>
+    ) : null
 
-          <div
-            className={cn(
-              'min-h-0 w-full',
-              toolbar.fullscreen ? 'flex-1' : 'h-[600px]',
-            )}
-          >
-            {content}
+    return (
+      <>
+        <div
+          className={cn(
+            'flex min-h-0 flex-col',
+            toolbar.fullscreen &&
+              'fixed inset-0 z-50 bg-background/80 p-3 backdrop-blur-sm sm:p-4',
+          )}
+        >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <TableToolbar
+              searchEnabled={searchEnabled}
+              searchPlaceholder={searchPlaceholder}
+              searchInputRef={toolbar.searchInputRef}
+              searchValue={toolbar.searchInput}
+              onSearchChange={toolbar.setSearchInput}
+              searchShortcut={toolbar.searchShortcut}
+              rowCount={toolbar.rowCount}
+              filtersActive={isFilterCustomized}
+              onResetFilters={() => void handleResetFilters()}
+              resettingFilters={resetFilters.isPending}
+              layoutCustomized={isCustomized}
+              onResetLayout={() => void handleResetLayout()}
+              resettingLayout={resetPreferences.isPending}
+              fullscreen={toolbar.fullscreen}
+              onToggleFullscreen={toolbar.toggleFullscreen}
+              savedViewsSlot={savedViewsSlot}
+              importSlot={importSlot}
+              exportSlot={exportSlot}
+            />
+
+            <div
+              className={cn(
+                'min-h-0 w-full',
+                toolbar.fullscreen ? 'flex-1' : 'h-[600px]',
+              )}
+            >
+              {content}
+            </div>
           </div>
         </div>
-      </div>
+
+        {canExport && config ? (
+          <ExportDialog
+            domain={domain}
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+            gridApi={gridApi}
+            columns={config.columns}
+            actionsColumnId={ACTIONS_COLUMN_ID}
+            search={toolbar.getSearchTerm()}
+          />
+        ) : null}
+      </>
     )
   },
 )

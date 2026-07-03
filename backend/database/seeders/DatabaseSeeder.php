@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
         $this->call(OperationalSiteSeeder::class);
         $this->call(CompanySeeder::class);
         $this->call(BusinessFunctionSeeder::class);
+        $this->call(EmploymentProfileSeeder::class);
         $this->call(NotificationSeeder::class);
     }
 }

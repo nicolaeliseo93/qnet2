@@ -4,8 +4,11 @@ namespace App\Services;
 
 use App\DataObjects\Companies\CreateCompanyData;
 use App\DataObjects\Companies\UpdateCompanyData;
+use App\DataObjects\Shared\ForSelectQuery;
+use App\DataObjects\Shared\ForSelectResult;
 use App\Models\Company;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -61,6 +64,75 @@ class CompanyService
     {
         // The owned address cascades away (HasAddresses::bootHasAddresses).
         $company->delete();
+    }
+
+    /**
+     * Minimal, searchable, paginated company list for the for-select standard
+     * (spec 0015, ADR 0011), mirroring UserService::forSelect: search by
+     * `denomination`/`vat_number`, order by denomination/id, ids[] hydrated
+     * without inflating total.
+     */
+    public function forSelect(ForSelectQuery $query): ForSelectResult
+    {
+        $base = Company::query()->select(['id', 'denomination', 'vat_number']);
+
+        if ($query->hasSearch()) {
+            $term = '%'.$query->search.'%';
+            $base->where(function ($q) use ($term): void {
+                $q->where('denomination', 'like', $term)
+                    ->orWhere('vat_number', 'like', $term);
+            });
+        }
+
+        $total = (clone $base)->count();
+
+        /** @var Collection<int, Company> $page */
+        $page = $base->orderBy('denomination')
+            ->orderBy('id')
+            ->offset($query->offset)
+            ->limit($query->limit)
+            ->get();
+
+        $items = $this->appendHydratedIds($page, $query);
+
+        return new ForSelectResult(
+            items: $items,
+            total: $total,
+            offset: $query->offset,
+            limit: $query->limit,
+        );
+    }
+
+    /**
+     * Append the explicitly-requested `ids[]` (edit-mode hydration) that are not
+     * already on the page, deduplicated. They bypass search and the same id/
+     * denomination/vat_number projection applies. Total is unaffected.
+     *
+     * @param  Collection<int, Company>  $page
+     * @return Collection<int, Company>
+     */
+    private function appendHydratedIds(Collection $page, ForSelectQuery $query): Collection
+    {
+        if (! $query->hasIds()) {
+            return $page;
+        }
+
+        $presentIds = $page->pluck('id')->all();
+        $missingIds = array_values(array_diff($query->ids, $presentIds));
+
+        if ($missingIds === []) {
+            return $page;
+        }
+
+        /** @var Collection<int, Company> $hydrated */
+        $hydrated = Company::query()
+            ->select(['id', 'denomination', 'vat_number'])
+            ->whereIn('id', $missingIds)
+            ->orderBy('denomination')
+            ->orderBy('id')
+            ->get();
+
+        return $page->concat($hydrated);
     }
 
     /**

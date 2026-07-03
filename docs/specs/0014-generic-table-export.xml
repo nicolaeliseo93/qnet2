@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0014 — Generic per-table Export (Export generico backend-driven).
+  Contract-first. Motore di export generico che RIUSA il framework tabellare già in
+  produzione (`app/Tables/*` + `config/tables.php`): a differenza dell'import NON servono
+  classi per-modulo, perché ogni `TableDefinition` espone GIÀ tutto ciò che serve
+  (baseQuery, mapRow, columns, allow-list filterable/sortable/searchable). Quindi ogni
+  tabella con una TableDefinition ottiene l'export "gratis". Collegato alle permission
+  esistenti tramite l'ability `export` (già presente: BasePolicy::export() →
+  can('{resource}.export'), già sincronizzata da permissions:sync, già esposta come
+  booleano in permissions.actions e già gated lato FE via <Can permission="{domain}.export">).
+
+  Decisioni prodotto (approvate dall'utente, 2026-07-03):
+  - Formati ORA: CSV (nativo, streaming, zero dip) + XLSX (openspout/openspout, MIT,
+    streaming write a basso consumo memoria). Nuova dipendenza AUTORIZZATA esplicitamente.
+    Architettura pluggable: interfaccia `ExportWriter` + `ExportWriterFactory`; aggiungere
+    PDF poi = un nuovo writer + una riga di config, senza toccare il core (OCP).
+  - Delivery: ASYNC/QUEUED come l'import. Tabella `export_runs` + `GenerateExportJob` in
+    coda (QUEUE_CONNECTION=database, infra già migrata) + polling stato + download link.
+    Motiva scalabilità/dataset grandi: la query è consumata in streaming via lazy cursor,
+    memoria costante; il file è scritto su disco privato e servito in download separato.
+  - Stato corrente = unica fonte di verità: l'export rispetta filtri, ordinamento, ricerca
+    globale, colonne visibili e ordine colonne ESATTAMENTE come la griglia. Lo stato viaggia
+    nel payload di creazione ed è congelato nel run (colonna `state` json).
+  - Raggruppamenti: NON supportati lato server (la SSRM è flat: nessun rowGroup/pivot esiste
+    nel contratto /rows né la griglia FE ne configura). Fuori scope; il contratto/Writer
+    resta estendibile ma non si implementa grouping ora (YAGNI).
+  - Storico: SOLO RUN CORRENTE (come import). `export_runs` serve per polling/download; nessuna
+    pagina "storico". L'UI espone solo il run in corso.
+-->
+<spec id="0014-generic-table-export" status="frozen" owner="tu" date="2026-07-03">
+
+  <goal>
+    Consentire a un utente autorizzato (`{domain}.export`) di esportare in CSV o XLSX una
+    tabella, ottenendo un file che rispecchia ESATTAMENTE lo stato corrente della griglia
+    (filtri, ordinamento, ricerca globale, colonne visibili, ordine colonne). Il backend è
+    l'unica fonte di verità di dati e struttura; il frontend invia solo lo stato e delega la
+    generazione. Il motore è generico e riusabile da qualunque tabella con una TableDefinition,
+    senza codice per-modulo.
+  </goal>
+
+  <context>
+    Verificato sul repo (nomi reali, file:line, non ipotizzati).
+
+    Plumbing autorizzazione GIÀ presente (NESSUNA modifica):
+    - `App\Policies\Abstracts\BasePolicy`: abilities() include `export`; export() →
+      $user->can('{resource}.export'). `permissions:sync` genera già '{resource}.export'.
+    - `permissions.actions` espone già il booleano `export` (companies/business-functions/
+      operational-sites/roles/users). FE: <Can permission="{domain}.export"> già disponibile.
+
+    Framework tabellare da RIUSARE (registry-driven, injection-safe):
+    - `App\Tables\TableRegistry::resolve(domain)` → `TableDefinition` (via container, 404 se ignoto).
+    - `TableDefinition` espone: baseQuery(), mapRow(User,Model), columns(),
+      sortableColumnIds()/filterableColumnMap()/searchableColumnIds() (allow-list ORDER BY/WHERE/LIKE),
+      applyDerived{Filter,Sort,Search}. `authorizeViewAny(User)` fail-closed via Gate.
+    - `App\Services\TableService::rows()` costruisce la query dallo stato griglia con
+      applyFilters/applySearch/applySorting (attualmente PRIVATE) + `App\Services\Table\FilterApplier`.
+      NESSUN whereRaw/orderByRaw su input: colonne risolte da allow-list, valori bound, LIKE escapato.
+
+    Envelope/helper (`App\Http\Controllers\Abstract\BaseApiController`): ok, created, noContent,
+    fail, handleControllerException (AuthorizationException→403, ModelNotFound→404).
+
+    Sibling da SPECCHIARE (import 0012, già in produzione):
+    - `App\Models\ImportRun extends App\Models\Abstracts\BaseModel`; `App\Enums\ImportStatus`;
+      `App\Jobs\{ValidateImportJob,ProcessImportJob}` (ctor `int $id`, findOrFail + try/catch →
+      status=Failed, disco privato `local` + path uuid); `App\Http\Controllers\Import\ImportController`
+      (thin, per-action try/catch, guard authorize + assertOwnedRun user_id+resource→404);
+      `App\Http\Resources\ImportRunResource` (GOTCHA: colonna `resource` collide con JsonResource::$resource
+      → usare var tipata locale `$run = $this->resource`); `config/imports.php` (registry + magic values env).
+    - FE: `frontend/src/features/imports/*` — poll-until-terminal via TanStack `refetchInterval`,
+      helper download `saveBlob` + `filenameFromContentDisposition`, i18n `en-imports.ts`/`it-imports.ts`.
+  </context>
+
+  <dependencies>
+    <backend>composer require openspout/openspout (MIT, streaming XLSX writer, basso consumo memoria).
+      È l'UNICA nuova dipendenza, autorizzata dall'utente. CSV resta nativo (zero dip).</backend>
+    <frontend>Nessuna nuova dipendenza.</frontend>
+  </dependencies>
+
+  <!-- ============================ CONTRATTO API (FROZEN) ============================ -->
+  <api>
+    <envelope>{ success, message, data } (ok/created/fail). Errori senza leak di classi interne.</envelope>
+
+    <endpoint method="POST" path="/api/exports/{domain}" throttle="10,1" ability="{domain}.export">
+      Crea un export run e dispatcha `GenerateExportJob`. {domain} risolve la TableDefinition
+      (404 se ignoto). Authorize: Gate 'export' su modelClass() (403) + authorizeViewAny (accesso lettura).
+      <request name="CreateExportRequest">
+        {
+          "format": "csv" | "xlsx",              // Rule::in(config('exports.formats'))
+          "columns": [                            // colonne visibili, NELL'ORDINE della griglia
+            { "colId": "&lt;id ∈ definition.columns&gt;", "header": "&lt;etichetta risolta lato FE&gt;" }
+          ],                                      // colId allow-listed su columnIds(); min 1
+          "sortModel": [ { "colId": "&lt;∈ sortableColumnIds&gt;", "sort": "asc"|"desc" } ],  // opz.
+          "filterModel": { "&lt;∈ filterableColumnIds&gt;": { ...AG Grid filter model... } },   // opz., stessa validazione di TableRowsRequest
+          "search": "string|null (≤100)"          // ricerca globale, opz.
+        }
+        Validazione: `columns` required, ogni colId ∈ definition.columnIds() (allow-list, altrimenti 422);
+        `header` string ≤255 (usato SOLO come intestazione file, mai in query); sortModel/filterModel/search
+        validati come in `TableRowsRequest` (colId sortable/filterable in allow-list, search ≤100).
+        La FormRequest NON autorizza (authorize()=true): l'authz è nel controller (non vede la definition risolta).
+      </request>
+      <response status="201">{ success, message, data: { export_run: ExportRunResource } }</response>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/exports/{domain}/{exportRun}" throttle="60,1" ability="{domain}.export">
+      Polling stato. Guard: authorize export + assertOwnedRun (exportRun.user_id==actor &amp;&amp;
+      exportRun.resource==domain, altrimenti 404).
+      <response status="200">{ success, message, data: { export_run: ExportRunResource } }</response>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/exports/{domain}/{exportRun}/download" throttle="60,1" ability="{domain}.export">
+      Download del file generato. Guard: authorize export + assertOwnedRun + status==Completed &amp;&amp;
+      file_path!=null (altrimenti 404/409). Ritorna `Storage::disk('local')->download(file_path, original_filename)`
+      (StreamedResponse) con Content-Type del formato e Content-Disposition attachment.
+    </endpoint>
+
+    <resource name="ExportRunResource">
+      { id, resource, status (enum->value), format, original_filename, row_count (nullable),
+        has_file (derived: file_path!==null &amp;&amp; status==completed), created_at }.
+      Il path grezzo `file_path` NON è mai esposto. GOTCHA colonna `resource`: usare var tipata locale.
+    </resource>
+  </api>
+
+  <!-- ============================ BACKEND (ownership: teammate backend) ============================ -->
+  <backend>
+    <naming>Inglese obbligatorio. Tabella `export_runs`; model `App\Models\ExportRun`; enum
+      `App\Enums\ExportStatus`, `App\Enums\ExportFormat`; namespace `App\Exports`; rotte `exports/{domain}`.</naming>
+
+    <migration file="database/migrations/2026_07_03_160000_create_export_runs_table.php">
+      Colonne (mirror ImportRun, `resource` string indexed NON FK):
+      id; string('resource')->index(); foreignId('user_id')->constrained()->cascadeOnDelete();
+      string('status'); string('format'); string('original_filename');
+      json('state'); // { columns:[{colId,header}], sortModel, filterModel, search } congelato
+      string('file_path')->nullable(); unsignedInteger('row_count')->nullable(); timestamps().
+      down(): dropIfExists.
+    </migration>
+
+    <model class="App\Models\ExportRun" extends="App\Models\Abstracts\BaseModel" factory="ExportRunFactory">
+      fillable: resource,user_id,status,format,original_filename,state,file_path,row_count.
+      casts: status=>ExportStatus::class, format=>ExportFormat::class, state=>'array',
+      row_count=>'int', file_path/original_filename=>'string'. user(): BelongsTo User.
+    </model>
+
+    <enum class="App\Enums\ExportStatus" backing="string">Processing='processing', Completed='completed',
+      Failed='failed'. (Single-phase: nessuna validazione/conferma. `failed` raggiungibile dal job così un
+      run non resta mai bloccato in `processing`.)</enum>
+    <enum class="App\Enums\ExportFormat" backing="string">Csv='csv', Xlsx='xlsx'. Metodi:
+      extension(): string; contentType(): string. Unica fonte di verità per estensione/MIME.</enum>
+
+    <config file="config/exports.php">
+      formats => ['csv','xlsx'] (abilitati; guida Rule::in + factory writer);
+      disk => 'local'; directory => 'exports';
+      max_rows => (int) env('EXPORT_MAX_ROWS', 100000);   // cap difensivo memoria/tempo
+      chunk_size => (int) env('EXPORT_CHUNK_SIZE', 1000);  // cursor/lazy chunk
+      writers => [ 'csv' => CsvExportWriter::class, 'xlsx' => XlsxExportWriter::class ]. // registry OCP
+    </config>
+
+    <writers namespace="App\Exports">
+      <interface name="ExportWriter">
+        open(string $path): void; writeHeaders(array $headers): void; writeRow(array $cells): void;
+        close(): void. (Streaming: scrive su file, mai bufferizza tutto in memoria.)
+      </interface>
+      <impl name="CsvExportWriter">SplFileObject/fputcsv su path; scrive BOM UTF-8 iniziale (compat Excel).
+        Zero dipendenze.</impl>
+      <impl name="XlsxExportWriter">openspout Writer\XLSX in streaming (Row::fromValues). Nuova dip.</impl>
+      <factory name="ExportWriterFactory">make(ExportFormat): ExportWriter risolvendo da config('exports.writers')
+        via container. Formato sconosciuto → eccezione (non dovrebbe accadere: Rule::in a monte).</factory>
+    </writers>
+
+    <query-refactor critical="true">
+      Estrarre il motore di costruzione query SSRM in UN solo posto riusabile (DRY, sicurezza in un punto).
+      Nuovo `App\Services\Table\TableQueryBuilder` con metodo pubblico
+      `build(TableDefinition $def, array $state): Builder` che applica filterModel/search/sortModel
+      (identico all'attuale logica private di TableService: allow-list, FilterApplier, no raw).
+      `TableService::rows()` DELEGA a TableQueryBuilder (comportamento invariato). `ExportService` lo riusa.
+      VINCOLO: la suite tabellare esistente deve restare VERDE (zero regressioni).
+    </query-refactor>
+
+    <service class="App\Services\ExportService" namespace="App\Services">
+      start(User $actor, TableDefinition $def, array $state, ExportFormat $format): ExportRun
+        // Step 1: costruisci original_filename ({domain}-{Y-m-d}.{ext}) — NB niente Date::now() vietato nei worker,
+        //         usa now() Laravel; Step 2: DB::transaction crea ExportRun(status=Processing, state, format);
+        //         Step 3: GenerateExportJob::dispatch($run->id); ritorna $run.
+      generate(ExportRun $run): void   // invocato dal job
+        // Step 1: risolvi TableDefinition via TableRegistry(resource); Step 2: query = TableQueryBuilder->build(def,state);
+        //         Step 3: cap max_rows; Step 4: writer = ExportWriterFactory->make(format); apri path uuid su disco;
+        //         Step 5: scrivi headers (da state.columns[].header); Step 6: query->lazy(chunk_size) → per riga
+        //         mapRow(actor,model) → ExportValueFormatter per colonna type → writer->writeRow(colonne ordinate);
+        //         Step 7: close; persisti file_path + row_count + status=Completed.
+    </service>
+
+    <formatter class="App\Exports\ExportValueFormatter">
+      Formatta i valori di mapRow per il file secondo il `type` colonna della definition, così l'output
+      rispecchia la griglia: datetime → formato configurato; boolean → sì/no localizzato (lang backend);
+      tags/array → join('; '); null → ''; altrimenti stringa. (Match pixel-perfect con i cell renderer JS non è
+      obiettivo: la fonte di verità è il valore backend formattato per type — documentato.)
+    </formatter>
+
+    <job class="App\Jobs\GenerateExportJob" queue="database">
+      implements ShouldQueue; ctor `private readonly int $exportRunId`. handle(ExportService $service):
+      $run = ExportRun::findOrFail($id); try { $service->generate($run); } catch (Throwable $e) {
+      $run->update(['status'=>Failed]); throw $e; }.
+    </job>
+
+    <controller class="App\Http\Controllers\Export\ExportController" extends="BaseApiController">
+      Thin; ctor injects TableRegistry, ExportService. Ogni action try/catch → handleControllerException.
+      store(CreateExportRequest,$domain): definition=registry->resolve($domain); authorizeExport(def,actor);
+        run=service->start(...); return created(['export_run'=>new ExportRunResource($run)]).
+      show(Request,$domain,ExportRun $exportRun): authorizeExport + assertOwnedRun; return ok([...]).
+      download(Request,$domain,ExportRun $exportRun): authorizeExport + assertOwnedRun + assertHasFile;
+        return Storage::disk('local')->download(file_path, original_filename).
+      Guard privati: authorizeExport → if(!Gate::forUser($actor)->allows('export',def->modelClass())) throw
+        AuthorizationException; assertOwnedRun → if(user_id!=actor||resource!=domain) throw ModelNotFoundException.
+      scopeBindings sulle route con {exportRun} annidato (chiude IDOR cross-domain).
+    </controller>
+
+    <routes file="routes/api.php" group="auth:sanctum">
+      throttle:10,1 → POST exports/{domain} (write che dispatcha il job).
+      throttle:60,1 → GET exports/{domain}/{exportRun}; GET exports/{domain}/{exportRun}/download.
+      {exportRun} annidato con ->scopeBindings().
+    </routes>
+  </backend>
+
+  <!-- ============================ FRONTEND (ownership: teammate frontend) ============================ -->
+  <frontend>
+    <principle>Il FE NON ricostruisce logica di export: legge lo stato corrente della griglia e lo invia.
+      L'export è GENERICO dentro `TableView` (che già possiede grid api, datasource, dominio, toolbar):
+      nessun codice per-modulo (companies-table/business-functions-table NON toccati per l'export).</principle>
+
+    <feature dir="frontend/src/features/exports/">
+      types.ts — ExportStatus, ExportFormat, ExportRun, ExportRunDetail (mirror BE 1:1).
+      api.ts — createExport(domain,payload), getExportRun(domain,id), downloadExport(domain,id) (blob + saveBlob).
+      query-keys.ts — exportKeys { all, domain(domain), run(domain,id) }.
+      use-export.ts — orchestrazione: createExport mutation seeda cache; refetchInterval mentre status∈{processing},
+        stop a terminale; on completed → download automatico (o pulsante download); reset(); mappa errori 403/422/429.
+      export-dialog.tsx — Sheet: scelta formato (CSV/XLSX), riassunto stato corrente (N filtri, ordinamento, ricerca,
+        M colonne), pulsante Esporta → progress → download.
+      export-progress.tsx — badge stato + progressbar indeterminata + pulsante download quando completed.
+      payload builder — da grid api: getColumnState() → colonne visibili nell'ordine (colId+header risolto via t()),
+        getFilterModel(), sortModel dallo stato colonne, getSearchTerm() (già esposto da useTableToolbarState).
+    </feature>
+
+    <shared-util file="frontend/src/lib/download.ts">
+      Estrarre `saveBlob` + `filenameFromContentDisposition` (oggi in features/imports/api.ts) in un util condiviso;
+      aggiornare imports/api.ts per importarli da qui (DRY; blast radius minimo, coperto dai test import esistenti).
+    </shared-util>
+
+    <toolbar file="frontend/src/features/table/table-toolbar.tsx">
+      Aggiungere prop `exportSlot?: ReactNode` (mirror di `importSlot`), reso accanto ad esso. Rimuovere il
+      placeholder `disabled` "soon" dell'export nel dropdown opzioni. `TableView` riempie lo slot internamente,
+      gated da useAbilities().can(`${domain}.export`), e monta l'ExportDialog con lo stato griglia.
+    </toolbar>
+
+    <i18n>
+      Creare `en-exports.ts`/`it-exports.ts` (oggetto flat `exports`: formats, dialog, progress, errors, stateSummary)
+      e WIRARLI nell'indice `en.ts`/`it.ts` (import + spread) — gotcha: come companies/imports, l'indice ha
+      il limite ~500 righe. Riusare `table.export` come label del pulsante.
+    </i18n>
+  </frontend>
+
+  <!-- ============================ ACCEPTANCE CRITERIA ============================ -->
+  <acceptance-criteria>
+    <ac id="AC-001">POST /api/exports/{domain} con stato valido → 201, crea ExportRun status=processing,
+      dispatcha GenerateExportJob, ritorna ExportRunResource.</ac>
+    <ac id="AC-002">Utente senza `{domain}.export` → 403 su store/show/download. Domain ignoto → 404.</ac>
+    <ac id="AC-003">show/download di un run non proprio (user_id diverso) o con resource!=domain → 404 (mai 403).</ac>
+    <ac id="AC-004">CreateExportRequest: colId non ∈ definition.columnIds() → 422; filterModel/sortModel con colId
+      non in allow-list → 422; search >100 → 422; columns vuoto → 422; format non ∈ {csv,xlsx} → 422.</ac>
+    <ac id="AC-005">GenerateExportJob genera il file rispettando filterModel+sortModel+search identici alla griglia;
+      il file contiene SOLO le colonne inviate, NELL'ORDINE inviato, con le header inviate.</ac>
+    <ac id="AC-006">CSV: file valido con BOM UTF-8, righe = conteggio filtrato (≤ max_rows). XLSX: file .xlsx valido
+      apribile (openspout streaming). Entrambi via ExportWriter/Factory (nessun ramo per-formato nel service).</ac>
+    <ac id="AC-007">A generazione OK: status=completed, file_path+row_count persistiti, has_file=true.
+      Su errore nel job: status=failed (mai bloccato in processing).</ac>
+    <ac id="AC-008">download con status=completed → StreamedResponse con Content-Disposition attachment,
+      Content-Type corretto per formato, filename {domain}-{data}.{ext}. status!=completed → 404/409.</ac>
+    <ac id="AC-009">TableService::rows() invariato dopo l'estrazione di TableQueryBuilder: suite tabellare VERDE.</ac>
+    <ac id="AC-010">FE: pulsante export nella toolbar gated da `{domain}.export`; dialog invia lo stato corrente
+      (colonne visibili+ordine, filtri, sort, ricerca); poll fino a completed; download del file. Nessun codice
+      per-modulo aggiunto (adapter companies/business-functions non modificati per l'export).</ac>
+    <ac id="AC-011">Sicurezza: nessun whereRaw/orderByRaw su input; header dal client usati solo come intestazioni
+      (mai in query); nessun secret; file_path grezzo mai esposto; openspout è l'unica nuova dip.</ac>
+  </acceptance-criteria>
+
+  <coverage-target>
+    Backend per-layer: Model 95% / (nessuna Policy nuova: riuso BasePolicy) / FormRequest 90% /
+    Service 90% / Job 90% / Writer 90% / Controller 85% / globale ≥85%. FE: use-export + export-dialog +
+    payload builder testati (Vitest), tsc --noEmit + ESLint puliti.
+  </coverage-target>
+
+  <out-of-scope>
+    Raggruppamenti/rowGroup/pivot/aggregazioni (non esistono lato server né in griglia). PDF (writer aggiungibile
+    poi senza refactor). Storico export (solo run corrente). Export schedulati/ricorrenti. Streaming sincrono
+    (scelto async).
+  </out-of-scope>
+</spec>
