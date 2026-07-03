@@ -123,6 +123,16 @@ interface TableDefinition
     public function filterableColumnIds(): array;
 
     /**
+     * Real DB column names whitelisted for the global quick-search OR-LIKE
+     * (spec 0009). MUST be real columns of the base table — the generic engine
+     * runs a bound `LIKE` on each; a derived key (no real column) would be an
+     * SQL error. Empty ⇒ the domain has no global search (no search box).
+     *
+     * @return array<int, string>
+     */
+    public function searchableColumnIds(): array;
+
+    /**
      * Resolved config for the given actor: columns/filters/actions filtered by
      * permission, dynamic options resolved. This is the GET /columns payload
      * (the DEFAULT layout, before any per-user preference is merged in).

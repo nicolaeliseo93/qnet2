@@ -163,7 +163,7 @@ export function RolesTable() {
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>
-        <SheetContent className="gap-0">
+        <SheetContent className="gap-0 sm:max-w-2xl">
           {sheet.kind === 'view' && (
             <>
               <SheetHeader>

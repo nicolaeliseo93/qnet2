@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { UserForm } from '@/features/users/user-form'
 import type { UserDetailWithPermissions } from '@/features/users/types'
 import type { ResourcePermissions } from '@/features/authorization/types'
@@ -102,7 +103,9 @@ function wrapper() {
     defaultOptions: { queries: { retry: false } },
   })
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
+    </QueryClientProvider>
   )
 }
 
@@ -183,8 +186,9 @@ describe('UserForm — atomic personal data', () => {
     )
 
     // The card is active from the start: no add/remove affordance, the required
-    // identity fields are rendered immediately.
-    expect(screen.getByText('Personal data')).toBeInTheDocument()
+    // identity fields are rendered immediately. The identity `FormSection`
+    // heading replaces the old "Personal data" copy (presentation-only).
+    expect(screen.getByText('Personal details')).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Add personal data' }),
     ).not.toBeInTheDocument()

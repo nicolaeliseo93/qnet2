@@ -123,6 +123,10 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
 
     expect(await screen.findByText('Field permissions')).toBeInTheDocument()
 
+    // Each resource collapses into its own disclosure (collapsed by
+    // default); expand it before asserting on the field matrix.
+    fireEvent.click(await screen.findByRole('button', { name: 'Users' }))
+
     // Default (no row yet) = unrestricted: visible + editable, not required.
     await waitFor(() =>
       expect(screen.getByRole('checkbox', { name: 'Tax code — Visible' })).toBeInTheDocument(),
@@ -147,6 +151,7 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
       { wrapper: wrapper() },
     )
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Users' }))
     await waitFor(() =>
       expect(screen.getByRole('checkbox', { name: 'Tax code — Visible' })).toBeInTheDocument(),
     )
@@ -181,6 +186,8 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
       />,
       { wrapper: wrapper() },
     )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Users' }))
 
     // Seeded from `role.field_permissions`: the visible flag was restricted.
     await waitFor(() =>
@@ -227,6 +234,7 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
       { wrapper: wrapper() },
     )
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Users' }))
     await waitFor(() =>
       expect(screen.getByRole('checkbox', { name: 'Tax code — Visible' })).toBeInTheDocument(),
     )
@@ -260,6 +268,7 @@ describe('RoleForm — field-permission matrix (spec 0006)', () => {
       { wrapper: wrapper() },
     )
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Users' }))
     await waitFor(() =>
       expect(screen.getByRole('checkbox', { name: 'Email — Visible' })).toBeInTheDocument(),
     )

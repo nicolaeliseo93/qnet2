@@ -168,6 +168,12 @@ export interface TableConfig {
    * `customized` for the filter state.
    */
   filtersCustomized?: boolean
+  /**
+   * Real column ids spanned by the global quick-search (spec 0009). Empty (or
+   * absent) ⇒ the domain has no global search, so the toolbar hides the search
+   * box. The frontend builds the search placeholder from these columns' labels.
+   */
+  searchable?: string[]
 }
 
 /**
@@ -194,6 +200,11 @@ export interface TableRowsPayload {
   endRow: number
   sortModel: SsrmSortModelItem[]
   filterModel: Record<string, unknown>
+  /**
+   * Global quick-search term (spec 0009). Applied server-side as a bound
+   * OR-LIKE over the domain's `searchable` columns; omitted/empty ⇒ no search.
+   */
+  search?: string
 }
 
 /** Pagination metadata from the `paginatedResponse()` envelope. */

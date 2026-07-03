@@ -13,6 +13,7 @@ import {
   type GridState,
   type ICellRendererParams,
   type IServerSideDatasource,
+  type ModelUpdatedEvent,
 } from 'ag-grid-community'
 import {
   AG_GRID_LOCALE_EN,
@@ -61,11 +62,14 @@ const dataTableTheme = themeQuartz
     headerBackgroundColor: 'var(--card)',
     headerTextColor: 'var(--muted-foreground)',
     rowHoverColor: 'var(--muted)',
-    wrapperBorder: true,
+    // The grid is fused into the toolbar block (spec 0009): the outer card owns
+    // the border and radius, so the grid drops its own wrapper border to read as
+    // one continuous surface with the header above it.
+    wrapperBorder: false,
     rowBorder: true,
     columnBorder: true,
     headerColumnBorder: true,
-    wrapperBorderRadius: 8,
+    wrapperBorderRadius: 0,
   })
   // Swap the header filter button's three-line glyph for an actual funnel.
   .withPart(
@@ -156,6 +160,11 @@ interface DataTableProps {
    * persist it. Forwarded verbatim from AG Grid's `onFilterChanged`.
    */
   onFilterChanged?: () => void
+  /**
+   * Fired with the grid's total known row count whenever the model updates, so
+   * the toolbar can show a live "N rows" counter (spec 0009).
+   */
+  onRowCountChanged?: (count: number) => void
 }
 
 /** Default cell value formatter for the given column type. */
@@ -187,6 +196,7 @@ export function DataTable({
   onColumnStateChanged,
   initialFilterModel,
   onFilterChanged,
+  onRowCountChanged,
 }: DataTableProps) {
   const { t, i18n } = useTranslation()
 
@@ -296,6 +306,16 @@ export function DataTable({
     [onColumnStateChanged],
   )
 
+  // Report the grid's total known row count on every model update. For the SSRM
+  // this is the `rowCount` the datasource last reported (the query total), which
+  // is exactly the "N rows" figure the toolbar shows.
+  const handleModelUpdated = useCallback(
+    (event: ModelUpdatedEvent) => {
+      onRowCountChanged?.(event.api.getDisplayedRowCount())
+    },
+    [onRowCountChanged],
+  )
+
   // Apply the saved filters once, at grid creation, so the first SSRM request is
   // already filtered. Omitted when empty so a clean table starts unfiltered.
   const initialState = useMemo<GridState | undefined>(
@@ -337,7 +357,9 @@ export function DataTable({
   )
 
   return (
-    <div className="h-[600px] w-full">
+    // Fills its parent so the toolbar block controls the height (fixed in the
+    // normal layout, flex-1 in fullscreen — spec 0009).
+    <div className="h-full min-h-0 w-full">
       <AgGridReact
         theme={dataTableTheme}
         columnDefs={colDefs}
@@ -348,6 +370,7 @@ export function DataTable({
         onColumnMoved={handleColumnMoved}
         onColumnVisible={handleColumnVisible}
         onFilterChanged={onFilterChanged}
+        onModelUpdated={handleModelUpdated}
         {...gridOptions}
       />
     </div>

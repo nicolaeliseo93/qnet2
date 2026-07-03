@@ -113,6 +113,38 @@ describe('createSsrmDatasource', () => {
     expect(params.success).toHaveBeenCalledWith({ rowData: items, rowCount: 1 })
   })
 
+  it('includes the trimmed search term from the getter when non-empty (spec 0009)', async () => {
+    fetchRowsMock.mockResolvedValue({
+      items: [],
+      export_link: null,
+      pagination: { total: 0, offset: 0, limit: 25, total_pages: 0 },
+    })
+    const params = stubParams({})
+
+    await createSsrmDatasource('users', () => '  needle  ').getRows(params)
+
+    expect(fetchRowsMock).toHaveBeenCalledWith(
+      'users',
+      expect.objectContaining({ search: 'needle' }),
+    )
+  })
+
+  it('omits `search` entirely when the getter returns an empty/blank term', async () => {
+    fetchRowsMock.mockResolvedValue({
+      items: [],
+      export_link: null,
+      pagination: { total: 0, offset: 0, limit: 25, total_pages: 0 },
+    })
+
+    await createSsrmDatasource('users', () => '   ').getRows(stubParams({}))
+    // No getter at all behaves the same.
+    await createSsrmDatasource('users').getRows(stubParams({}))
+
+    for (const call of fetchRowsMock.mock.calls) {
+      expect(call[1]).not.toHaveProperty('search')
+    }
+  })
+
   it('calls params.fail() when the request rejects', async () => {
     fetchRowsMock.mockRejectedValue(new Error('network error'))
     const params = stubParams({})

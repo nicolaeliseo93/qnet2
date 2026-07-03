@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/confirm-dialog-context'
 import { AddressForm } from '@/features/personal-data/address-form'
 import { nextDraftKey } from '@/features/personal-data/drafts'
 import type {
@@ -22,6 +23,13 @@ interface AddressesManagerProps {
    * ungated behaviour (self-service profile, AC-013).
    */
   fieldPermission?: PersonalDataFieldPermissionResolver
+  /**
+   * Renders the built-in title + top "Add" affordance. Defaults to `true`
+   * (today's standalone look). Pass `false` when an ancestor (e.g. a
+   * `FormSection`) already renders the heading, so only the rows plus a
+   * trailing "Add" action are rendered.
+   */
+  showHeader?: boolean
 }
 
 /** `new` = the add form is open; a string = that address `_key` is being edited. */
@@ -34,8 +42,14 @@ type EditingState = 'new' | string | null
  * a single primary address per owner in the buffer, mirroring the backend
  * (ADR 0010); when none is primary, the first address becomes the default.
  */
-export function AddressesManager({ value, onChange, fieldPermission }: AddressesManagerProps) {
+export function AddressesManager({
+  value,
+  onChange,
+  fieldPermission,
+  showHeader = true,
+}: AddressesManagerProps) {
   const { t } = useTranslation()
+  const confirm = useConfirm()
   const [editing, setEditing] = useState<EditingState>(null)
   const permission = fieldPermission?.('personal_data.addresses')
 
@@ -83,8 +97,14 @@ export function AddressesManager({ value, onChange, fieldPermission }: Addresses
     setEditing(null)
   }
 
-  const handleDelete = (key: string) => {
-    if (!window.confirm(t('personalData.addresses.deleteConfirm'))) {
+  const handleDelete = async (key: string) => {
+    const confirmed = await confirm({
+      tone: 'destructive',
+      title: t('personalData.addresses.deleteAction'),
+      description: t('personalData.addresses.deleteConfirm'),
+      confirmLabel: t('personalData.addresses.deleteAction'),
+    })
+    if (!confirmed) {
       return
     }
     onChange(normalizePrimary(value.filter((address) => address._key !== key)))
@@ -92,21 +112,23 @@ export function AddressesManager({ value, onChange, fieldPermission }: Addresses
 
   return (
     <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium">{t('personalData.addresses.title')}</h4>
-        {!readOnly && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setEditing('new')}
-            disabled={editing === 'new'}
-          >
-            <Plus aria-hidden="true" />
-            {t('personalData.addresses.add')}
-          </Button>
-        )}
-      </div>
+      {showHeader && (
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-medium">{t('personalData.addresses.title')}</h4>
+          {!readOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditing('new')}
+              disabled={editing === 'new'}
+            >
+              <Plus aria-hidden="true" />
+              {t('personalData.addresses.add')}
+            </Button>
+          )}
+        </div>
+      )}
 
       {value.length === 0 && editing !== 'new' && (
         <p className="text-sm text-muted-foreground">
@@ -127,23 +149,24 @@ export function AddressesManager({ value, onChange, fieldPermission }: Addresses
           ) : (
             <li
               key={address._key}
-              className="flex items-center justify-between gap-2 rounded-md border p-2"
+              className="flex flex-wrap items-center gap-2 rounded-lg border p-3"
             >
-              <div className="flex min-w-0 flex-col">
-                <span className="flex items-center gap-2">
-                  <span className="truncate text-sm">{address.line1}</span>
-                  {address.is_primary && (
-                    <Badge variant="secondary">
-                      {t('personalData.addresses.primaryBadge')}
-                    </Badge>
-                  )}
-                </span>
-                <span className="text-xs text-muted-foreground">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                <MapPin className="size-4" aria-hidden="true" />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-medium">{address.line1}</span>
+                <span className="truncate text-xs text-muted-foreground">
                   {[address.label, address.postal_code]
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
               </div>
+              {address.is_primary && (
+                <Badge variant="secondary">
+                  {t('personalData.addresses.primaryBadge')}
+                </Badge>
+              )}
               {!readOnly && (
                 <div className="flex shrink-0 gap-1">
                   <Button
@@ -173,6 +196,20 @@ export function AddressesManager({ value, onChange, fieldPermission }: Addresses
 
       {!readOnly && editing === 'new' && (
         <AddressForm onSubmit={handleAdd} onCancel={() => setEditing(null)} />
+      )}
+
+      {!showHeader && !readOnly && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setEditing('new')}
+          disabled={editing === 'new'}
+          className="self-start"
+        >
+          <Plus aria-hidden="true" />
+          {t('personalData.addresses.add')}
+        </Button>
       )}
     </section>
   )

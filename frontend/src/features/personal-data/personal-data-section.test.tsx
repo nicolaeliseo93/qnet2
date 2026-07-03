@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import type { ReactElement } from 'react'
 import { render, screen } from '@testing-library/react'
 import i18n from '@/i18n'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { PersonalDataSection } from '@/features/personal-data/personal-data-section'
 import type { EnumOption } from '@/features/config/types'
 import type {
@@ -10,6 +12,11 @@ import type {
   PersonalDataFieldPermission,
   PersonalDataFieldPermissionResolver,
 } from '@/features/personal-data/types'
+
+/** `ContactsManager`/`AddressesManager` call `useConfirm()`, so every render needs the provider. */
+function renderSection(ui: ReactElement) {
+  return render(<ConfirmDialogProvider>{ui}</ConfirmDialogProvider>)
+}
 
 /**
  * Spec 0008 acceptance criteria (frontend): AC-011 (per-field/section gating
@@ -99,7 +106,7 @@ beforeAll(async () => {
 
 describe('PersonalDataSection — field-permission gating (spec 0008)', () => {
   it('AC-013 — without a resolver, every field and section renders exactly as today', () => {
-    render(<PersonalDataSection value={draft()} onChange={() => {}} />)
+    renderSection(<PersonalDataSection value={draft()} onChange={() => {}} />)
 
     expect(screen.getByLabelText(/^First name/)).toBeInTheDocument()
     expect(screen.getByLabelText(/^Last name/)).toBeInTheDocument()
@@ -110,7 +117,7 @@ describe('PersonalDataSection — field-permission gating (spec 0008)', () => {
   })
 
   it('AC-011 — a card field with visible:false is not rendered', () => {
-    render(
+    renderSection(
       <PersonalDataSection
         value={draft()}
         onChange={() => {}}
@@ -125,7 +132,7 @@ describe('PersonalDataSection — field-permission gating (spec 0008)', () => {
   })
 
   it('AC-011 — a card field with editable:false renders disabled', () => {
-    render(
+    renderSection(
       <PersonalDataSection
         value={draft()}
         onChange={() => {}}
@@ -140,7 +147,7 @@ describe('PersonalDataSection — field-permission gating (spec 0008)', () => {
   })
 
   it('AC-011 — required reflects the resolved flag (both directions)', () => {
-    render(
+    renderSection(
       <PersonalDataSection
         value={draft()}
         onChange={() => {}}
@@ -164,7 +171,7 @@ describe('PersonalDataSection — field-permission gating (spec 0008)', () => {
   })
 
   it('AC-011 — a hidden contacts section is not rendered', () => {
-    render(
+    renderSection(
       <PersonalDataSection
         value={draft()}
         onChange={() => {}}
@@ -179,7 +186,7 @@ describe('PersonalDataSection — field-permission gating (spec 0008)', () => {
   })
 
   it('AC-011 — a non-editable contacts section is read-only: no add/edit/delete', () => {
-    render(
+    renderSection(
       <PersonalDataSection
         value={draft()}
         onChange={() => {}}
@@ -196,7 +203,7 @@ describe('PersonalDataSection — field-permission gating (spec 0008)', () => {
   })
 
   it('AC-011 — a hidden addresses section is not rendered', () => {
-    render(
+    renderSection(
       <PersonalDataSection
         value={draft()}
         onChange={() => {}}
@@ -211,7 +218,7 @@ describe('PersonalDataSection — field-permission gating (spec 0008)', () => {
   })
 
   it('AC-011 — a non-editable addresses section is read-only: no add/edit/delete', () => {
-    render(
+    renderSection(
       <PersonalDataSection
         value={draft()}
         onChange={() => {}}

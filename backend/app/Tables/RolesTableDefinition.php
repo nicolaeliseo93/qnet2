@@ -97,6 +97,8 @@ class RolesTableDefinition extends AbstractTableDefinition
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'text',
+                // Global quick-search spans this real column (spec 0009).
+                'searchable' => true,
             ],
             [
                 'id' => 'permissions',

@@ -28,6 +28,11 @@ export const it: TranslationResources = {
     notFound: 'Pagina non trovata',
     backToDashboard: 'Torna alla dashboard',
     comingSoon: 'Questa sezione non è ancora disponibile.',
+    soon: 'Presto',
+    clear: 'Cancella',
+    confirm: 'Conferma',
+    cancel: 'Annulla',
+    confirmTitle: 'Sei sicuro?',
   },
   config: {
     error: {
@@ -59,6 +64,14 @@ export const it: TranslationResources = {
   table: {
     actionsHeader: 'Azioni',
     rowActions: 'Azioni riga',
+    search: 'Cerca…',
+    searchPlaceholder: 'Cerca {{columns}}…',
+    rowCount_one: '{{count}} riga',
+    rowCount_other: '{{count}} righe',
+    options: 'Opzioni tabella',
+    export: 'Esporta',
+    fullscreen: 'Schermo intero',
+    exitFullscreen: 'Esci da schermo intero',
     confirmAction: 'Sei sicuro di voler eseguire questa azione?',
     loadError: 'Impossibile caricare la tabella. Riprova.',
     emptyConfig: 'Nessuna colonna disponibile per questa tabella.',
@@ -160,6 +173,28 @@ export const it: TranslationResources = {
       genericError: 'Si è verificato un errore. Riprova.',
       deleteError: "Impossibile eliminare l'utente. Riprova.",
       deleteForbidden: 'Non puoi eliminare questo utente.',
+      sections: {
+        identity: {
+          title: 'Anagrafica',
+          description: "Dati identificativi della persona o dell'azienda.",
+        },
+        credentials: {
+          title: 'Autenticazione',
+          description: "Credenziali di accesso e lingua dell'interfaccia.",
+        },
+        access: {
+          title: 'Ruoli e accessi',
+          description: 'Ruoli assegnati; i permessi vengono ereditati dai ruoli.',
+        },
+        contacts: {
+          title: 'Contatti',
+          description: 'Recapiti telefonici ed email.',
+        },
+        addresses: {
+          title: 'Indirizzi',
+          description: 'Sedi e indirizzi di fatturazione.',
+        },
+      },
       // The personal-data card fields/sections (spec 0008), read by the role
       // field-permissions matrix (`fieldPermissionLabel('users', 'personal_data.*')`).
       personal_data: personalDataFieldLabels,
@@ -299,6 +334,19 @@ export const it: TranslationResources = {
       genericError: 'Si è verificato un errore. Riprova.',
       deleteError: 'Impossibile eliminare il ruolo. Riprova.',
       deleteForbidden: 'Non puoi eliminare questo ruolo.',
+      sections: {
+        details: {
+          title: 'Dettagli ruolo',
+          description: 'Nome del ruolo e utenti a cui è assegnato.',
+        },
+        permissions: {
+          title: 'Permessi',
+          description:
+            'Raggruppati per dominio. I permessi avanzati sono nella configurazione dedicata.',
+        },
+      },
+      advanced: 'Configurazione avanzata',
+      advancedActions: 'Azioni aggiuntive',
     },
     fieldPermissions: {
       title: 'Permessi campi',
@@ -313,6 +361,7 @@ export const it: TranslationResources = {
   settings: {
     title: 'Impostazioni',
     subtitle: 'Gestisci le preferenze del tuo account.',
+    sectionNavLabel: 'Sezioni impostazioni',
     avatarTitle: 'Avatar',
     avatarSubtitle: "Carica un'immagine del profilo mostrata in tutta l'app.",
     avatarUpdated: 'Avatar aggiornato con successo.',

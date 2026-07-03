@@ -10,8 +10,8 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GridApi, GridReadyEvent } from 'ag-grid-community'
-import { FilterX, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -20,6 +20,8 @@ import {
 } from '@/components/data-table/data-table'
 import { createSsrmDatasource } from '@/features/table/ssrm-datasource'
 import { FilterViewsControl } from '@/features/table/filter-views-control'
+import { TableToolbar } from '@/features/table/table-toolbar'
+import { useTableToolbarState } from '@/features/table/use-table-toolbar-state'
 import {
   createRowActionsRenderer,
   type RowActionHandler,
@@ -64,10 +66,14 @@ interface TableViewProps extends RowActionsOptions {
 
 /**
  * Generic, domain-driven table. Given a `domain`, it loads the backend config,
- * builds the SSRM datasource, and mounts the agnostic DataTable wrapper. It owns
- * loading/error/empty states and the SSRM refresh mechanism, but holds NO
- * domain logic: custom rendering and action behavior arrive entirely via props
- * (`renderers`, `onAction`, `isBusy`, `decorateRow`).
+ * builds the SSRM datasource, and mounts the agnostic DataTable wrapper fused
+ * under a single unified toolbar (spec 0009: search + row count on the left;
+ * filter toggle, saved views, options and fullscreen on the right — one bordered
+ * block, no detached buttons). It owns loading/error/empty states, the SSRM
+ * refresh mechanism, and the toolbar's client state (search term, floating
+ * filters, fullscreen), but holds NO domain logic: custom rendering and action
+ * behavior arrive entirely via props (`renderers`, `onAction`, `isBusy`,
+ * `decorateRow`).
  *
  * Adding a new domain requires no change here — only a new adapter that mounts
  * this component with its `domain`, renderer map and action handler.
@@ -111,9 +117,6 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       [config?.filterState],
     )
 
-    // One datasource instance per domain; stable across re-renders.
-    const datasource = useMemo(() => createSsrmDatasource(domain), [domain])
-
     // SSRM rows are not cached by TanStack Query, so they cannot be invalidated
     // through the queryClient. We hold the grid API and purge its server-side
     // cache directly. Stored in state (not a ref) so the imperative handle picks
@@ -122,6 +125,27 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
     const handleGridReady = useCallback((event: GridReadyEvent) => {
       setGridApi(event.api)
     }, [])
+
+    // The domain's global quick-search allow-list (spec 0009); empty ⇒ no search
+    // box. Drives both the search affordance and the placeholder labels.
+    const searchable = useMemo(
+      () => config?.searchable ?? [],
+      [config?.searchable],
+    )
+    const searchEnabled = searchable.length > 0
+
+    // Client-only toolbar state (search term + ⌘K, floating filters, fullscreen,
+    // live row count), owned by a dedicated hook so this component stays a thin
+    // orchestrator (engineering.md §6).
+    const toolbar = useTableToolbarState({ gridApi, searchEnabled })
+
+    // One datasource instance per domain; stable across re-renders. The current
+    // search term is read lazily via the toolbar getter, so typing never rebuilds
+    // it (the grid is purge-reloaded on the debounced change instead).
+    const datasource = useMemo(
+      () => createSsrmDatasource(domain, toolbar.getSearchTerm),
+      [domain, toolbar.getSearchTerm],
+    )
 
     useImperativeHandle(
       ref,
@@ -195,6 +219,19 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       [],
     )
 
+    // Placeholder built from the searchable columns' localized labels, mirroring
+    // the backend allow-list (e.g. "Cerca nome/email…").
+    const searchPlaceholder = useMemo(() => {
+      if (!config || searchable.length === 0) {
+        return t('table.search')
+      }
+      const labels = searchable
+        .map((id) => config.columns.find((column) => column.id === id))
+        .filter((column): column is NonNullable<typeof column> => Boolean(column))
+        .map((column) => t(column.label))
+      return t('table.searchPlaceholder', { columns: labels.join('/') })
+    }, [config, searchable, t])
+
     const handleResetLayout = useCallback(async () => {
       try {
         await resetPreferences.mutateAsync()
@@ -242,14 +279,15 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
     let content: ReactNode
     if (isPending) {
       content = (
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-[560px] w-full" />
+        <div className="flex h-full flex-col gap-2 p-3">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <Skeleton key={index} className="h-8 w-full" />
+          ))}
         </div>
       )
     } else if (isError) {
       content = (
-        <div className="flex flex-col items-start gap-3">
+        <div className="flex h-full flex-col items-start gap-3 p-4">
           <p className="text-sm text-destructive">{t('table.loadError')}</p>
           <Button variant="outline" size="sm" onClick={() => void refetch()}>
             {t('common.retry')}
@@ -258,7 +296,9 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       )
     } else if (config.columns.length === 0) {
       content = (
-        <p className="text-sm text-muted-foreground">{t('table.emptyConfig')}</p>
+        <p className="p-4 text-sm text-muted-foreground">
+          {t('table.emptyConfig')}
+        </p>
       )
     } else {
       content = (
@@ -275,48 +315,60 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
           onColumnStateChanged={handleColumnStateChanged}
           initialFilterModel={initialFilterModel}
           onFilterChanged={handleFilterChanged}
+          onRowCountChanged={toolbar.setRowCount}
         />
       )
     }
 
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-end gap-2">
-          {gridApi && config ? (
-            <FilterViewsControl
-              domain={domain}
-              currentFilters={gridApi.getFilterModel() ?? EMPTY_FILTER_MODEL}
-              onApply={(filters) => {
-                gridApi.setFilterModel(filters)
-                setFiltersCustomizedLocally(Object.keys(filters).length > 0)
-              }}
-            />
-          ) : null}
-          {isFilterCustomized && (
-            <Button
-              variant="secondary"
-              size="xs"
-              onClick={() => void handleResetFilters()}
-              disabled={resetFilters.isPending}
-            >
-              <FilterX aria-hidden="true" />
-              {t('table.resetFilters')}
-            </Button>
-          )}
-          {isCustomized && (
-            <Button
-              variant="secondary"
-              size="xs"
-              onClick={() => void handleResetLayout()}
-              disabled={resetPreferences.isPending}
-            >
-              <RotateCcw aria-hidden="true" />
-              {t('table.resetLayout')}
-            </Button>
-          )}
-        </div>
+    const savedViewsSlot =
+      gridApi && config ? (
+        <FilterViewsControl
+          domain={domain}
+          currentFilters={gridApi.getFilterModel() ?? EMPTY_FILTER_MODEL}
+          onApply={(filters) => {
+            gridApi.setFilterModel(filters)
+            setFiltersCustomizedLocally(Object.keys(filters).length > 0)
+          }}
+        />
+      ) : null
 
-        {content}
+    return (
+      <div
+        className={cn(
+          'flex min-h-0 flex-col',
+          toolbar.fullscreen &&
+            'fixed inset-0 z-50 bg-background/80 p-3 backdrop-blur-sm sm:p-4',
+        )}
+      >
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <TableToolbar
+            searchEnabled={searchEnabled}
+            searchPlaceholder={searchPlaceholder}
+            searchInputRef={toolbar.searchInputRef}
+            searchValue={toolbar.searchInput}
+            onSearchChange={toolbar.setSearchInput}
+            searchShortcut={toolbar.searchShortcut}
+            rowCount={toolbar.rowCount}
+            filtersActive={isFilterCustomized}
+            onResetFilters={() => void handleResetFilters()}
+            resettingFilters={resetFilters.isPending}
+            layoutCustomized={isCustomized}
+            onResetLayout={() => void handleResetLayout()}
+            resettingLayout={resetPreferences.isPending}
+            fullscreen={toolbar.fullscreen}
+            onToggleFullscreen={toolbar.toggleFullscreen}
+            savedViewsSlot={savedViewsSlot}
+          />
+
+          <div
+            className={cn(
+              'min-h-0 w-full',
+              toolbar.fullscreen ? 'flex-1' : 'h-[600px]',
+            )}
+          >
+            {content}
+          </div>
+        </div>
       </div>
     )
   },

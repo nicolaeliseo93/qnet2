@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { MoreHorizontal } from 'lucide-react'
 import type { ICellRendererParams } from 'ag-grid-community'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/confirm-dialog-context'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,6 +75,7 @@ function RowActions({
   iconMap,
 }: RowActionsProps) {
   const { t } = useTranslation()
+  const confirm = useConfirm()
 
   const effectiveRow = decorateRow ? decorateRow(row) : row
   const busy = isBusy?.(effectiveRow) ?? false
@@ -88,9 +90,16 @@ function RowActions({
     return null
   }
 
-  const handleSelect = (action: TableActionDefinition) => {
-    if (action.confirm && !window.confirm(t('table.confirmAction'))) {
-      return
+  const handleSelect = async (action: TableActionDefinition) => {
+    if (action.confirm) {
+      const confirmed = await confirm({
+        tone: 'destructive',
+        title: t(action.label),
+        description: t('table.confirmAction'),
+      })
+      if (!confirmed) {
+        return
+      }
     }
     onAction(action, effectiveRow)
   }

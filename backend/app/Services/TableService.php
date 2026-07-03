@@ -42,7 +42,7 @@ class TableService
     /**
      * Execute the SSRM query and return the rows + total for the envelope.
      *
-     * @param  array{startRow: int, endRow: int, sortModel?: array<int, array<string, mixed>>, filterModel?: array<string, array<string, mixed>>}  $payload
+     * @param  array{startRow: int, endRow: int, sortModel?: array<int, array<string, mixed>>, filterModel?: array<string, array<string, mixed>>, search?: string|null}  $payload
      */
     public function rows(TableDefinition $definition, User $actor, array $payload): RowsResult
     {
@@ -52,6 +52,7 @@ class TableService
         $query = $definition->baseQuery();
 
         $this->applyFilters($definition, $query, $payload['filterModel'] ?? []);
+        $this->applySearch($definition, $query, $payload['search'] ?? null);
 
         $total = (clone $query)->count();
 
@@ -188,6 +189,41 @@ class TableService
 
             $this->filterApplier->apply($query, $columnId, $filterable[$columnId], $filter);
         }
+    }
+
+    /**
+     * Apply the global quick-search (spec 0009): a single grouped OR-LIKE over
+     * the definition's `searchableColumnIds()` allow-list.
+     *
+     * SECURITY: the columns come exclusively from the definition's server-side
+     * allow-list (never from the request), and the term is a LIKE-escaped bound
+     * parameter — never interpolated into SQL. The OR group is wrapped in its
+     * own closure so it AND-combines with any active column filters instead of
+     * widening them.
+     *
+     * @param  Builder<Model>  $query
+     */
+    private function applySearch(TableDefinition $definition, Builder $query, ?string $search): void
+    {
+        $term = $search === null ? '' : trim($search);
+
+        if ($term === '') {
+            return;
+        }
+
+        $columns = $definition->searchableColumnIds();
+
+        if ($columns === []) {
+            return;
+        }
+
+        $pattern = '%'.$this->filterApplier->escapeLike($term).'%';
+
+        $query->where(function (Builder $group) use ($columns, $pattern): void {
+            foreach ($columns as $column) {
+                $group->orWhere($column, 'like', $pattern);
+            }
+        });
     }
 
     /**

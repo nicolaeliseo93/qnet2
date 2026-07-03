@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import i18n from '@/i18n'
 import { RoleFieldPermissions } from '@/features/roles/role-field-permissions'
 import type { FieldCatalogueResource } from '@/features/roles/field-catalogue-api'
@@ -47,6 +47,10 @@ describe('RoleFieldPermissions — personal_data.* rows (spec 0008 AC-010)', () 
       />,
     )
 
+    // Each resource collapses into its own disclosure (collapsed by
+    // default); expand it before asserting on the field matrix.
+    fireEvent.click(screen.getByRole('button', { name: 'Users' }))
+
     // Readable labels, not raw dot-path tokens.
     expect(screen.getByText('First name')).toBeInTheDocument()
     expect(screen.getByText('Contacts')).toBeInTheDocument()
@@ -73,6 +77,8 @@ describe('RoleFieldPermissions — personal_data.* rows (spec 0008 AC-010)', () 
         disabled={false}
       />,
     )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Users' }))
 
     expect(screen.getByRole('checkbox', { name: 'First name — Visible' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: 'First name — Visible' })).toBeDisabled()

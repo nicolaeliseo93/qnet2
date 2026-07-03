@@ -1,8 +1,24 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import type { AddressDraft } from '@/features/personal-data/types'
+
+/**
+ * AddressesManager consumes `useConfirm` (dialog); wrap in a QueryClient too so
+ * any config-backed lookup resolves, mirroring the app's root providers.
+ */
+function renderWithConfirm(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <ConfirmDialogProvider>{ui}</ConfirmDialogProvider>
+    </QueryClientProvider>,
+  )
+}
 
 // Stub the inline editor so the manager's buffer logic is tested in isolation,
 // without pulling in the GeoSelect/config the real form needs. The stub submits a
@@ -58,12 +74,12 @@ describe('AddressesManager (controlled)', () => {
   })
 
   it('shows the empty state when there are no addresses', () => {
-    render(<AddressesManager value={[]} onChange={() => {}} />)
+    renderWithConfirm(<AddressesManager value={[]} onChange={() => {}} />)
     expect(screen.getByText('No addresses yet.')).toBeInTheDocument()
   })
 
   it('renders each address line and its label/postal summary', () => {
-    render(<AddressesManager value={[address()]} onChange={() => {}} />)
+    renderWithConfirm(<AddressesManager value={[address()]} onChange={() => {}} />)
     expect(screen.getByText('10 Downing Street')).toBeInTheDocument()
     expect(screen.getByText('Home · SW1A 2AA')).toBeInTheDocument()
     expect(
@@ -71,31 +87,34 @@ describe('AddressesManager (controlled)', () => {
     ).toBeInTheDocument()
   })
 
-  it('removes an address from the buffer without any network call', () => {
+  it('removes an address from the buffer without any network call', async () => {
     const onChange = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    render(<AddressesManager value={[address()]} onChange={onChange} />)
+    renderWithConfirm(<AddressesManager value={[address()]} onChange={onChange} />)
     fireEvent.click(screen.getByRole('button', { name: 'Delete address' }))
 
+    const dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete address' }))
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith([]))
     expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith([])
   })
 
-  it('enforces a single primary across the buffer (first becomes default)', () => {
+  it('enforces a single primary across the buffer (first becomes default)', async () => {
     const onChange = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const primary = address({ _key: 'address-1', id: 1, is_primary: true })
     const other = address({ _key: 'address-2', id: 2, is_primary: false })
 
-    render(<AddressesManager value={[primary, other]} onChange={onChange} />)
+    renderWithConfirm(<AddressesManager value={[primary, other]} onChange={onChange} />)
     // Delete the current primary; the remaining address must be promoted.
     fireEvent.click(
       screen.getAllByRole('button', { name: 'Delete address' })[0],
     )
+    const dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete address' }))
 
-    expect(onChange).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1))
     const next = onChange.mock.calls[0][0] as AddressDraft[]
     expect(next).toHaveLength(1)
     expect(next[0]._key).toBe('address-2')
@@ -105,7 +124,7 @@ describe('AddressesManager (controlled)', () => {
   it('makes the first added address primary by default', () => {
     const onChange = vi.fn()
 
-    render(<AddressesManager value={[]} onChange={onChange} />)
+    renderWithConfirm(<AddressesManager value={[]} onChange={onChange} />)
     fireEvent.click(screen.getByRole('button', { name: 'Add address' }))
     fireEvent.click(screen.getByTestId('stub-submit'))
 

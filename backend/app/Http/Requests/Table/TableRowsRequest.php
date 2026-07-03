@@ -26,6 +26,9 @@ use Illuminate\Validation\Validator;
  */
 class TableRowsRequest extends FormRequest
 {
+    /** Max length of the global quick-search term (spec 0009). */
+    public const int SEARCH_MAX_LENGTH = 100;
+
     private ?TableDefinition $resolvedDefinition = null;
 
     public function authorize(): bool
@@ -55,6 +58,10 @@ class TableRowsRequest extends FormRequest
             'filterModel' => ['sometimes', 'array'],
             // Whitelist the filter keys: every key must be a filterable column.
             'filterModel.*' => ['array'],
+
+            // Global quick-search term (spec 0009). The columns it spans are the
+            // server-side allow-list (searchableColumnIds), never the raw input.
+            'search' => ['sometimes', 'nullable', 'string', 'max:'.self::SEARCH_MAX_LENGTH],
         ];
     }
 

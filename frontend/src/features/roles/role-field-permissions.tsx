@@ -1,13 +1,24 @@
 import { useTranslation } from 'react-i18next'
+import { ChevronDown } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { fieldPermissionLabel, resourceLabel } from '@/features/roles/permission-labels'
 import type { FieldPermissionFlag } from '@/features/roles/field-permission-toggle'
 import type { FieldCatalogueResource } from '@/features/roles/field-catalogue-api'
+import type { FieldDescriptor } from '@/features/authorization/types'
 import type { RoleFieldPermission } from '@/features/roles/types'
+
+type ToggleFieldPermission = (
+  resource: string,
+  field: string,
+  flag: FieldPermissionFlag,
+  checked: boolean,
+) => void
 
 interface RoleFieldPermissionsProps {
   resources: FieldCatalogueResource[]
   value: RoleFieldPermission[]
-  onToggle: (resource: string, field: string, flag: FieldPermissionFlag, checked: boolean) => void
+  onToggle: ToggleFieldPermission
   disabled: boolean
 }
 
@@ -15,10 +26,10 @@ interface RoleFieldPermissionsProps {
  * Per-role field-permission matrix (spec 0006): for every registered
  * resource's fields, three toggles (visible / editable / required)
  * expressing a DB-driven RESTRICTION within the 0004 code ceiling — never an
- * escalation, enforced server-side. Reuses the existing permission-matrix
- * checkbox styling (`RoleFormBody`'s permissions section) rather than a new
- * `components/ui` primitive. UI-only: value/toggling logic lives in the
- * caller (`useRoleForm` + `field-permission-toggle.ts`).
+ * escalation, enforced server-side. Each resource collapses into its own
+ * disclosure (collapsed by default) so a role touching several resources
+ * stays scannable. UI-only: value/toggling logic lives in the caller
+ * (`useRoleForm` + `field-permission-toggle.ts`).
  */
 export function RoleFieldPermissions({
   resources,
@@ -33,43 +44,73 @@ export function RoleFieldPermissions({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-md border p-3">
+    <div className="flex flex-col gap-2">
       {resources.map((entry) => (
-        <fieldset key={entry.resource} className="flex flex-col gap-2">
-          <legend className="text-sm font-medium">{resourceLabel(entry.resource, i18n)}</legend>
-          <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 gap-y-1.5 pl-1">
-            <span />
-            <span className="text-center text-xs text-muted-foreground">
-              {t('roles.fieldPermissions.visible')}
-            </span>
-            <span className="text-center text-xs text-muted-foreground">
-              {t('roles.fieldPermissions.editable')}
-            </span>
-            <span className="text-center text-xs text-muted-foreground">
-              {t('roles.fieldPermissions.required')}
-            </span>
-            {entry.fields.map((field) => {
-              const rowValue = value.find(
-                (row) => row.resource === entry.resource && row.field === field.key,
-              )
-              return (
-                <FieldRow
-                  key={field.key}
-                  resource={entry.resource}
-                  fieldKey={field.key}
-                  label={fieldPermissionLabel(entry.resource, field.key, i18n)}
-                  visible={rowValue?.visible ?? true}
-                  editable={rowValue?.editable ?? true}
-                  required={rowValue?.required ?? false}
-                  mandatory={field.mandatory}
-                  disabled={disabled}
-                  onToggle={onToggle}
-                />
-              )
-            })}
-          </div>
-        </fieldset>
+        <Collapsible key={entry.resource} className="rounded-lg border">
+          <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-muted/50 [&[data-state=open]>svg]:rotate-180">
+            <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform" aria-hidden="true" />
+            {resourceLabel(entry.resource, i18n)}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="border-t px-3 pb-3 pt-2">
+            <FieldMatrix
+              resource={entry.resource}
+              fields={entry.fields}
+              value={value}
+              disabled={disabled}
+              onToggle={onToggle}
+            />
+          </CollapsibleContent>
+        </Collapsible>
       ))}
+    </div>
+  )
+}
+
+interface FieldMatrixProps {
+  resource: string
+  fields: FieldDescriptor[]
+  value: RoleFieldPermission[]
+  disabled: boolean
+  onToggle: ToggleFieldPermission
+}
+
+/** One resource's visible/editable/required grid, scrollable on its own so a long field list never forces page-level horizontal scroll. */
+function FieldMatrix({ resource, fields, value, disabled, onToggle }: FieldMatrixProps) {
+  const { t, i18n } = useTranslation()
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="grid min-w-[420px] grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 gap-y-1.5">
+        <span />
+        <span className="text-center text-xs text-muted-foreground">
+          {t('roles.fieldPermissions.visible')}
+        </span>
+        <span className="text-center text-xs text-muted-foreground">
+          {t('roles.fieldPermissions.editable')}
+        </span>
+        <span className="text-center text-xs text-muted-foreground">
+          {t('roles.fieldPermissions.required')}
+        </span>
+        {fields.map((field) => {
+          const rowValue = value.find(
+            (row) => row.resource === resource && row.field === field.key,
+          )
+          return (
+            <FieldRow
+              key={field.key}
+              resource={resource}
+              fieldKey={field.key}
+              label={fieldPermissionLabel(resource, field.key, i18n)}
+              visible={rowValue?.visible ?? true}
+              editable={rowValue?.editable ?? true}
+              required={rowValue?.required ?? false}
+              mandatory={field.mandatory}
+              disabled={disabled}
+              onToggle={onToggle}
+            />
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -83,7 +124,7 @@ interface FieldRowProps {
   required: boolean
   mandatory: boolean
   disabled: boolean
-  onToggle: (resource: string, field: string, flag: FieldPermissionFlag, checked: boolean) => void
+  onToggle: ToggleFieldPermission
 }
 
 /** One field's label + three toggles, as grid cells (a fragment, not a row element). */
@@ -143,15 +184,13 @@ interface FieldToggleProps {
 
 function FieldToggle({ checked, disabled, label, onChange }: FieldToggleProps) {
   return (
-    <label className="flex items-center justify-center">
-      <span className="sr-only">{label}</span>
-      <input
-        type="checkbox"
-        className="size-4 accent-primary"
+    <span className="flex items-center justify-center">
+      <Checkbox
         checked={checked}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
+        aria-label={label}
+        onCheckedChange={(next) => onChange(next === true)}
       />
-    </label>
+    </span>
   )
 }

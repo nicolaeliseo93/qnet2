@@ -5,6 +5,7 @@ import axios from 'axios'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/confirm-dialog-context'
 import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
@@ -14,6 +15,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useCreateFilterView, useDeleteFilterView, useFilterViews } from '@/features/table/use-filter-views'
 import type { FilterViewVisibility, TableFilterView } from '@/features/table/types'
 
@@ -128,6 +134,7 @@ function VisibilityOption({ value, active, icon: Icon, label, onSelect }: Visibi
  */
 export function FilterViewsControl({ domain, currentFilters, onApply }: FilterViewsControlProps) {
   const { t } = useTranslation()
+  const confirm = useConfirm()
   const { data: views } = useFilterViews(domain)
   const createView = useCreateFilterView(domain)
   const deleteView = useDeleteFilterView(domain)
@@ -157,7 +164,12 @@ export function FilterViewsControl({ domain, currentFilters, onApply }: FilterVi
   }
 
   const handleDelete = async (view: TableFilterView) => {
-    if (!window.confirm(t('table.confirmAction'))) {
+    const confirmed = await confirm({
+      tone: 'destructive',
+      title: t('table.deleteView'),
+      description: t('table.confirmAction'),
+    })
+    if (!confirmed) {
       return
     }
     try {
@@ -188,17 +200,26 @@ export function FilterViewsControl({ domain, currentFilters, onApply }: FilterVi
 
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="secondary" size="xs">
-          <Bookmark aria-hidden="true" />
-          {t('table.savedFilters')}
-          {count > 0 ? (
-            <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/10 px-1 text-[10px] font-semibold text-primary">
-              {count}
-            </span>
-          ) : null}
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="relative text-muted-foreground hover:text-foreground"
+              aria-label={t('table.savedFilters')}
+            >
+              <Bookmark aria-hidden="true" />
+              {count > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  {count}
+                </span>
+              ) : null}
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{t('table.savedFilters')}</TooltipContent>
+      </Tooltip>
 
       <DropdownMenuContent align="start" className="w-80 p-0">
         <div className="flex items-center gap-2 border-b px-3 py-2.5">

@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/features/auth/auth-provider'
 import { ConfigGate } from '@/features/config/config-gate'
@@ -17,9 +18,11 @@ function App() {
         <ConfigGate>
           <AuthProvider>
             <TooltipProvider>
-              <Suspense fallback={<FullScreenLoader />}>
-                <RouterProvider router={router} />
-              </Suspense>
+              <ConfirmDialogProvider>
+                <Suspense fallback={<FullScreenLoader />}>
+                  <RouterProvider router={router} />
+                </Suspense>
+              </ConfirmDialogProvider>
               <Toaster />
             </TooltipProvider>
           </AuthProvider>

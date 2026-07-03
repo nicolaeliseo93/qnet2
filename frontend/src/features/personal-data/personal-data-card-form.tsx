@@ -154,7 +154,7 @@ export function PersonalDataCardForm({
       {/* A div, not a form: this card is buffered and lives inside the user
           form, so it must never nest a <form> nor own a submit. */}
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {typeGate.visible && (
             <FormField
               control={form.control}
@@ -251,7 +251,7 @@ export function PersonalDataCardForm({
               />
             )
           : (firstNameGate.visible || lastNameGate.visible) && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {firstNameGate.visible && (
                   <FormField
                     control={form.control}
@@ -300,7 +300,7 @@ export function PersonalDataCardForm({
             )}
 
         {(taxCodeGate.visible || vatNumberGate.visible) && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {taxCodeGate.visible && (
               <FormField
                 control={form.control}

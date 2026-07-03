@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Phone, Plus, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/confirm-dialog-context'
 import { ContactForm } from '@/features/personal-data/contact-form'
 import { nextDraftKey } from '@/features/personal-data/drafts'
 import { useEnumOptions } from '@/features/config/use-config'
@@ -23,6 +24,13 @@ interface ContactsManagerProps {
    * ungated behaviour (self-service profile, AC-013).
    */
   fieldPermission?: PersonalDataFieldPermissionResolver
+  /**
+   * Renders the built-in title + top "Add" affordance. Defaults to `true`
+   * (today's standalone look). Pass `false` when an ancestor (e.g. a
+   * `FormSection`) already renders the heading, so only the rows plus a
+   * trailing "Add" action are rendered.
+   */
+  showHeader?: boolean
 }
 
 /** `new` = the add form is open; a string = that contact `_key` is being edited. */
@@ -34,8 +42,14 @@ type EditingState = 'new' | string | null
  * the parent submits the buffer as part of the user payload (ADR 0012). Enforces
  * one primary contact per type in the buffer, mirroring the backend.
  */
-export function ContactsManager({ value, onChange, fieldPermission }: ContactsManagerProps) {
+export function ContactsManager({
+  value,
+  onChange,
+  fieldPermission,
+  showHeader = true,
+}: ContactsManagerProps) {
   const { t } = useTranslation()
+  const confirm = useConfirm()
   const [editing, setEditing] = useState<EditingState>(null)
   const typeOptions = useEnumOptions('contact_type')
   const permission = fieldPermission?.('personal_data.contacts')
@@ -78,8 +92,14 @@ export function ContactsManager({ value, onChange, fieldPermission }: ContactsMa
     setEditing(null)
   }
 
-  const handleDelete = (key: string) => {
-    if (!window.confirm(t('personalData.contacts.deleteConfirm'))) {
+  const handleDelete = async (key: string) => {
+    const confirmed = await confirm({
+      tone: 'destructive',
+      title: t('personalData.contacts.deleteAction'),
+      description: t('personalData.contacts.deleteConfirm'),
+      confirmLabel: t('personalData.contacts.deleteAction'),
+    })
+    if (!confirmed) {
       return
     }
     onChange(value.filter((contact) => contact._key !== key))
@@ -87,21 +107,23 @@ export function ContactsManager({ value, onChange, fieldPermission }: ContactsMa
 
   return (
     <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium">{t('personalData.contacts.title')}</h4>
-        {!readOnly && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setEditing('new')}
-            disabled={editing === 'new'}
-          >
-            <Plus aria-hidden="true" />
-            {t('personalData.contacts.add')}
-          </Button>
-        )}
-      </div>
+      {showHeader && (
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-medium">{t('personalData.contacts.title')}</h4>
+          {!readOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditing('new')}
+              disabled={editing === 'new'}
+            >
+              <Plus aria-hidden="true" />
+              {t('personalData.contacts.add')}
+            </Button>
+          )}
+        </div>
+      )}
 
       {value.length === 0 && editing !== 'new' && (
         <p className="text-sm text-muted-foreground">
@@ -122,24 +144,25 @@ export function ContactsManager({ value, onChange, fieldPermission }: ContactsMa
           ) : (
             <li
               key={contact._key}
-              className="flex items-center justify-between gap-2 rounded-md border p-2"
+              className="flex flex-wrap items-center gap-2 rounded-lg border p-3"
             >
-              <div className="flex min-w-0 flex-col">
-                <span className="flex items-center gap-2">
-                  <span className="truncate text-sm">{contact.value}</span>
-                  {contact.is_primary && (
-                    <Badge variant="secondary">
-                      {t('personalData.contacts.primaryBadge')}
-                    </Badge>
-                  )}
-                </span>
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                <Phone className="size-4" aria-hidden="true" />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-medium">{contact.value}</span>
+                <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                   <Badge variant="outline" className="font-normal">
                     {typeLabelOf(contact.type)}
                   </Badge>
                   {contact.label && <span className="truncate">{contact.label}</span>}
                 </span>
               </div>
+              {contact.is_primary && (
+                <Badge variant="secondary">
+                  {t('personalData.contacts.primaryBadge')}
+                </Badge>
+              )}
               {!readOnly && (
                 <div className="flex shrink-0 gap-1">
                   <Button
@@ -169,6 +192,20 @@ export function ContactsManager({ value, onChange, fieldPermission }: ContactsMa
 
       {!readOnly && editing === 'new' && (
         <ContactForm onSubmit={handleAdd} onCancel={() => setEditing(null)} />
+      )}
+
+      {!showHeader && !readOnly && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setEditing('new')}
+          disabled={editing === 'new'}
+          className="self-start"
+        >
+          <Plus aria-hidden="true" />
+          {t('personalData.contacts.add')}
+        </Button>
       )}
     </section>
   )

@@ -72,7 +72,9 @@ it('returns the resolved config for a user with users.viewAny', function () {
 
     expect($data['resource'])->toBe('users')
         ->and($data['defaultPagination']['limit'])->toBe(25)
-        ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
+        ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']])
+        // Global quick-search allow-list (spec 0009): real columns only.
+        ->and($data['searchable'])->toBe(['name', 'email']);
 });
 
 it('exposes roles and locale options as flat string[] arrays', function () {

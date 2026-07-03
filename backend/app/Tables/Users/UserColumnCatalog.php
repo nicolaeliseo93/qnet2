@@ -52,6 +52,8 @@ final class UserColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'text',
+                // Global quick-search spans this real column (spec 0009).
+                'searchable' => true,
             ],
             [
                 'id' => 'email',
@@ -61,6 +63,7 @@ final class UserColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'text',
+                'searchable' => true,
             ],
             [
                 'id' => 'roles',

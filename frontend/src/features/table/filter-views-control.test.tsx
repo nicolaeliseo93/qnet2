@@ -1,7 +1,9 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { FilterViewsControl } from '@/features/table/filter-views-control'
 import type { TableFilterView } from '@/features/table/types'
 
@@ -58,7 +60,11 @@ function renderControl(
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <FilterViewsControl domain="users" currentFilters={currentFilters} onApply={onApply} />
+      <TooltipProvider>
+        <ConfirmDialogProvider>
+          <FilterViewsControl domain="users" currentFilters={currentFilters} onApply={onApply} />
+        </ConfirmDialogProvider>
+      </TooltipProvider>
     </QueryClientProvider>,
   )
   return { onApply }
@@ -98,22 +104,29 @@ describe('FilterViewsControl', () => {
 
   it('deletes an owned view after confirmation', async () => {
     deleteFilterView.mockResolvedValue(undefined)
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderControl([OWNED_VIEW])
 
     openMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete view' }))
+
+    const dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
 
     await waitFor(() => expect(deleteFilterView).toHaveBeenCalledWith('users', 1))
   })
 
   it('does not delete when the confirmation is dismissed', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
     renderControl([OWNED_VIEW])
 
     openMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete view' }))
 
+    const dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
     expect(deleteFilterView).not.toHaveBeenCalled()
   })
 

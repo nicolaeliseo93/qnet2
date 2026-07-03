@@ -105,6 +105,10 @@ abstract class AbstractTableDefinition implements TableDefinition
             'actions' => $this->resolveActions($actor),
             'defaultSort' => $this->defaultSort(),
             'defaultPagination' => $this->defaultPagination(),
+            // Real columns the global quick-search spans (spec 0009). The frontend
+            // shows the search box only when non-empty and builds its placeholder
+            // from these columns' labels.
+            'searchable' => $this->searchableColumnIds(),
         ];
     }
 
@@ -287,6 +291,27 @@ abstract class AbstractTableDefinition implements TableDefinition
     public function filterableColumnIds(): array
     {
         return array_keys($this->filterableColumnMap());
+    }
+
+    /**
+     * Real DB columns flagged `searchable` — the allow-list for the global
+     * quick-search OR-LIKE (spec 0009). Only columns that map to a real base
+     * column may be flagged (a bound `LIKE` runs on each); derived keys are
+     * never eligible.
+     *
+     * @return array<int, string>
+     */
+    public function searchableColumnIds(): array
+    {
+        $ids = [];
+
+        foreach ($this->columns() as $column) {
+            if (($column['searchable'] ?? false) === true) {
+                $ids[] = $column['id'];
+            }
+        }
+
+        return $ids;
     }
 
     /**

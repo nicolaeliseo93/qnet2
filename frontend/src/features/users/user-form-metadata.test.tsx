@@ -4,6 +4,7 @@ import axios, { AxiosError } from 'axios'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { UserForm } from '@/features/users/user-form'
 import type { UserDetailWithPermissions } from '@/features/users/types'
 import type { ResourceMeta } from '@/features/authorization/types'
@@ -82,7 +83,9 @@ function labelFor(text: string): HTMLElement {
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
+    </QueryClientProvider>
   )
 }
 

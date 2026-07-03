@@ -554,3 +554,138 @@ failures (i18n test-env mismatch), zero new regressions.
 
 Visual preview artifact (static approximation of the real component, light+dark):
 https://claude.ai/code/artifact/89ccf38e-10c2-4bbb-8ed9-97656c39553b
+
+## Reusable confirm dialog (replaces native `window.confirm`) — GREEN (verified)
+
+A single "wow" confirmation dialog now backs every confirm-gated action; native `window.confirm`
+is gone from the app (only a doc-comment mention remains).
+
+- New design-system primitive `components/ui/alert-dialog.tsx` (shadcn new-york over `radix-ui`
+  AlertDialog): frosted `backdrop-blur` overlay + spring-overshoot zoom/lift entrance
+  (`ease-[cubic-bezier(0.34,1.56,0.64,1)]`). Accessible by construction (role=alertdialog, focus trap).
+- Imperative API split per repo convention (context/hook vs provider, like `auth-*`):
+  `components/confirm-dialog-context.ts` (`ConfirmContext`, `useConfirm`, `ConfirmOptions`,
+  `ConfirmTone`) + `components/confirm-dialog.tsx` (`ConfirmDialogProvider`). Provider mounted once in
+  `App.tsx` inside `TooltipProvider`. Usage: `if (!(await confirm({tone, title, description}))) return`.
+- Tones `default|destructive|success|warning|info` → pulsing icon halo (`motion-safe:animate-ping`),
+  lucide icon, and confirm-button variant. Labels default to `common.confirm|cancel|confirmTitle`
+  (added to en+it).
+- Migrated all 4 `window.confirm` call sites: `personal-data/contacts-manager`,
+  `personal-data/addresses-manager` (tone destructive, delete-action confirm label),
+  `table/row-actions` (generic action confirm, title = action label), `table/filter-views-control`.
+- Tests: new `confirm-dialog.test.tsx` (4/4 — resolves true/false, renders title/desc, i18n defaults).
+  The 3 migrated component tests updated to drive the dialog (scoped `within(alertdialog)`); their
+  render harnesses now wrap the providers the components actually require. NOTE: those 3 tests were
+  already RED at HEAD from concurrent work (Tooltip added to `FilterViewsControl` w/o a
+  `TooltipProvider` in the test; `useEnumOptions` added to `ContactsManager` needing a QueryClient) —
+  the harness fixes incidentally green them again.
+- Verified: 19/19 across the 4 files, `tsc --noEmit` clean, ESLint clean on changed files.
+
+## Feature 0009 — Global quick-search + unified table toolbar — GREEN (verified by lead)
+
+Spec `docs/specs/0009-table-search-and-unified-toolbar.md` (FROZEN). Full-stack. The
+old detached `justify-end` buttons above the grid are gone: the table is now ONE
+`rounded-xl border` block with a fused toolbar (search + live row count left;
+reset-filters / saved-views / options `…` / fullscreen right). Column filtering stays
+on the header menu (hover) — no toolbar filter toggle, no floating-filter row. The grid
+drops its own wrapper border (`wrapperBorder:false`) to read continuous with the header.
+
+Contract:
+- `POST /tables/{domain}/rows` gains optional `search` (`nullable|string|max:100`,
+  `TableRowsRequest::SEARCH_MAX_LENGTH`). Applied as a grouped OR-`LIKE` over the
+  definition's `searchableColumnIds()` allow-list, AND-combined with `filterModel`,
+  bound + LIKE-escaped (mirrors `FilterApplier`; `\` is MySQL's default LIKE escape).
+- `GET /tables/{domain}/columns` `data` gains `searchable: string[]` (real columns only;
+  `[]` ⇒ no search box). users → `['name','email']`, roles → `['name']`.
+- New `TableDefinition::searchableColumnIds()`; `AbstractTableDefinition` derives it from
+  column declarations flagged `'searchable' => true` and emits it in `resolveConfig()`.
+  Only `AbstractTableDefinition` implements the interface → every domain inherits it.
+
+Frontend:
+- `TableToolbar` (new, presentational) + `useTableToolbarState` (new hook: search+⌘K,
+  fullscreen w/ scroll-lock+Escape, live row count). `TableView` composes them and stays
+  the orchestrator (under the 500 hard cap). Column filters stay on the header (hover) —
+  no toolbar filter toggle, no floating-filter row (removed per user feedback).
+- `createSsrmDatasource(domain, getSearch)`: term read lazily from a ref; typing debounces
+  a `refreshServerSide({purge:true})` (datasource never rebuilt). `DataTable` gains
+  `onRowCountChanged` (from `onModelUpdated`). Saved-views trigger is now icon-only.
+- i18n keys added to it+en: `table.searchPlaceholder`, `table.rowCount_one/_other`,
+  `table.options/export/fullscreen/exitFullscreen`, `common.soon/clear`. Export in the
+  `…` menu is a disabled "soon" placeholder (per request).
+
+Verified (all executed):
+- Backend: `TableRowsSearchTest` (5) + `TableConfigTest` searchable assertion; full Table
+  suite 118/118; **full backend suite 613 passed / 1 unrelated skip**; Pint clean.
+- Frontend: `ssrm-datasource.test` (+2 search cases), `table-toolbar.test` (7); table+data-table
+  suites 77 passed (the only 3 reds are the PRE-EXISTING `cell-renderers`/ContactsCell failures
+  from concurrent 0005/0008 work — unchanged vs HEAD, not this feature). `tsc --noEmit` clean;
+  ESLint clean on all changed files.
+
+Not committed yet (working tree still commingles 0004/0006/0005/0008 concurrent work). The
+grants/opportunities domain in the user's mockup does not exist — only `users`/`roles` consume
+`TableView`; the toolbar is domain-agnostic and will cover a future domain for free.
+
+## Settings page redesign (connected-user Impostazioni) — GREEN (verified)
+
+Presentational redesign of `pages/settings-page.tsx` (self-service settings). Two-column on
+desktop: a sticky identity + section-index rail (IntersectionObserver scroll-spy, reduced-motion
+honored) beside icon-led section cards (Profilo, Sicurezza). Fields are lifted onto a muted
+`FieldPanel` that forces the design-system `Input`/`SelectTrigger` (`data-slot`) to solid `bg-card`,
+so inputs read as elevated white surfaces against the tinted panel — the brief's contrast/depth ask.
+
+- Scope discipline: ONLY `settings-page.tsx` rewritten + one i18n key (`settings.sectionNavLabel`)
+  per locale. The three form files (`profile-form`/`password-form`/`avatar-form`) and the shared
+  `PersonalDataSection` were NOT touched (blast radius). The white-field override is scoped to the
+  page via `data-slot` selectors → checkboxes (`type=checkbox`) and the hidden file input are safe.
+- Verified: `tsc --noEmit` clean; ESLint clean on the page; `login-form` 3/3 (i18n smoke).
+  `it.ts` typed `: TranslationResources` so tsc confirms the new key mirrors `en.ts`.
+- The 5 reds in `profile-form.test.tsx` are PRE-EXISTING and independent: proven by `git stash` of
+  my files → identical `useConfirm must be used within a ConfirmDialogProvider`
+  (`confirm-dialog-context.ts:30`), from the concurrent uncommitted confirm-dialog work.
+- Not committed (working tree still commingles concurrent sessions). No live browser render was
+  done (headless); change is presentational/low-risk.
+
+## User form + Role form redesign — GREEN (verified)
+
+Presentational redesign of the User and Role create/edit forms (in the widened Sheet,
+`sm:max-w-2xl`). Contract 0004/0006/0008 UNCHANGED — only presentation. Approved via an HTML
+mockup first, then implemented on the real app tokens.
+
+Design-system foundation (mine):
+- New semantic tokens `--field` / `--field-border` (light: `#fff` on the grey body; dark: a surface
+  lighter than the card) + `@theme` mappings → `bg-field` / `border-field-border`. `input.tsx` and
+  `select.tsx` now use them instead of `bg-transparent` → fillable fields no longer blend into the
+  page (the brief's #1 complaint). Verified in the built CSS: `.bg-field{background-color:var(--field)}`.
+- New primitives: `components/ui/checkbox.tsx`, `components/ui/switch.tsx` (Radix, no new dep),
+  and a reusable `components/form-section.tsx` (icon chip + title + description + aside slot).
+- Sheet widened in `users-table.tsx` / `roles-table.tsx`.
+
+Forms:
+- User form (`user-form-body.tsx`): 5 `FormSection` cards — Anagrafica (personal-data card +
+  avatar), Autenticazione, Ruoli e accessi, Contatti, Indirizzi. Personal-data composed directly
+  from `PersonalDataCardForm`/`ContactsManager`/`AddressesManager` (buffered wiring preserved) so
+  Anagrafica renders first WITHOUT touching the shared `PersonalDataSection` (still used by
+  `ProfileForm`). `ContactsManager`/`AddressesManager` gained an optional `showHeader` prop
+  (default true = old behavior). All fields still wrapped in `MetaField`; sections self-hide when
+  all their fields are metadata-hidden.
+- Role form (`role-form-body.tsx` + `role-field-permissions.tsx`): permissions grouped per domain
+  card — primary abilities (`viewAny/view/create/update/delete`) visible as toggle pills, the rest
+  (export/import…) under a per-domain `Collapsible` "Configurazione avanzata". Field-permission
+  matrix kept as its own gated section (NOT nested per-domain: verified the field catalogue only
+  registers `users`/`roles` while permission groups are broader — they don't align 1:1), redesigned
+  as one `Collapsible` per resource with the `Checkbox` primitive. 0006 merge rule preserved exactly
+  (mandatory locked; `required` disabled unless `editable`).
+
+i18n: added `users.form.sections.*`, `roles.form.sections.*`, `roles.form.advanced(Actions)` to
+both locales.
+
+- Verified: `tsc --noEmit` clean; ESLint clean on changed scope; `vitest run` on
+  users+roles+personal-data = 96/96; `vite build` exit 0 (field utilities/tokens confirmed).
+- Pre-existing reds (NOT mine, proven by the concurrent sessions above via git-stash): 8 failures in
+  `auth/profile-form.test.tsx` (needs the `ConfirmDialogProvider` test wrapper — same fix already
+  applied to the user/personal-data tests) and `table/cell-renderers.test.tsx` (concurrent table work).
+- Follow-ups (flagged, out of scope): `en.ts`/`it.ts` now >500 lines (code-guard hard limit) —
+  grew from concurrent work + my keys; split the locale files once concurrent sessions settle.
+  `secret-scan` on locale files is a known false positive. `user-form-body.tsx` (343) and
+  `role-form-body.tsx` (363) exceed the 300 soft limit (under 500 hard) — optional sub-component split.
+- Not committed (working tree commingled). A scoped commit of the redesign files is recommended.

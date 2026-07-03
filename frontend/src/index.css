@@ -22,6 +22,11 @@
   --destructive: hsl(0 84.2% 60.2%);
   --border: hsl(214 18% 82%);
   --input: hsl(214 18% 82%);
+  /* Fillable-field surface: white on the grey body, distinguished from the
+     white card by a slightly stronger border. Contrast comes from border +
+     shadow, not a different fill, so fields never blend into the page. */
+  --field: hsl(0 0% 100%);
+  --field-border: hsl(214 16% 76%);
   --ring: hsl(222 63% 58%);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -56,6 +61,9 @@
   --destructive: hsl(0 62.8% 30.6%);
   --border: hsl(223 18% 28%);
   --input: hsl(223 18% 28%);
+  /* In dark mode a "white field" reads as a surface lighter than the card. */
+  --field: hsl(224 20% 18%);
+  --field-border: hsl(223 16% 33%);
   --ring: hsl(221 75% 70%);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -94,6 +102,8 @@
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-field: var(--field);
+  --color-field-border: var(--field-border);
   --color-ring: var(--ring);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);

@@ -17,11 +17,17 @@ const DEFAULT_BLOCK_SIZE = 25
  * to `params.success({ rowData, rowCount })`, and signals failures with
  * `params.fail()` so the grid can recover its state.
  *
+ * The global quick-search term (spec 0009) is NOT part of the AG Grid SSRM
+ * request, so the caller supplies it through the `getSearch` getter, read at
+ * request time. The datasource instance stays stable across renders; the caller
+ * calls `refreshServerSide({ purge: true })` when the debounced term changes.
+ *
  * Domain-agnostic: the only domain-specific input is the `domain` key. The same
  * datasource powers every table.
  */
 export function createSsrmDatasource(
   domain: string,
+  getSearch?: () => string,
 ): IServerSideDatasource<TableRow> {
   return {
     async getRows(params: IServerSideGetRowsParams<TableRow>): Promise<void> {
@@ -41,12 +47,17 @@ export function createSsrmDatasource(
           ? (request.filterModel as Record<string, unknown>)
           : {}
 
+      // Only send `search` when there is a non-empty term (keeps the request
+      // clean and lets the backend skip the OR-LIKE entirely otherwise).
+      const search = getSearch?.().trim() ?? ''
+
       try {
         const response = await fetchTableRows(domain, {
           startRow,
           endRow,
           sortModel,
           filterModel,
+          ...(search !== '' ? { search } : {}),
         })
 
         params.success({

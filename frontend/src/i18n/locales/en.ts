@@ -31,6 +31,11 @@ export const en = {
     notFound: 'Page not found',
     backToDashboard: 'Back to dashboard',
     comingSoon: 'This section is not available yet.',
+    soon: 'Soon',
+    clear: 'Clear',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+    confirmTitle: 'Are you sure?',
   },
   config: {
     error: {
@@ -62,6 +67,14 @@ export const en = {
   table: {
     actionsHeader: 'Actions',
     rowActions: 'Row actions',
+    search: 'Search…',
+    searchPlaceholder: 'Search {{columns}}…',
+    rowCount_one: '{{count}} row',
+    rowCount_other: '{{count}} rows',
+    options: 'Table options',
+    export: 'Export',
+    fullscreen: 'Fullscreen',
+    exitFullscreen: 'Exit fullscreen',
     confirmAction: 'Are you sure you want to perform this action?',
     loadError: 'Unable to load the table. Please try again.',
     emptyConfig: 'No columns are available for this table.',
@@ -163,6 +176,28 @@ export const en = {
       genericError: 'Something went wrong. Please try again.',
       deleteError: 'Unable to delete the user. Please try again.',
       deleteForbidden: 'You cannot delete this user.',
+      sections: {
+        identity: {
+          title: 'Personal details',
+          description: 'Identifying details of the person or company.',
+        },
+        credentials: {
+          title: 'Authentication',
+          description: 'Sign-in credentials and interface language.',
+        },
+        access: {
+          title: 'Roles & access',
+          description: 'Assigned roles; permissions are inherited from the roles.',
+        },
+        contacts: {
+          title: 'Contacts',
+          description: 'Phone and email contact details.',
+        },
+        addresses: {
+          title: 'Addresses',
+          description: 'Registered offices and billing addresses.',
+        },
+      },
       // The personal-data card fields/sections (spec 0008), read by the role
       // field-permissions matrix (`fieldPermissionLabel('users', 'personal_data.*')`).
       personal_data: personalDataFieldLabels,
@@ -302,6 +337,19 @@ export const en = {
       genericError: 'Something went wrong. Please try again.',
       deleteError: 'Unable to delete the role. Please try again.',
       deleteForbidden: 'You cannot delete this role.',
+      sections: {
+        details: {
+          title: 'Role details',
+          description: 'Role name and the users it is assigned to.',
+        },
+        permissions: {
+          title: 'Permissions',
+          description:
+            'Grouped by domain. Advanced permissions live in the dedicated configuration.',
+        },
+      },
+      advanced: 'Advanced configuration',
+      advancedActions: 'Additional actions',
     },
     // Per-role field-permission matrix (spec 0006): a DB-driven restriction
     // within the code security ceiling, editable from the role form.
@@ -318,6 +366,7 @@ export const en = {
   settings: {
     title: 'Settings',
     subtitle: 'Manage your account preferences.',
+    sectionNavLabel: 'Settings sections',
     avatarTitle: 'Avatar',
     avatarSubtitle: 'Upload a profile picture shown across the app.',
     avatarUpdated: 'Avatar updated successfully.',
