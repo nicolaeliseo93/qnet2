@@ -2,6 +2,8 @@ import { apiClient } from '@/api/client'
 import type { ApiResponse } from '@/api/types'
 import type {
   ColumnPreferenceInput,
+  TableColumnValuesPayload,
+  TableColumnValuesResponse,
   TableConfig,
   TableRowsPayload,
   TableRowsResponse,
@@ -59,4 +61,21 @@ export async function saveTablePreferences(
  */
 export async function resetTablePreferences(domain: string): Promise<void> {
   await apiClient.delete(`/tables/${domain}/preferences`)
+}
+
+/**
+ * Fetches the distinct values of one column for its Set Filter, restricted by
+ * the filters currently active on the OTHER columns (Excel-like behavior; see
+ * 0004). Called directly from the Set Filter's async `values` callback, not
+ * through TanStack Query — AG Grid owns that callback's lifecycle.
+ */
+export async function fetchTableColumnValues(
+  domain: string,
+  payload: TableColumnValuesPayload,
+): Promise<TableColumnValuesResponse> {
+  const { data } = await apiClient.post<ApiResponse<TableColumnValuesResponse>>(
+    `/tables/${domain}/values`,
+    payload,
+  )
+  return data.data
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Table;
 use App\Http\Controllers\Abstract\BaseApiController;
 use App\Http\Requests\Table\TablePreferencesRequest;
 use App\Http\Requests\Table\TableRowsRequest;
+use App\Http\Requests\Table\TableValuesRequest;
 use App\Http\Resources\TableRowResource;
 use App\Models\User;
 use App\Services\TablePreferenceService;
@@ -132,6 +133,40 @@ class TableController extends BaseApiController
                 offset: $result->offset,
                 limit: $result->limit,
             );
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * POST /api/tables/{domain}/values — distinct values for a single column
+     * (Excel-like set filter), scoped by the filters active on every OTHER
+     * column (the target column never auto-restricts its own list).
+     */
+    public function values(TableValuesRequest $request, string $domain): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->authorizeViewAny($definition->authorizeViewAny($actor));
+
+            $payload = $request->payload();
+
+            $result = $this->service->distinctValues(
+                $definition,
+                $actor,
+                $payload['columnId'],
+                $payload['search'],
+                $payload['filterModel'],
+                $payload['limit'],
+            );
+
+            return $this->ok([
+                'values' => $result->values,
+                'hasMore' => $result->hasMore,
+            ]);
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__);
         }

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Role;
+use App\Models\RoleFieldPermission;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -21,6 +22,9 @@ class RoleResource extends JsonResource
             'name' => $this->name,
             'permissions' => $this->getPermissionNames(),
             'users' => $this->memberIds(),
+            // Flat field-permission matrix rows (spec 0006), consumed by the
+            // Role form's "Permessi campi" section.
+            'field_permissions' => $this->fieldPermissionsList(),
             'created_at' => $this->created_at,
         ];
     }
@@ -53,5 +57,31 @@ class RoleResource extends JsonResource
             : $this->users()->pluck('users.id');
 
         return $ids->map(static fn ($id): int => (int) $id)->values()->all();
+    }
+
+    /**
+     * This role's field-permission matrix rows (spec 0006), flattened to
+     * `{ resource, field, visible, editable, required }`. RoleResource only
+     * ever projects a single role, so this is at most one extra query — no
+     * N+1 — when the relation is not already eager-loaded.
+     *
+     * @return array<int, array{resource: string, field: string, visible: bool, editable: bool, required: bool}>
+     */
+    private function fieldPermissionsList(): array
+    {
+        $rows = $this->relationLoaded('fieldPermissions')
+            ? $this->fieldPermissions
+            : $this->fieldPermissions()->get();
+
+        return $rows
+            ->map(static fn (RoleFieldPermission $row): array => [
+                'resource' => $row->resource,
+                'field' => $row->field,
+                'visible' => $row->visible,
+                'editable' => $row->editable,
+                'required' => $row->required,
+            ])
+            ->values()
+            ->all();
     }
 }

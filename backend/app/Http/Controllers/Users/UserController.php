@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Users;
 
+use App\Authorization\AuthorizationRegistry;
+use App\Authorization\ResourcePermissionsBuilder;
+use App\Enums\HttpStatusEnum;
 use App\Http\Controllers\Abstract\BaseApiController;
 use App\Http\Requests\Auth\UploadAvatarRequest;
 use App\Http\Requests\Users\StoreUserRequest;
@@ -12,6 +15,7 @@ use App\Services\AvatarService;
 use App\Services\UserService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Throwable;
 
 /**
@@ -24,23 +28,30 @@ use Throwable;
  * Authorization is re-enforced server-side on every action because these routes
  * are hit by frontend row-actions, which are NOT the source of truth.
  *
+ * show/store/update also attach the `permissions` metadata block (spec 0004)
+ * via ResourcePermissionsBuilder, contextual to the returned user.
+ *
  * @see UserService
  */
 class UserController extends BaseApiController
 {
     use AuthorizesRequests;
 
-    public function __construct(private readonly UserService $service) {}
+    public function __construct(
+        private readonly UserService $service,
+        private readonly AuthorizationRegistry $authorization,
+        private readonly ResourcePermissionsBuilder $permissionsBuilder,
+    ) {}
 
     /**
      * GET /api/users/{user} — single user (view row-action).
      */
-    public function show(User $user): JsonResponse
+    public function show(Request $request, User $user): JsonResponse
     {
         try {
             $this->authorize('view', $user);
 
-            return $this->ok(new UserResource($user));
+            return $this->okWithPermissions(new UserResource($user), $this->buildPermissions($request->user(), $user));
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['user' => $user->id]);
         }
@@ -56,7 +67,12 @@ class UserController extends BaseApiController
 
             $user = $this->service->create($request->user(), $request->toData(), $request->toProfile());
 
-            return $this->created(new UserResource($user));
+            return $this->okWithPermissions(
+                new UserResource($user),
+                $this->buildPermissions($request->user(), $user),
+                'Created',
+                HttpStatusEnum::CREATED,
+            );
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__);
         }
@@ -72,7 +88,7 @@ class UserController extends BaseApiController
 
             $user = $this->service->update($request->user(), $user, $request->toData(), $request->toProfile());
 
-            return $this->ok(new UserResource($user));
+            return $this->okWithPermissions(new UserResource($user), $this->buildPermissions($request->user(), $user));
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['user' => $user->id]);
         }
@@ -127,5 +143,15 @@ class UserController extends BaseApiController
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['user' => $user->id]);
         }
+    }
+
+    /**
+     * The `permissions` block for $model, contextual to $actor (spec 0004).
+     *
+     * @return array<string, mixed>
+     */
+    private function buildPermissions(User $actor, ?User $model): array
+    {
+        return $this->permissionsBuilder->build($this->authorization->resolve('users'), $actor, $model);
     }
 }

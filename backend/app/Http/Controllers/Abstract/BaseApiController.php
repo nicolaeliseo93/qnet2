@@ -82,6 +82,26 @@ abstract class BaseApiController
         return $this->ok($data, $message, HttpStatusEnum::CREATED);
     }
 
+    /**
+     * Same envelope as ok(), plus a top-level `permissions` block (spec 0004 —
+     * centralized authorization metadata): `{ success, message, data, permissions }`.
+     *
+     * @param  array<string, mixed>  $permissions
+     */
+    protected function okWithPermissions(
+        mixed $data,
+        array $permissions,
+        string $message = 'OK',
+        HttpStatusEnum $status = HttpStatusEnum::OK,
+    ): JsonResponse {
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => $data,
+            'permissions' => $permissions,
+        ], $status->value);
+    }
+
     protected function noContent(): JsonResponse
     {
         return response()->json(null, HttpStatusEnum::NO_CONTENT->value);

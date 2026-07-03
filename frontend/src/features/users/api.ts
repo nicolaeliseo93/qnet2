@@ -1,15 +1,22 @@
 import { apiClient } from '@/api/client'
-import type { ApiResponse } from '@/api/types'
+import type { ApiResponse, ApiResponseWithPermissions } from '@/api/types'
+import type { ResourcePermissions } from '@/features/authorization/types'
 import type {
   CreateUserPayload,
   UpdateUserPayload,
   UserDetail,
+  UserDetailWithPermissions,
 } from '@/features/users/types'
 
-/** Fetches a single user detail. Wrapped in the standard envelope → `data`. */
-export async function fetchUser(id: number): Promise<UserDetail> {
-  const { data } = await apiClient.get<ApiResponse<UserDetail>>(`/users/${id}`)
-  return data.data
+/**
+ * Fetches a single user detail together with the actor's authorization
+ * metadata for it (`permissions`, a top-level envelope sibling of `data`).
+ */
+export async function fetchUser(id: number): Promise<UserDetailWithPermissions> {
+  const { data } = await apiClient.get<
+    ApiResponseWithPermissions<UserDetail, ResourcePermissions>
+  >(`/users/${id}`)
+  return { ...data.data, permissions: data.permissions }
 }
 
 /** Creates a user. Returns the created resource from the envelope `data`. */

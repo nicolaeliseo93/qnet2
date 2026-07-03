@@ -45,6 +45,11 @@ export const it: TranslationResources = {
     resetLayout: 'Ripristina layout',
     layoutReset: 'Layout della tabella ripristinato ai valori predefiniti.',
     layoutError: 'Impossibile aggiornare il layout della tabella.',
+    filterValuesTruncated:
+      'Vengono mostrati solo i primi valori corrispondenti. Usa una condizione di filtro per restringere ulteriormente.',
+    textFilters: 'Filtri testo',
+    numberFilters: 'Filtri numero',
+    dateFilters: 'Filtri data',
     primaryContactsCount: '{{count}} contatti principali',
     copy: 'Copia',
     copied: 'Copiato',
@@ -247,6 +252,14 @@ export const it: TranslationResources = {
       deleteError: 'Impossibile eliminare il ruolo. Riprova.',
       deleteForbidden: 'Non puoi eliminare questo ruolo.',
     },
+    fieldPermissions: {
+      title: 'Permessi campi',
+      visible: 'Visibile',
+      editable: 'Modificabile',
+      required: 'Obbligatorio',
+      empty: 'Nessun campo disponibile da configurare.',
+      loadError: 'Impossibile caricare il catalogo dei campi. Riprova.',
+    },
   },
   settings: {
     title: 'Impostazioni',
@@ -339,6 +352,10 @@ export const it: TranslationResources = {
     passwordMinLength: 'La password deve avere almeno 8 caratteri.',
     resetLinkInvalid: 'Questo link di reset non è valido o è scaduto. Richiedine uno nuovo.',
     tooManyRequests: 'Troppe richieste. Attendi un momento e riprova.',
+  },
+  authorization: {
+    loadError: 'Impossibile caricare i permessi. Riprova.',
+    fieldNotEditable: 'Questo campo non può essere modificato.',
   },
   permissions: {
     abilities: {

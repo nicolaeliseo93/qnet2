@@ -122,7 +122,51 @@ it('exposes filterType in the resolved config so the frontend can pick the widge
         ->and($columns['country']['filterType'])->toBe('set')
         ->and($columns['name']['filterType'])->toBe('text')
         ->and($columns['created_at']['filterType'])->toBe('date')
-        ->and($columns['id']['filterType'])->toBeNull();
+        // spec 0004: `id` is now filterable with a `number` filter (equals/
+        // range/comparisons via TableService's number branch); `avatar_url`
+        // is the derived, genuinely non-filterable column.
+        ->and($columns['id']['filterType'])->toBe('number')
+        ->and($columns['avatar_url']['filterType'])->toBeNull();
+});
+
+it('exposes hasFilterValues so the frontend knows which columns support the Set Filter (spec 0004/0005)', function () {
+    $user = userWithUserAbilities(['viewAny']);
+    Sanctum::actingAs($user);
+
+    $data = $this->getJson('/api/tables/users/columns')->json('data');
+
+    foreach ($data['columns'] as $column) {
+        expect($column)->toHaveKey('hasFilterValues');
+    }
+
+    $columns = collect($data['columns'])->keyBy('id');
+
+    // Enumerable columns (static/derived catalogue) advertise a value list.
+    // spec 0005: `primary_contact` (COMPUTED) also advertises one — its
+    // distinct-values resolver is a real DB query (see UserPersonalDataColumns).
+    // `primary_address` is CONDITIONS-ONLY by deliberate UX decision (a
+    // formatted address string has no clean single-column match): it declares
+    // hasFilterValues=false, same as a genuinely non-filterable column.
+    expect($columns['name']['hasFilterValues'])->toBeTrue()
+        ->and($columns['id']['hasFilterValues'])->toBeTrue()
+        ->and($columns['roles']['hasFilterValues'])->toBeTrue()
+        ->and($columns['country']['hasFilterValues'])->toBeTrue()
+        ->and($columns['primary_contact']['hasFilterValues'])->toBeTrue()
+        ->and($columns['primary_address']['hasFilterValues'])->toBeFalse()
+        // Non-filterable columns default to false (no filter at all).
+        ->and($columns['avatar_url']['hasFilterValues'])->toBeFalse();
+});
+
+it('exposes hasFilterValues=true for the roles users_count AGGREGATE column', function () {
+    Permission::findOrCreate('roles.viewAny');
+    $user = User::factory()->create();
+    $user->givePermissionTo('roles.viewAny');
+    Sanctum::actingAs($user);
+
+    $data = $this->getJson('/api/tables/roles/columns')->json('data');
+    $columns = collect($data['columns'])->keyBy('id');
+
+    expect($columns['users_count']['hasFilterValues'])->toBeTrue();
 });
 
 it('declares the new user_type/address/geo/contact columns with the right visibility', function () {

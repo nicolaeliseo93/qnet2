@@ -3,9 +3,11 @@
 use App\Http\Controllers\Addresses\AddressController;
 use App\Http\Controllers\Attachments\AttachmentController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Authorization\FieldCatalogueController;
 use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\Contacts\ContactController;
 use App\Http\Controllers\Geo\GeoController;
+use App\Http\Controllers\Meta\MetaController;
 use App\Http\Controllers\Navigation\NavigationController;
 use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\PersonalData\PersonalDataController;
@@ -79,12 +81,33 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('tables/{domain}/columns', [TableController::class, 'columns']);
         Route::post('tables/{domain}/rows', [TableController::class, 'rows']);
 
+        // Distinct values for a single column (Excel-like set filter, spec
+        // 0004): allow-list columnId + filterModel keys, cap N, cross-column
+        // filters applied. See TableValuesRequest / TableService::distinctValues.
+        Route::post('tables/{domain}/values', [TableController::class, 'values']);
+
         // Per-user column preferences (order/width/visibility): self-scoped to the
         // authenticated user, gated by the same definition viewAny. Save upserts a
         // sparse delta; delete resets to the PHP default. See ADR-0004 /
         // docs/api/0003-table-preferences.md.
         Route::post('tables/{domain}/preferences', [TableController::class, 'savePreferences']);
         Route::delete('tables/{domain}/preferences', [TableController::class, 'resetPreferences']);
+    });
+
+    // Centralized, resource-driven authorization metadata (spec 0004): one
+    // generic endpoint per resource, registry-driven (config/authorization.php),
+    // mirroring the tables/{domain} pattern. Authorization ({resource}.viewAny)
+    // is enforced server-side in MetaController; unknown {resource} → 404.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('meta/{resource}', [MetaController::class, 'show']);
+    });
+
+    // Field catalogue for the Role form's field-permission matrix section
+    // (spec 0006): the static fields() of every registered resource.
+    // Authorization (roles.create OR roles.update) is enforced server-side in
+    // FieldCatalogueController.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('authorization/fields', [FieldCatalogueController::class, 'index']);
     });
 
     // Users CRUD backing the table row-actions (view/edit/delete) + create.

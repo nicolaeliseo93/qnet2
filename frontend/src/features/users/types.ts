@@ -7,6 +7,7 @@
 
 import type { PersonalDataCard } from '@/features/personal-data/types'
 import type { PersonalDataPayload } from '@/features/personal-data/drafts'
+import type { ResourcePermissions } from '@/features/authorization/types'
 
 /**
  * Allowed UI/user locales. Kept as a defensive guard only — the selectable
@@ -40,6 +41,15 @@ export interface UserDetail {
    */
   personal_data?: PersonalDataCard | null
   created_at: string | null
+}
+
+/**
+ * A `UserDetail` carrying the actor's authorization metadata for this
+ * instance (spec 0004), as returned by `GET /users/{user}` (`show`). Used to
+ * seed the edit form's `ResourcePermissionsProvider` without a second request.
+ */
+export interface UserDetailWithPermissions extends UserDetail {
+  permissions: ResourcePermissions
 }
 
 /** Payload for POST /users (create). `password` is required here. */

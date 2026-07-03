@@ -1,15 +1,24 @@
 import { apiClient } from '@/api/client'
-import type { ApiResponse } from '@/api/types'
+import type { ApiResponse, ApiResponseWithPermissions } from '@/api/types'
+import type { ResourcePermissions } from '@/features/authorization/types'
 import type {
   CreateRolePayload,
   RoleDetail,
+  RoleDetailWithPermissions,
   UpdateRolePayload,
 } from '@/features/roles/types'
 
-/** Fetches a single role detail. Wrapped in the standard envelope → `data`. */
-export async function fetchRole(id: number): Promise<RoleDetail> {
-  const { data } = await apiClient.get<ApiResponse<RoleDetail>>(`/roles/${id}`)
-  return data.data
+/**
+ * Fetches a single role detail together with the actor's authorization
+ * metadata for it (the envelope's top-level `permissions` sibling of `data`,
+ * exposed as `authorization` here — `data.permissions` is already the role's
+ * own granted-permission names and must not be shadowed).
+ */
+export async function fetchRole(id: number): Promise<RoleDetailWithPermissions> {
+  const { data } = await apiClient.get<
+    ApiResponseWithPermissions<RoleDetail, ResourcePermissions>
+  >(`/roles/${id}`)
+  return { ...data.data, authorization: data.permissions }
 }
 
 /** Creates a role. Returns the created resource from the envelope `data`. */

@@ -8,7 +8,7 @@
  */
 
 /** Field type that drives the default cell rendering/formatting. */
-export type ColumnType = 'text' | 'number' | 'datetime' | 'enum' | 'tags' | 'badge'
+export type ColumnType = 'text' | 'number' | 'datetime' | 'enum' | 'tags' | 'badge' | 'boolean'
 
 /**
  * Per-value badge metadata for a `badge` column, supplied by the backend from a
@@ -27,7 +27,7 @@ export interface EnumBadge {
 }
 
 /** AG Grid filter type advertised per column in the config catalog. */
-export type FilterType = 'text' | 'number' | 'date' | 'set'
+export type FilterType = 'text' | 'number' | 'date' | 'set' | 'boolean'
 
 /** How a row action should be rendered. */
 export type ActionType = 'link' | 'action' | 'danger'
@@ -72,6 +72,13 @@ export interface TableColumn {
   sortable: boolean
   /** Server-side whitelist: filter accepted only when true. */
   filterable: boolean
+  /**
+   * Whether the column supports a Set Filter value list (POST /values). `false`
+   * for computed/derived columns without a queryable value list (e.g. a
+   * concatenated address or a nested contact) — those get a conditions-only
+   * filter, never a Set tab. Absent or `true` behaves as supported (0005).
+   */
+  hasFilterValues?: boolean
   /** Allowed values for enum/tags/badge columns (may be resolved dynamically). */
   options?: string[]
   /**
@@ -189,4 +196,23 @@ export interface TableRowsResponse {
   items: TableRow[]
   export_link: string | null
   pagination: RowsPaginationMeta
+}
+
+/**
+ * POST /tables/{domain}/values request payload: distinct values for one
+ * column's Set Filter, server-side and Excel-like (0004). `filterModel`
+ * carries the filters currently active on the OTHER columns; the backend
+ * ignores an entry for `columnId` itself.
+ */
+export interface TableColumnValuesPayload {
+  columnId: string
+  search?: string
+  limit?: number
+  filterModel?: Record<string, unknown>
+}
+
+/** Response of POST /tables/{domain}/values (envelope `data`). */
+export interface TableColumnValuesResponse {
+  values: string[]
+  hasMore: boolean
 }

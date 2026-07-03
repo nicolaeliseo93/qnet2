@@ -16,3 +16,13 @@ export interface ApiErrorResponse {
   message: string
   errors?: Record<string, string[]>
 }
+
+/**
+ * Envelope variant used by authorization-aware endpoints (spec 0004): carries
+ * the standard `data` payload plus a `permissions` block as a top-level
+ * sibling (`BaseApiController::okWithPermissions`). Generic over the
+ * permissions shape so this module stays agnostic of any feature's type.
+ */
+export interface ApiResponseWithPermissions<T, P> extends ApiResponse<T> {
+  permissions: P
+}

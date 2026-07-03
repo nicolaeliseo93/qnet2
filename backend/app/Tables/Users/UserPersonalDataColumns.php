@@ -1,0 +1,392 @@
+<?php
+
+namespace App\Tables\Users;
+
+use App\Enums\PersonalDataTypeEnum;
+use App\Models\Address;
+use App\Models\Contact;
+use App\Models\PersonalData;
+use App\Models\User;
+use App\Tables\Users\Concerns\CorrelatesPersonalDataToUser;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * The personal-data-derived columns on the `users` table with no real DB
+ * column of their own: `user_type` (badge, from personalData.type),
+ * `primary_address` (formatted line from the primary Address) and
+ * `primary_contact` (all primary Contacts, one per type).
+ *
+ * Extracted out of UsersTableDefinition (file-size split, engineering.md §6):
+ * row formatting, badge/enum metadata, the derived filters/sorts and the
+ * Excel-like distinct-values resolution for `user_type` all live in one
+ * focused file. Behavior is unchanged from the pre-split implementation.
+ */
+class UserPersonalDataColumns
+{
+    use CorrelatesPersonalDataToUser;
+
+    /**
+     * Maximum number of values honoured in the `user_type` set filter. Caps
+     * the WHERE IN cardinality (defence in depth); excess values are ignored.
+     */
+    private const int MAX_FILTER_VALUES = 200;
+
+    /**
+     * Plain string[] of the PersonalDataTypeEnum values, used both as the
+     * `user_type` set-filter/distinct-values options and (via typeBadges) the
+     * badge value tokens.
+     *
+     * @return array<int, string>
+     */
+    public function typeValues(): array
+    {
+        return array_map(
+            static fn (PersonalDataTypeEnum $case): string => $case->value,
+            PersonalDataTypeEnum::cases(),
+        );
+    }
+
+    /**
+     * Badge metadata for the `user_type` column: value/label/color/icon for
+     * each PersonalDataTypeEnum case, so the frontend renders the badge
+     * without any knowledge of the User domain.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function typeBadges(): array
+    {
+        return array_map(
+            static fn ($meta): array => $meta->toArray(),
+            PersonalDataTypeEnum::options(),
+        );
+    }
+
+    /**
+     * Excel-like distinct values (spec 0004) for `user_type`: the same
+     * catalogue, optionally narrowed by a case-insensitive substring search
+     * and capped to `$limit`.
+     *
+     * @return array<int, string>
+     */
+    public function distinctTypeValues(?string $search, int $limit): array
+    {
+        $values = $this->typeValues();
+
+        $matches = $search === null || $search === ''
+            ? $values
+            : array_values(array_filter(
+                $values,
+                static fn (string $value): bool => stripos($value, $search) !== false,
+            ));
+
+        return array_slice($matches, 0, $limit);
+    }
+
+    /**
+     * Row fields derived from the personalData card + its primary address.
+     * The raw sensitive fields (line1, contact value) are read here ONLY to
+     * build the formatted strings; they are never returned as row fields.
+     *
+     * @return array{user_type: string|null, primary_address: string|null, primary_contact: array<int, array<string, mixed>>}
+     */
+    public function mapRow(?PersonalData $card, ?Address $address): array
+    {
+        return [
+            'user_type' => $card?->type?->value,
+            'primary_address' => $this->formatAddress($address),
+            'primary_contact' => $this->formatContacts($card?->contacts),
+        ];
+    }
+
+    /**
+     * Derived `user_type` set filter on personalData.type. Only valid enum
+     * values are honoured; whereHas implicitly excludes users without a card.
+     *
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $filter
+     */
+    public function applyTypeFilter(Builder $query, array $filter): void
+    {
+        $values = array_values(array_filter(
+            $this->setFilterValues($filter),
+            static fn (string $value): bool => PersonalDataTypeEnum::tryFrom($value) !== null,
+        ));
+
+        if ($values !== []) {
+            $query->whereHas('personalData', static function (Builder $cardQuery) use ($values): void {
+                $cardQuery->whereIn('type', $values);
+            });
+        }
+    }
+
+    /**
+     * Derived `primary_address` text filter: bound LIKE on the primary
+     * address' street/postal/city-name. Wildcards in user input are escaped.
+     *
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $filter
+     */
+    public function applyAddressFilter(Builder $query, array $filter): void
+    {
+        $needle = $this->likeNeedle($filter);
+
+        if ($needle !== null) {
+            $query->whereHas('personalData.addresses', function (Builder $addressQuery) use ($needle): void {
+                $addressQuery->where('is_primary', true)
+                    ->where(function (Builder $match) use ($needle): void {
+                        $match->where('line1', 'like', $needle)
+                            ->orWhere('postal_code', 'like', $needle)
+                            ->orWhereHas('city', static function (Builder $cityQuery) use ($needle): void {
+                                $cityQuery->where('name', 'like', $needle);
+                            });
+                    });
+            });
+        }
+    }
+
+    /**
+     * Derived `primary_contact` text filter: bound LIKE on the primary
+     * contact's value/label. Wildcards in user input are escaped.
+     *
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $filter
+     */
+    public function applyContactFilter(Builder $query, array $filter): void
+    {
+        $needle = $this->likeNeedle($filter);
+
+        if ($needle !== null) {
+            $query->whereHas('personalData.contacts', function (Builder $contactQuery) use ($needle): void {
+                $contactQuery->where('is_primary', true)
+                    ->where(function (Builder $match) use ($needle): void {
+                        $match->where('value', 'like', $needle)
+                            ->orWhere('label', 'like', $needle);
+                    });
+            });
+        }
+    }
+
+    /**
+     * Derived `primary_contact` SET filter (spec 0004/0005 `multi` widget):
+     * matches the real contact VALUE — the same string the /values endpoint
+     * returns — of the PRIMARY contact. Bound, capped cardinality (reuses
+     * setFilterValues' cap).
+     *
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $filter
+     */
+    public function applyContactSetFilter(Builder $query, array $filter): void
+    {
+        $values = $this->setFilterValues($filter);
+
+        if ($values !== []) {
+            $query->whereHas('personalData.contacts', static function (Builder $contactQuery) use ($values): void {
+                $contactQuery->where('is_primary', true)->whereIn('value', $values);
+            });
+        }
+    }
+
+    /**
+     * @return Builder<Model>
+     */
+    public function typeSortSubquery(): Builder
+    {
+        return $this->correlateToUser(
+            PersonalData::query()->select('personal_data.type'),
+        );
+    }
+
+    /**
+     * @return Builder<Model>
+     */
+    public function addressSortSubquery(): Builder
+    {
+        return $this->correlateToUser(
+            Address::query()
+                ->select('addresses.line1')
+                ->join('personal_data', 'personal_data.id', '=', 'addresses.addressable_id')
+                ->where('addresses.addressable_type', (new PersonalData)->getMorphClass())
+                ->where('addresses.is_primary', true),
+        );
+    }
+
+    /**
+     * @return Builder<Model>
+     */
+    public function contactSortSubquery(): Builder
+    {
+        return $this->correlateToUser(
+            Contact::query()
+                ->selectRaw('min(contacts.value)')
+                ->join('personal_data', 'personal_data.id', '=', 'contacts.contactable_id')
+                ->where('contacts.contactable_type', (new PersonalData)->getMorphClass())
+                ->where('contacts.is_primary', true),
+        );
+    }
+
+    /**
+     * Excel-like distinct values (spec 0004/0005) for the COMPUTED
+     * `primary_contact` column: distinct `value` of the PRIMARY contacts of
+     * every user matching `$query` (already scoped by every OTHER active
+     * filter). Search narrows on value/label, same as applyContactFilter,
+     * bound + LIKE-escaped.
+     *
+     * @param  Builder<Model>  $query
+     * @return array<int, string>
+     */
+    public function contactDistinctValues(Builder $query, ?string $search, int $limit): array
+    {
+        $userIds = (clone $query)->select('users.id');
+
+        $cardIds = DB::table('personal_data')
+            ->select('id')
+            ->where('personable_type', (new User)->getMorphClass())
+            ->whereIn('personable_id', $userIds);
+
+        return DB::table('contacts')
+            ->where('contactable_type', (new PersonalData)->getMorphClass())
+            ->where('is_primary', true)
+            ->whereIn('contactable_id', $cardIds)
+            ->whereNotNull('value')
+            ->when($search !== null && $search !== '', function (QueryBuilder $q) use ($search): void {
+                $needle = '%'.$this->escapeLike($search).'%';
+                $q->where(function (QueryBuilder $sub) use ($needle): void {
+                    $sub->where('value', 'like', $needle)
+                        ->orWhere('label', 'like', $needle);
+                });
+            })
+            ->distinct()
+            ->orderBy('value')
+            ->limit($limit)
+            ->pluck('value')
+            ->map(static fn (mixed $value): string => (string) $value)
+            ->all();
+    }
+
+    /**
+     * Format the primary address as a single human-readable line, e.g.
+     * "Via Roma 12, 20100 Milano (MI)". Returns null when there is no address.
+     */
+    private function formatAddress(?Address $address): ?string
+    {
+        if ($address === null) {
+            return null;
+        }
+
+        $street = trim((string) ($address->line1 ?? ''));
+        $locality = trim(implode(' ', array_filter([
+            $address->postal_code,
+            $address->city?->name,
+        ])));
+        $province = $address->province?->name;
+
+        if ($province !== null && $locality !== '') {
+            $locality .= " ({$province})";
+        }
+
+        $line = trim(implode(', ', array_filter([$street ?: null, $locality ?: null])));
+
+        return $line === '' ? null : $line;
+    }
+
+    /**
+     * Structured payload for EVERY primary contact (one per type), so the
+     * frontend can render each as a badge with the contact-type icon + label
+     * without knowing the ContactType domain. Empty array when there is none
+     * (the collection is already constrained to is_primary by baseQuery).
+     *
+     * @param  Collection<int, Contact>|null  $contacts
+     * @return array<int, array{type: string, icon: string|null, label: string, value: string}>
+     */
+    private function formatContacts(?Collection $contacts): array
+    {
+        if ($contacts === null) {
+            return [];
+        }
+
+        return $contacts
+            ->map(fn (Contact $contact): ?array => $this->formatContact($contact))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Structured payload for a single contact: its type, the type's icon
+     * (from the enum metadata), a display label (the contact's own label
+     * when set, else the type label) and the value. Returns null when the
+     * value is empty.
+     *
+     * @return array{type: string, icon: string|null, label: string, value: string}|null
+     */
+    private function formatContact(Contact $contact): ?array
+    {
+        $value = trim((string) ($contact->value ?? ''));
+
+        if ($value === '') {
+            return null;
+        }
+
+        $type = $contact->type;
+        $label = trim((string) ($contact->label ?? ''));
+
+        return [
+            'type' => $type->value,
+            'icon' => $type->icon(),
+            'label' => $label !== '' ? $label : $type->label(),
+            'value' => $value,
+        ];
+    }
+
+    /**
+     * Extract, sanitize and cap the string values of a set filter payload.
+     *
+     * @param  array<string, mixed>  $filter
+     * @return array<int, string>
+     */
+    private function setFilterValues(array $filter): array
+    {
+        $values = $filter['values'] ?? null;
+
+        if (! is_array($values)) {
+            return [];
+        }
+
+        $clean = array_values(array_filter(
+            $values,
+            static fn ($value): bool => is_string($value) && $value !== '',
+        ));
+
+        return array_slice($clean, 0, self::MAX_FILTER_VALUES);
+    }
+
+    /**
+     * Build a bound `%needle%` LIKE pattern from a text filter, or null when
+     * the filter carries no usable value. Wildcards are escaped so they are
+     * literal.
+     *
+     * @param  array<string, mixed>  $filter
+     */
+    private function likeNeedle(array $filter): ?string
+    {
+        $value = $filter['filter'] ?? null;
+
+        if (! is_scalar($value) || $value === '') {
+            return null;
+        }
+
+        return '%'.$this->escapeLike((string) $value).'%';
+    }
+
+    /**
+     * Escape LIKE wildcards in user input so they are treated literally.
+     */
+    private function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+}

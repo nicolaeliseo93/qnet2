@@ -1,8 +1,11 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { RoleForm } from '@/features/roles/role-form'
-import type { RoleDetail } from '@/features/roles/types'
+import type { RoleDetailWithPermissions } from '@/features/roles/types'
+import type { ResourcePermissions } from '@/features/authorization/types'
 
 const createRole = vi.fn()
 const updateRole = vi.fn()
@@ -13,6 +16,29 @@ vi.mock('@/features/roles/api', () => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
+
+/**
+ * This suite is not about authorization metadata (covered by
+ * `role-form-metadata.test.tsx`): every field resolves as visible+editable
+ * (the `MetaField` fallback, since `fields` is empty) so create/edit render
+ * exactly as they did before spec 0004.
+ */
+const FULL_ACCESS_PERMISSIONS: ResourcePermissions = {
+  resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+  fields: {},
+  actions: {},
+}
+
+vi.mock('@/features/roles/use-role-form-meta', () => ({
+  useRoleFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
+// This suite is not about the spec 0006 field-permission matrix (covered by
+// `role-form-field-permissions.test.tsx`): an empty catalogue keeps the new
+// section out of the way of the users-integration assertions below.
+vi.mock('@/features/roles/field-catalogue-api', () => ({
+  fetchFieldCatalogue: () => Promise.resolve({ resources: [] }),
+}))
 
 // Replace the async users multi-select with a lightweight controllable stub so
 // the integration test focuses on the form's payload/diffing logic, not the
@@ -48,14 +74,27 @@ beforeEach(() => {
   updateRole.mockReset()
 })
 
-function editRole(overrides: Partial<RoleDetail> = {}): RoleDetail {
+function editRole(
+  overrides: Partial<RoleDetailWithPermissions> = {},
+): RoleDetailWithPermissions {
   return {
     id: 3,
     name: 'Editor',
     permissions: ['users.viewAny'],
     created_at: null,
+    field_permissions: [],
+    // `useRoleFormMeta` is mocked above, so this value is never actually read;
+    // present only to satisfy `RoleFormMode`'s edit-variant type.
+    authorization: FULL_ACCESS_PERMISSIONS,
     ...overrides,
   }
+}
+
+function wrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
 }
 
 describe('RoleForm — users integration', () => {
@@ -70,6 +109,7 @@ describe('RoleForm — users integration', () => {
         onSuccess={onSuccess}
         onCancel={vi.fn()}
       />,
+      { wrapper: wrapper() },
     )
 
     fireEvent.change(screen.getByLabelText(/^Name/), {
@@ -93,6 +133,7 @@ describe('RoleForm — users integration', () => {
         onSuccess={vi.fn()}
         onCancel={vi.fn()}
       />,
+      { wrapper: wrapper() },
     )
     expect(screen.getByTestId('users-value')).toHaveTextContent('11,22')
   })
@@ -107,6 +148,7 @@ describe('RoleForm — users integration', () => {
         onSuccess={vi.fn()}
         onCancel={vi.fn()}
       />,
+      { wrapper: wrapper() },
     )
 
     // Change only the name; leave members as the hydrated [11].
@@ -131,6 +173,7 @@ describe('RoleForm — users integration', () => {
         onSuccess={vi.fn()}
         onCancel={vi.fn()}
       />,
+      { wrapper: wrapper() },
     )
 
     fireEvent.click(screen.getByText('clear-users'))

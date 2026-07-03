@@ -47,6 +47,11 @@ export const en = {
     resetLayout: 'Reset layout',
     layoutReset: 'Table layout reset to default.',
     layoutError: 'Unable to update the table layout.',
+    filterValuesTruncated:
+      'Showing only the first matching values. Use a filter condition to narrow further.',
+    textFilters: 'Text Filters',
+    numberFilters: 'Number Filters',
+    dateFilters: 'Date Filters',
     primaryContactsCount: '{{count}} primary contacts',
     copy: 'Copy',
     copied: 'Copied',
@@ -249,6 +254,16 @@ export const en = {
       deleteError: 'Unable to delete the role. Please try again.',
       deleteForbidden: 'You cannot delete this role.',
     },
+    // Per-role field-permission matrix (spec 0006): a DB-driven restriction
+    // within the code security ceiling, editable from the role form.
+    fieldPermissions: {
+      title: 'Field permissions',
+      visible: 'Visible',
+      editable: 'Editable',
+      required: 'Required',
+      empty: 'No fields are available to configure.',
+      loadError: 'Unable to load the field catalogue. Please try again.',
+    },
   },
   settings: {
     title: 'Settings',
@@ -341,6 +356,12 @@ export const en = {
     passwordMinLength: 'Password must be at least 8 characters.',
     resetLinkInvalid: 'This reset link is invalid or has expired. Request a new one.',
     tooManyRequests: 'Too many requests. Please wait a moment and try again.',
+  },
+  // Metadata-driven authorization (spec 0004): shared strings used by `MetaField`
+  // and any form consuming `useResourceMeta`/`ResourcePermissions`.
+  authorization: {
+    loadError: 'Unable to load permissions. Please try again.',
+    fieldNotEditable: 'This field cannot be edited.',
   },
   permissions: {
     // Standard CRUD abilities exposed by every resource policy (BasePolicy).

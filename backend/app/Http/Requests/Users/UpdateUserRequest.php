@@ -4,10 +4,12 @@ namespace App\Http\Requests\Users;
 
 use App\DataObjects\Users\UpdateUserData;
 use App\Enums\LocaleEnum;
+use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ResolvesAssignableRoles;
 use App\Http\Requests\Concerns\ValidatesUserProfile;
 use App\Models\User;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -22,9 +24,13 @@ use Illuminate\Validation\Rules\Password;
  * replicating the framework password defaults; the dedicated self-service flow
  * (PUT /api/auth/me/password) remains the path for a user changing their own
  * password with the current-password check.
+ * EnforcesFieldPermissions (spec 0004) additionally rejects any submitted field
+ * the actor cannot edit on this specific $user (e.g. `roles` on a super-admin
+ * target for a non-super-admin actor).
  */
 class UpdateUserRequest extends FormRequest
 {
+    use EnforcesFieldPermissions;
     use ResolvesAssignableRoles;
     use ValidatesUserProfile;
 
@@ -63,11 +69,28 @@ class UpdateUserRequest extends FormRequest
     }
 
     /**
-     * Apply the per-type contact `value` rules for the nested profile (ADR 0012).
+     * Apply the per-type contact `value` rules for the nested profile
+     * (ADR 0012) and the field-level authorization gate (spec 0004).
      */
     public function withValidator(Validator $validator): void
     {
-        $validator->after(fn (Validator $validator) => $this->validateProfile($validator));
+        $validator->after(function (Validator $validator): void {
+            $this->validateProfile($validator);
+            $this->enforceFieldPermissions($validator);
+        });
+    }
+
+    protected function authorizationResource(): string
+    {
+        return 'users';
+    }
+
+    protected function authorizationModel(): ?Model
+    {
+        /** @var User $user */
+        $user = $this->route('user');
+
+        return $user;
     }
 
     /**

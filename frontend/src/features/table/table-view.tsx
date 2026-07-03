@@ -194,6 +194,7 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       content = (
         <DataTable
           key={layoutVersion}
+          domain={domain}
           columns={config.columns}
           datasource={datasource}
           blockSize={config.defaultPagination.limit}

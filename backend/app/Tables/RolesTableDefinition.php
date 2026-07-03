@@ -5,6 +5,7 @@ namespace App\Tables;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\UserService;
+use App\Tables\Roles\RoleUsersCountColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -18,8 +19,13 @@ use Spatie\Permission\Models\Permission;
  * derived `permissions` tags column with a `set` filter whose options are the
  * full code-defined permission catalogue. mapRow exposes only safe fields, and
  * actionsFor calls RolePolicy (view→view, update→edit, delete→delete) while
- * hiding edit/delete on the protected `super-admin` system role (affordance ↔
+ * hiding edit/delete on the protected `super-admin` system role (affordance vs
  * the hard guard enforced in RoleService).
+ *
+ * The `users_count` AGGREGATE column (distinct-values resolution + the
+ * `multi`-widget derived filter) is delegated to RoleUsersCountColumn — a
+ * file-size split (engineering.md §6) mirroring the users-domain
+ * collaborators (UserGeoColumns / UserPersonalDataColumns).
  */
 class RolesTableDefinition extends AbstractTableDefinition
 {
@@ -28,6 +34,8 @@ class RolesTableDefinition extends AbstractTableDefinition
      * filter. Caps the WHERE IN cardinality (defence in depth); excess ignored.
      */
     private const int MAX_PERMISSION_FILTER_VALUES = 100;
+
+    public function __construct(private readonly RoleUsersCountColumn $usersCountColumn) {}
 
     public function domain(): string
     {
@@ -101,10 +109,12 @@ class RolesTableDefinition extends AbstractTableDefinition
             ],
             [
                 // Number of users currently assigned this role, derived via
-                // withCount('users'). Sortable (ORDER BY the users_count alias)
-                // and filterable with a number filter (equals/range/comparisons),
-                // applied server-side as a count comparison on the users relation
-                // (see applyUsersCountFilter). Rendered as a badge on the frontend.
+                // withCount('users'). Sortable (ORDER BY the users_count alias),
+                // filterable with a `multi` widget (Set + number condition:
+                // equals/range/comparisons), both delegated to
+                // RoleUsersCountColumn. Rendered as a badge on the frontend.
+                // AGGREGATE (no real DB column); hasFilterValues defaults to
+                // true (the Set list is resolved by RoleUsersCountColumn too).
                 'id' => 'users_count',
                 'label' => 'roles.columns.users_count',
                 'type' => 'number',
@@ -210,6 +220,37 @@ class RolesTableDefinition extends AbstractTableDefinition
     }
 
     /**
+     * Excel-like distinct values (spec 0004/0005) for the derived columns:
+     * `permissions` (the full code-defined permission catalogue) and
+     * `users_count` (the withCount aggregate, no real DB column). Every other
+     * (real-column) filterable column falls through to the generic engine's
+     * `SELECT DISTINCT` (return null).
+     *
+     * @param  Builder<Role>  $query
+     * @param  array<string, mixed>  $columnConfig
+     * @return array<int, string>|null
+     */
+    public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
+    {
+        if ($columnId === 'permissions') {
+            /** @var array<int, string> $names */
+            $names = Permission::query()->orderBy('name')->pluck('name')->all();
+
+            $matches = $search === null || $search === ''
+                ? $names
+                : array_values(array_filter($names, static fn (string $name): bool => stripos($name, $search) !== false));
+
+            return array_slice($matches, 0, $limit);
+        }
+
+        if ($columnId === 'users_count') {
+            return $this->usersCountColumn->distinctValues($query, $search, $limit);
+        }
+
+        return null;
+    }
+
+    /**
      * Map a Role model to the row payload (real fields + derived permissions).
      * `actions` is attached by the generic TableService via actionsFor().
      *
@@ -264,6 +305,9 @@ class RolesTableDefinition extends AbstractTableDefinition
      * the `permissions` set filter and the `users_count` aggregate filter. Every
      * other column id falls through to the generic real-column path.
      *
+     * `users_count` (a `multi` widget — Set + condition, spec 0004/0005) is
+     * fully delegated to RoleUsersCountColumn.
+     *
      * @param  Builder<Role>  $query
      * @param  array<string, mixed>  $columnConfig
      * @param  array<string, mixed>  $filter
@@ -272,7 +316,7 @@ class RolesTableDefinition extends AbstractTableDefinition
     {
         return match ($columnId) {
             'permissions' => $this->filterPermissions($query, $filter),
-            'users_count' => $this->filterUsersCount($query, $filter),
+            'users_count' => $this->usersCountColumn->applyDerivedFilter($query, $filter),
             default => false,
         };
     }
@@ -310,71 +354,5 @@ class RolesTableDefinition extends AbstractTableDefinition
         });
 
         return true;
-    }
-
-    /**
-     * Derived `users_count` number filter. The count is an aggregate (no real DB
-     * column), so it is applied as a count comparison on the `users` relation via
-     * has() — a bound correlated-subquery WHERE that is portable across drivers
-     * (no HAVING/alias dependency) and respected by the (clone)->count() total.
-     *
-     * The relation resolves off the guard-pinned model from baseQuery(), so the
-     * sanctum default-guard pitfall (see baseQuery) does not apply here either.
-     * AG Grid number operators map to SQL comparisons; `inRange` becomes a closed
-     * interval. Non-numeric / blank payloads add no constraint.
-     *
-     * @param  Builder<Role>  $query
-     * @param  array<string, mixed>  $filter
-     */
-    private function filterUsersCount(Builder $query, array $filter): bool
-    {
-        $type = is_string($filter['type'] ?? null) ? $filter['type'] : 'equals';
-
-        if ($type === 'inRange') {
-            $from = $this->intOrNull($filter['filter'] ?? null);
-            $to = $this->intOrNull($filter['filterTo'] ?? null);
-
-            if ($from !== null) {
-                $query->has('users', '>=', $from);
-            }
-
-            if ($to !== null) {
-                $query->has('users', '<=', $to);
-            }
-
-            return true;
-        }
-
-        $value = $this->intOrNull($filter['filter'] ?? null);
-
-        if ($value === null) {
-            return true; // blank / notBlank / malformed → no constraint
-        }
-
-        $operator = match ($type) {
-            'notEqual' => '!=',
-            'lessThan' => '<',
-            'lessThanOrEqual' => '<=',
-            'greaterThan' => '>',
-            'greaterThanOrEqual' => '>=',
-            default => '=', // 'equals'
-        };
-
-        $query->has('users', $operator, $value);
-
-        return true;
-    }
-
-    /**
-     * Coerce a filter payload value to a non-negative int, or null when it is not
-     * a usable numeric value (so the filter adds no constraint).
-     */
-    private function intOrNull(mixed $value): ?int
-    {
-        if (! is_numeric($value)) {
-            return null;
-        }
-
-        return max(0, (int) $value);
     }
 }

@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0005 — Filtri Excel-like per il framework tabellare generico (AG Grid SSRM).
+  Contract-first: il <data_contract> qui sotto e' CONGELATO. Backend implementa,
+  frontend consuma la stessa shape, senza comunicare durante l'implementazione.
+  Dominio/naming prosa in italiano; identificatori nel codice in INGLESE (engineering.md 1.2).
+-->
+<spec id="0005-table-excel-like-filters" status="draft" owner="tu" date="2026-07-02">
+
+  <goal>
+    Portare i filtri di ogni colonna delle tabelle SSRM a un'esperienza tipo Excel:
+    per ogni colonna un filtro combinato = lista dei valori distinti (recuperati dal
+    server, non dalla sola pagina corrente e rispettando i filtri gia' attivi sulle
+    altre colonne) PIU' condizioni avanzate per tipo di dato. I filtri lavorano in AND
+    tra colonne e restano compatibili con paginazione e ordinamento server-side.
+  </goal>
+
+  <context>
+    Framework tabellare generico gia' esistente (verificato, non ipotizzato):
+    - Backend: `TableDefinition` (interface) + `AbstractTableDefinition` + `TableRegistry`
+      (config `backend/config/tables.php`). Motore SSRM in
+      `backend/app/Services/TableService.php` (`applyFilters`/`applyColumnFilter`/
+      `applyDateFilter`/`applySorting`, cap `MAX_LIMIT=100`, `escapeLike`). Endpoint in
+      `backend/app/Http/Controllers/Table/TableController.php` (`columns`, `rows`,
+      `savePreferences`, `resetPreferences`). Validazione + whitelist in
+      `backend/app/Http/Requests/Table/TableRowsRequest.php`. Concrete:
+      `UsersTableDefinition`, `RolesTableDefinition`. Route in `backend/routes/api.php`
+      gruppo `auth:sanctum` + `throttle:60,1`. Envelope: `ok()` = {success,message,data};
+      `paginatedResponse()` = {items,pagination}.
+    - Frontend: AG Grid ENTERPRISE v35.3.1 gia' installato (ag-grid-community/enterprise/
+      react + @ag-grid-community/locale). Wrapper `frontend/src/components/data-table/
+      data-table.tsx` (`resolveFilter`), datasource `frontend/src/features/table/
+      ssrm-datasource.ts`, orchestratore `table-view.tsx`, tipi `types.ts`
+      (`ColumnType`, `FilterType`, `TableColumn`, `TableConfig`), api `api.ts`, hook
+      `use-table-config.ts`. Colonne generate dinamicamente dal backend via GET /columns.
+
+    Gap che questa spec colma:
+    1. Nessun endpoint per i valori distinti: oggi `column.options` del set filter e'
+       pre-calcolato una-tantum in GET /columns (statico, ignora i filtri attivi).
+    2. `applyColumnFilter` NON ha un ramo numerico: le colonne `number` cadono su LIKE.
+    3. Nessun supporto boolean.
+    4. Nessun widget combinato (lista valori + condizioni) per colonna.
+    5. Il datasource non veicola un filterModel combinato al backend.
+
+    Decisioni gia' prese (da conferma utente in fase di pianificazione):
+    - Widget per colonna: `agMultiColumnFilter` (Enterprise) = Set Filter + filtro per tipo.
+    - Valori distinti: endpoint dedicato con cap N e ricerca opzionale server-side,
+      rispettando i filtri attivi sulle ALTRE colonne. La colonna stessa NON auto-restringe
+      la propria lista (comportamento Excel).
+  </context>
+
+  <scope>
+    <in>
+      <item>Backend: nuovo endpoint POST /api/tables/{domain}/values per i valori distinti di una colonna, con allow-list colonne, ricerca opzionale, cap N, filtri cross-colonna applicati (escludendo la colonna target).</item>
+      <item>Backend: nuovo metodo di contratto `distinctValues(...)` su `TableDefinition`/`AbstractTableDefinition` (default: colonna DB reale via SELECT DISTINCT; override nelle concrete per colonne DERIVATE: roles, permissions, geo, user_type).</item>
+      <item>Backend: `TableService::distinctValues()` (motore) + estensione di `applyColumnFilter` per: ramo `number` (equals/notEqual/greaterThan/greaterThanOrEqual/lessThan/lessThanOrEqual/inRange), ramo `boolean` (true/false), ramo `multi` (Set + condizione), e condizioni combinate `{operator: AND|OR, conditions:[...]}` per text/number/date.</item>
+      <item>Backend: nuovo FormRequest `TableValuesRequest` (valida columnId in whitelist filtrabile, search, limit, filterModel keys in whitelist).</item>
+      <item>Backend: aggiunta `filterType` `number`/`boolean` alle colonne pertinenti nelle concrete definitions dove sensato (es. `users_count` number su roles; `id` number su users).</item>
+      <item>Backend: DB agent valuta/aggiunge indici su colonne filtrabili testuali/numeriche per la performance del DISTINCT + LIKE.</item>
+      <item>Frontend: `resolveFilter` usa `agMultiColumnFilter` per text/number/date (Set + condizione) e `agSetColumnFilter` per set/enum/boolean; `filterParams` costruisce i sub-filtri e il values-callback ASINCRONO del Set Filter che chiama il nuovo endpoint (payload = filterModel corrente sulle ALTRE colonne).</item>
+      <item>Frontend: nuova api `fetchTableColumnValues(domain, payload)`; tipi contratto (`TableColumnValuesPayload`, `TableColumnValuesResponse`, estensione `FilterType`/`ColumnType` con `boolean`).</item>
+      <item>Frontend: datasource inoltra intatto il filterModel combinato (multi) al backend; indicazione UI quando i valori distinti sono troncati (hasMore).</item>
+      <item>Test: Pest (endpoint values: happy/authz/whitelist/cross-colonna/cap; engine number/boolean/multi/combined) + Vitest (resolveFilter widget mapping, values-callback payload, datasource forwarding).</item>
+    </in>
+    <out>
+      <item>Advanced Filter globale di AG Grid (`enableAdvancedFilter`): resta disattivato; niente barra query cross-colonna.</item>
+      <item>Ricerca server-side legata al mini-filter del Set Filter mentre si digita (re-fetch on-type): l'endpoint SUPPORTA `search` ed e' testato, ma il wiring del mini-filter->server e' fuori scope in questa iterazione; il long-tail oltre il cap N si copre con le condizioni avanzate. Il campo `hasMore` segnala il troncamento.</item>
+      <item>Nuove dipendenze (nessuna: AG Grid Enterprise gia' presente).</item>
+      <item>Persistenza dei filtri nelle preferenze utente (fuori scope; qui solo comportamento runtime).</item>
+      <item>Modifiche al contratto di GET /columns, POST /rows (envelope invariati) oltre all'eventuale nuovo `filterType`.</item>
+      <item>Filtri su colonne non gia' marcate `filterable` (nessun ampliamento della superficie filtrabile oltre il necessario).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <!-- NUOVO endpoint: valori distinti di una colonna (set filter server-side, Excel-like) -->
+    <endpoint method="POST" path="/api/tables/{domain}/values">
+      <request>
+        <!-- content-type application/json -->
+        columnId: string            <!-- required; DEVE essere una colonna filterable (whitelist) -->
+        search: string|null         <!-- optional; substring case-insensitive sui valori distinti; max 255 -->
+        limit: integer|null         <!-- optional; default 200, min 1, cap 200 -->
+        filterModel: object|null    <!-- optional; stessi filtri attivi sulle ALTRE colonne (map colId -> filterEntry).
+                                          La colonna target, se presente, viene IGNORATA server-side (comportamento Excel). -->
+      </request>
+      <response status="200">
+        <!-- envelope ok(): { success:true, message, data } -->
+        data: {
+          values: string[]          <!-- valori distinti, come stringhe, ordinati asc; length <= limit -->
+          hasMore: boolean          <!-- true se esistono altri valori oltre al cap -->
+        }
+      </response>
+      <errors>
+        <!-- 401 non autenticato (auth:sanctum) -->
+        <!-- 403 actor senza permesso sul dominio (definition->authorizeViewAny) -->
+        <!-- 404 dominio sconosciuto (TableRegistry::resolve) -->
+        <!-- 422 columnId mancante o NON filterable; limit fuori range; filterModel con chiave non filterable -->
+      </errors>
+      <!-- BUGFIX: colonne DERIVATE computed (nessuna colonna DB reale, es. users.primary_address,
+           users.primary_contact, roles.users_count) NON hanno una lista valori distinti calcolabile
+           con un SELECT DISTINCT sulla base query → il motore NON deve mai cadere sul fallback
+           distinctFromColumn per queste (causava "Unknown column"). Per esse /values ritorna
+           { values: [], hasMore: false }. Il filtro su queste colonne resta pienamente funzionante
+           via le sole CONDIZIONI (applyDerivedFilter: address/contact text, users_count number). -->
+    </endpoint>
+
+    <!-- Aggiunta al contratto GET /columns: ogni colonna espone `hasFilterValues: boolean`.
+         true = supporta la lista valori (Set Filter server-side): colonne `set`/enum/boolean e
+         colonne testo/numero REALI o derivate con resolver (roles/geo/user_type/permissions).
+         false = colonna computed senza lista valori (address/contact/users_count) → il frontend
+         mostra SOLO il filtro a condizioni (agText/agNumber/agDate), niente Set tab, niente call /values. -->
+    <column_capability>
+      hasFilterValues: boolean   <!-- default true; le colonne computed la dichiarano false -->
+    </column_capability>
+
+    <!-- Shape del filterModel combinato inviato a POST /rows (e in `filterModel` di /values).
+         Backend (TableService::applyColumnFilter) deve interpretare questi tipi. -->
+    <filter_model_shapes>
+      <!-- SET / enum / boolean (multi-select lista valori) -->
+      set:     { filterType: "set", values: string[] }
+
+      <!-- TEXT: condizione singola o combinata -->
+      text:    { filterType: "text", type: "contains|notContains|equals|notEqual|startsWith|endsWith", filter: string }
+      text2:   { filterType: "text", operator: "AND|OR", conditions: [ textCond, textCond ] }
+
+      <!-- NUMBER: condizione singola o combinata; inRange usa filter+filterTo -->
+      number:  { filterType: "number", type: "equals|notEqual|greaterThan|greaterThanOrEqual|lessThan|lessThanOrEqual|inRange", filter: number, filterTo?: number }
+      number2: { filterType: "number", operator: "AND|OR", conditions: [ numberCond, numberCond ] }
+
+      <!-- DATE: condizione singola o combinata; inRange usa dateFrom+dateTo -->
+      date:    { filterType: "date", type: "equals|notEqual|lessThan|greaterThan|inRange", dateFrom: string, dateTo?: string }
+      date2:   { filterType: "date", operator: "AND|OR", conditions: [ dateCond, dateCond ] }
+
+      <!-- MULTI (agMultiColumnFilter): impila Set + condizione tipizzata (AND tra i due) -->
+      multi:   { filterType: "multi", filterModels: [ set|null, (text|number|date)|null ] }
+    </filter_model_shapes>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- BACKEND — endpoint values -->
+    <criterion id="AC-001">Dato un actor autorizzato, quando POST /api/tables/users/values con columnId reale filtrabile (es. `email`), allora 200 con data.values (stringhe distinte ordinate) e data.hasMore booleano; i valori provengono da TUTTE le righe, non dalla pagina corrente.</criterion>
+    <criterion id="AC-002">Dato POST /values con columnId NON filterable o mancante, allora 422 (whitelist), e la query non viene mai eseguita sull'input grezzo.</criterion>
+    <criterion id="AC-003">Dato un actor senza permesso sul dominio, quando POST /values, allora 403 (authorizeViewAny) prima di qualunque query.</criterion>
+    <criterion id="AC-004">Dato POST /values con `filterModel` attivo su un'ALTRA colonna, allora data.values e' ristretto a quel filtro; un filterModel sulla colonna target stessa NON restringe la sua lista.</criterion>
+    <criterion id="AC-005">Dato POST /values con `search`="ab", allora data.values contiene solo valori che matchano il substring (case-insensitive), con wildcard LIKE escapate; e con oltre `limit` valori distinti, data.values ha length == limit e data.hasMore == true.</criterion>
+    <criterion id="AC-006">Dato una colonna DERIVATA (es. `roles` su users, `permissions` su roles), quando POST /values, allora data.values usa il resolver della definition (non un DISTINCT sulla colonna DB inesistente) e rispetta lo scope per-actor.</criterion>
+    <!-- BACKEND — motore filtri -->
+    <criterion id="AC-007">Dato un filterModel number `{type:"greaterThanOrEqual", filter:10}` su una colonna number, allora la query applica WHERE col >= 10 con valore bound; `inRange` applica whereBetween(filter, filterTo).</criterion>
+    <criterion id="AC-008">Dato un filterModel `{filterType:"multi", filterModels:[setModel, textModel]}`, allora vengono applicati ENTRAMBI i sub-filtri in AND; con un solo sub-model presente si applica solo quello.</criterion>
+    <criterion id="AC-009">Dato un filterModel text combinato `{operator:"OR", conditions:[{type:"startsWith",filter:"a"},{type:"startsWith",filter:"b"}]}`, allora la query raggruppa le condizioni con OR annidato (senza alterare gli AND tra colonne diverse).</criterion>
+    <criterion id="AC-010">Dato un filterModel boolean `{filterType:"boolean", values:[true]}` (o equivalente set) su una colonna boolean, allora WHERE col = true; con [true,false] nessun vincolo o whereIn coerente.</criterion>
+    <criterion id="AC-011">Ogni valore filtro resta un parametro bound (mai interpolato); nessun uso di whereRaw/orderByRaw con input; le colonne non in whitelist sono ignorate/422.</criterion>
+    <!-- FRONTEND -->
+    <criterion id="AC-012">Dato una colonna con filterType text/number/date, allora resolveFilter restituisce `agMultiColumnFilter` con sub-filtri [SetFilter, filtro tipizzato]; per set/enum/boolean restituisce `agSetColumnFilter`.</criterion>
+    <criterion id="AC-013">Dato l'apertura del Set Filter di una colonna, allora il values-callback chiama fetchTableColumnValues con { columnId, filterModel = filtri correnti sulle ALTRE colonne } e popola la lista con la response; su errore params.fail-equivalent senza crash.</criterion>
+    <criterion id="AC-014">Dato un filterModel combinato prodotto dalla griglia, allora ssrm-datasource lo inoltra intatto (map by colId, inclusa la shape multi) a POST /rows; l'Advanced Filter (array model) resta escluso.</criterion>
+    <criterion id="AC-015">Dato data.hasMore==true, allora la UI segnala che la lista e' troncata (uso condizioni per il long-tail).</criterion>
+    <!-- BUGFIX colonne derivate computed -->
+    <criterion id="AC-016">Dato POST /values su una colonna DERIVATA computed (users.primary_address, users.primary_contact, roles.users_count), allora risposta 200 con { values: [], hasMore: false } — MAI 500/"Unknown column"; il motore non esegue distinctFromColumn su una colonna non reale.</criterion>
+    <criterion id="AC-017">Dato un filtro a CONDIZIONI su quelle colonne (address `contains`, users_count `greaterThan`/inRange), allora POST /rows filtra correttamente via applyDerivedFilter (nessuna regressione).</criterion>
+    <criterion id="AC-018">Dato GET /columns, allora ogni colonna espone `hasFilterValues`; il frontend usa il filtro a sole condizioni quando hasFilterValues==false (niente Set tab), agMultiColumnFilter quando true. Il flag/short-circuit resta come difesa in profondita' per colonne senza lista.</criterion>
+    <!-- ENHANCEMENT (UX Excel-classic + liste per le colonne computed) — sostituisce la scelta
+         precedente di lasciare le computed a sole condizioni. -->
+    <criterion id="AC-019">Dato POST /values sulle colonne computed CON checklist (users.primary_contact, roles.users_count), allora ritorna la LISTA dei valori distinti reali (valore del contatto primario; conteggio utenti), rispettando search + cap + filtri delle altre colonne, MAI 500. users.primary_address e' SOLO CONDIZIONI (hasFilterValues=false, decisione: valore composto → niente checklist, evita rischio parita' MySQL/SQLite): /values ritorna vuoto (short-circuit) e la sua condizione contains/equals filtra via applyAddressFilter.</criterion>
+    <criterion id="AC-022">Dato un filterModel `multi` su una colonna DERIVATA (primary_contact, users_count), allora applyDerivedFilter fa l'unwrap del multi e applica in AND ogni sub-model presente: il SET (values selezionati dalla checklist) via il set-handler della colonna (contact → whereIn su contacts.value dei primari; users_count → has('users','=',v) in OR sui conteggi), e la CONDIZIONE via il gestore esistente. Sia la selezione da checklist sia le condizioni filtrano correttamente (fix della regressione multi).</criterion>
+    <criterion id="AC-020">Dato il filtro di una colonna text/number/date, allora il layout e' Excel-classic: un unico pannello con Set Filter INLINE (ricerca + checklist + Seleziona tutto, excelMode) e la condizione tipizzata in un SOTTO-MENU titolato (Filtri per testo/numero/data). Nessuna scheda a tab. Le colonne set/enum/boolean restano checklist (agSetColumnFilter, excelMode).</criterion>
+    <criterion id="AC-021">Dato il pannello Excel, allora e' coerente su TUTTE le colonne filtrabili (stesso look), incluse le computed, che ora mostrano la checklist come le altre.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie gia' presenti (AG Grid Enterprise incluso). Nessuna nuova dipendenza.</item>
+    <item>Sicurezza: allow-list colonne per DISTINCT/filtri/sort; nessun whereRaw/orderByRaw su input; valori sempre bound; LIKE con escapeLike; authz server-side su OGNI endpoint (authorizeViewAny); FormRequest su ogni input.</item>
+    <item>Performance: DISTINCT con LIMIT N (cap 200) + ORDER BY; ricerca via LIKE su colonna preferibilmente indicizzata; il DB agent verifica/aggiunge indici. Filtro cross-colonna riusa esattamente la pipeline `applyFilters` (nessuna duplicazione della logica anti-injection).</item>
+    <item>Layering invariato: Controller thin -> FormRequest -> TableService/definition. La logica SSRM resta in UN solo posto (TableService); le colonne derivate restano nelle definition via hook, come applyDerivedFilter/applyDerivedSort.</item>
+    <item>Envelope: /values usa ok() ({success,message,data}); /rows e /columns invariati.</item>
+    <item>Identificatori in inglese; naming riusato esattamente da TableDefinition/TableService esistenti. File entro 300/500 righe: se TableService supera, valutare estrazione dei rami filtro in un collaboratore dedicato.</item>
+    <item>Definition of Done: test Pest+Vitest ESEGUITI (verdi), Pint/ESLint puliti, `tsc --noEmit` pulito, HANDOFF aggiornato a stato verde.</item>
+  </constraints>
+
+</spec>

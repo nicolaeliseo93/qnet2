@@ -21,6 +21,10 @@
 /storage/*.key
 /storage/pail
 /vendor
+# Stray SQLite dev DB accidentally created at project root (configured DB is MySQL "qnet2")
+/qnet2
+/*.sqlite
+/*.sqlite3
 _ide_helper.php
 Homestead.json
 Homestead.yaml

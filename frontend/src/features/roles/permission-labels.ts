@@ -43,3 +43,19 @@ export function permissionLabel(permission: string, i18n: I18nInstance): string 
   }
   return `${resourceLabel(permission.slice(0, dot), i18n)} · ${abilityLabel(permission, i18n)}`
 }
+
+/**
+ * Localized label for a resource's field, e.g. `users`/`email` → "Email"
+ * (spec 0006, field-permission matrix). Reuses each resource's existing form
+ * field labels (`<resource>.form.<field>`) so the matrix shows the same names
+ * as the form itself; falls back to a humanized token for a field with no
+ * existing form label (e.g. a future resource with no dedicated form yet).
+ */
+export function fieldPermissionLabel(
+  resource: string,
+  field: string,
+  i18n: I18nInstance,
+): string {
+  const key = `${resource}.form.${field}`
+  return i18n.exists(key) ? i18n.t(key) : humanizeToken(field)
+}

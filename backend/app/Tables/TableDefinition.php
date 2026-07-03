@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  * so the security-critical SSRM engine lives in exactly one place and every
  * domain inherits it identically.
  *
- * @phpstan-type ColumnDefinition array{id: string, label: string, type: string, visible: bool, sortable: bool, filterable: bool, filterType?: string|null, options?: array<int, scalar>|null, badges?: array<int, array<string, mixed>>|null, permission?: string|null}
+ * @phpstan-type ColumnDefinition array{id: string, label: string, type: string, visible: bool, sortable: bool, filterable: bool, filterType?: string|null, hasFilterValues?: bool, options?: array<int, scalar>|null, badges?: array<int, array<string, mixed>>|null, permission?: string|null}
  * @phpstan-type FilterDefinition array{columnId: string, type: string, options?: array<int, scalar>|null, optionsResolver?: callable}
  * @phpstan-type ActionDefinition array{key: string, label: string, icon: string, type: string, confirm: bool, permission?: string|null}
  */
@@ -169,4 +169,22 @@ interface TableDefinition
      * @param  Builder<Model>  $query
      */
     public function applyDerivedSort(Builder $query, string $columnId, string $direction): bool;
+
+    /**
+     * Hook for the Excel-like distinct-values endpoint (spec 0004). Return the
+     * resolved list of distinct scalar values (as strings, already
+     * search-filtered and capped to `$limit`) when the definition owns a
+     * DERIVED column with no real DB column to `SELECT DISTINCT` on (e.g.
+     * `roles`, `permissions`, geo names). Return null to let the generic
+     * engine run a plain `SELECT DISTINCT` on the real column `$columnId`.
+     *
+     * `$query` is the base query with every OTHER active filter already
+     * applied (never the target column's own filter — the column must not
+     * auto-restrict its own list).
+     *
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $columnConfig
+     * @return array<int, string>|null
+     */
+    public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array;
 }

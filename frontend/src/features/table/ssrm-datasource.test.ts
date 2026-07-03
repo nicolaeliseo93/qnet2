@@ -1,0 +1,125 @@
+import type { IServerSideGetRowsParams } from 'ag-grid-community'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSsrmDatasource } from '@/features/table/ssrm-datasource'
+import { fetchTableRows } from '@/features/table/api'
+import type { TableRow } from '@/features/table/types'
+
+vi.mock('@/features/table/api', () => ({
+  fetchTableRows: vi.fn(),
+}))
+
+const fetchRowsMock = vi.mocked(fetchTableRows)
+
+/** Builds a minimal SSRM `getRows` params stub around the given request. */
+function stubParams(
+  request: Partial<IServerSideGetRowsParams<TableRow>['request']>,
+): IServerSideGetRowsParams<TableRow> {
+  return {
+    request: {
+      startRow: 0,
+      endRow: 25,
+      rowGroupCols: [],
+      valueCols: [],
+      pivotCols: [],
+      pivotMode: false,
+      groupKeys: [],
+      filterModel: null,
+      sortModel: [],
+      ...request,
+    },
+    success: vi.fn(),
+    fail: vi.fn(),
+  } as unknown as IServerSideGetRowsParams<TableRow>
+}
+
+describe('createSsrmDatasource', () => {
+  beforeEach(() => {
+    fetchRowsMock.mockReset()
+  })
+
+  it('forwards a combined filterModel (including the multi shape) intact to fetchTableRows', async () => {
+    fetchRowsMock.mockResolvedValue({
+      items: [],
+      export_link: null,
+      pagination: { total: 0, offset: 0, limit: 25, total_pages: 0 },
+    })
+    const multiFilterModel = {
+      email: {
+        filterType: 'multi',
+        filterModels: [
+          { filterType: 'set', values: ['a@test.com'] },
+          { filterType: 'text', type: 'contains', filter: 'a' },
+        ],
+      },
+    }
+    const params = stubParams({ filterModel: multiFilterModel })
+
+    await createSsrmDatasource('users').getRows(params)
+
+    expect(fetchRowsMock).toHaveBeenCalledWith('users', {
+      startRow: 0,
+      endRow: 25,
+      sortModel: [],
+      filterModel: multiFilterModel,
+    })
+  })
+
+  it('normalizes a null filterModel to an empty object', async () => {
+    fetchRowsMock.mockResolvedValue({
+      items: [],
+      export_link: null,
+      pagination: { total: 0, offset: 0, limit: 25, total_pages: 0 },
+    })
+    const params = stubParams({ filterModel: null })
+
+    await createSsrmDatasource('users').getRows(params)
+
+    expect(fetchRowsMock).toHaveBeenCalledWith(
+      'users',
+      expect.objectContaining({ filterModel: {} }),
+    )
+  })
+
+  it('excludes the Advanced Filter model (array shape) from the request', async () => {
+    fetchRowsMock.mockResolvedValue({
+      items: [],
+      export_link: null,
+      pagination: { total: 0, offset: 0, limit: 25, total_pages: 0 },
+    })
+    // Defensive edge case: an array-shaped filterModel is never forwarded raw.
+    const params = stubParams({
+      filterModel: [{ filterType: 'join', type: 'AND', conditions: [] }] as never,
+    })
+
+    await createSsrmDatasource('users').getRows(params)
+
+    expect(fetchRowsMock).toHaveBeenCalledWith(
+      'users',
+      expect.objectContaining({ filterModel: {} }),
+    )
+  })
+
+  it('maps the paginatedResponse envelope to rowData/rowCount on success', async () => {
+    const items = [{ id: 1, actions: [] }] as TableRow[]
+    fetchRowsMock.mockResolvedValue({
+      items,
+      export_link: null,
+      pagination: { total: 1, offset: 0, limit: 25, total_pages: 1 },
+    })
+    const params = stubParams({})
+
+    await createSsrmDatasource('users').getRows(params)
+
+    expect(params.success).toHaveBeenCalledWith({ rowData: items, rowCount: 1 })
+  })
+
+  it('calls params.fail() when the request rejects', async () => {
+    fetchRowsMock.mockRejectedValue(new Error('network error'))
+    const params = stubParams({})
+
+    await createSsrmDatasource('users').getRows(params)
+
+    expect(params.fail).toHaveBeenCalled()
+    expect(params.success).not.toHaveBeenCalled()
+  })
+})

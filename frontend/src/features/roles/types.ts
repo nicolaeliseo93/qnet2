@@ -5,6 +5,21 @@
  * Source of truth: the Roles CRUD API contract (mirrors UserResource shape).
  */
 
+import type { ResourcePermissions } from '@/features/authorization/types'
+
+/**
+ * A single per-role field-permission override row (spec 0006): a DB-driven
+ * RESTRICTION within the 0004 code ceiling for one `(resource, field)` pair.
+ * Absence of a row for a field means "no restriction" (full ceiling).
+ */
+export interface RoleFieldPermission {
+  resource: string
+  field: string
+  visible: boolean
+  editable: boolean
+  required: boolean
+}
+
 /**
  * Single role detail returned by GET/POST/PATCH /roles (envelope `data`).
  * Matches RoleResource: the role plus the flat list of its permission names.
@@ -21,6 +36,22 @@ export interface RoleDetail {
    * older responses.
    */
   users?: number[]
+  /** This role's field-permission matrix overrides (spec 0006). */
+  field_permissions: RoleFieldPermission[]
+}
+
+/**
+ * A `RoleDetail` carrying the actor's authorization metadata for this
+ * instance (spec 0004), as returned by `GET /roles/{role}` (`show`). Used to
+ * seed the edit form's `ResourcePermissionsProvider` without a second request.
+ *
+ * Named `authorization`, not `permissions`: `RoleDetail.permissions` is
+ * already the role's own granted-permission names (`string[]`) — the wire
+ * envelope keeps the two as top-level siblings (`data.permissions` vs the
+ * envelope's `permissions`), so the flattened client type must not collide.
+ */
+export interface RoleDetailWithPermissions extends RoleDetail {
+  authorization: ResourcePermissions
 }
 
 /** Payload for POST /roles (create). */
@@ -29,15 +60,19 @@ export interface CreateRolePayload {
   permissions?: string[]
   /** Initial member ids. Omit to leave membership untouched. */
   users?: number[]
+  /** Initial field-permission matrix (spec 0006). Omit to leave it empty. */
+  field_permissions?: RoleFieldPermission[]
 }
 
 /**
  * Payload for PATCH /roles/{id} (partial update). Every field is optional so the
  * request only carries what actually changed. `users`: omit → membership
- * untouched; `[]` → remove all members; array → set membership.
+ * untouched; `[]` → remove all members; array → set membership. Same
+ * omit/empty-array semantics apply to `field_permissions` (spec 0006).
  */
 export interface UpdateRolePayload {
   name?: string
   permissions?: string[]
   users?: number[]
+  field_permissions?: RoleFieldPermission[]
 }

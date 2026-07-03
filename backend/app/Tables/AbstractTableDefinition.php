@@ -113,11 +113,16 @@ abstract class AbstractTableDefinition implements TableDefinition
      *
      * Presentation properties (visible/width/order) come from the layout and are
      * user-overridable (ADR-0004); structural/security properties (sortable/
-     * filterable/filterType) come straight from the declaration and are never
-     * user-overridable. `filterType` drives the frontend filter widget (a set
-     * filter can sit on a text/badge-rendered column, e.g. the geo columns), so
-     * it is part of the public contract. `badges` is emitted only for `badge`
-     * columns, keeping every other column byte-identical to before.
+     * filterable/filterType/hasFilterValues) come straight from the declaration
+     * and are never user-overridable. `filterType` drives the frontend filter
+     * widget (a set filter can sit on a text/badge-rendered column, e.g. the geo
+     * columns), so it is part of the public contract. `hasFilterValues` (spec
+     * 0004/0005) tells the frontend whether the column's Set Filter can
+     * enumerate a discrete value list at all — false for COMPUTED columns with
+     * no discrete list (a formatted address string, an aggregate count), which
+     * also have no real DB column to `SELECT DISTINCT` on. `badges` is emitted
+     * only for `badge` columns, keeping every other column byte-identical to
+     * before.
      *
      * @param  array<string, mixed>  $column
      * @param  array<string, array{visible: bool, width: int|null, order: int}>  $layout
@@ -137,6 +142,7 @@ abstract class AbstractTableDefinition implements TableDefinition
             'sortable' => $column['sortable'],
             'filterable' => $column['filterable'],
             'filterType' => $column['filterType'] ?? null,
+            'hasFilterValues' => $this->hasFilterValues($column),
             'options' => $this->optionsFor($column['id'], $actor)
                 ?? ($column['options'] ?? null),
         ];
@@ -154,6 +160,24 @@ abstract class AbstractTableDefinition implements TableDefinition
         }
 
         return $resolved;
+    }
+
+    /**
+     * Whether the Set Filter (spec 0004/0005) can enumerate a discrete value
+     * list for this column. Explicit `hasFilterValues` in the raw declaration
+     * wins (COMPUTED columns with no discrete list — e.g. a formatted address
+     * string, an aggregate count — declare it `false`); otherwise defaults to
+     * true whenever the column is filterable with a declared filterType.
+     *
+     * @param  array<string, mixed>  $column
+     */
+    private function hasFilterValues(array $column): bool
+    {
+        if (array_key_exists('hasFilterValues', $column)) {
+            return (bool) $column['hasFilterValues'];
+        }
+
+        return ($column['filterable'] ?? false) === true && ($column['filterType'] ?? null) !== null;
     }
 
     /**
@@ -307,5 +331,19 @@ abstract class AbstractTableDefinition implements TableDefinition
     public function applyDerivedSort(Builder $query, string $columnId, string $direction): bool
     {
         return false;
+    }
+
+    /**
+     * Default: no derived column owns its distinct-values resolution: let the
+     * generic engine `SELECT DISTINCT` the real column. Concrete definitions
+     * override for DERIVED columns (e.g. `roles`, `permissions`, geo names).
+     *
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $columnConfig
+     * @return array<int, string>|null
+     */
+    public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
+    {
+        return null;
     }
 }

@@ -4,7 +4,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { UserForm } from '@/features/users/user-form'
-import type { UserDetail } from '@/features/users/types'
+import type { UserDetailWithPermissions } from '@/features/users/types'
+import type { ResourcePermissions } from '@/features/authorization/types'
 import type { EnumOption } from '@/features/config/types'
 import type { PersonalDataCard } from '@/features/personal-data/types'
 
@@ -18,6 +19,22 @@ vi.mock('@/features/users/api', () => ({
   updateUser: (...args: unknown[]) => updateUserMock(...args),
   uploadUserAvatar: vi.fn(),
   deleteUserAvatar: vi.fn(),
+}))
+
+/**
+ * This suite is not about authorization metadata (covered by
+ * `user-form-metadata.test.tsx`): every field resolves as visible+editable
+ * (the `MetaField` fallback, since `fields` is empty) so create/edit render
+ * exactly as they did before spec 0004.
+ */
+const FULL_ACCESS_PERMISSIONS: ResourcePermissions = {
+  resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+  fields: {},
+  actions: { upload_avatar: true, delete_avatar: true },
+}
+
+vi.mock('@/features/users/use-user-form-meta', () => ({
+  useUserFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
 // Enum options consumed by the personal-data card form (controlled, no network).
@@ -89,7 +106,7 @@ function wrapper() {
   )
 }
 
-function user(overrides: Partial<UserDetail> = {}): UserDetail {
+function user(overrides: Partial<UserDetailWithPermissions> = {}): UserDetailWithPermissions {
   return {
     id: 7,
     name: 'Ada Lovelace',
@@ -98,6 +115,9 @@ function user(overrides: Partial<UserDetail> = {}): UserDetail {
     roles: [],
     avatar_url: null,
     created_at: null,
+    // `useUserFormMeta` is mocked above, so this value is never actually read;
+    // present only to satisfy `UserFormMode`'s edit-variant type.
+    permissions: FULL_ACCESS_PERMISSIONS,
     ...overrides,
   }
 }

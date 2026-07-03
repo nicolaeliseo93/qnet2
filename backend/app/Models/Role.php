@@ -6,6 +6,7 @@ use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\RoleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Permission\Models\Role as SpatieRole;
 
 /**
@@ -25,4 +26,14 @@ class Role extends SpatieRole
 {
     /** @use HasFactory<RoleFactory> */
     use HasFactory, LogsModelActivity;
+
+    /**
+     * This role's field-permission matrix rows (spec 0006) — per-resource,
+     * per-field visible/editable/required restrictions within the code
+     * ceiling. Fully replaced on every create/update (RoleService).
+     */
+    public function fieldPermissions(): HasMany
+    {
+        return $this->hasMany(RoleFieldPermission::class);
+    }
 }

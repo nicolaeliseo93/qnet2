@@ -16,7 +16,9 @@ import {
   AG_GRID_LOCALE_EN,
   AG_GRID_LOCALE_IT,
 } from '@ag-grid-community/locale'
+import { toast } from 'sonner'
 import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
+import { buildColumnFilter } from '@/components/data-table/column-filters'
 import { Skeleton } from '@/components/ui/skeleton'
 import { BadgeCell } from '@/features/table/cell-renderers'
 import type { ColumnType, TableColumn } from '@/features/table/types'
@@ -88,6 +90,13 @@ export type CellRenderer = (params: ICellRendererParams) => React.ReactNode
 export type RowActionsRenderer = (params: ICellRendererParams) => React.ReactNode
 
 interface DataTableProps {
+  /**
+   * Domain key selecting the server-side table definition (e.g. "users").
+   * The only domain-specific input the wrapper needs: it feeds the Set
+   * Filter's async values-callback (POST /tables/{domain}/values), nothing
+   * else about the domain leaks in.
+   */
+  domain: string
   /** Backend-driven column schema. */
   columns: TableColumn[]
   /** SSRM datasource feeding the grid. */
@@ -115,44 +124,6 @@ interface DataTableProps {
   onColumnStateChanged?: () => void
 }
 
-/**
- * Maps a backend column to the AG Grid filter component, or false.
- *
- * Prefers the explicit `filterType` from the config contract (0002) when
- * present, falling back to the column `type` for backward compatibility.
- */
-function resolveFilter(column: TableColumn): ColDef['filter'] {
-  if (!column.filterable) {
-    return false
-  }
-  if (column.filterType) {
-    switch (column.filterType) {
-      case 'number':
-        return 'agNumberColumnFilter'
-      case 'date':
-        return 'agDateColumnFilter'
-      case 'set':
-        return 'agSetColumnFilter'
-      case 'text':
-      default:
-        return 'agTextColumnFilter'
-    }
-  }
-  switch (column.type) {
-    case 'number':
-      return 'agNumberColumnFilter'
-    case 'datetime':
-      return 'agDateColumnFilter'
-    case 'tags':
-    case 'enum':
-    case 'badge':
-      return 'agSetColumnFilter'
-    case 'text':
-    default:
-      return 'agTextColumnFilter'
-  }
-}
-
 /** Default cell value formatter for the given column type. */
 function defaultValueFormatter(type: ColumnType) {
   if (type === 'tags') {
@@ -171,6 +142,7 @@ function defaultValueFormatter(type: ColumnType) {
  * domain logic or API calls — data arrives through the SSRM `datasource`.
  */
 export function DataTable({
+  domain,
   columns,
   datasource,
   blockSize,
@@ -204,11 +176,19 @@ export function DataTable({
             )
           : undefined
       const renderer = custom ?? badgeFallback
-      const filterWidget = resolveFilter(column)
       // A column with a persisted width uses it as a fixed width (flex:0 opts it
       // out of the flex layout); columns without one keep flexing to fill space
       // via defaultColDef.flex. Columns arrive already ordered by `order`.
       const hasWidth = column.width != null
+      // Every Set Filter (standalone or nested in the Multi Filter) gets its
+      // values from the server, never a backend one-off list or the paged
+      // client rows (0004) — see `buildColumnFilter`.
+      const { filter, filterParams } = buildColumnFilter(
+        domain,
+        column,
+        () => toast.info(t('table.filterValuesTruncated')),
+        t,
+      )
       return {
         colId: column.id,
         field: column.id,
@@ -220,14 +200,8 @@ export function DataTable({
         minWidth: hasWidth ? Math.min(DEFAULT_MIN_WIDTH, column.width!) : undefined,
         flex: hasWidth ? 0 : undefined,
         sortable: column.sortable,
-        filter: filterWidget,
-        // Set filters need their values supplied by the backend, not derived
-        // from the (paged) client rows. Keyed off the resolved widget so it also
-        // covers text/badge-rendered columns that carry a `set` filterType.
-        filterParams:
-          filterWidget === 'agSetColumnFilter'
-            ? { values: column.options ?? [] }
-            : undefined,
+        filter,
+        filterParams,
         cellRenderer: renderer
           ? (params: ICellRendererParams) => renderer(params)
           : undefined,
@@ -255,11 +229,11 @@ export function DataTable({
     }
 
     return mapped
-  }, [columns, cellRenderers, renderRowActions, actionsHeaderLabel, t])
+  }, [domain, columns, cellRenderers, renderRowActions, actionsHeaderLabel, t])
 
   // Persist only USER-driven layout changes. AG Grid also emits these events for
   // its own programmatic updates (`api`, e.g. when we apply new columnDefs) and
-  // for flex re-layout (`flex`); excluding them prevents a save↔rebuild loop.
+  // for flex re-layout (`flex`); excluding them prevents a save-then-rebuild loop.
   // Resize/move are debounced upstream and only acted on when `finished`.
   const handleColumnResized = useCallback(
     (event: ColumnResizedEvent) => {

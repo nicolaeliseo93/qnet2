@@ -9,19 +9,22 @@ namespace App\DataObjects\Roles;
  * contract is explicit and the service reads typed properties — see
  * standards/architecture.md → Data Transfer Objects.
  *
- * `permissions` / `users` are null when the client did not submit the key at all
- * (leave them untouched), versus an explicit list (sync exactly those).
+ * `permissions` / `users` / `fieldPermissions` are null when the client did not
+ * submit the key at all (leave them untouched), versus an explicit list (sync
+ * exactly those; `[]` clears).
  */
 final readonly class CreateRoleData
 {
     /**
      * @param  array<int, string>|null  $permissions
      * @param  array<int, int>|null  $users  user ids to set as members
+     * @param  array<int, array<string, mixed>>|null  $fieldPermissions  spec 0006 matrix rows
      */
     public function __construct(
         public string $name,
         public ?array $permissions = null,
         public ?array $users = null,
+        public ?array $fieldPermissions = null,
     ) {}
 
     /**
@@ -37,6 +40,7 @@ final readonly class CreateRoleData
             users: array_key_exists('users', $data)
                 ? array_map('intval', (array) $data['users'])
                 : null,
+            fieldPermissions: array_key_exists('field_permissions', $data) ? (array) $data['field_permissions'] : null,
         );
     }
 
@@ -48,5 +52,10 @@ final readonly class CreateRoleData
     public function hasUsers(): bool
     {
         return $this->users !== null;
+    }
+
+    public function hasFieldPermissions(): bool
+    {
+        return $this->fieldPermissions !== null;
     }
 }

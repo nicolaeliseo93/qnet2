@@ -10,19 +10,22 @@ namespace App\DataObjects\Roles;
  * (leave it untouched), preserving partial-update semantics — see
  * standards/architecture.md → Data Transfer Objects.
  *
- * `permissions` / `users` distinguish "not submitted" (null → leave untouched)
- * from an explicit empty list ([] → detach every permission / remove all members).
+ * `permissions` / `users` / `fieldPermissions` distinguish "not submitted"
+ * (null → leave untouched) from an explicit empty list ([] → detach every
+ * permission / remove all members / clear the field-permission matrix).
  */
 final readonly class UpdateRoleData
 {
     /**
      * @param  array<int, string>|null  $permissions
      * @param  array<int, int>|null  $users  user ids to set as members
+     * @param  array<int, array<string, mixed>>|null  $fieldPermissions  spec 0006 matrix rows
      */
     public function __construct(
         public ?string $name = null,
         public ?array $permissions = null,
         public ?array $users = null,
+        public ?array $fieldPermissions = null,
     ) {}
 
     /**
@@ -38,6 +41,7 @@ final readonly class UpdateRoleData
             users: array_key_exists('users', $data)
                 ? array_map('intval', (array) $data['users'])
                 : null,
+            fieldPermissions: array_key_exists('field_permissions', $data) ? (array) $data['field_permissions'] : null,
         );
     }
 
@@ -49,6 +53,11 @@ final readonly class UpdateRoleData
     public function hasUsers(): bool
     {
         return $this->users !== null;
+    }
+
+    public function hasFieldPermissions(): bool
+    {
+        return $this->fieldPermissions !== null;
     }
 
     /**

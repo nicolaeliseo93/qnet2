@@ -49,14 +49,18 @@ class RoleService
                 $this->syncUsers($actor, $role, $data->users);
             }
 
+            if ($data->hasFieldPermissions()) {
+                $this->syncFieldPermissions($role, $data->fieldPermissions);
+            }
+
             return $role;
         });
     }
 
     /**
-     * Update an existing role's name and, when provided, its permissions and
-     * members. Only keys present in $data are touched, so partial (PATCH) updates
-     * leave untouched fields as-is.
+     * Update an existing role's name and, when provided, its permissions,
+     * members and field-permission matrix. Only keys present in $data are
+     * touched, so partial (PATCH) updates leave untouched fields as-is.
      *
      * The protected `super-admin` role can never have its NAME or PERMISSIONS
      * mutated (guardSystemRole). Its MEMBERSHIP, however, may be managed by a
@@ -81,6 +85,10 @@ class RoleService
 
             if ($data->hasUsers()) {
                 $this->syncUsers($actor, $role, $data->users);
+            }
+
+            if ($data->hasFieldPermissions()) {
+                $this->syncFieldPermissions($role, $data->fieldPermissions);
             }
 
             return $role;
@@ -190,8 +198,8 @@ class RoleService
      * (rather than passed as bare names) so syncPermissions never has to infer a
      * guard from the request: on an API (sanctum) call Spatie's name resolution
      * would look the permissions up on the `sanctum` guard, while the catalogue
-     * lives on `web`. Resolving explicit models on the role's guard keeps roles ↔
-     * permissions resolvable regardless of the request's active guard. An empty
+     * lives on `web`. Resolving explicit models on the role's guard keeps roles
+     * and permissions resolvable regardless of the request's active guard. An empty
      * list detaches every permission (explicit "remove all" semantics).
      *
      * @param  array<int, string>  $names
@@ -204,6 +212,38 @@ class RoleService
             ->get();
 
         $role->syncPermissions($permissions);
+    }
+
+    /**
+     * Full-replace sync of the role's field-permission matrix rows (spec
+     * 0006) to match the submitted set — delete then recreate inside the
+     * caller's transaction, so a failure never half-applies. An explicit
+     * empty list clears every row (mirrors syncPermissions' "remove all").
+     *
+     * Duplicate (resource, field) entries in the submission (which the DB
+     * unique constraint would otherwise reject) are collapsed to the LAST
+     * submitted one, so a malformed/duplicated payload never 500s.
+     *
+     * @param  array<int, array<string, mixed>>  $entries
+     */
+    private function syncFieldPermissions(Role $role, array $entries): void
+    {
+        $rows = collect($entries)
+            ->keyBy(static fn (array $entry): string => "{$entry['resource']}.{$entry['field']}")
+            ->map(static fn (array $entry): array => [
+                'resource' => $entry['resource'],
+                'field' => $entry['field'],
+                'visible' => (bool) ($entry['visible'] ?? true),
+                'editable' => (bool) ($entry['editable'] ?? true),
+                'required' => (bool) ($entry['required'] ?? false),
+            ])
+            ->values();
+
+        $role->fieldPermissions()->delete();
+
+        if ($rows->isNotEmpty()) {
+            $role->fieldPermissions()->createMany($rows);
+        }
     }
 
     /**

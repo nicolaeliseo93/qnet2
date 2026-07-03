@@ -7,6 +7,18 @@ import type { TFunction } from 'i18next'
  * form). The shapes mirror the backend contract 1:1.
  */
 
+/**
+ * A single field-permission matrix row (spec 0006). UX mirror only — the
+ * backend is the source of truth for the merge; this just shapes the payload.
+ */
+const roleFieldPermissionSchema = z.object({
+  resource: z.string(),
+  field: z.string(),
+  visible: z.boolean(),
+  editable: z.boolean(),
+  required: z.boolean(),
+})
+
 /** Shared fields common to create and edit. */
 function baseFields(t: TFunction) {
   return {
@@ -16,6 +28,7 @@ function baseFields(t: TFunction) {
       .max(255, t('roles.form.nameMax')),
     permissions: z.array(z.string()),
     users: z.array(z.number()),
+    field_permissions: z.array(roleFieldPermissionSchema),
   }
 }
 

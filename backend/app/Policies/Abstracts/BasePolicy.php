@@ -47,13 +47,32 @@ abstract class BasePolicy
     }
 
     /**
-     * The standard CRUD abilities every resource policy exposes.
+     * Bulk/file export of this resource (spec 0004 — centralized authorization
+     * metadata: `resource.export`).
+     */
+    public function export(User $user): bool
+    {
+        return $user->can($this->permission('export'));
+    }
+
+    /**
+     * Bulk/file import of this resource (spec 0004 — centralized authorization
+     * metadata: `resource.import`).
+     */
+    public function import(User $user): bool
+    {
+        return $user->can($this->permission('import'));
+    }
+
+    /**
+     * The standard CRUD (+export/import) abilities every resource policy
+     * exposes.
      *
      * @return array<int, string>
      */
     public static function abilities(): array
     {
-        return ['viewAny', 'view', 'create', 'update', 'delete'];
+        return ['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import'];
     }
 
     /**

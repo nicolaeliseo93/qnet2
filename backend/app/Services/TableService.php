@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\DataObjects\Table\DistinctValuesResult;
 use App\DataObjects\Table\RowsResult;
 use App\Models\User;
+use App\Services\Table\FilterApplier;
 use App\Tables\TableDefinition;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -15,9 +17,12 @@ use Illuminate\Database\Eloquent\Model;
  * verbatim from the old UserTableService::rows() and its helpers): translate
  * startRow/endRow → offset/limit with a MAX_LIMIT cap, apply sortModel/
  * filterModel against the definition's strict sortable/filterable whitelist
- * using bound query-builder calls only (never raw user input in SQL), escape
- * LIKE wildcards, cap set-filter cardinality, paginate, then map each row +
- * attach the per-row actions[] via the definition's Policy hooks.
+ * using bound query-builder calls only (never raw user input in SQL), cap
+ * set-filter cardinality, paginate, then map each row + attach the per-row
+ * actions[] via the definition's Policy hooks. Per-type filter branches
+ * (text/number/boolean/date/set/multi/combined) live in the injected
+ * FilterApplier collaborator (spec 0004) to keep this file focused on
+ * orchestration.
  *
  * It operates ONLY through the resolved TableDefinition (baseQuery, columns,
  * mapRow, actionsFor, applyDerivedFilter), so every domain inherits the exact
@@ -31,6 +36,8 @@ class TableService
      * BaseApiController::MAX_LIMIT and is also enforced by the FormRequest.
      */
     private const int MAX_LIMIT = 100;
+
+    public function __construct(private readonly FilterApplier $filterApplier) {}
 
     /**
      * Execute the SSRM query and return the rows + total for the envelope.
@@ -72,6 +79,84 @@ class TableService
     }
 
     /**
+     * Distinct values for a single filterable column (Excel-like set filter),
+     * scoped by the filters active on every OTHER column — the target column
+     * never auto-restricts its own list. Delegates to the definition's
+     * distinctValues() hook for DERIVED columns (no real DB column, e.g.
+     * `roles`); falls back to a plain `SELECT DISTINCT` on the real column.
+     *
+     * Fetches one value beyond `$limit` so `hasMore` reflects real truncation
+     * without a second COUNT query.
+     *
+     * @param  array<string, array<string, mixed>>  $filterModel
+     */
+    public function distinctValues(
+        TableDefinition $definition,
+        User $actor,
+        string $columnId,
+        ?string $search,
+        array $filterModel,
+        int $limit,
+    ): DistinctValuesResult {
+        $filterable = $definition->filterableColumnMap();
+
+        if (! array_key_exists($columnId, $filterable)) {
+            return new DistinctValuesResult(values: [], hasMore: false);
+        }
+
+        $columnConfig = $filterable[$columnId];
+
+        // COMPUTED columns with no discrete value list (e.g. a formatted
+        // address string, an aggregate count) declare hasFilterValues=false:
+        // there is no real DB column to SELECT DISTINCT on, so the generic
+        // fallback must never be reached for them (defence in depth against
+        // a 500 — see spec 0004/0005 AC-016..018). Resolver-backed derived
+        // columns (roles/geo/user_type/permissions) keep hasFilterValues=true
+        // and are unaffected.
+        if (($columnConfig['hasFilterValues'] ?? true) === false) {
+            return new DistinctValuesResult(values: [], hasMore: false);
+        }
+
+        $query = $definition->baseQuery();
+
+        unset($filterModel[$columnId]); // Excel behaviour: never self-restrict.
+        $this->applyFilters($definition, $query, $filterModel);
+
+        $fetchLimit = $limit + 1;
+        $resolved = $definition->distinctValues($actor, $columnId, $columnConfig, $search, $query, $fetchLimit);
+        $values = $resolved ?? $this->distinctFromColumn($query, $columnId, $search, $fetchLimit);
+
+        return new DistinctValuesResult(
+            values: array_slice($values, 0, $limit),
+            hasMore: count($values) > $limit,
+        );
+    }
+
+    /**
+     * Plain `SELECT DISTINCT` fallback for a real DB column: optional
+     * case-insensitive substring search (bound, LIKE-escaped), sorted, capped.
+     *
+     * @param  Builder<Model>  $query
+     * @return array<int, string>
+     */
+    private function distinctFromColumn(Builder $query, string $column, ?string $search, int $limit): array
+    {
+        $clone = clone $query;
+
+        if ($search !== null && $search !== '') {
+            $clone->where($column, 'like', '%'.$this->filterApplier->escapeLike($search).'%');
+        }
+
+        return $clone->whereNotNull($column)
+            ->distinct()
+            ->orderBy($column)
+            ->limit($limit)
+            ->pluck($column)
+            ->map(static fn (mixed $value): string => (string) $value)
+            ->all();
+    }
+
+    /**
      * Apply whitelisted filters to the query.
      *
      * SECURITY: only keys present in the definition's filterable whitelist are
@@ -101,95 +186,8 @@ class TableService
                 continue;
             }
 
-            $this->applyColumnFilter($query, $columnId, $filterable[$columnId], $filter);
+            $this->filterApplier->apply($query, $columnId, $filterable[$columnId], $filter);
         }
-    }
-
-    /**
-     * Apply a scalar/date/set filter to a real DB column.
-     *
-     * @param  Builder<Model>  $query
-     * @param  array<string, mixed>  $columnConfig
-     * @param  array<string, mixed>  $filter
-     */
-    private function applyColumnFilter(Builder $query, string $column, array $columnConfig, array $filter): void
-    {
-        $filterType = $columnConfig['filterType'] ?? null;
-
-        // Set filter (enum columns, e.g. locale): WHERE column IN (?, ?...).
-        if ($filterType === 'set') {
-            $values = $filter['values'] ?? null;
-
-            if (is_array($values) && $values !== []) {
-                $options = $columnConfig['options'] ?? [];
-                $clean = array_values(array_filter(
-                    $values,
-                    static fn ($value): bool => is_scalar($value) && in_array($value, $options, true),
-                ));
-
-                if ($clean !== []) {
-                    $query->whereIn($column, $clean);
-                }
-            }
-
-            return;
-        }
-
-        // Date filter: equals / range on a datetime column.
-        if ($filterType === 'date') {
-            $this->applyDateFilter($query, $column, $filter);
-
-            return;
-        }
-
-        // Text filter (name, email): bound LIKE/equality, value never inlined.
-        $value = $filter['filter'] ?? null;
-
-        if (! is_scalar($value) || $value === '') {
-            return;
-        }
-
-        $value = (string) $value;
-        $type = is_string($filter['type'] ?? null) ? $filter['type'] : 'contains';
-
-        match ($type) {
-            'equals' => $query->where($column, '=', $value),
-            'notEqual' => $query->where($column, '!=', $value),
-            'startsWith' => $query->where($column, 'like', $this->escapeLike($value).'%'),
-            'endsWith' => $query->where($column, 'like', '%'.$this->escapeLike($value)),
-            'notContains' => $query->where($column, 'not like', '%'.$this->escapeLike($value).'%'),
-            default => $query->where($column, 'like', '%'.$this->escapeLike($value).'%'),
-        };
-    }
-
-    /**
-     * Apply a date filter (equals or inRange) on a datetime column.
-     *
-     * @param  Builder<Model>  $query
-     * @param  array<string, mixed>  $filter
-     */
-    private function applyDateFilter(Builder $query, string $column, array $filter): void
-    {
-        $type = is_string($filter['type'] ?? null) ? $filter['type'] : 'equals';
-        $from = is_string($filter['dateFrom'] ?? null) ? $filter['dateFrom'] : null;
-        $to = is_string($filter['dateTo'] ?? null) ? $filter['dateTo'] : null;
-
-        if ($type === 'inRange' && $from !== null && $to !== null) {
-            $query->whereBetween($column, [$from, $to]);
-
-            return;
-        }
-
-        if ($from === null) {
-            return;
-        }
-
-        match ($type) {
-            'greaterThan' => $query->where($column, '>', $from),
-            'lessThan' => $query->where($column, '<', $from),
-            'notEqual' => $query->whereDate($column, '!=', $from),
-            default => $query->whereDate($column, '=', $from),
-        };
     }
 
     /**
@@ -245,13 +243,5 @@ class TableService
                 }
             }
         }
-    }
-
-    /**
-     * Escape LIKE wildcards in user input so they are treated literally.
-     */
-    private function escapeLike(string $value): string
-    {
-        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
     }
 }

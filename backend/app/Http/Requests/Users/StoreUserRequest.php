@@ -4,9 +4,11 @@ namespace App\Http\Requests\Users;
 
 use App\DataObjects\Users\CreateUserData;
 use App\Enums\LocaleEnum;
+use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ResolvesAssignableRoles;
 use App\Http\Requests\Concerns\ValidatesUserProfile;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -18,9 +20,12 @@ use Illuminate\Validation\Rules\Password;
  * via authorize('create', User::class)). Rules mirror the existing profile /
  * password conventions: email unique, locale within the supported set, password
  * with the framework defaults, and roles validated against the real Spatie roles.
+ * EnforcesFieldPermissions (spec 0004) additionally rejects any submitted field
+ * the actor cannot edit (create-context, model = null).
  */
 class StoreUserRequest extends FormRequest
 {
+    use EnforcesFieldPermissions;
     use ResolvesAssignableRoles;
     use ValidatesUserProfile;
 
@@ -59,11 +64,25 @@ class StoreUserRequest extends FormRequest
     }
 
     /**
-     * Apply the per-type contact `value` rules for the nested profile (ADR 0012).
+     * Apply the per-type contact `value` rules for the nested profile
+     * (ADR 0012) and the field-level authorization gate (spec 0004).
      */
     public function withValidator(Validator $validator): void
     {
-        $validator->after(fn (Validator $validator) => $this->validateProfile($validator));
+        $validator->after(function (Validator $validator): void {
+            $this->validateProfile($validator);
+            $this->enforceFieldPermissions($validator);
+        });
+    }
+
+    protected function authorizationResource(): string
+    {
+        return 'users';
+    }
+
+    protected function authorizationModel(): ?Model
+    {
+        return null;
     }
 
     /**

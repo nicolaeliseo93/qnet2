@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Authorization\FieldPermissionRepository;
 use App\Models\Address;
 use App\Models\Attachment;
 use App\Models\Contact;
@@ -20,7 +21,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Singleton so FieldPermissionRepository::forRoleIds() memoizes its
+        // one query across the WHOLE request (spec 0006), even though
+        // AuthorizationRegistry::resolve() may build several
+        // ResourceAuthorization instances per request (e.g. the FormRequest's
+        // EnforcesFieldPermissions AND the controller's permissions block).
+        $this->app->singleton(FieldPermissionRepository::class);
     }
 
     /**

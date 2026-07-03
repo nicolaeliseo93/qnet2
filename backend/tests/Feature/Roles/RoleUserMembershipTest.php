@@ -150,19 +150,22 @@ it('update: response reflects the synced member ids', function () {
     expect($response->json('data.users'))->toEqual([$b->id]);
 });
 
-it('view: member ids reflect the privilege guard, not the requested escalation', function () {
+it('non-super-admin actor: users field locked on the super-admin role, no leak/no escalation (422)', function () {
     Role::create(['name' => RoleAssignmentGuard::PRIVILEGED_ROLE]);
     $actor = actorWithRoleAbilities(['update', 'view']);
     $victim = User::factory()->create();
     $superRole = Role::where('name', RoleAssignmentGuard::PRIVILEGED_ROLE)->first();
     Sanctum::actingAs($actor);
 
-    // A non-super-admin's super-admin membership change is filtered out, so the
-    // returned projection must show the unchanged (empty) membership — no leak,
-    // no escalation surfaced through the resource.
-    $response = $this->patchJson("/api/roles/{$superRole->id}", ['users' => [$victim->id]])->assertOk();
+    // Spec 0004 (EnforcesFieldPermissions): `users` is non-editable on the
+    // super-admin role for a non-super-admin actor, so the submission is
+    // rejected outright (422) — superseding the previous silent-filter UX
+    // where the guard quietly left membership unchanged with a 200.
+    $this->patchJson("/api/roles/{$superRole->id}", ['users' => [$victim->id]])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('users');
 
-    expect($response->json('data.users'))->toBe([]);
+    expect($superRole->fresh()->users)->toBeEmpty();
 });
 
 // ---------------------------------------------------------------------------
@@ -191,16 +194,21 @@ it('create: 422 when a user id does not exist', function () {
 // Privilege escalation — super-admin membership
 // ---------------------------------------------------------------------------
 
-it('non-super-admin actor CANNOT add a super-admin member via role membership', function () {
+it('non-super-admin actor CANNOT add a super-admin member via role membership (422, field locked)', function () {
     Role::create(['name' => RoleAssignmentGuard::PRIVILEGED_ROLE]);
     $actor = actorWithRoleAbilities(['update']);
     $victim = User::factory()->create();
     $superRole = Role::where('name', RoleAssignmentGuard::PRIVILEGED_ROLE)->first();
     Sanctum::actingAs($actor);
 
-    // roles.update lets them hit the endpoint, but the guard rejects the
-    // super-admin membership change (membership left unchanged, no escalation).
-    $this->patchJson("/api/roles/{$superRole->id}", ['users' => [$victim->id]])->assertOk();
+    // Spec 0004 (EnforcesFieldPermissions): the `users` field is locked
+    // (non-editable) on the super-admin role for a non-super-admin actor —
+    // the request is rejected at the validation layer (422), superseding the
+    // previous silent-filter UX (roles.update alone used to be enough to hit
+    // the endpoint, with the guard quietly dropping the escalation).
+    $this->patchJson("/api/roles/{$superRole->id}", ['users' => [$victim->id]])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('users');
 
     expect($victim->fresh()->hasRole(RoleAssignmentGuard::PRIVILEGED_ROLE))->toBeFalse();
 });

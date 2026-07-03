@@ -17,6 +17,10 @@ interface ImmediateModeProps {
   avatarUrl: string | null
   onUpload: (file: File) => Promise<void>
   onRemove: () => Promise<void>
+  /** Metadata-gated (spec 0004): hides the upload affordance. Defaults to true. */
+  canUpload?: boolean
+  /** Metadata-gated (spec 0004): hides the remove affordance. Defaults to true. */
+  canRemove?: boolean
 }
 
 /**
@@ -53,6 +57,8 @@ export function AvatarUpload(props: AvatarUploadProps) {
   const [hasLocalFile, setHasLocalFile] = useState(false)
 
   const remoteSrc = props.mode === 'immediate' ? props.avatarUrl : null
+  const canUpload = props.mode === 'immediate' ? (props.canUpload ?? true) : true
+  const canRemove = props.mode === 'immediate' ? (props.canRemove ?? true) : true
 
   // Revoke the deferred-mode local preview object URL on unmount (change/remove
   // already revoke the previous one). The ref mirrors the latest value via an
@@ -73,7 +79,7 @@ export function AvatarUpload(props: AvatarUploadProps) {
   // Local preview (deferred mode) takes precedence over the persisted avatar.
   const displaySrc = localPreview ?? remoteSrc
   const showRemove =
-    props.mode === 'deferred' ? hasLocalFile : Boolean(props.avatarUrl)
+    (props.mode === 'deferred' ? hasLocalFile : Boolean(props.avatarUrl)) && canRemove
 
   const validate = (file: File): string | null => {
     const reason = validateAvatarFile(file)
@@ -157,29 +163,33 @@ export function AvatarUpload(props: AvatarUploadProps) {
         <UserAvatar name={name} src={displaySrc} className="size-16" />
 
         <div className="flex flex-col gap-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-            disabled={pending}
-          />
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => inputRef.current?.click()}
+          {canUpload && (
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
               disabled={pending}
-            >
-              {pending ? (
-                <Loader2 className="animate-spin" aria-hidden="true" />
-              ) : (
-                <Upload aria-hidden="true" />
-              )}
-              {pending ? t('avatar.uploading') : t('avatar.chooseImage')}
-            </Button>
+            />
+          )}
+          <div className="flex gap-2">
+            {canUpload && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => inputRef.current?.click()}
+                disabled={pending}
+              >
+                {pending ? (
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <Upload aria-hidden="true" />
+                )}
+                {pending ? t('avatar.uploading') : t('avatar.chooseImage')}
+              </Button>
+            )}
             {showRemove && (
               <Button
                 type="button"
