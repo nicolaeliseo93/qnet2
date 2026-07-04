@@ -3,10 +3,16 @@
 use App\Enums\MigrationStatus;
 use App\Jobs\RunMigrationJob;
 use App\Migrations\MigrationRegistry;
+use App\Models\BusinessFunction;
+use App\Models\Company;
+use App\Models\Country;
 use App\Models\MigrationRun;
+use App\Models\OperationalSite;
 use App\Models\Role;
+use App\Models\State;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
@@ -51,19 +57,66 @@ if (! function_exists('runMigrationJobFor')) {
     }
 }
 
+if (! function_exists('fakeBcryptHash')) {
+    /**
+     * A real bcrypt hash (the external system's own convention), never a
+     * plaintext — matches UsersSource::BCRYPT_PATTERN.
+     */
+    function fakeBcryptHash(string $seed): string
+    {
+        return Hash::make($seed);
+    }
+}
+
 // ---------------------------------------------------------------------------
-// AC-008 — UsersSource: create + old_id + idempotent re-import
+// AC-008 — UsersSource: full profile (card, address, contacts, password,
+// employment), old_id, idempotent re-import
 // ---------------------------------------------------------------------------
 
-it('creates users with their personal-data card, sets old_id, and re-import skips (idempotent)', function () {
+it('creates a user with card, primary address, contacts, verbatim password hash and employment', function () {
     seedMigrationsConfig();
+    $country = Country::factory()->create(['name' => 'Italy']);
+    $state = State::factory()->for($country)->create(['name' => 'Lazio']);
+    $manager = User::factory()->create(['old_id' => 900]);
+    $businessFunction = BusinessFunction::factory()->create(['old_id' => 910]);
+    $company = Company::factory()->create(['old_id' => 920]);
+    $operationalSite = OperationalSite::factory()->create(['old_id' => 930]);
+    $externalHash = fakeBcryptHash('external-secret');
+
     Http::fake([
         fakeMigrationsBaseUrl().'/users*' => Http::response([
-            'data' => [
-                ['id' => 101, 'email' => 'ada@example.test', 'first_name' => 'Ada', 'last_name' => 'Lovelace', 'locale' => 'en'],
-                ['id' => 102, 'email' => 'alan@example.test', 'first_name' => 'Alan', 'last_name' => 'Turing', 'locale' => 'en'],
-            ],
-            'meta' => ['total' => 2],
+            'items' => [[
+                'id' => 101,
+                'email' => 'ada@example.test',
+                'password' => $externalHash,
+                'first_name' => 'Ada',
+                'last_name' => 'Lovelace',
+                'title' => 'ms',
+                'tax_code' => 'LVLADA00A00H501Z',
+                'vat_number' => 'IT12345678901',
+                'birth_date' => '1990-01-01',
+                'country' => 'Italy',
+                'region' => 'Lazio',
+                'city' => 'Rome',
+                'street' => 'Via Roma 1',
+                'postal_code' => '00100',
+                'personal_email' => 'ada.private@example.test',
+                'business_phone' => '+39 06 1234567',
+                'personal_phone' => '+39 333 1234567',
+                'is_manager' => false,
+                'job_description' => 'Engineer',
+                'reports_to_id' => 900,
+                'business_function_id' => 910,
+                'relationship_type' => 'employee',
+                'company_id' => 920,
+                'operational_site_id' => 930,
+                'qualification_type' => 'coordinator',
+                'hired_at' => '2020-01-01',
+                'terminated_at' => null,
+                'standard_daily_minutes' => 480,
+                'break_daily_minutes' => 30,
+            ]],
+            'pagination' => ['total' => 1, 'offset' => 0, 'limit' => 50, 'total_pages' => 1],
         ]),
     ]);
 
@@ -76,15 +129,45 @@ it('creates users with their personal-data card, sets old_id, and re-import skip
 
     expect($ada)->not->toBeNull()
         ->and($ada->old_id)->toBe(101)
+        ->and($ada->password)->toBe($externalHash) // verbatim, NOT re-hashed
         ->and($ada->personalData?->first_name)->toBe('Ada')
-        ->and($ada->personalData?->last_name)->toBe('Lovelace');
+        ->and($ada->personalData?->last_name)->toBe('Lovelace')
+        ->and($ada->personalData?->tax_code)->toBe('LVLADA00A00H501Z');
+
+    $address = $ada->personalData->addresses()->first();
+    expect($address)->not->toBeNull()
+        ->and($address->is_primary)->toBeTrue()
+        ->and($address->line1)->toBe('Via Roma 1')
+        ->and($address->country_id)->toBe($country->id)
+        ->and($address->state_id)->toBe($state->id);
+
+    $contacts = $ada->personalData->contacts()->orderBy('type')->get();
+    expect($contacts)->toHaveCount(3);
+
+    $email = $contacts->firstWhere('type', 'email');
+    expect($email->value)->toBe('ada.private@example.test')
+        ->and($email->label)->toBe('Personale')
+        ->and($email->is_primary)->toBeTrue();
+
+    $phones = $contacts->where('type', 'phone');
+    expect($phones->pluck('label')->sort()->values()->all())->toBe(['Aziendale', 'Personale']);
+
+    $employment = $ada->employment;
+    expect($employment)->not->toBeNull()
+        ->and($employment->reports_to_id)->toBe($manager->id)
+        ->and($employment->business_function_id)->toBe($businessFunction->id)
+        ->and($employment->company_id)->toBe($company->id)
+        ->and($employment->operational_site_id)->toBe($operationalSite->id)
+        ->and($employment->relationship_type->value)->toBe('employee')
+        ->and($employment->qualification_type->value)->toBe('coordinator')
+        ->and($employment->standard_daily_minutes)->toBe(480);
 
     $fresh = $run->fresh();
     expect($fresh->status)->toBe(MigrationStatus::Completed)
-        ->and($fresh->created_rows)->toBe(2)
+        ->and($fresh->created_rows)->toBe(1)
         ->and($fresh->skipped_rows)->toBe(0);
 
-    // Re-import the SAME external users: idempotent, no duplicates.
+    // Re-import the SAME external user: idempotent, no duplicate.
     $secondRun = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'users']);
     runMigrationJobFor($secondRun);
 
@@ -92,23 +175,30 @@ it('creates users with their personal-data card, sets old_id, and re-import skip
 
     $secondFresh = $secondRun->fresh();
     expect($secondFresh->created_rows)->toBe(0)
-        ->and($secondFresh->skipped_rows)->toBe(2);
+        ->and($secondFresh->skipped_rows)->toBe(1);
 });
 
 // ---------------------------------------------------------------------------
-// AC-009 — remap roles via old_id + warning on unresolved reference
+// AC-009 — remap roles/employment relations via old_id + warning on unresolved
 // ---------------------------------------------------------------------------
 
-it('remaps role references via old_id and warns on an unresolved one', function () {
+it('warns (non-fatally) on unresolved role and employment references', function () {
     seedMigrationsConfig();
     $migratedRole = Role::factory()->create(['name' => 'operator', 'old_id' => 55]);
 
     Http::fake([
         fakeMigrationsBaseUrl().'/users*' => Http::response([
-            'data' => [
-                ['id' => 201, 'email' => 'grace@example.test', 'first_name' => 'Grace', 'last_name' => 'Hopper', 'locale' => 'en', 'role_ids' => [55, 999]],
-            ],
-            'meta' => ['total' => 1],
+            'items' => [[
+                'id' => 201,
+                'email' => 'grace@example.test',
+                'password' => fakeBcryptHash('grace-secret'),
+                'first_name' => 'Grace',
+                'last_name' => 'Hopper',
+                'role_ids' => [55, 999],
+                'reports_to_id' => 777,
+                'relationship_type' => 'not-a-real-type',
+            ]],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
@@ -120,12 +210,49 @@ it('remaps role references via old_id and warns on an unresolved one', function 
     $grace = User::query()->where('email', 'grace@example.test')->first();
 
     expect($grace)->not->toBeNull()
-        ->and($grace->hasRole($migratedRole->name))->toBeTrue();
+        ->and($grace->hasRole($migratedRole->name))->toBeTrue()
+        ->and($grace->employment?->reports_to_id)->toBeNull()
+        ->and($grace->employment?->relationship_type)->toBeNull();
 
     $fresh = $run->fresh();
+    $messages = collect($fresh->report)->pluck('message')->implode(' | ');
+
     expect($fresh->status)->toBe(MigrationStatus::Completed)
         ->and($fresh->created_rows)->toBe(1)
-        ->and($fresh->report)->not->toBeNull()
-        ->and($fresh->report[0]['level'])->toBe('warning')
-        ->and($fresh->report[0]['message'])->toContain('999');
+        ->and($messages)->toContain('999')
+        ->and($messages)->toContain('777')
+        ->and($messages)->toContain('not-a-real-type');
+});
+
+// ---------------------------------------------------------------------------
+// Password — the external hash must already be bcrypt (never re-hashed,
+// never accepted as plaintext)
+// ---------------------------------------------------------------------------
+
+it('rejects a row whose password is not a valid bcrypt hash', function () {
+    seedMigrationsConfig();
+    Http::fake([
+        fakeMigrationsBaseUrl().'/users*' => Http::response([
+            'items' => [[
+                'id' => 301,
+                'email' => 'plain@example.test',
+                'password' => 'plaintext-not-a-hash',
+                'first_name' => 'Plain',
+                'last_name' => 'Text',
+            ]],
+            'pagination' => ['total' => 1],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $run = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'users']);
+
+    runMigrationJobFor($run);
+
+    expect(User::query()->where('email', 'plain@example.test')->exists())->toBeFalse();
+
+    $fresh = $run->fresh();
+    expect($fresh->failed_rows)->toBe(1)
+        ->and($fresh->report[0]['level'])->toBe('error')
+        ->and($fresh->report[0]['message'])->toContain('bcrypt');
 });

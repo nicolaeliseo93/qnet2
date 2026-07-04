@@ -47,7 +47,6 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
   const {
     form,
     isEdit,
-    localeOptions,
     serverError,
     profileDraft,
     setProfileDraft,
@@ -80,9 +79,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
   // decides whether the surrounding tab is shown at all. Identity has no
   // permission-gated field of its own, so it is always shown.
   const credentialsVisible =
-    fieldPermission('email').visible ||
-    fieldPermission('locale').visible ||
-    fieldPermission('password').visible
+    fieldPermission('email').visible || fieldPermission('password').visible
   const accessVisible = fieldPermission('roles').visible
   const profileVisible =
     fieldPermission('employment.business_function_id').visible ||
@@ -109,7 +106,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
   const tabHasErrorsLabel = t('users.form.tabs.tabHasErrors')
   const identityHasError = !profileValid
   const credentialsHasError = Boolean(
-    errors.email || errors.locale || errors.password || errors.password_confirmation,
+    errors.email || errors.password || errors.password_confirmation,
   )
   const accessHasError = Boolean(errors.roles)
   const profileHasError = Boolean(
@@ -203,11 +200,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
 
             {credentialsVisible && (
               <TabsContent value="credentials" className="flex flex-col gap-4">
-                <CredentialsTabContent
-                  control={form.control}
-                  isEdit={isEdit}
-                  localeOptions={localeOptions}
-                />
+                <CredentialsTabContent control={form.control} isEdit={isEdit} />
               </TabsContent>
             )}
 

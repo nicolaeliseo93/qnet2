@@ -49,7 +49,7 @@ class RolesSource extends AbstractMigrationSource
         ];
     }
 
-    protected function endpoint(): string
+    public function endpoint(): string
     {
         return 'roles';
     }

@@ -17,9 +17,9 @@ use Throwable;
  * the read-only preview shape, per-row transaction isolation, run counters
  * and report) live here once.
  *
- * Assumes the external system returns a Laravel-Resource-shaped page
- * (`{data:[...], meta:{current_page,per_page,total}}`) — see spec 0013
- * context. `fetchPage()` is the single seam a source can override for a
+ * Assumes the external system speaks OUR API dialect
+ * (`{items:[...], pagination:{total,offset,limit,total_pages}}`) — see spec
+ * 0013 context. `fetchPage()` is the single seam a source can override for a
  * different external shape without touching the rest of the engine.
  */
 abstract class AbstractMigrationSource implements MigrationSource
@@ -30,7 +30,7 @@ abstract class AbstractMigrationSource implements MigrationSource
      * Relative path (under config('migrations.base_url')) of this resource's
      * list endpoint on the external system.
      */
-    abstract protected function endpoint(): string;
+    abstract public function endpoint(): string;
 
     /**
      * Map one external record to a preview row (keys = column id).
@@ -63,10 +63,10 @@ abstract class AbstractMigrationSource implements MigrationSource
     {
         $payload = $this->fetchPage($query->page, $query->perPage);
         $records = $this->extractRecords($payload);
-        $meta = $this->extractMeta($payload);
+        $pagination = $this->extractPagination($payload);
 
         $rows = array_map(fn (array $record): array => $this->mapRow($record), $records);
-        $total = $this->extractTotal($meta);
+        $total = $this->extractTotal($pagination);
 
         return new MigrationPage(
             rows: $rows,
@@ -90,20 +90,66 @@ abstract class AbstractMigrationSource implements MigrationSource
                 $this->importRow($context, $record);
             }
 
-            $total = $this->extractTotal($this->extractMeta($payload));
+            $total = $this->extractTotal($this->extractPagination($payload));
             $hasMore = $this->hasMorePages($total, $page, $perPage, count($records));
             $page++;
         } while ($hasMore);
     }
 
     /**
+     * Canonical example of the response envelope this source's external
+     * endpoint (`endpoint()`) is expected to return — the "expected
+     * template" surfaced read-only to the super-admin alongside `columns()`
+     * (spec 0013). One example record is built from `columns()` with a
+     * representative value per declared type, wrapped in the SAME envelope
+     * `fetchPage()`/`extractRecords()`/`extractPagination()`/`extractTotal()`
+     * actually parse — never guessed, always the real parsed shape.
+     *
+     * @return array{items: array<int, array<string, int|string|bool>>, pagination: array{total: int, offset: int, limit: int, total_pages: int}}
+     */
+    public function sampleResponse(): array
+    {
+        $record = [];
+
+        foreach ($this->columns() as $column) {
+            $record[$column['id']] = $this->sampleValue($column['type'], $column['id'], $column['label']);
+        }
+
+        return [
+            'items' => [$record],
+            'pagination' => [
+                'total' => 1,
+                'offset' => 0,
+                'limit' => (int) config('migrations.default_per_page', 50),
+                'total_pages' => 1,
+            ],
+        ];
+    }
+
+    /**
+     * A representative value per declared column type, for `sampleResponse()`.
+     */
+    private function sampleValue(string $type, string $id, string $label): int|string|bool
+    {
+        return match ($type) {
+            'number' => 1,
+            'boolean' => true,
+            'date' => '2026-01-01',
+            default => $label !== '' ? $label : $id,
+        };
+    }
+
+    /**
+     * Translates the internal page/per_page into OUR external API dialect
+     * (`offset`/`limit`) before calling out.
+     *
      * @return array<string, mixed>
      */
     protected function fetchPage(int $page, int $perPage): array
     {
         return $this->client->get($this->endpoint(), [
-            'page' => $page,
-            'per_page' => $perPage,
+            'offset' => ($page - 1) * $perPage,
+            'limit' => $perPage,
         ]);
     }
 
@@ -113,30 +159,32 @@ abstract class AbstractMigrationSource implements MigrationSource
      */
     protected function extractRecords(array $payload): array
     {
-        return (array) ($payload['data'] ?? []);
+        return (array) ($payload['items'] ?? []);
     }
 
     /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
-    protected function extractMeta(array $payload): array
+    protected function extractPagination(array $payload): array
     {
-        return (array) ($payload['meta'] ?? []);
+        return (array) ($payload['pagination'] ?? []);
     }
 
     /**
-     * @param  array<string, mixed>  $meta
+     * @param  array<string, mixed>  $pagination
      */
-    protected function extractTotal(array $meta): ?int
+    protected function extractTotal(array $pagination): ?int
     {
-        return array_key_exists('total', $meta) ? (int) $meta['total'] : null;
+        return array_key_exists('total', $pagination) ? (int) $pagination['total'] : null;
     }
 
     /**
-     * A known total resolves has_more precisely; an absent total (AC-007)
-     * falls back to "the page came back full", a reasonable heuristic for an
-     * unknown-length external listing.
+     * A known total resolves has_more precisely — equivalent to the external
+     * dialect's `offset + limit < total` since `offset = (page-1)*perPage`
+     * and `limit = perPage`, i.e. `offset + limit === page * perPage`. An
+     * absent total (AC-007) falls back to "the page came back full", a
+     * reasonable heuristic for an unknown-length external listing.
      */
     protected function hasMorePages(?int $total, int $page, int $perPage, int $countReceived): bool
     {

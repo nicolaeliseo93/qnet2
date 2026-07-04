@@ -41,6 +41,15 @@ interface MigrationSource
     public function columns(): array;
 
     /**
+     * Relative path (under config('migrations.base_url')) of this resource's
+     * list endpoint on the external system — the single source of truth also
+     * used internally to fetch every page (preview and import alike), and
+     * surfaced read-only to the super-admin via the columns endpoint's
+     * "expected template" (spec 0013).
+     */
+    public function endpoint(): string;
+
+    /**
      * Fetch one normalized page from the external system (phase 1, read-only,
      * no writes). Never called with a stale/invalid page (validated upstream
      * by MigrationPreviewRequest).

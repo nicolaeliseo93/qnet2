@@ -58,7 +58,7 @@ class OperationalSitesSource extends AbstractMigrationSource
         ];
     }
 
-    protected function endpoint(): string
+    public function endpoint(): string
     {
         return 'operational-sites';
     }

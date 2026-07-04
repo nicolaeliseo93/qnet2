@@ -52,7 +52,7 @@ class BusinessFunctionsSource extends AbstractMigrationSource
         ];
     }
 
-    protected function endpoint(): string
+    public function endpoint(): string
     {
         return 'business-functions';
     }

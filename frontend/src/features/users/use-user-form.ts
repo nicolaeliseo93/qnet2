@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useResourcePermissions } from '@/features/authorization/permissions'
-import { useEnumOptions } from '@/features/config/use-config'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
 import { cardToDraft, emptyPersonalDataDraft } from '@/features/personal-data/drafts'
 import { buildPersonalDataSchema } from '@/features/personal-data/personal-data-schema'
@@ -69,6 +68,9 @@ const SERVER_ERROR_FIELDS = [
   'employment.break_daily_minutes',
 ] as const
 
+/** Locale is not user-editable on the form; new users default to Italian. */
+const DEFAULT_LOCALE: UserLocale = 'it'
+
 /** A blank employment sub-form, used for both create and an edit user with no profile yet. */
 const EMPTY_EMPLOYMENT: EmploymentFormValues = {
   is_manager: false,
@@ -124,10 +126,6 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
       readonly: permission.readonly,
     }
   }
-  // Selectable locales come from the backend bootstrap config (GET /api/config),
-  // never hardcoded on the frontend. Loaded before the app renders (ADR 0009), so
-  // it is populated by the time this form mounts.
-  const localeOptions = useEnumOptions('locale')
   const [serverError, setServerError] = useState<string | null>(null)
   // CREATE mode only: avatar chosen before the user exists, uploaded after save.
   const [pendingAvatar, setPendingAvatar] = useState<File | null>(null)
@@ -165,12 +163,6 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
     [isEdit, t],
   )
 
-  // The locale preselected on create: the backend's default option, falling back
-  // to the first one (config is loaded before this mounts, so it is non-empty).
-  const defaultLocale = (localeOptions.find((option) => option.is_default)?.value ??
-    localeOptions[0]?.value ??
-    'en') as UserLocale
-
   const defaultValues = useMemo<UserFormValues>(() => {
     if (mode.type === 'edit') {
       const employment = mode.user.employment
@@ -200,13 +192,13 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
     }
     return {
       email: '',
-      locale: defaultLocale,
+      locale: DEFAULT_LOCALE,
       roles: [],
       password: '',
       password_confirmation: '',
       employment: EMPTY_EMPLOYMENT,
     }
-  }, [mode, defaultLocale])
+  }, [mode])
 
   // EDIT: pre-known {id, name} for the selected roles, so the picker shows their
   // labels immediately (no hydration round-trip) — the names come from the user
@@ -348,7 +340,6 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
   return {
     form,
     isEdit,
-    localeOptions,
     serverError,
     pendingAvatar,
     setPendingAvatar,

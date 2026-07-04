@@ -1,7 +1,7 @@
 import { apiClient } from '@/api/client'
 import type { ApiResponse } from '@/api/types'
 import type {
-  MigrationColumn,
+  MigrationColumnsTemplate,
   MigrationPreviewPage,
   MigrationRun,
   MigrationRunCreated,
@@ -16,12 +16,16 @@ export async function fetchMigrationSources(): Promise<MigrationSourceSummary[]>
   return data.data.sources
 }
 
-/** Fetches the columns exposed by a source (`GET /migrations/{source}/columns`). */
-export async function fetchMigrationColumns(source: string): Promise<MigrationColumn[]> {
-  const { data } = await apiClient.get<ApiResponse<{ columns: MigrationColumn[] }>>(
+/**
+ * Fetches the expected template for a source (`GET /migrations/{source}/columns`):
+ * the field schema, the safe-to-display request the external source is
+ * expected to serve, and the canonical sample response envelope.
+ */
+export async function fetchMigrationColumns(source: string): Promise<MigrationColumnsTemplate> {
+  const { data } = await apiClient.get<ApiResponse<MigrationColumnsTemplate>>(
     `/migrations/${source}/columns`,
   )
-  return data.data.columns
+  return data.data
 }
 
 /**

@@ -12,7 +12,6 @@ export const migrations = {
     label: 'Migrations',
   },
   page: {
-    import: 'Import',
     sourceLabel: 'Source',
     sourcePlaceholder: 'Select a source…',
     sourcesLoadError: 'Unable to load the migration sources. Please try again.',
@@ -21,7 +20,25 @@ export const migrations = {
     previous: 'Previous',
     next: 'Next',
   },
+  template: {
+    title: 'Expected template',
+    description:
+      'qnet defines this field schema for {{source}}: the external source must return records matching it exactly.',
+    fieldHeader: 'Field',
+    typeHeader: 'Type',
+    loadError: 'Unable to load the expected template. Please try again.',
+    empty: 'This source defines no fields.',
+    importButton: 'Import this source',
+    endpointTitle: 'Expected endpoint',
+    method: 'Method: {{method}}',
+    copyUrl: 'Copy URL',
+    baseUrlMissing: 'The base URL is not configured for this source; only the path is shown.',
+    sampleTitle: 'Sample response',
+    copyJson: 'Copy JSON',
+    copied: 'Copied',
+  },
   preview: {
+    showButton: 'Show external preview',
     loadError: 'Unable to load the preview. Please try again.',
     empty: 'No records found for this source.',
   },

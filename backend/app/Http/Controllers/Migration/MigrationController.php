@@ -8,6 +8,7 @@ use App\Http\Resources\Migration\MigrationRunResource;
 use App\Http\Resources\Migration\MigrationSourceResource;
 use App\Migrations\MigrationQuery;
 use App\Migrations\MigrationRegistry;
+use App\Migrations\MigrationSource;
 use App\Models\MigrationRun;
 use App\Models\User;
 use App\Services\MigrationService;
@@ -49,14 +50,21 @@ class MigrationController extends BaseApiController
 
     /**
      * GET /api/migrations/{source}/columns — the source's preview column
-     * catalogue.
+     * catalogue, plus the "expected template" (spec 0013): the external
+     * request qnet will issue (method/base_url/path/url, no token) and a
+     * copyable sample of the response envelope the parser expects. Fully
+     * static — never calls the external system.
      */
     public function columns(string $source): JsonResponse
     {
         try {
             $definition = $this->registry->resolve($source); // 404 if unknown
 
-            return $this->ok(['columns' => $definition->columns()]);
+            return $this->ok([
+                'columns' => $definition->columns(),
+                'request' => $this->buildRequestInfo($definition),
+                'sample' => $definition->sampleResponse(),
+            ]);
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__);
         }
@@ -126,6 +134,39 @@ class MigrationController extends BaseApiController
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['migrationRun' => $migrationRun->id]);
         }
+    }
+
+    /**
+     * The external GET request qnet will issue for this source's list
+     * endpoint (spec 0013 "expected template"): base_url is the SAME,
+     * non-secret config key ExternalApiClient reads (the token is never
+     * included here).
+     *
+     * @return array{method: string, base_url: string, path: string, url: string}
+     */
+    private function buildRequestInfo(MigrationSource $definition): array
+    {
+        $baseUrl = (string) config('migrations.base_url', '');
+        $path = $definition->endpoint();
+
+        return [
+            'method' => 'GET',
+            'base_url' => $baseUrl,
+            'path' => $path,
+            'url' => $this->joinUrl($baseUrl, $path),
+        ];
+    }
+
+    /**
+     * Joins a base URL and a relative path with exactly one slash between
+     * them; an empty base_url yields the bare path.
+     */
+    private function joinUrl(string $baseUrl, string $path): string
+    {
+        $trimmedBase = rtrim($baseUrl, '/');
+        $trimmedPath = ltrim($path, '/');
+
+        return $trimmedBase === '' ? $trimmedPath : $trimmedBase.'/'.$trimmedPath;
     }
 
     /**

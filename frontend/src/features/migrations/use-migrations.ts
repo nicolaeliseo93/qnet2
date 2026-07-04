@@ -26,16 +26,22 @@ export function useMigrationColumns(source: string | null) {
   })
 }
 
-/** One page of the selected source's read-only external preview. */
+/**
+ * One page of the selected source's read-only external preview. This hits
+ * the external system, so unlike `useMigrationColumns` (the static, contract
+ * template) it is opt-in: callers gate it behind `enabled` so selecting a
+ * source alone never fires a live external request.
+ */
 export function useMigrationPreview(
   source: string | null,
   page: number,
   perPage: number = MIGRATION_PREVIEW_PER_PAGE,
+  enabled: boolean = true,
 ) {
   return useQuery({
     queryKey: migrationKeys.preview(source ?? '', page, perPage),
     queryFn: () => fetchMigrationPreview(source as string, page, perPage),
-    enabled: source != null,
+    enabled: source != null && enabled,
     // Keeps the previous page's rows on screen while the next page loads,
     // instead of flashing the loading skeleton on every prev/next click.
     placeholderData: (previous) => previous,

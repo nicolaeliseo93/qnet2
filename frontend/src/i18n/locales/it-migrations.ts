@@ -11,7 +11,6 @@ export const migrations = {
     label: 'Migrazioni',
   },
   page: {
-    import: 'Importa',
     sourceLabel: 'Sorgente',
     sourcePlaceholder: 'Seleziona una sorgente…',
     sourcesLoadError: 'Impossibile caricare le sorgenti di migrazione. Riprova.',
@@ -20,7 +19,25 @@ export const migrations = {
     previous: 'Precedente',
     next: 'Successiva',
   },
+  template: {
+    title: 'Template atteso',
+    description:
+      'qnet definisce questo schema di campi per {{source}}: la sorgente esterna deve restituire record conformi.',
+    fieldHeader: 'Campo',
+    typeHeader: 'Tipo',
+    loadError: 'Impossibile caricare il template atteso. Riprova.',
+    empty: 'Questa sorgente non definisce alcun campo.',
+    importButton: 'Importa questa sorgente',
+    endpointTitle: 'Endpoint atteso',
+    method: 'Metodo: {{method}}',
+    copyUrl: 'Copia URL',
+    baseUrlMissing: 'La base URL non è configurata per questa sorgente; viene mostrato solo il percorso.',
+    sampleTitle: 'Esempio di risposta',
+    copyJson: 'Copia JSON',
+    copied: 'Copiato',
+  },
   preview: {
+    showButton: 'Mostra anteprima dati esterni',
     loadError: "Impossibile caricare l'anteprima. Riprova.",
     empty: 'Nessun record trovato per questa sorgente.',
   },

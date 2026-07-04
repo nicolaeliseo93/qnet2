@@ -65,7 +65,7 @@ it('creates a company with its address, resolving geo names to ids', function ()
 
     Http::fake([
         fakeMigrationsBaseUrl().'/companies*' => Http::response([
-            'data' => [[
+            'items' => [[
                 'id' => 1,
                 'denomination' => 'Acme Srl',
                 'vat_number' => 'IT12345678901',
@@ -75,7 +75,7 @@ it('creates a company with its address, resolving geo names to ids', function ()
                 'street' => 'Via Roma 1',
                 'postal_code' => '00100',
             ]],
-            'meta' => ['total' => 1],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
@@ -110,8 +110,8 @@ it('creates a company with no address at all when street is absent', function ()
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/companies*' => Http::response([
-            'data' => [['id' => 2, 'denomination' => 'No Address Ltd']],
-            'meta' => ['total' => 1],
+            'items' => [['id' => 2, 'denomination' => 'No Address Ltd']],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
@@ -132,11 +132,11 @@ it('isolates a failed row (missing denomination) without blocking the valid one'
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/companies*' => Http::response([
-            'data' => [
+            'items' => [
                 ['id' => 3, 'denomination' => ''],
                 ['id' => 4, 'denomination' => 'Valid Company'],
             ],
-            'meta' => ['total' => 2],
+            'pagination' => ['total' => 2],
         ]),
     ]);
 
@@ -158,8 +158,8 @@ it('re-importing the same companies is idempotent (skip, no duplicate)', functio
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/companies*' => Http::response([
-            'data' => [['id' => 5, 'denomination' => 'Already migrated Srl']],
-            'meta' => ['total' => 1],
+            'items' => [['id' => 5, 'denomination' => 'Already migrated Srl']],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 

@@ -21,6 +21,37 @@ export interface MigrationColumn {
 /** A single external record row, keyed by column id. */
 export type MigrationPreviewRow = Record<string, string | number | boolean | null>
 
+/**
+ * The safe-to-display HTTP request the external source is expected to serve
+ * (no token/credentials -- backend strips those before returning this).
+ */
+export interface MigrationColumnsRequest {
+  method: string
+  base_url: string
+  path: string
+  url: string
+}
+
+/** Pagination metadata of the canonical sample response envelope. */
+export interface MigrationColumnsSampleMeta {
+  current_page: number
+  per_page: number
+  total: number
+}
+
+/** The canonical response envelope the external source must return. */
+export interface MigrationColumnsSample {
+  data: MigrationPreviewRow[]
+  meta: MigrationColumnsSampleMeta
+}
+
+/** Response shape of `GET /migrations/{source}/columns` (envelope `data`). */
+export interface MigrationColumnsTemplate {
+  columns: MigrationColumn[]
+  request: MigrationColumnsRequest
+  sample: MigrationColumnsSample
+}
+
 export interface MigrationPreviewPagination {
   page: number
   per_page: number

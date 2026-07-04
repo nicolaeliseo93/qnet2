@@ -60,8 +60,8 @@ it('adopts old_id onto an existing role sharing the same name (no duplicate)', f
     $existing = Role::factory()->create(['name' => 'operator']);
     Http::fake([
         fakeMigrationsBaseUrl().'/roles*' => Http::response([
-            'data' => [['id' => 1, 'name' => 'operator']],
-            'meta' => ['total' => 1],
+            'items' => [['id' => 1, 'name' => 'operator']],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
@@ -83,8 +83,8 @@ it('creates a new role with old_id when the name does not exist yet', function (
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/roles*' => Http::response([
-            'data' => [['id' => 2, 'name' => 'brand-new-role']],
-            'meta' => ['total' => 1],
+            'items' => [['id' => 2, 'name' => 'brand-new-role']],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
@@ -104,8 +104,8 @@ it('re-importing the same roles is idempotent (skip, no duplicate)', function ()
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/roles*' => Http::response([
-            'data' => [['id' => 3, 'name' => 'already-migrated']],
-            'meta' => ['total' => 1],
+            'items' => [['id' => 3, 'name' => 'already-migrated']],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 

@@ -7,6 +7,7 @@ use App\Models\MigrationRun;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
@@ -58,18 +59,19 @@ if (! function_exists('runMigrationJobFor')) {
 it('isolates a per-row commit-time failure without blocking the other rows', function () {
     seedMigrationsConfig();
     $existing = User::factory()->create(['email' => 'collision@example.test']);
+    $password = Hash::make('external-secret');
 
     Http::fake([
         fakeMigrationsBaseUrl().'/users*' => Http::response([
-            'data' => [
-                ['id' => 301, 'email' => 'valid-one@example.test', 'first_name' => 'One', 'last_name' => 'Ok', 'locale' => 'en'],
+            'items' => [
+                ['id' => 301, 'email' => 'valid-one@example.test', 'password' => $password, 'first_name' => 'One', 'last_name' => 'Ok'],
                 // Duplicates an EXISTING (non-migrated) user's email: the
                 // UserService::create() unique-email constraint fails at
                 // commit time, isolated to this row only.
-                ['id' => 302, 'email' => $existing->email, 'first_name' => 'Two', 'last_name' => 'Bad', 'locale' => 'en'],
-                ['id' => 303, 'email' => 'valid-three@example.test', 'first_name' => 'Three', 'last_name' => 'Ok', 'locale' => 'en'],
+                ['id' => 302, 'email' => $existing->email, 'password' => $password, 'first_name' => 'Two', 'last_name' => 'Bad'],
+                ['id' => 303, 'email' => 'valid-three@example.test', 'password' => $password, 'first_name' => 'Three', 'last_name' => 'Ok'],
             ],
-            'meta' => ['total' => 3],
+            'pagination' => ['total' => 3],
         ]),
     ]);
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, ChevronRight, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -18,6 +18,8 @@ import { PageHeader } from '@/components/page-header'
 import '@/features/migrations/i18n'
 import { ImportDialog } from '@/features/migrations/import-dialog'
 import { MigrationPreviewTable } from '@/features/migrations/migration-preview-table'
+import { MigrationTemplatePanel } from '@/features/migrations/migration-template-panel'
+import type { MigrationColumn, MigrationPreviewRow } from '@/features/migrations/types'
 import {
   useMigrationColumns,
   useMigrationPreview,
@@ -25,27 +27,33 @@ import {
 } from '@/features/migrations/use-migrations'
 
 const FIRST_PAGE = 1
+const EMPTY_COLUMNS: MigrationColumn[] = []
+const EMPTY_ROWS: MigrationPreviewRow[] = []
 
 /**
- * Migrations page (spec 0013, super-admin only): selects an external source
- * and renders its read-only, paginated preview (fase 1). Importing (fase 2)
- * is a separate confirm+poll flow opened from here via `ImportDialog`. No
- * edit/delete/create control ever appears -- the preview is strictly
- * read-only.
+ * Migrations page (spec 0013, super-admin only, template-first redesign):
+ * qnet is the contract owner, so selecting a source's primary view is the
+ * EXPECTED field schema (`MigrationTemplatePanel`, no external call) rather
+ * than a live external fetch. The read-only external preview and the import
+ * flow are both opt-in actions from there: the preview only fires once
+ * explicitly requested, and import opens the existing `ImportDialog`. No
+ * edit/delete/create control ever appears -- everything here is read-only.
  */
 export default function MigrationsPage() {
   const { t } = useTranslation('migrations')
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
   const [page, setPage] = useState(FIRST_PAGE)
+  const [previewRequested, setPreviewRequested] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
   const sourcesQuery = useMigrationSources()
   const columnsQuery = useMigrationColumns(selectedSource)
-  const previewQuery = useMigrationPreview(selectedSource, page)
+  const previewQuery = useMigrationPreview(selectedSource, page, undefined, previewRequested)
 
   const handleSourceChange = (next: string) => {
     setSelectedSource(next)
     setPage(FIRST_PAGE)
+    setPreviewRequested(false)
   }
 
   const sources = sourcesQuery.data ?? []
@@ -58,18 +66,7 @@ export default function MigrationsPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <PageHeader
-        actions={
-          <Button
-            type="button"
-            onClick={() => setImportOpen(true)}
-            disabled={selectedSource == null}
-          >
-            <Upload aria-hidden="true" />
-            {t('page.import')}
-          </Button>
-        }
-      />
+      <PageHeader />
 
       <Card>
         <CardContent className="flex flex-col gap-4">
@@ -98,49 +95,72 @@ export default function MigrationsPage() {
               </Select>
             )}
           </div>
-
-          {selectedSource ? (
-            <>
-              <MigrationPreviewTable
-                columns={columnsQuery.data ?? []}
-                rows={previewQuery.data?.rows ?? []}
-                isLoading={isPreviewLoading}
-                isError={isPreviewError}
-              />
-
-              {pagination ? (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    {t('page.pageIndicator', { page: pagination.page })}
-                  </span>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((current) => Math.max(FIRST_PAGE, current - 1))}
-                      disabled={pagination.page <= FIRST_PAGE}
-                    >
-                      <ChevronLeft aria-hidden="true" />
-                      {t('page.previous')}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((current) => current + 1)}
-                      disabled={!pagination.has_more}
-                    >
-                      {t('page.next')}
-                      <ChevronRight aria-hidden="true" />
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </>
-          ) : null}
         </CardContent>
       </Card>
+
+      {selectedSource ? (
+        <MigrationTemplatePanel
+          sourceLabel={selectedSourceLabel}
+          columns={columnsQuery.data?.columns ?? EMPTY_COLUMNS}
+          request={columnsQuery.data?.request}
+          sample={columnsQuery.data?.sample}
+          isLoading={columnsQuery.isLoading}
+          isError={columnsQuery.isError}
+          onImportClick={() => setImportOpen(true)}
+        />
+      ) : null}
+
+      {selectedSource && !previewRequested ? (
+        <div>
+          <Button type="button" variant="outline" onClick={() => setPreviewRequested(true)}>
+            <Eye aria-hidden="true" />
+            {t('preview.showButton')}
+          </Button>
+        </div>
+      ) : null}
+
+      {selectedSource && previewRequested ? (
+        <Card>
+          <CardContent className="flex flex-col gap-4">
+            <MigrationPreviewTable
+              columns={columnsQuery.data?.columns ?? EMPTY_COLUMNS}
+              rows={previewQuery.data?.rows ?? EMPTY_ROWS}
+              isLoading={isPreviewLoading}
+              isError={isPreviewError}
+            />
+
+            {pagination ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {t('page.pageIndicator', { page: pagination.page })}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((current) => Math.max(FIRST_PAGE, current - 1))}
+                    disabled={pagination.page <= FIRST_PAGE}
+                  >
+                    <ChevronLeft aria-hidden="true" />
+                    {t('page.previous')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((current) => current + 1)}
+                    disabled={!pagination.has_more}
+                  >
+                    {t('page.next')}
+                    <ChevronRight aria-hidden="true" />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {selectedSource ? (
         <ImportDialog

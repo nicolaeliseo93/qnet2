@@ -87,6 +87,41 @@ it('columns: 404 for an unknown source', function () {
     $this->getJson('/api/migrations/unknown-source/columns')->assertNotFound();
 });
 
+it('columns: 200 with the expected request template and a copyable sample, without calling the external system', function () {
+    seedMigrationsConfig();
+    config(['migrations.token' => 'super-secret-token']);
+    Http::fake();
+    Sanctum::actingAs(migrationsSuperAdminActor());
+
+    $response = $this->getJson('/api/migrations/roles/columns')
+        ->assertOk()
+        ->assertJsonPath('data.request.method', 'GET')
+        ->assertJsonPath('data.request.base_url', fakeMigrationsBaseUrl())
+        ->assertJsonPath('data.request.path', 'roles')
+        ->assertJsonPath('data.request.url', fakeMigrationsBaseUrl().'/roles')
+        ->assertJsonPath('data.sample.items.0.id', 1)
+        ->assertJsonPath('data.sample.items.0.name', 'Name')
+        ->assertJsonPath('data.sample.pagination.total', 1)
+        ->assertJsonPath('data.sample.pagination.offset', 0)
+        ->assertJsonPath('data.sample.pagination.limit', 50)
+        ->assertJsonPath('data.sample.pagination.total_pages', 1);
+
+    expect($response->json('data.request'))->not->toHaveKey('token')
+        ->and(json_encode($response->json('data.request')))->not->toContain('super-secret-token');
+
+    Http::assertNothingSent();
+});
+
+it('columns: base_url empty falls back to the bare path', function () {
+    config(['migrations.base_url' => '']);
+    Sanctum::actingAs(migrationsSuperAdminActor());
+
+    $this->getJson('/api/migrations/roles/columns')
+        ->assertOk()
+        ->assertJsonPath('data.request.base_url', '')
+        ->assertJsonPath('data.request.url', 'roles');
+});
+
 // ---------------------------------------------------------------------------
 // AC-016 — GET /api/migrations/{source}/preview
 // ---------------------------------------------------------------------------
@@ -95,8 +130,8 @@ it('preview: 200 with normalized rows and pagination', function () {
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/roles*' => Http::response([
-            'data' => [['id' => 1, 'name' => 'operator']],
-            'meta' => ['total' => 1],
+            'items' => [['id' => 1, 'name' => 'operator']],
+            'pagination' => ['total' => 1, 'offset' => 0, 'limit' => 10, 'total_pages' => 1],
         ]),
     ]);
     Sanctum::actingAs(migrationsSuperAdminActor());

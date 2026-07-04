@@ -30,17 +30,21 @@ if (! function_exists('seedMigrationsConfig')) {
 
 // ---------------------------------------------------------------------------
 // AC-007 — AbstractMigrationSource::preview: mapping + pagination + total
+//
+// The external CRM speaks OUR API dialect: request params `offset`/`limit`
+// (translated from the internal page/per_page), response envelope
+// `{items:[...], pagination:{total,offset,limit,total_pages}}`.
 // ---------------------------------------------------------------------------
 
-it('translates page/per_page and maps records to rows keyed by column id', function () {
+it('translates page/per_page to offset/limit and maps records to rows keyed by column id', function () {
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/roles*' => Http::response([
-            'data' => [
+            'items' => [
                 ['id' => 10, 'name' => 'operator'],
                 ['id' => 11, 'name' => 'reviewer'],
             ],
-            'meta' => ['current_page' => 2, 'per_page' => 2, 'total' => 5],
+            'pagination' => ['total' => 5, 'offset' => 2, 'limit' => 2, 'total_pages' => 3],
         ]),
     ]);
 
@@ -53,17 +57,17 @@ it('translates page/per_page and maps records to rows keyed by column id', funct
         ->and($page->page)->toBe(2)
         ->and($page->perPage)->toBe(2)
         ->and($page->total)->toBe(5)
-        ->and($page->hasMore)->toBeTrue(); // 2*2=4 < 5
+        ->and($page->hasMore)->toBeTrue(); // offset(2)+limit(2)=4 < 5
 
-    Http::assertSent(fn ($request) => $request['page'] === 2 && $request['per_page'] === 2);
+    Http::assertSent(fn ($request) => $request['offset'] === 2 && $request['limit'] === 2);
 });
 
 it('has_more is false once the last page is reached (known total)', function () {
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/roles*' => Http::response([
-            'data' => [['id' => 10, 'name' => 'operator']],
-            'meta' => ['total' => 1],
+            'items' => [['id' => 10, 'name' => 'operator']],
+            'pagination' => ['total' => 1, 'offset' => 0, 'limit' => 50, 'total_pages' => 1],
         ]),
     ]);
 
@@ -71,13 +75,15 @@ it('has_more is false once the last page is reached (known total)', function () 
 
     expect($page->total)->toBe(1)
         ->and($page->hasMore)->toBeFalse();
+
+    Http::assertSent(fn ($request) => $request['offset'] === 0 && $request['limit'] === 50);
 });
 
-it('total is null when meta.total is absent (AC-007)', function () {
+it('total is null when pagination.total is absent (AC-007)', function () {
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/roles*' => Http::response([
-            'data' => [['id' => 10, 'name' => 'operator']],
+            'items' => [['id' => 10, 'name' => 'operator']],
         ]),
     ]);
 

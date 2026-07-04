@@ -137,14 +137,11 @@ describe('UserForm — metadata-driven authorization (spec 0004)', () => {
           email: {
             visible: true, hidden: false, editable: true, readonly: false, required: true, disabled: false,
           },
-          locale: {
-            visible: true, hidden: false, editable: false, readonly: true, required: false, disabled: false,
-          },
           roles: {
             visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false,
           },
           password: {
-            visible: true, hidden: false, editable: true, readonly: false, required: false, disabled: false,
+            visible: true, hidden: false, editable: false, readonly: true, required: false, disabled: false,
           },
         },
         actions: {},
@@ -156,7 +153,7 @@ describe('UserForm — metadata-driven authorization (spec 0004)', () => {
       { wrapper: wrapper() },
     )
 
-    // Email/locale/password live on the Credentials tab (spec 0015 redesign).
+    // Email/password live on the Credentials tab (spec 0015 redesign).
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Credentials' })).toBeInTheDocument())
     switchTab('Credentials')
 
@@ -165,7 +162,7 @@ describe('UserForm — metadata-driven authorization (spec 0004)', () => {
     expect(screen.queryByLabelText(/Roles/)).not.toBeInTheDocument()
 
     // AC12: the readonly/non-editable field renders disabled.
-    expect(screen.getByRole('combobox', { name: 'Language' })).toBeDisabled()
+    expect(screen.getByLabelText(/^Password/)).toBeDisabled()
 
     // AC13: `required` from metadata drives the label's `*` — email is
     // required, password is not (other required markers on screen belong to

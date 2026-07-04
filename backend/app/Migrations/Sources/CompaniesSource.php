@@ -61,7 +61,7 @@ class CompaniesSource extends AbstractMigrationSource
         ];
     }
 
-    protected function endpoint(): string
+    public function endpoint(): string
     {
         return 'companies';
     }

@@ -8,16 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FormControl, FormDescription } from '@/components/ui/form'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { AsyncPaginatedMultiSelect } from '@/components/ui/async-paginated-multi-select'
 import type { ForSelectItem } from '@/features/for-select/types'
-import type { EnumOption } from '@/features/config/types'
 import { MetaField } from '@/features/authorization/MetaField'
 import { ROLES_FOR_SELECT_RESOURCE } from '@/features/roles/for-select-api'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
@@ -128,14 +120,9 @@ export function IdentityTabContent({
 interface CredentialsTabContentProps {
   control: Control<UserFormValues>
   isEdit: boolean
-  localeOptions: EnumOption[]
 }
 
-export function CredentialsTabContent({
-  control,
-  isEdit,
-  localeOptions,
-}: CredentialsTabContentProps) {
+export function CredentialsTabContent({ control, isEdit }: CredentialsTabContentProps) {
   const { t } = useTranslation()
 
   return (
@@ -155,25 +142,6 @@ export function CredentialsTabContent({
               {...field}
             />
           </FormControl>
-        )}
-      </MetaField>
-
-      <MetaField control={control} name="locale" metaKey="locale" label={t('users.form.locale')}>
-        {({ field, disabled }) => (
-          <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
-            <FormControl>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {localeOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         )}
       </MetaField>
 

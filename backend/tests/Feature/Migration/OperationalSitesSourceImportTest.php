@@ -67,7 +67,7 @@ it('creates a site with its address, resolving geo names to ids', function () {
 
     Http::fake([
         fakeMigrationsBaseUrl().'/operational-sites*' => Http::response([
-            'data' => [[
+            'items' => [[
                 'id' => 1,
                 'country' => 'Italy',
                 'region' => 'Lazio',
@@ -75,7 +75,7 @@ it('creates a site with its address, resolving geo names to ids', function () {
                 'street' => 'Via Roma 1',
                 'postal_code' => '00100',
             ]],
-            'meta' => ['total' => 1],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
@@ -107,13 +107,13 @@ it('creates the site with a warning when the region name cannot be resolved', fu
 
     Http::fake([
         fakeMigrationsBaseUrl().'/operational-sites*' => Http::response([
-            'data' => [[
+            'items' => [[
                 'id' => 2,
                 'country' => 'Italy',
                 'region' => 'Unknown Region',
                 'street' => 'Via Milano 5',
             ]],
-            'meta' => ['total' => 1],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
@@ -137,11 +137,11 @@ it('isolates a failed row (missing street) without blocking the valid one', func
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/operational-sites*' => Http::response([
-            'data' => [
+            'items' => [
                 ['id' => 3],
                 ['id' => 4, 'street' => 'Via Torino 9'],
             ],
-            'meta' => ['total' => 2],
+            'pagination' => ['total' => 2],
         ]),
     ]);
 
@@ -164,8 +164,8 @@ it('re-importing the same sites is idempotent (skip, no duplicate)', function ()
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/operational-sites*' => Http::response([
-            'data' => [['id' => 5, 'street' => 'Via Napoli 2']],
-            'meta' => ['total' => 1],
+            'items' => [['id' => 5, 'street' => 'Via Napoli 2']],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 

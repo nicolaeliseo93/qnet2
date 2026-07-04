@@ -63,10 +63,10 @@ it('creates a business function and attaches users resolved via old_id', functio
 
     Http::fake([
         fakeMigrationsBaseUrl().'/business-functions*' => Http::response([
-            'data' => [
+            'items' => [
                 ['id' => 1, 'name' => 'Finance', 'type' => 'business_unit', 'user_ids' => [501, 502]],
             ],
-            'meta' => ['total' => 1],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
@@ -93,10 +93,10 @@ it('creates the business function even when a user reference is unresolved, with
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/business-functions*' => Http::response([
-            'data' => [
+            'items' => [
                 ['id' => 2, 'name' => 'Operations', 'user_ids' => [999]],
             ],
-            'meta' => ['total' => 1],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
@@ -122,10 +122,10 @@ it('re-importing the same business functions is idempotent (skip, no duplicate)'
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/business-functions*' => Http::response([
-            'data' => [
+            'items' => [
                 ['id' => 3, 'name' => 'Already migrated'],
             ],
-            'meta' => ['total' => 1],
+            'pagination' => ['total' => 1],
         ]),
     ]);
 
