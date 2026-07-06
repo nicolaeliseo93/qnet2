@@ -179,6 +179,7 @@ export const en = {
     error: 'Failed to load options.',
     search: 'Search',
     noMatch: 'No matches found',
+    retry: 'Retry',
   },
   roles: {
     title: 'Roles',

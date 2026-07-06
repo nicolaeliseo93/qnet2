@@ -9,11 +9,10 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 /**
  * Factory for Address records (GAP fill: the reusable Address model had no
  * factory). Geo references are left null by default so the factory does not
- * depend on the reference tables being seeded; use withLabel() for a named
- * address, or complete() for a full address tied to a real seeded city.
+ * depend on the reference tables being seeded; use complete() for a full
+ * address tied to a real seeded city.
  *
  *     Address::factory()->create();
- *     Address::factory()->withLabel('Billing')->create();
  *     Address::factory()->complete()->create(); // full geo, not just the street
  *     Address::factory()->for($card, 'addressable')->create(); // owned
  *
@@ -29,7 +28,6 @@ class AddressFactory extends Factory
     public function definition(): array
     {
         return [
-            'label' => $this->faker->randomElement(['Home', 'Billing', 'Warehouse', null]),
             'line1' => $this->faker->streetAddress(),
             'line2' => $this->faker->optional()->secondaryAddress(),
             'postal_code' => $this->faker->postcode(),
@@ -41,16 +39,6 @@ class AddressFactory extends Factory
             'longitude' => $this->faker->longitude(),
             'is_primary' => false,
         ];
-    }
-
-    /**
-     * An address with an explicit human label.
-     */
-    public function withLabel(string $label): static
-    {
-        return $this->state(fn (array $attributes): array => [
-            'label' => $label,
-        ]);
     }
 
     /**

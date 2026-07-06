@@ -83,6 +83,10 @@ class GeoResolver
             }
 
             $provinceId = $province->id;
+            // Backfill a blank region/country from the resolved province (a
+            // plate code identifies its province, hence region and country).
+            $stateId ??= $province->state_id;
+            $countryId ??= $province->country_id;
         }
 
         if ($this->present($cityName)) {
@@ -93,6 +97,9 @@ class GeoResolver
             }
 
             $cityId = $city->id;
+            $provinceId ??= $city->province_id;
+            $stateId ??= $city->state_id;
+            $countryId ??= $city->country_id;
         }
 
         return GeoResolutionResult::ok($countryId, $stateId, $provinceId, $cityId);

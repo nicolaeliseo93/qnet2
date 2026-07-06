@@ -35,7 +35,15 @@ vi.mock('@/features/geo/use-geo', () => ({
   useCountries: () => ({ data: [{ id: 1, name: 'Italy', iso2: 'IT' }], isPending: false, isError: false }),
   useStates: () => ({ data: [], isPending: false, isError: false }),
   useProvinces: () => ({ data: [], isPending: false, isError: false }),
-  useCities: () => ({ data: [], isPending: false, isError: false }),
+  useCities: () => ({
+    data: { pages: [[]] },
+    isPending: false,
+    isError: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: () => {},
+    refetch: () => {},
+  }),
 }))
 
 /**

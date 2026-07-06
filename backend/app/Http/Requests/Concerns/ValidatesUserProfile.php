@@ -105,7 +105,6 @@ trait ValidatesUserProfile
             // Addresses: present key (even empty) is authoritative.
             'personal_data.addresses' => ['sometimes', 'array'],
             'personal_data.addresses.*.id' => ['sometimes', 'integer', 'min:1'],
-            'personal_data.addresses.*.label' => ['nullable', 'string', 'max:255'],
             'personal_data.addresses.*.line1' => ['required', 'string', 'max:255'],
             'personal_data.addresses.*.line2' => ['nullable', 'string', 'max:255'],
             'personal_data.addresses.*.postal_code' => ['nullable', 'string', 'max:20'],
@@ -232,7 +231,6 @@ trait ValidatesUserProfile
                 id: isset($row['id']) ? (int) $row['id'] : null,
                 data: new CreateAddress(
                     line1: (string) ($row['line1'] ?? ''),
-                    label: $row['label'] ?? null,
                     line2: $row['line2'] ?? null,
                     postalCode: $row['postal_code'] ?? null,
                     cityId: isset($row['city_id']) ? (int) $row['city_id'] : null,

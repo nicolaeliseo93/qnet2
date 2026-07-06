@@ -38,13 +38,12 @@ class UserAddressSeeder extends Seeder
         $primaryCity = $cities[$index % max($cities->count(), 1)] ?? City::query()->with(['country', 'state', 'province'])->first();
 
         if ($primaryCity === null) {
-            Address::factory()->withLabel('Primary')->primary()->for($card, 'addressable')->create();
+            Address::factory()->primary()->for($card, 'addressable')->create();
 
             return;
         }
 
         Address::factory()->forCity($primaryCity)->primary()->for($card, 'addressable')->create([
-            'label' => $card->type === PersonalDataTypeEnum::Company ? 'Headquarters' : 'Home',
             'postal_code' => $this->postalCode($faker, $primaryCity->country?->iso2),
         ]);
 
@@ -52,7 +51,6 @@ class UserAddressSeeder extends Seeder
             $secondaryCity = $cities[($index + 17) % $cities->count()] ?? $primaryCity;
 
             Address::factory()->forCity($secondaryCity)->for($card, 'addressable')->create([
-                'label' => 'Billing',
                 'postal_code' => $this->postalCode($faker, $secondaryCity->country?->iso2),
             ]);
 
@@ -60,7 +58,6 @@ class UserAddressSeeder extends Seeder
                 $warehouseCity = $cities[($index + 43) % $cities->count()] ?? $secondaryCity;
 
                 Address::factory()->forCity($warehouseCity)->for($card, 'addressable')->create([
-                    'label' => 'Warehouse',
                     'postal_code' => $this->postalCode($faker, $warehouseCity->country?->iso2),
                 ]);
             }
@@ -72,7 +69,6 @@ class UserAddressSeeder extends Seeder
             $secondaryCity = $cities[($index + 9) % $cities->count()] ?? $primaryCity;
 
             Address::factory()->forCity($secondaryCity)->for($card, 'addressable')->create([
-                'label' => 'Billing',
                 'postal_code' => $this->postalCode($faker, $secondaryCity->country?->iso2),
             ]);
         }

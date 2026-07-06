@@ -32,7 +32,6 @@ export interface Contact {
 /** A single address (AddressResource). */
 export interface Address {
   id: number
-  label: string | null
   line1: string
   line2: string | null
   postal_code: string | null
@@ -115,7 +114,6 @@ export type UpdateContactPayload = ContactFields
 /** Address fields shared by create and update. */
 export interface AddressFields {
   line1: string
-  label?: string | null
   line2?: string | null
   postal_code?: string | null
   city_id?: number | null
@@ -171,7 +169,6 @@ export interface AddressDraft {
   _key: string
   /** Present = existing row to update; absent = new row to create. */
   id?: number
-  label: string | null
   line1: string
   line2: string | null
   postal_code: string | null

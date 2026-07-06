@@ -67,7 +67,6 @@ function addressToDraft(address: Address): AddressDraft {
   return {
     _key: `address-${address.id}`,
     id: address.id,
-    label: address.label,
     line1: address.line1,
     line2: address.line2,
     postal_code: address.postal_code,
@@ -113,7 +112,6 @@ export interface PersonalDataContactPayload {
 /** A single address in the nested `personal_data.addresses[]` wire shape. */
 export interface PersonalDataAddressPayload {
   id?: number
-  label: string | null
   line1: string
   line2: string | null
   postal_code: string | null
@@ -157,7 +155,6 @@ function contactToPayload(draft: ContactDraft): PersonalDataContactPayload {
 function addressToPayload(draft: AddressDraft): PersonalDataAddressPayload {
   return {
     ...(draft.id !== undefined ? { id: draft.id } : {}),
-    label: draft.label,
     line1: draft.line1,
     line2: draft.line2,
     postal_code: draft.postal_code,

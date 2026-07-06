@@ -16,7 +16,6 @@ final readonly class CreateAddress
 {
     public function __construct(
         public string $line1,
-        public ?string $label = null,
         public ?string $line2 = null,
         public ?string $postalCode = null,
         public ?int $cityId = null,
@@ -37,7 +36,6 @@ final readonly class CreateAddress
     public function toAttributes(): array
     {
         return [
-            'label' => $this->label,
             'line1' => $this->line1,
             'line2' => $this->line2,
             'postal_code' => $this->postalCode,

@@ -20,11 +20,39 @@ vi.mock('@/features/geo/use-geo', () => ({
 }))
 
 function query<T>(data: T) {
-  return { data, isPending: false, isError: false }
+  return { data, isPending: false, isError: false, refetch: vi.fn() }
 }
 
-const pending = { data: undefined, isPending: true, isError: false }
-const errored = { data: undefined, isPending: false, isError: true }
+// Cities are an infinite query: the hook exposes paged data plus the paging
+// controls the select drives for infinite scroll.
+function cityQuery(
+  items: unknown[],
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    data: { pages: [items] },
+    isPending: false,
+    isError: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
+    refetch: vi.fn(),
+    ...overrides,
+  }
+}
+
+const pending = {
+  data: undefined,
+  isPending: true,
+  isError: false,
+  refetch: vi.fn(),
+}
+const errored = {
+  data: undefined,
+  isPending: false,
+  isError: true,
+  refetch: vi.fn(),
+}
 
 beforeAll(async () => {
   await i18n.changeLanguage('en')
@@ -55,7 +83,7 @@ beforeEach(() => {
     ]),
   )
   useCitiesMock.mockReturnValue(
-    query([{ id: 100, name: 'Grumo Nevano', state_id: 10, province_id: 50 }]),
+    cityQuery([{ id: 100, name: 'Grumo Nevano', state_id: 10, province_id: 50 }]),
   )
 })
 
@@ -170,20 +198,25 @@ describe('GeoSelect', () => {
     })
   })
 
-  it('shows a skeleton while the countries load', () => {
+  it('shows a skeleton inside the popup while the countries load', () => {
     useCountriesMock.mockReturnValue(pending)
-    const { container } = render(<GeoSelect value={empty} onChange={() => {}} />)
+    render(<GeoSelect value={empty} onChange={() => {}} />)
 
+    fireEvent.click(screen.getAllByRole('combobox')[0])
     expect(
-      container.querySelector('[data-slot="skeleton"]'),
+      screen.getByTestId('searchable-select-skeleton'),
     ).toBeInTheDocument()
   })
 
-  it('shows an inline error when the countries fail to load', () => {
-    useCountriesMock.mockReturnValue(errored)
+  it('shows an inline error with a retry inside the popup on load failure', () => {
+    const refetch = vi.fn()
+    useCountriesMock.mockReturnValue({ ...errored, refetch })
     render(<GeoSelect value={empty} onChange={() => {}} />)
 
+    fireEvent.click(screen.getAllByRole('combobox')[0])
     expect(screen.getByText('Failed to load options.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(refetch).toHaveBeenCalled()
   })
 
   it('filters the country options client-side as the user types', () => {
@@ -216,5 +249,66 @@ describe('GeoSelect', () => {
     await waitFor(() =>
       expect(useCitiesMock).toHaveBeenCalledWith(10, null, 'grumo'),
     )
+  })
+
+  it('keeps the city dropdown open (loading inside) while a search re-fetches', () => {
+    // Regression: a re-search used to flip the field to a skeleton and unmount
+    // the open popover, closing it and preventing selection.
+    useCitiesMock.mockReturnValue(cityQuery([], { isPending: true }))
+    render(
+      <GeoSelect
+        value={{ country_id: 1, state_id: 10, province_id: null, city_id: null }}
+        onChange={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getAllByRole('combobox')[3])
+
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    expect(screen.getByTestId('searchable-select-skeleton')).toBeInTheDocument()
+  })
+
+  it('loads the next city page when the sentinel intersects', async () => {
+    const fetchNextPage = vi.fn()
+    useCitiesMock.mockReturnValue(
+      cityQuery(
+        [{ id: 100, name: 'Aversa', state_id: 10, province_id: null }],
+        { hasNextPage: true, fetchNextPage },
+      ),
+    )
+
+    type ObserverCallback = (entries: { isIntersecting: boolean }[]) => void
+    let trigger: ObserverCallback | null = null
+    const observe = vi.fn()
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(cb: ObserverCallback) {
+          trigger = cb
+        }
+        observe = observe
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return []
+        }
+      },
+    )
+
+    render(
+      <GeoSelect
+        value={{ country_id: 1, state_id: 10, province_id: null, city_id: null }}
+        onChange={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getAllByRole('combobox')[3])
+    await screen.findByRole('option', { name: 'Aversa' })
+    await waitFor(() => expect(observe).toHaveBeenCalled())
+    const fire = trigger as ObserverCallback | null
+    fire?.([{ isIntersecting: true }])
+    expect(fetchNextPage).toHaveBeenCalled()
+
+    vi.unstubAllGlobals()
   })
 })

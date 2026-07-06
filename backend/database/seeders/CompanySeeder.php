@@ -63,13 +63,12 @@ class CompanySeeder extends Seeder
         $city = $cities->isNotEmpty() ? $cities[$index % $cities->count()] : null;
 
         if ($city === null) {
-            Address::factory()->withLabel('Headquarters')->primary()->for($company, 'addressable')->create();
+            Address::factory()->primary()->for($company, 'addressable')->create();
 
             return;
         }
 
         Address::factory()->forCity($city)->primary()->for($company, 'addressable')->create([
-            'label' => 'Headquarters',
             'postal_code' => $faker->numerify('#####'),
         ]);
     }

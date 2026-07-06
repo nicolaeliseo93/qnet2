@@ -56,7 +56,6 @@ function address(overrides: Partial<AddressDraft> = {}): AddressDraft {
   return {
     _key: 'address-1',
     id: 1,
-    label: 'Home',
     line1: '221B Baker Street',
     line2: null,
     postal_code: null,

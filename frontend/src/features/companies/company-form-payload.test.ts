@@ -38,7 +38,6 @@ function original(
     vat_number: 'IT12345678901',
     address: {
       id: 3,
-      label: null,
       line1: '221B Baker Street',
       line2: null,
       postal_code: '20100',

@@ -8,6 +8,7 @@ use App\Models\Province;
 use App\Models\State;
 use App\Support\Geo\ItalianGeoLocalizer;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Resolves an external system's geo strings (country/region/province/city) to
@@ -23,10 +24,13 @@ use Illuminate\Database\Eloquent\Builder;
  *  2. The lookup itself is case-insensitive (LIKE, wildcards escaped), so a
  *     legacy `FRATTAMAGGIORE` still matches the dataset's `Frattamaggiore`.
  *
- * Each level is looked up scoped to its resolved parent. A level whose value was
- * supplied but does not resolve (unknown value, or an unresolved parent) is a
- * non-fatal warning; levels are independent, so partial geo data still resolves
- * whatever it can.
+ * Resolution is BACKFILLING, not strictly top-down: a level is looked up scoped
+ * to whatever ancestor already resolved, and a resolved province/city fills in
+ * any ancestor that was blank. This matters because sources vary — companies
+ * send an EMPTY region but a province plate code + comune; an Italian plate code
+ * identifies its province (hence its region and country) nationally, so the
+ * whole chain still resolves. A non-empty level that cannot resolve is a
+ * non-fatal warning; whatever resolved is still used.
  */
 class MigrationGeoResolver
 {
@@ -36,10 +40,16 @@ class MigrationGeoResolver
     {
         $warnings = [];
 
+        // Step 1: top-down where present (country -> region).
         $countryId = $this->resolveCountry($countryName, $warnings);
         $stateId = $this->resolveState($countryId, $stateName, $warnings);
-        $provinceId = $this->resolveProvince($stateId, $provinceName, $warnings);
-        $cityId = $this->resolveCity($stateId, $provinceId, $cityName, $warnings);
+
+        // Step 2: province from its plate code, backfilling a blank region/country.
+        [$provinceId, $stateId, $countryId] = $this->resolveProvince($provinceName, $stateId, $countryId, $warnings);
+
+        // Step 3: city scoped to the (possibly backfilled) province/region,
+        // backfilling any ancestor still blank.
+        [$cityId, $stateId, $countryId] = $this->resolveCity($cityName, $provinceId, $stateId, $countryId, $warnings);
 
         return new MigrationGeoResolution($countryId, $stateId, $provinceId, $cityId, $warnings);
     }
@@ -55,13 +65,15 @@ class MigrationGeoResolver
             return null;
         }
 
-        $id = $this->matchByName(Country::query(), $this->localizer->country($name));
+        $country = $this->firstByName(Country::query(), $this->localizer->country($name));
 
-        if ($id === null) {
+        if ($country === null) {
             $warnings[] = "Unresolved country '{$name}'.";
+
+            return null;
         }
 
-        return $id;
+        return $country->id;
     }
 
     /**
@@ -81,97 +93,113 @@ class MigrationGeoResolver
             return null;
         }
 
-        $id = $this->matchByName(
-            State::query()->where('country_id', $countryId),
-            $this->localizer->region($name),
-        );
+        $state = $this->firstByName(State::query()->where('country_id', $countryId), $this->localizer->region($name));
 
-        if ($id === null) {
+        if ($state === null) {
             $warnings[] = "Unresolved region '{$name}'.";
+
+            return null;
         }
 
-        return $id;
+        return $state->id;
     }
 
     /**
      * The legacy province value is a plate code (`NA`, `RG`): translate it to a
-     * province name, then match within the resolved state. An unknown code has
-     * no textual fallback, so it resolves to null with a warning.
+     * province name and match it scoped to whatever ancestor resolved (region,
+     * else country, else nationally — a plate code is unique in Italy). A found
+     * province backfills a blank region/country from its own ancestry.
      *
      * @param  array<int, string>  $warnings
+     * @return array{0: ?int, 1: ?int, 2: ?int} [provinceId, stateId, countryId]
      */
-    private function resolveProvince(?int $stateId, ?string $name, array &$warnings): ?int
+    private function resolveProvince(?string $name, ?int $stateId, ?int $countryId, array &$warnings): array
     {
         $name = $this->blankToNull($name);
 
         if ($name === null) {
-            return null;
-        }
-
-        if ($stateId === null) {
-            $warnings[] = "Unresolved province '{$name}' (no resolved region).";
-
-            return null;
+            return [null, $stateId, $countryId];
         }
 
         $canonical = $this->localizer->province($name);
 
-        $id = $canonical === null
+        $province = $canonical === null
             ? null
-            : $this->matchByName(Province::query()->where('state_id', $stateId), $canonical);
+            : $this->firstByName($this->scopeToAncestor(Province::query(), $stateId, $countryId), $canonical);
 
-        if ($id === null) {
+        if ($province === null) {
             $warnings[] = "Unresolved province '{$name}'.";
+
+            return [null, $stateId, $countryId];
         }
 
-        return $id;
+        return [$province->id, $stateId ?? $province->state_id, $countryId ?? $province->country_id];
     }
 
     /**
      * @param  array<int, string>  $warnings
+     * @return array{0: ?int, 1: ?int, 2: ?int} [cityId, stateId, countryId]
      */
-    private function resolveCity(?int $stateId, ?int $provinceId, ?string $name, array &$warnings): ?int
+    private function resolveCity(?string $name, ?int $provinceId, ?int $stateId, ?int $countryId, array &$warnings): array
     {
         $name = $this->blankToNull($name);
 
         if ($name === null) {
-            return null;
+            return [null, $stateId, $countryId];
         }
 
-        if ($stateId === null) {
+        // A city name needs at least a province or region scope to be safely
+        // disambiguated (many comuni share a name across Italy).
+        if ($provinceId === null && $stateId === null) {
             $warnings[] = "Unresolved city '{$name}' (no resolved region).";
 
-            return null;
+            return [null, $stateId, $countryId];
         }
 
         $canonical = $this->localizer->city($name);
 
-        $query = City::query()
-            ->where('state_id', $stateId)
-            ->when($provinceId !== null, fn (Builder $inner) => $inner->where('province_id', $provinceId));
+        $query = City::query()->when(
+            $provinceId !== null,
+            fn (Builder $inner) => $inner->where('province_id', $provinceId),
+            fn (Builder $inner) => $inner->where('state_id', $stateId),
+        );
 
-        $id = $canonical === null ? null : $this->matchByName($query, $canonical);
+        $city = $canonical === null ? null : $this->firstByName($query, $canonical);
 
-        if ($id === null) {
+        if ($city === null) {
             $warnings[] = "Unresolved city '{$name}'.";
+
+            return [null, $stateId, $countryId];
         }
 
-        return $id;
+        return [$city->id, $stateId ?? $city->state_id, $countryId ?? $city->country_id];
+    }
+
+    /**
+     * Scope a province/city query to the tightest resolved ancestor (region,
+     * else country, else unscoped — a plate code is nationally unique).
+     *
+     * @param  Builder<*>  $query
+     * @return Builder<*>
+     */
+    private function scopeToAncestor(Builder $query, ?int $stateId, ?int $countryId): Builder
+    {
+        return $query
+            ->when($stateId !== null, fn (Builder $inner) => $inner->where('state_id', $stateId))
+            ->when($stateId === null && $countryId !== null, fn (Builder $inner) => $inner->where('country_id', $countryId));
     }
 
     /**
      * Case-insensitive exact match on `name` (LIKE with the value's own
      * wildcards escaped — no pattern search, just collation-independent
-     * equality). Returns the matched row id, or null.
+     * equality). Returns the first matching row (with its ancestor ids for
+     * backfilling), or null.
      *
      * @param  Builder<*>  $query
      */
-    private function matchByName(Builder $query, string $name): ?int
+    private function firstByName(Builder $query, string $name): ?Model
     {
-        /** @var int|null $id */
-        $id = $query->where('name', 'like', addcslashes($name, '\\%_'))->value('id');
-
-        return $id;
+        return $query->where('name', 'like', addcslashes($name, '\\%_'))->first();
     }
 
     private function blankToNull(?string $value): ?string

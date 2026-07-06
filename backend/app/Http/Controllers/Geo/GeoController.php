@@ -96,9 +96,11 @@ class GeoController extends BaseApiController
     }
 
     /**
-     * GET /api/cities?province_id={id}|state_id={id}&search={q} — cities of a
-     * province (preferred) or, failing that, of a state, ordered by name,
-     * optionally filtered by a name LIKE, capped at CITY_RESULT_LIMIT.
+     * GET /api/cities?province_id={id}|state_id={id}&search={q}&offset={n} —
+     * cities of a province (preferred) or, failing that, of a state, ordered by
+     * name, optionally filtered by a name LIKE. Returned one page at a time
+     * (CITY_RESULT_LIMIT rows) so the client can scroll through provinces with
+     * hundreds of comuni; `offset` skips the already-loaded rows.
      */
     public function cities(ListCitiesRequest $request): JsonResponse
     {
@@ -121,6 +123,8 @@ class GeoController extends BaseApiController
                     fn ($query) => $query->where('name', 'like', addcslashes($search, '\\%_').'%')
                 )
                 ->orderBy('name')
+                ->orderBy('id')
+                ->offset($request->offset())
                 ->limit(self::CITY_RESULT_LIMIT)
                 ->get();
 

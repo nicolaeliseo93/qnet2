@@ -196,6 +196,25 @@ it('cities: caps the result set at 50', function () {
         ->assertJsonCount(50, 'data');
 });
 
+it('cities: offset pages past the first 50 for infinite scroll', function () {
+    Sanctum::actingAs(User::factory()->create());
+
+    $state = State::factory()->create();
+    // Names sort deterministically as City-000 .. City-059 so the page boundary
+    // is predictable regardless of insertion order.
+    foreach (range(0, 59) as $index) {
+        City::factory()->forState($state)->create([
+            'name' => sprintf('City-%03d', $index),
+        ]);
+    }
+
+    $this->getJson("/api/cities?state_id={$state->id}&offset=50")
+        ->assertOk()
+        ->assertJsonCount(10, 'data')
+        ->assertJsonPath('data.0.name', 'City-050')
+        ->assertJsonPath('data.9.name', 'City-059');
+});
+
 it('cities: 422 when province_id does not exist', function () {
     Sanctum::actingAs(User::factory()->create());
 

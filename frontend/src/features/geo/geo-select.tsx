@@ -1,7 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SearchableSelect } from '@/components/ui/searchable-select'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   useCities,
   useCountries,
@@ -38,19 +37,24 @@ interface GeoFieldProps {
   disabled: boolean
   emptyLabel: string
   errorLabel: string
+  retryLabel: string
   searchPlaceholder: string
   noMatchLabel: string
   onChange: (id: number) => void
+  onRetry: () => void
   /** Set false when the caller narrows the list server-side (city level). */
   filter?: boolean
   /** Debounced search term, for the server-searched city level. */
   onSearchChange?: (term: string) => void
+  hasNextPage?: boolean
+  isFetchingNextPage?: boolean
+  onLoadMore?: () => void
 }
 
 /**
- * A single dependent geo select. Renders a skeleton while its data loads, an
- * inline message on error, and otherwise a searchable option list. Disabled
- * until its parent has been chosen.
+ * A single dependent geo select: a searchable dropdown that owns its own
+ * loading/error/empty states inside the popover, so a re-search never unmounts
+ * it. Disabled until its parent has been chosen.
  */
 function GeoField({
   label,
@@ -62,38 +66,42 @@ function GeoField({
   disabled,
   emptyLabel,
   errorLabel,
+  retryLabel,
   searchPlaceholder,
   noMatchLabel,
   onChange,
+  onRetry,
   filter,
   onSearchChange,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
 }: GeoFieldProps) {
-  const showSkeleton = !disabled && isPending
-
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-sm font-medium">{label}</span>
-      {showSkeleton ? (
-        <Skeleton className="h-9 w-full" />
-      ) : isError && !disabled ? (
-        <p className="text-sm text-destructive">{errorLabel}</p>
-      ) : (
-        <SearchableSelect
-          value={value}
-          onChange={onChange}
-          options={options}
-          disabled={disabled}
-          filter={filter}
-          onSearchChange={onSearchChange}
-          labels={{
-            placeholder:
-              !disabled && options.length === 0 ? emptyLabel : placeholder,
-            searchPlaceholder,
-            empty: emptyLabel,
-            noMatch: noMatchLabel,
-          }}
-        />
-      )}
+      <SearchableSelect
+        value={value}
+        onChange={onChange}
+        options={options}
+        disabled={disabled}
+        isPending={!disabled && isPending}
+        isError={!disabled && isError}
+        onRetry={onRetry}
+        filter={filter}
+        onSearchChange={onSearchChange}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        onLoadMore={onLoadMore}
+        labels={{
+          placeholder,
+          searchPlaceholder,
+          empty: emptyLabel,
+          noMatch: noMatchLabel,
+          error: errorLabel,
+          retry: retryLabel,
+        }}
+      />
     </div>
   )
 }
@@ -124,6 +132,12 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
   const states = useStates(value.country_id)
   const provinces = useProvinces(value.state_id)
   const cities = useCities(value.state_id, value.province_id, citySearch)
+
+  // Flatten the paged city results into a single option list for the select.
+  const cityOptions = useMemo(
+    () => cities.data?.pages.flat() ?? [],
+    [cities.data?.pages],
+  )
 
   const handleCountry = (countryId: number) => {
     setCitySearch('')
@@ -161,9 +175,11 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         disabled={disabled}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
+        retryLabel={t('geo.retry')}
         searchPlaceholder={t('geo.search')}
         noMatchLabel={t('geo.noMatch')}
         onChange={handleCountry}
+        onRetry={countries.refetch}
       />
 
       <GeoField
@@ -176,9 +192,11 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         disabled={disabled || value.country_id == null}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
+        retryLabel={t('geo.retry')}
         searchPlaceholder={t('geo.search')}
         noMatchLabel={t('geo.noMatch')}
         onChange={handleState}
+        onRetry={states.refetch}
       />
 
       <GeoField
@@ -191,26 +209,33 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         disabled={disabled || value.state_id == null}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
+        retryLabel={t('geo.retry')}
         searchPlaceholder={t('geo.search')}
         noMatchLabel={t('geo.noMatch')}
         onChange={handleProvince}
+        onRetry={provinces.refetch}
       />
 
       <GeoField
         label={t('geo.city')}
         placeholder={t('geo.cityPlaceholder')}
         value={value.city_id}
-        options={cities.data ?? []}
+        options={cityOptions}
         isPending={cities.isPending}
         isError={cities.isError}
         disabled={disabled || value.state_id == null}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
+        retryLabel={t('geo.retry')}
         searchPlaceholder={t('geo.search')}
         noMatchLabel={t('geo.noMatch')}
         filter={false}
         onSearchChange={setCitySearch}
+        hasNextPage={cities.hasNextPage}
+        isFetchingNextPage={cities.isFetchingNextPage}
+        onLoadMore={cities.fetchNextPage}
         onChange={handleCity}
+        onRetry={cities.refetch}
       />
     </div>
   )

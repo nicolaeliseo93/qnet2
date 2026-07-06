@@ -80,7 +80,6 @@ export const personalData = {
     title: 'Addresses',
     add: 'Add address',
     empty: 'No addresses yet.',
-    label: 'Label',
     line1: 'Address',
     line2: 'Address line 2',
     postalCode: 'Postal code',

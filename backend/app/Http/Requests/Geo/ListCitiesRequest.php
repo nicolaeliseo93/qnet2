@@ -33,6 +33,7 @@ class ListCitiesRequest extends FormRequest
             'province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
             'state_id' => ['required_without:province_id', 'nullable', 'integer', Rule::exists('states', 'id')],
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'offset' => ['sometimes', 'integer', 'min:0'],
         ];
     }
 
@@ -55,5 +56,13 @@ class ListCitiesRequest extends FormRequest
         $search = $this->validated('search');
 
         return is_string($search) && $search !== '' ? $search : null;
+    }
+
+    /**
+     * Zero-based row offset for keyset-free paging; defaults to the first page.
+     */
+    public function offset(): int
+    {
+        return (int) ($this->validated('offset') ?? 0);
     }
 }

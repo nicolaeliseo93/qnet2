@@ -40,7 +40,6 @@ class StoreCompanyRequest extends FormRequest
 
             // Address: present key (even empty) is authoritative.
             'address' => ['sometimes', 'nullable', 'array'],
-            'address.label' => ['nullable', 'string', 'max:255'],
             'address.line1' => ['required_with:address', 'string', 'max:255'],
             'address.line2' => ['nullable', 'string', 'max:255'],
             'address.postal_code' => ['nullable', 'string', 'max:20'],

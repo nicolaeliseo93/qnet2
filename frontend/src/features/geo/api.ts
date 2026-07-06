@@ -31,21 +31,27 @@ export async function fetchProvinces(stateId: number): Promise<Province[]> {
 }
 
 /**
- * Lists the cities of a province (preferred, the finest level) or, for countries
- * without a province level, of a state, ordered by name (max 50). An optional
- * `search` prefix narrows the results server-side.
+ * Lists one page of cities of a province (preferred, the finest level) or, for
+ * countries without a province level, of a state, ordered by name (page size
+ * 50). An optional `search` prefix narrows the results server-side; `offset`
+ * skips already-loaded rows so the caller can scroll through provinces with
+ * hundreds of comuni.
  */
 export async function fetchCities(parent: {
   stateId: number
   provinceId?: number | null
   search?: string
+  offset?: number
 }): Promise<City[]> {
-  const { stateId, provinceId, search } = parent
+  const { stateId, provinceId, search, offset } = parent
   const { data } = await apiClient.get<ApiResponse<City[]>>('/cities', {
-    params:
-      provinceId != null
-        ? { province_id: provinceId, search: search || undefined }
-        : { state_id: stateId, search: search || undefined },
+    params: {
+      ...(provinceId != null
+        ? { province_id: provinceId }
+        : { state_id: stateId }),
+      search: search || undefined,
+      offset: offset || undefined,
+    },
   })
   return data.data
 }

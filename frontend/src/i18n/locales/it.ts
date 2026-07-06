@@ -172,6 +172,7 @@ export const it: TranslationResources = {
     error: 'Caricamento delle opzioni non riuscito.',
     search: 'Cerca',
     noMatch: 'Nessun risultato',
+    retry: 'Riprova',
   },
   roles: {
     title: 'Ruoli',

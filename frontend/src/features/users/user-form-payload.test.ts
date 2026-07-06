@@ -37,7 +37,6 @@ function draft(overrides: Partial<PersonalDataDraft> = {}): PersonalDataDraft {
       {
         _key: 'a1',
         id: 1,
-        label: null,
         line1: '221B Baker Street',
         line2: null,
         postal_code: null,

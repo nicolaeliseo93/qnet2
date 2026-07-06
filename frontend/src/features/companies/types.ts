@@ -14,7 +14,6 @@ import type { ResourcePermissions } from '@/features/authorization/types'
  */
 export interface CompanyAddress {
   id: number
-  label: string | null
   line1: string
   line2: string | null
   postal_code: string | null

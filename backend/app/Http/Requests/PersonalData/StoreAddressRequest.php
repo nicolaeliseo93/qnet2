@@ -44,7 +44,6 @@ class StoreAddressRequest extends FormRequest
     protected function domainRules(): array
     {
         return [
-            'label' => ['nullable', 'string', 'max:255'],
             'line1' => ['required', 'string', 'max:255'],
             'line2' => ['nullable', 'string', 'max:255'],
             'postal_code' => ['nullable', 'string', 'max:20'],
@@ -88,7 +87,6 @@ class StoreAddressRequest extends FormRequest
     {
         return new CreateAddress(
             line1: $this->string('line1')->toString(),
-            label: $this->input('label'),
             line2: $this->input('line2'),
             postalCode: $this->input('postal_code'),
             cityId: $this->filled('city_id') ? (int) $this->input('city_id') : null,

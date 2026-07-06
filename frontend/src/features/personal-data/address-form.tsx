@@ -79,7 +79,6 @@ export function AddressForm({ address, onSubmit, onCancel }: AddressFormProps) {
   const form = useForm<AddressFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      label: address?.label ?? '',
       line1: address?.line1 ?? '',
       line2: address?.line2 ?? '',
       postal_code: address?.postal_code ?? '',
@@ -94,7 +93,6 @@ export function AddressForm({ address, onSubmit, onCancel }: AddressFormProps) {
   const handleSubmit = (values: AddressFormValues) => {
     onSubmit({
       ...(address?.id !== undefined ? { id: address.id } : {}),
-      label: values.label || null,
       line1: values.line1,
       line2: values.line2 || null,
       postal_code: values.postal_code || null,
@@ -112,20 +110,6 @@ export function AddressForm({ address, onSubmit, onCancel }: AddressFormProps) {
           outer user form, so it must not nest a <form>. Save validates and commits
           to the parent buffer via RHF's handleSubmit on a plain button. */}
       <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3">
-        <FormField
-          control={form.control}
-          name="label"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('personalData.addresses.label')}</FormLabel>
-              <FormControl>
-                <Input autoComplete="off" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
         <FormField
           control={form.control}
           name="line1"

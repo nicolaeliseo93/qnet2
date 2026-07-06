@@ -41,7 +41,6 @@ class UpdateCompanyRequest extends FormRequest
             'vat_number' => ['sometimes', 'nullable', 'string', 'max:50'],
 
             'address' => ['sometimes', 'nullable', 'array'],
-            'address.label' => ['nullable', 'string', 'max:255'],
             'address.line1' => ['required_with:address', 'string', 'max:255'],
             'address.line2' => ['nullable', 'string', 'max:255'],
             'address.postal_code' => ['nullable', 'string', 'max:20'],

@@ -44,7 +44,6 @@ function address(overrides: Partial<AddressDraft> = {}): AddressDraft {
   return {
     _key: 'address-1',
     id: 1,
-    label: 'Home',
     line1: '10 Downing Street',
     line2: null,
     postal_code: 'SW1A 2AA',

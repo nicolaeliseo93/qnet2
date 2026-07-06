@@ -80,7 +80,6 @@ export const personalData = {
     title: 'Indirizzi',
     add: 'Aggiungi indirizzo',
     empty: 'Nessun indirizzo presente.',
-    label: 'Etichetta',
     line1: 'Indirizzo',
     line2: 'Indirizzo (riga 2)',
     postalCode: 'CAP',

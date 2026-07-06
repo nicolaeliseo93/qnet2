@@ -82,7 +82,6 @@ it('create: 201 attaches an address to a personal-data owner', function () {
     $this->postJson('/api/addresses', [
         'addressable_type' => 'personal_data',
         'addressable_id' => $card->id,
-        'label' => 'Home',
         'line1' => '1 Infinite Loop',
         'postal_code' => '95014',
     ])
@@ -210,7 +209,6 @@ it('create: 422 when line1 is missing', function () {
     $this->postJson('/api/addresses', [
         'addressable_type' => 'personal_data',
         'addressable_id' => $card->id,
-        'label' => 'Home',
     ])->assertStatus(422)->assertJsonValidationErrors('line1');
 });
 

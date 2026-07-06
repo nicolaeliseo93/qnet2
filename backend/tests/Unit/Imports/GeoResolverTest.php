@@ -59,6 +59,19 @@ it('resolves a label-noisy comune by stripping the site label before matching', 
         ->and($result->cityId)->toBe($city->id);
 });
 
+it('backfills a blank region/country from the province plate code', function () {
+    $geo = geoResolverChain();
+
+    // No country, no region — only the plate code + comune (the companies shape).
+    $result = app(GeoResolver::class)->resolve(null, null, 'MI', 'Milano');
+
+    expect($result->isResolved())->toBeTrue()
+        ->and($result->provinceId)->toBe($geo['province']->id)
+        ->and($result->stateId)->toBe($geo['state']->id)
+        ->and($result->countryId)->toBe($geo['country']->id)
+        ->and($result->cityId)->toBe($geo['city']->id);
+});
+
 it('skips blank/absent levels with no error and no id', function () {
     $result = app(GeoResolver::class)->resolve(null, null, null, null);
 

@@ -34,7 +34,6 @@ vi.mock('@/features/personal-data/address-form', () => ({
       data-testid="stub-submit"
       onClick={() =>
         onSubmit({
-          label: null,
           line1: 'New Street',
           line2: null,
           postal_code: null,
@@ -55,7 +54,6 @@ function address(overrides: Partial<AddressDraft> = {}): AddressDraft {
   return {
     _key: 'address-1',
     id: 1,
-    label: 'Home',
     line1: '10 Downing Street',
     line2: null,
     postal_code: 'SW1A 2AA',
@@ -78,10 +76,12 @@ describe('AddressesManager (controlled)', () => {
     expect(screen.getByText('No addresses yet.')).toBeInTheDocument()
   })
 
-  it('renders each address line and its label/postal summary', () => {
-    renderWithConfirm(<AddressesManager value={[address()]} onChange={() => {}} />)
+  it('renders each address line and its secondary/postal summary', () => {
+    renderWithConfirm(
+      <AddressesManager value={[address({ line2: 'Flat 2' })]} onChange={() => {}} />,
+    )
     expect(screen.getByText('10 Downing Street')).toBeInTheDocument()
-    expect(screen.getByText('Home · SW1A 2AA')).toBeInTheDocument()
+    expect(screen.getByText('Flat 2 · SW1A 2AA')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Delete address' }),
     ).toBeInTheDocument()

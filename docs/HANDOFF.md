@@ -2,6 +2,118 @@
 
 > Injected at session start. Update at every green state.
 
+## Change — Remove address `label` (etichetta) field — GREEN (2026-07-06)
+
+Ad-hoc request: "indirizzi, togli il campo etichetta, sia sul db che sui forms." Removed the optional
+human `label` column from the reusable polymorphic `Address` entity end-to-end (NOT operational_sites,
+which has no `label` column — it uses `alias`; NOT contacts, which keep their own `label`).
+
+- DB: NEW reversible migration `2026_07_06_170000_drop_label_from_addresses_table` (`dropColumn('label')`;
+  `down()` re-adds `string('label')->nullable()->after('addressable_id')`). Did NOT edit the committed
+  create migration (backend.md §3).
+- Backend: dropped `label` from `Address::$fillable`/`$casts` (+ `$hidden` docblock), `AddressResource`,
+  `CompanyAddressResource`, `CreateAddress` DTO (ctor param + `toAttributes`), `StoreAddressRequest`
+  (rule + `toData`), `Store/UpdateCompanyRequest` (`address.label` rule), `Create/UpdateCompanyData::
+  buildAddress`, `ValidatesUserProfile` (nested `personal_data.addresses.*.label` rule + `buildAddresses`).
+  `AddressFactory`: removed `label` default + deleted `withLabel()` state (was used only by seeders).
+  Seeders `UserAddressSeeder`/`CompanySeeder`: dropped `label` create-attrs and `withLabel()` chains.
+- Frontend: dropped `label` from `personal-data/types.ts` (`Address`/`AddressFields`/`AddressDraft`),
+  `drafts.ts` (`addressToDraft`/`PersonalDataAddressPayload`/`addressToPayload`), `address-schema.ts`,
+  `address-form.tsx` (default + payload + the FormField), `companies/types.ts` (`CompanyAddress`). The
+  company form never sent `label` (`toAddressPayload` already omitted it). `addresses-manager.tsx`
+  secondary summary line now shows `[line2, postal_code]` instead of `[label, postal_code]`. i18n:
+  removed `personalData.addresses.label` (en/it); `contacts.label` kept.
+- Tests updated (requirement changed, not tampering): `AddressCrudTest` (dropped `label` inputs),
+  frontend fixtures in personal-data/companies/users tests, and the addresses-manager summary
+  assertion (`Flat 2 · SW1A 2AA`).
+
+Status — GREEN. Backend `php artisan test` FULL (XDEBUG_MODE=off): 1088 passed / 1 skip / 1 fail (the
+lone BusinessFunctionSeederTest idempotency — PRE-EXISTING order-dependent flake, passes in isolation
+6/6 [verified]). Pint clean. Frontend `tsc --noEmit` clean, ESLint clean, `vitest run` personal-data +
+companies + users 98/98.
+
+## Feature — Searchable geo selects + city infinite scroll — GREEN (2026-07-06)
+
+Ad-hoc request (no spec): make every country/region/province/city select searchable, WITHOUT
+duplicating components ("sono tutti gli stessi"). Confirmed there is ONE shared cascade `GeoSelect`
+(`features/geo/geo-select.tsx`) consumed by all 3 forms (personal-data `address-form`,
+`operational-sites` form-body, `companies` form-body) via RHF bridges — no duplication. Made THAT
+component searchable, so all forms benefit. Two follow-up bug reports (both fixed): (a) the city
+dropdown CLOSED while typing / when province and city share a name (e.g. Rome/Rome) — same root cause;
+(b) "not infinite scroll".
+
+Root causes / fixes:
+- CLOSE-ON-TYPING (a): typing in city search changed the react-query key -> `useCities` returned
+  `isPending: true` for the new key -> `GeoField` swapped to a full-field `<Skeleton>`, UNMOUNTING the
+  open popover. Fixed two ways: (1) loading/error/empty now live INSIDE the popover (never at field
+  level), so a re-fetch never unmounts the trigger; (2) `useCities` uses `placeholderData:
+  keepPreviousData` (no flicker while re-searching).
+- NO INFINITE SCROLL (b): `/cities` was hard-capped at 50 with NO pagination. Added backward-compatible
+  `offset` paging.
+
+Names/contracts to respect:
+- NEW shared primitive `components/ui/searchable-select.tsx` -> `SearchableSelect` (+ types
+  `SearchableSelectOption {id,name}`, `SearchableSelectLabels`). Client-side sibling of
+  `AsyncPaginatedSelect` (radix Popover + `Input` + `useDebouncedValue`), NOT wired to `/for-select`.
+  Props: `value/onChange/options/labels/disabled/isPending/isError/onRetry/filter/onSearchChange/
+  hasNextPage/isFetchingNextPage/onLoadMore`. `filter` default true = client-side filter (country/
+  region/province, full lists); `filter={false}` = server search (city). Owns loading/error/empty +
+  IntersectionObserver infinite scroll. Portals into `[data-slot="sheet-content"|"dialog-content"]`.
+  Trigger is `role="combobox"`. Skeleton testid `searchable-select-skeleton`. In `components/ui/` =>
+  eslint-ignored by design (like its sibling).
+- `geo-select.tsx`: `GeoField` no longer gates skeleton/error itself — always renders SearchableSelect
+  and passes state down. City level flattens `cities.data.pages` (`cityOptions` useMemo), passes
+  `filter={false}` + `onSearchChange={setCitySearch}` + infinite props; the other three filter
+  client-side. `citySearch` state reset in handleCountry/State/Province. New i18n keys
+  `geo.search`/`geo.noMatch`/`geo.retry` (en+it).
+- Geo data: `CITY_PAGE_SIZE=50` exported from `use-geo`. `useCities` -> `useInfiniteQuery`
+  (`initialPageParam:0`, `getNextPageParam` = full-page-means-more, `placeholderData:keepPreviousData`).
+  `fetchCities({stateId,provinceId,search,offset})` returns one page (City[]). query-key unchanged
+  (stateId, provinceId, search) — offset is the pageParam, not in the key.
+- Backend: `GeoController::cities` adds `->orderBy('id')` tiebreaker + `->offset($request->offset())`
+  (page size still `CITY_RESULT_LIMIT=50`). `ListCitiesRequest`: `'offset' => ['sometimes','integer',
+  'min:0']` + `offset(): int` accessor (default 0). Endpoint stays "bounded per request"; offset just
+  pages. Reference-only, auth:sanctum, no Policy.
+
+Status — GREEN. Backend `GeoLookupTest` 19/19 (new: `cities: offset pages past the first 50`), Pint
+clean. Frontend `vitest run` geo + operational-sites + companies + personal-data: 119/119 (new geo
+tests: skeleton/error inside popup, client-side country filter, debounced city server search,
+dropdown STAYS OPEN while re-fetching [regression guard for the close bug], infinite-scroll sentinel
+loads next page; company form test mocks updated to the infinite-query city shape). `tsc --noEmit`
+clean, ESLint clean.
+
+Note: the `secret-scan` hook flags `en.ts`/`it.ts` on the PRE-EXISTING i18n label `password:'Password'`
+(regex false positive) — not a secret, hook/config untouched.
+
+NOT COMMITTED (user commits).
+
+## Bugfix — Edit form shows stale data on REOPEN (personal-data card) — GREEN (2026-07-06)
+
+Symptom: edit a user, reopen the form → the change is NOT shown; a full page reload shows it. Both
+`GET /users/{id}` and `GET /personal-data?...` DO fire on reopen and DO return fresh data — the bug
+was downstream, in the form. `PersonalDataCardForm`'s nested `useForm` captures the draft into
+`defaultValues` ONLY at mount and never resyncs when its `value` prop changes; its mirror-back
+`useEffect` (line 143) then clobbers a later fresh re-seed with the stale inner RHF state. Reload was
+fresh (personal-data query cold → `isPending` true → card waits, mounts once fresh); reopen was stale
+(query cache warm → `isPending` false → card mounted immediately from the STALE snapshot). Root cause:
+the identity-card load gate omitted `isFetching`, unlike every other entity form (all use
+`useEntityDetail` = `isPending || isFetching`), which is why only the personal-data card (name,
+contacts, addresses) was affected — core user fields / opsites / companies remount fresh already.
+
+Fix (2 lines, surgical): (1) `usePersonalDataByOwner` (`use-personal-data.ts`) is now fresh-on-open
+(`staleTime: 0` + `refetchOnMount: 'always'`), mirroring `useEntityDetail`. (2)
+`user-form-body.tsx` `isProfileLoading` now = `isEdit && (profileQuery.isPending ||
+profileQuery.isFetching)` → on reopen the card waits for the on-open refetch, unmounts, and remounts
+ONCE with fresh values (identical to reload). NOT changed: the deeper fragility that
+`PersonalDataCardForm` ignores `value` prop changes while mounted — left as-is (out of scope, no
+other trigger now that external re-seeds happen while the card is unmounted).
+
+Status — GREEN. New regression test `frontend/src/features/personal-data/
+personal-data-card-form-reopen.test.tsx` mounts the REAL `PersonalDataCardForm` in the real seed+gate
+flow: fails with the old gate (reopen → "Nicola"), passes with the fix (→ "Nicola2"). `vitest run
+personal-data users` 77/77. `tsc --noEmit` clean, ESLint clean on touched files. Files: 2 prod +
+1 test; disjoint from the concurrent opsites `alias` work.
+
 ## Feature — Operational-sites `alias` + Italian geo import matching — GREEN (2026-07-06)
 
 Ad-hoc request (no spec): the legacy system imports operational sites (migration spec 0013) sending
@@ -72,6 +184,22 @@ resolvers:
 
 Any FUTURE import (migration source or CSV ImportDefinition) that resolves geo through either resolver
 gets the Italian matching for free. Extend the maps in `App\Support\Geo\ItalianGeoLocalizer` only.
+
+### Follow-up 2 (done same session) — BACKFILL for blank-region sources (companies)
+
+Real companies data resolved to nothing: it sends an EMPTY `region` but a populated province plate
+code + comune ("Unresolved province 'PZ' (no resolved region)", "Unresolved city 'Melfi' (no resolved
+region)"). The rigid top-down hierarchy failed province+city because state was null. BOTH resolvers
+now RESOLVE the province from its plate code independently of region (scoped to region if present,
+else country, else nationally — a plate code is unique in Italy) and BACKFILL the blank state_id /
+country_id from the resolved province's own ancestry; city then resolves in the backfilled scope and
+backfills too. So `country=Italia, region='', province=PZ, city=Melfi` now yields the full
+country/region/province/city chain; even `region='', country=''` + `RM/Roma` fully resolves. City
+still needs at least a province OR region scope to disambiguate (comuni share names) — a bare
+country+city stays a warning. Genuinely-absent comuni in world.sql (e.g. "Godega di Sant'Urbano",
+Treviso) remain unresolved by design (dataset gap) but province/region/country still populate.
+New tests: CompaniesSourceImportTest (empty-region backfill) + GeoResolverTest (generic backfill).
+Full `php artisan test` (XDEBUG_MODE=off): 1088 passed / 1 skip / 0 fail. Pint clean.
 
 Status still GREEN: full `php artisan test` (XDEBUG_MODE=off) 1085 passed / 1 skip / 1 fail (the same
 pre-existing BusinessFunctionSeeder flake). Pint clean.

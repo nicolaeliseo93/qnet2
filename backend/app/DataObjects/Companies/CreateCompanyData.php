@@ -66,7 +66,6 @@ final readonly class CreateCompanyData
 
         return new CreateAddress(
             line1: (string) ($address['line1'] ?? ''),
-            label: $address['label'] ?? null,
             line2: $address['line2'] ?? null,
             postalCode: $address['postal_code'] ?? null,
             cityId: isset($address['city_id']) ? (int) $address['city_id'] : null,

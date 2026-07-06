@@ -157,7 +157,7 @@ export function AddressesManager({
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-medium">{address.line1}</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {[address.label, address.postal_code]
+                  {[address.line2, address.postal_code]
                     .filter(Boolean)
                     .join(' · ')}
                 </span>

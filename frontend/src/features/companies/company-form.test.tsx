@@ -40,7 +40,15 @@ vi.mock('@/features/geo/use-geo', () => ({
   useCountries: () => ({ data: [{ id: 1, name: 'Italy', iso2: 'IT' }], isPending: false, isError: false }),
   useStates: () => ({ data: [{ id: 10, name: 'Lombardy', country_id: 1 }], isPending: false, isError: false }),
   useProvinces: () => ({ data: [{ id: 50, name: 'Milan', state_id: 10 }], isPending: false, isError: false }),
-  useCities: () => ({ data: [{ id: 100, name: 'Milan', state_id: 10, province_id: 50 }], isPending: false, isError: false }),
+  useCities: () => ({
+    data: { pages: [[{ id: 100, name: 'Milan', state_id: 10, province_id: 50 }]] },
+    isPending: false,
+    isError: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: () => {},
+    refetch: () => {},
+  }),
 }))
 
 function wrapper() {
@@ -59,7 +67,6 @@ function company(
     vat_number: 'IT12345678901',
     address: {
       id: 3,
-      label: null,
       line1: '221B Baker Street',
       line2: null,
       postal_code: '20100',

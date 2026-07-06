@@ -25,7 +25,6 @@ class Address extends BaseModel
     use HasFactory, LogsModelActivity;
 
     protected $fillable = [
-        'label',
         'line1',
         'line2',
         'postal_code',
@@ -39,7 +38,6 @@ class Address extends BaseModel
     ];
 
     protected $casts = [
-        'label' => 'string',
         'line1' => 'string',
         'line2' => 'string',
         'postal_code' => 'string',
@@ -56,7 +54,7 @@ class Address extends BaseModel
      * The locating parts of an address (street lines and exact coordinates) are
      * personal data and not needed for a readable audit trail. Hiding them keeps
      * them out of the activity log (LogsModelActivity excludes $hidden) and out
-     * of default JSON serialization; label, postal code and the city/province/
+     * of default JSON serialization; postal code and the city/province/
      * state/country ids stay logged and serializable. The values remain readable via
      * the attribute and through an explicit, authorized resource when one is
      * added.

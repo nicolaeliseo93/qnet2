@@ -3,9 +3,11 @@
 use App\Enums\MigrationStatus;
 use App\Jobs\RunMigrationJob;
 use App\Migrations\MigrationRegistry;
+use App\Models\City;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\MigrationRun;
+use App\Models\Province;
 use App\Models\Role;
 use App\Models\State;
 use App\Models\User;
@@ -57,6 +59,43 @@ if (! function_exists('runMigrationJobFor')) {
 // ---------------------------------------------------------------------------
 // CompaniesSource — create + address (geo resolved by name)
 // ---------------------------------------------------------------------------
+
+it('resolves an EMPTY region from the province plate code, backfilling region + country', function () {
+    seedMigrationsConfig();
+    $country = Country::factory()->create(['name' => 'Italy']);
+    $state = State::factory()->for($country)->create(['name' => 'Basilicata']);
+    $province = Province::factory()->forState($state)->create(['name' => 'Potenza']);
+    $city = City::factory()->forProvince($province)->create(['name' => 'Melfi']);
+
+    Http::fake([
+        fakeMigrationsBaseUrl().'/companies*' => Http::response([
+            'items' => [[
+                'id' => 20,
+                'denomination' => 'Lucania Srl',
+                'country' => 'Italia',
+                'region' => '', // the companies shape: region is blank
+                'province' => 'PZ',
+                'city' => 'Melfi',
+                'street' => 'Via Vittorio Emanuele 1',
+            ]],
+            'pagination' => ['total' => 1],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $run = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'companies']);
+
+    runMigrationJobFor($run);
+
+    $company = Company::query()->where('old_id', 20)->first();
+    $address = $company->addresses()->firstOrFail();
+
+    expect($address->country_id)->toBe($country->id)
+        ->and($address->state_id)->toBe($state->id)
+        ->and($address->province_id)->toBe($province->id)
+        ->and($address->city_id)->toBe($city->id)
+        ->and($run->fresh()->report)->toBeNull();
+});
 
 it('creates a company with its address, resolving geo names to ids', function () {
     seedMigrationsConfig();

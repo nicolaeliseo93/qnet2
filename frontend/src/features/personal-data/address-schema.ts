@@ -9,7 +9,6 @@ import type { TFunction } from 'i18next'
  */
 export function buildAddressSchema(t: TFunction) {
   return z.object({
-    label: z.string().optional(),
     line1: z.string().min(1, t('personalData.addresses.line1Required')).max(255),
     line2: z.string().optional(),
     postal_code: z.string().max(20).optional(),
