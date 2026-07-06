@@ -86,9 +86,6 @@ function EmptyCell() {
  * stay in the domain's own renderer map.
  */
 
-/** How many tags are shown inline before collapsing into a “+N” badge. */
-const MAX_VISIBLE_TAGS = 2
-
 /** Formats an ISO datetime using the active UI locale, blank when missing. */
 export function formatDateTime(value: unknown): string {
   if (typeof value !== 'string' || value === '') {
@@ -104,54 +101,46 @@ export function formatDateTime(value: unknown): string {
   }).format(date)
 }
 
-/** Optional per-tag label formatter (e.g. to localize permission names). */
-type TagsCellProps = ICellRendererParams & {
-  formatTag?: (tag: string) => string
-}
-
 /**
- * Renders a `tags` column (a string array such as roles or permissions) as a row
- * of badges, collapsing the overflow into a “+N” badge with a tooltip listing
- * every value. Centered to match the column header alignment. Pass `formatTag`
- * to localize the displayed labels (raw values stay the React keys).
+ * Renders a `tags` column (a string array such as roles) as a single compact
+ * badge showing the count, with a tooltip listing every value — the same
+ * count-plus-tooltip shape as `ContactsCell`, so a long list never widens the
+ * column or wraps into unreadable rows. The accessible name carries the full
+ * comma-separated list. Em dash when the array is empty or missing.
  */
-export function TagsCell({ value, formatTag }: TagsCellProps) {
+export function TagsCountCell({ value }: ICellRendererParams) {
   if (!Array.isArray(value) || value.length === 0) {
     return <EmptyCell />
   }
 
   const tags = value as string[]
-  const label = (tag: string) => (formatTag ? formatTag(tag) : tag)
-  const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS)
-  const hiddenCount = tags.length - visibleTags.length
-  const allLabels = tags.map(label).join(', ')
+  const allLabels = tags.join(', ')
 
   return (
     <div className={CELL_WRAPPER}>
-      <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
-        {visibleTags.map((tag) => (
-          <Badge key={tag} variant="secondary" className={BADGE_BASE}>
-            {label(tag)}
-          </Badge>
-        ))}
-        {hiddenCount > 0 && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge
-                  variant="outline"
-                  className={cn(BADGE_BASE, 'cursor-default')}
-                  tabIndex={0}
-                  aria-label={allLabels}
-                >
-                  +{hiddenCount}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent side="top">{allLabels}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-      </div>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="secondary"
+              className={cn(BADGE_BASE, 'cursor-default tabular-nums')}
+              tabIndex={0}
+              aria-label={allLabels}
+            >
+              {tags.length}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" variant="light" className="max-w-64 p-0">
+            <ul className="flex flex-col divide-y">
+              {tags.map((tag) => (
+                <li key={tag} className="px-3 py-1.5 text-sm">
+                  {tag}
+                </li>
+              ))}
+            </ul>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   )
 }

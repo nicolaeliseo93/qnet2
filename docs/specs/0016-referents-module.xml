@@ -1,0 +1,368 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0016 — Referents module (it: Referenti) + Referent Types lookup module.
+  Contract-first. Two coupled modules, both greenfield, English identifiers
+  (engineering.md §1.2): the `referent-types` full-CRUD lookup module feeds the
+  `referents` main module's "Referent type" select.
+
+  The `referents` module MIRRORS `users` exactly for the anagraphic experience:
+  it REUSES the polymorphic personal-data stack unchanged (personal_data card +
+  contacts + addresses) via `use HasPersonalData`, plus the generic SSRM table
+  (AG Grid), metadata-driven form (spec 0004), field permissions (spec 0006 /
+  personal-data field permissions spec 0008), Policy authz server-side, response
+  envelope { success, message, data, permissions? }.
+
+  User-approved decisions (this session):
+    - Naming: domain/route/resource/permission = `referents` and `referent-types`;
+      models Referent / ReferentType; tables `referents` / `referent_types`;
+      enum column `contact_scope`.
+    - `referent_types` = FULL managed CRUD module (own table, form, Policy,
+      permissions), NOT a seed-only lookup.
+    - `contact_scope` = REQUIRED, DB default 'internal', form pre-selects internal.
+
+  Verified references (real names, not hypothesised):
+    - Reuse unit: `App\Models\Concerns\HasPersonalData` → morphOne PersonalData
+      (personable), which itself owns contacts (HasContacts) + addresses
+      (HasAddresses) — all `nullableMorphs`, so NO schema change to shared tables.
+    - Reusable services (owner-agnostic today): `PersonalDataService`,
+      `ContactService`, `AddressService`. Reusable DTOs:
+      `App\DataObjects\PersonalData\{CreatePersonalData,CreateContact,CreateAddress}`
+      and wrappers `App\DataObjects\Users\{ProfileData,ContactInput,AddressInput}`.
+      Reusable FormRequest trait `ValidatesUserProfile` (nested key `personal_data`,
+      FormRequest-agnostic). Reusable Resources `PersonalDataResource`,
+      `AddressResource`, `ContactResource`.
+    - The ONLY user-specific writer is `App\Services\ProfileWriter` (hardcodes User
+      and derives users.name). Referent gets its OWN thin writer reusing the three
+      services (Users' ProfileWriter left untouched → zero blast radius).
+    - Frontend anagraphic components (owner-agnostic): `features/personal-data/`
+      → `PersonalDataCardForm`, `ContactsManager`, `AddressesManager`, `drafts.ts`
+      (`emptyPersonalDataDraft`, `cardToDraft`, `draftToPayload`,
+      `omitNonEditableFields`), `buildPersonalDataSchema`. Users mounts these in
+      `user-form-account-tabs.tsx` against a `PersonalDataDraft` buffer.
+    - Generic infra to REUSE unchanged (do not modify): `app/Tables/Abstract*`,
+      `app/Authorization/Abstract*`, `TableController`, `MetaController`, generic
+      routes tables/meta, `features/table/` (`<TableView>`), `features/authorization/`
+      (`ResourcePermissionsProvider`, `useResourcePermissions`, `<MetaField>`,
+      `useResourceMeta`), `components/ui/async-paginated-select.tsx`,
+      `hooks/use-entity-detail.ts`, `for-select` (ADR 0011).
+    - `components/ui/textarea.tsx` DOES NOT EXIST yet → a new shadcn textarea
+      primitive is required for the "Notes" field (ui-design ownership).
+-->
+<spec id="0016-referents-module" status="draft" owner="tu" date="2026-07-06">
+
+  <goal>
+    Nuovo modulo "Referents" (Referenti): un referente è una persona/entità di
+    contatto che riusa integralmente l'anagrafica del modulo Utenti (personal
+    data card + contatti + indirizzi), classificata da un "Referent type"
+    (tabella di supporto gestita a CRUD completo) e da un ambito di contatto
+    interno/esterno (enum estendibile). Il modulo deve essere coerente al 100%
+    con Utenti/Funzioni aziendali: tabella AG Grid SSRM (filtri/ordinamenti/
+    ricerca/paginazione/export backend-driven), form metadata-driven, permessi
+    di risorsa + permessi sui campi, CRUD create/edit/view/delete con lo stesso
+    flusso e la stessa grafica, in Visualizzazione e Modifica.
+  </goal>
+
+  <context>
+    Due moduli greenfield, inglese-first. `referent-types` è il modulo lookup a
+    CRUD completo (id, name) che alimenta il select "Referent type" del modulo
+    `referents`. Entrambi sono adapter sottili sopra i framework generici già
+    pronti (registry-driven: 1 classe + 1 riga di config, nessuna rotta generica
+    nuova). Vedi il blocco commento in testa per i nomi reali verificati.
+
+    Reuse cardine: `Referent` ottiene la carta anagrafica con `use HasPersonalData`
+    (morph `personable`, nullable) — nessuna migrazione sulle tabelle condivise
+    `personal_data`/`contacts`/`addresses`. La carta possiede contatti e indirizzi
+    via i propri trait. La scrittura atomica riusa `PersonalDataService`,
+    `ContactService`, `AddressService` (già `Model $owner`-agnostici) tramite un
+    nuovo writer sottile `ReferentProfileWriter` (deriva `referents.name` dalla
+    carta, come `ProfileWriter` fa per `users.name`, ma senza toccare il codice
+    Users). La validazione annidata riusa il trait `ValidatesUserProfile`
+    (chiave `personal_data`), gli output riusano `PersonalDataResource`/
+    `AddressResource`/`ContactResource`.
+
+    Campo "Settori attività" (activity sectors): placeholder DISABILITATO per
+    sviluppi futuri — reso solo lato frontend come campo disabilitato, NON
+    persistito, NON nel contratto dati, NON nella meta dei campi.
+
+    Il select "Referent type" è servito dallo standard for-select ADR 0011
+    (`GET /api/referent-types/for-select` + `AsyncPaginatedSelect`). Le opzioni
+    di `contact_scope` sono servite come metadata enum dal bootstrap pubblico
+    `GET /api/config` (`config/config.php` form_enums) — coerente con
+    `contact_type`/`personal_data_type` già lì; l'aggiunta è NON sensibile ma
+    richiede la review dell'agente Security (regola in testa a config.php).
+  </context>
+
+  <scope>
+    <in>
+      <!-- ===== Referent Types (lookup, full CRUD) ===== -->
+      <item>Migrazione `referent_types` (id, name NOT NULL, timestamps) + factory + seeder con valori iniziali.</item>
+      <item>Model `ReferentType` (fillable name, LogsModelActivity) con hasMany referents().</item>
+      <item>Policy `ReferentTypePolicy extends BasePolicy` (resource 'referent-types').</item>
+      <item>CRUD: Store/UpdateReferentTypeRequest (EnforcesFieldPermissions), Create/UpdateReferentTypeData, ReferentTypeResource, ReferentTypeForSelectResource, ReferentTypeService, ReferentTypeController + ReferentTypeForSelectController, blocco rotte.</item>
+      <item>`ReferentTypesTableDefinition` + `ReferentTypeColumnCatalog` (colonne: name, created_at) registrata in config/tables.php.</item>
+      <item>`ReferentTypesAuthorization` (field: name) registrata in config/authorization.php.</item>
+      <item>Nodo navigazione `referent-types` + permessi `referent-types.*` via permissions:sync.</item>
+      <item>Frontend `features/referent-types/` completo (adapter su business-functions: api, types, schema, form/body, table, detail, payload, form-meta, for-select-api, column-renderers) + pagina + rotta + i18n en/it + voce sidebar.</item>
+
+      <!-- ===== Referents (main module, reuses anagraphic) ===== -->
+      <item>Enum `ReferentContactScopeEnum` (string; Internal='internal' #[IsDefault], External='external'; use HasMeta) + registrazione in config/config.php form_enums come `referent_contact_scope`.</item>
+      <item>Migrazione `referents` (id, name, referent_type_id nullable FK→referent_types nullOnDelete, contact_scope string NOT NULL default 'internal', notes text nullable, timestamps) + factory.</item>
+      <item>Model `Referent` (use HasPersonalData, HasFactory, LogsModelActivity; fillable name/referent_type_id/contact_scope/notes; cast contact_scope enum; belongsTo referentType()).</item>
+      <item>Policy `ReferentPolicy extends BasePolicy` (resource 'referents').</item>
+      <item>`ReferentProfileWriter` (riusa PersonalDataService/ContactService/AddressService; deriva referents.name da CreatePersonalData::displayName()).</item>
+      <item>CRUD: Store/UpdateReferentRequest (EnforcesFieldPermissions + ValidatesUserProfile, profileRequired()=true su create), Create/UpdateReferentData (referent-specific scalars + ProfileData riusata), ReferentResource (embed PersonalDataResource), ReferentService, ReferentController, blocco rotte.</item>
+      <item>`ReferentsTableDefinition` + `ReferentColumnCatalog` (colonne: name, referent_type derivata, contact_scope, primary_contact derivata, created_at) + derived filter/sort/distinct per referent_type e contact_scope; registrata in config/tables.php.</item>
+      <item>`ReferentsAuthorization` (field: referent_type_id/select, contact_scope/select, notes/text + i `personal_data.*` mirror di UsersAuthorization) registrata in config/authorization.php.</item>
+      <item>Nodo navigazione `referents` + permessi `referents.*` via permissions:sync.</item>
+      <item>Frontend `features/referents/` completo (adapter su users CON anagrafica embedded: PersonalDataCardForm + ContactsManager + AddressesManager contro un buffer PersonalDataDraft; + AsyncPaginatedSelect su 'referent-types'; + Select contact_scope da enum options; + Textarea notes; + placeholder disabilitato activity_sectors) + pagina + rotta + i18n en/it + voce sidebar.</item>
+      <item>Nuovo primitivo UI `components/ui/textarea.tsx` (shadcn, ui-design) per il campo Notes.</item>
+      <item>Test: Pest (backend, Policy/Authorization/Service ≥90%, controller/table ≥85%) + Vitest (frontend). ESEGUITI.</item>
+    </in>
+    <out>
+      <item>NESSUNA modifica ai framework generici (app/Tables/Abstract*, app/Authorization/Abstract*, TableController, MetaController, rotte generiche, features/table, features/authorization, features/for-select, components/data-table, hooks/use-entity-detail).</item>
+      <item>NESSUNA modifica a `ProfileWriter`, `PersonalDataService`, `ContactService`, `AddressService`, `ValidatesUserProfile`, `PersonalDataResource`/`AddressResource`/`ContactResource`, e ai componenti `features/personal-data/*`: si RIUSANO invariati.</item>
+      <item>NESSUNA migrazione sulle tabelle condivise `personal_data`/`contacts`/`addresses` (il morph `personable`/`contactable`/`addressable` è già nullable).</item>
+      <item>Campo "activity sectors" NON persistito: solo placeholder disabilitato frontend; fuori dal data_contract e dalla meta dei campi.</item>
+      <item>NESSUN endpoint `referents/for-select` (nessun modulo seleziona i referenti in questa spec). `referent-types/for-select` invece È incluso.</item>
+      <item>NESSUN import dati legacy per referenti/tipi referente (greenfield).</item>
+      <item>NESSUN campo employment/geo/avatar sul referente (specifici di users).</item>
+      <item>`contact_scope` come booleano (scartato: enum estendibile, decisione utente).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- =====================================================================
+         MODULE A — REFERENT TYPES  (domain/resource/permission: referent-types)
+         Route-model binding {referentType}. Envelope { success, message, data, permissions? }.
+         Auth: sanctum + throttle:60,1 su CRUD; generic table endpoints throttle:60,1.
+         ===================================================================== -->
+
+    <endpoint method="GET" path="/api/tables/referent-types/columns">
+      <request>Nessun body. Generico (registry).</request>
+      <response status="200">
+        TableConfig, columns nell'ordine:
+        [
+          { id:'name', type:'text', sortable:true, filterable:true, filterType:'text', searchable:true, visible:true },
+          { id:'created_at', type:'datetime', sortable:true, filterable:true, filterType:'date', visible:true }
+        ]
+        + defaultSort [{columnId:'name', direction:'asc'}], defaultPagination {limit:25},
+        + actions [view(referent-types.view), edit(referent-types.update), delete(referent-types.delete)] filtrate per permesso,
+        + searchable ['name']. Label = chiavi i18n `referentTypes.columns.*`.
+      </response>
+      <errors>403 se manca referent-types.viewAny (fail-closed).</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/referent-types/rows">
+      <request>Payload SSRM generico. Whitelist sort/filter/search = colonne dichiarate.</request>
+      <response status="200">{ items:[{ id:number, name:string, created_at:string, actions:string[] }], pagination:{ total, offset, limit, total_pages } }.</response>
+      <errors>403 se manca referent-types.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/referent-types/values">
+      <request>{ columnId, search?, filterModel? } — allow-list columnId.</request>
+      <response status="200">Valori distinti (name) per set-filter.</response>
+      <errors>403 senza viewAny; 422 columnId non in allow-list.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/meta/referent-types">
+      <response status="200">{ success, message, data:{ fields:[ { key:'name', type:'text', mandatory:true } ] }, permissions:{ resource, fields, actions } }.</response>
+      <errors>403 se manca referent-types.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/referent-types/for-select">
+      <request>Query: search?, limit?, offset?, ids?[] (idratazione). Gated referent-types.viewAny.</request>
+      <response status="200">paginatedResponse di ReferentTypeForSelectResource: { items:[{ id:number, label:string }], pagination }.</response>
+      <errors>403 senza referent-types.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/referent-types/{referentType}">
+      <response status="200">okWithPermissions: data = { id:number, name:string, created_at:string }, permissions = blocco spec 0004 contestuale.</response>
+      <errors>403 senza referent-types.view; 404.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/referent-types">
+      <request>{ name: string (required, max 191) }.</request>
+      <response status="201">okWithPermissions(ReferentTypeResource, permissions, 'Created', 201).</response>
+      <errors>403 senza referent-types.create; 422 (name mancante); 422 campo non-editable (EnforcesFieldPermissions).</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/referent-types/{referentType}">
+      <request>{ name?: string } (sometimes).</request>
+      <response status="200">okWithPermissions(ReferentTypeResource, permissions).</response>
+      <errors>403 senza referent-types.update; 404; 422.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/referent-types/{referentType}">
+      <response status="204">No content. I referenti che puntavano al tipo vedono referent_type_id → null (nullOnDelete).</response>
+      <errors>403 senza referent-types.delete; 404.</errors>
+    </endpoint>
+
+    <!-- =====================================================================
+         MODULE B — REFERENTS  (domain/resource/permission: referents)
+         Route-model binding {referent}. Reuses the frozen personal-data
+         sub-contract (specs 0003/0008): nested key `personal_data` =
+         { type,title,first_name,last_name,company_name,tax_code,vat_number,
+           sdi_code,birth_date, contacts:[{id?,type,value,label?,is_primary}],
+           addresses:[{id?,line1,line2?,postal_code?,city_id?,province_id?,
+           state_id?,country_id?,latitude?,longitude?,is_primary}] }.
+         ===================================================================== -->
+
+    <endpoint method="GET" path="/api/tables/referents/columns">
+      <response status="200">
+        TableConfig, columns nell'ordine:
+        [
+          { id:'name', type:'text', sortable:true, filterable:true, filterType:'text', searchable:true, visible:true },
+          { id:'referent_type', type:'text', sortable:true, filterable:true, filterType:'set', visible:true },   <!-- derived: nome tipo -->
+          { id:'contact_scope', type:'text', sortable:true, filterable:true, filterType:'set', visible:true },     <!-- enum internal|external -->
+          { id:'primary_contact', type:'text', sortable:false, filterable:false, visible:true },                   <!-- derived: contatto primario carta -->
+          { id:'created_at', type:'datetime', sortable:true, filterable:true, filterType:'date', visible:true }
+        ]
+        + defaultSort [{columnId:'created_at', direction:'desc'}], defaultPagination {limit:25},
+        + actions [view(referents.view), edit(referents.update), delete(referents.delete)] filtrate per permesso,
+        + searchable ['name']. Label = chiavi i18n `referents.columns.*`.
+      </response>
+      <errors>403 se manca referents.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/referents/rows">
+      <request>Payload SSRM generico. Whitelist = colonne dichiarate; `referent_type`/`contact_scope` filtro set via allow-list derivata.</request>
+      <response status="200">
+        { items:[ {
+          id:number, name:string,
+          referent_type: { id:number, name:string } | null,
+          contact_scope: 'internal' | 'external',
+          primary_contact: { type:string, value:string } | null,
+          created_at:string,
+          actions: string[]
+        } ], pagination:{ total, offset, limit, total_pages } }
+        Eager loading di referentType + personalData.contacts (no N+1); nessun campo sensibile.
+      </response>
+      <errors>403 se manca referents.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/referents/values">
+      <request>{ columnId, search?, filterModel? } — allow-list columnId (referent_type, contact_scope).</request>
+      <response status="200">referent_type → nomi tipi distinti; contact_scope → valori enum distinti.</response>
+      <errors>403 senza viewAny; 422 columnId fuori allow-list.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/meta/referents">
+      <response status="200">
+        { success, message, data:{ fields }, permissions:{ resource, fields, actions } }
+        data.fields (chiavi referent-specifiche + mirror personal_data.*):
+        [
+          { key:'referent_type_id', type:'select', mandatory:false },
+          { key:'contact_scope', type:'select', mandatory:true },
+          { key:'notes', type:'text', mandatory:false },
+          { key:'personal_data.type', type:'select', mandatory:true },
+          { key:'personal_data.title', type:'select' },
+          { key:'personal_data.first_name', type:'text', mandatory:true },
+          { key:'personal_data.last_name', type:'text', mandatory:true },
+          { key:'personal_data.company_name', type:'text', mandatory:true },
+          { key:'personal_data.tax_code', type:'text' },
+          { key:'personal_data.vat_number', type:'text' },
+          { key:'personal_data.sdi_code', type:'text' },
+          { key:'personal_data.birth_date', type:'date' },
+          { key:'personal_data.contacts', type:'collection' },
+          { key:'personal_data.addresses', type:'collection' }
+        ]
+        permissions.actions = { delete, export, import }.
+      </response>
+      <errors>403 se manca referents.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/referents/{referent}">
+      <response status="200">
+        okWithPermissions: data =
+        {
+          id:number, name:string,
+          referent_type_id: number | null,
+          referent_type: { id:number, name:string } | null,   <!-- idratazione select -->
+          contact_scope: 'internal' | 'external',
+          notes: string | null,
+          personal_data: PersonalDataResource | null,          <!-- carta + contacts[] + addresses[] -->
+          created_at:string
+        }
+        permissions = blocco spec 0004/0008 contestuale al modello (include personal_data.*).
+      </response>
+      <errors>403 senza referents.view; 404.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/referents">
+      <request>
+        {
+          referent_type_id: number | null (optional; exists:referent_types,id),
+          contact_scope: 'internal' | 'external' (required; default 'internal' lato form),
+          notes: string | null (optional; max 5000),
+          personal_data: { ...carta... , contacts?:[...], addresses?:[...] }  (REQUIRED su create — name derivato dalla carta)
+        }
+      </request>
+      <response status="201">okWithPermissions(ReferentResource, permissions, 'Created', 201). Stessa shape di data del GET show. `name` = displayName() della carta.</response>
+      <errors>403 senza referents.create; 422 validazione (contact_scope mancante/non valido, referent_type_id inesistente, personal_data mancante/incoerente per tipo); 422 campo non-editable (EnforcesFieldPermissions, incl. personal_data.*).</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/referents/{referent}">
+      <request>Come POST ma tutti `sometimes` (PATCH parziale). `personal_data` opzionale; se presente, contacts/addresses = full-replace sync (array vuoto = cancella tutti; assente = invariato). `referent_type_id:null` rimuove il tipo. Se la carta cambia, `name` viene ri-derivato.</request>
+      <response status="200">okWithPermissions(ReferentResource, permissions). Shape di data del GET show.</response>
+      <errors>403 senza referents.update; 404; 422 validazione / campo non-editable.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/referents/{referent}">
+      <response status="204">No content. La carta personal_data (e i suoi contatti/indirizzi) cascade via HasPersonalData.</response>
+      <errors>403 senza referents.delete; 404.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/config">
+      <request>Pubblico (invariato). Aggiunta: chiave enum `referent_contact_scope`.</request>
+      <response status="200">data.enums.referent_contact_scope = ReferentContactScopeEnum::options() → [{ value:'internal', label, ... }, { value:'external', label, ... }].</response>
+      <errors>Nessuno nuovo (endpoint pubblico rate-limited esistente).</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- ===== BACKEND — Referent Types ===== -->
+    <criterion id="AC-001">Data la migrazione, esiste `referent_types` (id, name NOT NULL, timestamps); `down()` la rimuove. (test: Schema::hasTable/hasColumns + rollback)</criterion>
+    <criterion id="AC-002">Dopo `permissions:sync`, esistono `referent-types.{viewAny,view,create,update,delete,export,import}`; il nodo `/referent-types` compare in GET /navigation solo con referent-types.view. (test: SyncPermissions + Navigation)</criterion>
+    <criterion id="AC-003">Con referent-types.viewAny, GET /tables/referent-types/columns → colonne [name, created_at] coi flag dichiarati; senza permesso → 403. (test: Table config + authz)</criterion>
+    <criterion id="AC-004">Con referent-types.create, POST {name} → 201 + data {id,name,created_at}; senza create → 403; name mancante → 422. (test: CRUD create + authz + validazione)</criterion>
+    <criterion id="AC-005">PATCH parziale {name} aggiorna il tipo; DELETE con referent-types.delete → 204. (test: update + destroy)</criterion>
+    <criterion id="AC-006">GET /referent-types/for-select con referent-types.viewAny → { items:[{id,label}], pagination }, filtrato da search; senza viewAny → 403. (test: for-select shape + authz)</criterion>
+
+    <!-- ===== BACKEND — Referents ===== -->
+    <criterion id="AC-007">Data la migrazione `referents` (name, referent_type_id nullable FK nullOnDelete, contact_scope NOT NULL default 'internal', notes text nullable, timestamps), `down()` la rimuove; NESSUNA nuova colonna su personal_data/contacts/addresses. (test: Schema + assenza modifiche condivise)</criterion>
+    <criterion id="AC-008">Il model `Referent` usa HasPersonalData → personalData() è MorphOne(PersonalData); referentType() è BelongsTo(ReferentType); contact_scope è cast a ReferentContactScopeEnum; LogsModelActivity attivo. (test: unit relazioni + cast)</criterion>
+    <criterion id="AC-009">Con referents.create, POST {contact_scope, personal_data:{card+contacts+addresses}} → 201; il referente possiede una carta personal_data con i suoi contatti/indirizzi (morph personable=referent), e `name` = displayName() della carta. (test: create atomico + reuse services + name derivato)</criterion>
+    <criterion id="AC-010">POST senza `personal_data` → 422 (profileRequired su create); contact_scope assente/non ∈ {internal,external} → 422; referent_type_id inesistente → 422. (test: validazione)</criterion>
+    <criterion id="AC-011">GET /referents/{id} con referents.view → data con referent_type_id, referent_type{...}|null, contact_scope, notes, personal_data{carta,contacts[],addresses[]} e blocco permissions (incl. personal_data.*); senza view → 403; id inesistente → 404. (test: show + permissions)</criterion>
+    <criterion id="AC-012">PATCH parziale con solo `personal_data.contacts` sostituisce i contatti (full-replace sync) lasciando invariati gli altri campi; PATCH {referent_type_id:null} rimuove il tipo; il cambio carta ri-deriva `name`. (test: update parziale + sync + name)</criterion>
+    <criterion id="AC-013">Senza referents.update, PATCH → 403 (base authz) prima di ogni 422 di campo; con update ma un `personal_data.*` reso non-editable dalla matrice DB, l'invio di un valore CAMBIATO → 422 su quel campo (parità con users, EnforcesFieldPermissions). (test: field permissions)</criterion>
+    <criterion id="AC-014">DELETE con referents.delete → 204 e la carta personal_data + contatti + indirizzi sono rimossi (cascade HasPersonalData); senza delete → 403. (test: destroy + cascade)</criterion>
+    <criterion id="AC-015">POST /tables/referents/rows → ogni row espone name, referent_type{id,name}|null, contact_scope, primary_contact{type,value}|null, created_at, actions[] coerenti con la Policy per-row; nessun N+1 (query count costante con preventLazyLoading). (test: rows shape + eager loading)</criterion>
+    <criterion id="AC-016">/values su columnId='referent_type' → nomi tipi distinti; 'contact_scope' → valori enum distinti; columnId fuori allow-list → 422. (test: distinctValues)</criterion>
+    <criterion id="AC-017">GET /meta/referents con viewAny → data.fields = [referent_type_id, contact_scope(mandatory), notes, personal_data.*] e permissions con i 6 flag per campo; senza viewAny → 403. (test: meta shape)</criterion>
+    <criterion id="AC-018">GET /config (pubblico) include data.enums.referent_contact_scope = [{value:'internal',label},{value:'external',label}]. (test: config endpoint)</criterion>
+
+    <!-- ===== FRONTEND ===== -->
+    <criterion id="AC-019">La pagina Referenti senza referents.viewAny mostra il fallback `<Can>` e non monta la tabella; col permesso monta `<TableView domain="referents">`. Idem pagina Referent types con referent-types.viewAny. (test: page gating)</criterion>
+    <criterion id="AC-020">Il form di creazione Referente mostra, metadata-driven: la sezione anagrafica (PersonalDataCardForm + ContactsManager + AddressesManager contro un PersonalDataDraft), il select "Referent type" (AsyncPaginatedSelect resource='referent-types'), il select contact_scope (opzioni dall'enum, pre-selezionato 'internal'), la Textarea Notes, e il placeholder DISABILITATO "Activity sectors". Il meta arriva da useResourceMeta('referents'). (test: form create + MetaField + campi anagrafica)</criterion>
+    <criterion id="AC-021">Il form di modifica consuma detail.permissions: un campo `hidden` non è renderizzato, un `readonly` non è editabile, un `required` mostra l'asterisco; un 422 dal server è mappato inline (applyServerValidationErrors), inclusi i path `personal_data.*`. La sezione anagrafica è seeded da `detail.personal_data` via cardToDraft. (test: form edit metadata + seed)</criterion>
+    <criterion id="AC-022">Al submit create il payload è {referent_type_id?, contact_scope, notes?, personal_data:{card,contacts,addresses}} (draftToPayload + omitNonEditableFields); al submit update il builder PATCH include SOLO i campi cambiati rispetto all'originale. (test: payload builder create/update)</criterion>
+    <criterion id="AC-023">La tabella Referenti (griglia) rende: name, referent_type (nome), contact_scope (badge leggibile), primary_contact (cella contatto), created_at; le row-action view/edit/delete aprono lo stesso flusso Sheet di Users. (test: renderers + azioni)</criterion>
+    <criterion id="AC-024">Il modulo Referent types replica il flusso completo (tabella + create/edit/view/delete + form metadata-driven con il solo campo name). (test: referent-types table + form)</criterion>
+    <criterion id="AC-025">Il nuovo primitivo `components/ui/textarea.tsx` è accessibile (label collegata, focus-visible, aria-invalid/aria-describedby sull'errore) e usato dal campo Notes; `tsc --noEmit` e ESLint puliti. (test: textarea a11y + typecheck)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm): solo librerie già presenti. Il textarea è un primitivo shadcn scritto a mano (Radix non richiesto).</item>
+    <item>Authz server-side su OGNI endpoint (Policy/permessi). L'UI nasconde, il backend autorizza.</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/rotte/permessi/chiavi). Domini `referents` e `referent-types`.</item>
+    <item>Envelope { success, message, data, permissions? } rispettato. Mai model Eloquent raw: sempre via Resource.</item>
+    <item>Mass assignment: $fillable esplicito su Referent e ReferentType. Filtri/sort SSRM SOLO da allow-list di colonne (mai input grezzo in *Raw).</item>
+    <item>RIUSO OBBLIGATORIO invariato di: HasPersonalData, PersonalData/Contact/Address services+DTO, ValidatesUserProfile, PersonalDataResource/AddressResource/ContactResource, features/personal-data/* (PersonalDataCardForm, ContactsManager, AddressesManager, drafts), TableView, MetaField, useResourceMeta, AsyncPaginatedSelect, for-select. Nessuna duplicazione di stile/logica. Duplicazione ammessa e circoscritta: `ReferentProfileWriter` (deriva referents.name) e l'helper personalDataFieldPermissions in ReferentsAuthorization — per NON toccare il codice Users (blast radius zero).</item>
+    <item>File entro 300/500 righe; dead code zero; nessuna emoticon; Pint + ESLint + `tsc --noEmit` puliti.</item>
+    <item>config/config.php è PUBLIC e sensibile: l'aggiunta di `referent_contact_scope` richiede la review dell'agente Security (regola in testa al file) prima del verde.</item>
+    <item>Coverage per-layer: Policy/Authorization/Service ≥90%; controller/table ≥85%. Test ESEGUITI, non solo scritti.</item>
+    <item>Ownership file disgiunta tra teammate. Contratto qui congelato = punto di sincronizzazione: backend e frontend procedono in parallelo.</item>
+  </constraints>
+
+</spec>

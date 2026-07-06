@@ -67,8 +67,6 @@ export const usersFormEmployment = {
   terminatedAt: 'Cessato il',
   standardDailyMinutes: 'Durata giornaliera standard',
   breakDailyMinutes: 'Durata pausa giornaliera',
-  hours: 'Ore',
-  minutes: 'Minuti',
   jobDescriptionMax: 'La mansione può contenere al massimo 255 caratteri.',
   terminatedBeforeHiredAt: 'La data di cessazione deve essere successiva o uguale a quella di assunzione.',
 }

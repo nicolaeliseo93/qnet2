@@ -20,6 +20,9 @@ use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\OperationalSites\OperationalSiteController;
 use App\Http\Controllers\OperationalSites\OperationalSiteForSelectController;
 use App\Http\Controllers\PersonalData\PersonalDataController;
+use App\Http\Controllers\Referents\ReferentController;
+use App\Http\Controllers\ReferentTypes\ReferentTypeController;
+use App\Http\Controllers\ReferentTypes\ReferentTypeForSelectController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RoleForSelectController;
 use App\Http\Controllers\Table\TableController;
@@ -305,6 +308,37 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('operational-sites', [OperationalSiteController::class, 'store']);
         Route::match(['put', 'patch'], 'operational-sites/{operationalSite}', [OperationalSiteController::class, 'update']);
         Route::delete('operational-sites/{operationalSite}', [OperationalSiteController::class, 'destroy']);
+    });
+
+    // Referent types CRUD (spec 0016): full-managed lookup feeding the
+    // `referents` module's "Referent type" select. Authorization
+    // (referent-types.view/create/update/delete) is enforced server-side in
+    // ReferentTypeController via ReferentTypePolicy on every endpoint.
+    Route::middleware('throttle:60,1')->group(function () {
+        // Minimal searchable/paginated referent-type list for entity-backed
+        // selects (for-select standard, ADR 0011), feeding the referent-form
+        // "Referent type" select. Declared ABOVE referent-types/{referentType}
+        // so the literal `for-select` segment wins over the bound wildcard.
+        // Gated by referent-types.viewAny server-side in
+        // ReferentTypeForSelectController.
+        Route::get('referent-types/for-select', ReferentTypeForSelectController::class);
+
+        Route::get('referent-types/{referentType}', [ReferentTypeController::class, 'show']);
+        Route::post('referent-types', [ReferentTypeController::class, 'store']);
+        Route::match(['put', 'patch'], 'referent-types/{referentType}', [ReferentTypeController::class, 'update']);
+        Route::delete('referent-types/{referentType}', [ReferentTypeController::class, 'destroy']);
+    });
+
+    // Referents CRUD (spec 0016): a contact person/entity reusing the `users`
+    // anagraphic stack (personal-data card + contacts + addresses) unchanged
+    // via HasPersonalData. No for-select (no module selects a referent in this
+    // spec). Authorization (referents.view/create/update/delete) is enforced
+    // server-side in ReferentController via ReferentPolicy on every endpoint.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('referents/{referent}', [ReferentController::class, 'show']);
+        Route::post('referents', [ReferentController::class, 'store']);
+        Route::match(['put', 'patch'], 'referents/{referent}', [ReferentController::class, 'update']);
+        Route::delete('referents/{referent}', [ReferentController::class, 'destroy']);
     });
 
     // In-app user notifications (Laravel native `database` channel). Every

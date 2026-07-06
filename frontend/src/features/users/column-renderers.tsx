@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   ContactsCell,
   DateTimeCell,
-  TagsCell,
+  TagsCountCell,
 } from '@/features/table/cell-renderers'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 
@@ -91,12 +91,12 @@ function AvatarCell({ value, data }: ICellRendererParams) {
 /**
  * Custom cell renderers keyed by the backend column `id`. Only columns that need
  * special rendering appear here; everything else falls back to AG Grid defaults.
- * The generic `roles` (tags) and `created_at` (datetime) cells come from the
- * shared table renderers so they are not re-implemented per domain.
+ * The generic `roles` (count badge + tooltip) and `created_at` (datetime) cells
+ * come from the shared table renderers so they are not re-implemented per domain.
  */
 export const userColumnRenderers: TableRendererMap = {
   avatar_url: (params) => <AvatarCell {...params} />,
-  roles: (params) => <TagsCell {...params} />,
+  roles: (params) => <TagsCountCell {...params} />,
   email: (params) => <EmailCell {...params} />,
   created_at: (params) => <DateTimeCell {...params} />,
   // All primary contacts (one per type): icon + label badges, value in tooltip.

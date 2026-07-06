@@ -1,3 +1,14 @@
+import {
+  Briefcase,
+  CalendarClock,
+  FileSignature,
+  IdCard,
+  KeyRound,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
@@ -26,8 +37,33 @@ interface UserFormBodyProps {
 /** Small dot marking a tab that carries a validation error (AC-014). */
 function TabErrorDot({ label }: { label: string }) {
   return (
-    <span className="size-1.5 shrink-0 rounded-full bg-destructive" role="img" aria-label={label} />
+    <span
+      className="size-1.5 shrink-0 rounded-full bg-destructive shadow-[0_0_0_2px] shadow-destructive/15"
+      role="img"
+      aria-label={label}
+    />
   )
+}
+
+// Premium skin for the user form's tab strip, composed on top of the shared
+// `components/ui/tabs` design-system base (this only overrides look, not
+// behaviour, so the rest of the app's tabs are untouched). The active pill
+// carries a subtle primary tint + ring and the icon nudges up in scale.
+const TAB_LIST_CLASS = 'gap-1 rounded-lg border border-border/60 bg-muted/40 p-1 shadow-sm'
+const TAB_TRIGGER_CLASS =
+  'gap-1.5 rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-all duration-200 ' +
+  'hover:bg-background/60 hover:text-foreground ' +
+  'data-[state=active]:bg-background data-[state=active]:text-primary ' +
+  'data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-primary/15 ' +
+  '[&_svg]:size-3.5 [&_svg]:transition-transform [&_svg]:duration-200 data-[state=active]:[&_svg]:scale-110'
+
+/** One entry in the tab strip: its value, label, icon, and gating flags. */
+interface UserFormTab {
+  value: string
+  label: string
+  Icon: LucideIcon
+  visible: boolean
+  hasError: boolean
 }
 
 /**
@@ -131,6 +167,23 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
       errors.employment?.break_daily_minutes,
   )
 
+  // Contacts/addresses live in the buffered personal-data draft, seeded only
+  // once the identity card has loaded — so they are gated on the profile query
+  // too, not just field visibility. Shared by both the trigger and its content.
+  const contactsRenderable = !isProfileLoading && !isProfileError && contactsVisible
+  const addressesRenderable = !isProfileLoading && !isProfileError && addressesVisible
+
+  const tabItems: UserFormTab[] = [
+    { value: 'identity', label: t('users.form.tabs.identity'), Icon: IdCard, visible: true, hasError: identityHasError },
+    { value: 'credentials', label: t('users.form.tabs.credentials'), Icon: KeyRound, visible: credentialsVisible, hasError: credentialsHasError },
+    { value: 'access', label: t('users.form.tabs.access'), Icon: ShieldCheck, visible: accessVisible, hasError: accessHasError },
+    { value: 'profile', label: t('users.form.tabs.profile'), Icon: Briefcase, visible: profileVisible, hasError: profileHasError },
+    { value: 'contract', label: t('users.form.tabs.contract'), Icon: FileSignature, visible: contractVisible, hasError: contractHasError },
+    { value: 'contractData', label: t('users.form.tabs.contractData'), Icon: CalendarClock, visible: contractDataVisible, hasError: contractDataHasError },
+    { value: 'contacts', label: t('users.form.tabs.contacts'), Icon: Phone, visible: contactsRenderable, hasError: false },
+    { value: 'addresses', label: t('users.form.tabs.addresses'), Icon: MapPin, visible: addressesRenderable, hasError: false },
+  ]
+
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <Form {...form}>
@@ -140,47 +193,16 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
           noValidate
         >
           <Tabs defaultValue="identity" className="flex flex-1 flex-col gap-4">
-            <TabsList>
-              <TabsTrigger value="identity">
-                {t('users.form.tabs.identity')}
-                {identityHasError && <TabErrorDot label={tabHasErrorsLabel} />}
-              </TabsTrigger>
-              {credentialsVisible && (
-                <TabsTrigger value="credentials">
-                  {t('users.form.tabs.credentials')}
-                  {credentialsHasError && <TabErrorDot label={tabHasErrorsLabel} />}
-                </TabsTrigger>
-              )}
-              {accessVisible && (
-                <TabsTrigger value="access">
-                  {t('users.form.tabs.access')}
-                  {accessHasError && <TabErrorDot label={tabHasErrorsLabel} />}
-                </TabsTrigger>
-              )}
-              {profileVisible && (
-                <TabsTrigger value="profile">
-                  {t('users.form.tabs.profile')}
-                  {profileHasError && <TabErrorDot label={tabHasErrorsLabel} />}
-                </TabsTrigger>
-              )}
-              {contractVisible && (
-                <TabsTrigger value="contract">
-                  {t('users.form.tabs.contract')}
-                  {contractHasError && <TabErrorDot label={tabHasErrorsLabel} />}
-                </TabsTrigger>
-              )}
-              {contractDataVisible && (
-                <TabsTrigger value="contractData">
-                  {t('users.form.tabs.contractData')}
-                  {contractDataHasError && <TabErrorDot label={tabHasErrorsLabel} />}
-                </TabsTrigger>
-              )}
-              {!isProfileLoading && !isProfileError && contactsVisible && (
-                <TabsTrigger value="contacts">{t('users.form.tabs.contacts')}</TabsTrigger>
-              )}
-              {!isProfileLoading && !isProfileError && addressesVisible && (
-                <TabsTrigger value="addresses">{t('users.form.tabs.addresses')}</TabsTrigger>
-              )}
+            <TabsList className={TAB_LIST_CLASS}>
+              {tabItems
+                .filter((tab) => tab.visible)
+                .map(({ value, label, Icon, hasError }) => (
+                  <TabsTrigger key={value} value={value} className={TAB_TRIGGER_CLASS}>
+                    <Icon aria-hidden="true" />
+                    {label}
+                    {hasError && <TabErrorDot label={tabHasErrorsLabel} />}
+                  </TabsTrigger>
+                ))}
             </TabsList>
 
             <TabsContent value="identity" className="flex flex-col gap-4">
@@ -239,7 +261,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
               </TabsContent>
             )}
 
-            {!isProfileLoading && !isProfileError && contactsVisible && (
+            {contactsRenderable && (
               <TabsContent value="contacts" className="flex flex-col gap-4">
                 <ContactsTabContent
                   profileDraft={profileDraft}
@@ -249,7 +271,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
               </TabsContent>
             )}
 
-            {!isProfileLoading && !isProfileError && addressesVisible && (
+            {addressesRenderable && (
               <TabsContent value="addresses" className="flex flex-col gap-4">
                 <AddressesTabContent
                   profileDraft={profileDraft}

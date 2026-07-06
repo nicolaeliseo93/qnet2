@@ -71,8 +71,6 @@ export const usersFormEmployment = {
   terminatedAt: 'Terminated at',
   standardDailyMinutes: 'Standard daily duration',
   breakDailyMinutes: 'Daily break duration',
-  hours: 'Hours',
-  minutes: 'Minutes',
   jobDescriptionMax: 'Job description must be at most 255 characters.',
   terminatedBeforeHiredAt: 'Termination date must be on or after the hire date.',
 }

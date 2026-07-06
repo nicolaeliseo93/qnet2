@@ -107,10 +107,7 @@ export function ContractDataTabContent({ control }: ContractDataTabContentProps)
                 value={field.value}
                 onChange={field.onChange}
                 disabled={disabled}
-                labels={{
-                  hours: t('users.form.employment.hours'),
-                  minutes: t('users.form.employment.minutes'),
-                }}
+                label={t('users.form.employment.standardDailyMinutes')}
               />
             </FormControl>
           )}
@@ -128,10 +125,7 @@ export function ContractDataTabContent({ control }: ContractDataTabContentProps)
                 value={field.value}
                 onChange={field.onChange}
                 disabled={disabled}
-                labels={{
-                  hours: t('users.form.employment.hours'),
-                  minutes: t('users.form.employment.minutes'),
-                }}
+                label={t('users.form.employment.breakDailyMinutes')}
               />
             </FormControl>
           )}

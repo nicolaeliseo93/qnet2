@@ -3,6 +3,8 @@
 use App\Tables\BusinessFunctionsTableDefinition;
 use App\Tables\CompaniesTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
+use App\Tables\ReferentsTableDefinition;
+use App\Tables\ReferentTypesTableDefinition;
 use App\Tables\RolesTableDefinition;
 use App\Tables\UsersTableDefinition;
 
@@ -34,6 +36,8 @@ return [
         'business-functions' => BusinessFunctionsTableDefinition::class,
         'companies' => CompaniesTableDefinition::class,
         'operational-sites' => OperationalSitesTableDefinition::class,
+        'referent-types' => ReferentTypesTableDefinition::class,
+        'referents' => ReferentsTableDefinition::class,
     ],
 
 ];

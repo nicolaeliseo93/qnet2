@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
     {
         Artisan::call('locations:add');
 
+        $this->call(ReferentTypeSeeder::class);
         $this->call(RolePermissionSeeder::class);
         $this->call(DemoUserSeeder::class);
     }

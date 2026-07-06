@@ -13,6 +13,12 @@ I componenti in `components/ui/` sono l'**unica** base di stile. Le schermate li
 
 ## 2. Sizing scale (default compatti)
 
+> **Preferenza cliente (vincolante).** Il committente di questo progetto **preferisce
+> le UI piccole e compatte**: niente elementi giganti. A parità di scelta, prendi
+> **l'estremo più piccolo** della scala. Tab/chip/toolbar → `text-xs`, padding minimi
+> (`px-2.5 py-1`), icone `size-3.5`. Ingrandisci solo quando la leggibilità (WCAG,
+> target tap ≥ 24px) o una CTA primaria lo richiedono davvero.
+
 | Elemento | Default | Note |
 |---|---|---|
 | Testo body | `text-sm` / `text-base` | `text-base` solo per contenuti principali |
@@ -20,6 +26,7 @@ I componenti in `components/ui/` sono l'**unica** base di stile. Le schermate li
 | Heading card | `text-base font-semibold` | compatto |
 | Padding card | `p-3` / `p-4` | `p-6` solo card grandi |
 | Padding bottone | `px-3 py-1.5` | `px-4 py-2` solo CTA primari |
+| Tab / chip | `text-xs px-2.5 py-1`, icona `size-3.5` | strip compatta, mai tab giganti |
 | Gap griglia | `gap-3` / `gap-4` | `gap-6` solo sezioni separate |
 | Radius / ombra | `rounded-lg` / `shadow-sm` | `shadow-md` solo su hover/focus |
 

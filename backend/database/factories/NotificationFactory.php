@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Notifications\GenericNotification;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 /**
@@ -62,7 +63,7 @@ class NotificationFactory extends Factory
     /**
      * Attach the notification to any notifiable model.
      */
-    public function forNotifiable(\Illuminate\Database\Eloquent\Model $notifiable): static
+    public function forNotifiable(Model $notifiable): static
     {
         return $this->state(fn (array $attributes): array => [
             'notifiable_type' => $notifiable->getMorphClass(),

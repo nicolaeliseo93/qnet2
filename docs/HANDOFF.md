@@ -2,6 +2,46 @@
 
 > Injected at session start. Update at every green state.
 
+## Change — Users import: automatic end-of-import relinking pass — GREEN (2026-07-06)
+
+Ad-hoc request: within a SINGLE users import run, a subordinate (e.g. old_id 3) processed BEFORE its
+manager (e.g. old_id 500, later in the same page) left `reports_to_id` null and required a manual
+re-run. Added a second relinking pass at the end of the import so load order is now irrelevant *within
+one run* — no manual re-run needed.
+
+Backend-only, additive, reuses the existing reconcile machinery:
+- `AbstractMigrationSource` (generic engine): extracted the pagination loop into `eachRecord(callable)`;
+  `import()` now runs TWO steps — Step 1 `importRow` (unchanged, per-row tx), Step 2 `afterImport($context)`
+  hook (NEW, `protected`, no-op default). `appendReport()` widened `private -> protected` so a source's
+  second pass can append to the run report. No other source overrides `import()`, so they inherit the
+  no-op — behavior identical (verified: full Migration suite 79/79).
+- `MapsExternalUserRecord` trait: extracted shared core `resolveAndBackfillEmployment($externalId,$record)
+  -> [filledCount, warnings]` (loads user by `old_id` with employment, re-resolves relations, back-fills
+  only still-NULL columns via `nullRelationBackfill`). `reconcileEmployment` (re-import skip path) now
+  delegates to it and appends "Relinked N ... on re-import."; NEW `relinkEmployment()` delegates too and
+  returns ONLY "Relinked N ... after import." (or null) — it DISCARDS the re-derived "Unresolved"
+  warnings because Step 1 already reported them (no duplicate report entries).
+- `UsersSource`: NEW `afterImport()` override -> `eachRecord(relinkRow)`; `relinkRow` isolates each relink
+  in its own `DB::transaction` + try/catch (one failure never aborts the pass), appends only successful
+  relinks. Added `use Throwable;`.
+
+Invariant preserved: `reports_to_id` back-filled ONLY for non-managers (`nullRelationBackfill` guard).
+The re-import/cross-source self-healing (skip path) is unchanged and still covered.
+
+Names/contracts to respect: `eachRecord`, `afterImport`, `resolveAndBackfillEmployment`, `relinkEmployment`,
+`relinkRow`. Report message strings: "... on re-import." (skip path) vs "... after import." (2nd pass).
+
+Two honest caveats (signalled, not changed): (1) the 2nd pass RE-FETCHES the external pages (~2x calls to
+the `users` endpoint) — acceptable for auto-relink in one run; could be narrowed to users-with-null-relations
+if the dataset is large. (2) This 2nd pass is INTERNAL to UsersSource; cross-SOURCE forward refs (e.g. a
+business_function source running after users) are still handled by the re-import skip path, NOT here — a
+global post-migration relink at the `RunMigrationJob` level would be a separate change.
+
+Status — GREEN. NEW test `relinks reports_to_id in a SINGLE run when the manager is imported after the
+subordinate` (subordinate first, manager later, same page) passes. `UsersSourceImportTest` 6/6; full
+`tests/Feature/Migration` 79/79. Pint clean. Files within budget (trait 452 < 500, UsersSource 253,
+AbstractMigrationSource 292). Backend-only, no frontend touched.
+
 ## Change — Redesign of the record "view" sheets (eye-icon detail panels) — GREEN (2026-07-06)
 
 Ad-hoc request (no spec): the detail views opened by the table eye icon "fanno cagare" — make them

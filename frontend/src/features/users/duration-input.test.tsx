@@ -3,69 +3,60 @@ import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { DurationInput } from '@/features/users/duration-input'
 
-const labels = { hours: 'Hours', minutes: 'Minutes' }
+const label = 'Standard daily duration'
 
-/** Stateful wrapper so two sequential edits build on the same live value, like a real form field. */
+/** Stateful wrapper so sequential edits build on the same live value, like a real form field. */
 function ControlledDurationInput({ initial }: { initial: number | null }) {
   const [value, setValue] = useState(initial)
-  return <DurationInput value={value} onChange={setValue} labels={labels} />
+  return <DurationInput value={value} onChange={setValue} label={label} />
 }
 
 describe('DurationInput', () => {
-  it('AC-017 — shows 480 minutes as 8 hours / 0 minutes', () => {
-    render(<DurationInput value={480} onChange={vi.fn()} labels={labels} />)
+  it('AC-017 — shows 480 minutes as 08:00', () => {
+    render(<DurationInput value={480} onChange={vi.fn()} label={label} />)
 
-    expect(screen.getByLabelText('Hours')).toHaveValue(8)
-    expect(screen.getByLabelText('Minutes')).toHaveValue(0)
+    expect(screen.getByLabelText(label)).toHaveValue('08:00')
   })
 
-  it('AC-017 — emits 480 total minutes for 8h 0m', () => {
+  it('AC-017 — emits 480 total minutes for 08:00', () => {
     const onChange = vi.fn()
-    render(<DurationInput value={null} onChange={onChange} labels={labels} />)
+    render(<DurationInput value={null} onChange={onChange} label={label} />)
 
-    fireEvent.change(screen.getByLabelText('Hours'), { target: { value: '8' } })
+    fireEvent.change(screen.getByLabelText(label), { target: { value: '08:00' } })
     expect(onChange).toHaveBeenLastCalledWith(480)
   })
 
-  it('renders blank inputs when the value is null', () => {
-    render(<DurationInput value={null} onChange={vi.fn()} labels={labels} />)
+  it('emits total minutes including the minutes part (90 for 01:30)', () => {
+    const onChange = vi.fn()
+    render(<DurationInput value={null} onChange={onChange} label={label} />)
 
-    expect(screen.getByLabelText('Hours')).toHaveValue(null)
-    expect(screen.getByLabelText('Minutes')).toHaveValue(null)
+    fireEvent.change(screen.getByLabelText(label), { target: { value: '01:30' } })
+    expect(onChange).toHaveBeenLastCalledWith(90)
   })
 
-  it('converges to 0 (not null) once a set value is cleared part by part', () => {
-    // `null` only represents "never touched"; once a real value exists,
-    // clearing both parts lands on the explicit "0 minutes" value.
+  it('renders a blank field when the value is null', () => {
+    render(<DurationInput value={null} onChange={vi.fn()} label={label} />)
+
+    expect(screen.getByLabelText(label)).toHaveValue('')
+  })
+
+  it('returns to null once the field is cleared', () => {
+    const onChange = vi.fn()
     render(<ControlledDurationInput initial={90} />)
 
-    fireEvent.change(screen.getByLabelText('Hours'), { target: { value: '' } })
-    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '' } })
-    expect(screen.getByLabelText('Hours')).toHaveValue(0)
-    expect(screen.getByLabelText('Minutes')).toHaveValue(0)
+    fireEvent.change(screen.getByLabelText(label), { target: { value: '' } })
+    expect(screen.getByLabelText(label)).toHaveValue('')
   })
 
-  it('clamps an out-of-range hours part to the 24h/1440min ceiling', () => {
-    const onChange = vi.fn()
-    render(<DurationInput value={0} onChange={onChange} labels={labels} />)
+  it('caps the displayed value at the 23:59 ceiling', () => {
+    render(<DurationInput value={2000} onChange={vi.fn()} label={label} />)
 
-    fireEvent.change(screen.getByLabelText('Hours'), { target: { value: '99' } })
-    // 99h clamped to 24h -> 1440 total minutes (the contract's max).
-    expect(onChange).toHaveBeenLastCalledWith(1440)
+    expect(screen.getByLabelText(label)).toHaveValue('23:59')
   })
 
-  it('clamps an out-of-range minutes part to 59', () => {
-    const onChange = vi.fn()
-    render(<DurationInput value={0} onChange={onChange} labels={labels} />)
+  it('disables the control when disabled', () => {
+    render(<DurationInput value={null} onChange={vi.fn()} label={label} disabled />)
 
-    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '99' } })
-    expect(onChange).toHaveBeenLastCalledWith(59)
-  })
-
-  it('disables both parts when disabled', () => {
-    render(<DurationInput value={null} onChange={vi.fn()} labels={labels} disabled />)
-
-    expect(screen.getByLabelText('Hours')).toBeDisabled()
-    expect(screen.getByLabelText('Minutes')).toBeDisabled()
+    expect(screen.getByLabelText(label)).toBeDisabled()
   })
 })

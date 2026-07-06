@@ -11,6 +11,8 @@ use App\Models\Contact;
 use App\Models\EmploymentProfile;
 use App\Models\OperationalSite;
 use App\Models\PersonalData;
+use App\Models\Referent;
+use App\Models\ReferentType;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserTablePreference;
@@ -61,6 +63,8 @@ class AppServiceProvider extends ServiceProvider
             'company' => Company::class,
             'operational_site' => OperationalSite::class,
             'employment_profile' => EmploymentProfile::class,
+            'referent' => Referent::class,
+            'referent_type' => ReferentType::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

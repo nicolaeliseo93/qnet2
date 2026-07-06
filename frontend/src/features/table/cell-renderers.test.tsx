@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import type { ICellRendererParams } from 'ag-grid-community'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import i18n from '@/i18n'
-import { BadgeCell, ContactsCell, CountCell } from '@/features/table/cell-renderers'
+import { BadgeCell, ContactsCell, CountCell, TagsCountCell } from '@/features/table/cell-renderers'
 import type { EnumBadge, PrimaryContact } from '@/features/table/types'
 
 /**
@@ -107,6 +107,32 @@ describe('CountCell', () => {
   it('renders an em dash when the value is not a finite number', () => {
     const { getByText } = renderCount(null)
     expect(getByText('—')).toBeInTheDocument()
+  })
+})
+
+function renderTagsCount(value: unknown) {
+  const params = { value } as unknown as ICellRendererParams
+  return render(<TagsCountCell {...params} />)
+}
+
+describe('TagsCountCell', () => {
+  it('renders a single badge with the tag count, not the tags inline', () => {
+    const { getByText, queryByText } = renderTagsCount(['Admin', 'Editor', 'Viewer'])
+    expect(getByText('3')).toBeInTheDocument()
+    expect(queryByText('Admin')).toBeNull()
+  })
+
+  it('exposes the full tag list via the badge accessible name (tooltip source)', () => {
+    const { getByLabelText } = renderTagsCount(['Admin', 'Editor'])
+    expect(getByLabelText('Admin, Editor')).toBeInTheDocument()
+  })
+
+  it('renders an em dash for an empty tag array', () => {
+    expect(renderTagsCount([]).getByText('—')).toBeInTheDocument()
+  })
+
+  it('renders an em dash when the value is missing', () => {
+    expect(renderTagsCount(undefined).getByText('—')).toBeInTheDocument()
   })
 })
 

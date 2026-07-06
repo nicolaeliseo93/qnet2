@@ -5,6 +5,7 @@ use App\Enums\LocaleEnum;
 use App\Enums\NotificationLevelEnum;
 use App\Enums\PersonalDataTypeEnum;
 use App\Enums\PersonalTitleEnum;
+use App\Enums\ReferentContactScopeEnum;
 
 return [
 
@@ -17,7 +18,7 @@ return [
     | endpoint GET /api/config (outside auth:sanctum). ConfigService iterates
     | this list and serializes each enum's presentation options for the client.
     |
-    | ⚠️  SECURITY — THIS ENDPOINT IS PUBLIC (UNAUTHENTICATED).
+    | SECURITY — THIS ENDPOINT IS PUBLIC (UNAUTHENTICATED).
     |     - Only add NON-SENSITIVE presentation metadata here.
     |     - Never add anything user-, tenant-, or permission-scoped, nor any
     |       value that leaks internal structure beyond what the login screen
@@ -42,6 +43,9 @@ return [
         'personal_title' => PersonalTitleEnum::class,
         'contact_type' => ContactTypeEnum::class,
         'notification_level' => NotificationLevelEnum::class,
+        // Referent contact scope (spec 0016): internal/external classification
+        // shown on the referent form's "Contact scope" select.
+        'referent_contact_scope' => ReferentContactScopeEnum::class,
     ],
 
 ];

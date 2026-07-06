@@ -1,92 +1,68 @@
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, ComponentProps } from 'react'
 import { Input } from '@/components/ui/input'
 
-/** Minutes in one hour, used for the total-minutes <-> hours/minutes split. */
+/** Minutes in one hour, used for the total-minutes <-> HH:MM conversion. */
 const MINUTES_PER_HOUR = 60
-/** Contract bound (spec 0015): a duration never exceeds a full day. */
-const MAX_TOTAL_MINUTES = 1440
-const MAX_HOURS = 24
-const MAX_MINUTES = 59
+/**
+ * Contract bound (spec 0015): a duration never reaches a full day. The native
+ * time control tops out at 23:59, which is also the sensible ceiling for a
+ * daily work/break duration — the schema's 1440 stays a harmless superset.
+ */
+const MAX_TOTAL_MINUTES = 23 * MINUTES_PER_HOUR + 59
 
-export interface DurationInputLabels {
-  hours: string
-  minutes: string
-}
-
-interface DurationInputProps {
+interface DurationInputProps
+  extends Omit<ComponentProps<typeof Input>, 'value' | 'onChange' | 'type'> {
   /** Total duration in minutes, or `null` when unset. */
   value: number | null
-  /** Called with the next total in minutes, or `null` when both parts are cleared. */
+  /** Called with the next total in minutes, or `null` when the field is cleared. */
   onChange: (minutes: number | null) => void
-  labels: DurationInputLabels
-  disabled?: boolean
+  /** Accessible name for the single time control. */
+  label: string
 }
 
-/** Clamps `value` to the inclusive `[min, max]` range. */
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
+/** Two-digit zero-padded string for the HH and MM parts. */
+function pad(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/** Total minutes -> "HH:MM" for the native time input; empty string when unset. */
+function toTimeValue(value: number | null): string {
+  if (value === null) return ''
+  const clamped = Math.min(Math.max(value, 0), MAX_TOTAL_MINUTES)
+  return `${pad(Math.floor(clamped / MINUTES_PER_HOUR))}:${pad(clamped % MINUTES_PER_HOUR)}`
+}
+
+/** "HH:MM" -> total minutes; `null` when the field is cleared. */
+function fromTimeValue(raw: string): number | null {
+  if (raw === '') return null
+  const [rawHours, rawMinutes] = raw.split(':')
+  const minutes = (Number(rawHours) || 0) * MINUTES_PER_HOUR + (Number(rawMinutes) || 0)
+  return Math.min(Math.max(minutes, 0), MAX_TOTAL_MINUTES)
 }
 
 /**
- * Hours/minutes duration control backed by a single `minutes` value (spec
- * 0015 stores durations as a plain integer, not a TIME column). Two small
- * number inputs edit the hours (0..24) and minutes (0..59) parts; each edit
- * recomputes and emits the clamped total. `null` represents "never touched"
- * (both parts render blank); once a real value exists, clearing both parts
- * converges to the explicit `0` (not back to `null`) — same distinction a
- * numeric input makes between an empty field and a typed `0`.
+ * Single HH:MM duration control backed by a total `minutes` value (spec 0015
+ * stores durations as a plain integer, not a TIME column). A native
+ * `type="time"` input renders the familiar "08:00" field/stepper; each edit
+ * converts the HH:MM string back to total minutes. `null` represents "unset"
+ * (blank field); clearing the field returns to `null`. Extra props (the id and
+ * ARIA wired by `FormControl`) are forwarded onto the real input.
  */
-export function DurationInput({ value, onChange, labels, disabled }: DurationInputProps) {
-  const hours = value === null ? '' : String(Math.floor(value / MINUTES_PER_HOUR))
-  const minutes = value === null ? '' : String(value % MINUTES_PER_HOUR)
-
-  const commit = (rawHours: string, rawMinutes: string) => {
-    if (rawHours === '' && rawMinutes === '') {
-      onChange(null)
-      return
-    }
-    const nextHours = clamp(Number(rawHours) || 0, 0, MAX_HOURS)
-    const nextMinutes = clamp(Number(rawMinutes) || 0, 0, MAX_MINUTES)
-    onChange(clamp(nextHours * MINUTES_PER_HOUR + nextMinutes, 0, MAX_TOTAL_MINUTES))
-  }
-
-  const handleHoursChange = (event: ChangeEvent<HTMLInputElement>) => {
-    commit(event.target.value, minutes)
-  }
-
-  const handleMinutesChange = (event: ChangeEvent<HTMLInputElement>) => {
-    commit(hours, event.target.value)
+export function DurationInput({ value, onChange, label, disabled, ...rest }: DurationInputProps) {
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onChange(fromTimeValue(event.target.value))
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Input
-        type="number"
-        inputMode="numeric"
-        min={0}
-        max={MAX_HOURS}
-        step={1}
-        value={hours}
-        onChange={handleHoursChange}
-        disabled={disabled}
-        aria-label={labels.hours}
-        className="w-20"
-      />
-      <span className="text-sm text-muted-foreground" aria-hidden="true">
-        :
-      </span>
-      <Input
-        type="number"
-        inputMode="numeric"
-        min={0}
-        max={MAX_MINUTES}
-        step={1}
-        value={minutes}
-        onChange={handleMinutesChange}
-        disabled={disabled}
-        aria-label={labels.minutes}
-        className="w-20"
-      />
-    </div>
+    <Input
+      type="time"
+      value={toTimeValue(value)}
+      onChange={handleChange}
+      disabled={disabled}
+      aria-label={label}
+      max={toTimeValue(MAX_TOTAL_MINUTES)}
+      className="w-32"
+      {...rest}
+    />
   )
 }

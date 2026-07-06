@@ -3,6 +3,8 @@
 use App\Authorization\BusinessFunctionsAuthorization;
 use App\Authorization\CompaniesAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
+use App\Authorization\ReferentsAuthorization;
+use App\Authorization\ReferentTypesAuthorization;
 use App\Authorization\RolesAuthorization;
 use App\Authorization\UsersAuthorization;
 
@@ -33,6 +35,8 @@ return [
         'business-functions' => BusinessFunctionsAuthorization::class,
         'companies' => CompaniesAuthorization::class,
         'operational-sites' => OperationalSitesAuthorization::class,
+        'referent-types' => ReferentTypesAuthorization::class,
+        'referents' => ReferentsAuthorization::class,
     ],
 
 ];
