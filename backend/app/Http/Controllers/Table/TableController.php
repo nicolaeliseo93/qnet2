@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Table;
 
 use App\Http\Controllers\Abstract\BaseApiController;
+use App\Http\Requests\Table\BulkDeleteTableRequest;
 use App\Http\Requests\Table\TableFilterStateRequest;
 use App\Http\Requests\Table\TablePreferencesRequest;
 use App\Http\Requests\Table\TableRowsRequest;
 use App\Http\Requests\Table\TableValuesRequest;
 use App\Http\Resources\TableRowResource;
 use App\Models\User;
+use App\Services\TableBulkDeleteService;
 use App\Services\TableFilterStateService;
 use App\Services\TablePreferenceService;
 use App\Services\TableService;
@@ -37,6 +39,7 @@ class TableController extends BaseApiController
         private readonly TableService $service,
         private readonly TablePreferenceService $preferences,
         private readonly TableFilterStateService $filters,
+        private readonly TableBulkDeleteService $bulkDelete,
     ) {}
 
     /**
@@ -216,6 +219,34 @@ class TableController extends BaseApiController
                 'values' => $result->values,
                 'hasMore' => $result->hasMore,
             ]);
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * POST /api/tables/{domain}/bulk-delete — best-effort delete of many rows
+     * by id. Baseline authorization mirrors rows/columns (the definition's
+     * viewAny); the per-row 'delete' ability and domain delete guards (e.g.
+     * the last-super-admin guard) are enforced PER ID by TableBulkDeleteService,
+     * never fatal to the rest of the batch — see the DTO/response shape in
+     * BulkDeleteResult.
+     */
+    public function bulkDelete(BulkDeleteTableRequest $request, string $domain): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->authorizeViewAny($definition->authorizeViewAny($actor));
+
+            $result = $this->bulkDelete->delete($definition, $actor, $request->ids());
+
+            return $this->ok([
+                'deleted' => $result->deleted,
+                'failed' => $result->failed,
+            ], 'Bulk delete completed');
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__);
         }

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  bulkDeleteTableRows,
   fetchTableColumnValues,
   resetTableFilters,
   saveTableFilters,
@@ -59,5 +60,24 @@ describe('resetTableFilters', () => {
     await resetTableFilters('users')
 
     expect(deleteMock).toHaveBeenCalledWith('/tables/users/filters')
+  })
+})
+
+describe('bulkDeleteTableRows', () => {
+  it('posts the selected ids and unwraps the ok() envelope', async () => {
+    const result = {
+      deleted: 2,
+      failed: [{ id: 3, reason: 'forbidden' as const }],
+    }
+    postMock.mockResolvedValue({
+      data: { success: true, message: 'ok', data: result },
+    })
+
+    const response = await bulkDeleteTableRows('users', [1, 2, 3])
+
+    expect(response).toEqual(result)
+    expect(postMock).toHaveBeenCalledWith('/tables/users/bulk-delete', {
+      ids: [1, 2, 3],
+    })
   })
 })

@@ -5,6 +5,7 @@ namespace App\Tables;
 use App\Authorization\AssignablePermissionCatalogue;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\RoleService;
 use App\Services\UserService;
 use App\Tables\Roles\RoleUsersCountColumn;
 use Illuminate\Database\Eloquent\Builder;
@@ -39,6 +40,7 @@ class RolesTableDefinition extends AbstractTableDefinition
     public function __construct(
         private readonly RoleUsersCountColumn $usersCountColumn,
         private readonly AssignablePermissionCatalogue $permissionCatalogue,
+        private readonly RoleService $roleService,
     ) {}
 
     public function domain(): string
@@ -353,5 +355,16 @@ class RolesTableDefinition extends AbstractTableDefinition
         });
 
         return true;
+    }
+
+    /**
+     * Delegate to RoleService::delete() so the bulk-delete endpoint respects
+     * the exact same protected-system-role guard as the single DELETE
+     * /roles/{role} endpoint (RoleController::destroy).
+     */
+    public function deleteModel(Model $model): void
+    {
+        /** @var Role $model */
+        $this->roleService->delete($model);
     }
 }

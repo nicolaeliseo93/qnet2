@@ -57,8 +57,14 @@ export default function MigrationsPage() {
   }
 
   const sources = sourcesQuery.data ?? []
-  const selectedSourceLabel =
-    sources.find((source) => source.key === selectedSource)?.label ?? selectedSource ?? ''
+  // Source names are user-facing: translate the backend key via i18n, falling
+  // back to the backend's English label when a key has no translation.
+  const translateSourceLabel = (key: string, fallback: string) =>
+    t(`sources.${key}`, { defaultValue: fallback })
+  const selectedSourceMatch = sources.find((source) => source.key === selectedSource)
+  const selectedSourceLabel = selectedSourceMatch
+    ? translateSourceLabel(selectedSourceMatch.key, selectedSourceMatch.label)
+    : (selectedSource ?? '')
 
   const pagination = previewQuery.data?.pagination
   const isPreviewLoading = columnsQuery.isLoading || previewQuery.isLoading
@@ -88,7 +94,7 @@ export default function MigrationsPage() {
                 <SelectContent>
                   {sources.map((source) => (
                     <SelectItem key={source.key} value={source.key}>
-                      {source.label}
+                      {translateSourceLabel(source.key, source.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>

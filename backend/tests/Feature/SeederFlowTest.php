@@ -3,14 +3,15 @@
 use App\Models\City;
 use App\Models\Country;
 use App\Models\Province;
-use App\Models\User;
 use App\Models\State;
+use App\Models\User;
+use Database\Seeders\DemoUserSeeder;
+use Database\Seeders\NotificationSeeder;
+use Database\Seeders\PersonalDataSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\UserAddressSeeder;
 use Database\Seeders\UserContactSeeder;
 use Database\Seeders\UserSeeder;
-use Database\Seeders\NotificationSeeder;
-use Database\Seeders\PersonalDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -37,6 +38,7 @@ it('gives a complete profile to every deterministic development user', function 
     seedGeoFixture();
 
     $this->seed(RolePermissionSeeder::class);
+    $this->seed(DemoUserSeeder::class);
     $this->seed(UserSeeder::class);
     $this->seed(PersonalDataSeeder::class);
     $this->seed(UserContactSeeder::class);
@@ -54,6 +56,7 @@ it('seeds notifications only for users that follow the personal-data flow', func
     seedGeoFixture();
 
     $this->seed(RolePermissionSeeder::class);
+    $this->seed(DemoUserSeeder::class);
     $this->seed(UserSeeder::class);
     $this->seed(PersonalDataSeeder::class);
     $this->seed(UserContactSeeder::class);
@@ -75,6 +78,7 @@ it('seeds both individual and company profiles with realistic nested data', func
     seedGeoFixture();
 
     $this->seed(RolePermissionSeeder::class);
+    $this->seed(DemoUserSeeder::class);
     $this->seed(UserSeeder::class);
     $this->seed(PersonalDataSeeder::class);
     $this->seed(UserContactSeeder::class);

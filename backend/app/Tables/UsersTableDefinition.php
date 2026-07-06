@@ -443,4 +443,15 @@ class UsersTableDefinition extends AbstractTableDefinition
 
         return true;
     }
+
+    /**
+     * Delegate to UserService::delete() so the bulk-delete endpoint respects
+     * the exact same last-super-admin guard as the single DELETE /users/{user}
+     * endpoint (UserController::destroy).
+     */
+    public function deleteModel(Model $model): void
+    {
+        /** @var User $model */
+        $this->userService->delete($model);
+    }
 }

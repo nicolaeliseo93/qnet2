@@ -241,6 +241,21 @@ export interface TableColumnValuesResponse {
   hasMore: boolean
 }
 
+/** Why a single row was skipped by a bulk-delete request. */
+export type BulkDeleteFailureReason = 'forbidden' | 'guarded' | 'not_found'
+
+/** One row that could not be deleted, with the reason it was skipped. */
+export interface BulkDeleteFailure {
+  id: number
+  reason: BulkDeleteFailureReason
+}
+
+/** Response of POST /tables/{domain}/bulk-delete (envelope `data`). */
+export interface BulkDeleteResult {
+  deleted: number
+  failed: BulkDeleteFailure[]
+}
+
 /**
  * Visibility of a saved filter view (spec 0007). A `private` view is visible
  * only to its owner; a `shared` view is visible/appliable by every user who

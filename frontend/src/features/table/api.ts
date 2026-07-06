@@ -1,6 +1,7 @@
 import { apiClient } from '@/api/client'
 import type { ApiResponse } from '@/api/types'
 import type {
+  BulkDeleteResult,
   ColumnPreferenceInput,
   TableColumnValuesPayload,
   TableColumnValuesResponse,
@@ -86,6 +87,23 @@ export async function saveTableFilters(
  */
 export async function resetTableFilters(domain: string): Promise<void> {
   await apiClient.delete(`/tables/${domain}/filters`)
+}
+
+/**
+ * Deletes a batch of rows for a domain in one request (currently-selected ids
+ * only; the caller decides which ids are selected, never a server-side
+ * "select all"). The backend re-checks authorization per row and reports any
+ * id it could not delete instead of failing the whole request.
+ */
+export async function bulkDeleteTableRows(
+  domain: string,
+  ids: number[],
+): Promise<BulkDeleteResult> {
+  const { data } = await apiClient.post<ApiResponse<BulkDeleteResult>>(
+    `/tables/${domain}/bulk-delete`,
+    { ids },
+  )
+  return data.data
 }
 
 /**

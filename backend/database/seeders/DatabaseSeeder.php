@@ -13,19 +13,17 @@ class DatabaseSeeder extends Seeder
     /**
      * Seed the application's database.
      */
+    /**
+     * The default seed builds a clean, working application: reference data,
+     * the role/permission catalogue and the single privileged demo account.
+     * Fake fixtures for every other table live in DemoDataSeeder, run on
+     * demand via `php artisan db:seed --class=DemoDataSeeder`.
+     */
     public function run(): void
     {
         Artisan::call('locations:add');
 
         $this->call(RolePermissionSeeder::class);
-        $this->call(UserSeeder::class);
-        $this->call(PersonalDataSeeder::class);
-        $this->call(UserContactSeeder::class);
-        $this->call(UserAddressSeeder::class);
-        $this->call(OperationalSiteSeeder::class);
-        $this->call(CompanySeeder::class);
-        $this->call(BusinessFunctionSeeder::class);
-        $this->call(EmploymentProfileSeeder::class);
-        $this->call(NotificationSeeder::class);
+        $this->call(DemoUserSeeder::class);
     }
 }

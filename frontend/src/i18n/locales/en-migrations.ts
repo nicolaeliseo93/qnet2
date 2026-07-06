@@ -11,6 +11,13 @@ export const migrations = {
   nav: {
     label: 'Migrations',
   },
+  sources: {
+    roles: 'Roles',
+    users: 'Users',
+    'business-functions': 'Business functions',
+    companies: 'Companies',
+    'operational-sites': 'Operational sites',
+  },
   page: {
     sourceLabel: 'Source',
     sourcePlaceholder: 'Select a source…',

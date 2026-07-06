@@ -96,6 +96,13 @@ Route::middleware('auth:sanctum')->group(function () {
         // filters applied. See TableValuesRequest / TableService::distinctValues.
         Route::post('tables/{domain}/values', [TableController::class, 'values']);
 
+        // Generic bulk-delete: best-effort delete of many rows by id. Baseline
+        // authorization is the same definition viewAny as every other
+        // tables/{domain}/* endpoint; the per-row 'delete' ability and domain
+        // delete guards (e.g. last-super-admin) are enforced PER ID by
+        // TableBulkDeleteService, never fatal to the rest of the batch.
+        Route::post('tables/{domain}/bulk-delete', [TableController::class, 'bulkDelete']);
+
         // Per-user column preferences (order/width/visibility): self-scoped to the
         // authenticated user, gated by the same definition viewAny. Save upserts a
         // sparse delta; delete resets to the PHP default. See ADR-0004 /

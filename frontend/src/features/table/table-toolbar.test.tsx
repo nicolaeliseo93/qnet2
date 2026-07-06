@@ -101,4 +101,24 @@ describe('TableToolbar', () => {
 
     expect(screen.getByRole('menuitem', { name: 'Import' })).toBeInTheDocument()
   })
+
+  it('renders bulkActionsSlot next to the row count when provided', () => {
+    renderToolbar({
+      bulkActionsSlot: (
+        <button type="button">Delete selected (2)</button>
+      ),
+    })
+
+    expect(
+      screen.getByRole('button', { name: 'Delete selected (2)' }),
+    ).toBeInTheDocument()
+  })
+
+  it('omits the bulk-actions area when no selection is active', () => {
+    renderToolbar()
+
+    expect(
+      screen.queryByRole('button', { name: /delete selected/i }),
+    ).not.toBeInTheDocument()
+  })
 })

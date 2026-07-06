@@ -384,4 +384,15 @@ abstract class AbstractTableDefinition implements TableDefinition
     {
         return false;
     }
+
+    /**
+     * Default: a plain delete, identical to calling the model directly.
+     * Concrete definitions override when the domain's single-delete endpoint
+     * delegates to a Service that enforces a guard beyond the Policy check
+     * (e.g. the last-super-admin guard, a protected-system-row guard).
+     */
+    public function deleteModel(Model $model): void
+    {
+        $model->delete();
+    }
 }

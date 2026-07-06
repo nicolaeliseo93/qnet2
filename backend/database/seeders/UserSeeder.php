@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Enums\LocaleEnum;
 use App\Models\User;
-use App\Services\RoleAssignmentGuard;
 use Database\Seeders\Concerns\SeedsDevelopmentUsers;
 use Faker\Factory as FakerFactory;
 use Faker\Generator;
@@ -29,26 +28,9 @@ class UserSeeder extends Seeder
         $faker = FakerFactory::create('it_IT');
         $faker->seed(20260616);
 
-        $this->seedDemoUser();
-
         for ($index = 1; $index <= self::USERS; $index++) {
             $this->seedGeneratedUser($faker, $index);
         }
-    }
-
-    private function seedDemoUser(): void
-    {
-        $user = User::firstOrNew(['email' => self::DEMO_EMAIL]);
-        $user->name = 'Demo User';
-        $user->locale = LocaleEnum::It->value;
-        $user->email_verified_at ??= now();
-
-        if (! $user->exists) {
-            $user->password = 'password';
-        }
-
-        $user->save();
-        $user->syncRoles([RoleAssignmentGuard::PRIVILEGED_ROLE]);
     }
 
     private function seedGeneratedUser(Generator $faker, int $index): void
@@ -69,7 +51,7 @@ class UserSeeder extends Seeder
         $user->email_verified_at ??= now();
 
         if (! $user->exists) {
-            $user->password = 'password';
+            $user->password = config('seeding.password');
         }
 
         $user->save();

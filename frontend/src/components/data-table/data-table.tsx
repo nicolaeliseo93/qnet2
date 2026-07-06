@@ -8,12 +8,15 @@ import {
   type ColumnMovedEvent,
   type ColumnResizedEvent,
   type ColumnVisibleEvent,
+  type GetRowIdParams,
   type GridOptions,
   type GridReadyEvent,
   type GridState,
   type ICellRendererParams,
   type IServerSideDatasource,
   type ModelUpdatedEvent,
+  type RowSelectionOptions,
+  type SelectionChangedEvent,
 } from 'ag-grid-community'
 import {
   AG_GRID_LOCALE_EN,
@@ -24,7 +27,7 @@ import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
 import { buildColumnFilter } from '@/components/data-table/column-filters'
 import { Skeleton } from '@/components/ui/skeleton'
 import { BadgeCell } from '@/features/table/cell-renderers'
-import type { ColumnType, TableColumn } from '@/features/table/types'
+import type { ColumnType, TableColumn, TableRow } from '@/features/table/types'
 
 // Register enterprise modules + license once, at module load.
 setupAgGrid()
@@ -85,6 +88,20 @@ export const ACTIONS_COLUMN_ID = '__actions'
 
 /** Default minimum width for data columns without an explicit backend width. */
 const DEFAULT_MIN_WIDTH = 120
+
+/**
+ * Row-selection config shared by every domain that opts in (`enableSelection`).
+ * Multi-row checkboxes with a header "select all"; `selectAll: 'currentPage'`
+ * caps select-all at the loaded page instead of every row across the SSRM
+ * dataset, matching the bulk-delete contract (explicit ids only, no
+ * server-side "select all" semantics).
+ */
+const ROW_SELECTION: RowSelectionOptions<TableRow> = {
+  mode: 'multiRow',
+  checkboxes: true,
+  headerCheckbox: true,
+  selectAll: 'currentPage',
+}
 
 /**
  * Fixed width of the row-actions column. Sized to hold up to three compact icon
@@ -165,6 +182,17 @@ interface DataTableProps {
    * the toolbar can show a live "N rows" counter (spec 0009).
    */
   onRowCountChanged?: (count: number) => void
+  /**
+   * Turns on multi-row checkbox selection (header "select all" scoped to the
+   * current page). Off by default so domains without a bulk action see no
+   * behavior change.
+   */
+  enableSelection?: boolean
+  /**
+   * Fired with the ids of the currently-selected rows whenever the selection
+   * changes. Only wired when `enableSelection` is true.
+   */
+  onSelectionChanged?: (ids: number[]) => void
 }
 
 /** Default cell value formatter for the given column type. */
@@ -197,6 +225,8 @@ export function DataTable({
   initialFilterModel,
   onFilterChanged,
   onRowCountChanged,
+  enableSelection,
+  onSelectionChanged,
 }: DataTableProps) {
   const { t, i18n } = useTranslation()
 
@@ -316,6 +346,32 @@ export function DataTable({
     [onRowCountChanged],
   )
 
+  // Required by SSRM for stable row identity across block reloads, and by the
+  // selection feature to track selected rows by id rather than row index.
+  const getRowId = useCallback(
+    (params: GetRowIdParams<TableRow>) => String(params.data.id),
+    [],
+  )
+
+  // SSRM stores a header "select all" as a selection-state flag rather than
+  // individually-toggled nodes, so `getSelectedRows()` returns empty on that
+  // path (only single-row toggles populate it). Walking the loaded nodes and
+  // reading `isSelected()` yields the concrete ids for both single-row and
+  // select-all, and is naturally scoped to the loaded/current page — matching
+  // the bulk-delete contract (delete by explicit id, current page only).
+  const handleSelectionChanged = useCallback(
+    (event: SelectionChangedEvent<TableRow>) => {
+      const ids: number[] = []
+      event.api.forEachNode((node) => {
+        if (node.isSelected() && node.data) {
+          ids.push(node.data.id)
+        }
+      })
+      onSelectionChanged?.(ids)
+    },
+    [onSelectionChanged],
+  )
+
   // Apply the saved filters once, at grid creation, so the first SSRM request is
   // already filtered. Omitted when empty so a clean table starts unfiltered.
   const initialState = useMemo<GridState | undefined>(
@@ -326,7 +382,7 @@ export function DataTable({
     [initialFilterModel],
   )
 
-  const gridOptions = useMemo<GridOptions>(
+  const gridOptions = useMemo<GridOptions<TableRow>>(
     () => ({
       rowModelType: 'serverSide',
       serverSideDatasource: datasource,
@@ -352,8 +408,12 @@ export function DataTable({
         flex: 1,
         minWidth: DEFAULT_MIN_WIDTH,
       },
+      // Stable row ids are required for SSRM selection to survive block
+      // reloads; only wired when selection is actually enabled.
+      getRowId: enableSelection ? getRowId : undefined,
+      rowSelection: enableSelection ? ROW_SELECTION : undefined,
     }),
-    [datasource, blockSize],
+    [datasource, blockSize, enableSelection, getRowId],
   )
 
   return (
@@ -371,6 +431,7 @@ export function DataTable({
         onColumnVisible={handleColumnVisible}
         onFilterChanged={onFilterChanged}
         onModelUpdated={handleModelUpdated}
+        onSelectionChanged={enableSelection ? handleSelectionChanged : undefined}
         {...gridOptions}
       />
     </div>

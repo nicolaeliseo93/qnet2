@@ -66,6 +66,13 @@ interface TableToolbarProps {
    * knowing about domains, permissions or the export feature (spec 0014).
    */
   exportSlot?: ReactNode
+  /**
+   * Bulk-actions affordance for the current selection (rendered by the caller,
+   * which owns the selection state and the delete mutation). Purely a slot:
+   * the toolbar renders it next to the row count without knowing about
+   * selection or bulk delete.
+   */
+  bulkActionsSlot?: ReactNode
 }
 
 interface IconButtonProps {
@@ -123,6 +130,7 @@ export function TableToolbar({
   savedViewsSlot,
   importSlot,
   exportSlot,
+  bulkActionsSlot,
 }: TableToolbarProps) {
   const { t } = useTranslation()
 
@@ -168,6 +176,8 @@ export function TableToolbar({
             {t('table.rowCount', { count: rowCount })}
           </span>
         ) : null}
+
+        {bulkActionsSlot}
       </div>
 
       {/* Right: icon controls */}

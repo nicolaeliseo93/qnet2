@@ -53,6 +53,12 @@ php artisan key:generate
 php artisan migrate
 
 php artisan serve   # http://127.0.0.1:8000
+
+# Crea dati fake per prove
+php artisan db:seed --class=DemoDataSeeder
+ 
+# Crea ambiente pulito solo con un utente superadmin
+php artisan db:seed 
 ```
 
 ## Testing

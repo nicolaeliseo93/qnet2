@@ -218,4 +218,21 @@ interface TableDefinition
      * @param  Builder<Model>  $query
      */
     public function applyDerivedSearch(Builder $query, string $columnId, string $pattern): bool;
+
+    /**
+     * Delete a single row already authorized (the 'delete' ability) for the
+     * generic bulk-delete endpoint (POST /api/tables/{domain}/bulk-delete).
+     *
+     * Default (AbstractTableDefinition): a plain `$model->delete()`. Override
+     * when the domain's single-delete endpoint delegates to a Service that
+     * enforces MORE than the Policy check (e.g. UserService::delete's
+     * last-super-admin guard, RoleService::delete's protected-role guard) —
+     * delegating here keeps the bulk path and the single-delete path under
+     * the exact same guard, never a shortcut around it. An implementation MAY
+     * throw (AuthorizationException or an HTTP exception, e.g. via `abort()`)
+     * to signal a domain guard rejected this specific row; the bulk-delete
+     * service catches it and reports the row as `guarded` without aborting
+     * the rest of the batch.
+     */
+    public function deleteModel(Model $model): void;
 }

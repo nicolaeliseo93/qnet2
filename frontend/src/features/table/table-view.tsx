@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GridApi, GridReadyEvent } from 'ag-grid-community'
-import { Download } from 'lucide-react'
+import { Download, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,7 @@ import { createSsrmDatasource } from '@/features/table/ssrm-datasource'
 import { FilterViewsControl } from '@/features/table/filter-views-control'
 import { TableToolbar } from '@/features/table/table-toolbar'
 import { useTableToolbarState } from '@/features/table/use-table-toolbar-state'
+import { useBulkDelete } from '@/features/table/use-bulk-delete'
 import { ExportDialog } from '@/features/exports/export-dialog'
 import {
   createRowActionsRenderer,
@@ -142,6 +143,34 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       setGridApi(event.api)
     }, [])
 
+    // Purges and reloads the SSRM cache; shared by the imperative handle (used
+    // by domain adapters after their own CRUD mutations) and the generic
+    // bulk-delete flow below.
+    const refreshGrid = useCallback(() => {
+      gridApi?.refreshServerSide({ purge: true })
+    }, [gridApi])
+
+    // Bulk selection (current page only, per the SSRM select-all contract) and
+    // the generic bulk-delete flow, gated on the domain's own action catalog:
+    // the affordance only shows up when the backend actually exposes 'delete'
+    // for this user (already permission-filtered server-side).
+    const [selectedIds, setSelectedIds] = useState<number[]>([])
+    const canBulkDelete = useMemo(
+      () => config?.actions.some((action) => action.key === 'delete') ?? false,
+      [config],
+    )
+    const { runBulkDelete, isDeleting } = useBulkDelete({
+      domain,
+      gridApi,
+      refresh: refreshGrid,
+    })
+    const handleBulkDelete = useCallback(async () => {
+      const didDelete = await runBulkDelete(selectedIds)
+      if (didDelete) {
+        setSelectedIds([])
+      }
+    }, [runBulkDelete, selectedIds])
+
     // The domain's global quick-search allow-list (spec 0009); empty ⇒ no search
     // box. Drives both the search affordance and the placeholder labels.
     const searchable = useMemo(
@@ -163,13 +192,7 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       [domain, toolbar.getSearchTerm],
     )
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        refresh: () => gridApi?.refreshServerSide({ purge: true }),
-      }),
-      [gridApi],
-    )
+    useImperativeHandle(ref, () => ({ refresh: refreshGrid }), [refreshGrid])
 
     // Persist the user's column layout, debounced so a drag/resize burst yields a
     // single save. The full current state is read from the grid and sent to the
@@ -332,6 +355,8 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
           initialFilterModel={initialFilterModel}
           onFilterChanged={handleFilterChanged}
           onRowCountChanged={toolbar.setRowCount}
+          enableSelection={canBulkDelete}
+          onSelectionChanged={setSelectedIds}
         />
       )
     }
@@ -346,6 +371,25 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
             setFiltersCustomizedLocally(Object.keys(filters).length > 0)
           }}
         />
+      ) : null
+
+    const bulkActionsSlot =
+      canBulkDelete && selectedIds.length > 0 ? (
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="hidden whitespace-nowrap text-xs font-medium text-muted-foreground sm:inline">
+            {t('table.selectedCount', { count: selectedIds.length })}
+          </span>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            disabled={isDeleting}
+            onClick={() => void handleBulkDelete()}
+          >
+            <Trash2 aria-hidden="true" />
+            {t('table.deleteSelected', { count: selectedIds.length })}
+          </Button>
+        </div>
       ) : null
 
     const exportSlot = canExport ? (
@@ -378,6 +422,7 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
               onSearchChange={toolbar.setSearchInput}
               searchShortcut={toolbar.searchShortcut}
               rowCount={toolbar.rowCount}
+              bulkActionsSlot={bulkActionsSlot}
               filtersActive={isFilterCustomized}
               onResetFilters={() => void handleResetFilters()}
               resettingFilters={resetFilters.isPending}
