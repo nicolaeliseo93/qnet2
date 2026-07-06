@@ -1,7 +1,9 @@
 /* eslint-disable react-refresh/only-export-components -- renderer registry module: cells are AG Grid render functions, not route/page components */
 import type { ICellRendererParams } from 'ag-grid-community'
+import { Check, X } from 'lucide-react'
 import i18n from '@/i18n'
 import { UserAvatar } from '@/components/user-avatar'
+import { Badge } from '@/components/ui/badge'
 import {
   ContactsCell,
   DateTimeCell,
@@ -21,12 +23,41 @@ function DateCell({ value }: ICellRendererParams) {
   return <span>{new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' }).format(date)}</span>
 }
 
-/** Renders a boolean column (is_manager, is_active) as a localized yes/no label. */
+/** Renders the `is_manager` boolean column as a localized yes/no label. */
 function BooleanCell({ value }: ICellRendererParams) {
   if (typeof value !== 'boolean') {
     return <span className="text-muted-foreground">—</span>
   }
   return <span>{i18n.t(value ? 'common.yes' : 'common.no')}</span>
+}
+
+/**
+ * Colored tone classes for the boolean badge (green = yes, red = no), matching
+ * the business-functions boolean badge so boolean status columns look the same
+ * across the app and adapt to dark mode.
+ */
+const BOOLEAN_BADGE_YES =
+  'border-transparent bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
+const BOOLEAN_BADGE_NO =
+  'border-transparent bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200'
+
+/**
+ * Renders the `is_active` column as a colored yes/no badge with a leading icon
+ * (check for active, cross for inactive). Icon plus text keeps it accessible —
+ * color is not the only signal.
+ */
+function ActiveBadgeCell({ value }: ICellRendererParams) {
+  if (typeof value !== 'boolean') {
+    return <span className="text-muted-foreground">—</span>
+  }
+  return (
+    <div className="flex h-full items-center justify-center">
+      <Badge className={value ? BOOLEAN_BADGE_YES : BOOLEAN_BADGE_NO}>
+        {value ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
+        {i18n.t(value ? 'common.yes' : 'common.no')}
+      </Badge>
+    </div>
+  )
 }
 
 /** Renders an email as a mailto link (users-specific). */
@@ -73,7 +104,7 @@ export const userColumnRenderers: TableRendererMap = {
   // Employment profile columns (spec 0015): relationship_type/qualification_type
   // are `badge` columns, rendered generically by the table's own `BadgeCell`
   // fallback (no entry needed here).
-  is_active: (params) => <BooleanCell {...params} />,
+  is_active: (params) => <ActiveBadgeCell {...params} />,
   is_manager: (params) => <BooleanCell {...params} />,
   hired_at: (params) => <DateCell {...params} />,
   terminated_at: (params) => <DateCell {...params} />,
