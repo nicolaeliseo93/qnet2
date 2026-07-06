@@ -21,8 +21,8 @@ function DateCell({ value }: ICellRendererParams) {
   return <span>{new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' }).format(date)}</span>
 }
 
-/** Renders the `is_manager` boolean column as a localized yes/no label. */
-function IsManagerCell({ value }: ICellRendererParams) {
+/** Renders a boolean column (is_manager, is_active) as a localized yes/no label. */
+function BooleanCell({ value }: ICellRendererParams) {
   if (typeof value !== 'boolean') {
     return <span className="text-muted-foreground">—</span>
   }
@@ -73,7 +73,8 @@ export const userColumnRenderers: TableRendererMap = {
   // Employment profile columns (spec 0015): relationship_type/qualification_type
   // are `badge` columns, rendered generically by the table's own `BadgeCell`
   // fallback (no entry needed here).
-  is_manager: (params) => <IsManagerCell {...params} />,
+  is_active: (params) => <BooleanCell {...params} />,
+  is_manager: (params) => <BooleanCell {...params} />,
   hired_at: (params) => <DateCell {...params} />,
   terminated_at: (params) => <DateCell {...params} />,
 }

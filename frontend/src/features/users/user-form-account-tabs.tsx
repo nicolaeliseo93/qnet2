@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { FormControl, FormDescription } from '@/components/ui/form'
 import { AsyncPaginatedMultiSelect } from '@/components/ui/async-paginated-multi-select'
 import type { ForSelectItem } from '@/features/for-select/types'
@@ -222,6 +223,20 @@ export function AccessTabContent({ control, selectedRoleItems }: AccessTabConten
                 triggerLabel: t('users.form.roles'),
               }}
             />
+          </FormControl>
+        )}
+      </MetaField>
+
+      <MetaField
+        control={control}
+        name="is_active"
+        metaKey="is_active"
+        label={t('users.form.is_active')}
+        description={<FormDescription>{t('users.form.isActiveHint')}</FormDescription>}
+      >
+        {({ field, disabled }) => (
+          <FormControl>
+            <Switch checked={field.value} onCheckedChange={field.onChange} disabled={disabled} />
           </FormControl>
         )}
       </MetaField>

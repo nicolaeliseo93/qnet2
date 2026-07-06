@@ -61,6 +61,7 @@ class UpdateUserRequest extends FormRequest
                 Rule::unique('users', 'email')->ignore($user->id),
             ],
             'locale' => ['sometimes', 'required', Rule::in(LocaleEnum::values())],
+            'is_active' => ['sometimes', 'boolean'],
             'password' => ['sometimes', 'required', 'confirmed', Password::defaults()],
             'roles' => ['sometimes', 'array'],
             // Role IDS the current actor may assign (for-select, ADR 0011): a non

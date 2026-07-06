@@ -109,6 +109,57 @@ it('create: 201 + persistence + hashed password not exposed', function () {
         ->and(Hash::check('Str0ng-P4ssw0rd!', $created->password))->toBeTrue();
 });
 
+it('create: is_active defaults to true when omitted, and is exposed by the resource', function () {
+    $actor = userWithUserAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/users', [
+        'email' => 'active.default@example.com',
+        'locale' => 'it',
+        'password' => 'Str0ng-P4ssw0rd!',
+        'password_confirmation' => 'Str0ng-P4ssw0rd!',
+        'personal_data' => individualProfile(),
+    ])->assertCreated()
+        ->assertJsonPath('data.is_active', true);
+
+    $this->assertDatabaseHas('users', [
+        'email' => 'active.default@example.com',
+        'is_active' => true,
+    ]);
+});
+
+it('create: persists an explicit is_active=false', function () {
+    $actor = userWithUserAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/users', [
+        'email' => 'inactive.new@example.com',
+        'locale' => 'it',
+        'is_active' => false,
+        'password' => 'Str0ng-P4ssw0rd!',
+        'password_confirmation' => 'Str0ng-P4ssw0rd!',
+        'personal_data' => individualProfile(),
+    ])->assertCreated()
+        ->assertJsonPath('data.is_active', false);
+
+    $this->assertDatabaseHas('users', [
+        'email' => 'inactive.new@example.com',
+        'is_active' => false,
+    ]);
+});
+
+it('update: toggles is_active off', function () {
+    $actor = userWithUserAbilities(['update']);
+    $target = User::factory()->create(['is_active' => true]);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/users/{$target->id}", ['is_active' => false])
+        ->assertOk()
+        ->assertJsonPath('data.is_active', false);
+
+    expect($target->fresh()->is_active)->toBeFalse();
+});
+
 it('create: derives users.name from an individual card (First Last)', function () {
     $actor = userWithUserAbilities(['create']);
     Sanctum::actingAs($actor);

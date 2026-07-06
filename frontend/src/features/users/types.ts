@@ -80,6 +80,8 @@ export interface UserDetail {
   name: string
   email: string
   locale: UserLocale
+  /** Whether the account may sign in. An inactive user is denied login. */
+  is_active: boolean
   /** Role memberships as {id, name}: the form picks by id, the detail shows name. */
   roles: UserRole[]
   /** Absolute URL to the authenticated avatar download endpoint, or null. */
@@ -127,6 +129,8 @@ export interface EmploymentPayload {
 export interface CreateUserPayload {
   email: string
   locale: UserLocale
+  /** Whether the account may sign in (defaults to true server-side when omitted). */
+  is_active: boolean
   /** Role IDS to assign (for-select standard, ADR 0011). */
   roles?: number[]
   password: string
@@ -148,6 +152,8 @@ export interface CreateUserPayload {
 export interface UpdateUserPayload {
   email?: string
   locale?: UserLocale
+  /** Whether the account may sign in. Sent only when toggled. */
+  is_active?: boolean
   /** Role IDS to assign (for-select standard, ADR 0011). */
   roles?: number[]
   password?: string

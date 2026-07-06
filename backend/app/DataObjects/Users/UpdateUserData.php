@@ -27,6 +27,7 @@ final readonly class UpdateUserData
         public ?string $email = null,
         public ?string $locale = null,
         public ?string $password = null,
+        public ?bool $is_active = null,
         public ?array $roles = null,
     ) {}
 
@@ -41,6 +42,7 @@ final readonly class UpdateUserData
             email: array_key_exists('email', $data) ? (string) $data['email'] : null,
             locale: array_key_exists('locale', $data) ? (string) $data['locale'] : null,
             password: array_key_exists('password', $data) ? (string) $data['password'] : null,
+            is_active: array_key_exists('is_active', $data) ? (bool) $data['is_active'] : null,
             roles: array_key_exists('roles', $data) ? (array) $data['roles'] : null,
         );
     }
@@ -56,7 +58,7 @@ final readonly class UpdateUserData
      * separately, and `name` is derived from the card by the UserService (ADR 0012),
      * not submitted here.
      *
-     * @return array<string, string>
+     * @return array<string, string|bool>
      */
     public function submittedAttributes(): array
     {
@@ -65,8 +67,9 @@ final readonly class UpdateUserData
                 'email' => $this->email,
                 'locale' => $this->locale,
                 'password' => $this->password,
+                'is_active' => $this->is_active,
             ],
-            static fn (?string $value): bool => $value !== null,
+            static fn (mixed $value): bool => $value !== null,
         );
     }
 }

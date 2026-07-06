@@ -49,6 +49,7 @@ export function buildCreatePayload(
   return {
     email: values.email,
     locale: values.locale,
+    is_active: values.is_active,
     roles: values.roles,
     password: values.password,
     password_confirmation: values.password_confirmation,
@@ -77,6 +78,9 @@ export function buildUpdatePayload(
   }
   if (values.locale !== original.locale) {
     payload.locale = values.locale
+  }
+  if (values.is_active !== original.is_active) {
+    payload.is_active = values.is_active
   }
   if (!sameRoles(values.roles, original.roles.map((role) => role.id))) {
     payload.roles = values.roles

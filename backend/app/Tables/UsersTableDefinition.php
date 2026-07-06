@@ -217,6 +217,7 @@ class UsersTableDefinition extends AbstractTableDefinition
             'avatar_url' => $row->avatarDataUri(),
             'roles' => $row->getRoleNames()->all(),
             'locale' => $row->locale,
+            'is_active' => $row->is_active,
             'created_at' => $row->created_at,
             'country' => $address?->country?->name,
             'region' => $address?->state?->name,

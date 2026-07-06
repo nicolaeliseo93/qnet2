@@ -14,7 +14,7 @@ export const migrations = {
     roles: 'Ruoli',
     users: 'Utenti',
     'business-functions': 'Funzioni aziendali',
-    companies: 'Aziende',
+    companies: 'Società aziendali',
     'operational-sites': 'Sedi operative',
   },
   page: {

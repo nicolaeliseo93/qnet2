@@ -26,6 +26,7 @@ final readonly class CreateUserData
         public string $email,
         public string $locale,
         public string $password,
+        public bool $is_active = true,
         public ?array $roles = null,
     ) {}
 
@@ -40,6 +41,7 @@ final readonly class CreateUserData
             email: (string) $data['email'],
             locale: (string) $data['locale'],
             password: (string) $data['password'],
+            is_active: array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true,
             roles: array_key_exists('roles', $data) ? (array) $data['roles'] : null,
         );
     }
@@ -54,7 +56,7 @@ final readonly class CreateUserData
      * boundary). `name` is NOT included here: it is derived from the personal-data
      * card and merged in by the UserService (ADR 0012).
      *
-     * @return array<string, string>
+     * @return array<string, string|bool>
      */
     public function attributes(): array
     {
@@ -62,6 +64,7 @@ final readonly class CreateUserData
             'email' => $this->email,
             'locale' => $this->locale,
             'password' => $this->password,
+            'is_active' => $this->is_active,
         ];
     }
 }

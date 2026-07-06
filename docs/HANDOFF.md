@@ -2,6 +2,51 @@
 
 > Injected at session start. Update at every green state.
 
+## Feature — User `is_active` (login gate + grid column + form field) — GREEN (2026-07-06)
+
+Ad-hoc request (no spec): add `users.is_active` (bool). An INACTIVE account keeps its record but is
+DENIED login; active behaves as before. Also surfaced as a grid column AND a form field.
+
+Names/contracts:
+- Backend: migration `2026_07_06_100000_add_is_active_to_users_table` (`boolean('is_active')
+  ->default(true)->after('password')`, reversible). `User` — `is_active` added to `#[Fillable]` and
+  cast `'is_active' => 'boolean'`. Login gate in `AuthService::login`: AFTER the credential check
+  (so an unauthenticated caller can't probe account state), `if (! $user->is_active) throw
+  ValidationException(['email' => [__('auth.inactive')]])` → same 422 envelope as auth.failed. New
+  lang key `auth.inactive` (en/it). `UserResource` emits `is_active`. `UsersAuthorization`: new
+  `FieldDefinition('is_active', 'boolean')` + ceiling entry (visibleEditable when actor may write,
+  else readonly — no dedicated permission). Store/UpdateUserRequest: `'is_active' => ['sometimes',
+  'boolean']`. DTOs: `CreateUserData::$is_active` (default true; in `attributes()`), `UpdateUserData
+  ::$is_active` (nullable; in `submittedAttributes()`, filter callback widened to `mixed`). Grid:
+  real column in `UserColumnCatalog` (`type:'boolean', filterType:'set', visible:true`) + filter
+  entry + `UsersTableDefinition::mapRow` `'is_active' => $row->is_active`. Generic engine owns
+  sort/set-filter/distinct (mirrors business-functions `is_business_unit`; NOT a derived column).
+  `UserFactory`: `is_active`=true default + `inactive()` state.
+- Frontend: `UserDetail.is_active` + `CreateUserPayload.is_active` (required) + `UpdateUserPayload
+  .is_active?`. `user-schema` baseFields `is_active: z.boolean()`. `use-user-form` defaultValues
+  (edit: `mode.user.is_active`; create: true) + SERVER_ERROR_FIELDS. `user-form-payload`: create
+  always carries it; update sends it ONLY when changed from original. Switch (MetaField) in the
+  ACCESS tab of `user-form-account-tabs.tsx`. Grid renderer: `IsManagerCell` generalized to
+  `BooleanCell` (plain yes/no), keyed for both `is_manager` and `is_active`. i18n: `users.columns
+  .is_active` + `users.form.is_active` (label, snake key — feeds `fieldPermissionLabel`) +
+  `users.form.isActiveHint` (en/it).
+
+Status — GREEN. Backend `php artisan test` FULL: 1079 passed / 1 skip / 0 fail (the lone
+BusinessFunctionSeederTest idempotency fail is a PRE-EXISTING order-dependent flake: passes in
+isolation and on re-run). Pint clean. Snapshot tests updated for the additive field (requirement
+changed, not tampering): FieldCatalogueEndpointTest + MetaEndpointTest field-key lists, TablePreferences
+default column order (is_active at index 6, created_at shifted to 8). Frontend: `tsc --noEmit` clean,
+ESLint clean, `vitest run src/features/users` 36/36 (+ payload is_active coverage). Full vitest 436
+pass / 8 PRE-EXISTING baseline fail (auth/profile-form ×5, table/cell-renderers ContactsCell ×3 —
+unrelated, per prior HANDOFF).
+
+FOLLOW-UP (out of scope, not done): a user deactivated WHILE holding a live Sanctum token keeps access
+until the token expires — the gate is login-only. If "hard block" is required, add an is_active check
+in a middleware / on token resolution and revoke tokens on deactivation.
+
+NOT COMMITTED. Working tree still entangled with concurrent specs 0012/0013/0014/0015 — an is_active
+-scoped commit must include only the ~26 files listed above.
+
 ## Feature 0015 — User employment profile (Profilo + Rapporto + Dati contrattuali) — GREEN (verifier-confirmed)
 
 Spec `docs/specs/0015-user-employment-profile.xml` (contract FROZEN). Adds a per-user employment

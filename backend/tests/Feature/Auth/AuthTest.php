@@ -45,6 +45,21 @@ it('rejects login with invalid credentials', function () {
         ->assertJsonValidationErrors('email');
 });
 
+it('denies login to an inactive account despite valid credentials', function () {
+    $user = User::factory()->inactive()->create([
+        'password' => bcrypt('password'),
+    ]);
+
+    $this->postJson('/api/auth/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors('email')
+        ->assertJsonPath('errors.email.0', __('auth.inactive'));
+
+    expect($user->tokens()->count())->toBe(0);
+});
+
 it('validates required login fields', function () {
     $this->postJson('/api/auth/login', [])
         ->assertStatus(422)

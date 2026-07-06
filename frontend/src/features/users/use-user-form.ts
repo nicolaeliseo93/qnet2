@@ -52,6 +52,7 @@ const SEED_PENDING = Symbol('seed-pending')
 const SERVER_ERROR_FIELDS = [
   'email',
   'locale',
+  'is_active',
   'roles',
   'password',
   'employment.is_manager',
@@ -169,6 +170,7 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
       return {
         email: mode.user.email,
         locale: mode.user.locale,
+        is_active: mode.user.is_active,
         roles: mode.user.roles.map((role) => role.id),
         password: '',
         password_confirmation: '',
@@ -193,6 +195,7 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
     return {
       email: '',
       locale: DEFAULT_LOCALE,
+      is_active: true,
       roles: [],
       password: '',
       password_confirmation: '',

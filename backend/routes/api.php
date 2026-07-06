@@ -189,7 +189,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('migrations/{source}/preview', [MigrationController::class, 'preview']);
         });
 
-        Route::middleware('throttle:6,1')->group(function () {
+        Route::middleware('throttle:30,1')->group(function () {
             Route::post('migrations/{source}/import', [MigrationController::class, 'import']);
         });
     });

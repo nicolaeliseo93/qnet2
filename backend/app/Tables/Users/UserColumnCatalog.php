@@ -87,6 +87,18 @@ final class UserColumnCatalog
                 'options' => LocaleEnum::values(),
             ],
             [
+                // Real boolean column: an inactive user cannot log in
+                // (AuthService::login). Generic engine owns sort/set-filter/
+                // distinct — mirrors business-functions' is_business_unit.
+                'id' => 'is_active',
+                'label' => 'users.columns.is_active',
+                'type' => 'boolean',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
                 'id' => 'created_at',
                 'label' => 'users.columns.created_at',
                 'type' => 'datetime',
@@ -293,6 +305,7 @@ final class UserColumnCatalog
             ['columnId' => 'email', 'type' => 'text'],
             ['columnId' => 'roles', 'type' => 'set'],
             ['columnId' => 'locale', 'type' => 'set', 'options' => LocaleEnum::values()],
+            ['columnId' => 'is_active', 'type' => 'set'],
             ['columnId' => 'created_at', 'type' => 'date'],
             ['columnId' => 'user_type', 'type' => 'set', 'options' => $userTypeValues],
             ['columnId' => 'primary_address', 'type' => 'text'],

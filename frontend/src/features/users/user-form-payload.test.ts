@@ -74,6 +74,7 @@ const emptyEmployment: UserFormValues['employment'] = {
 const formValues: UserFormValues = {
   email: 'ada@example.com',
   locale: 'en',
+  is_active: true,
   roles: [],
   password: TEST_PASSWORD,
   password_confirmation: TEST_PASSWORD,
@@ -86,6 +87,7 @@ function original(overrides: Partial<UserDetailWithPermissions> = {}): UserDetai
     name: 'Ada Lovelace',
     email: 'ada@example.com',
     locale: 'en',
+    is_active: true,
     roles: [],
     avatar_url: null,
     created_at: null,
@@ -145,6 +147,27 @@ describe('buildCreatePayload — personal-data gating (spec 0008)', () => {
     expect(payload.personal_data.addresses).toHaveLength(1)
     expect(payload.personal_data.first_name).toBe('Ada')
     expect('tax_code' in payload.personal_data).toBe(false)
+  })
+})
+
+describe('is_active in the payloads', () => {
+  it('create: always carries is_active', () => {
+    expect(buildCreatePayload({ ...formValues, is_active: false }, draft()).is_active).toBe(false)
+    expect(buildCreatePayload({ ...formValues, is_active: true }, draft()).is_active).toBe(true)
+  })
+
+  it('update: sends is_active only when it changed from the original', () => {
+    const base = { ...formValues, password: '', password_confirmation: '' }
+
+    const unchanged = buildUpdatePayload(base, original({ is_active: true }), draft())
+    expect('is_active' in unchanged).toBe(false)
+
+    const toggled = buildUpdatePayload(
+      { ...base, is_active: false },
+      original({ is_active: true }),
+      draft(),
+    )
+    expect(toggled.is_active).toBe(false)
   })
 })
 

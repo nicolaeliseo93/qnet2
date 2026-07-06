@@ -47,6 +47,7 @@ class UsersAuthorization extends AbstractResourceAuthorization
         return [
             new FieldDefinition('email', 'email', mandatory: true),
             new FieldDefinition('locale', 'select', mandatory: true),
+            new FieldDefinition('is_active', 'boolean'),
             new FieldDefinition('roles', 'multiselect'),
             new FieldDefinition('password', 'password', mandatory: true),
             new FieldDefinition('personal_data.type', 'select', 'personal_data', mandatory: true),
@@ -99,6 +100,7 @@ class UsersAuthorization extends AbstractResourceAuthorization
         return array_merge([
             'email' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'locale' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
+            'is_active' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'password' => $mayWrite ? FieldPermission::visibleEditable(required: $isCreate) : FieldPermission::visibleReadonly(),
             'roles' => $this->rolesFieldPermission($actor, $model, $mayWrite),
         ], $this->personalDataFieldPermissions($mayWrite), $this->employmentFieldPermissions($mayWrite));

@@ -23,7 +23,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Spatie\Activitylog\Traits\CausesActivity;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'locale'])]
+#[Fillable(['name', 'email', 'password', 'locale', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements HasLocalePreference
 {
@@ -111,6 +111,7 @@ class User extends Authenticatable implements HasLocalePreference
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
             // Spec 0013 — external data migration: the source system's id for
             // a migrated user, guarded (not in $fillable) so it is only ever
             // set by property assignment post-create, never mass-assigned.

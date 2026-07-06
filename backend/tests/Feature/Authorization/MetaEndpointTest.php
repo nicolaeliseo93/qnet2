@@ -68,7 +68,7 @@ it('200: returns the field catalogue and the full permissions block (create-cont
     // Spec 0015 adds the 12 employment.* keys.
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
     expect($keys)->toEqualCanonicalizing([
-        'email', 'locale', 'roles', 'password',
+        'email', 'locale', 'is_active', 'roles', 'password',
         'personal_data.type', 'personal_data.title', 'personal_data.first_name',
         'personal_data.last_name', 'personal_data.company_name', 'personal_data.tax_code',
         'personal_data.vat_number', 'personal_data.sdi_code', 'personal_data.birth_date',

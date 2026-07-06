@@ -9,6 +9,7 @@ return [
     */
 
     'failed' => 'Queste credenziali non corrispondono ai nostri dati.',
+    'inactive' => 'Questo account non è attivo. Contatta un amministratore.',
     'password' => 'La password fornita non è corretta.',
     'throttle' => 'Troppi tentativi di accesso. Riprova tra :seconds secondi.',
     'logged_out' => 'Disconnessione effettuata con successo.',

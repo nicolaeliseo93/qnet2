@@ -63,6 +63,8 @@ function baseFields(t: TFunction) {
       .min(1, t('users.form.emailRequired'))
       .email(t('users.form.emailInvalid')),
     locale: localeSchema,
+    // Whether the account may sign in; an inactive user is denied login.
+    is_active: z.boolean(),
     // Role IDS (for-select standard, ADR 0011): the picker submits ids.
     roles: z.array(z.number()),
     // Employment profile (spec 0015): always present, upserted on submit.

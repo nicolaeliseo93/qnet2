@@ -56,6 +56,7 @@ class StoreUserRequest extends FormRequest
             // nested personal_data card (ADR 0012) by the UserService.
             'email' => ['required', 'email', Rule::unique('users', 'email')],
             'locale' => ['required', Rule::in(LocaleEnum::values())],
+            'is_active' => ['sometimes', 'boolean'],
             'password' => ['required', 'confirmed', Password::defaults()],
             'roles' => ['sometimes', 'array'],
             // Role IDS the current actor may assign (for-select, ADR 0011): a non

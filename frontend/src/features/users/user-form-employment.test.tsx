@@ -120,6 +120,7 @@ function user(overrides: Partial<UserDetailWithPermissions> = {}): UserDetailWit
     name: 'Ada Lovelace',
     email: 'ada@example.com',
     locale: 'en',
+    is_active: true,
     roles: [],
     avatar_url: null,
     created_at: null,

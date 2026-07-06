@@ -31,6 +31,15 @@ class AuthService
             ]);
         }
 
+        // An inactive account keeps its record but may not sign in. Checked only
+        // after the credentials pass so an unauthenticated caller can never probe
+        // which accounts are inactive.
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'email' => [__('auth.inactive')],
+            ]);
+        }
+
         $token = $user->createToken($deviceName)->plainTextToken;
 
         return new LoginResult(user: $user, token: $token);
