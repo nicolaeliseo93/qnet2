@@ -41,6 +41,17 @@ class UserService
     ) {}
 
     /**
+     * Eager-load the nested read tree (personal-data + employment, with their
+     * {id,label} references) the UserResource emits only `whenLoaded`, so a
+     * plain GET /users/{user} returns the SAME shape create()/update() do.
+     * Single source of truth for the relation set (WRITE_RESULT_RELATIONS).
+     */
+    public function loadProfileTree(User $user): User
+    {
+        return $user->load(self::WRITE_RESULT_RELATIONS);
+    }
+
+    /**
      * The privileged role that grants every ability via Gate::before. Kept as a
      * back-compatible alias of the guard's constant: existing callers
      * (RoleService, RolesTableDefinition, tests) reference UserService::PRIVILEGED_ROLE.

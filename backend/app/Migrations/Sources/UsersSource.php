@@ -18,6 +18,7 @@ use App\Services\UserService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Throwable;
 
 /**
  * `users` migration source (spec 0013 AC-008/009, extended for the full
@@ -156,7 +157,7 @@ class UsersSource extends AbstractMigrationSource
         }
 
         if ($this->existsByOldId(User::class, $externalId)) {
-            return MigrationRowOutcome::skipped();
+            return MigrationRowOutcome::skipped($this->reconcileEmployment($externalId, $record));
         }
 
         $email = trim((string) ($record['email'] ?? ''));
@@ -214,5 +215,39 @@ class UsersSource extends AbstractMigrationSource
         $user->save();
 
         return MigrationRowOutcome::created($warnings);
+    }
+
+    /**
+     * Second pass over every imported user: back-fill any employment relation
+     * (notably the self-referential `reports_to_id`) left null because the
+     * referenced user was processed later in the SAME run. Each relink is
+     * isolated in its own transaction so a single failure never aborts the
+     * pass; only successful relinks are appended to the run report.
+     */
+    protected function afterImport(MigrationImportContext $context): void
+    {
+        $this->eachRecord(fn (array $record): mixed => $this->relinkRow($context, $record));
+    }
+
+    /**
+     * @param  array<string, mixed>  $record
+     */
+    private function relinkRow(MigrationImportContext $context, array $record): void
+    {
+        $externalId = $this->externalId($record);
+
+        if ($externalId === null) {
+            return;
+        }
+
+        try {
+            $message = DB::transaction(fn (): ?string => $this->relinkEmployment($externalId, $record));
+
+            if ($message !== null) {
+                $this->appendReport($context->run, $externalId, 'warning', $message);
+            }
+        } catch (Throwable $exception) {
+            $this->appendReport($context->run, $externalId, 'warning', 'Relink pass failed: '.$exception->getMessage());
+        }
     }
 }

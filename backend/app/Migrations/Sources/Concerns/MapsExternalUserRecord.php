@@ -14,6 +14,7 @@ use App\Migrations\AbstractMigrationSource;
 use App\Migrations\Support\MigrationGeoResolver;
 use App\Models\BusinessFunction;
 use App\Models\Company;
+use App\Models\EmploymentProfile;
 use App\Models\OperationalSite;
 use App\Models\Role;
 use App\Models\User;
@@ -228,6 +229,116 @@ trait MapsExternalUserRecord
         );
 
         return [$employment, $warnings];
+    }
+
+    /**
+     * Self-healing re-import (spec 0013 idempotency, extended): a user whose
+     * `old_id` already exists is not blindly skipped — any employment relation
+     * still NULL on the existing row is back-filled from the external record
+     * via `old_id`, without overwriting a value already set or duplicating
+     * anything. This resolves the two cases a single create-time pass cannot:
+     * a user imported BEFORE its parents (business function / site / company)
+     * were migrated, and the self-referential manager (`reports_to_id`) whose
+     * record is processed after the subordinate — both are fixed by simply
+     * running the users import again once every parent exists.
+     *
+     * @param  array<string, mixed>  $record
+     * @return array<int, string>
+     */
+    private function reconcileEmployment(int|string $externalId, array $record): array
+    {
+        [$filled, $warnings] = $this->resolveAndBackfillEmployment($externalId, $record);
+
+        if ($filled > 0) {
+            $warnings[] = 'Relinked '.$filled.' employment reference(s) on re-import.';
+        }
+
+        return $warnings;
+    }
+
+    /**
+     * End-of-import relinking pass (spec 0013, ordering-independent): a user
+     * whose manager/parent appeared LATER in the SAME run had that reference
+     * left null on the first pass; now that every row exists, its still-null
+     * employment relations are back-filled — no manual re-run needed. The
+     * unresolved-reference warnings were already reported on the first pass,
+     * so only the successful relink is surfaced (its message, or null).
+     *
+     * @param  array<string, mixed>  $record
+     */
+    private function relinkEmployment(int|string $externalId, array $record): ?string
+    {
+        [$filled] = $this->resolveAndBackfillEmployment($externalId, $record);
+
+        return $filled > 0 ? 'Relinked '.$filled.' employment reference(s) after import.' : null;
+    }
+
+    /**
+     * Re-resolve the record's employment relations and back-fill any that are
+     * still NULL on the already-existing user. Returns how many columns were
+     * filled and the resolution warnings — shared by the re-import skip path
+     * and the end-of-import relinking pass, which surface them differently.
+     *
+     * @param  array<string, mixed>  $record
+     * @return array{0: int, 1: array<int, string>}
+     */
+    private function resolveAndBackfillEmployment(int|string $externalId, array $record): array
+    {
+        if (! $this->hasEmploymentPayload($record)) {
+            return [0, []];
+        }
+
+        /** @var User|null $user */
+        $user = User::query()->where('old_id', $externalId)->with('employment')->first();
+
+        if ($user?->employment === null) {
+            return [0, []];
+        }
+
+        [$employment, $warnings] = $this->buildEmployment($record);
+
+        if ($employment === null) {
+            return [0, $warnings];
+        }
+
+        $fill = $this->nullRelationBackfill($user->employment, $employment);
+
+        if ($fill !== []) {
+            $user->employment->update($fill);
+        }
+
+        return [count($fill), $warnings];
+    }
+
+    /**
+     * The employment relation columns still NULL on the existing row that now
+     * resolve to a qnet id — filled once, never overwriting. A manager can
+     * never report to someone (the EmploymentWriter invariant), so
+     * `reports_to_id` is back-filled only for non-managers.
+     *
+     * @return array<string, int>
+     */
+    private function nullRelationBackfill(EmploymentProfile $existing, EmploymentData $desired): array
+    {
+        $candidates = [
+            'business_function_id' => $desired->businessFunctionId,
+            'company_id' => $desired->companyId,
+            'operational_site_id' => $desired->operationalSiteId,
+        ];
+
+        if (! $desired->isManager) {
+            $candidates['reports_to_id'] = $desired->reportsToId;
+        }
+
+        $fill = [];
+
+        foreach ($candidates as $column => $resolvedId) {
+            if ($resolvedId !== null && $existing->{$column} === null) {
+                $fill[$column] = $resolvedId;
+            }
+        }
+
+        return $fill;
     }
 
     /**

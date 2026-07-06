@@ -79,6 +79,23 @@ abstract class AbstractMigrationSource implements MigrationSource
 
     public function import(MigrationImportContext $context): void
     {
+        // Step 1: create/skip every row in its own per-row transaction.
+        $this->eachRecord(fn (array $record): mixed => $this->importRow($context, $record));
+
+        // Step 2: second pass to relink forward references that only became
+        // resolvable once every row of this source exists (default: no-op).
+        $this->afterImport($context);
+    }
+
+    /**
+     * Paginate the external listing, invoking $handle for every record. Shared
+     * by the import pass and any source's afterImport() relinking pass, so both
+     * walk the external contract the same way.
+     *
+     * @param  callable(array<string, mixed>): mixed  $handle
+     */
+    protected function eachRecord(callable $handle): void
+    {
         $page = 1;
         $perPage = (int) config('migrations.import_batch_size', 100);
 
@@ -87,13 +104,24 @@ abstract class AbstractMigrationSource implements MigrationSource
             $records = $this->extractRecords($payload);
 
             foreach ($records as $record) {
-                $this->importRow($context, $record);
+                $handle($record);
             }
 
             $total = $this->extractTotal($this->extractPagination($payload));
             $hasMore = $this->hasMorePages($total, $page, $perPage, count($records));
             $page++;
         } while ($hasMore);
+    }
+
+    /**
+     * Hook: a second pass after every row has been imported, for relational
+     * references only resolvable once the whole set exists (e.g. a
+     * self-referential parent processed after its child in the same run).
+     * Default: nothing to relink.
+     */
+    protected function afterImport(MigrationImportContext $context): void
+    {
+        // No forward-reference relinking needed by default.
     }
 
     /**
@@ -242,10 +270,10 @@ abstract class AbstractMigrationSource implements MigrationSource
                 $run->increment('skipped_rows');
             } else {
                 $run->increment('created_rows');
+            }
 
-                foreach ($outcome->warnings as $warning) {
-                    $this->appendReport($run, $externalId, 'warning', $warning);
-                }
+            foreach ($outcome->warnings as $warning) {
+                $this->appendReport($run, $externalId, 'warning', $warning);
             }
         } catch (Throwable $exception) {
             $run->increment('failed_rows');
@@ -255,7 +283,7 @@ abstract class AbstractMigrationSource implements MigrationSource
         $run->increment('total_rows');
     }
 
-    private function appendReport(MigrationRun $run, int|string|null $externalId, string $level, string $message): void
+    protected function appendReport(MigrationRun $run, int|string|null $externalId, string $level, string $message): void
     {
         $report = $run->report ?? [];
         $report[] = ['old_id' => $externalId, 'level' => $level, 'message' => $message];

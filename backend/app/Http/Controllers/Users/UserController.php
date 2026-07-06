@@ -51,7 +51,10 @@ class UserController extends BaseApiController
         try {
             $this->authorize('view', $user);
 
-            return $this->okWithPermissions(new UserResource($user), $this->buildPermissions($request->user(), $user));
+            return $this->okWithPermissions(
+                new UserResource($this->service->loadProfileTree($user)),
+                $this->buildPermissions($request->user(), $user),
+            );
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['user' => $user->id]);
         }
