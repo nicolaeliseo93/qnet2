@@ -27,6 +27,7 @@ import { operationalSiteColumnRenderers } from '@/features/operational-sites/col
 import { deleteOperationalSite, fetchOperationalSite } from '@/features/operational-sites/api'
 import { OperationalSiteForm } from '@/features/operational-sites/operational-site-form'
 import { OperationalSiteDetailView } from '@/features/operational-sites/operational-site-detail'
+import { DetailError, DetailLoading } from '@/components/detail/detail-panel'
 import type { OperationalSiteDetail } from '@/features/operational-sites/types'
 import { ImportDialog } from '@/features/imports/import-dialog'
 
@@ -172,7 +173,7 @@ export function OperationalSitesTable() {
         <SheetContent className="gap-0 sm:max-w-2xl">
           {sheet.kind === 'view' && (
             <>
-              <SheetHeader>
+              <SheetHeader className="sr-only">
                 <SheetTitle>{t('operationalSites.detail.title')}</SheetTitle>
                 <SheetDescription>{t('operationalSites.detail.subtitle')}</SheetDescription>
               </SheetHeader>
@@ -233,23 +234,16 @@ function ViewOperationalSiteLoader({ operationalSiteId }: ViewOperationalSiteLoa
 
   if (isError) {
     return (
-      <div className="flex flex-col items-start gap-3 p-4">
-        <p className="text-sm text-destructive">{t('operationalSites.detail.loadError')}</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
+      <DetailError
+        message={t('operationalSites.detail.loadError')}
+        retryLabel={t('common.retry')}
+        onRetry={() => refetch()}
+      />
     )
   }
 
   if (isLoading || !operationalSite) {
-    return (
-      <div className="flex flex-col gap-4 p-4">
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-      </div>
-    )
+    return <DetailLoading />
   }
 
   return <OperationalSiteDetailView operationalSite={operationalSite} />

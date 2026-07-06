@@ -6,6 +6,7 @@ import type { OperationalSiteDetail } from '@/features/operational-sites/types'
 
 const BASE: OperationalSiteDetail = {
   id: 1,
+  alias: 'Sede Milano',
   line1: 'Via Roma 1',
   postal_code: '20100',
   country_id: 1,

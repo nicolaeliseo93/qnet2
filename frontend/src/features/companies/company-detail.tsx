@@ -1,7 +1,17 @@
-import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Building2, MapPin, Receipt } from 'lucide-react'
+import {
+  DetailEmpty,
+  DetailError,
+  DetailField,
+  DetailGrid,
+  DetailHero,
+  DetailLoading,
+  DetailMeta,
+  DetailMonogram,
+  DetailPanel,
+  DetailSection,
+} from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchCompany } from '@/features/companies/api'
@@ -12,9 +22,8 @@ interface CompanyDetailProps {
 }
 
 /**
- * Read-only detail of a single company, fetched fresh from the
- * (re-authorized) detail endpoint. Handles loading and error states;
- * rendered inside a Sheet.
+ * Read-only detail of a single company, fetched fresh from the (re-authorized)
+ * detail endpoint. Composed from the shared detail kit; rendered inside a Sheet.
  */
 export function CompanyDetailView({ companyId }: CompanyDetailProps) {
   const { t } = useTranslation()
@@ -27,45 +36,60 @@ export function CompanyDetailView({ companyId }: CompanyDetailProps) {
 
   if (isError) {
     return (
-      <div className="flex flex-col items-start gap-3 p-4">
-        <p className="text-sm text-destructive">{t('companies.detail.loadError')}</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
+      <DetailError
+        message={t('companies.detail.loadError')}
+        retryLabel={t('common.retry')}
+        onRetry={() => refetch()}
+      />
     )
   }
 
   if (isLoading || !company) {
-    return (
-      <div className="flex flex-col gap-4 p-4">
-        <Skeleton className="h-6 w-1/2" />
-        <Skeleton className="h-6 w-2/3" />
-        <Skeleton className="h-6 w-1/3" />
-      </div>
-    )
+    return <DetailLoading />
   }
 
   const createdAt = formatDateTime(company.created_at)
 
   return (
-    <dl className="flex flex-col gap-4 overflow-y-auto p-4 text-sm">
-      <Field label={t('companies.form.denomination')}>{company.denomination}</Field>
-      <Field label={t('companies.form.vatNumber')}>
-        {company.vat_number || <EmptyValue />}
-      </Field>
-      <Field label={t('companies.form.sections.address.title')}>
-        <AddressField address={company.address} />
-      </Field>
-      <Field label={t('companies.columns.created_at')}>{createdAt || <EmptyValue />}</Field>
-    </dl>
+    <DetailPanel>
+      <DetailHero
+        media={<DetailMonogram name={company.denomination} icon={<Building2 />} />}
+        title={company.denomination}
+        subtitle={locationSummary(company.address)}
+      />
+
+      <DetailSection title={t('companies.form.sections.general.title')}>
+        <DetailGrid>
+          <DetailField label={t('companies.form.vatNumber')} icon={<Receipt />}>
+            {company.vat_number || <DetailEmpty />}
+          </DetailField>
+        </DetailGrid>
+      </DetailSection>
+
+      <DetailSection title={t('companies.form.sections.address.title')} icon={<MapPin />}>
+        <AddressBlock address={company.address} />
+      </DetailSection>
+
+      {createdAt ? (
+        <DetailMeta label={t('companies.columns.created_at')}>{createdAt}</DetailMeta>
+      ) : null}
+    </DetailPanel>
   )
 }
 
-/** The address block: the street lines followed by the geo/postal summary line. */
-function AddressField({ address }: { address: CompanyAddress | null }) {
+/** A short "City, Country" line for the hero subtitle, or undefined. */
+function locationSummary(address: CompanyAddress | null): string | undefined {
   if (!address) {
-    return <EmptyValue />
+    return undefined
+  }
+  const summary = [address.city, address.country].filter(Boolean).join(', ')
+  return summary || undefined
+}
+
+/** Street lines followed by the muted postal/geo summary. */
+function AddressBlock({ address }: { address: CompanyAddress | null }) {
+  if (!address) {
+    return <DetailEmpty />
   }
 
   const summary = [address.postal_code, address.city, address.province, address.region, address.country]
@@ -73,24 +97,10 @@ function AddressField({ address }: { address: CompanyAddress | null }) {
     .join(', ')
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-0.5 text-sm text-foreground">
       <span>{address.line1}</span>
-      {address.line2 && <span>{address.line2}</span>}
-      {summary && <span className="text-muted-foreground">{summary}</span>}
-    </div>
-  )
-}
-
-/** Em-dash placeholder for an empty field value. */
-function EmptyValue() {
-  return <span className="text-muted-foreground">—</span>
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <dt className="font-medium text-muted-foreground">{label}</dt>
-      <dd>{children}</dd>
+      {address.line2 ? <span>{address.line2}</span> : null}
+      {summary ? <span className="mt-1 text-muted-foreground">{summary}</span> : null}
     </div>
   )
 }

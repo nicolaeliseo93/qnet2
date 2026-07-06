@@ -2,6 +2,50 @@
 
 > Injected at session start. Update at every green state.
 
+## Change — Redesign of the record "view" sheets (eye-icon detail panels) — GREEN (2026-07-06)
+
+Ad-hoc request (no spec): the detail views opened by the table eye icon "fanno cagare" — make them
+beautiful, CRM-grade. There are exactly 5 modules with a detail view: users, companies, roles,
+business-functions, operational-sites (the other 11 features have no record "show" view). All 5 were
+flat `<dl>` label/value lists inside a right-side resizable `Sheet`.
+
+Key move (anti-duplication, ui-design §1): built ONE shared presentational kit and composed all 5
+views from it — change the look HERE and it propagates.
+- NEW `frontend/src/components/detail/detail-panel.tsx` (~275 lines) exports: `DetailPanel`
+  (scroll root + `motion-safe` fade/slide enter), `DetailHero` (gradient band + monogram/avatar +
+  title + subtitle + badges, with a decorative `blur-3xl` primary glow), `DetailMonogram`
+  (deterministic tint via existing `avatarColor`, icon or initials), `DetailSection`,
+  `DetailGrid` (2-col responsive), `DetailField` (label + icon + value), `DetailEmpty` (keeps the
+  app-wide `—`), `DetailPerson` (reuses `UserAvatar`), `DetailMeta` (muted created-at footer),
+  `DetailLoading` / `DetailError` (shared states, reused by the 3 self-fetching views + the 2 loaders).
+  Uses ONLY existing deps (lucide, tw-animate-css, avatarColor, UserAvatar, Badge/Skeleton/Button) —
+  no new packages. Theme-locked to existing light/dark tokens (navy `--primary`); one accent, honors
+  `prefers-reduced-motion` via `motion-safe:`.
+- Rewrote the 5 `*-detail.tsx` composing the kit. Self-fetching (users/companies/roles) keep
+  `useEntityDetail`; presentational (business-functions/operational-sites) unchanged contract (still
+  receive the object as prop). Reused ONLY existing i18n keys (no new keys invented): e.g.
+  `companies.form.sections.general/address.title`, `operationalSites.form.sections.address.title`,
+  `roles.form.permissions`, `users.detail.employment.*`. Roles permissions still grouped via
+  `groupPermissions`/`permissionAbility`. User employment accessors copied verbatim (proven).
+- The 5 table files: in the `view` branch ONLY, the generic `<SheetHeader>` is now
+  `className="sr-only"` (keeps Radix a11y `SheetTitle`/`Description`; the rich `DetailHero` is the sole
+  visible header). Create/edit branches untouched. The 2 presentational loaders
+  (`ViewBusinessFunctionLoader`, `ViewOperationalSiteLoader`) now use `DetailError`/`DetailLoading`.
+
+Naming/contract to respect: the detail component export names are UNCHANGED
+(`UserDetailView`, `CompanyDetailView`, `RoleDetailView`, `BusinessFunctionDetailView`,
+`OperationalSiteDetailView`) with the SAME props — safe to keep wiring as-is.
+
+Test note (requirement changed, not tampering): `operational-site-detail.test.tsx` BASE fixture gained
+`alias: 'Sede Milano'`. New layout promotes `alias` to the hero title and renders the street as a
+labeled field only when an alias exists (avoids duplicating the street value, which the single-match
+`getByText` assertions require). `—` empty placeholder kept exactly, so em-dash-count assertions hold.
+
+Out of scope (signalled): the create/edit form sheets were NOT restyled — only the read-only view.
+
+Status — GREEN. `tsc --noEmit` 0, ESLint clean on all changed files, `vitest run` on the 15 affected
+test files 88/88 (incl. the 2 restyled detail tests + 5 table tests). Frontend-only, no backend.
+
 ## Change — Import role `description` (spec 0013 roles source) — GREEN (2026-07-06)
 
 Ad-hoc request: import roles with `old_id` carrying `name` + `description`; the `roles` table had no

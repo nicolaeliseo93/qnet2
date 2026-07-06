@@ -1,11 +1,18 @@
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { UserAvatar } from '@/components/user-avatar'
+import { Network, UserCog, Users } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import {
+  DetailEmpty,
+  DetailHero,
+  DetailMeta,
+  DetailMonogram,
+  DetailPanel,
+  DetailPerson,
+  DetailSection,
+} from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import type {
-  BusinessFunctionDetail,
-  BusinessFunctionMember,
-} from '@/features/business-functions/types'
+import type { BusinessFunctionDetail } from '@/features/business-functions/types'
 
 interface BusinessFunctionDetailViewProps {
   businessFunction: BusinessFunctionDetail
@@ -13,38 +20,56 @@ interface BusinessFunctionDetailViewProps {
 
 /**
  * Read-only detail of a single business function. Purely presentational: the
- * caller (the table's "view" sheet, owned elsewhere) fetches the fresh detail
- * and passes it down — this component owns no data-fetching state, mirroring
- * the field layout of `UserDetailView` for visual consistency.
+ * caller (the table's "view" sheet) fetches the fresh detail and passes it
+ * down. Composed from the shared detail kit for a consistent CRM look.
  */
 export function BusinessFunctionDetailView({ businessFunction }: BusinessFunctionDetailViewProps) {
   const { t } = useTranslation()
   const createdAt = formatDateTime(businessFunction.created_at)
 
   return (
-    <dl className="flex flex-col gap-4 overflow-y-auto p-4 text-sm">
-      <Field label={t('businessFunctions.detail.name')}>{businessFunction.name}</Field>
-      <Field label={t('businessFunctions.detail.type')}>
-        {typeLabel(t, businessFunction.type)}
-      </Field>
-      <Field label={t('businessFunctions.detail.manager')}>
-        <MemberField member={businessFunction.manager} />
-      </Field>
-      <Field label={t('businessFunctions.detail.users')}>
+    <DetailPanel>
+      <DetailHero
+        media={<DetailMonogram name={businessFunction.name} icon={<Network />} />}
+        title={businessFunction.name}
+        badges={<Badge variant="secondary">{typeLabel(t, businessFunction.type)}</Badge>}
+      />
+
+      <DetailSection title={t('businessFunctions.detail.manager')} icon={<UserCog />}>
+        {businessFunction.manager ? (
+          <DetailPerson
+            name={businessFunction.manager.name}
+            avatarUrl={businessFunction.manager.avatar_url}
+          />
+        ) : (
+          <DetailEmpty />
+        )}
+      </DetailSection>
+
+      <DetailSection
+        title={t('businessFunctions.detail.users')}
+        icon={<Users />}
+        action={
+          businessFunction.users.length > 0 ? (
+            <Badge variant="secondary">{businessFunction.users.length}</Badge>
+          ) : null
+        }
+      >
         {businessFunction.users.length > 0 ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {businessFunction.users.map((user) => (
-              <MemberField key={user.id} member={user} />
+              <DetailPerson key={user.id} name={user.name} avatarUrl={user.avatar_url} />
             ))}
           </div>
         ) : (
-          <EmptyValue />
+          <DetailEmpty />
         )}
-      </Field>
-      <Field label={t('businessFunctions.detail.created_at')}>
-        {createdAt || <EmptyValue />}
-      </Field>
-    </dl>
+      </DetailSection>
+
+      {createdAt ? (
+        <DetailMeta label={t('businessFunctions.detail.created_at')}>{createdAt}</DetailMeta>
+      ) : null}
+    </DetailPanel>
   )
 }
 
@@ -57,31 +82,4 @@ function typeLabel(t: TFunction, type: BusinessFunctionDetail['type']): string {
     return t('businessFunctions.form.type.businessService')
   }
   return t('businessFunctions.form.type.none')
-}
-
-/** An avatar next to the member's name, or an em dash when there is no member. */
-function MemberField({ member }: { member: BusinessFunctionMember | null }) {
-  if (!member) {
-    return <EmptyValue />
-  }
-  return (
-    <div className="flex items-center gap-2">
-      <UserAvatar name={member.name} src={member.avatar_url} className="size-7" />
-      <span>{member.name}</span>
-    </div>
-  )
-}
-
-/** Em-dash placeholder for an empty field value. */
-function EmptyValue() {
-  return <span className="text-muted-foreground">—</span>
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <dt className="font-medium text-muted-foreground">{label}</dt>
-      <dd>{children}</dd>
-    </div>
-  )
 }

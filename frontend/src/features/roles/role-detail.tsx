@@ -1,13 +1,20 @@
 import { useTranslation } from 'react-i18next'
+import { KeyRound, ShieldCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import {
+  DetailEmpty,
+  DetailError,
+  DetailHero,
+  DetailLoading,
+  DetailMeta,
+  DetailMonogram,
+  DetailPanel,
+  DetailSection,
+} from '@/components/detail/detail-panel'
+import { formatDateTime } from '@/features/table/cell-renderers'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchRole } from '@/features/roles/api'
-import {
-  groupPermissions,
-  permissionAbility,
-} from '@/features/roles/permission-groups'
+import { groupPermissions, permissionAbility } from '@/features/roles/permission-groups'
 
 interface RoleDetailProps {
   roleId: number
@@ -15,11 +22,11 @@ interface RoleDetailProps {
 
 /**
  * Read-only detail of a single role, fetched fresh from the (re-authorized)
- * detail endpoint. Handles loading and error states; rendered inside a Sheet.
- * Permissions are grouped by resource for readability.
+ * detail endpoint. Permissions are grouped by resource for readability, laid
+ * out with the shared detail kit; rendered inside a Sheet.
  */
 export function RoleDetailView({ roleId }: RoleDetailProps) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const {
     data: role,
     isLoading,
@@ -29,39 +36,42 @@ export function RoleDetailView({ roleId }: RoleDetailProps) {
 
   if (isError) {
     return (
-      <div className="flex flex-col items-start gap-3 p-4">
-        <p className="text-sm text-destructive">{t('roles.detail.loadError')}</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
+      <DetailError
+        message={t('roles.detail.loadError')}
+        retryLabel={t('common.retry')}
+        onRetry={() => refetch()}
+      />
     )
   }
 
   if (isLoading || !role) {
-    return (
-      <div className="flex flex-col gap-4 p-4">
-        <Skeleton className="h-6 w-1/2" />
-        <Skeleton className="h-6 w-2/3" />
-        <Skeleton className="h-6 w-1/3" />
-      </div>
-    )
+    return <DetailLoading />
   }
 
-  const createdAt = formatDateTime(role.created_at, i18n.language)
+  const createdAt = formatDateTime(role.created_at)
   const groups = groupPermissions(role.permissions)
 
   return (
-    <dl className="flex flex-col gap-4 overflow-y-auto p-4 text-sm">
-      <Field label={t('roles.form.name')}>{role.name}</Field>
-      <Field label={t('roles.form.permissions')}>
+    <DetailPanel>
+      <DetailHero
+        media={<DetailMonogram name={role.name} icon={<ShieldCheck />} />}
+        title={role.name}
+      />
+
+      <DetailSection
+        title={t('roles.form.permissions')}
+        icon={<KeyRound />}
+        action={
+          groups.length > 0 ? (
+            <Badge variant="secondary">{role.permissions.length}</Badge>
+          ) : null
+        }
+      >
         {groups.length > 0 ? (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {groups.map((group) => (
-              <div key={group.resource} className="flex flex-col gap-1">
-                <span className="text-xs font-medium uppercase text-muted-foreground">
-                  {group.resource}
-                </span>
+              <div key={group.resource} className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">{group.resource}</span>
                 <div className="flex flex-wrap gap-1">
                   {group.permissions.map((permission) => (
                     <Badge key={permission} variant="secondary">
@@ -73,41 +83,13 @@ export function RoleDetailView({ roleId }: RoleDetailProps) {
             ))}
           </div>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <DetailEmpty />
         )}
-      </Field>
-      <Field label={t('roles.columns.created_at')}>
-        {createdAt || <span className="text-muted-foreground">—</span>}
-      </Field>
-    </dl>
-  )
-}
+      </DetailSection>
 
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <dt className="font-medium text-muted-foreground">{label}</dt>
-      <dd>{children}</dd>
-    </div>
+      {createdAt ? (
+        <DetailMeta label={t('roles.columns.created_at')}>{createdAt}</DetailMeta>
+      ) : null}
+    </DetailPanel>
   )
-}
-
-function formatDateTime(value: string | null, language: string): string {
-  if (!value) {
-    return ''
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-  return new Intl.DateTimeFormat(language, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date)
 }

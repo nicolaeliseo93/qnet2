@@ -189,7 +189,7 @@ export function RolesTable() {
         <SheetContent className="gap-0 sm:max-w-2xl">
           {sheet.kind === 'view' && (
             <>
-              <SheetHeader>
+              <SheetHeader className="sr-only">
                 <SheetTitle>{t('roles.detail.title')}</SheetTitle>
                 <SheetDescription>{t('roles.detail.subtitle')}</SheetDescription>
               </SheetHeader>

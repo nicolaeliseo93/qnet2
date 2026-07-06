@@ -179,7 +179,7 @@ export function UsersTable() {
         <SheetContent className="gap-0 sm:max-w-2xl">
           {sheet.kind === 'view' && (
             <>
-              <SheetHeader>
+              <SheetHeader className="sr-only">
                 <SheetTitle>{t('users.detail.title')}</SheetTitle>
                 <SheetDescription>{t('users.detail.subtitle')}</SheetDescription>
               </SheetHeader>

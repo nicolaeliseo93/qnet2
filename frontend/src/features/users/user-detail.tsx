@@ -1,7 +1,28 @@
 import { useTranslation } from 'react-i18next'
+import {
+  Briefcase,
+  Building2,
+  CalendarClock,
+  Coffee,
+  Globe,
+  MapPin,
+  Shield,
+  Timer,
+  UserCog,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import { UserAvatar } from '@/components/user-avatar'
+import {
+  DetailEmpty,
+  DetailError,
+  DetailField,
+  DetailGrid,
+  DetailHero,
+  DetailLoading,
+  DetailMeta,
+  DetailPanel,
+  DetailSection,
+} from '@/components/detail/detail-panel'
 import { useEnumOptions } from '@/features/config/use-config'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchUser } from '@/features/users/api'
@@ -12,7 +33,7 @@ interface UserDetailProps {
 
 /**
  * Read-only detail of a single user, fetched fresh from the (re-authorized)
- * detail endpoint. Handles loading and error states; rendered inside a Sheet.
+ * detail endpoint. Composed from the shared detail kit; rendered inside a Sheet.
  */
 export function UserDetailView({ userId }: UserDetailProps) {
   const { t, i18n } = useTranslation()
@@ -26,133 +47,110 @@ export function UserDetailView({ userId }: UserDetailProps) {
 
   if (isError) {
     return (
-      <div className="flex flex-col items-start gap-3 p-4">
-        <p className="text-sm text-destructive">{t('users.detail.loadError')}</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
+      <DetailError
+        message={t('users.detail.loadError')}
+        retryLabel={t('common.retry')}
+        onRetry={() => refetch()}
+      />
     )
   }
 
   if (isLoading || !user) {
-    return (
-      <div className="flex flex-col gap-4 p-4">
-        <Skeleton className="h-6 w-1/2" />
-        <Skeleton className="h-6 w-2/3" />
-        <Skeleton className="h-6 w-1/3" />
-      </div>
-    )
+    return <DetailLoading />
   }
 
   const createdAt = formatDateTime(user.created_at, i18n.language)
+  const localeLabel =
+    localeOptions.find((option) => option.value === user.locale)?.label ?? user.locale
+  const employment = user.employment
 
   return (
-    <dl className="flex flex-col gap-4 overflow-y-auto p-4 text-sm">
-      <Field label={t('users.form.name')}>{user.name}</Field>
-      <Field label={t('users.form.email')}>{user.email}</Field>
-      <Field label={t('users.form.locale')}>
-        {localeOptions.find((option) => option.value === user.locale)?.label ??
-          user.locale}
-      </Field>
-      <Field label={t('users.form.roles')}>
-        {user.roles.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {user.roles.map((role) => (
-              <Badge key={role.id} variant="secondary">
-                {role.name}
-              </Badge>
-            ))}
-          </div>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </Field>
-      <Field label={t('users.columns.created_at')}>
-        {createdAt || <span className="text-muted-foreground">—</span>}
-      </Field>
+    <DetailPanel>
+      <DetailHero
+        media={<UserAvatar name={user.name} src={user.avatar_url} className="size-14" />}
+        title={user.name}
+        subtitle={user.email}
+      />
 
-      {user.employment && (
-        <div className="flex flex-col gap-4 border-t pt-4">
-          <h3 className="text-sm font-semibold text-foreground">
-            {t('users.detail.employment.title')}
-          </h3>
-          <Field label={t('users.detail.employment.isManager')}>
-            {user.employment.is_manager ? t('common.yes') : t('common.no')}
-          </Field>
-          <Field label={t('users.detail.employment.businessFunction')}>
-            {user.employment.business_function?.label ?? (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </Field>
-          <Field label={t('users.detail.employment.reportsTo')}>
-            {user.employment.reports_to?.label ?? (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </Field>
-          <Field label={t('users.detail.employment.jobDescription')}>
-            {user.employment.job_description || <span className="text-muted-foreground">—</span>}
-          </Field>
-          <Field label={t('users.detail.employment.relationshipType')}>
-            {user.employment.relationship_type ? (
-              t(`enums.relationship_type.${user.employment.relationship_type}`)
+      <DetailSection>
+        <DetailGrid>
+          <DetailField label={t('users.form.locale')} icon={<Globe />}>
+            {localeLabel}
+          </DetailField>
+          <DetailField label={t('users.form.roles')} icon={<Shield />} full>
+            {user.roles.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {user.roles.map((role) => (
+                  <Badge key={role.id} variant="secondary">
+                    {role.name}
+                  </Badge>
+                ))}
+              </div>
             ) : (
-              <span className="text-muted-foreground">—</span>
+              <DetailEmpty />
             )}
-          </Field>
-          <Field label={t('users.detail.employment.company')}>
-            {user.employment.company?.label ?? <span className="text-muted-foreground">—</span>}
-          </Field>
-          <Field label={t('users.detail.employment.operationalSite')}>
-            {user.employment.operational_site?.label ?? (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </Field>
-          <Field label={t('users.detail.employment.qualificationType')}>
-            {user.employment.qualification_type ? (
-              t(`enums.qualification_type.${user.employment.qualification_type}`)
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </Field>
-          <Field label={t('users.detail.employment.hiredAt')}>
-            {formatDate(user.employment.hired_at, i18n.language) || (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </Field>
-          <Field label={t('users.detail.employment.terminatedAt')}>
-            {formatDate(user.employment.terminated_at, i18n.language) || (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </Field>
-          <Field label={t('users.detail.employment.standardDailyMinutes')}>
-            {formatMinutes(user.employment.standard_daily_minutes) ?? (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </Field>
-          <Field label={t('users.detail.employment.breakDailyMinutes')}>
-            {formatMinutes(user.employment.break_daily_minutes) ?? (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </Field>
-        </div>
-      )}
-    </dl>
-  )
-}
+          </DetailField>
+        </DetailGrid>
+      </DetailSection>
 
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <dt className="font-medium text-muted-foreground">{label}</dt>
-      <dd>{children}</dd>
-    </div>
+      {employment ? (
+        <DetailSection title={t('users.detail.employment.title')} icon={<Briefcase />}>
+          <DetailGrid>
+            <DetailField label={t('users.detail.employment.isManager')} icon={<UserCog />}>
+              {employment.is_manager ? t('common.yes') : t('common.no')}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.businessFunction')} icon={<Briefcase />}>
+              {employment.business_function?.label ?? <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.reportsTo')} icon={<UserCog />}>
+              {employment.reports_to?.label ?? <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.company')} icon={<Building2 />}>
+              {employment.company?.label ?? <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.operationalSite')} icon={<MapPin />}>
+              {employment.operational_site?.label ?? <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.relationshipType')}>
+              {employment.relationship_type ? (
+                t(`enums.relationship_type.${employment.relationship_type}`)
+              ) : (
+                <DetailEmpty />
+              )}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.qualificationType')}>
+              {employment.qualification_type ? (
+                t(`enums.qualification_type.${employment.qualification_type}`)
+              ) : (
+                <DetailEmpty />
+              )}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.hiredAt')} icon={<CalendarClock />}>
+              {formatDate(employment.hired_at, i18n.language) || <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.terminatedAt')} icon={<CalendarClock />}>
+              {formatDate(employment.terminated_at, i18n.language) || <DetailEmpty />}
+            </DetailField>
+            <DetailField
+              label={t('users.detail.employment.standardDailyMinutes')}
+              icon={<Timer />}
+            >
+              {formatMinutes(employment.standard_daily_minutes) ?? <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.breakDailyMinutes')} icon={<Coffee />}>
+              {formatMinutes(employment.break_daily_minutes) ?? <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('users.detail.employment.jobDescription')} full>
+              {employment.job_description || <DetailEmpty />}
+            </DetailField>
+          </DetailGrid>
+        </DetailSection>
+      ) : null}
+
+      {createdAt ? (
+        <DetailMeta label={t('users.columns.created_at')}>{createdAt}</DetailMeta>
+      ) : null}
+    </DetailPanel>
   )
 }
 
