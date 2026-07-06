@@ -168,6 +168,36 @@ describe('buildColumnFilter', () => {
     expect(filter).toBe('agSetColumnFilter')
     expect(filterParams).toMatchObject({ excelMode: 'windows' })
   })
+
+  // A boolean column's checklist must show Sì/No, not the raw 1/0 the backend
+  // yields. The formatter localizes display only; the raw value is untouched.
+  it('localizes a boolean column Set Filter to yes/no (both 1/0 and true/false shapes)', () => {
+    const { filterParams } = buildColumnFilter(
+      'users',
+      stubColumn({ id: 'is_active', type: 'boolean', filterType: 'set' }),
+      vi.fn(),
+      translate,
+    )
+
+    const format = (filterParams as { valueFormatter: (p: { value: unknown }) => string })
+      .valueFormatter
+    expect(format({ value: '1' })).toBe('common.yes')
+    expect(format({ value: '0' })).toBe('common.no')
+    expect(format({ value: true })).toBe('common.yes')
+    expect(format({ value: false })).toBe('common.no')
+    expect(format({ value: null })).toBe('')
+  })
+
+  it('does not attach a boolean valueFormatter to a non-boolean Set Filter column', () => {
+    const { filterParams } = buildColumnFilter(
+      'users',
+      stubColumn({ id: 'user_type', type: 'enum' }),
+      vi.fn(),
+      translate,
+    )
+
+    expect((filterParams as { valueFormatter?: unknown }).valueFormatter).toBeUndefined()
+  })
 })
 
 /** Builds a minimal `SetFilterValuesFuncParams` stub carrying a fake filter model. */

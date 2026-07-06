@@ -9,6 +9,7 @@ import type {
   ISetFilterParams,
   SetFilterValuesFunc,
   SetFilterValuesFuncParams,
+  ValueFormatterParams,
 } from 'ag-grid-community'
 import { fetchTableColumnValues } from '@/features/table/api'
 import type { TableColumn } from '@/features/table/types'
@@ -106,15 +107,43 @@ export function createColumnValuesGetter(
  */
 export function buildSetFilterParams(
   domain: string,
-  columnId: string,
+  column: TableColumn,
   onTruncated: () => void,
+  translate: (key: string) => string,
 ): ISetFilterParams {
-  return {
-    values: createColumnValuesGetter(domain, columnId, onTruncated),
+  const params: ISetFilterParams = {
+    values: createColumnValuesGetter(domain, column.id, onTruncated),
     refreshValuesOnOpen: true,
     suppressClearModelOnRefreshValues: true,
     excelMode: 'windows',
   }
+  // Boolean columns carry raw 1/0 (real columns) or true/false (definition
+  // overrides); localize the checklist labels to Sì/No like the cell renderer,
+  // while the underlying value round-trips unchanged to the backend filter.
+  if (column.type === 'boolean') {
+    params.valueFormatter = (formatterParams: ValueFormatterParams): string =>
+      formatBooleanFilterValue(formatterParams.value, translate)
+  }
+  return params
+}
+
+const BOOLEAN_YES_KEY = 'common.yes'
+const BOOLEAN_NO_KEY = 'common.no'
+
+/**
+ * Maps a boolean column's raw distinct value to its localized Set Filter label.
+ * Accepts both shapes the backend can emit — `"1"`/`"0"` strings (real columns)
+ * and `true`/`false` (definition overrides). Display only.
+ */
+function formatBooleanFilterValue(
+  value: unknown,
+  translate: (key: string) => string,
+): string {
+  if (value === null || value === undefined || value === '') {
+    return ''
+  }
+  const isTruthy = value === true || value === 1 || value === '1' || value === 'true'
+  return translate(isTruthy ? BOOLEAN_YES_KEY : BOOLEAN_NO_KEY)
 }
 
 /** i18n key for the sub-menu title of the typed condition filter (0005). */
@@ -147,7 +176,7 @@ export function buildColumnFilter(
 ): { filter: ColDef['filter']; filterParams: ColDef['filterParams'] } {
   const filter = resolveFilter(column)
   if (filter === 'agSetColumnFilter') {
-    return { filter, filterParams: buildSetFilterParams(domain, column.id, onTruncated) }
+    return { filter, filterParams: buildSetFilterParams(domain, column, onTruncated, translate) }
   }
   if (filter === 'agMultiColumnFilter') {
     const typedFilter = resolveTypedFilter(column)
@@ -155,7 +184,7 @@ export function buildColumnFilter(
       filters: [
         {
           filter: 'agSetColumnFilter',
-          filterParams: buildSetFilterParams(domain, column.id, onTruncated),
+          filterParams: buildSetFilterParams(domain, column, onTruncated, translate),
         },
         {
           filter: typedFilter,

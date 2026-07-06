@@ -22,6 +22,7 @@ final readonly class CreateRoleData
      */
     public function __construct(
         public string $name,
+        public ?string $description = null,
         public ?array $permissions = null,
         public ?array $users = null,
         public ?array $fieldPermissions = null,
@@ -36,6 +37,7 @@ final readonly class CreateRoleData
     {
         return new self(
             name: (string) $data['name'],
+            description: array_key_exists('description', $data) ? ($data['description'] !== null ? (string) $data['description'] : null) : null,
             permissions: array_key_exists('permissions', $data) ? (array) $data['permissions'] : null,
             users: array_key_exists('users', $data)
                 ? array_map('intval', (array) $data['users'])

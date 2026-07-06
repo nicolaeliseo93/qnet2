@@ -43,6 +43,7 @@ class RoleService
             $role = Role::create([
                 'name' => $data->name,
                 'guard_name' => $this->guardName(),
+                'description' => $data->description,
             ]);
 
             if ($data->hasPermissions()) {

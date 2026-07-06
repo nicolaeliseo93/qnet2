@@ -2,6 +2,34 @@
 
 > Injected at session start. Update at every green state.
 
+## Change — Import role `description` (spec 0013 roles source) — GREEN (2026-07-06)
+
+Ad-hoc request: import roles with `old_id` carrying `name` + `description`; the `roles` table had no
+`description` column, so add one via migration; roles then get assigned to imported users. The
+user->role assignment already existed and is tested (`UsersSourceImportTest` "warns ... on unresolved
+role" asserts `hasRole` true via `role_ids` -> `resolveRoleNames`) — NO change needed there.
+
+New work (backend-only, additive):
+- DB: NEW reversible migration `2026_07_06_180000_add_description_to_roles_table`
+  (`text('description')->nullable()->after('name')`; `down()` drops it). TEXT not VARCHAR(255): external
+  descriptions are multi-sentence and overran 255 on MySQL (1406 "Data too long"). Did NOT edit the
+  committed `old_id` or spatie create migrations (backend.md §3).
+- `Role` model: `description` added to `#[Fillable(['name','guard_name','description'])]`.
+- `CreateRoleData`: NEW `?string $description = null` (2nd ctor param); `fromValidated` reads it only
+  if the key is present (CRUD path leaves it null — StoreRoleRequest has no rule for it, unchanged).
+- `RoleService::create`: persists `'description' => $data->description` in the `Role::create` array.
+- `RolesSource`: `columns()` + `mapRow()` add `description` (label "Description", after `name` so the
+  MigrationEndpoints `columns.1.id === 'name'` assertion still holds). `processRow` threads the trimmed
+  description into both paths. ADOPT path backfills description ONLY when the existing role has none
+  (never clobbers a curated qnet description). Local `blankToNull()` helper added (not on the base).
+- `RoleResource`: `description` exposed (additive envelope field).
+
+Out of scope (signalled, not implemented): the Roles CRUD form/StoreRoleRequest do not yet let a user
+type a description — the column is import-fed + read-projected only. Add a rule + form field if wanted.
+
+Status — GREEN. `RolesSourceImportTest` + `UsersSourceImportTest` + `MigrationEndpointsTest` 28/28;
+`--filter=Role` 140/140. Pint clean. Backend-only, no frontend touched.
+
 ## Change — Remove address `label` (etichetta) field — GREEN (2026-07-06)
 
 Ad-hoc request: "indirizzi, togli il campo etichetta, sia sul db che sui forms." Removed the optional

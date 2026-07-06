@@ -29,16 +29,18 @@ it('dry-run validates individual/company rows + email/type/locale/role errors; c
     // The importing actor is NOT a super-admin (no roles at all).
     $actor = User::factory()->create();
 
-    $header = 'email,type,first_name,last_name,company_name,locale,roles';
+    $header = 'email,type,first_name,last_name,company_name,locale,is_active,roles';
     $csv = $header."\n"
-        .'alice@example.com,individual,Alice,Wonder,,,editor'."\n" // valid: individual + role
-        .'bob@example.com,company,,,Bob Corp,it,'."\n" // valid: company + explicit locale
-        .',,X,Y,,,'."\n" // invalid: email missing
-        .'existing@example.com,,X,Y,,,'."\n" // invalid: email duplicates an existing DB user
-        .'nonames@example.com,individual,,,,,'."\n" // invalid: individual missing first/last name
-        .'nocompany@example.com,company,,,,,'."\n" // invalid: company missing company_name
-        .'badlocale@example.com,individual,A,B,,xx,'."\n" // invalid: unknown locale
-        .'escalate@example.com,individual,C,D,,,super-admin'."\n"; // invalid: role not assignable by actor
+        .'alice@example.com,individual,Alice,Wonder,,,true,editor'."\n" // valid: individual + role + explicit active
+        .'bob@example.com,company,,,Bob Corp,it,,'."\n" // valid: company + explicit locale + blank is_active (-> active)
+        .'ina@example.com,individual,Ina,Active,,,false,'."\n" // valid: individual + is_active false
+        .',,X,Y,,,,'."\n" // invalid: email missing
+        .'existing@example.com,,X,Y,,,,'."\n" // invalid: email duplicates an existing DB user
+        .'nonames@example.com,individual,,,,,,'."\n" // invalid: individual missing first/last name
+        .'nocompany@example.com,company,,,,,,'."\n" // invalid: company missing company_name
+        .'badlocale@example.com,individual,A,B,,xx,,'."\n" // invalid: unknown locale
+        .'badactive@example.com,individual,A,B,,,maybe,'."\n" // invalid: unparseable is_active
+        .'escalate@example.com,individual,C,D,,,,super-admin'."\n"; // invalid: role not assignable by actor
     Storage::disk('local')->put('imports/users.csv', $csv);
 
     $run = ImportRun::factory()->create([
@@ -52,9 +54,9 @@ it('dry-run validates individual/company rows + email/type/locale/role errors; c
 
     $validated = $run->fresh();
     expect($validated->status)->toBe(ImportStatus::AwaitingConfirmation)
-        ->and($validated->total_rows)->toBe(8)
-        ->and($validated->valid_rows)->toBe(2)
-        ->and($validated->invalid_rows)->toBe(6)
+        ->and($validated->total_rows)->toBe(10)
+        ->and($validated->valid_rows)->toBe(3)
+        ->and($validated->invalid_rows)->toBe(7)
         ->and(User::query()->count())->toBe(2); // dry-run created nothing (existing user + actor only)
 
     $reasons = collect($validated->preview['invalid_sample'])->pluck('errors')->flatten()->implode(' ');
@@ -63,6 +65,7 @@ it('dry-run validates individual/company rows + email/type/locale/role errors; c
         ->and($reasons)->toContain('first_name is required when type is individual')
         ->and($reasons)->toContain('company_name is required when type is company')
         ->and($reasons)->toContain('locale must be one of')
+        ->and($reasons)->toContain('is_active must be one of')
         ->and($reasons)->toContain('Role not assignable by the importing user: super-admin');
 
     $run->update(['status' => ImportStatus::Processing]);
@@ -70,18 +73,24 @@ it('dry-run validates individual/company rows + email/type/locale/role errors; c
 
     $processed = $run->fresh();
     expect($processed->status)->toBe(ImportStatus::Completed)
-        ->and($processed->imported_rows)->toBe(2);
+        ->and($processed->imported_rows)->toBe(3);
 
     $alice = User::query()->where('email', 'alice@example.com')->firstOrFail();
     expect($alice->name)->toBe('Alice Wonder')
         ->and($alice->personalData->type)->toBe(PersonalDataTypeEnum::Individual)
+        ->and($alice->is_active)->toBeTrue() // explicit `true` cell
         ->and($alice->hasRole('editor'))->toBeTrue()
         ->and($alice->hasRole('super-admin'))->toBeFalse();
 
     $bob = User::query()->where('email', 'bob@example.com')->firstOrFail();
     expect($bob->name)->toBe('Bob Corp')
         ->and($bob->personalData->type)->toBe(PersonalDataTypeEnum::Company)
-        ->and($bob->locale)->toBe('it');
+        ->and($bob->locale)->toBe('it')
+        ->and($bob->is_active)->toBeTrue(); // blank is_active defaults to active
+
+    // is_active `false` is honored — the imported user is created inactive.
+    $ina = User::query()->where('email', 'ina@example.com')->firstOrFail();
+    expect($ina->is_active)->toBeFalse();
 
     // Passwords are random, hashed, never a plaintext/derived value from the
     // file (the CSV carries no password column at all), and distinct per user.

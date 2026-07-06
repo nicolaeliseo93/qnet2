@@ -81,6 +81,7 @@ it('creates a user with card, primary address, contacts, verbatim password hash 
     $businessFunction = BusinessFunction::factory()->create(['old_id' => 910]);
     $company = Company::factory()->create(['old_id' => 920]);
     $operationalSite = OperationalSite::factory()->create(['old_id' => 930]);
+    $role = Role::factory()->create(['name' => 'Admin', 'old_id' => 68]);
     $externalHash = fakeBcryptHash('external-secret');
 
     Http::fake([
@@ -103,6 +104,7 @@ it('creates a user with card, primary address, contacts, verbatim password hash 
                 'personal_email' => 'ada.private@example.test',
                 'business_phone' => '+39 06 1234567',
                 'personal_phone' => '+39 333 1234567',
+                'is_active' => true,
                 'is_manager' => false,
                 'job_description' => 'Engineer',
                 'reports_to_id' => 900,
@@ -115,6 +117,7 @@ it('creates a user with card, primary address, contacts, verbatim password hash 
                 'terminated_at' => null,
                 'standard_daily_minutes' => 480,
                 'break_daily_minutes' => 30,
+                'roles' => [['id' => 68, 'name' => 'Admin']],
             ]],
             'pagination' => ['total' => 1, 'offset' => 0, 'limit' => 50, 'total_pages' => 1],
         ]),
@@ -132,7 +135,9 @@ it('creates a user with card, primary address, contacts, verbatim password hash 
         ->and($ada->password)->toBe($externalHash) // verbatim, NOT re-hashed
         ->and($ada->personalData?->first_name)->toBe('Ada')
         ->and($ada->personalData?->last_name)->toBe('Lovelace')
-        ->and($ada->personalData?->tax_code)->toBe('LVLADA00A00H501Z');
+        ->and($ada->personalData?->tax_code)->toBe('LVLADA00A00H501Z')
+        ->and($ada->is_active)->toBeTrue()
+        ->and($ada->hasRole('Admin'))->toBeTrue();
 
     $address = $ada->personalData->addresses()->first();
     expect($address)->not->toBeNull()
@@ -178,6 +183,34 @@ it('creates a user with card, primary address, contacts, verbatim password hash 
         ->and($secondFresh->skipped_rows)->toBe(1);
 });
 
+it('honors an inactive external user (is_active=false) instead of forcing active', function () {
+    seedMigrationsConfig();
+
+    Http::fake([
+        fakeMigrationsBaseUrl().'/users*' => Http::response([
+            'items' => [[
+                'id' => 150,
+                'email' => 'inactive@example.test',
+                'password' => fakeBcryptHash('inactive-secret'),
+                'first_name' => 'In',
+                'last_name' => 'Active',
+                'is_active' => false,
+            ]],
+            'pagination' => ['total' => 1],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $run = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'users']);
+
+    runMigrationJobFor($run);
+
+    $user = User::query()->where('email', 'inactive@example.test')->first();
+
+    expect($user)->not->toBeNull()
+        ->and($user->is_active)->toBeFalse();
+});
+
 // ---------------------------------------------------------------------------
 // AC-009 — remap roles/employment relations via old_id + warning on unresolved
 // ---------------------------------------------------------------------------
@@ -194,7 +227,7 @@ it('warns (non-fatally) on unresolved role and employment references', function 
                 'password' => fakeBcryptHash('grace-secret'),
                 'first_name' => 'Grace',
                 'last_name' => 'Hopper',
-                'role_ids' => [55, 999],
+                'roles' => [['id' => 55, 'name' => 'operator'], ['id' => 999, 'name' => 'ghost']],
                 'reports_to_id' => 777,
                 'relationship_type' => 'not-a-real-type',
             ]],

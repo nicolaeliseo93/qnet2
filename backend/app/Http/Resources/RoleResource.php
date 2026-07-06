@@ -20,6 +20,7 @@ class RoleResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'description' => $this->description,
             'permissions' => $this->getPermissionNames(),
             'users' => $this->memberIds(),
             // Flat field-permission matrix rows (spec 0006), consumed by the

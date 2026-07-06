@@ -12,12 +12,13 @@ use App\Services\RoleService;
 use RuntimeException;
 
 /**
- * `roles` migration source (spec 0013 AC-011): imports only `name` (+
- * `old_id`) — the role's permissions are NOT imported (qnet's abilities are
+ * `roles` migration source (spec 0013 AC-011): imports `name` + `description`
+ * (+ `old_id`) — the role's permissions are NOT imported (qnet's abilities are
  * generated from code via `permissions:sync`, never arbitrary). When the
  * external `name` already matches an existing qnet role that has no
  * `old_id` yet, the import ADOPTS the old_id onto it instead of creating a
- * duplicate (roles.name is unique).
+ * duplicate (roles.name is unique) and backfills its description only when the
+ * existing role has none, so an adoption never clobbers a curated description.
  */
 class RolesSource extends AbstractMigrationSource
 {
@@ -46,6 +47,7 @@ class RolesSource extends AbstractMigrationSource
         return [
             ['id' => 'id', 'label' => 'ID', 'type' => 'number'],
             ['id' => 'name', 'label' => 'Name', 'type' => 'string'],
+            ['id' => 'description', 'label' => 'Description', 'type' => 'string'],
         ];
     }
 
@@ -68,6 +70,7 @@ class RolesSource extends AbstractMigrationSource
         return [
             'id' => $record['id'] ?? null,
             'name' => $record['name'] ?? null,
+            'description' => $record['description'] ?? null,
         ];
     }
 
@@ -85,6 +88,8 @@ class RolesSource extends AbstractMigrationSource
             throw new RuntimeException('name is required.');
         }
 
+        $description = $this->blankToNull($record['description'] ?? null);
+
         if ($this->existsByOldId(Role::class, $externalId)) {
             return MigrationRowOutcome::skipped();
         }
@@ -93,15 +98,26 @@ class RolesSource extends AbstractMigrationSource
 
         if ($adopted !== null) {
             $adopted->old_id = $externalId;
+            // Backfill only an empty description: never clobber a curated one.
+            if ($description !== null && $this->blankToNull($adopted->description) === null) {
+                $adopted->description = $description;
+            }
             $adopted->save();
 
             return MigrationRowOutcome::created();
         }
 
-        $role = $this->service->create($context->actor, new CreateRoleData(name: $name));
+        $role = $this->service->create($context->actor, new CreateRoleData(name: $name, description: $description));
         $role->old_id = $externalId;
         $role->save();
 
         return MigrationRowOutcome::created();
+    }
+
+    private function blankToNull(mixed $value): ?string
+    {
+        $trimmed = trim((string) ($value ?? ''));
+
+        return $trimmed === '' ? null : $trimmed;
     }
 }

@@ -263,6 +263,19 @@ it('resolves a DERIVED column (permissions on the roles domain) scoped to the as
         ->and($response->json('data.values'))->not->toContain('widgets.publish');
 });
 
+it('always offers both boolean states for a boolean column, even when the data holds only one', function () {
+    $actor = userWithUserAbilities(['viewAny']);
+    // Every user (actor included) is active by default: the data holds only "1",
+    // yet the filter must still offer "0" so the user can filter by either state.
+    User::factory()->create(['is_active' => true]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/users/values', ['columnId' => 'is_active'])->assertOk();
+
+    expect($response->json('data.values'))->toEqualCanonicalizing(['1', '0'])
+        ->and($response->json('data.hasMore'))->toBeFalse();
+});
+
 it('resolves a set/enum column (locale) via its static options — non-regression', function () {
     $actor = userWithUserAbilities(['viewAny']);
     Sanctum::actingAs($actor);

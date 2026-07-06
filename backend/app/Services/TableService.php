@@ -39,6 +39,17 @@ class TableService
      */
     private const int MAX_LIMIT = 100;
 
+    /**
+     * Fixed value list offered for a boolean column's Set Filter. Both options
+     * are ALWAYS shown (as raw 1/0, localized to Sì/No on the frontend) rather
+     * than only the values currently present in the data, so the user can always
+     * filter by either state. Emitted as strings to match the generic column
+     * fallback and round-trip cleanly through the set/boolean filter.
+     *
+     * @var array<int, string>
+     */
+    private const array BOOLEAN_FILTER_VALUES = ['1', '0'];
+
     public function __construct(
         private readonly TableQueryBuilder $queryBuilder,
         private readonly FilterApplier $filterApplier,
@@ -130,12 +141,32 @@ class TableService
 
         $fetchLimit = $limit + 1;
         $resolved = $definition->distinctValues($actor, $columnId, $columnConfig, $search, $query, $fetchLimit);
-        $values = $resolved ?? $this->distinctFromColumn($query, $columnId, $search, $fetchLimit);
+        $values = $resolved ?? $this->distinctForColumn($columnConfig, $query, $columnId, $search, $fetchLimit);
 
         return new DistinctValuesResult(
             values: array_slice($values, 0, $limit),
             hasMore: count($values) > $limit,
         );
+    }
+
+    /**
+     * Fallback value list for a real DB column with no definition override.
+     *
+     * A boolean column always offers BOTH states (not merely the ones present
+     * in the data) so the user can filter by either; every other type falls
+     * back to a plain `SELECT DISTINCT` over the actual values.
+     *
+     * @param  array<string, mixed>  $columnConfig
+     * @param  Builder<Model>  $query
+     * @return array<int, string>
+     */
+    private function distinctForColumn(array $columnConfig, Builder $query, string $column, ?string $search, int $limit): array
+    {
+        if (($columnConfig['type'] ?? null) === 'boolean') {
+            return self::BOOLEAN_FILTER_VALUES;
+        }
+
+        return $this->distinctFromColumn($query, $column, $search, $limit);
     }
 
     /**

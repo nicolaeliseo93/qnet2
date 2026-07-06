@@ -18,7 +18,8 @@ use Illuminate\Support\Str;
  * Columns: `email` (required, natural key), `type` (optional
  * individual|company, blank -> individual), `first_name`/`last_name`
  * (required when `type` is individual), `company_name` (required when `type`
- * is company), `locale` (optional -> LocaleEnum::default()), `roles`
+ * is company), `locale` (optional -> LocaleEnum::default()), `is_active`
+ * (optional boolean true|false|1|0, blank -> true), `roles`
  * (optional, PIPE-delimited `|` list of role NAMES — same delimiter
  * convention as RolesImportDefinition's `permissions` cell).
  *
@@ -43,6 +44,10 @@ class UsersImportDefinition extends AbstractImportDefinition
 {
     private const int PASSWORD_LENGTH = 32;
 
+    private const array TRUE_VALUES = ['1', 'true'];
+
+    private const array FALSE_VALUES = ['0', 'false'];
+
     public function __construct(private readonly UserService $service) {}
 
     public function domain(): string
@@ -64,6 +69,7 @@ class UsersImportDefinition extends AbstractImportDefinition
             ['id' => 'last_name', 'required' => false],
             ['id' => 'company_name', 'required' => false],
             ['id' => 'locale', 'required' => false],
+            ['id' => 'is_active', 'required' => false],
             ['id' => 'roles', 'required' => false],
         ];
     }
@@ -74,6 +80,7 @@ class UsersImportDefinition extends AbstractImportDefinition
             ...$this->emailErrors($row),
             ...$this->typeErrors($row),
             ...$this->localeErrors($row),
+            ...$this->isActiveErrors($row),
             ...$this->roleErrors($row, $context->actor),
         ];
     }
@@ -115,6 +122,7 @@ class UsersImportDefinition extends AbstractImportDefinition
                 email: trim($row['email']),
                 locale: $locale !== '' ? $locale : (LocaleEnum::default() ?? LocaleEnum::En)->value,
                 password: Str::password(self::PASSWORD_LENGTH),
+                is_active: $this->resolveIsActive($row),
                 roles: $roles !== [] ? $roles : null,
             ),
             new ProfileData(card: $card),
@@ -180,6 +188,34 @@ class UsersImportDefinition extends AbstractImportDefinition
         }
 
         return [];
+    }
+
+    /**
+     * @param  array<string, string>  $row
+     * @return array<int, string>
+     */
+    private function isActiveErrors(array $row): array
+    {
+        $raw = mb_strtolower(trim($row['is_active'] ?? ''));
+
+        if ($raw !== '' && ! in_array($raw, [...self::TRUE_VALUES, ...self::FALSE_VALUES], true)) {
+            return ['is_active must be one of: '.implode(', ', [...self::TRUE_VALUES, ...self::FALSE_VALUES]).', or blank.'];
+        }
+
+        return [];
+    }
+
+    /**
+     * Blank -> true (mirrors CreateUserData's default: a newly imported user is
+     * active unless the row explicitly opts out).
+     *
+     * @param  array<string, string>  $row
+     */
+    private function resolveIsActive(array $row): bool
+    {
+        $raw = mb_strtolower(trim($row['is_active'] ?? ''));
+
+        return ! in_array($raw, self::FALSE_VALUES, true);
     }
 
     /**

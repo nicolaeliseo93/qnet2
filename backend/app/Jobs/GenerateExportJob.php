@@ -26,6 +26,12 @@ class GenerateExportJob implements ShouldQueue
 
     public function handle(ExportService $service): void
     {
+        // A large export can exceed PHP's max_execution_time; under the sync
+        // queue driver this job runs inside the HTTP request and would be
+        // killed at 30s. Lift the per-script limit (harmless under async
+        // workers, which govern their own timeout).
+        set_time_limit(0);
+
         /** @var ExportRun $run */
         $run = ExportRun::query()->findOrFail($this->exportRunId);
 

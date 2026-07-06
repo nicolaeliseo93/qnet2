@@ -30,6 +30,12 @@ class RunMigrationJob implements ShouldQueue
 
     public function handle(MigrationRegistry $registry): void
     {
+        // A large migration can exceed PHP's max_execution_time; under the sync
+        // queue driver this job runs inside the HTTP request and would be
+        // killed at 30s. Lift the per-script limit (harmless under async
+        // workers, which govern their own timeout).
+        set_time_limit(0);
+
         /** @var MigrationRun $run */
         $run = MigrationRun::query()->findOrFail($this->migrationRunId);
 

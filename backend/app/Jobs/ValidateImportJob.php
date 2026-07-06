@@ -34,6 +34,12 @@ class ValidateImportJob implements ShouldQueue
 
     public function handle(ImportRegistry $registry, CsvReader $reader, ImportService $importService): void
     {
+        // A large import can exceed PHP's max_execution_time; under the sync
+        // queue driver this job runs inside the HTTP request and would be
+        // killed at 30s. Lift the per-script limit (harmless under async
+        // workers, which govern their own timeout).
+        set_time_limit(0);
+
         /** @var ImportRun $run */
         $run = ImportRun::query()->findOrFail($this->importRunId);
 

@@ -112,6 +112,20 @@ it('columns: 200 with the expected request template and a copyable sample, witho
     Http::assertNothingSent();
 });
 
+it('columns: the users sample template includes is_active and the roles relation', function () {
+    seedMigrationsConfig();
+    Http::fake();
+    Sanctum::actingAs(migrationsSuperAdminActor());
+
+    $this->getJson('/api/migrations/users/columns')
+        ->assertOk()
+        ->assertJsonPath('data.sample.items.0.is_active', true)
+        ->assertJsonPath('data.sample.items.0.roles.0.id', 1)
+        ->assertJsonPath('data.sample.items.0.roles.0.name', 'Role name');
+
+    Http::assertNothingSent();
+});
+
 it('columns: base_url empty falls back to the bare path', function () {
     config(['migrations.base_url' => '']);
     Sanctum::actingAs(migrationsSuperAdminActor());

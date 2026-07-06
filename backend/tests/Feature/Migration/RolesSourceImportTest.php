@@ -60,7 +60,7 @@ it('adopts old_id onto an existing role sharing the same name (no duplicate)', f
     $existing = Role::factory()->create(['name' => 'operator']);
     Http::fake([
         fakeMigrationsBaseUrl().'/roles*' => Http::response([
-            'items' => [['id' => 1, 'name' => 'operator']],
+            'items' => [['id' => 1, 'name' => 'operator', 'description' => 'Front-line operator']],
             'pagination' => ['total' => 1],
         ]),
     ]);
@@ -71,7 +71,9 @@ it('adopts old_id onto an existing role sharing the same name (no duplicate)', f
     runMigrationJobFor($run);
 
     expect(Role::query()->where('name', 'operator')->count())->toBe(1)
-        ->and($existing->fresh()->old_id)->toBe(1);
+        ->and($existing->fresh()->old_id)->toBe(1)
+        // Backfilled onto the adopted role, which had no description yet.
+        ->and($existing->fresh()->description)->toBe('Front-line operator');
 
     $fresh = $run->fresh();
     expect($fresh->status)->toBe(MigrationStatus::Completed)
@@ -79,11 +81,11 @@ it('adopts old_id onto an existing role sharing the same name (no duplicate)', f
         ->and($fresh->skipped_rows)->toBe(0);
 });
 
-it('creates a new role with old_id when the name does not exist yet', function () {
+it('creates a new role with old_id and description when the name does not exist yet', function () {
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/roles*' => Http::response([
-            'items' => [['id' => 2, 'name' => 'brand-new-role']],
+            'items' => [['id' => 2, 'name' => 'brand-new-role', 'description' => 'A freshly imported role']],
             'pagination' => ['total' => 1],
         ]),
     ]);
@@ -97,7 +99,27 @@ it('creates a new role with old_id when the name does not exist yet', function (
 
     expect($role)->not->toBeNull()
         ->and($role->old_id)->toBe(2)
+        ->and($role->description)->toBe('A freshly imported role')
         ->and($role->permissions)->toHaveCount(0); // AC-011: permissions are never imported
+});
+
+it('never clobbers a curated description when adopting an existing role', function () {
+    seedMigrationsConfig();
+    $existing = Role::factory()->create(['name' => 'curator', 'description' => 'Curated in qnet']);
+    Http::fake([
+        fakeMigrationsBaseUrl().'/roles*' => Http::response([
+            'items' => [['id' => 4, 'name' => 'curator', 'description' => 'External description']],
+            'pagination' => ['total' => 1],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $run = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'roles']);
+
+    runMigrationJobFor($run);
+
+    expect($existing->fresh()->old_id)->toBe(4)
+        ->and($existing->fresh()->description)->toBe('Curated in qnet');
 });
 
 it('re-importing the same roles is idempotent (skip, no duplicate)', function () {

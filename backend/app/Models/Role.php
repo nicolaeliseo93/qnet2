@@ -21,7 +21,7 @@ use Spatie\Permission\Models\Role as SpatieRole;
  * Pointing config('permission.models.role') at this class makes every Spatie
  * relation (User->roles, syncRoles, getRoleNames) resolve to it transparently.
  */
-#[Fillable(['name', 'guard_name'])]
+#[Fillable(['name', 'guard_name', 'description'])]
 class Role extends SpatieRole
 {
     /** @use HasFactory<RoleFactory> */
