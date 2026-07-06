@@ -22,7 +22,12 @@ class OperationalSite extends BaseModel
     /** @use HasFactory<OperationalSiteFactory> */
     use HasAddresses, HasFactory, LogsModelActivity;
 
-    protected $fillable = [];
+    protected $fillable = [
+        // The site's own free-text label. The site is otherwise identified by
+        // its address (spec 0011); `alias` exists because the legacy import
+        // carries a site name in its `comune` field that is not a real city.
+        'alias',
+    ];
 
     /**
      * Spec 0013 — external data migration: the source system's id for a

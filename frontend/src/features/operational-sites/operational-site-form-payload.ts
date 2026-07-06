@@ -16,6 +16,7 @@ export function buildCreatePayload(
   values: OperationalSiteFormValues,
 ): CreateOperationalSitePayload {
   return {
+    alias: values.alias || null,
     line1: values.line1,
     postal_code: values.postal_code || null,
     country_id: values.country_id,
@@ -36,6 +37,10 @@ export function buildUpdatePayload(
 ): UpdateOperationalSitePayload {
   const payload: UpdateOperationalSitePayload = {}
 
+  const alias = values.alias || null
+  if (alias !== original.alias) {
+    payload.alias = alias
+  }
   if (values.line1 !== original.line1) {
     payload.line1 = values.line1
   }

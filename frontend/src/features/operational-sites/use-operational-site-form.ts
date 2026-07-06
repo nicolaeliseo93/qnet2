@@ -23,6 +23,7 @@ import type {
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = [
+  'alias',
   'line1',
   'postal_code',
   'country_id',
@@ -60,6 +61,7 @@ export function useOperationalSiteForm({ mode, onSuccess }: UseOperationalSiteFo
   const defaultValues = useMemo<OperationalSiteFormValues>(() => {
     if (mode.type === 'edit') {
       return {
+        alias: mode.operationalSite.alias ?? '',
         line1: mode.operationalSite.line1,
         postal_code: mode.operationalSite.postal_code ?? '',
         country_id: mode.operationalSite.country_id,
@@ -69,6 +71,7 @@ export function useOperationalSiteForm({ mode, onSuccess }: UseOperationalSiteFo
       }
     }
     return {
+      alias: '',
       line1: '',
       postal_code: '',
       country_id: null,

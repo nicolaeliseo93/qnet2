@@ -28,6 +28,7 @@ class OperationalSiteResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'alias' => $this->alias,
             'line1' => $address?->line1,
             'postal_code' => $address?->postal_code,
             'country_id' => $address?->country_id,

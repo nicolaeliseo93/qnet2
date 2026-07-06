@@ -47,10 +47,12 @@ it('200: field catalogue matches the frozen contract, in order, with mandatory f
         ->assertJsonPath('success', true);
 
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
-    expect($keys)->toBe(['country_id', 'state_id', 'province_id', 'city_id', 'line1', 'postal_code']);
+    expect($keys)->toBe(['alias', 'country_id', 'state_id', 'province_id', 'city_id', 'line1', 'postal_code']);
 
     $fields = collect($response->json('data.fields'))->keyBy('key');
-    expect($fields['country_id']['mandatory'])->toBeFalse()
+    expect($fields['alias']['mandatory'])->toBeFalse()
+        ->and($fields['alias']['type'])->toBe('text')
+        ->and($fields['country_id']['mandatory'])->toBeFalse()
         ->and($fields['state_id']['mandatory'])->toBeFalse()
         ->and($fields['province_id']['mandatory'])->toBeFalse()
         ->and($fields['city_id']['mandatory'])->toBeTrue()

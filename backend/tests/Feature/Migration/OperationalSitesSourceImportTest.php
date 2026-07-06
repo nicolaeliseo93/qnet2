@@ -7,6 +7,7 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\MigrationRun;
 use App\Models\OperationalSite;
+use App\Models\Province;
 use App\Models\Role;
 use App\Models\State;
 use App\Models\User;
@@ -99,6 +100,46 @@ it('creates a site with its address, resolving geo names to ids', function () {
     expect($fresh->status)->toBe(MigrationStatus::Completed)
         ->and($fresh->created_rows)->toBe(1)
         ->and($fresh->report)->toBeNull();
+});
+
+it('stores the legacy comune as alias and resolves Italian names + province code', function () {
+    seedMigrationsConfig();
+    $country = Country::factory()->create(['name' => 'Italy']);
+    $state = State::factory()->for($country)->create(['name' => 'Campania']);
+    $province = Province::factory()->forState($state)->create(['name' => 'Naples']);
+    $city = City::factory()->forProvince($province)->create(['name' => 'Frattamaggiore']);
+
+    Http::fake([
+        fakeMigrationsBaseUrl().'/operational-sites*' => Http::response([
+            'items' => [[
+                'id' => 10,
+                'country' => 'Italia',
+                'region' => 'Campania',
+                'province' => 'NA',
+                'city' => 'FRATTAMAGGIORE 1 (HQ)',
+                'street' => 'Via Roma 1',
+            ]],
+            'pagination' => ['total' => 1],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $run = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'operational-sites']);
+
+    runMigrationJobFor($run);
+
+    $site = OperationalSite::query()->where('old_id', 10)->first();
+
+    expect($site)->not->toBeNull()
+        ->and($site->alias)->toBe('FRATTAMAGGIORE 1 (HQ)');
+
+    $address = $site->addresses()->first();
+    expect($address->country_id)->toBe($country->id)
+        ->and($address->state_id)->toBe($state->id)
+        ->and($address->province_id)->toBe($province->id)
+        ->and($address->city_id)->toBe($city->id);
+
+    expect($run->fresh()->report)->toBeNull();
 });
 
 it('creates the site with a warning when the region name cannot be resolved', function () {

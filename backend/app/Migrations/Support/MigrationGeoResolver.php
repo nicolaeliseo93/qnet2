@@ -6,24 +6,31 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\Province;
 use App\Models\State;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Resolves the external system's geo NAMES (country/region/province/city) to
- * qnet's geo ids (spec 0013 Increment 2 — CompaniesSource/
- * OperationalSitesSource). Own collaborator (does NOT reuse
- * App\Imports\Support\GeoResolver: that belongs to spec 0012's separate,
- * not-yet-committed lane).
+ * Resolves an external system's geo strings (country/region/province/city) to
+ * qnet's geo ids. Shared by every migration source whose records carry the
+ * same address shape (CompaniesSource, OperationalSitesSource and any future
+ * import) — the matching lives here ONCE, so a new source gets it for free.
  *
- * Mirrors the real hierarchy (country -> state/region -> province -> city,
- * see App\Models\{Country,State,Province,City}): each level is looked up
- * scoped to its resolved parent, by an exact (trimmed) name match — reference
- * data, no fuzzy matching. A level whose name was supplied but does not
- * resolve (unknown name, or its parent itself unresolved) is a non-fatal
- * warning; every level's absence is independent, so partial geo data still
- * resolves whatever it can.
+ * Two layers make the legacy strings resolvable against the ENGLISH reference
+ * dataset (world.sql):
+ *  1. ItalianGeoLocalizer translates the Italian value / province plate code to
+ *     the reference spelling (`Italia`->`Italy`, `Sicilia`->`Sicily`, `NA`->
+ *     `Naples`), and strips site-label noise off the `comune`.
+ *  2. The lookup itself is case-insensitive (LIKE, wildcards escaped), so a
+ *     legacy `FRATTAMAGGIORE` still matches the dataset's `Frattamaggiore`.
+ *
+ * Each level is looked up scoped to its resolved parent. A level whose value was
+ * supplied but does not resolve (unknown value, or an unresolved parent) is a
+ * non-fatal warning; levels are independent, so partial geo data still resolves
+ * whatever it can.
  */
 class MigrationGeoResolver
 {
+    public function __construct(private readonly ItalianGeoLocalizer $localizer) {}
+
     public function resolve(?string $countryName, ?string $stateName, ?string $provinceName, ?string $cityName): MigrationGeoResolution
     {
         $warnings = [];
@@ -47,7 +54,7 @@ class MigrationGeoResolver
             return null;
         }
 
-        $id = Country::query()->where('name', $name)->value('id');
+        $id = $this->matchByName(Country::query(), $this->localizer->country($name));
 
         if ($id === null) {
             $warnings[] = "Unresolved country '{$name}'.";
@@ -73,7 +80,10 @@ class MigrationGeoResolver
             return null;
         }
 
-        $id = State::query()->where('country_id', $countryId)->where('name', $name)->value('id');
+        $id = $this->matchByName(
+            State::query()->where('country_id', $countryId),
+            $this->localizer->region($name),
+        );
 
         if ($id === null) {
             $warnings[] = "Unresolved region '{$name}'.";
@@ -83,6 +93,10 @@ class MigrationGeoResolver
     }
 
     /**
+     * The legacy province value is a plate code (`NA`, `RG`): translate it to a
+     * province name, then match within the resolved state. An unknown code has
+     * no textual fallback, so it resolves to null with a warning.
+     *
      * @param  array<int, string>  $warnings
      */
     private function resolveProvince(?int $stateId, ?string $name, array &$warnings): ?int
@@ -99,7 +113,11 @@ class MigrationGeoResolver
             return null;
         }
 
-        $id = Province::query()->where('state_id', $stateId)->where('name', $name)->value('id');
+        $canonical = $this->localizer->province($name);
+
+        $id = $canonical === null
+            ? null
+            : $this->matchByName(Province::query()->where('state_id', $stateId), $canonical);
 
         if ($id === null) {
             $warnings[] = "Unresolved province '{$name}'.";
@@ -125,15 +143,32 @@ class MigrationGeoResolver
             return null;
         }
 
-        $id = City::query()
+        $canonical = $this->localizer->city($name);
+
+        $query = City::query()
             ->where('state_id', $stateId)
-            ->when($provinceId !== null, fn ($query) => $query->where('province_id', $provinceId))
-            ->where('name', $name)
-            ->value('id');
+            ->when($provinceId !== null, fn (Builder $inner) => $inner->where('province_id', $provinceId));
+
+        $id = $canonical === null ? null : $this->matchByName($query, $canonical);
 
         if ($id === null) {
             $warnings[] = "Unresolved city '{$name}'.";
         }
+
+        return $id;
+    }
+
+    /**
+     * Case-insensitive exact match on `name` (LIKE with the value's own
+     * wildcards escaped — no pattern search, just collation-independent
+     * equality). Returns the matched row id, or null.
+     *
+     * @param  Builder<*>  $query
+     */
+    private function matchByName(Builder $query, string $name): ?int
+    {
+        /** @var int|null $id */
+        $id = $query->where('name', 'like', addcslashes($name, '\\%_'))->value('id');
 
         return $id;
     }

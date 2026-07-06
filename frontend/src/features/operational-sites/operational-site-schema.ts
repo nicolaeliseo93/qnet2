@@ -8,9 +8,10 @@ import type { TFunction } from 'i18next'
  * backend contract (spec 0011) 1:1.
  */
 
-/** Backend `line1`/`postal_code` column limits (spec 0011 data_contract). */
+/** Backend `line1`/`postal_code`/`alias` column limits (spec 0011 data_contract). */
 const LINE1_MAX_LENGTH = 255
 const POSTAL_CODE_MAX_LENGTH = 20
+const ALIAS_MAX_LENGTH = 255
 
 /**
  * Shared fields common to create and edit. `city_id` is the only mandatory
@@ -20,6 +21,7 @@ const POSTAL_CODE_MAX_LENGTH = 20
  */
 function baseFields(t: TFunction) {
   return {
+    alias: z.string().max(ALIAS_MAX_LENGTH, t('operationalSites.form.aliasMax')).optional(),
     line1: z
       .string()
       .min(1, t('operationalSites.form.line1Required'))

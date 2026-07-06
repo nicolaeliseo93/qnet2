@@ -33,6 +33,8 @@ final readonly class UpdateOperationalSiteData
         public bool $provinceIdSubmitted = false,
         public ?int $cityId = null,
         public bool $cityIdSubmitted = false,
+        public ?string $alias = null,
+        public bool $aliasSubmitted = false,
     ) {}
 
     /**
@@ -55,6 +57,8 @@ final readonly class UpdateOperationalSiteData
             provinceIdSubmitted: array_key_exists('province_id', $data),
             cityId: isset($data['city_id']) ? (int) $data['city_id'] : null,
             cityIdSubmitted: array_key_exists('city_id', $data),
+            alias: array_key_exists('alias', $data) ? $data['alias'] : null,
+            aliasSubmitted: array_key_exists('alias', $data),
         );
     }
 

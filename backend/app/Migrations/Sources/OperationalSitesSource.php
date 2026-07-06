@@ -103,6 +103,10 @@ class OperationalSitesSource extends AbstractMigrationSource
             throw new RuntimeException('street is required.');
         }
 
+        // The legacy `comune` is a site label (e.g. "FRATTAMAGGIORE 1 (HQ)"),
+        // not a real city — kept verbatim as the site alias.
+        $alias = trim((string) ($record['city'] ?? ''));
+
         $geo = $this->geoResolver->resolve(
             $record['country'] ?? null,
             $record['region'] ?? null,
@@ -119,6 +123,7 @@ class OperationalSitesSource extends AbstractMigrationSource
                 stateId: $geo->stateId,
                 provinceId: $geo->provinceId,
                 cityId: $geo->cityId,
+                alias: $alias === '' ? null : $alias,
             ),
         );
 

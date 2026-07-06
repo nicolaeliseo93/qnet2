@@ -38,6 +38,7 @@ class OperationalSitesAuthorization extends AbstractResourceAuthorization
     public function fields(): array
     {
         return [
+            new FieldDefinition('alias', 'text'),
             new FieldDefinition('country_id', 'select'),
             new FieldDefinition('state_id', 'select'),
             new FieldDefinition('province_id', 'select'),
@@ -63,6 +64,7 @@ class OperationalSitesAuthorization extends AbstractResourceAuthorization
         $mayWrite = $this->actorMayWrite($actor, $model);
 
         return [
+            'alias' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'country_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'state_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'province_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),

@@ -76,6 +76,7 @@ function operationalSite(
 ): OperationalSiteDetailWithPermissions {
   return {
     id: 9,
+    alias: 'HQ',
     line1: 'Via Roma 1',
     postal_code: '20100',
     country_id: 1,
@@ -129,6 +130,7 @@ describe('OperationalSiteForm — create/edit', () => {
 
     await waitFor(() => expect(createOperationalSiteMock).toHaveBeenCalledTimes(1))
     expect(createOperationalSiteMock).toHaveBeenCalledWith({
+      alias: null,
       line1: 'Via Torino 3',
       postal_code: '10100',
       country_id: 5,

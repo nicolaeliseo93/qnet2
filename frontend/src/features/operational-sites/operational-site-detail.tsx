@@ -19,6 +19,9 @@ export function OperationalSiteDetailView({ operationalSite }: OperationalSiteDe
 
   return (
     <dl className="flex flex-col gap-4 overflow-y-auto p-4 text-sm">
+      <Field label={t('operationalSites.detail.alias')}>
+        {operationalSite.alias || <EmptyValue />}
+      </Field>
       <Field label={t('operationalSites.detail.line1')}>{operationalSite.line1}</Field>
       <Field label={t('operationalSites.detail.postal_code')}>
         {operationalSite.postal_code || <EmptyValue />}

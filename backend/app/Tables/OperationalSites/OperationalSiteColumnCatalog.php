@@ -30,6 +30,21 @@ final class OperationalSiteColumnCatalog
                 'filterType' => 'number',
             ],
             [
+                // The site's own label (a REAL column on operational_sites,
+                // unlike every geo/address column here). The legacy import
+                // fills it from the source `comune` string; sort/filter/search
+                // run through the generic engine (real column, no derived hook).
+                'id' => 'alias',
+                'label' => 'operationalSites.columns.alias',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'text',
+                'hasFilterValues' => false,
+                'searchable' => true,
+            ],
+            [
                 // Comune, the name of the primary address' City. Set filter
                 // with backend-resolved options; global quick-search spans it
                 // (spec 0009/0011, via applyDerivedSearch).
@@ -107,6 +122,8 @@ final class OperationalSiteColumnCatalog
     public static function filters(): array
     {
         return [
+            // Real column: conditions-only text filter (no discrete value list).
+            ['columnId' => 'alias', 'type' => 'text'],
             // Geo set filters: options resolved dynamically in optionsFor().
             ['columnId' => 'city', 'type' => 'set'],
             ['columnId' => 'street', 'type' => 'text'],

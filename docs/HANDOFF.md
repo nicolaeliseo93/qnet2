@@ -2,6 +2,60 @@
 
 > Injected at session start. Update at every green state.
 
+## Feature — Operational-sites `alias` + Italian geo import matching — GREEN (2026-07-06)
+
+Ad-hoc request (no spec): the legacy system imports operational sites (migration spec 0013) sending
+the `comune` as a site LABEL ("FRATTAMAGGIORE 1 (HQ)"), a province SIGLA ("NA") and Italian
+country/region names — none matched the ENGLISH reference dataset (world.sql: `Italy`/`Sicily`/
+`Naples`), so every geo level resolved to null. Two-part fix, decided with the user: (1) add an own
+`alias` column on operational_sites (grid + import + editable form) holding the legacy comune string
+verbatim; (2) a SHARED, agnostic Italian→English geo localizer in the migration resolver (used by
+CompaniesSource + OperationalSitesSource + any future import — NOT operational-sites-specific, per
+the user's "prepararsi in modo agnostico").
+
+Names/contracts to respect:
+- Backend NEW: migration `2026_07_06_160000_add_alias_to_operational_sites_table` (`string('alias')
+  ->nullable()->after('id')`, reversible). `OperationalSite::$fillable = ['alias']` (was `[]` — this
+  removed the model's "totally guarded" state; `old_id` now SILENTLY dropped on mass-assign like
+  Company/Role, not thrown — OldIdSchemaTest updated accordingly). `CreateOperationalSiteData::$alias`
+  + `UpdateOperationalSiteData::$alias/$aliasSubmitted`. `OperationalSiteService::create` persists
+  `alias`; `update` writes it when `aliasSubmitted` (independent of address changes).
+  `OperationalSiteResource` emits `alias`. Store/UpdateOperationalSiteRequest: `'alias' => [...,
+  'string','max:255']`. `OperationalSitesAuthorization`: `FieldDefinition('alias','text')` + ceiling
+  (visibleEditable when actor may write) — FIRST field, so meta key order is `['alias','country_id',
+  ...]`. Grid: REAL column `alias` in `OperationalSiteColumnCatalog` (text, visible, hasFilterValues
+  false, searchable — generic engine owns sort/filter/search, NOT a derived geo column) + filter
+  entry; `OperationalSitesTableDefinition::mapRow` `'alias' => $row->alias`. Columns now 8, searchable
+  `['alias','city','street']`.
+- Geo matching NEW (SHARED): `App\Migrations\Support\ItalianGeoLocalizer` — static reference maps
+  (country `italia`->`Italy`; ~11 region deltas incl. `sicillia` typo->`Sicily`; full 106 province
+  plate-code->name map incl. anglicized `NA`->`Naples`/`MI`->`Milan`; ~9 anglicized city aliases) +
+  `cleanCityLabel()` stripping the legacy label noise (" - N", "(HQ)", trailing site number).
+  `MigrationGeoResolver` rewritten to inject the localizer and match case-insensitively (LIKE with
+  wildcards escaped — portable across MySQL/SQLite; `FRATTAMAGGIORE`->`Frattamaggiore`). Province is a
+  code with no textual fallback -> unknown code = warning; every level independent, so `Matera` still
+  resolves as a city even when its wrong sigla `MA` fails. OperationalSitesSource stores raw
+  `record['city']` as alias.
+- Frontend: `OperationalSiteDetail.alias`/`CreateOperationalSitePayload.alias` (create always carries
+  it; update sends only when changed). `operational-site-schema` baseFields `alias` (optional,
+  max 255). `use-operational-site-form` defaults + SERVER_ERROR_FIELDS. `MetaField` (metaKey `alias`)
+  above the geo cascade in `operational-site-form-body`. Grid renderer `alias` (AddressTextCell).
+  Detail view shows `alias`. i18n: `operationalSites.columns.alias`/`.detail.alias`/`.form.alias`/
+  `.form.aliasMax` (en/it, label "Name"/"Nome").
+
+Status — GREEN. Backend `php artisan test` FULL (XDEBUG_MODE=off): 1084 passed / 1 skip / 1 fail (the
+lone BusinessFunctionSeederTest idempotency — PRE-EXISTING order-dependent flake, passes in isolation
+[verified]). New: ItalianGeoLocalizerTest (17 unit) + a migration test asserting alias stored + full
+IT resolution. Pint clean. Frontend: `tsc --noEmit` clean, ESLint clean, `vitest run
+src/features/operational-sites` 46/46 (payload/form fixtures updated for the additive `alias`).
+
+FOLLOW-UP (out of scope, flagged): the spec-0012 GENERIC file-import uses its own
+`App\Imports\Support\GeoResolver` (separate lane) — if those uploads carry the same Italian strings,
+reuse `ItalianGeoLocalizer` there too (it is migration-layer-independent). Also: `alias` deviates from
+spec 0011's "site has no own name column" — user-authorized; spec XML not amended.
+
+NOT COMMITTED.
+
 ## Feature — User `is_active` (login gate + grid column + form field) — GREEN (2026-07-06)
 
 Ad-hoc request (no spec): add `users.is_active` (bool). An INACTIVE account keeps its record but is

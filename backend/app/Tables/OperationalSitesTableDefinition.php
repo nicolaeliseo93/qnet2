@@ -131,6 +131,7 @@ class OperationalSitesTableDefinition extends AbstractTableDefinition
 
         return [
             'id' => $row->id,
+            'alias' => $row->alias,
             'city' => $address?->city?->name,
             'street' => $address?->line1,
             'postal_code' => $address?->postal_code,

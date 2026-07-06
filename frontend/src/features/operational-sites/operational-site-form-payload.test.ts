@@ -9,6 +9,7 @@ import type { OperationalSiteFormValues } from '@/features/operational-sites/use
 /** Spec 0011 AC-019: create payload shape, update payload diffs only changes. */
 
 const formValues: OperationalSiteFormValues = {
+  alias: 'HQ',
   line1: 'Via Roma 1',
   postal_code: '20100',
   country_id: 1,
@@ -22,6 +23,7 @@ function original(
 ): OperationalSiteDetailWithPermissions {
   return {
     id: 7,
+    alias: 'HQ',
     line1: 'Via Roma 1',
     postal_code: '20100',
     country_id: 1,
@@ -47,6 +49,7 @@ describe('buildCreatePayload', () => {
     const payload = buildCreatePayload(formValues)
 
     expect(payload).toEqual({
+      alias: 'HQ',
       line1: 'Via Roma 1',
       postal_code: '20100',
       country_id: 1,
@@ -54,6 +57,11 @@ describe('buildCreatePayload', () => {
       province_id: 3,
       city_id: 4,
     })
+  })
+
+  it('sends alias null when left blank', () => {
+    const payload = buildCreatePayload({ ...formValues, alias: '' })
+    expect(payload.alias).toBeNull()
   })
 
   it('sends postal_code null when left blank', () => {
@@ -97,9 +105,16 @@ describe('buildUpdatePayload', () => {
     expect(payload).toEqual({ city_id: 9 })
   })
 
+  it('includes a changed alias (and sends null when cleared)', () => {
+    expect(buildUpdatePayload({ ...formValues, alias: 'Milan office' }, original())).toEqual({
+      alias: 'Milan office',
+    })
+    expect(buildUpdatePayload({ ...formValues, alias: '' }, original())).toEqual({ alias: null })
+  })
+
   it('combines multiple changed fields in a single payload', () => {
     const payload = buildUpdatePayload(
-      { line1: 'Via Torino 3', postal_code: '10100', country_id: 1, state_id: 5, province_id: 6, city_id: 9 },
+      { alias: 'HQ', line1: 'Via Torino 3', postal_code: '10100', country_id: 1, state_id: 5, province_id: 6, city_id: 9 },
       original(),
     )
 

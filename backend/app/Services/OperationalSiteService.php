@@ -44,7 +44,7 @@ class OperationalSiteService
     {
         return DB::transaction(function () use ($data): OperationalSite {
             /** @var OperationalSite $site */
-            $site = OperationalSite::create([]);
+            $site = OperationalSite::create(['alias' => $data->alias]);
 
             $this->addresses->createFor($site, $data->toAddress());
 
@@ -55,6 +55,10 @@ class OperationalSiteService
     public function update(User $actor, OperationalSite $site, UpdateOperationalSiteData $data): OperationalSite
     {
         return DB::transaction(function () use ($site, $data): OperationalSite {
+            if ($data->aliasSubmitted) {
+                $site->update(['alias' => $data->alias]);
+            }
+
             if ($data->hasAddressChanges()) {
                 $this->writeAddress($site, $data);
             }

@@ -26,6 +26,7 @@ final readonly class CreateOperationalSiteData
         public ?int $stateId = null,
         public ?int $provinceId = null,
         public ?int $cityId = null,
+        public ?string $alias = null,
     ) {}
 
     /**
@@ -42,6 +43,7 @@ final readonly class CreateOperationalSiteData
             stateId: isset($data['state_id']) ? (int) $data['state_id'] : null,
             provinceId: isset($data['province_id']) ? (int) $data['province_id'] : null,
             cityId: isset($data['city_id']) ? (int) $data['city_id'] : null,
+            alias: $data['alias'] ?? null,
         );
     }
 

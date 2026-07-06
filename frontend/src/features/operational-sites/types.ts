@@ -24,6 +24,8 @@ export interface GeoReference {
  */
 export interface OperationalSiteDetail {
   id: number
+  /** The site's own free-text label (legacy `comune` when migrated). */
+  alias: string | null
   line1: string
   postal_code: string | null
   country_id: number | null
@@ -49,6 +51,7 @@ export interface OperationalSiteDetailWithPermissions extends OperationalSiteDet
 
 /** Payload for POST /operational-sites (create). */
 export interface CreateOperationalSitePayload {
+  alias: string | null
   line1: string
   postal_code: string | null
   country_id: number | null

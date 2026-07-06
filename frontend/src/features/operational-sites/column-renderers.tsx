@@ -29,12 +29,14 @@ function AddressTextCell({ value }: ICellRendererParams) {
 }
 
 /**
- * Custom cell renderers keyed by the backend column `id`. Every grid column
- * except `id`/`created_at` is derived from the site's primary address
- * (spec 0011); `created_at` reuses the shared domain-agnostic renderer so
- * the datetime formatting is not re-implemented per domain.
+ * Custom cell renderers keyed by the backend column `id`. `alias` is the site's
+ * own text column; the geo/address columns (city/street/postal_code/province/
+ * region) are derived from its primary address (spec 0011); `created_at` reuses
+ * the shared domain-agnostic renderer so datetime formatting is not
+ * re-implemented per domain.
  */
 export const operationalSiteColumnRenderers: TableRendererMap = {
+  alias: (params) => <AddressTextCell {...params} />,
   city: (params) => <AddressTextCell {...params} />,
   street: (params) => <AddressTextCell {...params} />,
   postal_code: (params) => <AddressTextCell {...params} />,

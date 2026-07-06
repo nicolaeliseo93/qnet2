@@ -6,7 +6,6 @@ use App\Models\OperationalSite;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -132,12 +131,13 @@ it('persists old_id set by property assignment on OperationalSite', function () 
 });
 
 it('does not mass-assign old_id on OperationalSite::create()', function () {
-    // OperationalSite has an entirely empty $fillable (spec 0011: it has no
-    // own writable columns, only its address), so Eloquent's guard rejects
-    // ANY mass-assigned attribute outright rather than silently dropping it
-    // — a stricter, still-compliant form of "old_id is not mass-assignable".
-    expect(fn () => OperationalSite::create(['old_id' => 999]))
-        ->toThrow(MassAssignmentException::class);
+    // OperationalSite now has one own writable column (`alias`): the guard
+    // silently drops old_id (not in $fillable) while accepting alias, matching
+    // Company/Role above. old_id stays settable only by property assignment.
+    $site = OperationalSite::create(['alias' => 'HQ', 'old_id' => 999]);
+
+    expect($site->old_id)->toBeNull()
+        ->and($site->alias)->toBe('HQ');
 });
 
 it('does not mass-assign old_id on Role::create()', function () {

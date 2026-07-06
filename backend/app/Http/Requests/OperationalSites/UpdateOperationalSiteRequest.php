@@ -38,6 +38,7 @@ class UpdateOperationalSiteRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'alias' => ['sometimes', 'nullable', 'string', 'max:255'],
             'line1' => ['sometimes', 'required', 'string', 'max:255'],
             'postal_code' => ['sometimes', 'nullable', 'string', 'max:20'],
             'country_id' => ['sometimes', 'nullable', 'integer', Rule::exists('countries', 'id')],

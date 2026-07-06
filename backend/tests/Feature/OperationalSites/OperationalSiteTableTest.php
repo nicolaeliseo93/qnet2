@@ -51,7 +51,7 @@ function siteTableGeoChain(string $cityName, string $provinceName, string $state
 // AC-003 — columns config
 // ---------------------------------------------------------------------------
 
-it('returns the 7 columns in order with the declared flags, 403 without viewAny', function () {
+it('returns the 8 columns in order with the declared flags, 403 without viewAny', function () {
     $actor = userWithSiteAbilities([]);
     Sanctum::actingAs($actor);
     $this->getJson('/api/tables/operational-sites/columns')->assertForbidden();
@@ -67,14 +67,17 @@ it('returns the 7 columns in order with the declared flags, 403 without viewAny'
     expect($data['resource'])->toBe('operational-sites')
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']])
         ->and($data['defaultPagination']['limit'])->toBe(25)
-        ->and($data['searchable'])->toBe(['city', 'street']);
+        ->and($data['searchable'])->toBe(['alias', 'city', 'street']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['id', 'city', 'street', 'postal_code', 'province', 'region', 'created_at']);
+    expect($ids)->toBe(['id', 'alias', 'city', 'street', 'postal_code', 'province', 'region', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['id']['visible'])->toBeFalse()
         ->and($columns['id']['filterType'])->toBe('number')
+        ->and($columns['alias']['visible'])->toBeTrue()
+        ->and($columns['alias']['filterType'])->toBe('text')
+        ->and($columns['alias']['hasFilterValues'])->toBeFalse()
         ->and($columns['city']['visible'])->toBeTrue()
         ->and($columns['city']['filterType'])->toBe('set')
         ->and($columns['street']['filterType'])->toBe('text')

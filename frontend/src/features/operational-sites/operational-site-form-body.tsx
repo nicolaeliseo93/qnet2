@@ -82,6 +82,19 @@ export function OperationalSiteFormBody({
             title={t('operationalSites.form.sections.address.title')}
             description={t('operationalSites.form.sections.address.description')}
           >
+            <MetaField
+              control={form.control}
+              name="alias"
+              metaKey="alias"
+              label={t('operationalSites.form.alias')}
+            >
+              {({ field, disabled, readOnly }) => (
+                <FormControl>
+                  <Input disabled={disabled} readOnly={readOnly} {...field} />
+                </FormControl>
+              )}
+            </MetaField>
+
             {geoVisible && (
               <GeoSelect value={geoValue} onChange={handleGeoChange} disabled={geoDisabled} />
             )}
