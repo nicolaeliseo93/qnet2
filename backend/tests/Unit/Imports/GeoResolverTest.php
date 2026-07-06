@@ -11,17 +11,18 @@ use Tests\TestCase;
 uses(TestCase::class, RefreshDatabase::class);
 
 /**
- * A real geo chain (country -> state/region -> province -> city), mirroring
- * CompanyCrudTest::companyGeoChain().
+ * A real geo chain in the reference dataset's ENGLISH spelling (country ->
+ * state/region -> province -> city), so the tests exercise the Italian->English
+ * localization the resolver now applies (mirrors the real world.sql data).
  *
  * @return array{country: Country, state: State, province: Province, city: City}
  */
 function geoResolverChain(): array
 {
-    $country = Country::factory()->create(['name' => 'Italia']);
-    $state = State::factory()->create(['name' => 'Lombardia', 'country_id' => $country->id]);
-    $province = Province::factory()->create(['name' => 'Milano', 'state_id' => $state->id, 'country_id' => $country->id]);
-    $city = City::factory()->create(['name' => 'Milano', 'province_id' => $province->id, 'state_id' => $state->id, 'country_id' => $country->id]);
+    $country = Country::factory()->create(['name' => 'Italy']);
+    $state = State::factory()->create(['name' => 'Lombardy', 'country_id' => $country->id]);
+    $province = Province::factory()->create(['name' => 'Milan', 'state_id' => $state->id, 'country_id' => $country->id]);
+    $city = City::factory()->create(['name' => 'Milan', 'province_id' => $province->id, 'state_id' => $state->id, 'country_id' => $country->id]);
 
     return compact('country', 'state', 'province', 'city');
 }
@@ -30,10 +31,11 @@ function geoResolverChain(): array
 // AC-005 — GeoResolver: resolve ok, not-found, ambiguous
 // ---------------------------------------------------------------------------
 
-it('resolves the full hierarchy case-insensitively to the correct ids', function () {
+it('resolves the full hierarchy, translating Italian names + province code case-insensitively', function () {
     $geo = geoResolverChain();
 
-    $result = (new GeoResolver)->resolve('itALIA', 'lombardia', 'MILANO', 'milano');
+    // Italian country/region, the province PLATE CODE, and an anglicized city.
+    $result = app(GeoResolver::class)->resolve('itALIA', 'lombardia', 'MI', 'Milano');
 
     expect($result->isResolved())->toBeTrue()
         ->and($result->countryId)->toBe($geo['country']->id)
@@ -42,8 +44,23 @@ it('resolves the full hierarchy case-insensitively to the correct ids', function
         ->and($result->cityId)->toBe($geo['city']->id);
 });
 
+it('resolves a label-noisy comune by stripping the site label before matching', function () {
+    $geo = geoResolverChain();
+    $city = City::factory()->create([
+        'name' => 'Frattamaggiore',
+        'province_id' => $geo['province']->id,
+        'state_id' => $geo['state']->id,
+        'country_id' => $geo['country']->id,
+    ]);
+
+    $result = app(GeoResolver::class)->resolve('Italia', 'Lombardia', 'MI', 'FRATTAMAGGIORE 1 (HQ)');
+
+    expect($result->isResolved())->toBeTrue()
+        ->and($result->cityId)->toBe($city->id);
+});
+
 it('skips blank/absent levels with no error and no id', function () {
-    $result = (new GeoResolver)->resolve(null, null, null, null);
+    $result = app(GeoResolver::class)->resolve(null, null, null, null);
 
     expect($result->isResolved())->toBeTrue()
         ->and($result->countryId)->toBeNull()
@@ -55,7 +72,7 @@ it('skips blank/absent levels with no error and no id', function () {
 it('fails with a reason when a name does not exist', function () {
     geoResolverChain();
 
-    $result = (new GeoResolver)->resolve('Nonexistentland', null, null, null);
+    $result = app(GeoResolver::class)->resolve('Nonexistentland', null, null, null);
 
     expect($result->isResolved())->toBeFalse()
         ->and($result->error)->toContain('Nonexistentland');
@@ -64,26 +81,26 @@ it('fails with a reason when a name does not exist', function () {
 it('disambiguates a city WITHIN the given province: a homonym city in another province fails', function () {
     $geo = geoResolverChain();
 
-    // Homonym city "Milano" in a DIFFERENT province ("Bergamo").
+    // Homonym city "Milan" in a DIFFERENT province ("Bergamo").
     $otherProvince = Province::factory()->create(['name' => 'Bergamo', 'state_id' => $geo['state']->id, 'country_id' => $geo['country']->id]);
-    City::factory()->create(['name' => 'Milano', 'province_id' => $otherProvince->id, 'state_id' => $geo['state']->id, 'country_id' => $geo['country']->id]);
+    City::factory()->create(['name' => 'Milan', 'province_id' => $otherProvince->id, 'state_id' => $geo['state']->id, 'country_id' => $geo['country']->id]);
 
-    // Resolving "Milano" city scoped to the ORIGINAL province still succeeds unambiguously.
-    $scoped = (new GeoResolver)->resolve(null, null, 'Milano', 'Milano');
+    // Scoped to the ORIGINAL province (via its plate code) still succeeds unambiguously.
+    $scoped = app(GeoResolver::class)->resolve(null, null, 'MI', 'Milano');
     expect($scoped->isResolved())->toBeTrue()
         ->and($scoped->cityId)->toBe($geo['city']->id);
 
-    // Resolving "Milano" city with NO province scope is now ambiguous (two provinces have it).
-    $unscoped = (new GeoResolver)->resolve(null, null, null, 'Milano');
+    // With NO province scope it is now ambiguous (two provinces have a "Milan").
+    $unscoped = app(GeoResolver::class)->resolve(null, null, null, 'Milano');
     expect($unscoped->isResolved())->toBeFalse();
 });
 
-it('fails when a province name is ambiguous within the given state', function () {
+it('fails when a province is ambiguous within the given state', function () {
     $geo = geoResolverChain();
-    Province::factory()->create(['name' => 'Milano', 'state_id' => $geo['state']->id, 'country_id' => $geo['country']->id]);
+    Province::factory()->create(['name' => 'Milan', 'state_id' => $geo['state']->id, 'country_id' => $geo['country']->id]);
 
-    $result = (new GeoResolver)->resolve(null, 'Lombardia', 'Milano', null);
+    $result = app(GeoResolver::class)->resolve(null, 'Lombardia', 'MI', null);
 
     expect($result->isResolved())->toBeFalse()
-        ->and($result->error)->toContain('Milano');
+        ->and($result->error)->toContain('MI');
 });

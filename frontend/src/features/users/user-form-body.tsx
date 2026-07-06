@@ -70,7 +70,10 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
   // The identity card's data is still loading/failed (edit mode only): show a
   // single skeleton/retry in its place, and hold off on contacts/addresses
   // (their buffers are not seeded yet either) instead of rendering empty rows.
-  const isProfileLoading = isEdit && profileQuery.isPending
+  // `isFetching` (not just `isPending`) so a reopen with a stale cached card
+  // waits for the on-open refetch before mounting: the card's inner RHF seeds
+  // its defaults once at mount, so it must mount only from fresh server values.
+  const isProfileLoading = isEdit && (profileQuery.isPending || profileQuery.isFetching)
   const isProfileError = isEdit && profileQuery.isError
 
   // Whole-tab visibility, read from the same authorization context `MetaField`

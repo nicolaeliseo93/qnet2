@@ -18,10 +18,12 @@ uses(RefreshDatabase::class);
  */
 function operationalSitesImportGeoChain(): array
 {
-    $country = Country::factory()->create(['name' => 'Italia']);
-    $state = State::factory()->create(['name' => 'Lombardia', 'country_id' => $country->id]);
-    $province = Province::factory()->create(['name' => 'Milano', 'state_id' => $state->id, 'country_id' => $country->id]);
-    $city = City::factory()->create(['name' => 'Milano', 'province_id' => $province->id, 'state_id' => $state->id, 'country_id' => $country->id]);
+    // Reference dataset spelling is ENGLISH (world.sql); the CSV rows carry the
+    // Italian names + province plate code the resolver localizes onto it.
+    $country = Country::factory()->create(['name' => 'Italy']);
+    $state = State::factory()->create(['name' => 'Lombardy', 'country_id' => $country->id]);
+    $province = Province::factory()->create(['name' => 'Milan', 'state_id' => $state->id, 'country_id' => $country->id]);
+    $city = City::factory()->create(['name' => 'Milan', 'province_id' => $province->id, 'state_id' => $state->id, 'country_id' => $country->id]);
 
     return compact('country', 'state', 'province', 'city');
 }
@@ -36,11 +38,11 @@ it('AC-014: dry-run + commit creates a site with its address; missing city/stree
 
     $header = 'country,region,province,city,street,postal_code';
     $csv = $header."\n"
-        .'Italia,Lombardia,Milano,Milano,Via Roma 1,20100'."\n" // valid
+        .'Italia,Lombardia,MI,Milano,Via Roma 1,20100'."\n" // valid (IT names + MI plate code, localized)
         .',,,,'.'Via Torino 2'.",\n" // invalid: city missing
-        .'Italia,Lombardia,Milano,Milano,,20100'."\n" // invalid: street missing
+        .'Italia,Lombardia,MI,Milano,,20100'."\n" // invalid: street missing
         .'Nonexistentland,,,Milano,Via Verdi 3,'."\n" // invalid: geo not found
-        .'Italia,Lombardia,Milano,Milano,Via Roma 1,20100'."\n"; // invalid: intra-file duplicate of row 1 (city+street)
+        .'Italia,Lombardia,MI,Milano,Via Roma 1,20100'."\n"; // invalid: intra-file duplicate of row 1 (city+street)
     Storage::disk('local')->put('imports/operational-sites.csv', $csv);
 
     $actor = User::factory()->create();
@@ -79,14 +81,14 @@ it('AC-014: dry-run + commit creates a site with its address; missing city/stree
     expect($address->line1)->toBe('Via Roma 1')
         ->and($address->postal_code)->toBe('20100')
         ->and($address->is_primary)->toBeTrue()
-        ->and($address->city->name)->toBe('Milano');
+        ->and($address->city->name)->toBe('Milan');
 });
 
 it('AC-014: two sites at the SAME city+street across separate runs are both allowed (no DB natural key)', function () {
     Storage::fake('local');
     operationalSitesImportGeoChain();
 
-    $csv = "country,region,province,city,street,postal_code\nItalia,Lombardia,Milano,Milano,Via Roma 1,20100\n";
+    $csv = "country,region,province,city,street,postal_code\nItalia,Lombardia,MI,Milano,Via Roma 1,20100\n";
     Storage::disk('local')->put('imports/operational-sites-2.csv', $csv);
 
     // A site already exists at this exact city+street (a prior import, or manual creation).

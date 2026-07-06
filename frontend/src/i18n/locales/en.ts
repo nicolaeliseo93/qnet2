@@ -177,6 +177,8 @@ export const en = {
     cityPlaceholder: 'Select a city',
     empty: 'No options available',
     error: 'Failed to load options.',
+    search: 'Search',
+    noMatch: 'No matches found',
   },
   roles: {
     title: 'Roles',

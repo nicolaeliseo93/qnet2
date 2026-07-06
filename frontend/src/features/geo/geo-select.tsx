@@ -1,11 +1,6 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   useCities,
@@ -43,13 +38,19 @@ interface GeoFieldProps {
   disabled: boolean
   emptyLabel: string
   errorLabel: string
+  searchPlaceholder: string
+  noMatchLabel: string
   onChange: (id: number) => void
+  /** Set false when the caller narrows the list server-side (city level). */
+  filter?: boolean
+  /** Debounced search term, for the server-searched city level. */
+  onSearchChange?: (term: string) => void
 }
 
 /**
  * A single dependent geo select. Renders a skeleton while its data loads, an
- * inline message on error/empty, and otherwise the option list. Disabled until
- * its parent has been chosen.
+ * inline message on error, and otherwise a searchable option list. Disabled
+ * until its parent has been chosen.
  */
 function GeoField({
   label,
@@ -61,7 +62,11 @@ function GeoField({
   disabled,
   emptyLabel,
   errorLabel,
+  searchPlaceholder,
+  noMatchLabel,
   onChange,
+  filter,
+  onSearchChange,
 }: GeoFieldProps) {
   const showSkeleton = !disabled && isPending
 
@@ -73,26 +78,21 @@ function GeoField({
       ) : isError && !disabled ? (
         <p className="text-sm text-destructive">{errorLabel}</p>
       ) : (
-        <Select
-          value={value != null ? String(value) : undefined}
-          onValueChange={(next) => onChange(Number(next))}
-          disabled={disabled || options.length === 0}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue
-              placeholder={
-                !disabled && options.length === 0 ? emptyLabel : placeholder
-              }
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map((option) => (
-              <SelectItem key={option.id} value={String(option.id)}>
-                {option.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          value={value}
+          onChange={onChange}
+          options={options}
+          disabled={disabled}
+          filter={filter}
+          onSearchChange={onSearchChange}
+          labels={{
+            placeholder:
+              !disabled && options.length === 0 ? emptyLabel : placeholder,
+            searchPlaceholder,
+            empty: emptyLabel,
+            noMatch: noMatchLabel,
+          }}
+        />
       )}
     </div>
   )
@@ -116,12 +116,17 @@ function GeoField({
 export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps) {
   const { t } = useTranslation()
 
+  // Cities are capped server-side, so their list is narrowed by a server search
+  // term rather than filtered client-side like the other levels.
+  const [citySearch, setCitySearch] = useState('')
+
   const countries = useCountries()
   const states = useStates(value.country_id)
   const provinces = useProvinces(value.state_id)
-  const cities = useCities(value.state_id, value.province_id)
+  const cities = useCities(value.state_id, value.province_id, citySearch)
 
   const handleCountry = (countryId: number) => {
+    setCitySearch('')
     onChange({
       country_id: countryId,
       state_id: null,
@@ -131,10 +136,12 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
   }
 
   const handleState = (stateId: number) => {
+    setCitySearch('')
     onChange({ ...value, state_id: stateId, province_id: null, city_id: null })
   }
 
   const handleProvince = (provinceId: number) => {
+    setCitySearch('')
     onChange({ ...value, province_id: provinceId, city_id: null })
   }
 
@@ -154,6 +161,8 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         disabled={disabled}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
+        searchPlaceholder={t('geo.search')}
+        noMatchLabel={t('geo.noMatch')}
         onChange={handleCountry}
       />
 
@@ -167,6 +176,8 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         disabled={disabled || value.country_id == null}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
+        searchPlaceholder={t('geo.search')}
+        noMatchLabel={t('geo.noMatch')}
         onChange={handleState}
       />
 
@@ -180,6 +191,8 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         disabled={disabled || value.state_id == null}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
+        searchPlaceholder={t('geo.search')}
+        noMatchLabel={t('geo.noMatch')}
         onChange={handleProvince}
       />
 
@@ -193,6 +206,10 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         disabled={disabled || value.state_id == null}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
+        searchPlaceholder={t('geo.search')}
+        noMatchLabel={t('geo.noMatch')}
+        filter={false}
+        onSearchChange={setCitySearch}
         onChange={handleCity}
       />
     </div>

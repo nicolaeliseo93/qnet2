@@ -6,6 +6,7 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\Province;
 use App\Models\State;
+use App\Support\Geo\ItalianGeoLocalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -14,6 +15,12 @@ use Illuminate\Database\Eloquent\Model;
  * carries human-readable geo NAMES (country/region/province/city), never ids,
  * so every address-bearing ImportDefinition resolves them through here before
  * building its domain DTO (App\DataObjects\PersonalData\CreateAddress).
+ *
+ * Every level is first passed through ItalianGeoLocalizer (shared with the
+ * migration resolver), so the Italian strings imports carry — `Italia`,
+ * `Sicilia`, the province plate code `NA`, `Napoli`, and label-noisy comuni —
+ * match the ENGLISH reference dataset. A non-Italian / already-correct value
+ * passes through unchanged, so this stays a general resolver, not IT-only.
  *
  * Resolution is hierarchical and case-insensitive: a city is disambiguated
  * WITHIN the given province, a province WITHIN the given state, a state
@@ -29,6 +36,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class GeoResolver
 {
+    public function __construct(private readonly ItalianGeoLocalizer $localizer) {}
+
     public function resolve(
         ?string $countryName,
         ?string $stateName,
@@ -41,7 +50,7 @@ class GeoResolver
         $cityId = null;
 
         if ($this->present($countryName)) {
-            $country = $this->findByName(Country::query(), $countryName);
+            $country = $this->findByName(Country::query(), $this->localizer->country($countryName));
 
             if ($country === null) {
                 return GeoResolutionResult::failed("Country \"{$countryName}\" not found or ambiguous.");
@@ -57,7 +66,7 @@ class GeoResolver
                 $query->where('country_id', $countryId);
             }
 
-            $state = $this->findByName($query, $stateName);
+            $state = $this->findByName($query, $this->localizer->region($stateName));
 
             if ($state === null) {
                 return GeoResolutionResult::failed("Region \"{$stateName}\" not found or ambiguous.");
@@ -99,7 +108,9 @@ class GeoResolver
             $query->where('country_id', $countryId);
         }
 
-        return $this->findByName($query, $name);
+        // A plate code (`NA`) maps to the province name; anything else (a full
+        // province name already) falls through to a plain name match.
+        return $this->findByName($query, $this->localizer->province($name) ?? $name);
     }
 
     private function resolveCity(string $name, ?int $countryId, ?int $stateId, ?int $provinceId): ?City
@@ -114,7 +125,10 @@ class GeoResolver
             $query->where('country_id', $countryId);
         }
 
-        return $this->findByName($query, $name);
+        // Strip site-label noise and translate anglicized comuni before
+        // matching (a pure placeholder cleans to null -> falls back to raw,
+        // which simply fails to resolve like any unknown name).
+        return $this->findByName($query, $this->localizer->city($name) ?? $name);
     }
 
     private function present(?string $name): bool

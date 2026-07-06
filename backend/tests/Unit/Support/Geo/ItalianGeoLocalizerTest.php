@@ -1,6 +1,6 @@
 <?php
 
-use App\Migrations\Support\ItalianGeoLocalizer;
+use App\Support\Geo\ItalianGeoLocalizer;
 
 beforeEach(function () {
     $this->localizer = new ItalianGeoLocalizer;

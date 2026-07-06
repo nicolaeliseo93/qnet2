@@ -21,10 +21,12 @@ uses(RefreshDatabase::class);
  */
 function companiesImportGeoChain(): array
 {
-    $country = Country::factory()->create(['name' => 'Italia']);
-    $state = State::factory()->create(['name' => 'Lombardia', 'country_id' => $country->id]);
-    $province = Province::factory()->create(['name' => 'Milano', 'state_id' => $state->id, 'country_id' => $country->id]);
-    $city = City::factory()->create(['name' => 'Milano', 'province_id' => $province->id, 'state_id' => $state->id, 'country_id' => $country->id]);
+    // Reference dataset spelling is ENGLISH (world.sql); the CSV below carries
+    // the Italian names + province plate code the resolver localizes onto it.
+    $country = Country::factory()->create(['name' => 'Italy']);
+    $state = State::factory()->create(['name' => 'Lombardy', 'country_id' => $country->id]);
+    $province = Province::factory()->create(['name' => 'Milan', 'state_id' => $state->id, 'country_id' => $country->id]);
+    $city = City::factory()->create(['name' => 'Milan', 'province_id' => $province->id, 'state_id' => $state->id, 'country_id' => $country->id]);
 
     return compact('country', 'state', 'province', 'city');
 }
@@ -40,7 +42,7 @@ it('AC-013: dry-run + commit creates a Company with its primary address, geo nam
 
     $header = 'denomination,vat_number,country,region,province,city,street,postal_code';
     $csv = $header."\n"
-        .'Acme Srl,IT12345678901,Italia,Lombardia,Milano,Milano,Via Roma 1,20100'."\n" // valid
+        .'Acme Srl,IT12345678901,Italia,Lombardia,MI,Milano,Via Roma 1,20100'."\n" // valid (IT names + MI plate code, localized)
         .',IT000,,,,,,'."\n" // invalid: denomination missing
         .'Beta Srl,,Nonexistentland,,,,,'."\n" // invalid: geo not found
         .'Existing Srl,,,,,,,'."\n"; // invalid: denomination duplicates existing DB row
@@ -81,10 +83,10 @@ it('AC-013: dry-run + commit creates a Company with its primary address, geo nam
     expect($address->line1)->toBe('Via Roma 1')
         ->and($address->postal_code)->toBe('20100')
         ->and($address->is_primary)->toBeTrue()
-        ->and($address->city->name)->toBe('Milano')
-        ->and($address->province->name)->toBe('Milano')
-        ->and($address->state->name)->toBe('Lombardia')
-        ->and($address->country->name)->toBe('Italia');
+        ->and($address->city->name)->toBe('Milan')
+        ->and($address->province->name)->toBe('Milan')
+        ->and($address->state->name)->toBe('Lombardy')
+        ->and($address->country->name)->toBe('Italy');
 });
 
 it('AC-013: a company with no address columns filled is created with no address', function () {

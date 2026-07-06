@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import i18n from '@/i18n'
 import { GeoSelect, type GeoValue } from '@/features/geo/geo-select'
 
@@ -12,8 +12,11 @@ vi.mock('@/features/geo/use-geo', () => ({
   useCountries: () => useCountriesMock(),
   useStates: (countryId: number | null) => useStatesMock(countryId),
   useProvinces: (stateId: number | null) => useProvincesMock(stateId),
-  useCities: (stateId: number | null, provinceId?: number | null) =>
-    useCitiesMock(stateId, provinceId),
+  useCities: (
+    stateId: number | null,
+    provinceId?: number | null,
+    search?: string,
+  ) => useCitiesMock(stateId, provinceId, search),
 }))
 
 function query<T>(data: T) {
@@ -69,7 +72,7 @@ describe('GeoSelect', () => {
 
     expect(useStatesMock).toHaveBeenCalledWith(null)
     expect(useProvincesMock).toHaveBeenCalledWith(null)
-    expect(useCitiesMock).toHaveBeenCalledWith(null, null)
+    expect(useCitiesMock).toHaveBeenCalledWith(null, null, '')
   })
 
   it('disables the state/province/city selects until a country is chosen', () => {
@@ -104,7 +107,7 @@ describe('GeoSelect', () => {
       />,
     )
 
-    expect(useCitiesMock).toHaveBeenCalledWith(10, 50)
+    expect(useCitiesMock).toHaveBeenCalledWith(10, 50, '')
   })
 
   it('resets state, province and city when the country changes', () => {
@@ -181,5 +184,37 @@ describe('GeoSelect', () => {
     render(<GeoSelect value={empty} onChange={() => {}} />)
 
     expect(screen.getByText('Failed to load options.')).toBeInTheDocument()
+  })
+
+  it('filters the country options client-side as the user types', () => {
+    render(<GeoSelect value={empty} onChange={() => {}} />)
+
+    fireEvent.click(screen.getAllByRole('combobox')[0])
+    fireEvent.change(screen.getByLabelText('Search'), {
+      target: { value: 'fra' },
+    })
+
+    expect(screen.getByRole('option', { name: 'France' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: 'Italy' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('narrows the city list server-side via a debounced search term', async () => {
+    render(
+      <GeoSelect
+        value={{ country_id: 1, state_id: 10, province_id: null, city_id: null }}
+        onChange={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getAllByRole('combobox')[3])
+    fireEvent.change(screen.getByLabelText('Search'), {
+      target: { value: 'grumo' },
+    })
+
+    await waitFor(() =>
+      expect(useCitiesMock).toHaveBeenCalledWith(10, null, 'grumo'),
+    )
   })
 })

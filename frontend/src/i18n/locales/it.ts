@@ -170,6 +170,8 @@ export const it: TranslationResources = {
     cityPlaceholder: 'Seleziona una città',
     empty: 'Nessuna opzione disponibile',
     error: 'Caricamento delle opzioni non riuscito.',
+    search: 'Cerca',
+    noMatch: 'Nessun risultato',
   },
   roles: {
     title: 'Ruoli',

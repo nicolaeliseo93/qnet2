@@ -49,10 +49,32 @@ lone BusinessFunctionSeederTest idempotency — PRE-EXISTING order-dependent fla
 IT resolution. Pint clean. Frontend: `tsc --noEmit` clean, ESLint clean, `vitest run
 src/features/operational-sites` 46/46 (payload/form fixtures updated for the additive `alias`).
 
-FOLLOW-UP (out of scope, flagged): the spec-0012 GENERIC file-import uses its own
-`App\Imports\Support\GeoResolver` (separate lane) — if those uploads carry the same Italian strings,
-reuse `ItalianGeoLocalizer` there too (it is migration-layer-independent). Also: `alias` deviates from
-spec 0011's "site has no own name column" — user-authorized; spec XML not amended.
+Also: `alias` deviates from spec 0011's "site has no own name column" — user-authorized; spec XML
+not amended.
+
+### Follow-up (done same session) — localizer made agnostic across ALL import paths
+
+Per user ("anche i prossimi import saranno così, preparati a fare questo check per ogni indirizzo
+importato"): `ItalianGeoLocalizer` MOVED from `App\Migrations\Support` to the neutral shared namespace
+`App\Support\Geo\ItalianGeoLocalizer` (test at `tests/Unit/Support/Geo/`). Now consumed by BOTH import
+resolvers:
+- `App\Migrations\Support\MigrationGeoResolver` (migration: companies + operational-sites) — unchanged
+  behavior, just the moved `use`.
+- `App\Imports\Support\GeoResolver` (spec 0012 GENERIC CSV import, every ImportDefinition) — NEW:
+  constructor injects the localizer; country/region routed through it, province tries the plate-code
+  map then falls back to a plain name match, city strips label noise + translates. Non-Italian /
+  already-correct values pass through, so it stays a general resolver. Container auto-wires the new
+  dep into all *ImportDefinition ctors (no manual binding).
+- Test fixtures for the CSV import (`GeoResolverTest`, `CompaniesImportTest`, `OperationalSitesImport
+  Test`) switched from Italian-spelled reference rows to the real ENGLISH dataset spelling (Italy/
+  Lombardy/Milan) with Italian + `MI` plate-code CSV inputs — they now exercise the localization
+  end-to-end (requirement changed, not tampering).
+
+Any FUTURE import (migration source or CSV ImportDefinition) that resolves geo through either resolver
+gets the Italian matching for free. Extend the maps in `App\Support\Geo\ItalianGeoLocalizer` only.
+
+Status still GREEN: full `php artisan test` (XDEBUG_MODE=off) 1085 passed / 1 skip / 1 fail (the same
+pre-existing BusinessFunctionSeeder flake). Pint clean.
 
 NOT COMMITTED.
 

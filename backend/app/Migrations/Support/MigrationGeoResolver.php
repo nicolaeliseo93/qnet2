@@ -6,6 +6,7 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\Province;
 use App\Models\State;
+use App\Support\Geo\ItalianGeoLocalizer;
 use Illuminate\Database\Eloquent\Builder;
 
 /**

@@ -1,16 +1,19 @@
 <?php
 
-namespace App\Migrations\Support;
+namespace App\Support\Geo;
 
 use Illuminate\Support\Str;
 
 /**
- * Bridges the Italian geo strings the legacy systems emit to the ENGLISH /
+ * Bridges the Italian geo strings external systems emit to the ENGLISH /
  * anglicized reference dataset (world.sql) qnet ships: `Italia`->`Italy`,
  * `Sicilia`->`Sicily`, the province plate code `NA`->`Naples`, `Napoli`->
- * `Naples`. Reference data, not business logic — it is deliberately shared by
- * MigrationGeoResolver (companies, operational-sites AND every future import
- * with the same address shape), so the matching lives in ONE place.
+ * `Naples`. Reference data, not business logic — it lives in this neutral,
+ * shared namespace so EVERY import path consumes it: the migration resolver
+ * (App\Migrations\Support\MigrationGeoResolver — companies, operational-sites)
+ * AND the generic CSV import resolver (App\Imports\Support\GeoResolver), plus
+ * any future import with the same address shape. The matching lives in ONE
+ * place.
  *
  * Every method returns the CANONICAL string to match the reference table on
  * (case-insensitively); an input already matching the dataset (`Campania`,
