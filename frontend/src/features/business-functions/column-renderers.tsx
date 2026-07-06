@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- renderer registry module: cells are AG Grid render functions, not route/page components */
 import type { ICellRendererParams } from 'ag-grid-community'
+import { Check, X } from 'lucide-react'
 import i18n from '@/i18n'
 import { UserAvatar } from '@/components/user-avatar'
 import { Badge } from '@/components/ui/badge'
@@ -124,13 +125,26 @@ function UsersCell({ value }: ICellRendererParams) {
   )
 }
 
-/** Renders a boolean column (`is_business_unit`/`is_business_service`) as a Sì/No badge. */
+/**
+ * Colored tone classes for the boolean badge (green = yes, red = no), reusing
+ * the same palette as the generic table BadgeCell so tones stay consistent
+ * across the app and adapt to dark mode.
+ */
+const BOOLEAN_BADGE_YES = 'border-transparent bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
+const BOOLEAN_BADGE_NO = 'border-transparent bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200'
+
+/**
+ * Renders a boolean column (`is_business_unit`/`is_business_service`) as a
+ * colored Sì/No badge with a leading icon (check for yes, cross for no). Color
+ * is not the only signal — icon plus text keep it accessible.
+ */
 function BooleanCell({ value }: ICellRendererParams) {
   const isTrue = value === true
 
   return (
     <div className="flex h-full items-center justify-center">
-      <Badge variant={isTrue ? 'secondary' : 'outline'}>
+      <Badge className={isTrue ? BOOLEAN_BADGE_YES : BOOLEAN_BADGE_NO}>
+        {isTrue ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
         {isTrue ? i18n.t('common.yes') : i18n.t('common.no')}
       </Badge>
     </div>
