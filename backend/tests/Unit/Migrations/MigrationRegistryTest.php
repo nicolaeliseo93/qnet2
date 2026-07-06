@@ -1,11 +1,11 @@
 <?php
 
 use App\Migrations\MigrationRegistry;
+use App\Migrations\Sources\BusinessFunctionMembersSource;
 use App\Migrations\Sources\BusinessFunctionsSource;
 use App\Migrations\Sources\CompaniesSource;
 use App\Migrations\Sources\OperationalSitesSource;
 use App\Migrations\Sources\RolesSource;
-use App\Migrations\Sources\UserBusinessFunctionsSource;
 use App\Migrations\Sources\UsersSource;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,7 +36,7 @@ it('config/migrations.php registers every source (spec 0013 Increment 2)', funct
         'business-functions' => BusinessFunctionsSource::class,
         'companies' => CompaniesSource::class,
         'operational-sites' => OperationalSitesSource::class,
-        'user-business-functions' => UserBusinessFunctionsSource::class,
+        'business-function-members' => BusinessFunctionMembersSource::class,
     ]);
 });
 
@@ -45,6 +45,6 @@ it('all() resolves every registered source', function () {
 
     expect($sources)->toHaveCount(6)
         ->and(array_map(fn ($source) => $source->key(), $sources))->toBe([
-            'roles', 'users', 'business-functions', 'companies', 'operational-sites', 'user-business-functions',
+            'roles', 'users', 'business-functions', 'companies', 'operational-sites', 'business-function-members',
         ]);
 });

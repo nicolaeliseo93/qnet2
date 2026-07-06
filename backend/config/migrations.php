@@ -1,10 +1,10 @@
 <?php
 
+use App\Migrations\Sources\BusinessFunctionMembersSource;
 use App\Migrations\Sources\BusinessFunctionsSource;
 use App\Migrations\Sources\CompaniesSource;
 use App\Migrations\Sources\OperationalSitesSource;
 use App\Migrations\Sources\RolesSource;
-use App\Migrations\Sources\UserBusinessFunctionsSource;
 use App\Migrations\Sources\UsersSource;
 
 return [
@@ -57,7 +57,7 @@ return [
         'business-functions' => BusinessFunctionsSource::class,
         'companies' => CompaniesSource::class,
         'operational-sites' => OperationalSitesSource::class,
-        'user-business-functions' => UserBusinessFunctionsSource::class,
+        'business-function-members' => BusinessFunctionMembersSource::class,
     ],
 
 ];

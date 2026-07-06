@@ -34,9 +34,10 @@ final class MigrationOrder
         // Phase 2 — users (reference the phase 1 entities via old_id).
         ['users'],
 
-        // Phase 3 — junctions between phase 1 and phase 2 entities: the
-        // user <-> business-function pivot needs both sides already migrated.
-        ['user-business-functions'],
+        // Phase 3 — associations that link phase 2 users onto phase 1 entities:
+        // business-function operators (pivot) + responsible (manager_id) need
+        // both the function and its users already migrated.
+        ['business-function-members'],
     ];
 
     /**
