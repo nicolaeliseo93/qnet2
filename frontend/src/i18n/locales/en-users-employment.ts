@@ -6,19 +6,15 @@
  */
 
 /**
- * Short labels for the user form's tab strip. `contractData` is worded
- * distinctly from `contract` (not just "Contract data") so the two tabs never
- * share an accessible-name prefix — keeps role+name queries unambiguous.
+ * Labels for the user form's three macro tabs. Each macro tab groups several
+ * `FormSection`s (Account = identity/credentials/access, Employment =
+ * profile/contract/contract-details, Contact info = contacts/addresses); the
+ * per-section headings come from `users.form.sections.*`, not from here.
  */
 export const usersFormTabs = {
-  identity: 'Identity',
-  credentials: 'Credentials',
-  access: 'Access',
-  profile: 'Profile',
-  contract: 'Contract',
-  contractData: 'Contract details',
-  contacts: 'Contacts',
-  addresses: 'Addresses',
+  account: 'Account',
+  employment: 'Employment',
+  contactInfo: 'Contact info',
   tabHasErrors: 'This tab has validation errors.',
 }
 

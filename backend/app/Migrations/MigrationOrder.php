@@ -28,11 +28,12 @@ final class MigrationOrder
      * @var array<int, array<int, string>>
      */
     public const PHASES = [
-        // Phase 1 — independent anchor entities that users later link to.
-        ['business-functions', 'companies', 'operational-sites'],
+        // Phase 1 — independent anchor entities that later phases link to.
+        ['business-functions', 'companies', 'operational-sites', 'referent-types'],
 
-        // Phase 2 — users (reference the phase 1 entities via old_id).
-        ['users'],
+        // Phase 2 — entities that reference the phase 1 anchors via old_id:
+        // users (companies/sites/functions) and referents (referent-types).
+        ['users', 'referents'],
 
         // Phase 3 — associations that link phase 2 users onto phase 1 entities:
         // business-function operators (pivot) + responsible (manager_id) need

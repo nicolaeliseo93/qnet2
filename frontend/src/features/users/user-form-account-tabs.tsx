@@ -16,6 +16,7 @@ import { ROLES_FOR_SELECT_RESOURCE } from '@/features/roles/for-select-api'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { PersonalDataCardForm } from '@/features/personal-data/personal-data-card-form'
+import { cardOwnerRef } from '@/features/personal-data/drafts'
 import type {
   PersonalDataDraft,
   PersonalDataFieldPermissionResolver,
@@ -269,6 +270,7 @@ export function ContactsTabContent({
         onChange={(contacts) => setProfileDraft({ ...profileDraft, contacts })}
         fieldPermission={personalDataFieldPermission}
         showHeader={false}
+        persistence={cardOwnerRef(profileDraft)}
       />
     </FormSection>
   )
@@ -293,6 +295,7 @@ export function AddressesTabContent({
         onChange={(addresses) => setProfileDraft({ ...profileDraft, addresses })}
         fieldPermission={personalDataFieldPermission}
         showHeader={false}
+        persistence={cardOwnerRef(profileDraft)}
       />
     </FormSection>
   )

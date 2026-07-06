@@ -6,7 +6,6 @@ use App\DataObjects\PersonalData\CreatePersonalData;
 use App\DataObjects\Users\CreateUserData;
 use App\DataObjects\Users\ProfileData;
 use App\Enums\PersonalDataTypeEnum;
-use App\Enums\PersonalTitleEnum;
 use App\Migrations\AbstractMigrationSource;
 use App\Migrations\MigrationImportContext;
 use App\Migrations\MigrationRowOutcome;
@@ -78,7 +77,6 @@ class UsersSource extends AbstractMigrationSource
             ['id' => 'password', 'label' => 'Password (bcrypt hash)', 'type' => 'string'],
             ['id' => 'first_name', 'label' => 'First name', 'type' => 'string'],
             ['id' => 'last_name', 'label' => 'Last name', 'type' => 'string'],
-            ['id' => 'title', 'label' => 'Title', 'type' => 'string'],
             ['id' => 'tax_code', 'label' => 'Tax code', 'type' => 'string'],
             ['id' => 'vat_number', 'label' => 'VAT number', 'type' => 'string'],
             ['id' => 'birth_date', 'label' => 'Birth date', 'type' => 'date'],
@@ -193,7 +191,6 @@ class UsersSource extends AbstractMigrationSource
             new ProfileData(
                 card: new CreatePersonalData(
                     type: PersonalDataTypeEnum::Individual,
-                    title: PersonalTitleEnum::fromValue($record['title'] ?? null),
                     firstName: $firstName,
                     lastName: $lastName,
                     taxCode: $this->blankToNull($record['tax_code'] ?? null),

@@ -2,11 +2,13 @@ import {
   Briefcase,
   Building2,
   Circle,
+  ContactRound,
   DatabaseZap,
   Layers,
   LayoutDashboard,
   MapPin,
   ShieldCheck,
+  Tags,
   Users,
   type LucideIcon,
 } from 'lucide-react'
@@ -24,6 +26,8 @@ const iconMap: Record<string, LucideIcon> = {
   'map-pin': MapPin,
   layers: Layers,
   'database-zap': DatabaseZap,
+  'contact-round': ContactRound,
+  tags: Tags,
 }
 
 export function resolveIcon(name: string | null): LucideIcon {

@@ -14,7 +14,6 @@ const enums: Record<string, EnumOption[]> = {
     { value: 'individual', label: 'Individual', color: null, icon: null, is_default: true, hidden_on_form: false },
     { value: 'company', label: 'Company', color: null, icon: null, is_default: false, hidden_on_form: false },
   ],
-  personal_title: [],
 }
 
 vi.mock('@/features/config/use-config', () => ({
@@ -28,7 +27,6 @@ let serverCard = {
   first_name: 'Nicola',
   last_name: 'Eliseo',
   company_name: null,
-  title: null,
   tax_code: null,
   vat_number: null,
   sdi_code: null,

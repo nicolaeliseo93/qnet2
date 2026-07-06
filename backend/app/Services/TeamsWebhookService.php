@@ -20,7 +20,7 @@ class TeamsWebhookService
     public function enabled(): bool
     {
         return (bool) config('services.teams.enabled')
-            && !empty(config('services.teams.webhook_errors'));
+            && ! empty(config('services.teams.webhook_errors'));
     }
 
     /**
@@ -30,8 +30,7 @@ class TeamsWebhookService
         string $title,
         string $message,
         array $facts = []
-    ): bool
-    {
+    ): bool {
         return $this->sendStyledText('info', $title, $message, $facts);
     }
 
@@ -42,8 +41,7 @@ class TeamsWebhookService
         string $title,
         string $message,
         array $facts = []
-    ): bool
-    {
+    ): bool {
         return $this->sendStyledText('success', $title, $message, $facts);
     }
 
@@ -54,8 +52,7 @@ class TeamsWebhookService
         string $title,
         string $message,
         array $facts = []
-    ): bool
-    {
+    ): bool {
         return $this->sendStyledText('error', $title, $message, $facts);
     }
 
@@ -67,8 +64,7 @@ class TeamsWebhookService
         string $title,
         string $message,
         array $facts = []
-    ): bool
-    {
+    ): bool {
         [$regularFacts, $expandableFacts] = $this->splitFacts($facts);
 
         $body = [
@@ -92,11 +88,11 @@ class TeamsWebhookService
             ],
         ];
 
-        if (!empty($regularFacts)) {
+        if (! empty($regularFacts)) {
             $body[] = [
                 'type' => 'FactSet',
                 'facts' => collect($regularFacts)
-                    ->map(fn($value, $key) => [
+                    ->map(fn ($value, $key) => [
                         'title' => (string) $key,
                         'value' => (string) $value,
                     ])
@@ -105,7 +101,7 @@ class TeamsWebhookService
             ];
         }
 
-        if (!empty($expandableFacts)) {
+        if (! empty($expandableFacts)) {
             foreach ($expandableFacts as $key => $value) {
                 $body = array_merge($body, $this->buildExpandableSection((string) $key, (string) $value));
             }
@@ -144,7 +140,7 @@ class TeamsWebhookService
     {
         $webhookUrl = $this->resolveWebhookUrl($level);
 
-        if (!(bool) config('services.teams.enabled') || empty($webhookUrl)) {
+        if (! (bool) config('services.teams.enabled') || empty($webhookUrl)) {
             Log::warning('Teams webhook is disabled or not configured.', [
                 'level' => $level,
             ]);
@@ -214,6 +210,7 @@ class TeamsWebhookService
 
             if (in_array($normalizedKey, self::EXPANDABLE_FACT_KEYS, true) || mb_strlen($stringValue) > 500) {
                 $expandableFacts[$key] = $stringValue;
+
                 continue;
             }
 
@@ -228,7 +225,7 @@ class TeamsWebhookService
      */
     private function buildExpandableSection(string $label, string $value): array
     {
-        $sectionId = 'details_' . md5($label . $value);
+        $sectionId = 'details_'.md5($label.$value);
         $preview = mb_substr($value, 0, 600);
 
         if (mb_strlen($value) > 600) {

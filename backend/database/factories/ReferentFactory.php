@@ -39,7 +39,7 @@ class ReferentFactory extends Factory
 
     /**
      * Attach a personal-data card (morph `personable`, same pattern used by
-     * `PersonalDataSeeder` for users: `$owner->personalData()->updateOrCreate()`
+     * `DemoPersonalDataSeeder` for users: `$owner->personalData()->updateOrCreate()`
      * / `PersonalData::factory()->for($owner, 'personable')`), then re-derive
      * `name` from the card's display name so it stays consistent with the
      * denormalized `referents.name` column (mirrors `users.name`).

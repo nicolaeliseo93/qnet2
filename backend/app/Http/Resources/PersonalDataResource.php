@@ -32,7 +32,6 @@ class PersonalDataResource extends JsonResource
         return [
             'id' => $this->id,
             'type' => $this->type,
-            'title' => $this->title,
             'first_name' => $this->first_name,
             'last_name' => $this->last_name,
             'company_name' => $this->company_name,
@@ -42,6 +41,7 @@ class PersonalDataResource extends JsonResource
             'vat_number' => $this->vat_number,
             'sdi_code' => $this->sdi_code,
             'birth_date' => $this->birth_date,
+            'gender' => $this->gender,
             'personable_type' => $this->personable_type,
             'personable_id' => $this->personable_id,
             'contacts' => ContactResource::collection($this->whenLoaded('contacts')),

@@ -7,7 +7,5 @@ use Attribute;
 #[Attribute(Attribute::TARGET_CLASS_CONSTANT)]
 class Icon
 {
-    public function __construct(public string $icon)
-    {
-    }
+    public function __construct(public string $icon) {}
 }

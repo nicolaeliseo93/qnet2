@@ -30,6 +30,13 @@
 - **Nomi in inglese, obbligatorio** — tabelle, colonne, rotte/URI e nomi di route in inglese (`grants`, non `bandi`; `expires_at`, non `scadenza`). Eccezione solo per i nomi già esistenti nel codebase, che si riusano invariati. Vedi `engineering.md §1.2`.
 - **Migrazioni**: usale come version control dello schema; mai mischiare SQL grezzo. Sempre reversibili (`down`). **Mai** modificare una migrazione già committata: creane una nuova.
 
+### 3.1 Seeder e factory — separazione seed pulito / dati fake (vincolante)
+
+- **`DatabaseSeeder` = seed pulito**, minimale: SOLO inizializzazione/reference (es. `locations:add`), il catalogo permessi + l'unico ruolo privilegiato `super-admin` (`RolePermissionSeeder`) e l'unico utente demo (`DemoUserSeeder`). Nient'altro.
+- **Ogni altro seeder = dati fake/demo** → prefisso **`Demo`** obbligatorio nel nome della classe e richiamato **solo** da `DemoDataSeeder` (eseguito on-demand: `php artisan db:seed --class=DemoDataSeeder`). Mai aggiungere un seeder di dati fake a `DatabaseSeeder`.
+- **Ogni nuova factory/generazione di dati fake** appartiene al percorso `DemoDataSeeder`, mai al seed pulito. Un nuovo modulo con fixtures → nuovo `Demo<Entità>Seeder` aggiunto alla lista di `DemoDataSeeder`, nell'ordine di dipendenza corretto.
+- Idempotenza: i seeder demo usano `firstOrCreate`/`updateOrCreate`/`syncRoles` così che re-run non duplichino righe.
+
 ## 4. Permessi e audit
 
 - RBAC con `spatie/laravel-permission`: permessi via Policy/`can`, sync delle abilities.

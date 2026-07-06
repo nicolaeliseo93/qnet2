@@ -11,6 +11,7 @@ import type {
   AddressDraft,
   Contact,
   ContactDraft,
+  OwnerRef,
   PersonalDataCard,
   PersonalDataDraft,
   PersonalDataFieldPermissionResolver,
@@ -18,6 +19,22 @@ import type {
 } from '@/features/personal-data/types'
 
 let keyCounter = 0
+
+/**
+ * Stable alias of the polymorphic owner of contacts/addresses (the personal-data
+ * card), matching the backend `contactable_types`/`addressable_types` allowlist.
+ */
+const CARD_OWNER_ALIAS = 'personal_data'
+
+/**
+ * The owner a manager persists a contact/address against, or `undefined` when
+ * the card does not exist yet. Immediate persistence needs a card id, so a draft
+ * without one (create mode, or an edited owner with no card) stays buffered and
+ * is persisted with the parent user payload instead.
+ */
+export function cardOwnerRef(draft: PersonalDataDraft): OwnerRef | undefined {
+  return draft.id !== undefined ? { type: CARD_OWNER_ALIAS, id: draft.id } : undefined
+}
 
 /**
  * A blank personal-data draft, used to keep the card always active in the user
@@ -29,7 +46,6 @@ export function emptyPersonalDataDraft(
 ): PersonalDataDraft {
   return {
     type,
-    title: null,
     first_name: null,
     last_name: null,
     company_name: null,
@@ -37,6 +53,7 @@ export function emptyPersonalDataDraft(
     vat_number: null,
     sdi_code: null,
     birth_date: null,
+    gender: type === 'company' ? null : 'male',
     contacts: [],
     addresses: [],
   }
@@ -52,7 +69,7 @@ export function nextDraftKey(): string {
 /* Seed: persisted card → draft tree (edit mode)                               */
 /* -------------------------------------------------------------------------- */
 
-function contactToDraft(contact: Contact): ContactDraft {
+export function contactToDraft(contact: Contact): ContactDraft {
   return {
     _key: `contact-${contact.id}`,
     id: contact.id,
@@ -63,7 +80,7 @@ function contactToDraft(contact: Contact): ContactDraft {
   }
 }
 
-function addressToDraft(address: Address): AddressDraft {
+export function addressToDraft(address: Address): AddressDraft {
   return {
     _key: `address-${address.id}`,
     id: address.id,
@@ -83,7 +100,6 @@ export function cardToDraft(card: PersonalDataCard): PersonalDataDraft {
   return {
     id: card.id,
     type: card.type,
-    title: card.title,
     first_name: card.first_name,
     last_name: card.last_name,
     company_name: card.company_name,
@@ -91,6 +107,9 @@ export function cardToDraft(card: PersonalDataCard): PersonalDataDraft {
     vat_number: card.vat_number,
     sdi_code: card.sdi_code,
     birth_date: card.birth_date ? card.birth_date.slice(0, 10) : null,
+    // Mirror emptyPersonalDataDraft: an individual always carries a gender
+    // (default male; backfills a legacy null), a company carries none.
+    gender: card.gender ?? (card.type === 'company' ? null : 'male'),
     contacts: card.contacts.map(contactToDraft),
     addresses: card.addresses.map(addressToDraft),
   }
@@ -130,7 +149,6 @@ export interface PersonalDataAddressPayload {
  */
 export interface PersonalDataPayload {
   type?: PersonalDataDraft['type']
-  title?: string | null
   first_name?: string | null
   last_name?: string | null
   company_name?: string | null
@@ -138,6 +156,7 @@ export interface PersonalDataPayload {
   vat_number?: string | null
   sdi_code?: string | null
   birth_date?: string | null
+  gender?: PersonalDataDraft['gender']
   contacts?: PersonalDataContactPayload[]
   addresses?: PersonalDataAddressPayload[]
 }
@@ -174,7 +193,6 @@ function addressToPayload(draft: AddressDraft): PersonalDataAddressPayload {
 export function draftToPayload(draft: PersonalDataDraft): PersonalDataPayload {
   return {
     type: draft.type,
-    title: draft.title,
     first_name: draft.first_name,
     last_name: draft.last_name,
     company_name: draft.company_name,
@@ -182,6 +200,7 @@ export function draftToPayload(draft: PersonalDataDraft): PersonalDataPayload {
     vat_number: draft.vat_number,
     sdi_code: draft.sdi_code,
     birth_date: draft.birth_date,
+    gender: draft.gender,
     contacts: draft.contacts.map(contactToPayload),
     addresses: draft.addresses.map(addressToPayload),
   }
@@ -190,7 +209,6 @@ export function draftToPayload(draft: PersonalDataDraft): PersonalDataPayload {
 /** The mapped payload's scalar keys, each gated by its own `personal_data.*` key. */
 const SCALAR_PAYLOAD_KEYS = [
   'type',
-  'title',
   'first_name',
   'last_name',
   'company_name',
@@ -198,6 +216,7 @@ const SCALAR_PAYLOAD_KEYS = [
   'vat_number',
   'sdi_code',
   'birth_date',
+  'gender',
 ] as const
 
 /**

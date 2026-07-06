@@ -96,6 +96,35 @@ return [
                         ],
                     ],
                 ],
+                [
+                    // Referents (spec 0016): a contact person/entity reusing the
+                    // users anagraphic stack. Modelled as a collapsible group
+                    // (same shape as `fa-companies-services`) so its full-CRUD
+                    // lookup `referent-types` nests UNDER referents instead of
+                    // sitting as a flat sibling. The route-less group is dropped
+                    // automatically when the actor can see none of its children.
+                    'key' => 'referents-group',
+                    'label' => 'navigation.referents',
+                    'icon' => 'contact-round',
+                    'route' => null,
+                    'permission' => null,
+                    'children' => [
+                        [
+                            'key' => 'referents',
+                            'label' => 'navigation.referents',
+                            'icon' => 'contact-round',
+                            'route' => '/referents',
+                            'permission' => 'referents.view',
+                        ],
+                        [
+                            'key' => 'referent-types',
+                            'label' => 'navigation.referentTypes',
+                            'icon' => 'tags',
+                            'route' => '/referent-types',
+                            'permission' => 'referent-types.view',
+                        ],
+                    ],
+                ],
             ],
         ],
         [

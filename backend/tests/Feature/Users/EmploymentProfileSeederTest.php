@@ -2,9 +2,10 @@
 
 use App\Models\EmploymentProfile;
 use App\Models\User;
-use Database\Seeders\EmploymentProfileSeeder;
+use Database\Seeders\DemoEmploymentProfileSeeder;
+use Database\Seeders\DemoRolesSeeder;
+use Database\Seeders\DemoUsersSeeder;
 use Database\Seeders\RolePermissionSeeder;
-use Database\Seeders\UserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -20,9 +21,10 @@ uses(RefreshDatabase::class);
 
 it('seeds at least 2 managers and every other seeded user reports to one of them (no self-reference)', function () {
     $this->seed(RolePermissionSeeder::class);
-    $this->seed(UserSeeder::class);
+    $this->seed(DemoRolesSeeder::class);
+    $this->seed(DemoUsersSeeder::class);
 
-    $this->seed(EmploymentProfileSeeder::class);
+    $this->seed(DemoEmploymentProfileSeeder::class);
 
     $managers = EmploymentProfile::where('is_manager', true)->get();
     expect($managers->count())->toBeGreaterThanOrEqual(2);
@@ -45,11 +47,12 @@ it('seeds at least 2 managers and every other seeded user reports to one of them
 
 it('is idempotent — re-running does not duplicate employment rows', function () {
     $this->seed(RolePermissionSeeder::class);
-    $this->seed(UserSeeder::class);
-    $this->seed(EmploymentProfileSeeder::class);
+    $this->seed(DemoRolesSeeder::class);
+    $this->seed(DemoUsersSeeder::class);
+    $this->seed(DemoEmploymentProfileSeeder::class);
     $countBefore = EmploymentProfile::count();
 
-    $this->seed(EmploymentProfileSeeder::class);
+    $this->seed(DemoEmploymentProfileSeeder::class);
 
     expect(EmploymentProfile::count())->toBe($countBefore);
 });

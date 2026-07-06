@@ -10,7 +10,7 @@ use Faker\Factory as FakerFactory;
 use Faker\Generator;
 use Illuminate\Database\Seeder;
 
-class UserContactSeeder extends Seeder
+class DemoUserContactSeeder extends Seeder
 {
     use SeedsDevelopmentUsers;
 

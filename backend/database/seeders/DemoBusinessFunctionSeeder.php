@@ -8,7 +8,7 @@ use Faker\Factory as FakerFactory;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
 
-class BusinessFunctionSeeder extends Seeder
+class DemoBusinessFunctionSeeder extends Seeder
 {
     /**
      * Curated demo business functions with their mutually-exclusive type
@@ -43,7 +43,7 @@ class BusinessFunctionSeeder extends Seeder
     /**
      * Seed the demo business functions, each with a responsible manager and a
      * set of associated users drawn from the already-seeded user pool
-     * (UserSeeder runs first). Idempotent: re-running updates in place by name
+     * (DemoUsersSeeder runs first). Idempotent: re-running updates in place by name
      * and never duplicates a function or a membership row.
      */
     public function run(): void

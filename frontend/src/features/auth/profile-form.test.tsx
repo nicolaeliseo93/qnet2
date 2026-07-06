@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { ProfileForm } from '@/features/auth/profile-form'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import type { User } from '@/features/auth/types'
 import type { EnumOption } from '@/features/config/types'
 import type { PersonalDataCard } from '@/features/personal-data/types'
@@ -37,7 +38,6 @@ const enums: Record<string, EnumOption[]> = {
       hidden_on_form: false,
     },
   ],
-  personal_title: [],
   contact_type: [],
   locale: [
     {
@@ -77,7 +77,9 @@ function wrapper() {
     defaultOptions: { queries: { retry: false } },
   })
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
+    </QueryClientProvider>
   )
 }
 
@@ -85,7 +87,6 @@ function card(overrides: Partial<PersonalDataCard> = {}): PersonalDataCard {
   return {
     id: 99,
     type: 'individual',
-    title: null,
     first_name: 'Ada',
     last_name: 'Lovelace',
     company_name: null,

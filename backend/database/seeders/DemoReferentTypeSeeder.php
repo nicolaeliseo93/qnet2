@@ -11,7 +11,7 @@ use Illuminate\Database\Seeder;
  * re-running never duplicates rows nor overwrites manual edits made through
  * the `referent-types` CRUD module.
  */
-class ReferentTypeSeeder extends Seeder
+class DemoReferentTypeSeeder extends Seeder
 {
     /**
      * @var array<int, string>

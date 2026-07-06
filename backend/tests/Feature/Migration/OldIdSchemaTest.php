@@ -3,6 +3,8 @@
 use App\Models\BusinessFunction;
 use App\Models\Company;
 use App\Models\OperationalSite;
+use App\Models\Referent;
+use App\Models\ReferentType;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -22,6 +24,8 @@ dataset('old_id_tables', [
     'business_functions' => ['business_functions', '2026_07_04_100200_add_old_id_to_business_functions_table.php'],
     'companies' => ['companies', '2026_07_04_100300_add_old_id_to_companies_table.php'],
     'operational_sites' => ['operational_sites', '2026_07_04_100400_add_old_id_to_operational_sites_table.php'],
+    'referent_types' => ['referent_types', '2026_07_07_100200_add_old_id_to_referent_types_table.php'],
+    'referents' => ['referents', '2026_07_07_100300_add_old_id_to_referents_table.php'],
 ]);
 
 /**
@@ -36,6 +40,8 @@ function oldIdFactoryFor(string $table): Factory
         'business_functions' => BusinessFunction::factory(),
         'companies' => Company::factory(),
         'operational_sites' => OperationalSite::factory(),
+        'referent_types' => ReferentType::factory(),
+        'referents' => Referent::factory(),
     };
 }
 
@@ -144,4 +150,32 @@ it('does not mass-assign old_id on Role::create()', function () {
     $role = Role::create(['name' => 'imported-role', 'guard_name' => 'web', 'old_id' => 999]);
 
     expect($role->old_id)->toBeNull();
+});
+
+it('persists old_id set by property assignment on ReferentType', function () {
+    $referentType = ReferentType::factory()->create();
+    $referentType->old_id = 505;
+    $referentType->save();
+
+    expect($referentType->fresh()->old_id)->toBe(505);
+});
+
+it('does not mass-assign old_id on ReferentType::create()', function () {
+    $referentType = ReferentType::create(['name' => 'Supplier', 'old_id' => 999]);
+
+    expect($referentType->old_id)->toBeNull();
+});
+
+it('persists old_id set by property assignment on Referent', function () {
+    $referent = Referent::factory()->create();
+    $referent->old_id = 506;
+    $referent->save();
+
+    expect($referent->fresh()->old_id)->toBe(506);
+});
+
+it('does not mass-assign old_id on Referent::create()', function () {
+    $referent = Referent::create(['name' => 'John Doe', 'contact_scope' => 'internal', 'old_id' => 999]);
+
+    expect($referent->old_id)->toBeNull();
 });

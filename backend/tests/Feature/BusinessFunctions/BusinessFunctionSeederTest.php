@@ -2,7 +2,7 @@
 
 use App\Models\BusinessFunction;
 use App\Models\User;
-use Database\Seeders\BusinessFunctionSeeder;
+use Database\Seeders\DemoBusinessFunctionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -14,7 +14,7 @@ uses(RefreshDatabase::class);
 it('seeds the curated business functions with managers and members', function () {
     User::factory()->count(12)->create();
 
-    $this->seed(BusinessFunctionSeeder::class);
+    $this->seed(DemoBusinessFunctionSeeder::class);
 
     expect(BusinessFunction::count())->toBe(15);
 
@@ -32,17 +32,17 @@ it('seeds the curated business functions with managers and members', function ()
 it('is idempotent — re-running does not duplicate functions or memberships', function () {
     User::factory()->count(12)->create();
 
-    $this->seed(BusinessFunctionSeeder::class);
+    $this->seed(DemoBusinessFunctionSeeder::class);
     $membershipCount = BusinessFunction::first()->users()->count();
 
-    $this->seed(BusinessFunctionSeeder::class);
+    $this->seed(DemoBusinessFunctionSeeder::class);
 
     expect(BusinessFunction::count())->toBe(15);
     expect(BusinessFunction::first()->users()->count())->toBe($membershipCount);
 });
 
 it('seeds functions even with no users to associate', function () {
-    $this->seed(BusinessFunctionSeeder::class);
+    $this->seed(DemoBusinessFunctionSeeder::class);
 
     expect(BusinessFunction::count())->toBe(15);
     expect(BusinessFunction::whereNotNull('manager_id')->count())->toBe(0);

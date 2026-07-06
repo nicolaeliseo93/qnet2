@@ -5,13 +5,14 @@ use App\Models\Country;
 use App\Models\Province;
 use App\Models\State;
 use App\Models\User;
+use Database\Seeders\DemoNotificationSeeder;
+use Database\Seeders\DemoPersonalDataSeeder;
+use Database\Seeders\DemoRolesSeeder;
+use Database\Seeders\DemoUserAddressSeeder;
+use Database\Seeders\DemoUserContactSeeder;
 use Database\Seeders\DemoUserSeeder;
-use Database\Seeders\NotificationSeeder;
-use Database\Seeders\PersonalDataSeeder;
+use Database\Seeders\DemoUsersSeeder;
 use Database\Seeders\RolePermissionSeeder;
-use Database\Seeders\UserAddressSeeder;
-use Database\Seeders\UserContactSeeder;
-use Database\Seeders\UserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -38,11 +39,12 @@ it('gives a complete profile to every deterministic development user', function 
     seedGeoFixture();
 
     $this->seed(RolePermissionSeeder::class);
+    $this->seed(DemoRolesSeeder::class);
     $this->seed(DemoUserSeeder::class);
-    $this->seed(UserSeeder::class);
-    $this->seed(PersonalDataSeeder::class);
-    $this->seed(UserContactSeeder::class);
-    $this->seed(UserAddressSeeder::class);
+    $this->seed(DemoUsersSeeder::class);
+    $this->seed(DemoPersonalDataSeeder::class);
+    $this->seed(DemoUserContactSeeder::class);
+    $this->seed(DemoUserAddressSeeder::class);
 
     $users = seededUsers()->with(['personalData.contacts', 'personalData.addresses'])->get();
 
@@ -56,12 +58,13 @@ it('seeds notifications only for users that follow the personal-data flow', func
     seedGeoFixture();
 
     $this->seed(RolePermissionSeeder::class);
+    $this->seed(DemoRolesSeeder::class);
     $this->seed(DemoUserSeeder::class);
-    $this->seed(UserSeeder::class);
-    $this->seed(PersonalDataSeeder::class);
-    $this->seed(UserContactSeeder::class);
-    $this->seed(UserAddressSeeder::class);
-    $this->seed(NotificationSeeder::class);
+    $this->seed(DemoUsersSeeder::class);
+    $this->seed(DemoPersonalDataSeeder::class);
+    $this->seed(DemoUserContactSeeder::class);
+    $this->seed(DemoUserAddressSeeder::class);
+    $this->seed(DemoNotificationSeeder::class);
 
     seededUsers()->whereHas('personalData')->get()->each(
         fn (User $user) => expect($user->notifications()->count())->toBe(24)
@@ -78,11 +81,12 @@ it('seeds both individual and company profiles with realistic nested data', func
     seedGeoFixture();
 
     $this->seed(RolePermissionSeeder::class);
+    $this->seed(DemoRolesSeeder::class);
     $this->seed(DemoUserSeeder::class);
-    $this->seed(UserSeeder::class);
-    $this->seed(PersonalDataSeeder::class);
-    $this->seed(UserContactSeeder::class);
-    $this->seed(UserAddressSeeder::class);
+    $this->seed(DemoUsersSeeder::class);
+    $this->seed(DemoPersonalDataSeeder::class);
+    $this->seed(DemoUserContactSeeder::class);
+    $this->seed(DemoUserAddressSeeder::class);
 
     $users = seededUsers()->with(['personalData.contacts', 'personalData.addresses'])->get();
     $companies = $users->filter(fn (User $user): bool => $user->personalData?->type->value === 'company');

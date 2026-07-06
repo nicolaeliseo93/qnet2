@@ -65,10 +65,12 @@ it('200 with the catalogue for users and roles, keys matching each resolver\'s f
     $resources = collect($response->json('data.resources'))->keyBy('resource');
 
     // spec 0010 registered `business-functions` AND `companies`, spec 0011
-    // `operational-sites`, all in the same generic registry
-    // (config/authorization.php), so this registry-driven catalogue
-    // legitimately grows to include them.
-    expect($resources->keys()->all())->toEqualCanonicalizing(['users', 'roles', 'business-functions', 'companies', 'operational-sites']);
+    // `operational-sites`, spec 0016 `referent-types` AND `referents`, all in
+    // the same generic registry (config/authorization.php), so this
+    // registry-driven catalogue legitimately grows to include them.
+    expect($resources->keys()->all())->toEqualCanonicalizing([
+        'users', 'roles', 'business-functions', 'companies', 'operational-sites', 'referent-types', 'referents',
+    ]);
 
     $userFieldKeys = collect($resources['users']['fields'])->pluck('key')->all();
     $expectedUserKeys = array_map(fn ($field) => $field->key, app(UsersAuthorization::class)->fields());
@@ -99,9 +101,10 @@ it('spec 0008/0015: users.fields contains exactly the 4 existing + 11 personal_d
 
     expect($byKey->keys()->all())->toEqualCanonicalizing([
         'email', 'locale', 'is_active', 'roles', 'password',
-        'personal_data.type', 'personal_data.title', 'personal_data.first_name',
+        'personal_data.type', 'personal_data.first_name',
         'personal_data.last_name', 'personal_data.company_name', 'personal_data.tax_code',
         'personal_data.vat_number', 'personal_data.sdi_code', 'personal_data.birth_date',
+        'personal_data.gender',
         'personal_data.contacts', 'personal_data.addresses',
         // spec 0015 — the 12 employment.* keys.
         'employment.is_manager', 'employment.job_description', 'employment.reports_to_id',
@@ -112,7 +115,6 @@ it('spec 0008/0015: users.fields contains exactly the 4 existing + 11 personal_d
 
     $expectedTypes = [
         'personal_data.type' => 'select',
-        'personal_data.title' => 'select',
         'personal_data.first_name' => 'text',
         'personal_data.last_name' => 'text',
         'personal_data.company_name' => 'text',
@@ -120,6 +122,7 @@ it('spec 0008/0015: users.fields contains exactly the 4 existing + 11 personal_d
         'personal_data.vat_number' => 'text',
         'personal_data.sdi_code' => 'text',
         'personal_data.birth_date' => 'date',
+        'personal_data.gender' => 'select',
         'personal_data.contacts' => 'collection',
         'personal_data.addresses' => 'collection',
     ];

@@ -29,18 +29,21 @@ import type { ContactDraft } from '@/features/personal-data/types'
 interface ContactFormProps {
   /** When present the form edits this draft; otherwise it creates a new one. */
   contact?: ContactDraft
-  /** Returns the validated draft fields to the manager's buffer. */
+  /** Returns the validated draft fields to the manager. */
   onSubmit: (fields: Omit<ContactDraft, '_key'>) => void
   /** Called when the user cancels. */
   onCancel: () => void
+  /** True while an immediate write is in flight: disables the actions. */
+  submitting?: boolean
 }
 
 /**
- * Inline create/edit form for a single contact channel. Controlled/buffered: it
- * validates per-type (mirroring the backend) and hands the values back through
- * `onSubmit`; it performs no network call. Owner-agnostic.
+ * Create/edit form for a single contact channel, rendered inside the manager's
+ * dialog. Validates per-type (mirroring the backend) and hands the values back
+ * through `onSubmit`; the manager decides whether to buffer them or persist them
+ * immediately. Owner-agnostic.
  */
-export function ContactForm({ contact, onSubmit, onCancel }: ContactFormProps) {
+export function ContactForm({ contact, onSubmit, onCancel, submitting = false }: ContactFormProps) {
   const { t } = useTranslation()
   const typeOptions = useEnumOptions('contact_type')
   const schema = useMemo(() => buildContactSchema(t), [t])
@@ -73,10 +76,10 @@ export function ContactForm({ contact, onSubmit, onCancel }: ContactFormProps) {
 
   return (
     <Form {...form}>
-      {/* A div, not a form: this inline editor is buffered and rendered inside the
-          outer user form, so it must not nest a <form>. Save validates and commits
-          to the parent buffer via RHF's handleSubmit on a plain button. */}
-      <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3">
+      {/* A div, not a form: the dialog is portaled outside the outer user form,
+          but keeping a plain button (RHF's handleSubmit) avoids any nested-form
+          ambiguity and works identically for the buffered and immediate paths. */}
+      <div className="flex flex-col gap-3">
         <FormField
           control={form.control}
           name="type"
@@ -150,15 +153,24 @@ export function ContactForm({ contact, onSubmit, onCancel }: ContactFormProps) {
         />
 
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            disabled={submitting}
+          >
             {t('personalData.contacts.cancel')}
           </Button>
           <Button
             type="button"
             size="sm"
             onClick={form.handleSubmit(handleSubmit)}
+            disabled={submitting}
           >
-            {t('personalData.contacts.save')}
+            {submitting
+              ? t('personalData.contacts.saving')
+              : t('personalData.contacts.save')}
           </Button>
         </div>
       </div>

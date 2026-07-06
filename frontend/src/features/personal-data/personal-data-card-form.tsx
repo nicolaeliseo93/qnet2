@@ -11,6 +11,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
@@ -27,9 +28,6 @@ import type {
   PersonalDataDraft,
   PersonalDataFieldPermissionResolver,
 } from '@/features/personal-data/types'
-
-/** Sentinel for the "no title" option (Radix Select items need a non-empty value). */
-const TITLE_NONE = '__none__'
 
 interface PersonalDataCardFormProps {
   /** The buffered card fields owned by the parent section. */
@@ -75,7 +73,7 @@ function resolveGate(
 
 /**
  * Controlled/buffered create/edit form for the registry card fields. The `type`
- * and `title` options come from the server config; individual vs company fields
+ * options come from the server config; individual vs company fields
  * toggle by the selected type, mirroring the backend per-type contract. It keeps
  * RHF + Zod for inline validation but performs no network call: every change is
  * lifted into the parent buffer through `onChange`, and the whole tree is saved by
@@ -88,7 +86,7 @@ export function PersonalDataCardForm({
 }: PersonalDataCardFormProps) {
   const { t } = useTranslation()
   const typeOptions = useEnumOptions('personal_data_type')
-  const titleOptions = useEnumOptions('personal_title')
+  const genderOptions = useEnumOptions('gender')
   const schema = useMemo(() => buildPersonalDataSchema(t), [t])
 
   const form = useForm<PersonalDataFormValues>({
@@ -96,7 +94,6 @@ export function PersonalDataCardForm({
     mode: 'onChange',
     defaultValues: {
       type: value.type,
-      title: value.title ?? '',
       first_name: value.first_name ?? '',
       last_name: value.last_name ?? '',
       company_name: value.company_name ?? '',
@@ -104,6 +101,8 @@ export function PersonalDataCardForm({
       vat_number: value.vat_number ?? '',
       sdi_code: value.sdi_code ?? '',
       birth_date: value.birth_date ?? '',
+      // Individual cards always carry a gender (default male); company: none.
+      gender: value.gender ?? 'male',
     },
   })
 
@@ -113,7 +112,6 @@ export function PersonalDataCardForm({
   const isCompany = watched.type === 'company'
 
   const typeGate = resolveGate(fieldPermission, 'personal_data.type', true)
-  const titleGate = resolveGate(fieldPermission, 'personal_data.title', false)
   const companyNameGate = resolveGate(fieldPermission, 'personal_data.company_name', true)
   const firstNameGate = resolveGate(fieldPermission, 'personal_data.first_name', true)
   const lastNameGate = resolveGate(fieldPermission, 'personal_data.last_name', true)
@@ -121,6 +119,7 @@ export function PersonalDataCardForm({
   const vatNumberGate = resolveGate(fieldPermission, 'personal_data.vat_number', false)
   const sdiCodeGate = resolveGate(fieldPermission, 'personal_data.sdi_code', false)
   const birthDateGate = resolveGate(fieldPermission, 'personal_data.birth_date', false)
+  const genderGate = resolveGate(fieldPermission, 'personal_data.gender', false)
 
   // Mirror the current field values into the parent buffer (in an effect, so the
   // parent update happens after this render rather than during it), preserving the
@@ -128,7 +127,6 @@ export function PersonalDataCardForm({
   const next: PersonalDataDraft = {
     ...(value.id !== undefined ? { id: value.id } : {}),
     type: (watched.type ?? value.type) as PersonalDataDraft['type'],
-    title: watched.title || null,
     first_name: watched.first_name || null,
     last_name: watched.last_name || null,
     company_name: watched.company_name || null,
@@ -136,6 +134,8 @@ export function PersonalDataCardForm({
     vat_number: watched.vat_number || null,
     sdi_code: watched.sdi_code || null,
     birth_date: watched.birth_date || null,
+    // Gender is an individual-only attribute: a company card carries none.
+    gender: isCompany ? null : (watched.gender ?? 'male'),
     contacts: value.contacts,
     addresses: value.addresses,
   }
@@ -154,78 +154,36 @@ export function PersonalDataCardForm({
       {/* A div, not a form: this card is buffered and lives inside the user
           form, so it must never nest a <form> nor own a submit. */}
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {typeGate.visible && (
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel required={typeGate.required}>
-                    {t('personalData.form.type')}
-                  </FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    disabled={typeGate.disabled}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {typeOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {titleGate.visible && (
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel required={titleGate.required}>
-                    {t('personalData.form.title')}
-                  </FormLabel>
-                  <Select
-                    value={field.value ? field.value : TITLE_NONE}
-                    onValueChange={(value) =>
-                      field.onChange(value === TITLE_NONE ? '' : value)
-                    }
-                    disabled={titleGate.disabled}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={TITLE_NONE}>
-                        {t('personalData.form.titleNone')}
-                      </SelectItem>
-                      {titleOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-        </div>
+        {typeGate.visible && (
+          <FormField
+            control={form.control}
+            name="type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel required={typeGate.required}>
+                  {t('personalData.form.type')}
+                </FormLabel>
+                {/* Full-width segmented toggle (individual vs company) instead of a
+                    select: the choice reshapes the form, so it stays visible. */}
+                <Tabs value={field.value} onValueChange={field.onChange}>
+                  <TabsList className="w-full">
+                    {typeOptions.map((option) => (
+                      <TabsTrigger
+                        key={option.value}
+                        value={option.value}
+                        disabled={typeGate.disabled}
+                        className="flex-1"
+                      >
+                        {option.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         {isCompany
           ? companyNameGate.visible && (
@@ -371,27 +329,63 @@ export function PersonalDataCardForm({
           />
         )}
 
-        {!isCompany && birthDateGate.visible && (
-          <FormField
-            control={form.control}
-            name="birth_date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel required={birthDateGate.required}>
-                  {t('personalData.form.birthDate')}
-                </FormLabel>
-                <FormControl>
-                  <Input
-                    type="date"
-                    disabled={birthDateGate.disabled}
-                    readOnly={birthDateGate.readOnly}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+        {!isCompany && (birthDateGate.visible || genderGate.visible) && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {birthDateGate.visible && (
+              <FormField
+                control={form.control}
+                name="birth_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel required={birthDateGate.required}>
+                      {t('personalData.form.birthDate')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        disabled={birthDateGate.disabled}
+                        readOnly={birthDateGate.readOnly}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             )}
-          />
+            {genderGate.visible && (
+              <FormField
+                control={form.control}
+                name="gender"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel required={genderGate.required}>
+                      {t('personalData.form.gender')}
+                    </FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={genderGate.disabled || genderGate.readOnly}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {genderOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+          </div>
         )}
       </div>
     </Form>
@@ -402,13 +396,13 @@ export function PersonalDataCardForm({
 function sameCardFields(a: PersonalDataDraft, b: PersonalDataDraft): boolean {
   return (
     a.type === b.type &&
-    a.title === b.title &&
     a.first_name === b.first_name &&
     a.last_name === b.last_name &&
     a.company_name === b.company_name &&
     a.tax_code === b.tax_code &&
     a.vat_number === b.vat_number &&
     a.sdi_code === b.sdi_code &&
-    a.birth_date === b.birth_date
+    a.birth_date === b.birth_date &&
+    a.gender === b.gender
   )
 }

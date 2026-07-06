@@ -3,8 +3,8 @@
 namespace App\Http\Requests\PersonalData;
 
 use App\DataObjects\PersonalData\CreatePersonalData;
+use App\Enums\GenderEnum;
 use App\Enums\PersonalDataTypeEnum;
-use App\Enums\PersonalTitleEnum;
 use App\Http\Requests\Concerns\ResolvesOwner;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -51,7 +51,6 @@ class StorePersonalDataRequest extends FormRequest
 
         return [
             'type' => ['required', Rule::enum(PersonalDataTypeEnum::class)],
-            'title' => ['nullable', Rule::enum(PersonalTitleEnum::class)],
 
             'first_name' => [$isIndividual ? 'required' : 'nullable', 'string', 'max:255'],
             'last_name' => [$isIndividual ? 'required' : 'nullable', 'string', 'max:255'],
@@ -61,6 +60,7 @@ class StorePersonalDataRequest extends FormRequest
             'vat_number' => ['nullable', 'string', 'max:32'],
             'sdi_code' => ['nullable', 'string', 'max:32'],
             'birth_date' => ['nullable', 'date', 'before:today'],
+            'gender' => ['nullable', Rule::enum(GenderEnum::class)],
         ];
     }
 
@@ -112,7 +112,6 @@ class StorePersonalDataRequest extends FormRequest
     {
         return new CreatePersonalData(
             type: PersonalDataTypeEnum::from($this->string('type')->toString()),
-            title: PersonalTitleEnum::fromValue($this->input('title')),
             firstName: $this->input('first_name'),
             lastName: $this->input('last_name'),
             companyName: $this->input('company_name'),
@@ -120,6 +119,7 @@ class StorePersonalDataRequest extends FormRequest
             vatNumber: $this->input('vat_number'),
             sdiCode: $this->input('sdi_code'),
             birthDate: $this->input('birth_date'),
+            gender: $this->input('gender'),
         );
     }
 }

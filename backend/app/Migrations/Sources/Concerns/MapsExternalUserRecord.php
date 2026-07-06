@@ -2,9 +2,6 @@
 
 namespace App\Migrations\Sources\Concerns;
 
-use App\DataObjects\PersonalData\CreateAddress;
-use App\DataObjects\PersonalData\CreateContact;
-use App\DataObjects\Users\AddressInput;
 use App\DataObjects\Users\ContactInput;
 use App\DataObjects\Users\EmploymentData;
 use App\Enums\ContactTypeEnum;
@@ -18,7 +15,6 @@ use App\Models\EmploymentProfile;
 use App\Models\OperationalSite;
 use App\Models\Role;
 use App\Models\User;
-use Illuminate\Support\Facades\Validator;
 
 /**
  * Field-mapping helpers for UsersSource (spec 0013): translate one raw external
@@ -27,12 +23,18 @@ use Illuminate\Support\Facades\Validator;
  * source itself to keep it under the file-size budget; every relational
  * reference is remapped via `old_id` on the using AbstractMigrationSource.
  *
+ * The address/contact mapping (identical for every personal-data owner) lives
+ * in the shared MapsExternalProfileRecord; only the user-specific roles and
+ * employment mapping stays here.
+ *
  * @phpstan-require-extends AbstractMigrationSource
  *
  * @property-read MigrationGeoResolver $geoResolver
  */
 trait MapsExternalUserRecord
 {
+    use MapsExternalProfileRecord;
+
     /**
      * The external role references, as external ids, taken from the record's
      * `roles` array of `{id, name}` objects (the external contract's shape).
@@ -97,95 +99,23 @@ trait MapsExternalUserRecord
     }
 
     /**
-     * Build the user's primary address from the external geo NAMES (same
-     * approach as CompaniesSource/OperationalSitesSource), only when at least
-     * a street or a city was supplied; a street-less city falls back to
-     * being the address line itself. An unresolved geo level is a non-fatal
-     * warning — the address is still created with whatever resolved.
-     *
-     * @param  array<string, mixed>  $record
-     * @return array{0: ?AddressInput, 1: array<int, string>}
-     */
-    private function buildAddress(array $record): array
-    {
-        $line1 = trim((string) ($record['street'] ?? ''));
-        $city = trim((string) ($record['city'] ?? ''));
-
-        if ($line1 === '' && $city === '') {
-            return [null, []];
-        }
-
-        $geo = $this->geoResolver->resolve(
-            $record['country'] ?? null,
-            $record['region'] ?? null,
-            $record['province'] ?? null,
-            $record['city'] ?? null,
-        );
-
-        $address = new AddressInput(
-            id: null,
-            data: new CreateAddress(
-                line1: $line1 !== '' ? $line1 : $city,
-                postalCode: $this->blankToNull($record['postal_code'] ?? null),
-                cityId: $geo->cityId,
-                provinceId: $geo->provinceId,
-                stateId: $geo->stateId,
-                countryId: $geo->countryId,
-                isPrimary: true,
-            ),
-        );
-
-        return [$address, $geo->warnings];
-    }
-
-    /**
-     * Build the user's contact channels: a personal email (primary) plus a
+     * Build the user's contact channels: a personal email plus a
      * business/personal phone, each keyed by a free-text label (there is no
-     * business/personal dimension on ContactTypeEnum itself). A present but
-     * invalid value (fails the type's own `valueRules()`) is skipped with a
-     * non-fatal warning rather than failing the whole row.
+     * business/personal dimension on ContactTypeEnum itself) and each flagged
+     * primary. As the two phones share a type, the "one primary per owner + type"
+     * invariant (ContactService) keeps the last of them primary. Delegates to the
+     * shared, candidate-driven builder (MapsExternalProfileRecord).
      *
      * @param  array<string, mixed>  $record
      * @return array{0: array<int, ContactInput>, 1: array<int, string>}
      */
     private function buildContacts(array $record): array
     {
-        $candidates = [
-            ['field' => 'personal_email', 'type' => ContactTypeEnum::Email, 'label' => 'Personale', 'primary' => true],
-            ['field' => 'business_phone', 'type' => ContactTypeEnum::Phone, 'label' => 'Aziendale', 'primary' => false],
-            ['field' => 'personal_phone', 'type' => ContactTypeEnum::Phone, 'label' => 'Personale', 'primary' => false],
-        ];
-
-        $inputs = [];
-        $warnings = [];
-
-        foreach ($candidates as $candidate) {
-            $value = trim((string) ($record[$candidate['field']] ?? ''));
-
-            if ($value === '') {
-                continue;
-            }
-
-            if (! $this->isValidContactValue($candidate['type'], $value)) {
-                $warnings[] = "Invalid {$candidate['field']} value, skipped.";
-
-                continue;
-            }
-
-            $inputs[] = new ContactInput(id: null, data: new CreateContact(
-                type: $candidate['type'],
-                value: $value,
-                label: $candidate['label'],
-                isPrimary: $candidate['primary'],
-            ));
-        }
-
-        return [$inputs, $warnings];
-    }
-
-    private function isValidContactValue(ContactTypeEnum $type, string $value): bool
-    {
-        return Validator::make(['value' => $value], ['value' => $type->valueRules()])->passes();
+        return $this->buildContactInputs($record, [
+            ['field' => 'personal_email', 'type' => ContactTypeEnum::Email, 'label' => 'Personale'],
+            ['field' => 'business_phone', 'type' => ContactTypeEnum::Phone, 'label' => 'Aziendale'],
+            ['field' => 'personal_phone', 'type' => ContactTypeEnum::Phone, 'label' => 'Personale'],
+        ]);
     }
 
     /**
@@ -436,17 +366,5 @@ trait MapsExternalUserRecord
         }
 
         return filter_var($value, FILTER_VALIDATE_BOOLEAN);
-    }
-
-    private function blankToNull(mixed $value): ?string
-    {
-        $trimmed = trim((string) ($value ?? ''));
-
-        return $trimmed === '' ? null : $trimmed;
-    }
-
-    private function blankToInt(mixed $value): ?int
-    {
-        return ($value === null || $value === '') ? null : (int) $value;
     }
 }

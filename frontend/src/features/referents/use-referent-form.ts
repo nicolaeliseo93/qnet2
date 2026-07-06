@@ -143,7 +143,6 @@ export function useReferentForm({ mode, onSuccess }: UseReferentFormArgs) {
     () =>
       buildPersonalDataSchema(t).safeParse({
         type: profileDraft.type,
-        title: profileDraft.title ?? undefined,
         first_name: profileDraft.first_name ?? undefined,
         last_name: profileDraft.last_name ?? undefined,
         company_name: profileDraft.company_name ?? undefined,

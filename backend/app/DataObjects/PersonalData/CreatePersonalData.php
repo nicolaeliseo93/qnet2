@@ -3,7 +3,6 @@
 namespace App\DataObjects\PersonalData;
 
 use App\Enums\PersonalDataTypeEnum;
-use App\Enums\PersonalTitleEnum;
 
 /**
  * Declared payload for creating/updating a PersonalData card (see
@@ -18,7 +17,6 @@ final readonly class CreatePersonalData
 {
     public function __construct(
         public PersonalDataTypeEnum $type,
-        public ?PersonalTitleEnum $title = null,
         public ?string $firstName = null,
         public ?string $lastName = null,
         public ?string $companyName = null,
@@ -26,6 +24,7 @@ final readonly class CreatePersonalData
         public ?string $vatNumber = null,
         public ?string $sdiCode = null,
         public ?string $birthDate = null,
+        public ?string $gender = null,
     ) {}
 
     /**
@@ -56,7 +55,6 @@ final readonly class CreatePersonalData
     {
         return [
             'type' => $this->type->value,
-            'title' => $this->title?->value,
             'first_name' => $this->firstName,
             'last_name' => $this->lastName,
             'company_name' => $this->companyName,
@@ -64,6 +62,7 @@ final readonly class CreatePersonalData
             'vat_number' => $this->vatNumber,
             'sdi_code' => $this->sdiCode,
             'birth_date' => $this->birthDate,
+            'gender' => $this->gender,
         ];
     }
 }

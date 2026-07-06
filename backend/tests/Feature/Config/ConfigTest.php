@@ -24,9 +24,9 @@ it('exposes data.enums with the allowlisted snake_case keys', function () {
                 'enums' => [
                     'locale',
                     'personal_data_type',
-                    'personal_title',
                     'contact_type',
                     'notification_level',
+                    'referent_contact_scope',
                 ],
             ],
         ]);
@@ -75,9 +75,21 @@ it('exposes the expected option count per enum', function () {
 
     expect($enums['locale'])->toHaveCount(2)
         ->and($enums['personal_data_type'])->toHaveCount(2)
-        ->and($enums['personal_title'])->toHaveCount(5)
         ->and($enums['contact_type'])->toHaveCount(6)
-        ->and($enums['notification_level'])->toHaveCount(4);
+        ->and($enums['notification_level'])->toHaveCount(4)
+        ->and($enums['referent_contact_scope'])->toHaveCount(2);
+});
+
+// ---------------------------------------------------------------------------
+// AC-018 (spec 0016) — referent_contact_scope options
+// ---------------------------------------------------------------------------
+
+it('exposes data.enums.referent_contact_scope with internal/external, internal default', function () {
+    $options = $this->getJson('/api/config')->assertOk()->json('data.enums.referent_contact_scope');
+
+    expect(collect($options)->pluck('value')->all())->toBe(['internal', 'external'])
+        ->and(collect($options)->firstWhere('value', 'internal')['is_default'])->toBeTrue()
+        ->and(collect($options)->firstWhere('value', 'external')['is_default'])->toBeFalse();
 });
 
 it('filters out cases flagged hiddenOnForm', function () {

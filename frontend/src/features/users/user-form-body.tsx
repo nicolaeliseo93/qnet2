@@ -1,18 +1,13 @@
-import {
-  Briefcase,
-  CalendarClock,
-  FileSignature,
-  IdCard,
-  KeyRound,
-  MapPin,
-  Phone,
-  ShieldCheck,
-  type LucideIcon,
-} from 'lucide-react'
+import { Briefcase, IdCard, Phone, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  FORM_TAB_LIST_CLASS,
+  FORM_TAB_TRIGGER_CLASS,
+  TabErrorDot,
+} from '@/components/form-tab-strip'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import {
   AccessTabContent,
@@ -34,29 +29,6 @@ interface UserFormBodyProps {
   onAvatarChange?: () => void
 }
 
-/** Small dot marking a tab that carries a validation error (AC-014). */
-function TabErrorDot({ label }: { label: string }) {
-  return (
-    <span
-      className="size-1.5 shrink-0 rounded-full bg-destructive shadow-[0_0_0_2px] shadow-destructive/15"
-      role="img"
-      aria-label={label}
-    />
-  )
-}
-
-// Premium skin for the user form's tab strip, composed on top of the shared
-// `components/ui/tabs` design-system base (this only overrides look, not
-// behaviour, so the rest of the app's tabs are untouched). The active pill
-// carries a subtle primary tint + ring and the icon nudges up in scale.
-const TAB_LIST_CLASS = 'gap-1 rounded-lg border border-border/60 bg-muted/40 p-1 shadow-sm'
-const TAB_TRIGGER_CLASS =
-  'gap-1.5 rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-all duration-200 ' +
-  'hover:bg-background/60 hover:text-foreground ' +
-  'data-[state=active]:bg-background data-[state=active]:text-primary ' +
-  'data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-primary/15 ' +
-  '[&_svg]:size-3.5 [&_svg]:transition-transform [&_svg]:duration-200 data-[state=active]:[&_svg]:scale-110'
-
 /** One entry in the tab strip: its value, label, icon, and gating flags. */
 interface UserFormTab {
   value: string
@@ -67,15 +39,17 @@ interface UserFormTab {
 }
 
 /**
- * The user create/edit form UI, redesigned as a tabbed layout (spec 0015):
- * Identity, Credentials, Access, Profile, Contract, Contract data, Contacts,
- * Addresses. Every field is wrapped in `MetaField` (spec 0004): hidden fields
- * are absent, non-editable fields render disabled/read-only, `required` comes
- * from the resolved `ResourcePermissions` — no hardcoded permission logic
- * lives here. All non-render logic lives in `useUserForm`; each tab's content
- * lives in a sibling module (`user-form-account-tabs.tsx`,
- * `user-form-employment-tabs.tsx`, `user-form-contract-data-tab.tsx`) so this
- * orchestration file stays within the engineering size limits.
+ * The user create/edit form UI, organized into three macro tabs that each group
+ * several `FormSection`s (a scrollable panel): Account (identity, credentials,
+ * access), Employment (profile, contract, contract data) and Contact info
+ * (contacts, addresses). A macro tab is shown only when at least one of its
+ * sections is visible, and carries the error dot when any of them has one. Every
+ * field is wrapped in `MetaField` (spec 0004): hidden fields are absent,
+ * non-editable fields render disabled/read-only, `required` comes from the
+ * resolved `ResourcePermissions` — no hardcoded permission logic lives here. All
+ * non-render logic lives in `useUserForm`; each section's content lives in a
+ * sibling module (`user-form-account-tabs.tsx`, `user-form-employment-tabs.tsx`,
+ * `user-form-contract-data-tab.tsx`) so this file stays within the size limits.
  */
 export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: UserFormBodyProps) {
   const { t } = useTranslation()
@@ -173,15 +147,17 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
   const contactsRenderable = !isProfileLoading && !isProfileError && contactsVisible
   const addressesRenderable = !isProfileLoading && !isProfileError && addressesVisible
 
+  // Macro-tab visibility/error = OR over the sections each one groups (Account's
+  // Identity section is always present, so Account is always shown).
+  const employmentVisible = profileVisible || contractVisible || contractDataVisible
+  const contactInfoVisible = contactsRenderable || addressesRenderable
+  const accountHasError = identityHasError || credentialsHasError || accessHasError
+  const employmentHasError = profileHasError || contractHasError || contractDataHasError
+
   const tabItems: UserFormTab[] = [
-    { value: 'identity', label: t('users.form.tabs.identity'), Icon: IdCard, visible: true, hasError: identityHasError },
-    { value: 'credentials', label: t('users.form.tabs.credentials'), Icon: KeyRound, visible: credentialsVisible, hasError: credentialsHasError },
-    { value: 'access', label: t('users.form.tabs.access'), Icon: ShieldCheck, visible: accessVisible, hasError: accessHasError },
-    { value: 'profile', label: t('users.form.tabs.profile'), Icon: Briefcase, visible: profileVisible, hasError: profileHasError },
-    { value: 'contract', label: t('users.form.tabs.contract'), Icon: FileSignature, visible: contractVisible, hasError: contractHasError },
-    { value: 'contractData', label: t('users.form.tabs.contractData'), Icon: CalendarClock, visible: contractDataVisible, hasError: contractDataHasError },
-    { value: 'contacts', label: t('users.form.tabs.contacts'), Icon: Phone, visible: contactsRenderable, hasError: false },
-    { value: 'addresses', label: t('users.form.tabs.addresses'), Icon: MapPin, visible: addressesRenderable, hasError: false },
+    { value: 'account', label: t('users.form.tabs.account'), Icon: IdCard, visible: true, hasError: accountHasError },
+    { value: 'employment', label: t('users.form.tabs.employment'), Icon: Briefcase, visible: employmentVisible, hasError: employmentHasError },
+    { value: 'contactInfo', label: t('users.form.tabs.contactInfo'), Icon: Phone, visible: contactInfoVisible, hasError: false },
   ]
 
   return (
@@ -192,12 +168,12 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
           className="flex flex-1 flex-col gap-4 p-4"
           noValidate
         >
-          <Tabs defaultValue="identity" className="flex flex-1 flex-col gap-4">
-            <TabsList className={TAB_LIST_CLASS}>
+          <Tabs defaultValue="account" className="flex flex-1 flex-col gap-4">
+            <TabsList className={FORM_TAB_LIST_CLASS}>
               {tabItems
                 .filter((tab) => tab.visible)
                 .map(({ value, label, Icon, hasError }) => (
-                  <TabsTrigger key={value} value={value} className={TAB_TRIGGER_CLASS}>
+                  <TabsTrigger key={value} value={value} className={FORM_TAB_TRIGGER_CLASS}>
                     <Icon aria-hidden="true" />
                     {label}
                     {hasError && <TabErrorDot label={tabHasErrorsLabel} />}
@@ -205,7 +181,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
                 ))}
             </TabsList>
 
-            <TabsContent value="identity" className="flex flex-col gap-4">
+            <TabsContent value="account" className="flex flex-col gap-4">
               <IdentityTabContent
                 mode={mode}
                 profileName={profileName}
@@ -221,63 +197,50 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
                 canUploadAvatar={canUploadAvatar}
                 canRemoveAvatar={canRemoveAvatar}
               />
+              {credentialsVisible && (
+                <CredentialsTabContent control={form.control} isEdit={isEdit} />
+              )}
+              {accessVisible && (
+                <AccessTabContent control={form.control} selectedRoleItems={selectedRoleItems} />
+              )}
             </TabsContent>
 
-            {credentialsVisible && (
-              <TabsContent value="credentials" className="flex flex-col gap-4">
-                <CredentialsTabContent control={form.control} isEdit={isEdit} />
+            {employmentVisible && (
+              <TabsContent value="employment" className="flex flex-col gap-4">
+                {profileVisible && (
+                  <ProfileTabContent
+                    control={form.control}
+                    selectedBusinessFunctionItem={selectedBusinessFunctionItem}
+                    selectedReportsToItem={selectedReportsToItem}
+                  />
+                )}
+                {contractVisible && (
+                  <ContractTabContent
+                    control={form.control}
+                    selectedCompanyItem={selectedCompanyItem}
+                    selectedOperationalSiteItem={selectedOperationalSiteItem}
+                  />
+                )}
+                {contractDataVisible && <ContractDataTabContent control={form.control} />}
               </TabsContent>
             )}
 
-            {accessVisible && (
-              <TabsContent value="access" className="flex flex-col gap-4">
-                <AccessTabContent control={form.control} selectedRoleItems={selectedRoleItems} />
-              </TabsContent>
-            )}
-
-            {profileVisible && (
-              <TabsContent value="profile" className="flex flex-col gap-4">
-                <ProfileTabContent
-                  control={form.control}
-                  selectedBusinessFunctionItem={selectedBusinessFunctionItem}
-                  selectedReportsToItem={selectedReportsToItem}
-                />
-              </TabsContent>
-            )}
-
-            {contractVisible && (
-              <TabsContent value="contract" className="flex flex-col gap-4">
-                <ContractTabContent
-                  control={form.control}
-                  selectedCompanyItem={selectedCompanyItem}
-                  selectedOperationalSiteItem={selectedOperationalSiteItem}
-                />
-              </TabsContent>
-            )}
-
-            {contractDataVisible && (
-              <TabsContent value="contractData" className="flex flex-col gap-4">
-                <ContractDataTabContent control={form.control} />
-              </TabsContent>
-            )}
-
-            {contactsRenderable && (
-              <TabsContent value="contacts" className="flex flex-col gap-4">
-                <ContactsTabContent
-                  profileDraft={profileDraft}
-                  setProfileDraft={setProfileDraft}
-                  personalDataFieldPermission={personalDataFieldPermission}
-                />
-              </TabsContent>
-            )}
-
-            {addressesRenderable && (
-              <TabsContent value="addresses" className="flex flex-col gap-4">
-                <AddressesTabContent
-                  profileDraft={profileDraft}
-                  setProfileDraft={setProfileDraft}
-                  personalDataFieldPermission={personalDataFieldPermission}
-                />
+            {contactInfoVisible && (
+              <TabsContent value="contactInfo" className="flex flex-col gap-4">
+                {contactsRenderable && (
+                  <ContactsTabContent
+                    profileDraft={profileDraft}
+                    setProfileDraft={setProfileDraft}
+                    personalDataFieldPermission={personalDataFieldPermission}
+                  />
+                )}
+                {addressesRenderable && (
+                  <AddressesTabContent
+                    profileDraft={profileDraft}
+                    setProfileDraft={setProfileDraft}
+                    personalDataFieldPermission={personalDataFieldPermission}
+                  />
+                )}
               </TabsContent>
             )}
           </Tabs>

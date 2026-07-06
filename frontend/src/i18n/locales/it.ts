@@ -6,6 +6,7 @@ import { operationalSites } from './it-operational-sites'
 import { imports } from './it-imports'
 import { exports } from './it-exports'
 import { table } from './it-table'
+import { referents, referentTypes } from './it-referents'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -43,6 +44,8 @@ export const it: TranslationResources = {
     roles: 'Ruoli',
     companies: 'Società aziendali',
     businessFunctions: 'Funzioni aziendali',
+    referents: 'Referenti',
+    referentTypes: 'Tipi referente',
     operationalSites: 'Sedi operative',
     faCompaniesServices: 'FA Società & Servizi',
     settings: 'Impostazioni',
@@ -427,4 +430,6 @@ export const it: TranslationResources = {
   operationalSites,
   imports,
   exports,
+  referents,
+  referentTypes,
 }

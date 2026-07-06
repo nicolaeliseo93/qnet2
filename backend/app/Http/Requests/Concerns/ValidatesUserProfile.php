@@ -9,8 +9,8 @@ use App\DataObjects\Users\AddressInput;
 use App\DataObjects\Users\ContactInput;
 use App\DataObjects\Users\ProfileData;
 use App\Enums\ContactTypeEnum;
+use App\Enums\GenderEnum;
 use App\Enums\PersonalDataTypeEnum;
-use App\Enums\PersonalTitleEnum;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -66,8 +66,6 @@ trait ValidatesUserProfile
                 Rule::requiredIf($hasProfile),
                 Rule::enum(PersonalDataTypeEnum::class),
             ],
-            'personal_data.title' => ['nullable', Rule::enum(PersonalTitleEnum::class)],
-
             'personal_data.first_name' => [
                 Rule::requiredIf(fn (): bool => $this->input('personal_data.type') === PersonalDataTypeEnum::Individual->value),
                 'nullable',
@@ -91,6 +89,7 @@ trait ValidatesUserProfile
             'personal_data.vat_number' => ['nullable', 'string', 'max:32'],
             'personal_data.sdi_code' => ['nullable', 'string', 'max:32'],
             'personal_data.birth_date' => ['nullable', 'date', 'before:today'],
+            'personal_data.gender' => ['nullable', Rule::enum(GenderEnum::class)],
 
             // Contacts: present key (even empty) is authoritative.
             'personal_data.contacts' => ['sometimes', 'array'],
@@ -185,7 +184,6 @@ trait ValidatesUserProfile
     {
         return new CreatePersonalData(
             type: PersonalDataTypeEnum::from((string) $this->input('personal_data.type')),
-            title: PersonalTitleEnum::fromValue($this->input('personal_data.title')),
             firstName: $this->input('personal_data.first_name'),
             lastName: $this->input('personal_data.last_name'),
             companyName: $this->input('personal_data.company_name'),
@@ -193,6 +191,7 @@ trait ValidatesUserProfile
             vatNumber: $this->input('personal_data.vat_number'),
             sdiCode: $this->input('personal_data.sdi_code'),
             birthDate: $this->input('personal_data.birth_date'),
+            gender: $this->input('personal_data.gender'),
         );
     }
 

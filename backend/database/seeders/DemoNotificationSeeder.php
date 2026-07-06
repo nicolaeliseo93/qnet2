@@ -12,7 +12,7 @@ use Illuminate\Database\Seeder;
  * have realistic data out of the box. Idempotent: each user's notifications are
  * cleared first so re-running does not pile up.
  */
-class NotificationSeeder extends Seeder
+class DemoNotificationSeeder extends Seeder
 {
     public function run(): void
     {

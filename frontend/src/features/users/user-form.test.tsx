@@ -58,7 +58,6 @@ const enums: Record<string, EnumOption[]> = {
       hidden_on_form: false,
     },
   ],
-  personal_title: [],
   contact_type: [],
   locale: [
     {
@@ -104,7 +103,9 @@ vi.mock('@/features/personal-data/use-personal-data', () => ({
  * `click` — see `@radix-ui/react-tabs`.
  */
 function switchTab(name: string) {
-  fireEvent.mouseDown(screen.getByRole('tab', { name }))
+  // Match by name prefix: a macro tab with a validation error carries an extra
+  // indicator in its accessible name, so an exact match would miss it.
+  fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) }))
 }
 
 function wrapper() {
@@ -139,7 +140,6 @@ function card(overrides: Partial<PersonalDataCard> = {}): PersonalDataCard {
   return {
     id: 99,
     type: 'individual',
-    title: null,
     first_name: 'Ada',
     last_name: 'Lovelace',
     company_name: null,
@@ -225,8 +225,8 @@ describe('UserForm — atomic personal data', () => {
       target: { value: 'Lovelace' },
     })
 
-    // Credentials moved to their own tab (spec 0015 tabbed redesign).
-    switchTab('Credentials')
+    // Credentials live under the Account macro tab (the default-active tab).
+    switchTab('Account')
     fireEvent.change(screen.getByLabelText(/^Email/), {
       target: { value: 'ada@example.com' },
     })
@@ -264,7 +264,7 @@ describe('UserForm — atomic personal data', () => {
     )
 
     // All account fields valid, but the mandatory identity fields are left empty.
-    switchTab('Credentials')
+    switchTab('Account')
     fireEvent.change(screen.getByLabelText(/^Email/), {
       target: { value: 'grace@example.com' },
     })
@@ -303,7 +303,7 @@ describe('UserForm — atomic personal data', () => {
     )
 
     // The seeded contact is present on its own tab (spec 0015 tabbed redesign).
-    switchTab('Contacts')
+    switchTab('Contact info')
     expect(screen.getByText('ada@work.com')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))

@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  * user is a subordinate reporting to one of them, round-robin. Idempotent:
  * the profile is upserted by owner.
  */
-class EmploymentProfileSeeder extends Seeder
+class DemoEmploymentProfileSeeder extends Seeder
 {
     use SeedsDevelopmentUsers;
 

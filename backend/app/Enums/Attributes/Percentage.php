@@ -9,7 +9,5 @@ class Percentage
 {
     public function __construct(
         public float $percentage
-    )
-    {
-    }
+    ) {}
 }

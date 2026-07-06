@@ -15,7 +15,7 @@ use Illuminate\Database\Seeder;
  * Idempotent: the card is upserted by owner and the nested contacts/addresses
  * are handled by dedicated seeders.
  */
-class PersonalDataSeeder extends Seeder
+class DemoPersonalDataSeeder extends Seeder
 {
     use SeedsDevelopmentUsers;
 

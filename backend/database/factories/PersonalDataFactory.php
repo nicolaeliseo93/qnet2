@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\GenderEnum;
 use App\Enums\PersonalDataTypeEnum;
-use App\Enums\PersonalTitleEnum;
 use App\Models\PersonalData;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -62,7 +62,6 @@ class PersonalDataFactory extends Factory
     {
         return [
             'type' => PersonalDataTypeEnum::Individual->value,
-            'title' => $this->faker->randomElement(PersonalTitleEnum::cases())->value,
             'first_name' => $this->faker->firstName(),
             'last_name' => $this->faker->lastName(),
             'company_name' => null,
@@ -70,6 +69,7 @@ class PersonalDataFactory extends Factory
             'vat_number' => null,
             'sdi_code' => null,
             'birth_date' => $this->faker->dateTimeBetween('-80 years', '-18 years')->format('Y-m-d'),
+            'gender' => $this->faker->randomElement(GenderEnum::cases())->value,
         ];
     }
 
@@ -83,7 +83,6 @@ class PersonalDataFactory extends Factory
     {
         return [
             'type' => PersonalDataTypeEnum::Company->value,
-            'title' => null,
             'first_name' => $this->faker->firstName(),
             'last_name' => $this->faker->lastName(),
             'company_name' => $this->faker->company(),
@@ -91,6 +90,7 @@ class PersonalDataFactory extends Factory
             'vat_number' => (string) $this->faker->numerify('###########'),
             'sdi_code' => strtoupper($this->faker->bothify('???####')),
             'birth_date' => null,
+            'gender' => null,
         ];
     }
 }

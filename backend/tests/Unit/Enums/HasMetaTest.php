@@ -7,7 +7,6 @@ use App\Enums\Concerns\HasMeta;
 use App\Enums\ContactTypeEnum;
 use App\Enums\NotificationLevelEnum;
 use App\Enums\PersonalDataTypeEnum;
-use App\Enums\PersonalTitleEnum;
 use Illuminate\Support\Facades\App;
 use Tests\TestCase;
 
@@ -99,12 +98,7 @@ it('returns null/false when the attributes are absent', function () {
     // ContactType cases carry no #[Color] and (except Phone) no #[IsDefault].
     expect(ContactTypeEnum::Mobile->color())->toBeNull()
         ->and(ContactTypeEnum::Mobile->isDefault())->toBeFalse()
-        ->and(ContactTypeEnum::Mobile->hiddenOnForm())->toBeFalse()
-        // PersonalTitle cases carry only #[Label].
-        ->and(PersonalTitleEnum::Mr->color())->toBeNull()
-        ->and(PersonalTitleEnum::Mr->icon())->toBeNull()
-        ->and(PersonalTitleEnum::Mr->isDefault())->toBeFalse()
-        ->and(PersonalTitleEnum::Mr->hiddenOnForm())->toBeFalse();
+        ->and(ContactTypeEnum::Mobile->hiddenOnForm())->toBeFalse();
 });
 
 it('never throws for a case decorated with unrelated attributes and reads only the five presentation ones', function () {
@@ -176,10 +170,6 @@ it('returns the #[IsDefault] case for enums that declare one', function () {
         ->and(ContactTypeEnum::default())->toBe(ContactTypeEnum::Phone);
 });
 
-it('returns null when no case declares #[IsDefault]', function () {
-    expect(PersonalTitleEnum::default())->toBeNull();
-});
-
 /*
 |--------------------------------------------------------------------------
 | Consistency: #[IsDefault] case === fromValue(null)
@@ -190,9 +180,4 @@ it('keeps #[IsDefault] consistent with fromValue(null) for each domain enum', fu
     expect(NotificationLevelEnum::default())->toBe(NotificationLevelEnum::fromValue(null))
         ->and(PersonalDataTypeEnum::default())->toBe(PersonalDataTypeEnum::fromValue(null))
         ->and(ContactTypeEnum::default())->toBe(ContactTypeEnum::fromValue(null));
-});
-
-it('has no default and an optional (nullable) fromValue for PersonalTitleEnum', function () {
-    expect(PersonalTitleEnum::default())->toBeNull()
-        ->and(PersonalTitleEnum::fromValue(null))->toBeNull();
 });

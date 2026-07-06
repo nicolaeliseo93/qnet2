@@ -15,12 +15,9 @@ export const enums = {
     individual: 'Individual',
     company: 'Company',
   },
-  personal_title: {
-    mr: 'Mr',
-    mrs: 'Mrs',
-    ms: 'Ms',
-    dr: 'Dr',
-    prof: 'Prof',
+  gender: {
+    male: 'Male',
+    female: 'Female',
   },
   contact_type: {
     phone: 'Phone',
@@ -51,5 +48,10 @@ export const enums = {
     teacher_vat: 'VAT Teacher',
     trainee_cost: 'Trainee Cost',
     hourly_cost_me: 'Hourly Cost M.E.',
+  },
+  // Referent contact ambit (spec 0016).
+  referent_contact_scope: {
+    internal: 'Internal',
+    external: 'External',
   },
 }

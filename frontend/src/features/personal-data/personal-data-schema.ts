@@ -11,7 +11,6 @@ export function buildPersonalDataSchema(t: TFunction) {
   return z
     .object({
       type: z.enum(['individual', 'company']),
-      title: z.string().optional(),
       first_name: z.string().optional(),
       last_name: z.string().optional(),
       company_name: z.string().optional(),
@@ -21,6 +20,8 @@ export function buildPersonalDataSchema(t: TFunction) {
       sdi_code: z.string().max(32).optional(),
       // Empty string = "no date"; a value must be a real, non-future date.
       birth_date: z.string().optional(),
+      // Individual only (default male); a company card carries no gender.
+      gender: z.enum(['male', 'female']).optional(),
     })
     .superRefine((values, ctx) => {
       if (values.type === 'individual') {

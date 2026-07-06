@@ -2,6 +2,7 @@
 
 namespace App\DataObjects\Notifications;
 
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Collection;
 
 /**
@@ -13,7 +14,7 @@ use Illuminate\Support\Collection;
 final readonly class NotificationListResult
 {
     /**
-     * @param  Collection<int, \Illuminate\Notifications\DatabaseNotification>  $items
+     * @param  Collection<int, DatabaseNotification>  $items
      */
     public function __construct(
         public Collection $items,

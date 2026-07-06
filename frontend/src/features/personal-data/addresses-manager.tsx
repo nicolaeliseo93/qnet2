@@ -3,11 +3,20 @@ import { useTranslation } from 'react-i18next'
 import { MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useConfirm } from '@/components/confirm-dialog-context'
 import { AddressForm } from '@/features/personal-data/address-form'
-import { nextDraftKey } from '@/features/personal-data/drafts'
+import { createAddress, deleteAddress, updateAddress } from '@/features/personal-data/api'
+import { addressToDraft, nextDraftKey } from '@/features/personal-data/drafts'
+import { useImmediatePersist } from '@/features/personal-data/use-immediate-persist'
 import type {
   AddressDraft,
+  OwnerRef,
   PersonalDataFieldPermissionResolver,
 } from '@/features/personal-data/types'
 
@@ -30,26 +39,36 @@ interface AddressesManagerProps {
    * trailing "Add" action are rendered.
    */
   showHeader?: boolean
+  /**
+   * When present (edit of an owner whose personal-data card already exists),
+   * each add/edit/remove is persisted immediately to the backend against this
+   * owner and the buffer is synced with the returned row. Omitting it keeps the
+   * buffered flow: changes live in the buffer until the parent form is saved
+   * (create mode, or edit of an owner with no card yet).
+   */
+  persistence?: OwnerRef
 }
 
 /** `new` = the add form is open; a string = that address `_key` is being edited. */
 type EditingState = 'new' | string | null
 
 /**
- * Reusable CRUD list for an owner's addresses, controlled/buffered: it never
- * touches the network — add/edit/remove mutate the buffer through `onChange`, and
- * the parent submits the buffer as part of the user payload (ADR 0012). Enforces
- * a single primary address per owner in the buffer, mirroring the backend
- * (ADR 0010); when none is primary, the first address becomes the default.
+ * Reusable CRUD list for an owner's addresses; the create/edit form opens in a
+ * dialog. Two write modes via `persistence`: buffered (ADR 0012) or immediate
+ * (persist each change, sync the buffer with the server row whose `is_primary`
+ * is authoritative — the backend auto-primaries the first). Single primary per
+ * owner, mirroring the backend (ADR 0010).
  */
 export function AddressesManager({
   value,
   onChange,
   fieldPermission,
   showHeader = true,
+  persistence,
 }: AddressesManagerProps) {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  const { pending, run } = useImmediatePersist()
   const [editing, setEditing] = useState<EditingState>(null)
   const permission = fieldPermission?.('personal_data.addresses')
 
@@ -59,9 +78,8 @@ export function AddressesManager({
   const readOnly = permission ? permission.disabled || !permission.editable : false
 
   /**
-   * Normalizes the single-primary invariant: if a key is forced primary it wins
-   * and the rest are demoted; otherwise, when no address is primary, the first
-   * becomes the default.
+   * Single-primary invariant: a forced key wins (rest demoted); otherwise, when
+   * none is primary, the first becomes the default.
    */
   const normalizePrimary = (
     addresses: AddressDraft[],
@@ -82,18 +100,66 @@ export function AddressesManager({
     return addresses
   }
 
-  const handleAdd = (fields: Omit<AddressDraft, '_key'>) => {
-    const draft: AddressDraft = { ...fields, _key: nextDraftKey() }
-    const next = [...value, draft]
-    onChange(normalizePrimary(next, draft.is_primary ? draft._key : undefined))
+  /** Merges a just-added draft into the buffer, normalizing the primary flag. */
+  const appendDraft = (draft: AddressDraft) => {
+    onChange(normalizePrimary([...value, draft], draft.is_primary ? draft._key : undefined))
+  }
+
+  /** Replaces the draft at `key` in the buffer, normalizing the primary flag. */
+  const replaceDraft = (key: string, draft: AddressDraft) => {
+    const next = value.map((address) => (address._key === key ? draft : address))
+    onChange(normalizePrimary(next, draft.is_primary ? key : undefined))
+  }
+
+  const handleAdd = async (fields: Omit<AddressDraft, '_key'>) => {
+    if (persistence) {
+      const ok = await run(
+        async () => {
+          const created = await createAddress({
+            ...fields,
+            addressable_type: persistence.type,
+            addressable_id: persistence.id,
+          })
+          appendDraft(addressToDraft(created))
+        },
+        'personalData.addresses.created',
+        'personalData.addresses.genericError',
+      )
+      if (ok) {
+        setEditing(null)
+      }
+      return
+    }
+    appendDraft({ ...fields, _key: nextDraftKey() })
     setEditing(null)
   }
 
-  const handleEdit = (key: string, fields: Omit<AddressDraft, '_key'>) => {
-    const next = value.map((address) =>
-      address._key === key ? { ...fields, _key: key } : address,
-    )
-    onChange(normalizePrimary(next, fields.is_primary ? key : undefined))
+  const handleEdit = async (key: string, fields: Omit<AddressDraft, '_key'>) => {
+    const current = value.find((address) => address._key === key)
+    if (persistence && current?.id !== undefined) {
+      const ok = await run(
+        async () => {
+          const updated = await updateAddress(current.id!, {
+            line1: fields.line1,
+            line2: fields.line2,
+            postal_code: fields.postal_code,
+            city_id: fields.city_id,
+            province_id: fields.province_id,
+            state_id: fields.state_id,
+            country_id: fields.country_id,
+            is_primary: fields.is_primary,
+          })
+          replaceDraft(key, { ...addressToDraft(updated), _key: key })
+        },
+        'personalData.addresses.updated',
+        'personalData.addresses.genericError',
+      )
+      if (ok) {
+        setEditing(null)
+      }
+      return
+    }
+    replaceDraft(key, { ...fields, _key: key })
     setEditing(null)
   }
 
@@ -107,7 +173,17 @@ export function AddressesManager({
     if (!confirmed) {
       return
     }
-    onChange(normalizePrimary(value.filter((address) => address._key !== key)))
+    const current = value.find((address) => address._key === key)
+    const removed = () => onChange(normalizePrimary(value.filter((a) => a._key !== key)))
+    if (persistence && current?.id !== undefined) {
+      await run(
+        () => deleteAddress(current.id!).then(removed),
+        'personalData.addresses.deleted',
+        'personalData.addresses.genericError',
+      )
+      return
+    }
+    removed()
   }
 
   return (
@@ -116,13 +192,7 @@ export function AddressesManager({
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-medium">{t('personalData.addresses.title')}</h4>
           {!readOnly && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setEditing('new')}
-              disabled={editing === 'new'}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditing('new')}>
               <Plus aria-hidden="true" />
               {t('personalData.addresses.add')}
             </Button>
@@ -130,73 +200,57 @@ export function AddressesManager({
         </div>
       )}
 
-      {value.length === 0 && editing !== 'new' && (
+      {value.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {t('personalData.addresses.empty')}
         </p>
       )}
 
       <ul className="flex flex-col gap-2">
-        {value.map((address) =>
-          !readOnly && editing === address._key ? (
-            <li key={address._key}>
-              <AddressForm
-                address={address}
-                onSubmit={(fields) => handleEdit(address._key, fields)}
-                onCancel={() => setEditing(null)}
-              />
-            </li>
-          ) : (
-            <li
-              key={address._key}
-              className="flex flex-wrap items-center gap-2 rounded-lg border p-3"
-            >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <MapPin className="size-4" aria-hidden="true" />
+        {value.map((address) => (
+          <li
+            key={address._key}
+            className="flex flex-wrap items-center gap-2 rounded-lg border p-3"
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+              <MapPin className="size-4" aria-hidden="true" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium">{address.line1}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {[address.line2, address.postal_code].filter(Boolean).join(' · ')}
               </span>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-medium">{address.line1}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {[address.line2, address.postal_code]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
+            </div>
+            {address.is_primary && (
+              <Badge variant="secondary">
+                {t('personalData.addresses.primaryBadge')}
+              </Badge>
+            )}
+            {!readOnly && (
+              <div className="flex shrink-0 gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('personalData.addresses.editAction')}
+                  onClick={() => setEditing(address._key)}
+                >
+                  <Pencil aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('personalData.addresses.deleteAction')}
+                  onClick={() => handleDelete(address._key)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
               </div>
-              {address.is_primary && (
-                <Badge variant="secondary">
-                  {t('personalData.addresses.primaryBadge')}
-                </Badge>
-              )}
-              {!readOnly && (
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t('personalData.addresses.editAction')}
-                    onClick={() => setEditing(address._key)}
-                  >
-                    <Pencil aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t('personalData.addresses.deleteAction')}
-                    onClick={() => handleDelete(address._key)}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              )}
-            </li>
-          ),
-        )}
+            )}
+          </li>
+        ))}
       </ul>
-
-      {!readOnly && editing === 'new' && (
-        <AddressForm onSubmit={handleAdd} onCancel={() => setEditing(null)} />
-      )}
 
       {!showHeader && !readOnly && (
         <Button
@@ -204,13 +258,43 @@ export function AddressesManager({
           variant="ghost"
           size="sm"
           onClick={() => setEditing('new')}
-          disabled={editing === 'new'}
           className="self-start"
         >
           <Plus aria-hidden="true" />
           {t('personalData.addresses.add')}
         </Button>
       )}
+
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(open) => {
+          if (!open && !pending) {
+            setEditing(null)
+          }
+        }}
+      >
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>
+              {editing === 'new'
+                ? t('personalData.addresses.add')
+                : t('personalData.addresses.editAction')}
+            </DialogTitle>
+          </DialogHeader>
+          {editing !== null && (
+            <AddressForm
+              address={editing === 'new' ? undefined : value.find((a) => a._key === editing)}
+              onSubmit={
+                editing === 'new'
+                  ? handleAdd
+                  : (fields) => handleEdit(editing, fields)
+              }
+              onCancel={() => setEditing(null)}
+              submitting={pending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

@@ -30,7 +30,6 @@ const enums: Record<string, EnumOption[]> = {
     { value: 'individual', label: 'Individual', color: null, icon: null, is_default: true, hidden_on_form: false },
     { value: 'company', label: 'Company', color: null, icon: null, is_default: false, hidden_on_form: false },
   ],
-  personal_title: [],
   contact_type: [
     { value: 'email', label: 'Email', color: null, icon: null, is_default: true, hidden_on_form: false },
   ],
@@ -71,7 +70,6 @@ function address(overrides: Partial<AddressDraft> = {}): AddressDraft {
 function draft(overrides: Partial<PersonalDataDraft> = {}): PersonalDataDraft {
   return {
     type: 'individual',
-    title: null,
     first_name: 'Ada',
     last_name: 'Lovelace',
     company_name: null,

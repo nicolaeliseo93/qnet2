@@ -9,7 +9,6 @@
  */
 export const personalDataFieldLabels = {
   type: 'Tipo',
-  title: 'Titolo',
   first_name: 'Nome',
   last_name: 'Cognome',
   company_name: 'Ragione sociale',
@@ -17,6 +16,7 @@ export const personalDataFieldLabels = {
   vat_number: 'Partita IVA',
   sdi_code: 'Codice destinatario SDI',
   birth_date: 'Data di nascita',
+  gender: 'Sesso',
   contacts: 'Contatti',
   addresses: 'Indirizzi',
 }
@@ -31,8 +31,6 @@ export const personalData = {
   },
   form: {
     type: personalDataFieldLabels.type,
-    title: personalDataFieldLabels.title,
-    titleNone: 'Nessuno',
     firstName: personalDataFieldLabels.first_name,
     lastName: personalDataFieldLabels.last_name,
     companyName: personalDataFieldLabels.company_name,
@@ -40,6 +38,7 @@ export const personalData = {
     vatNumber: personalDataFieldLabels.vat_number,
     sdiCode: personalDataFieldLabels.sdi_code,
     birthDate: personalDataFieldLabels.birth_date,
+    gender: personalDataFieldLabels.gender,
     save: 'Salva',
     saving: 'Salvataggio…',
     create: 'Crea scheda',

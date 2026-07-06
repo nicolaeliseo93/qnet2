@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\GenderEnum;
 use App\Enums\PersonalDataTypeEnum;
-use App\Enums\PersonalTitleEnum;
 use App\Models\Abstracts\BaseModel;
 use App\Models\Concerns\HasAddresses;
 use App\Models\Concerns\HasContacts;
@@ -30,11 +30,11 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * which cascade away when the card is deleted.
  *
  * @property PersonalDataTypeEnum $type
- * @property PersonalTitleEnum|null $title
  * @property string|null $first_name
  * @property string|null $last_name
  * @property string|null $company_name
  * @property string|null $sdi_code
+ * @property GenderEnum|null $gender
  */
 class PersonalData extends BaseModel
 {
@@ -45,7 +45,6 @@ class PersonalData extends BaseModel
 
     protected $fillable = [
         'type',
-        'title',
         'first_name',
         'last_name',
         'company_name',
@@ -53,11 +52,11 @@ class PersonalData extends BaseModel
         'vat_number',
         'sdi_code',
         'birth_date',
+        'gender',
     ];
 
     protected $casts = [
         'type' => PersonalDataTypeEnum::class,
-        'title' => PersonalTitleEnum::class,
         'first_name' => 'string',
         'last_name' => 'string',
         'company_name' => 'string',
@@ -65,6 +64,7 @@ class PersonalData extends BaseModel
         'vat_number' => 'string',
         'sdi_code' => 'string',
         'birth_date' => 'date',
+        'gender' => GenderEnum::class,
     ];
 
     /**

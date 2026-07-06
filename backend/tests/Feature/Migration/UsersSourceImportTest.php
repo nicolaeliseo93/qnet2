@@ -92,7 +92,6 @@ it('creates a user with card, primary address, contacts, verbatim password hash 
                 'password' => $externalHash,
                 'first_name' => 'Ada',
                 'last_name' => 'Lovelace',
-                'title' => 'ms',
                 'tax_code' => 'LVLADA00A00H501Z',
                 'vat_number' => 'IT12345678901',
                 'birth_date' => '1990-01-01',

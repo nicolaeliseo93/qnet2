@@ -3,12 +3,21 @@ import { useTranslation } from 'react-i18next'
 import { Pencil, Phone, Plus, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useConfirm } from '@/components/confirm-dialog-context'
 import { ContactForm } from '@/features/personal-data/contact-form'
-import { nextDraftKey } from '@/features/personal-data/drafts'
+import { createContact, deleteContact, updateContact } from '@/features/personal-data/api'
+import { contactToDraft, nextDraftKey } from '@/features/personal-data/drafts'
+import { useImmediatePersist } from '@/features/personal-data/use-immediate-persist'
 import { useEnumOptions } from '@/features/config/use-config'
 import type {
   ContactDraft,
+  OwnerRef,
   PersonalDataFieldPermissionResolver,
 } from '@/features/personal-data/types'
 
@@ -31,25 +40,36 @@ interface ContactsManagerProps {
    * trailing "Add" action are rendered.
    */
   showHeader?: boolean
+  /**
+   * When present (edit of an owner whose personal-data card already exists),
+   * each add/edit/remove is persisted immediately to the backend against this
+   * owner and the buffer is synced with the returned row. Omitting it keeps the
+   * buffered flow: changes live in the buffer until the parent form is saved
+   * (create mode, or edit of an owner with no card yet).
+   */
+  persistence?: OwnerRef
 }
 
 /** `new` = the add form is open; a string = that contact `_key` is being edited. */
 type EditingState = 'new' | string | null
 
 /**
- * Reusable CRUD list for an owner's contacts, controlled/buffered: it never
- * touches the network — add/edit/remove mutate the buffer through `onChange`, and
- * the parent submits the buffer as part of the user payload (ADR 0012). Enforces
- * one primary contact per type in the buffer, mirroring the backend.
+ * Reusable CRUD list for an owner's contacts. The create/edit form opens in a
+ * dialog. Two write modes, chosen by `persistence`: buffered (mutate through
+ * `onChange`, persisted with the parent user payload — ADR 0012) or immediate
+ * (persist each change straight away and sync the buffer with the server row).
+ * Enforces one primary contact per type, mirroring the backend.
  */
 export function ContactsManager({
   value,
   onChange,
   fieldPermission,
   showHeader = true,
+  persistence,
 }: ContactsManagerProps) {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  const { pending, run } = useImmediatePersist()
   const [editing, setEditing] = useState<EditingState>(null)
   const typeOptions = useEnumOptions('contact_type')
   const permission = fieldPermission?.('personal_data.contacts')
@@ -75,20 +95,63 @@ export function ContactsManager({
         : contact,
     )
 
-  const handleAdd = (fields: Omit<ContactDraft, '_key'>) => {
-    const draft: ContactDraft = { ...fields, _key: nextDraftKey() }
+  /** Merges a just-added draft into the buffer, enforcing the primary rule. */
+  const appendDraft = (draft: ContactDraft) => {
     const next = [...value, draft]
     onChange(draft.is_primary ? enforcePrimary(next, draft._key, draft.type) : next)
+  }
+
+  /** Replaces the draft at `key` in the buffer, enforcing the primary rule. */
+  const replaceDraft = (key: string, draft: ContactDraft) => {
+    const next = value.map((contact) => (contact._key === key ? draft : contact))
+    onChange(draft.is_primary ? enforcePrimary(next, draft._key, draft.type) : next)
+  }
+
+  const handleAdd = async (fields: Omit<ContactDraft, '_key'>) => {
+    if (persistence) {
+      const ok = await run(
+        async () => {
+          const created = await createContact({
+            ...fields,
+            contactable_type: persistence.type,
+            contactable_id: persistence.id,
+          })
+          appendDraft(contactToDraft(created))
+        },
+        'personalData.contacts.created',
+        'personalData.contacts.genericError',
+      )
+      if (ok) {
+        setEditing(null)
+      }
+      return
+    }
+    appendDraft({ ...fields, _key: nextDraftKey() })
     setEditing(null)
   }
 
-  const handleEdit = (key: string, fields: Omit<ContactDraft, '_key'>) => {
-    const next = value.map((contact) =>
-      contact._key === key ? { ...fields, _key: key } : contact,
-    )
-    onChange(
-      fields.is_primary ? enforcePrimary(next, key, fields.type) : next,
-    )
+  const handleEdit = async (key: string, fields: Omit<ContactDraft, '_key'>) => {
+    const current = value.find((contact) => contact._key === key)
+    if (persistence && current?.id !== undefined) {
+      const ok = await run(
+        async () => {
+          const updated = await updateContact(current.id!, {
+            type: fields.type,
+            value: fields.value,
+            label: fields.label,
+            is_primary: fields.is_primary,
+          })
+          replaceDraft(key, { ...contactToDraft(updated), _key: key })
+        },
+        'personalData.contacts.updated',
+        'personalData.contacts.genericError',
+      )
+      if (ok) {
+        setEditing(null)
+      }
+      return
+    }
+    replaceDraft(key, { ...fields, _key: key })
     setEditing(null)
   }
 
@@ -102,8 +165,21 @@ export function ContactsManager({
     if (!confirmed) {
       return
     }
+    const current = value.find((contact) => contact._key === key)
+    if (persistence && current?.id !== undefined) {
+      await run(
+        () => deleteContact(current.id!).then(() => onChange(value.filter((c) => c._key !== key))),
+        'personalData.contacts.deleted',
+        'personalData.contacts.genericError',
+      )
+      return
+    }
     onChange(value.filter((contact) => contact._key !== key))
   }
+
+  const editingContact = typeof editing === 'string' && editing !== 'new'
+    ? value.find((contact) => contact._key === editing)
+    : undefined
 
   return (
     <section className="flex flex-col gap-2">
@@ -111,13 +187,7 @@ export function ContactsManager({
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-medium">{t('personalData.contacts.title')}</h4>
           {!readOnly && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setEditing('new')}
-              disabled={editing === 'new'}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditing('new')}>
               <Plus aria-hidden="true" />
               {t('personalData.contacts.add')}
             </Button>
@@ -125,74 +195,60 @@ export function ContactsManager({
         </div>
       )}
 
-      {value.length === 0 && editing !== 'new' && (
+      {value.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {t('personalData.contacts.empty')}
         </p>
       )}
 
       <ul className="flex flex-col gap-2">
-        {value.map((contact) =>
-          !readOnly && editing === contact._key ? (
-            <li key={contact._key}>
-              <ContactForm
-                contact={contact}
-                onSubmit={(fields) => handleEdit(contact._key, fields)}
-                onCancel={() => setEditing(null)}
-              />
-            </li>
-          ) : (
-            <li
-              key={contact._key}
-              className="flex flex-wrap items-center gap-2 rounded-lg border p-3"
-            >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <Phone className="size-4" aria-hidden="true" />
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-medium">{contact.value}</span>
-                <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                  <Badge variant="outline" className="font-normal">
-                    {typeLabelOf(contact.type)}
-                  </Badge>
-                  {contact.label && <span className="truncate">{contact.label}</span>}
-                </span>
-              </div>
-              {contact.is_primary && (
-                <Badge variant="secondary">
-                  {t('personalData.contacts.primaryBadge')}
+        {value.map((contact) => (
+          <li
+            key={contact._key}
+            className="flex flex-wrap items-center gap-2 rounded-lg border p-3"
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+              <Phone className="size-4" aria-hidden="true" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium">{contact.value}</span>
+              <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <Badge variant="outline" className="font-normal">
+                  {typeLabelOf(contact.type)}
                 </Badge>
-              )}
-              {!readOnly && (
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t('personalData.contacts.editAction')}
-                    onClick={() => setEditing(contact._key)}
-                  >
-                    <Pencil aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t('personalData.contacts.deleteAction')}
-                    onClick={() => handleDelete(contact._key)}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              )}
-            </li>
-          ),
-        )}
+                {contact.label && <span className="truncate">{contact.label}</span>}
+              </span>
+            </div>
+            {contact.is_primary && (
+              <Badge variant="secondary">
+                {t('personalData.contacts.primaryBadge')}
+              </Badge>
+            )}
+            {!readOnly && (
+              <div className="flex shrink-0 gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('personalData.contacts.editAction')}
+                  onClick={() => setEditing(contact._key)}
+                >
+                  <Pencil aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('personalData.contacts.deleteAction')}
+                  onClick={() => handleDelete(contact._key)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </div>
+            )}
+          </li>
+        ))}
       </ul>
-
-      {!readOnly && editing === 'new' && (
-        <ContactForm onSubmit={handleAdd} onCancel={() => setEditing(null)} />
-      )}
 
       {!showHeader && !readOnly && (
         <Button
@@ -200,13 +256,43 @@ export function ContactsManager({
           variant="ghost"
           size="sm"
           onClick={() => setEditing('new')}
-          disabled={editing === 'new'}
           className="self-start"
         >
           <Plus aria-hidden="true" />
           {t('personalData.contacts.add')}
         </Button>
       )}
+
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(open) => {
+          if (!open && !pending) {
+            setEditing(null)
+          }
+        }}
+      >
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>
+              {editing === 'new'
+                ? t('personalData.contacts.add')
+                : t('personalData.contacts.editAction')}
+            </DialogTitle>
+          </DialogHeader>
+          {editing !== null && (
+            <ContactForm
+              contact={editingContact}
+              onSubmit={
+                editing === 'new'
+                  ? handleAdd
+                  : (fields) => handleEdit(editing, fields)
+              }
+              onCancel={() => setEditing(null)}
+              submitting={pending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

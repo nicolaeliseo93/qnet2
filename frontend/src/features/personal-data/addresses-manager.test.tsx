@@ -50,6 +50,16 @@ vi.mock('@/features/personal-data/address-form', () => ({
   ),
 }))
 
+// Immediate-persistence path hits the per-entity address endpoints.
+const createAddressMock = vi.fn()
+const updateAddressMock = vi.fn()
+const deleteAddressMock = vi.fn()
+vi.mock('@/features/personal-data/api', () => ({
+  createAddress: (...a: unknown[]) => createAddressMock(...a),
+  updateAddress: (...a: unknown[]) => updateAddressMock(...a),
+  deleteAddress: (...a: unknown[]) => deleteAddressMock(...a),
+}))
+
 function address(overrides: Partial<AddressDraft> = {}): AddressDraft {
   return {
     _key: 'address-1',
@@ -135,5 +145,67 @@ describe('AddressesManager (controlled)', () => {
     // No address was primary, so the first one becomes the default.
     expect(next[0].is_primary).toBe(true)
     expect(next[0].id).toBeUndefined()
+  })
+
+  it('persists a new address immediately and adopts the server primary flag', async () => {
+    const onChange = vi.fn()
+    // The backend auto-primaries the first address; the buffer must adopt that.
+    createAddressMock.mockResolvedValue({
+      id: 77,
+      line1: 'New Street',
+      line2: null,
+      postal_code: null,
+      city_id: null,
+      province_id: null,
+      state_id: null,
+      country_id: null,
+      is_primary: true,
+      addressable_type: 'personal_data',
+      addressable_id: 99,
+      created_at: null,
+    })
+
+    renderWithConfirm(
+      <AddressesManager
+        value={[]}
+        onChange={onChange}
+        persistence={{ type: 'personal_data', id: 99 }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add address' }))
+    fireEvent.click(screen.getByTestId('stub-submit'))
+
+    await waitFor(() =>
+      expect(createAddressMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          addressable_type: 'personal_data',
+          addressable_id: 99,
+          line1: 'New Street',
+        }),
+      ),
+    )
+    await waitFor(() => expect(onChange).toHaveBeenCalled())
+    const next = onChange.mock.calls[0][0] as AddressDraft[]
+    expect(next[0].id).toBe(77)
+    expect(next[0].is_primary).toBe(true)
+  })
+
+  it('deletes a persisted address immediately through the endpoint', async () => {
+    const onChange = vi.fn()
+    deleteAddressMock.mockResolvedValue(undefined)
+
+    renderWithConfirm(
+      <AddressesManager
+        value={[address()]}
+        onChange={onChange}
+        persistence={{ type: 'personal_data', id: 99 }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Delete address' }))
+    const dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete address' }))
+
+    await waitFor(() => expect(deleteAddressMock).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith([]))
   })
 })

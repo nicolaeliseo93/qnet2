@@ -40,7 +40,10 @@ class BusinessFunctionMembersSource extends AbstractMigrationSource
 
     public function label(): string
     {
-        return 'Business function members';
+        // Named for what the pass actually does (reconcile the manager +
+        // operators onto an already-migrated function), so it is not mistaken
+        // for the "Business functions" source in the selector.
+        return 'Business functions — reconcile manager & operators';
     }
 
     /**

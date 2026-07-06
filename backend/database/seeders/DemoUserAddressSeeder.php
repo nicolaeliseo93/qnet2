@@ -11,7 +11,7 @@ use Faker\Factory as FakerFactory;
 use Faker\Generator;
 use Illuminate\Database\Seeder;
 
-class UserAddressSeeder extends Seeder
+class DemoUserAddressSeeder extends Seeder
 {
     use SeedsDevelopmentUsers;
 

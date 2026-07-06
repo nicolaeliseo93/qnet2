@@ -20,6 +20,19 @@ class ReferentType extends BaseModel
     use HasFactory, LogsModelActivity;
 
     /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            // Spec 0013 — external data migration: the source system's id for a
+            // migrated type, guarded (not in #[Fillable]) so it is only ever set
+            // by property assignment post-create.
+            'old_id' => 'integer',
+        ];
+    }
+
+    /**
      * The referents classified under this type. `referent_type_id` is
      * nullOnDelete (migration), so deleting a type never cascades a delete.
      */

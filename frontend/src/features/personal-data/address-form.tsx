@@ -61,18 +61,21 @@ function GeoFields({
 interface AddressFormProps {
   /** When present the form edits this draft; otherwise it creates a new one. */
   address?: AddressDraft
-  /** Returns the validated draft fields to the manager's buffer. */
+  /** Returns the validated draft fields to the manager. */
   onSubmit: (fields: Omit<AddressDraft, '_key'>) => void
   /** Called when the user cancels. */
   onCancel: () => void
+  /** True while an immediate write is in flight: disables the actions. */
+  submitting?: boolean
 }
 
 /**
- * Inline create/edit form for a single address. Controlled/buffered: it validates
- * (only `line1` required, mirroring the backend) and hands the values back through
- * `onSubmit`; it performs no network call. Owner-agnostic.
+ * Create/edit form for a single address, rendered inside the manager's dialog.
+ * Validates (only `line1` required, mirroring the backend) and hands the values
+ * back through `onSubmit`; the manager decides whether to buffer them or persist
+ * them immediately. Owner-agnostic.
  */
-export function AddressForm({ address, onSubmit, onCancel }: AddressFormProps) {
+export function AddressForm({ address, onSubmit, onCancel, submitting = false }: AddressFormProps) {
   const { t } = useTranslation()
   const schema = useMemo(() => buildAddressSchema(t), [t])
 
@@ -106,10 +109,10 @@ export function AddressForm({ address, onSubmit, onCancel }: AddressFormProps) {
 
   return (
     <Form {...form}>
-      {/* A div, not a form: this inline editor is buffered and rendered inside the
-          outer user form, so it must not nest a <form>. Save validates and commits
-          to the parent buffer via RHF's handleSubmit on a plain button. */}
-      <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3">
+      {/* A div, not a form: the dialog is portaled outside the outer user form,
+          but keeping a plain button (RHF's handleSubmit) avoids any nested-form
+          ambiguity and works identically for the buffered and immediate paths. */}
+      <div className="flex flex-col gap-3">
         <FormField
           control={form.control}
           name="line1"
@@ -178,15 +181,24 @@ export function AddressForm({ address, onSubmit, onCancel }: AddressFormProps) {
         />
 
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            disabled={submitting}
+          >
             {t('personalData.addresses.cancel')}
           </Button>
           <Button
             type="button"
             size="sm"
             onClick={form.handleSubmit(handleSubmit)}
+            disabled={submitting}
           >
-            {t('personalData.addresses.save')}
+            {submitting
+              ? t('personalData.addresses.saving')
+              : t('personalData.addresses.save')}
           </Button>
         </div>
       </div>

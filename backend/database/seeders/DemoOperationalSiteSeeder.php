@@ -20,14 +20,14 @@ use Illuminate\Support\Collection;
  * to filter/sort/search on (spec 0011's OperationalSiteGeoColumns). Reuses
  * OperationalSiteFactory::withAddress(), which already falls back to a
  * freshly-built City (via its own factory chain) when none is passed — a
- * REAL city either way — mirroring UserAddressSeeder's "no city available"
+ * REAL city either way — mirroring DemoUserAddressSeeder's "no city available"
  * fallback without ever leaving a site geo-less.
  *
  * Deterministic faker seed for reproducibility; existing sites are cleared at
  * the start of the run (idempotent across repeated `db:seed` — deleting a
- * site cascades its address via HasAddresses), mirroring CompanySeeder.
+ * site cascades its address via HasAddresses), mirroring DemoCompanySeeder.
  */
-class OperationalSiteSeeder extends Seeder
+class DemoOperationalSiteSeeder extends Seeder
 {
     private const int SITES = 40;
 

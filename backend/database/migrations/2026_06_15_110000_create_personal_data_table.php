@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
  * card via morphOne (HasPersonalData) without a schema change — and a card can
  * also exist standalone before being linked.
  *
- * It covers both natural persons (type=individual: first/last name, title,
+ * It covers both natural persons (type=individual: first/last name,
  * birth date, tax code) and legal entities (type=company: company name, VAT
  * number). `full_name` and `ceo` are PHP accessors on the model, not stored
  * columns. No controller/API is exposed yet — data layer + service only.
@@ -31,9 +31,6 @@ return new class extends Migration
 
             // individual | company (PersonalDataTypeEnum).
             $table->string('type');
-
-            // Honorific for a natural person (PersonalTitleEnum), optional.
-            $table->string('title')->nullable();
 
             // Natural-person fields (type=individual).
             $table->string('first_name')->nullable();

@@ -2,7 +2,6 @@
 
 use App\DataObjects\PersonalData\CreatePersonalData;
 use App\Enums\PersonalDataTypeEnum;
-use App\Enums\PersonalTitleEnum;
 use App\Models\PersonalData;
 use App\Models\User;
 use App\Services\PersonalDataService;
@@ -18,14 +17,12 @@ beforeEach(function () {
 it('creates an individual card for an owner', function () {
     $card = $this->service->createFor($this->user, new CreatePersonalData(
         type: PersonalDataTypeEnum::Individual,
-        title: PersonalTitleEnum::Dr,
         firstName: 'Ada',
         lastName: 'Lovelace',
     ));
 
     expect($card->personable_id)->toBe($this->user->id)
-        ->and($card->full_name)->toBe('Ada Lovelace')
-        ->and($card->title)->toBe(PersonalTitleEnum::Dr);
+        ->and($card->full_name)->toBe('Ada Lovelace');
 });
 
 it('creates a company card for an owner', function () {

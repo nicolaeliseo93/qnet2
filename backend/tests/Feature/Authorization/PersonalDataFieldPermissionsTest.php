@@ -78,7 +78,7 @@ it('AC-002: permissions.fields includes the 11 personal_data.* keys, editable wh
     $fields = $response->json('permissions.fields');
 
     $expectedKeys = [
-        'personal_data.type', 'personal_data.title', 'personal_data.first_name',
+        'personal_data.type', 'personal_data.first_name',
         'personal_data.last_name', 'personal_data.company_name', 'personal_data.tax_code',
         'personal_data.vat_number', 'personal_data.sdi_code', 'personal_data.birth_date',
         'personal_data.contacts', 'personal_data.addresses',

@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  * (comune / provincia / regione / country) are populated. Deterministic faker
  * seed + firstOrNew on the denomination keep the seed idempotent across runs.
  */
-class CompanySeeder extends Seeder
+class DemoCompanySeeder extends Seeder
 {
     private const int COMPANIES = 30;
 

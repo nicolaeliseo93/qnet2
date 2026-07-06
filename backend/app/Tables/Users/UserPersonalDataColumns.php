@@ -4,15 +4,12 @@ namespace App\Tables\Users;
 
 use App\Enums\PersonalDataTypeEnum;
 use App\Models\Address;
-use App\Models\Contact;
 use App\Models\PersonalData;
 use App\Models\User;
+use App\Tables\Shared\PrimaryContactColumn;
 use App\Tables\Users\Concerns\CorrelatesPersonalDataToUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 /**
  * The personal-data-derived columns on the `users` table with no real DB
@@ -23,7 +20,9 @@ use Illuminate\Support\Facades\DB;
  * Extracted out of UsersTableDefinition (file-size split, engineering.md §6):
  * row formatting, badge/enum metadata, the derived filters/sorts and the
  * Excel-like distinct-values resolution for `user_type` all live in one
- * focused file. Behavior is unchanged from the pre-split implementation.
+ * focused file. The `primary_contact` mechanics are delegated to the shared
+ * PrimaryContactColumn (reused verbatim by the referents domain) — this class
+ * only binds them to the `users` owner. Behavior is unchanged.
  */
 class UserPersonalDataColumns
 {
@@ -34,6 +33,8 @@ class UserPersonalDataColumns
      * the WHERE IN cardinality (defence in depth); excess values are ignored.
      */
     private const int MAX_FILTER_VALUES = 200;
+
+    public function __construct(private readonly PrimaryContactColumn $contactColumn) {}
 
     /**
      * Plain string[] of the PersonalDataTypeEnum values, used both as the
@@ -98,7 +99,7 @@ class UserPersonalDataColumns
         return [
             'user_type' => $card?->type?->value,
             'primary_address' => $this->formatAddress($address),
-            'primary_contact' => $this->formatContacts($card?->contacts),
+            'primary_contact' => $this->contactColumn->format($card?->contacts),
         ];
     }
 
@@ -149,45 +150,25 @@ class UserPersonalDataColumns
     }
 
     /**
-     * Derived `primary_contact` text filter: bound LIKE on the primary
-     * contact's value/label. Wildcards in user input are escaped.
+     * Derived `primary_contact` text filter, delegated to the shared column.
      *
      * @param  Builder<Model>  $query
      * @param  array<string, mixed>  $filter
      */
     public function applyContactFilter(Builder $query, array $filter): void
     {
-        $needle = $this->likeNeedle($filter);
-
-        if ($needle !== null) {
-            $query->whereHas('personalData.contacts', function (Builder $contactQuery) use ($needle): void {
-                $contactQuery->where('is_primary', true)
-                    ->where(function (Builder $match) use ($needle): void {
-                        $match->where('value', 'like', $needle)
-                            ->orWhere('label', 'like', $needle);
-                    });
-            });
-        }
+        $this->contactColumn->applyTextFilter($query, $filter);
     }
 
     /**
-     * Derived `primary_contact` SET filter (spec 0004/0005 `multi` widget):
-     * matches the real contact VALUE — the same string the /values endpoint
-     * returns — of the PRIMARY contact. Bound, capped cardinality (reuses
-     * setFilterValues' cap).
+     * Derived `primary_contact` SET filter, delegated to the shared column.
      *
      * @param  Builder<Model>  $query
      * @param  array<string, mixed>  $filter
      */
     public function applyContactSetFilter(Builder $query, array $filter): void
     {
-        $values = $this->setFilterValues($filter);
-
-        if ($values !== []) {
-            $query->whereHas('personalData.contacts', static function (Builder $contactQuery) use ($values): void {
-                $contactQuery->where('is_primary', true)->whereIn('value', $values);
-            });
-        }
+        $this->contactColumn->applySetFilter($query, $filter);
     }
 
     /**
@@ -219,52 +200,19 @@ class UserPersonalDataColumns
      */
     public function contactSortSubquery(): Builder
     {
-        return $this->correlateToUser(
-            Contact::query()
-                ->selectRaw('min(contacts.value)')
-                ->join('personal_data', 'personal_data.id', '=', 'contacts.contactable_id')
-                ->where('contacts.contactable_type', (new PersonalData)->getMorphClass())
-                ->where('contacts.is_primary', true),
-        );
+        return $this->contactColumn->sortSubquery('users', (new User)->getMorphClass());
     }
 
     /**
-     * Excel-like distinct values (spec 0004/0005) for the COMPUTED
-     * `primary_contact` column: distinct `value` of the PRIMARY contacts of
-     * every user matching `$query` (already scoped by every OTHER active
-     * filter). Search narrows on value/label, same as applyContactFilter,
-     * bound + LIKE-escaped.
+     * Excel-like distinct values for the COMPUTED `primary_contact` column,
+     * delegated to the shared column and bound to the `users` owner.
      *
      * @param  Builder<Model>  $query
      * @return array<int, string>
      */
     public function contactDistinctValues(Builder $query, ?string $search, int $limit): array
     {
-        $userIds = (clone $query)->select('users.id');
-
-        $cardIds = DB::table('personal_data')
-            ->select('id')
-            ->where('personable_type', (new User)->getMorphClass())
-            ->whereIn('personable_id', $userIds);
-
-        return DB::table('contacts')
-            ->where('contactable_type', (new PersonalData)->getMorphClass())
-            ->where('is_primary', true)
-            ->whereIn('contactable_id', $cardIds)
-            ->whereNotNull('value')
-            ->when($search !== null && $search !== '', function (QueryBuilder $q) use ($search): void {
-                $needle = '%'.$this->escapeLike($search).'%';
-                $q->where(function (QueryBuilder $sub) use ($needle): void {
-                    $sub->where('value', 'like', $needle)
-                        ->orWhere('label', 'like', $needle);
-                });
-            })
-            ->distinct()
-            ->orderBy('value')
-            ->limit($limit)
-            ->pluck('value')
-            ->map(static fn (mixed $value): string => (string) $value)
-            ->all();
+        return $this->contactColumn->distinctValues($query, 'users', (new User)->getMorphClass(), $search, $limit);
     }
 
     /**
@@ -291,55 +239,6 @@ class UserPersonalDataColumns
         $line = trim(implode(', ', array_filter([$street ?: null, $locality ?: null])));
 
         return $line === '' ? null : $line;
-    }
-
-    /**
-     * Structured payload for EVERY primary contact (one per type), so the
-     * frontend can render each as a badge with the contact-type icon + label
-     * without knowing the ContactType domain. Empty array when there is none
-     * (the collection is already constrained to is_primary by baseQuery).
-     *
-     * @param  Collection<int, Contact>|null  $contacts
-     * @return array<int, array{type: string, icon: string|null, label: string, value: string}>
-     */
-    private function formatContacts(?Collection $contacts): array
-    {
-        if ($contacts === null) {
-            return [];
-        }
-
-        return $contacts
-            ->map(fn (Contact $contact): ?array => $this->formatContact($contact))
-            ->filter()
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Structured payload for a single contact: its type, the type's icon
-     * (from the enum metadata), a display label (the contact's own label
-     * when set, else the type label) and the value. Returns null when the
-     * value is empty.
-     *
-     * @return array{type: string, icon: string|null, label: string, value: string}|null
-     */
-    private function formatContact(Contact $contact): ?array
-    {
-        $value = trim((string) ($contact->value ?? ''));
-
-        if ($value === '') {
-            return null;
-        }
-
-        $type = $contact->type;
-        $label = trim((string) ($contact->label ?? ''));
-
-        return [
-            'type' => $type->value,
-            'icon' => $type->icon(),
-            'label' => $label !== '' ? $label : $type->label(),
-            'value' => $value,
-        ];
     }
 
     /**

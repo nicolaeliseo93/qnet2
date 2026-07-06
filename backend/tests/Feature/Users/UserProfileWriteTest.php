@@ -28,7 +28,6 @@ function fullProfilePayload(array $overrides = []): array
 {
     return array_merge([
         'type' => 'individual',
-        'title' => 'mr',
         'first_name' => 'Ada',
         'last_name' => 'Lovelace',
         'tax_code' => 'LVLADA90A01H501Z',

@@ -13,6 +13,7 @@ import { operationalSites } from './en-operational-sites'
 import { imports } from './en-imports'
 import { exports } from './en-exports'
 import { table } from './en-table'
+import { referents, referentTypes } from './en-referents'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -50,6 +51,8 @@ export const en = {
     roles: 'Roles',
     companies: 'Companies',
     businessFunctions: 'Business Functions',
+    referents: 'Referents',
+    referentTypes: 'Referent Types',
     operationalSites: 'Operational Sites',
     faCompaniesServices: 'FA Companies & Services',
     settings: 'Settings',
@@ -442,6 +445,8 @@ export const en = {
   operationalSites,
   imports,
   exports,
+  referents,
+  referentTypes,
 }
 
 export type TranslationResources = typeof en

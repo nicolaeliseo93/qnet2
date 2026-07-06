@@ -13,6 +13,8 @@ const UsersPage = lazy(() => import('@/pages/users-page'))
 const RolesPage = lazy(() => import('@/pages/roles-page'))
 const CompaniesPage = lazy(() => import('@/pages/companies-page'))
 const BusinessFunctionsPage = lazy(() => import('@/pages/business-functions-page'))
+const ReferentsPage = lazy(() => import('@/pages/referents-page'))
+const ReferentTypesPage = lazy(() => import('@/pages/referent-types-page'))
 const OperationalSitesPage = lazy(() => import('@/pages/operational-sites-page'))
 const MigrationsPage = lazy(() => import('@/features/migrations/migrations-page'))
 const SettingsPage = lazy(() => import('@/pages/settings-page'))
@@ -57,6 +59,14 @@ export const router = createBrowserRouter([
           {
             path: 'business-functions',
             element: <BusinessFunctionsPage />,
+          },
+          {
+            path: 'referents',
+            element: <ReferentsPage />,
+          },
+          {
+            path: 'referent-types',
+            element: <ReferentTypesPage />,
           },
           {
             path: 'operational-sites',

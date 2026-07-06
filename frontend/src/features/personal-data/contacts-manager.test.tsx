@@ -41,6 +41,16 @@ vi.mock('@/features/personal-data/contact-form', () => ({
   ),
 }))
 
+// Immediate-persistence path hits the per-entity contact endpoints.
+const createContactMock = vi.fn()
+const updateContactMock = vi.fn()
+const deleteContactMock = vi.fn()
+vi.mock('@/features/personal-data/api', () => ({
+  createContact: (...a: unknown[]) => createContactMock(...a),
+  updateContact: (...a: unknown[]) => updateContactMock(...a),
+  deleteContact: (...a: unknown[]) => deleteContactMock(...a),
+}))
+
 function contact(overrides: Partial<ContactDraft> = {}): ContactDraft {
   return {
     _key: 'contact-1',
@@ -103,5 +113,62 @@ describe('ContactsManager (controlled)', () => {
     expect(next[1].value).toBe('new@example.com')
     expect(next[1].is_primary).toBe(true)
     expect(next[1].id).toBeUndefined()
+  })
+
+  it('persists a new contact immediately and seeds the buffer with the server id', async () => {
+    const onChange = vi.fn()
+    createContactMock.mockResolvedValue({
+      id: 42,
+      type: 'email',
+      label: null,
+      value: 'new@example.com',
+      is_primary: true,
+      contactable_type: 'personal_data',
+      contactable_id: 99,
+      created_at: null,
+    })
+
+    renderWithConfirm(
+      <ContactsManager
+        value={[]}
+        onChange={onChange}
+        persistence={{ type: 'personal_data', id: 99 }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add contact' }))
+    fireEvent.click(screen.getByTestId('stub-submit'))
+
+    // The write targets the card owner, and the buffer is synced with the row id.
+    await waitFor(() =>
+      expect(createContactMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contactable_type: 'personal_data',
+          contactable_id: 99,
+          value: 'new@example.com',
+        }),
+      ),
+    )
+    await waitFor(() => expect(onChange).toHaveBeenCalled())
+    const next = onChange.mock.calls[0][0] as ContactDraft[]
+    expect(next[0].id).toBe(42)
+  })
+
+  it('deletes a persisted contact immediately through the endpoint', async () => {
+    const onChange = vi.fn()
+    deleteContactMock.mockResolvedValue(undefined)
+
+    renderWithConfirm(
+      <ContactsManager
+        value={[contact()]}
+        onChange={onChange}
+        persistence={{ type: 'personal_data', id: 99 }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Delete contact' }))
+    const dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete contact' }))
+
+    await waitFor(() => expect(deleteContactMock).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith([]))
   })
 })

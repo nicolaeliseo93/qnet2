@@ -9,7 +9,6 @@
  */
 export const personalDataFieldLabels = {
   type: 'Type',
-  title: 'Title',
   first_name: 'First name',
   last_name: 'Last name',
   company_name: 'Company name',
@@ -17,6 +16,7 @@ export const personalDataFieldLabels = {
   vat_number: 'VAT number',
   sdi_code: 'SDI recipient code',
   birth_date: 'Date of birth',
+  gender: 'Gender',
   contacts: 'Contacts',
   addresses: 'Addresses',
 }
@@ -31,8 +31,6 @@ export const personalData = {
   },
   form: {
     type: personalDataFieldLabels.type,
-    title: personalDataFieldLabels.title,
-    titleNone: 'None',
     firstName: personalDataFieldLabels.first_name,
     lastName: personalDataFieldLabels.last_name,
     companyName: personalDataFieldLabels.company_name,
@@ -40,6 +38,7 @@ export const personalData = {
     vatNumber: personalDataFieldLabels.vat_number,
     sdiCode: personalDataFieldLabels.sdi_code,
     birthDate: personalDataFieldLabels.birth_date,
+    gender: personalDataFieldLabels.gender,
     save: 'Save',
     saving: 'Saving…',
     create: 'Create card',

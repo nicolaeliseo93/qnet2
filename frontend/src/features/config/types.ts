@@ -20,7 +20,7 @@ export interface EnumOption {
 /**
  * The bootstrap payload (envelope `data`). `enums` is keyed by the snake_case
  * enum key declared in the backend allowlist (config/config.php → form_enums),
- * e.g. `personal_data_type`, `personal_title`, `contact_type`.
+ * e.g. `personal_data_type`, `contact_type`.
  */
 export interface AppConfig {
   enums: Record<string, EnumOption[]>

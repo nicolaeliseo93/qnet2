@@ -20,14 +20,16 @@ class DemoDataSeeder extends Seeder
     {
         $this->call(DatabaseSeeder::class);
 
-        $this->call(UserSeeder::class);
-        $this->call(PersonalDataSeeder::class);
-        $this->call(UserContactSeeder::class);
-        $this->call(UserAddressSeeder::class);
-        $this->call(OperationalSiteSeeder::class);
-        $this->call(CompanySeeder::class);
-        $this->call(BusinessFunctionSeeder::class);
-        $this->call(EmploymentProfileSeeder::class);
-        $this->call(NotificationSeeder::class);
+        $this->call(DemoReferentTypeSeeder::class);
+        $this->call(DemoRolesSeeder::class);
+        $this->call(DemoUsersSeeder::class);
+        $this->call(DemoPersonalDataSeeder::class);
+        $this->call(DemoUserContactSeeder::class);
+        $this->call(DemoUserAddressSeeder::class);
+        $this->call(DemoOperationalSiteSeeder::class);
+        $this->call(DemoCompanySeeder::class);
+        $this->call(DemoBusinessFunctionSeeder::class);
+        $this->call(DemoEmploymentProfileSeeder::class);
+        $this->call(DemoNotificationSeeder::class);
     }
 }

@@ -1,8 +1,11 @@
+import { IdCard, MapPin, Phone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
+import { FormSection } from '@/components/form-section'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { PersonalDataCardForm } from '@/features/personal-data/personal-data-card-form'
+import { cardOwnerRef } from '@/features/personal-data/drafts'
 import type {
   PersonalDataDraft,
   PersonalDataFieldPermissionResolver,
@@ -22,11 +25,13 @@ interface PersonalDataSectionProps {
 }
 
 /**
- * Reusable, owner-agnostic personal-data section. Controlled/buffered: the parent
- * owns the draft tree and submits it inside the single user payload (ADR 0012) —
- * the section performs no network call. The card is ALWAYS active (no add/remove
- * affordance): the section renders the card form plus the contacts/addresses
- * managers, all wired to the same buffer, in both create and edit.
+ * Reusable, owner-agnostic personal-data section, aligned with the Users form
+ * look: the card and the contacts/addresses managers each sit in their own
+ * `FormSection` (icon + title + count badge), the editors opening in the shared
+ * dialog. Controlled/buffered: the parent owns the draft tree; contacts/addresses
+ * persist immediately when the card already exists (`cardOwnerRef`), otherwise
+ * they stay buffered until the parent form is saved (ADR 0012). The card is
+ * always active; a section whose gating is not visible is not rendered.
  */
 export function PersonalDataSection({
   value,
@@ -34,31 +39,47 @@ export function PersonalDataSection({
   fieldPermission,
 }: PersonalDataSectionProps) {
   const { t } = useTranslation()
+  const persistence = cardOwnerRef(value)
+  const contactsVisible = fieldPermission?.('personal_data.contacts').visible ?? true
+  const addressesVisible = fieldPermission?.('personal_data.addresses').visible ?? true
 
   return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <h3 className="text-base font-semibold">
-          {t('personalData.section.title')}
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          {t('personalData.section.subtitle')}
-        </p>
-      </div>
+    <section className="flex flex-col gap-4">
+      <FormSection icon={IdCard} title={t('personalData.section.title')}>
+        <PersonalDataCardForm value={value} onChange={onChange} fieldPermission={fieldPermission} />
+      </FormSection>
 
-      <PersonalDataCardForm value={value} onChange={onChange} fieldPermission={fieldPermission} />
-      <Separator />
-      <ContactsManager
-        value={value.contacts}
-        onChange={(contacts) => onChange({ ...value, contacts })}
-        fieldPermission={fieldPermission}
-      />
-      <Separator />
-      <AddressesManager
-        value={value.addresses}
-        onChange={(addresses) => onChange({ ...value, addresses })}
-        fieldPermission={fieldPermission}
-      />
+      {contactsVisible && (
+        <FormSection
+          icon={Phone}
+          title={t('personalData.contacts.title')}
+          aside={<Badge variant="secondary">{value.contacts.length}</Badge>}
+        >
+          <ContactsManager
+            value={value.contacts}
+            onChange={(contacts) => onChange({ ...value, contacts })}
+            fieldPermission={fieldPermission}
+            showHeader={false}
+            persistence={persistence}
+          />
+        </FormSection>
+      )}
+
+      {addressesVisible && (
+        <FormSection
+          icon={MapPin}
+          title={t('personalData.addresses.title')}
+          aside={<Badge variant="secondary">{value.addresses.length}</Badge>}
+        >
+          <AddressesManager
+            value={value.addresses}
+            onChange={(addresses) => onChange({ ...value, addresses })}
+            fieldPermission={fieldPermission}
+            showHeader={false}
+            persistence={persistence}
+          />
+        </FormSection>
+      )}
     </section>
   )
 }

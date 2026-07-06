@@ -51,7 +51,6 @@ class UsersAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('roles', 'multiselect'),
             new FieldDefinition('password', 'password', mandatory: true),
             new FieldDefinition('personal_data.type', 'select', 'personal_data', mandatory: true),
-            new FieldDefinition('personal_data.title', 'select', 'personal_data'),
             new FieldDefinition('personal_data.first_name', 'text', 'personal_data', mandatory: true),
             new FieldDefinition('personal_data.last_name', 'text', 'personal_data', mandatory: true),
             new FieldDefinition('personal_data.company_name', 'text', 'personal_data', mandatory: true),
@@ -59,6 +58,7 @@ class UsersAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('personal_data.vat_number', 'text', 'personal_data'),
             new FieldDefinition('personal_data.sdi_code', 'text', 'personal_data'),
             new FieldDefinition('personal_data.birth_date', 'date', 'personal_data'),
+            new FieldDefinition('personal_data.gender', 'select', 'personal_data'),
             new FieldDefinition('personal_data.contacts', 'collection', 'personal_data'),
             new FieldDefinition('personal_data.addresses', 'collection', 'personal_data'),
             new FieldDefinition('employment.is_manager', 'boolean', 'employment'),
@@ -122,7 +122,6 @@ class UsersAuthorization extends AbstractResourceAuthorization
 
         return [
             'personal_data.type' => $permission,
-            'personal_data.title' => $permission,
             'personal_data.first_name' => $permission,
             'personal_data.last_name' => $permission,
             'personal_data.company_name' => $permission,
@@ -130,6 +129,7 @@ class UsersAuthorization extends AbstractResourceAuthorization
             'personal_data.vat_number' => $permission,
             'personal_data.sdi_code' => $permission,
             'personal_data.birth_date' => $permission,
+            'personal_data.gender' => $permission,
             'personal_data.contacts' => $permission,
             'personal_data.addresses' => $permission,
         ];

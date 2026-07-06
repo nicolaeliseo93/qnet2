@@ -17,6 +17,9 @@ export const migrations = {
     'business-functions': 'Business functions',
     companies: 'Companies',
     'operational-sites': 'Operational sites',
+    'business-function-members': 'Business functions — reconcile manager & operators',
+    'referent-types': 'Referent types',
+    referents: 'Referents',
   },
   page: {
     sourceLabel: 'Source',

@@ -5,16 +5,11 @@
  * into the `users.*` namespace from there.
  */
 
-/** Short labels for the user form's tab strip. */
+/** Labels for the user form's three macro tabs (see the EN file for the grouping). */
 export const usersFormTabs = {
-  identity: 'Anagrafica',
-  credentials: 'Credenziali',
-  access: 'Accessi',
-  profile: 'Profilo',
-  contract: 'Rapporto',
-  contractData: 'Dati contrattuali',
-  contacts: 'Contatti',
-  addresses: 'Indirizzi',
+  account: 'Anagrafica',
+  employment: 'Impiego',
+  contactInfo: 'Recapiti',
   tabHasErrors: 'Questa scheda contiene errori di validazione.',
 }
 

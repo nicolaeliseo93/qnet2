@@ -5,7 +5,7 @@ import { RoleFieldPermissions } from '@/features/roles/role-field-permissions'
 import type { FieldCatalogueResource } from '@/features/roles/field-catalogue-api'
 
 /**
- * Spec 0008 AC-010: the `users` resource catalogue now carries the 11
+ * Spec 0008 AC-010: the `users` resource catalogue now carries the
  * `personal_data.*` keys (contract, `GET /api/authorization/fields`) — the
  * matrix must render one row per key, each with a readable label and three
  * toggles, alongside the pre-existing account fields. `mandatory` (spec 0008
@@ -19,7 +19,6 @@ const USERS_CATALOGUE: FieldCatalogueResource = {
   fields: [
     { key: 'email', type: 'email', group: null, mandatory: true },
     { key: 'personal_data.type', type: 'select', group: 'personal_data', mandatory: true },
-    { key: 'personal_data.title', type: 'select', group: 'personal_data', mandatory: false },
     { key: 'personal_data.first_name', type: 'text', group: 'personal_data', mandatory: true },
     { key: 'personal_data.last_name', type: 'text', group: 'personal_data', mandatory: true },
     { key: 'personal_data.company_name', type: 'text', group: 'personal_data', mandatory: true },

@@ -17,6 +17,9 @@ export interface OwnerRef {
 
 export type PersonalDataType = 'individual' | 'company'
 
+/** Biological sex of a natural-person card (GenderEnum). Null for a company. */
+export type Gender = 'male' | 'female'
+
 /** A single contact channel (ContactResource). */
 export interface Contact {
   id: number
@@ -51,7 +54,6 @@ export interface Address {
 export interface PersonalDataCard {
   id: number
   type: PersonalDataType
-  title: string | null
   first_name: string | null
   last_name: string | null
   company_name: string | null
@@ -61,6 +63,7 @@ export interface PersonalDataCard {
   vat_number: string | null
   sdi_code: string | null
   birth_date: string | null
+  gender: Gender | null
   personable_type: string
   personable_id: number
   contacts: Contact[]
@@ -75,7 +78,6 @@ export interface PersonalDataCard {
 /** Card fields shared by create and update (the registry data itself). */
 export interface PersonalDataFields {
   type: PersonalDataType
-  title?: string | null
   first_name?: string | null
   last_name?: string | null
   company_name?: string | null
@@ -83,6 +85,7 @@ export interface PersonalDataFields {
   vat_number?: string | null
   sdi_code?: string | null
   birth_date?: string | null
+  gender?: Gender | null
 }
 
 /** POST /api/personal-data — card fields plus the owner. */
@@ -216,7 +219,6 @@ export interface PersonalDataDraft {
   /** Present = existing card to update; absent = new card to create. */
   id?: number
   type: PersonalDataType
-  title: string | null
   first_name: string | null
   last_name: string | null
   company_name: string | null
@@ -224,6 +226,7 @@ export interface PersonalDataDraft {
   vat_number: string | null
   sdi_code: string | null
   birth_date: string | null
+  gender: Gender | null
   contacts: ContactDraft[]
   addresses: AddressDraft[]
 }

@@ -15,12 +15,9 @@ export const enums = {
     individual: 'Persona fisica',
     company: 'Azienda',
   },
-  personal_title: {
-    mr: 'Sig.',
-    mrs: 'Sig.ra',
-    ms: 'Sig.na',
-    dr: 'Dott.',
-    prof: 'Prof.',
+  gender: {
+    male: 'Maschio',
+    female: 'Femmina',
   },
   contact_type: {
     phone: 'Telefono',
@@ -51,5 +48,10 @@ export const enums = {
     teacher_vat: 'Docenti P.IVA',
     trainee_cost: 'Costo Tirocinante',
     hourly_cost_me: 'Costo orario M.E.',
+  },
+  // Ambito di contatto del referente (spec 0016).
+  referent_contact_scope: {
+    internal: 'Interno',
+    external: 'Esterno',
   },
 }

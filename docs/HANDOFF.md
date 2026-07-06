@@ -2,6 +2,320 @@
 
 > Injected at session start. Update at every green state.
 
+## Change — Referents `primary_contact` column made IDENTICAL to Users — GREEN (2026-07-06)
+
+Ad-hoc request: the referents `primary_contact` table column must be identical to the users one,
+reusing existing code (no reinvention). User chose FULL parity (render + sort/filter) via
+AskUserQuestion. Before: referents showed a single `{type,value}` inline badge, not sortable/filterable;
+users showed the array of ALL primary contacts (count badge + tooltip), sortable + filterable.
+
+Key leverage: the contact mechanics were domain-agnostic but lived privately/hardcoded-to-`users` in
+`UserPersonalDataColumns`. Extracted them ONCE into a shared collaborator so the two columns can never
+drift; the frontend is already generic (`type:'tags'` + `filterType:'text'` auto-yields the same
+`agMultiColumnFilter`), so only the renderer swap was needed there.
+
+Backend:
+- NEW `App\Tables\Shared\PrimaryContactColumn` — the whole column contract: `format()` (payload = all
+  primary contacts `{type,icon,label,value}`), `applyTextFilter`/`applySetFilter` (whereHas on
+  `personalData.contacts`, is_primary, bound LIKE / whereIn value, capped 200), `sortSubquery(ownerTable,
+  ownerMorph)` (correlated MIN(value)), `distinctValues(query, ownerTable, ownerMorph, search, limit)`.
+  The owner table + morph alias are the ONLY per-domain params.
+- `UserPersonalDataColumns`: now injects `PrimaryContactColumn` and DELEGATES its 5 contact methods to it
+  (behavior IDENTICAL — `UsersTableDefinition` unchanged, zero edits there). Removed the dead
+  `formatContacts`/`formatContact` + the inlined sort/distinct bodies; dropped unused Contact/DB/
+  QueryBuilder/Collection imports.
+- `ReferentsTableDefinition`: `use UnwrapsMultiFilter`, injects `PrimaryContactColumn`, mapRow →
+  `format($row->personalData?->contacts)`, `applyDerivedFilter` handles `primary_contact` via the multi
+  unwrap (Set→applySetFilter + condition→applyTextFilter, in AND), `applyDerivedSort`/`distinctValues`
+  add the `primary_contact` arm bound to `('referents', (new Referent)->getMorphClass())`. Removed the
+  bespoke `primaryContact()` single-contact method.
+- `ReferentColumnCatalog`: `primary_contact` now `type:'tags'`, sortable+filterable, `filterType:'text'`
+  (dropped `hasFilterValues:false`); added `['columnId'=>'primary_contact','type'=>'text']` to filters().
+
+Frontend: `referents/column-renderers.tsx` → `primary_contact` now uses the shared `ContactsCell`
+(removed the bespoke `PrimaryContactCell` + `ReferentPrimaryContact` interface). Nothing else changed.
+
+Tests: `ReferentTableTest` — columns assertion updated to tags/sortable/filterable; row payload now
+asserts the array `{type,icon,label,value}`; empty referent → `primary_contact === []` (was null); the
+old "422 primary_contact not filterable" test replaced with distinct-values + text-filter + sort tests
+(parity with Users). Frontend renderer test now asserts the shared count badge. Backend: Table +
+Referents + ReferentTypes suites GREEN (224 pass); Pint clean. Frontend: tsc clean, ESLint clean on
+changed files, referents suite 29 pass. The KNOWN PRE-EXISTING `ContactsCell` 3-test failure (shared
+`cell-renderers.test.tsx`, i18n not set to `en` in its setup) still stands — confirmed pre-existing via
+`git stash`, untouched by this change.
+
+## Change — Gender field on the anagraphic card + referents migration (pec/fax/gender) — GREEN (2026-07-06)
+
+Ad-hoc request: (1) add `gender` (enum male/female, DEFAULT male, rendered as a select) to the shared
+personal-data card ("anagrafica"), extended to EVERY anagraphic form; (2) the `referents` migration
+source must also map `pec`, `fax` and `gender`. Decisions taken with the user (AskUserQuestion):
+field name `gender` (not `sex`); INDIVIDUAL-ONLY (nullable column, null for a company — mirrors
+`birth_date`).
+
+Key leverage: all forms (user, referent, `/settings` profile) render the SAME `PersonalDataCardForm`
+and submit via the SAME `drafts.ts` helpers, so the field was added in ONE place and propagated
+everywhere.
+
+Backend:
+- NEW `App\Enums\GenderEnum` (Male `#[IsDefault]` / Female, HasMeta, `fromValue`).
+- NEW additive migration `2026_07_07_100400_add_gender_to_personal_data_table` — `gender` string
+  nullable after `birth_date`, reversible. APPLIED to dev DB.
+- `PersonalData`: `gender` in `$fillable` + cast `GenderEnum::class` (NOT hidden — the select needs to
+  read it; it is not a fiscal identifier). `CreatePersonalData` DTO param + `toAttributes`.
+  `PersonalDataResource` exposes `gender`. `PersonalDataFactory`: random male/female for individual,
+  null for company.
+- Validation: `StorePersonalDataRequest` + `ValidatesUserProfile` → `['nullable', Rule::enum(GenderEnum)]`
+  and threaded into the card DTO.
+- `config/config.php` `form_enums`: `'gender' => GenderEnum::class` (public bootstrap; option list only).
+- Spec-0008 field catalogue: `personal_data.gender` (type `select`) added to BOTH `UsersAuthorization`
+  and `ReferentsAuthorization` (fields() + ceiling map; comments 10→11 keys).
+- `ReferentsSource`: columns `pec`, `fax`, `gender`; contact candidates PEC (`ContactTypeEnum::Pec`) +
+  Fax (`ContactTypeEnum::Fax`); NEW `resolveGender()` (blank→default male, unknown→male + non-fatal
+  warning) threaded into the card. `pec`/`fax` are already existing ContactTypeEnum cases.
+- ALL migrated contacts are now flagged primary: the shared `MapsExternalProfileRecord::buildContactInputs`
+  forces `isPrimary: true` (obsolete `primary` candidate flag dropped from both ReferentsSource and
+  MapsExternalUserRecord). The one-primary-per-owner+type invariant (ContactService) keeps every
+  distinct-type channel primary; UsersSource's two same-type phones reconcile to the last one.
+  Migrated addresses were already primary (`buildAddress` sets `isPrimary: true`). ReferentsSourceImportTest
+  extended (pec+fax in the fixture, 5 contacts, every one primary).
+
+Frontend (all via shared personal-data module):
+- `types.ts`: `Gender = 'male'|'female'`; `gender` on `PersonalDataCard`, `PersonalDataFields`,
+  `PersonalDataDraft`.
+- `personal-data-schema.ts`: `gender: z.enum(['male','female']).optional()`.
+- `personal-data-card-form.tsx`: gender `<Select>` (`useEnumOptions('gender')`) rendered ONLY for
+  individual, next to birth date; defaults male; `next` sets null for company; gate
+  `personal_data.gender`; `sameCardFields` compares it.
+- `drafts.ts`: `emptyPersonalDataDraft` + `cardToDraft` derive gender (individual→male backfilling a
+  legacy null, company→null) so no spurious diff; `draftToPayload` + `PersonalDataPayload` +
+  `SCALAR_PAYLOAD_KEYS` include gender.
+- i18n: `enums.gender.male/female` (EN Male/Female, IT Maschio/Femmina); `personalDataFieldLabels.gender`
+  (EN "Gender", IT "Sesso") — flows into both the card form and the spec-0008 matrix label.
+
+Tests: updated 3 FROZEN-CONTRACT field-catalogue assertions to include `personal_data.gender`
+(`FieldCatalogueEndpointTest`, `MetaEndpointTest`, `ReferentMetaTest`) — contract change, not tampering.
+Backend: affected suites green (474 pass; the only red is the KNOWN PRE-EXISTING `RolesSource`
+`description` case in `AbstractMigrationSourcePreviewTest`, out of scope). Pint clean. Frontend: tsc
+clean, ESLint clean on changed files, vitest 500 pass (same KNOWN PRE-EXISTING `ContactsCell` 3-test
+failure stands, unrelated).
+
+## Change — Migration sources for referent-types + referents (with contacts/addresses) + i18n select — GREEN (2026-07-06)
+
+Ad-hoc request (spec 0013 external-data-migration): add `referent-types` and `referents` to the
+migration engine, mirroring `users` for contacts/addresses; rename the confusing
+`business-function-members` label; translate the source select (it was showing raw English backend
+labels).
+
+Backend:
+- 2 additive schema migrations: `old_id` BIGINT UNSIGNED nullable + UNIQUE on `referent_types`
+  (`..._100200_...`) and `referents` (`..._100300_...`), reversible `down()` (same shape as the 5
+  spec-0013 old_id migrations). `old_id` cast `integer` + guarded (not in `#[Fillable]`) on
+  `ReferentType`/`Referent`.
+- NEW shared concern `Migrations/Sources/Concerns/MapsExternalProfileRecord`: the field-name-agnostic
+  address (`buildAddress`) + contact (`buildContactInputs(record, candidates)`) mapping plus
+  `blankToNull`/`blankToInt`, extracted VERBATIM from `MapsExternalUserRecord` (which now `use`s it and
+  delegates its `buildContacts`; dropped 452→368 lines). Behavior identical — full UsersSourceImportTest
+  still green.
+- NEW `ReferentTypesSource` (lookup: id,name via `ReferentTypeService::create`, skip by old_id) and
+  `ReferentsSource` (card+address+contacts via `ReferentService::create`; `referent_type_id` remapped
+  via `old_id` → non-fatal warning if unresolved; unknown `contact_scope` → enum default + warning).
+  Registered in `config/migrations.php` (now 8 sources) and `MigrationOrder` (referent-types phase 1,
+  referents phase 2).
+- Renamed `BusinessFunctionMembersSource::label()` → "Business functions — reconcile manager &
+  operators" (key `business-function-members` unchanged; it's a route slug).
+
+Frontend: the select already calls `t('sources.<key>', {defaultValue: backendLabel})` — only the i18n
+keys were missing. Added `business-function-members`, `referent-types`, `referents` to
+`en-migrations.ts` / `it-migrations.ts` (IT: "Funzioni aziendali — riconcilia responsabile e
+operatori", "Tipi di referente", "Referenti").
+
+Tests: NEW `ReferentTypesSourceImportTest` (3) + `ReferentsSourceImportTest` (5, incl. contacts/address
+assertions, type remap warning, scope default, idempotent skip, isolated failure);
+`OldIdSchemaTest` dataset+guards extended to the 2 new tables; `MigrationRegistryTest` → 8 sources.
+Backend Migration+Referents+Users suites green (Pint clean). Frontend tsc clean, vitest migrations 13/13,
+ESLint clean.
+
+KNOWN PRE-EXISTING FAILURE (NOT mine, out of scope): `AbstractMigrationSourcePreviewTest` (1 test) —
+`RolesSource` emits a `description` column (committed roles-description feature) the test's expected
+fixture doesn't include. Verified red on stash without my changes. Signalled, left untouched.
+
+## Change — Personal-data `type` as a full-width segmented tab (not a select) — GREEN (2026-07-06)
+
+Ad-hoc request: the "person type" field (individual vs company) must be a full-width TAB toggle, not a
+select. In `personal-data-card-form.tsx` the `type` `FormField` now renders the design-system `Tabs`
+(`TabsList className="w-full"`, each `TabsTrigger className="flex-1"`, `value`/`onValueChange` bound to
+the RHF field) and was moved out of the `grid-cols-2` wrapper so it spans the whole row. Labels come
+from the `personal_data_type` enum (server config); gating (`typeGate.disabled`) disables the triggers;
+`FormMessage` keeps inline validation. `PersonalDataCardForm` is shared, so the toggle shows identically
+in the user form, referents and `/settings`. No test drove the old type select, so nothing broke.
+
+Status — GREEN. `tsc` clean; ESLint clean on the file; full vitest 500 passed. `Select` import stays in
+that file because a CONCURRENT (not-this-work) `gender` field still uses it. Same KNOWN PRE-EXISTING
+FAILURE stands (`table/cell-renderers.test.tsx > ContactsCell`, 3 tests — incomplete `en.ts` change).
+
+## Change — Align Settings + Referents form to the new user-form graphics — GREEN (2026-07-06)
+
+Follow-up: `/settings` (self-service profile) and the Referents form now match the redesigned user
+form. The contacts/addresses DIALOG already propagated (shared managers); this brings the PRESENTATION
+into line.
+
+DRY: extracted the premium tab strip into NEW `components/form-tab-strip.tsx` (`FORM_TAB_LIST_CLASS`,
+`FORM_TAB_TRIGGER_CLASS`, `TabErrorDot`). `user-form-body.tsx` imports these (local copies removed).
+
+Referents (`referent-form-body.tsx`): 2 macro tabs over the shared strip — Account (anagraphic card +
+referent details) and Contact info (contacts + addresses). Each section is a `FormSection` (card with
+`IdCard`; contacts/addresses `Phone`/`MapPin` + count `Badge`, managers `showHeader={false}`). Macro
+visibility = OR of its sections; Account error dot = `!profileValid || errors.{referent_type_id,
+contact_scope,notes}`. Immediate persistence via the already-wired `persistence`. New i18n:
+`referents.form.tabs.account/contactInfo/tabHasErrors` (REPLACED the 4 per-tab labels) +
+`referents.form.sections.identity.{title,description}`.
+
+Settings (`PersonalDataSection`, used ONLY by `profile-form.tsx`): card / contacts / addresses each in
+a `FormSection` (icon + title + count badge), managers `showHeader={false}`; the contacts/addresses
+`FormSection` is gated by section visibility (hidden section renders nothing — keeps AC-011 green). No
+tabs (settings keeps its sticky section index).
+
+Tests: referent tab tests remapped (`switchTab` prefix-matches the accessible name; `Details`->`Account`,
+`Contacts`->`Contact info`). User-form / profile-form / personal-data-section suites unchanged and green.
+
+Status — GREEN. `tsc` clean; ESLint clean on changed files; full vitest 500 passed. Same KNOWN
+PRE-EXISTING FAILURE stands (`table/cell-renderers.test.tsx > ContactsCell`, 3 tests — incomplete
+`en.ts` change, not this work; out of scope).
+
+## Change — User form 3 macro-tabs + contacts/addresses dialog & immediate persist — GREEN (2026-07-06)
+
+Ad-hoc request (no spec): (1) redesign the user form tab strip — the 8 flat tabs were disliked;
+(2) create contacts/addresses via a POPUP instead of an inline form, across EVERY consumer;
+(3) "one click" — stop the double-save feeling. Decisions taken with the user (AskUserQuestion):
+grouped 3 macro-tabs; immediate persistence in EDIT when the card exists, staged when it does not
+(and always staged in create). Frontend-only — all per-entity endpoints already exist.
+
+Tabs (users only): `user-form-body.tsx` now renders 3 macro tabs, each stacking the EXISTING
+sub-content `FormSection`s (reused unchanged): Account (identity/credentials/access), Employment
+(profile/contract/contract-data), Contact info (contacts/addresses). Macro visible = OR of its
+sections' visibility; macro error dot = OR of their errors. Default tab `account`. New i18n keys
+`users.form.tabs.account/employment/contactInfo` (EN Account/Employment/Contact info; IT
+Anagrafica/Impiego/Recapiti) REPLACED the 8 now-unused per-tab keys in `*-users-employment.ts`.
+Referents keep their own 4-tab layout (untouched).
+
+Dialog + persistence (shared, propagates to ALL consumers): NEW `components/ui/dialog.tsx` (shadcn,
+mirrors `sheet.tsx`, unified `radix-ui` import — no new dep). `ContactsManager`/`AddressesManager`
+rewritten: rows are always read-only; the create/edit form (`ContactForm`/`AddressForm`, now with a
+`submitting` prop, container dropped since the dialog gives the surface) opens in a `Dialog`. NEW
+optional prop `persistence?: OwnerRef`: when present the manager persists each add/edit/delete
+immediately (`createContact`/`updateContact`/`deleteContact` + address equivalents, already in
+`personal-data/api.ts`) and syncs the buffer with the RETURNED row (real id + server-authoritative
+`is_primary` — backend auto-primaries the first address). When absent → today's buffered flow
+(ADR 0012). Shared orchestration in NEW `use-immediate-persist.ts` (pending + success/error toasts,
+reusing existing `personalData.*.created/updated/deleted/genericError` keys). Owner derived once via
+NEW `cardOwnerRef(draft)` helper in `drafts.ts` (rule: card has id → `{type:'personal_data', id}`,
+else undefined). Wired from the 3 consumers: user form (`user-form-account-tabs.tsx`),
+`referent-form-body.tsx`, and `PersonalDataSection` (covers self-service profile).
+
+Correctness note: after an immediate write the card query is deliberately NOT invalidated — the
+`seededFrom` guard in `useUserForm` would re-seed and clobber unsaved card-scalar edits; the buffer
+is synced locally instead (fresh data appears on reopen via `refetchOnMount:'always'`).
+
+Tests: manager buffer-mode tests unchanged + NEW immediate-mode tests (mock `personal-data/api`,
+assert endpoint call + buffer id sync + delete). User-form tests remapped to macro tabs (`switchTab`
+now matches tab name by prefix so an error-dot suffix doesn't break the match). Fixed a PRE-EXISTING
+gap in `profile-form.test.tsx` (missing `ConfirmDialogProvider` in its wrapper — failed before this
+work too).
+
+Status — GREEN for this scope. `tsc --noEmit` clean; ESLint clean on all changed files; full vitest
+500 passed. Files: `addresses-manager.tsx` at 300 lines (soft limit).
+KNOWN PRE-EXISTING FAILURE (NOT mine, out of scope): `table/cell-renderers.test.tsx > ContactsCell`
+(3 tests) — an incomplete change to `src/i18n/locales/en.ts` (modified in the tree, not by this work)
+broke the contacts-cell plural label `{{count}} primary contacts`. Signalled, left untouched.
+
+## Change — Seeder convention: all fake seeders `Demo`-prefixed, only under DemoDataSeeder — GREEN (2026-07-06)
+
+Follow-up to the clean-seed split: every seeder NOT part of `DatabaseSeeder` must be `Demo`-prefixed and
+called ONLY from `DemoDataSeeder` (`php artisan db:seed --class=DemoDataSeeder`). Renamed the remaining
+non-prefixed fake seeders (class + file, PSR-4): ReferentTypeSeeder→DemoReferentTypeSeeder,
+UserSeeder→**DemoUsersSeeder** (plural — `DemoUserSeeder` is the clean single-account seeder, kept),
+PersonalDataSeeder→DemoPersonalDataSeeder, UserContactSeeder→DemoUserContactSeeder,
+UserAddressSeeder→DemoUserAddressSeeder, OperationalSiteSeeder→DemoOperationalSiteSeeder,
+CompanySeeder→DemoCompanySeeder, BusinessFunctionSeeder→DemoBusinessFunctionSeeder,
+EmploymentProfileSeeder→DemoEmploymentProfileSeeder, NotificationSeeder→DemoNotificationSeeder.
+Cross-references between seeders were only in comments (no code coupling). Updated `DemoDataSeeder` call
+list + test `use`/`seed()` refs. `composer dump-autoload -o` re-run.
+
+Clean-seed members UNCHANGED (no Demo rename needed as they ARE the clean seed): `RolePermissionSeeder`,
+`DemoUserSeeder`. `DatabaseSeeder` = locations:add + RolePermissionSeeder + DemoUserSeeder only.
+
+RULE added to `.claude/rules/backend.md §3.1`: DatabaseSeeder stays minimal (init/reference + super-admin
+role + demo user); every other seeder is `Demo`-prefixed and wired only into DemoDataSeeder; every new
+factory/fake-data generation belongs to the DemoDataSeeder path, never the clean seed.
+
+Status — GREEN. Affected suites (SeederFlow, EmploymentProfile, BusinessFunctions, Roles) 117/117; full
+backend 1198/1200. The 1 failure (`AbstractMigrationSourcePreviewTest`, an extra `description` key in
+mapped preview rows) is PRE-EXISTING WIP, unrelated to seeders (0 seeder refs, file not touched here).
+Pint clean, autoload regenerated.
+
+## Change — Clean DatabaseSeeder: only super-admin role + demo user — GREEN (2026-07-06)
+
+Ad-hoc request: the clean default seed must contain ONLY init/reference seeders + the single
+privileged `super-admin` role + the single demo user. All fake fixtures (incl. the extra
+application roles) belong to on-demand seeders.
+
+`RolePermissionSeeder` used to do BOTH the bootstrap AND create 5 non-privileged fixture roles
+(admin/manager/operator/user/viewer with permission matrices). Split:
+- `RolePermissionSeeder` (clean): now ONLY `permissions:sync` + `roles:create-super-admin` +
+  forget cache. This is the permission catalogue (reference data) + the one privileged role.
+- NEW `DemoRolesSeeder`: the 5 non-privileged roles + their permission matrices (moved verbatim).
+  Requires the permission catalogue to exist first. Idempotent (findOrCreate + syncPermissions).
+- `DemoDataSeeder`: now calls `DemoRolesSeeder` BEFORE `UserSeeder` (UserSeeder assigns those roles
+  to fake users, so they must exist).
+
+`DatabaseSeeder` now runs ONLY: `locations:add` (init) + `RolePermissionSeeder` + `DemoUserSeeder`.
+`ReferentTypeSeeder` was ALSO moved out (referent types are domain data managed via the CRUD module,
+not init like locations) → now seeded by `DemoDataSeeder` before `DemoRolesSeeder`. Net clean seed =
+locations + super-admin role + demo user, nothing else.
+
+Tests (requirement changed, not tampering): `SeederFlowTest` (3x) and `EmploymentProfileSeederTest`
+(2x) now seed `DemoRolesSeeder` after `RolePermissionSeeder` (they run `UserSeeder`). Old
+`RolePermissionSeederTest` (asserted the 5 fixture roles) split: its fixture-role assertions moved to
+NEW `DemoRolesSeederTest`; `RolePermissionSeederTest` now asserts the clean seed = permission catalogue
+present + roles == `['super-admin']` only.
+
+Status — GREEN. Affected seeder tests 10/10; broader Roles+Auth+Users 205/205. Pint clean. Backend-only.
+Names to respect: `DemoRolesSeeder`, `RolePermissionSeeder` (clean bootstrap only).
+
+## Change — Remove personal-data `title` (salutation Mr/Mrs/...) field everywhere — GREEN (2026-07-06)
+
+Ad-hoc request: drop the personal-data `title` field (honorific: Mr/Mrs/Ms/Dr/Prof, backed by
+`PersonalTitleEnum`, exposed as config enum key `personal_title`) from the whole stack, migrations included.
+Done in parallel by disjoint backend + frontend agents, each running its own suite.
+
+BACKEND: deleted `app/Enums/PersonalTitleEnum.php`; removed the field from `PersonalData` model
+(fillable/casts/docblock), `PersonalDataResource`, `StorePersonalDataRequest`, `ValidatesUserProfile`
+(nested user write), `CreatePersonalData` DTO, `UsersAuthorization` + `ReferentsAuthorization`
+(FieldDefinition + ceiling map; the `personal_data.*` count docblocks now say 10, not 11),
+`UsersSource` (migration import: dropped the `title` external column + mapping), `config/config.php`
+(`form_enums` no longer exposes `personal_title`), `PersonalDataFactory`. The create migration
+`2026_06_15_110000_create_personal_data_table.php` was edited DIRECTLY to drop the `title` column
+(pre-prod SQLite, user explicitly said "anche in migrations" — no new drop migration). Tests updated.
+
+FRONTEND: removed the salutation select + plumbing from `personal-data-card-form.tsx`
+(`TITLE_NONE`/`titleOptions`/`titleGate`/FormField/defaults/payload/compare), `personal-data-schema.ts`,
+`types.ts`, `drafts.ts`, plus `use-user-form.ts`/`use-referent-form.ts` (dropped `title` from the
+validated profile payload). i18n: removed the `personal_title` enum block (`en-enums`/`it-enums`) and
+`personalData.form.title`/`titleNone` + the `personalDataFieldLabels.title`
+(`en-personal-data.ts`/`it-personal-data.ts`). Test fixtures cleaned (`personal_title: []`,
+`personal_data.title` catalogue mocks).
+
+Contract now: `GET /api/config` `data.enums` has NO `personal_title` key; every `PersonalData*` payload
+(Resource, `/api/meta/*`, `/api/authorization/fields`) has NO `title` key. Other `title` identifiers
+(notification title, DialogTitle/SheetTitle, section titles) are UNRELATED and untouched.
+
+Status — GREEN. Repo-wide grep for `PersonalTitle|personal_title|personal_data.title|titleGate|
+titleOptions|TITLE_NONE|personalData.form.title` → zero matches. Backend: Pint clean, full suite green
+except two PRE-EXISTING failures unrelated to this change (an `AbstractMigrationSourcePreviewTest` Role
+`description` mismatch, and a `MetaEndpointTest` "no permission named users.export" permission-cache
+flake — both reproduce on baseline). Frontend: `tsc --noEmit` clean, ESLint clean, affected suites green
+except a pre-existing `profile-form.test.tsx` `ConfirmDialogProvider` harness bug (reproduces on baseline).
+
 ## Change — Users import: automatic end-of-import relinking pass — GREEN (2026-07-06)
 
 Ad-hoc request: within a SINGLE users import run, a subordinate (e.g. old_id 3) processed BEFORE its

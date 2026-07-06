@@ -86,7 +86,9 @@ function labelFor(text: string): HTMLElement {
  * `click` — see `@radix-ui/react-tabs`.
  */
 function switchTab(name: string) {
-  fireEvent.mouseDown(screen.getByRole('tab', { name }))
+  // Match by name prefix: a macro tab with a validation error carries an extra
+  // indicator in its accessible name, so an exact match would miss it.
+  fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) }))
 }
 
 function wrapper() {
@@ -154,9 +156,9 @@ describe('UserForm — metadata-driven authorization (spec 0004)', () => {
       { wrapper: wrapper() },
     )
 
-    // Email/password live on the Credentials tab (spec 0015 redesign).
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Credentials' })).toBeInTheDocument())
-    switchTab('Credentials')
+    // Email/password live under the Account macro tab (spec 0015 redesign).
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Account/ })).toBeInTheDocument())
+    switchTab('Account')
 
     // AC11: the hidden field is absent from the DOM.
     expect(screen.getByLabelText(/^Email/)).toBeInTheDocument()
@@ -192,8 +194,8 @@ describe('UserForm — metadata-driven authorization (spec 0004)', () => {
       { wrapper: wrapper() },
     )
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Credentials' })).toBeInTheDocument())
-    switchTab('Credentials')
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Account/ })).toBeInTheDocument())
+    switchTab('Account')
 
     expect(screen.getByLabelText(/^Email/)).toBeInTheDocument()
     // No crash, and the field renders visible + editable (the graceful default).
@@ -241,7 +243,7 @@ describe('UserForm — metadata-driven authorization (spec 0004)', () => {
 
     // The `email` 422 error renders inline in the Credentials tab: it must be
     // mounted for the message to appear (spec 0015 redesign unmounts inactive tabs).
-    switchTab('Credentials')
+    switchTab('Account')
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(screen.getByText('field not editable')).toBeInTheDocument())

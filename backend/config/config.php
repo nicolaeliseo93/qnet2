@@ -1,10 +1,10 @@
 <?php
 
 use App\Enums\ContactTypeEnum;
+use App\Enums\GenderEnum;
 use App\Enums\LocaleEnum;
 use App\Enums\NotificationLevelEnum;
 use App\Enums\PersonalDataTypeEnum;
-use App\Enums\PersonalTitleEnum;
 use App\Enums\ReferentContactScopeEnum;
 
 return [
@@ -40,7 +40,9 @@ return [
         // of hardcoding it on the frontend.
         'locale' => LocaleEnum::class,
         'personal_data_type' => PersonalDataTypeEnum::class,
-        'personal_title' => PersonalTitleEnum::class,
+        // Biological sex of a natural-person card (NON-SENSITIVE presentation
+        // metadata: the male/female option list, not any person's value).
+        'gender' => GenderEnum::class,
         'contact_type' => ContactTypeEnum::class,
         'notification_level' => NotificationLevelEnum::class,
         // Referent contact scope (spec 0016): internal/external classification
