@@ -16,7 +16,10 @@ import {
 import type { AttributeFieldValue, ProductDetail, ProductFormMode } from '@/features/products/types'
 
 /** Server-side generic field names mapped onto the form for 422 handling. */
-const SERVER_ERROR_FIELDS = ['name', 'description', 'cost', 'price', 'category_id'] as const
+const SERVER_ERROR_FIELDS = ['name', 'description', 'cost', 'price', 'category_id', 'product_type'] as const
+
+/** Default product type for a new product (SERVICE-only catalogue for now). */
+const DEFAULT_PRODUCT_TYPE = 'SERVICE' as const
 
 export type ProductFormValues = CreateProductFormValues
 
@@ -59,6 +62,7 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
         cost: product.cost,
         price: product.price,
         category_id: product.category_id,
+        product_type: product.product_type,
         attributes: attributesRecordFromDetail(product),
       }
     }
@@ -68,6 +72,7 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
       cost: null,
       price: null,
       category_id: null,
+      product_type: DEFAULT_PRODUCT_TYPE,
       attributes: {},
     }
   }, [mode])

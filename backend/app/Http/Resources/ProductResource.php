@@ -26,6 +26,7 @@ class ProductResource extends JsonResource
             'price' => $this->price,
             'category_id' => $this->category_id,
             'category' => $this->categorySummary($this->category),
+            'product_type' => $this->product_type,
             'attributes' => $this->attributeValues->map(fn (ProductAttributeValue $value): array => [
                 'attribute_id' => $value->attribute_id,
                 'code' => $value->attribute->code,

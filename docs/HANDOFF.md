@@ -2,6 +2,65 @@
 
 > Injected at session start. Update at every green state.
 
+## Change — Demo product catalogue reworked from physical goods to SERVICES — GREEN (2026-07-07)
+
+`ProductCatalogTaxonomy` (data for `DemoProductCatalogSeeder`) rewritten: was Elettronica/Arredamento
+physical goods, now a two-root SERVICE catalogue — `Consulenza` (children IT → Sviluppo Software /
+Cybersecurity, plus Business) and `Formazione` (Corsi, Workshop). Same structural invariants preserved:
+all 5 attribute data types, an ENUM reused across both roots (now `delivery_mode` [Onsite/Remoto/Ibrido]
+in place of `color`), 3-level tree, required attrs, and a demo service seeded directly in the intermediate
+`IT` category. New attribute codes: provider(str), sla_hours(dec), delivery_mode(enum), seniority_level(enum),
+duration_hours(int), technology(str), on_call(bool), audit_type(enum), is_remote(bool), certificate_included(bool),
+max_participants(int), session_length_hours(dec). Products already seeded as `ProductType::Service` (unchanged);
+`ProductFactory`/`ProductCategoryFactory` were already generic+Service (untouched). Requirement change →
+`DemoProductCatalogSeederTest` updated to the new names (Consulenza/Formazione/IT/Sviluppo Software,
+delivery_mode). Verified: Pest 6/6 (196 assertions) + Pint clean.
+
+## Change — Product categories: opt-out of attribute inheritance (barrier) — GREEN (2026-07-07)
+
+New per-category `inherits_attributes` boolean (migration `110700`, default true → backward compatible)
+on `product_categories`. When false a category becomes an inheritance ROOT: a BARRIER that cuts it AND
+its descendants off from every attribute above it. User-confirmed semantics (AskUserQuestion): barrier on
+the chain (not just skip the direct parent) + editable in create AND edit.
+
+Backend: `CategoryHierarchy` gained a private `inheritedAncestors()` (barrier-aware walk) now used by
+`effectiveAttributes()` + `ancestorAttributes()`; the public `ancestors()` stays the FULL structural walk
+and is used ONLY by the anti-cycle guard — the barrier must NOT weaken cycle detection (kept separate on
+purpose). Walk rule: if the category itself opts out → inherits nothing; else climb while each node keeps
+inheriting, and the first opted-out ANCESTOR still contributes its own attributes but stops the climb.
+Wired through: Model (`#[Fillable]` + `casts` bool), Create/UpdateProductCategoryData (Update uses the
+`*Submitted` flag pattern), ProductCategoryService::create, Store/UpdateRequest (`sometimes|boolean`),
+ProductCategoryResource (`inherits_attributes`), ProductCategoriesAuthorization (field
+`inherits_attributes` type `boolean` + ceiling — REQUIRED or EnforcesFieldPermissions rejects it),
+Factory (+`notInheriting()` state).
+
+Frontend (features/product-categories): `inherits_attributes` added to schema (z.boolean), types
+(ProductCategoryDetail + CreateProductCategoryPayload), form defaults (edit=category value, create=true),
+payload builders (create always sends it; update diffs it), and SERVER_ERROR_FIELDS. Form body renders a
+`Switch` MetaField (mirrors users `is_active`) ONLY when a parent is selected (meaningless at root), and
+the read-only inherited list is gated on the toggle so opting out empties it immediately (before save).
+i18n en/it: `inheritsAttributes` + `inheritsAttributesHint`.
+
+Spec 0017 updated (overview, data model, effective-attributes description, contract shapes, Authorization
+fields, new AC-008b). Verified GREEN: backend `tests/Feature/ProductCategories`+`Products` 73/73 (419
+assert) incl. 4 new barrier/flag tests; Pint clean. Frontend vitest product-categories 18/18 (payload
+test extended for the new field + a toggle case), `tsc --noEmit` clean, ESLint clean.
+
+## Change — Demo referents seeder (full contacts + addresses) — GREEN (2026-07-07)
+
+New `DemoReferentSeeder` (registered in `DemoDataSeeder` right after `DemoReferentTypeSeeder`, its
+dependency). Seeds 30 referents, each reusing the users' anagraphic stack via `HasPersonalData`: one
+personal-data card (individual/company round-robin, index%3), a COMPLETE contact form (email+mobile
+primary, phone; companies also switchboard+pec+website) and 1–2 addresses tied to REAL seeded cities
+(`Address::factory()->forCity()`, full geo ancestry) — mirrors `DemoUserContactSeeder`/`DemoUserAddressSeeder`.
+Classified round-robin by a seeded `ReferentType`; `contact_scope` alternates internal/external; `name`
+re-derived from the card's `full_name` (mirrors `ReferentProfileWriter`). Idempotent via per-model delete
+(HasPersonalData deleting hook cascades card→contacts/addresses), mirroring `DemoOperationalSiteSeeder`.
+Degrades gracefully with empty cities/types. Deterministic faker seed 20260707.
+Verified: Pest `tests/Feature/Referents/DemoReferentSeederTest.php` 3/3 (246 assertions) + Pint clean;
+real run against dev DB (156k cities) → 30 referents, sample company 5 contacts/2 addresses w/ real geo,
+re-run stays 30 / 0 orphans (idempotent).
+
 ## Feature — Products module (configurable EAV: attributes + category tree + products) — GREEN (2026-07-07)
 
 Spec `docs/specs/0017-products-module.xml` (contract-first, user-approved via AskUserQuestion). Built by
@@ -28,8 +87,9 @@ ancestors', ancestors-first + sort_order. IMPLEMENTED as an iterative PHP `paren
 authorized this at dispatch; spec 0017 scope/AC-008/constraints were updated to match the implementation.
 
 Backend layers (mirror business-functions/referent-types): Policies (auto-discovered), *Authorization
-(config/authorization.php), TableDefinitions for `attributes`+`products` only (categories = tree view, no
-SSRM grid) with derived `category` filter/sort/distinct, Requests/DTO/Services/Resources/thin Controllers.
+(config/authorization.php), TableDefinitions for `attributes`, `products` AND `product-categories`
+(REV 2026-07-07 — see below) with derived `category`/`parent` filter/sort/distinct,
+Requests/DTO/Services/Resources/thin Controllers.
 Key endpoints beyond CRUD: `GET /product-categories/tree` (nested + counts) and
 `GET /product-categories/{id}/effective-attributes` (feeds the dynamic product form) — both declared ABOVE
 the `{productCategory}` wildcard so literals win. ProductService validates dynamic attrs (⊆ effective set,
@@ -39,13 +99,61 @@ Restrictive deletes → 409 (attribute in use / category with children or produc
 `permissions:sync` → 21 new permissions (attributes.*/product-categories.*/products.*, 7 abilities each).
 
 Frontend (features/attributes, features/product-categories, features/products): TableView adapters for
-attributes+products grids; attribute form shows the ENUM options editor only when data_type===ENUM;
-categories use a custom recursive TREE view (built from existing components/ui, no new dep) with
-attribute-assignment editor (is_required/sort_order) + read-only inherited list; product form's category
-picker calls effective-attributes and generates typed dynamic fields (STRING→text, INTEGER/DECIMAL→number,
+attributes, products AND product-categories grids; attribute form shows the ENUM options editor only when
+data_type===ENUM; the category CRUD form (attribute-assignment editor with is_required/sort_order +
+read-only inherited list) is hosted in the grid's Sheet; product form's category picker calls
+effective-attributes and generates typed dynamic fields (STRING→text, INTEGER/DECIMAL→number,
 BOOLEAN→checkbox, ENUM→select), regenerating on category change. Category/parent pickers flatten the tree
-client-side; the attribute-assignment picker reuses POST /tables/attributes/rows — NO new for-select
+endpoint client-side; the attribute-assignment picker reuses POST /tables/attributes/rows — NO new for-select
 endpoints (per spec). Routes + breadcrumbs + icon-map + split i18n en/it-products.ts wired.
+
+REV 2026-07-07 (user requests, both GREEN, independently re-verified): (1) product-categories LIST is no
+longer a tree — it is a standard AG Grid SSRM table (`ProductCategoriesTableDefinition` +
+`ProductCategoryColumnCatalog` registered in config/tables.php; columns name/parent/description/
+attributes_count/products_count/created_at). `parent` is a derived self-relation column (filter/sort/distinct
+like BusinessFunctions `manager`); the two `*_count` columns are withCount AGGREGATES (mirror
+RolesTableDefinition `users_count`: generic sort on the alias, filter+distinct via a `has($rel,op,n)` count
+condition — `ProductCategoryCountColumn`). `deleteModel()` was overridden to route the now-reachable generic
+bulk-delete through ProductCategoryService::delete() so the restrictive 409 guard (children/products in use)
+holds there too. The old tree LIST components (product-category-tree*.tsx + test) were DELETED; the form
+stack + use-product-category-tree.ts + flatten-tree.ts were KEPT (the form's parent-picker still flattens
+GET /product-categories/tree, which remains). (2) The attributes_count/products_count grid cells show the
+count PLUS a hover/focus TOOLTIP listing the names: mapRow now carries `attributes:[{id,name}]` (own
+assignments, uncapped) and `products:[{id,name}]` (capped at PRODUCT_TOOLTIP_LIST_LIMIT=100; counts stay the
+real withCount totals; frontend shows "+N more" from products_count - products.length). Backend gotcha left
+as a code comment: a restricted HasMany eager-select (`products:id,name`) silently drops rows unless the FK
+`category_id` is included in the select. Frontend uses a shared `CountWithNamesCell` mirroring the generic
+count-badge+tooltip pattern. Verified: backend tests/Feature/ProductCategories 34/34 + pint clean; frontend
+product-categories vitest 12/12 + tsc clean. spec 0017 updated (scope/AC-008/AC-022/constraints).
+
+REV 2026-07-07 (user request, GREEN): products now carry a `product_type` classification. New enum
+`App\Enums\ProductType` (SERVICE only for now, `#[IsDefault]`, sole extension point — add a case to surface
+it everywhere). Migration `2026_07_07_110600_add_product_type_to_products_table` adds NOT NULL string(32)
+default 'SERVICE', indexed (up/down/re-apply verified on dev). Model cast `product_type => ProductType` +
+Fillable; ProductFactory defaults Service; ProductResource exposes it; config form_enums key `product_type`.
+Grid: it is a REAL badge/set column (NOT derived) — ProductColumnCatalog adds column+filter; ProductsTableDefinition
+mirrors AttributesTableDefinition's `data_type` (badgesFor/enumKeyFor + raw-column distinctValues bypassing the
+enum cast; the generic set filter handles the real column via the filters() allow-list). Products grid is now 7
+columns (name/description/cost/price/category/product_type/created_at).
+Frontend: `ProductType` type + product_type on ProductDetail; badge renders via the generic BadgeCell fallback
+(no domain renderer, like `data_type`); product-detail shows a Type badge via enumLabelOf('product_type', …);
+i18n product_type enum + `products.columns.product_type` (en/it).
+
+REV 2026-07-07 (follow-up, GREEN): product_type is now SELECTABLE + REQUIRED in the product form, and cost/price
+are now REQUIRED too (user request). ProductsAuthorization registers product_type as a mandatory `select` field
+(+ cost/price flipped to mandatory) in both fields() and the ceiling. Store/UpdateProductRequest: cost/price
+`required` (update `sometimes|required`), product_type `required, Rule::enum(ProductType::class)`. CreateProductData
+now carries non-null cost/price/`ProductType $productType`; UpdateProductData adds productType + submitted flag →
+submittedAttributes; ProductService::create persists product_type; DemoProductCatalogSeeder passes
+productType: Service. GOTCHA (spec 0008): MANDATORY fields bypass the DB field-permission matrix intersect
+(AbstractResourceAuthorization::fieldPermissions), so making cost/price mandatory means the matrix can no longer
+lock them — ProductSecurityTest's matrix-lock case was retargeted from `price` to `description` (now the ONLY
+non-mandatory generic field). DB columns cost/price stay NULLABLE (no migration): "required" is enforced at the
+validation/form layer only, so pre-existing null rows are not broken. Frontend: schema requires cost/price
+(superRefine) + product_type (`z.enum(['SERVICE'])`, form default 'SERVICE'); form-body adds a MetaField-wrapped
+product_type Select fed by useEnumOptions('product_type'); payload builders thread product_type + non-null
+cost/price; i18n costRequired/priceRequired/productType (en/it). Verified: backend Pest Products+Authorization+
+Config+Attributes 154/154, pint clean; frontend tsc clean, vitest products+i18n 13/13, eslint clean.
 
 Verification (independent verifier, all re-run): 25/25 acceptance criteria PASS with file:line evidence;
 integration seams A-F PASS (icon tokens, enum values, effective-attributes/tree/rows shapes, permission/route

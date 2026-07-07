@@ -5,15 +5,25 @@ import { DateTimeCell } from '@/features/table/cell-renderers'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 import type { ProductCategorySummary } from '@/features/products/types'
 
-/** Formats a decimal amount using the active UI locale, em dash when null/invalid (spec AC-025). */
+/**
+ * Formats a decimal amount using the active UI locale, em dash when null/invalid (spec AC-025).
+ * Accepts a numeric string too: Laravel's `decimal:2` cast serializes cost/price as strings
+ * (e.g. "10.00"), so a strict `typeof === 'number'` check would blank every value.
+ */
 export function formatDecimal(value: unknown): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  const numeric =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : NaN
+  if (!Number.isFinite(numeric)) {
     return ''
   }
   return new Intl.NumberFormat(i18n.language, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value)
+  }).format(numeric)
 }
 
 /** Renders a `cost`/`price` decimal cell, em dash when null. */

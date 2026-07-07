@@ -2,11 +2,14 @@
 
 namespace App\DataObjects\Products;
 
+use App\Enums\ProductType;
+
 /**
  * Validated payload for creating a product (POST /api/products, spec 0017).
  * Declared DTO (no "magic flying array") so the StoreProductRequest →
  * ProductService contract is explicit — see standards/architecture.md →
- * Data Transfer Objects.
+ * Data Transfer Objects. `cost`/`price`/`productType` are all required by the
+ * FormRequest, so they cross as non-null values.
  */
 final readonly class CreateProductData
 {
@@ -16,9 +19,10 @@ final readonly class CreateProductData
     public function __construct(
         public string $name,
         public ?string $description,
-        public ?float $cost,
-        public ?float $price,
+        public float $cost,
+        public float $price,
         public int $categoryId,
+        public ProductType $productType,
         public ?array $attributes = null,
     ) {}
 
@@ -32,9 +36,10 @@ final readonly class CreateProductData
         return new self(
             name: (string) $data['name'],
             description: array_key_exists('description', $data) ? $data['description'] : null,
-            cost: array_key_exists('cost', $data) && $data['cost'] !== null ? (float) $data['cost'] : null,
-            price: array_key_exists('price', $data) && $data['price'] !== null ? (float) $data['price'] : null,
+            cost: (float) $data['cost'],
+            price: (float) $data['price'],
             categoryId: (int) $data['category_id'],
+            productType: ProductType::from((string) $data['product_type']),
             attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
         );
     }

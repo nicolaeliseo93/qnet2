@@ -14,6 +14,7 @@ function original(overrides: Partial<ProductCategoryDetail> = {}): ProductCatego
     name: 'Laptops',
     parent_id: 1,
     parent: { id: 1, name: 'Electronics' },
+    inherits_attributes: true,
     description: null,
     attributes: [{ attribute_id: 9, code: 'ram', name: 'RAM', data_type: 'INTEGER', is_required: true, sort_order: 0 }],
     inherited_attributes: [],
@@ -27,6 +28,7 @@ describe('buildCreatePayload', () => {
     const values: ProductCategoryFormValues = {
       name: 'Laptops',
       parent_id: 1,
+      inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
     }
@@ -34,6 +36,7 @@ describe('buildCreatePayload', () => {
     expect(buildCreatePayload(values)).toEqual({
       name: 'Laptops',
       parent_id: 1,
+      inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
     })
@@ -45,6 +48,7 @@ describe('buildUpdatePayload', () => {
     const values: ProductCategoryFormValues = {
       name: 'Laptops',
       parent_id: 1,
+      inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
     }
@@ -56,6 +60,7 @@ describe('buildUpdatePayload', () => {
     const values: ProductCategoryFormValues = {
       name: 'Laptops',
       parent_id: 2,
+      inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
     }
@@ -63,10 +68,23 @@ describe('buildUpdatePayload', () => {
     expect(buildUpdatePayload(values, original())).toEqual({ parent_id: 2 })
   })
 
+  it('includes only the changed inherits_attributes', () => {
+    const values: ProductCategoryFormValues = {
+      name: 'Laptops',
+      parent_id: 1,
+      inherits_attributes: false,
+      description: null,
+      attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+    }
+
+    expect(buildUpdatePayload(values, original())).toEqual({ inherits_attributes: false })
+  })
+
   it('sends a full attributes replacement when the assignment set changed', () => {
     const values: ProductCategoryFormValues = {
       name: 'Laptops',
       parent_id: 1,
+      inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: false, sort_order: 0 }],
     }

@@ -3,11 +3,13 @@
 namespace App\Http\Requests\Products;
 
 use App\DataObjects\Products\UpdateProductData;
+use App\Enums\ProductType;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Models\Product;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for PUT/PATCH /api/products/{product} (spec 0017).
@@ -38,9 +40,10 @@ class UpdateProductRequest extends FormRequest
         return [
             'name' => ['sometimes', 'required', 'string', 'max:191'],
             'description' => ['sometimes', 'nullable', 'string'],
-            'cost' => ['sometimes', 'nullable', 'numeric'],
-            'price' => ['sometimes', 'nullable', 'numeric'],
+            'cost' => ['sometimes', 'required', 'numeric'],
+            'price' => ['sometimes', 'required', 'numeric'],
             'category_id' => ['sometimes', 'required', 'integer', 'exists:product_categories,id'],
+            'product_type' => ['sometimes', 'required', Rule::enum(ProductType::class)],
             'attributes' => ['sometimes', 'array'],
             'attributes.*.attribute_id' => ['required', 'integer', 'exists:attributes,id', 'distinct'],
             'attributes.*.value' => ['nullable'],

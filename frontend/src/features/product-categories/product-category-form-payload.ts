@@ -23,6 +23,7 @@ export function buildCreatePayload(
   return {
     name: values.name,
     parent_id: values.parent_id,
+    inherits_attributes: values.inherits_attributes,
     description: values.description,
     attributes: values.attributes,
   }
@@ -44,6 +45,9 @@ export function buildUpdatePayload(
   }
   if (values.parent_id !== original.parent_id) {
     payload.parent_id = values.parent_id
+  }
+  if (values.inherits_attributes !== original.inherits_attributes) {
+    payload.inherits_attributes = values.inherits_attributes
   }
   if (values.description !== original.description) {
     payload.description = values.description

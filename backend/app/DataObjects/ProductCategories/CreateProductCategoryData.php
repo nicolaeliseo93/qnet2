@@ -17,6 +17,7 @@ final readonly class CreateProductCategoryData
     public function __construct(
         public string $name,
         public ?int $parentId = null,
+        public bool $inheritsAttributes = true,
         public ?string $description = null,
         public ?array $attributes = null,
     ) {}
@@ -31,6 +32,7 @@ final readonly class CreateProductCategoryData
         return new self(
             name: (string) $data['name'],
             parentId: array_key_exists('parent_id', $data) && $data['parent_id'] !== null ? (int) $data['parent_id'] : null,
+            inheritsAttributes: array_key_exists('inherits_attributes', $data) ? (bool) $data['inherits_attributes'] : true,
             description: array_key_exists('description', $data) ? $data['description'] : null,
             attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
         );

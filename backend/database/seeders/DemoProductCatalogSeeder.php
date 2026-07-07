@@ -2,103 +2,140 @@
 
 namespace Database\Seeders;
 
+use App\DataObjects\Products\CreateProductData;
 use App\Enums\AttributeType;
+use App\Enums\ProductType;
 use App\Models\Attribute;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Services\ProductService;
+use Database\Seeders\DemoProductCatalog\ProductCatalogTaxonomy;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 
 /**
- * Seed a small, illustrative product catalogue (spec 0017): a handful of
- * reusable attributes (one per data type), a two-level category tree
- * exercising attribute inheritance, and a couple of demo products with
- * typed attribute values. Idempotent: every row is looked up by its natural
- * key (attribute code / category name / product name) before being created,
- * so re-running never duplicates rows nor overwrites manual edits made
- * through the `attributes`/`product-categories`/`products` CRUD modules.
+ * Seed a rich, illustrative SERVICE catalogue (spec 0017) from the
+ * declarative taxonomy in ProductCatalogTaxonomy: attributes of all 5 data
+ * types (ENUM ones with their options), a two-root category tree exercising
+ * multi-level inheritance AND attribute reuse (`delivery_mode` assigned to
+ * both roots, never duplicated), and demo services — for leaf categories and
+ * one intermediate one — each carrying a typed value for every one of its
+ * EFFECTIVE attributes (own + inherited).
+ *
+ * Idempotent: attributes/options/categories are looked up by their natural
+ * key (code/value/name) before being created, category-attribute
+ * assignments are a pivot sync (never duplicates), and a product already
+ * present by name is skipped entirely — re-running never duplicates rows nor
+ * overwrites manual edits made through the CRUD modules.
  */
 class DemoProductCatalogSeeder extends Seeder
 {
     public function run(): void
     {
-        $color = $this->attribute('color', 'Color', AttributeType::Enum, [
-            ['value' => 'red', 'label' => 'Red'],
-            ['value' => 'blue', 'label' => 'Blue'],
-            ['value' => 'black', 'label' => 'Black'],
-        ]);
-        $material = $this->attribute('material', 'Material', AttributeType::String);
-        $warrantyMonths = $this->attribute('warranty_months', 'Warranty (months)', AttributeType::Integer);
-        $weightKg = $this->attribute('weight_kg', 'Weight (kg)', AttributeType::Decimal);
-        $isWaterproof = $this->attribute('is_waterproof', 'Waterproof', AttributeType::Boolean);
+        $attributesByCode = $this->seedAttributes();
 
-        $electronics = ProductCategory::firstOrCreate(['name' => 'Electronics'], ['parent_id' => null]);
-        $this->assignAttribute($electronics, $warrantyMonths, isRequired: true, sortOrder: 0);
-
-        $laptops = ProductCategory::firstOrCreate(['name' => 'Laptops'], ['parent_id' => $electronics->id]);
-        $this->assignAttribute($laptops, $weightKg, isRequired: false, sortOrder: 0);
-
-        $clothing = ProductCategory::firstOrCreate(['name' => 'Clothing'], ['parent_id' => null]);
-        $this->assignAttribute($clothing, $color, isRequired: true, sortOrder: 0);
-        $this->assignAttribute($clothing, $material, isRequired: false, sortOrder: 1);
-
-        $jackets = ProductCategory::firstOrCreate(['name' => 'Jackets'], ['parent_id' => $clothing->id]);
-        $this->assignAttribute($jackets, $isWaterproof, isRequired: false, sortOrder: 0);
-
-        $this->product($laptops, 'Demo Laptop 14"', cost: 650, price: 999, values: [
-            ['attribute' => $warrantyMonths, 'column' => 'value_integer', 'value' => 24],
-            ['attribute' => $weightKg, 'column' => 'value_decimal', 'value' => 1.4],
-        ]);
-
-        $blueOption = $color->options()->where('value', 'blue')->first();
-
-        $this->product($jackets, 'Demo Rain Jacket', cost: 30, price: 79.90, values: [
-            ['attribute' => $color, 'column' => 'option_id', 'value' => $blueOption?->id],
-            ['attribute' => $material, 'column' => 'value_string', 'value' => 'nylon'],
-            ['attribute' => $isWaterproof, 'column' => 'value_boolean', 'value' => true],
-        ]);
+        $this->seedTree(ProductCatalogTaxonomy::tree(), null, $attributesByCode);
     }
 
     /**
-     * @param  array<int, array{value: string, label: string}>  $options
+     * @return Collection<string, Attribute>
      */
-    private function attribute(string $code, string $name, AttributeType $dataType, array $options = []): Attribute
+    private function seedAttributes(): Collection
     {
-        /** @var Attribute $attribute */
-        $attribute = Attribute::firstOrCreate(['code' => $code], ['name' => $name, 'data_type' => $dataType]);
-
-        foreach ($options as $index => $option) {
-            $attribute->options()->firstOrCreate(
-                ['value' => $option['value']],
-                ['label' => $option['label'], 'sort_order' => $index],
+        foreach (ProductCatalogTaxonomy::attributes() as $code => $definition) {
+            /** @var Attribute $attribute */
+            $attribute = Attribute::firstOrCreate(
+                ['code' => $code],
+                ['name' => $definition['name'], 'data_type' => $definition['type']],
             );
+
+            foreach ($definition['options'] ?? [] as $index => $value) {
+                $attribute->options()->firstOrCreate(['value' => $value], ['label' => $value, 'sort_order' => $index]);
+            }
         }
 
-        return $attribute;
-    }
-
-    private function assignAttribute(ProductCategory $category, Attribute $attribute, bool $isRequired, int $sortOrder): void
-    {
-        $category->attributes()->syncWithoutDetaching([
-            $attribute->id => ['is_required' => $isRequired, 'sort_order' => $sortOrder],
-        ]);
+        return Attribute::whereIn('code', array_keys(ProductCatalogTaxonomy::attributes()))->get()->keyBy('code');
     }
 
     /**
-     * @param  array<int, array{attribute: Attribute, column: string, value: mixed}>  $values
+     * Recursively walk the taxonomy tree: create/reuse the category, sync
+     * its OWN attribute assignments, seed its demo products, then recurse
+     * into its children.
+     *
+     * @param  array<string, array<string, mixed>>  $tree
+     * @param  Collection<string, Attribute>  $attributesByCode
      */
-    private function product(ProductCategory $category, string $name, float $cost, float $price, array $values): void
+    private function seedTree(array $tree, ?ProductCategory $parent, Collection $attributesByCode): void
     {
-        /** @var Product $product */
-        $product = Product::firstOrCreate(
-            ['name' => $name],
-            ['cost' => $cost, 'price' => $price, 'category_id' => $category->id],
-        );
+        foreach ($tree as $name => $node) {
+            /** @var ProductCategory $category */
+            $category = ProductCategory::firstOrCreate(['name' => $name], ['parent_id' => $parent?->id]);
 
-        foreach ($values as $row) {
-            $product->attributeValues()->updateOrCreate(
-                ['attribute_id' => $row['attribute']->id],
-                [$row['column'] => $row['value']],
-            );
+            $this->assignAttributes($category, $node['attributes'] ?? [], $attributesByCode);
+            $this->seedProducts($category, $node['products'] ?? [], $attributesByCode);
+            $this->seedTree($node['children'] ?? [], $category, $attributesByCode);
         }
+    }
+
+    /**
+     * @param  array<string, bool>  $attributes  code => is_required
+     * @param  Collection<string, Attribute>  $attributesByCode
+     */
+    private function assignAttributes(ProductCategory $category, array $attributes, Collection $attributesByCode): void
+    {
+        $syncData = [];
+        $sortOrder = 0;
+
+        foreach ($attributes as $code => $isRequired) {
+            $syncData[$attributesByCode[$code]->id] = ['is_required' => $isRequired, 'sort_order' => $sortOrder];
+            $sortOrder++;
+        }
+
+        $category->attributes()->syncWithoutDetaching($syncData);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $products
+     * @param  Collection<string, Attribute>  $attributesByCode
+     */
+    private function seedProducts(ProductCategory $category, array $products, Collection $attributesByCode): void
+    {
+        $service = app(ProductService::class);
+
+        foreach ($products as $definition) {
+            // Natural key (name): a product already present is left untouched.
+            if (Product::where('name', $definition['name'])->exists()) {
+                continue;
+            }
+
+            $attributeValues = collect($definition['values'])
+                ->map(fn (mixed $value, string $code): array => [
+                    'attribute_id' => $attributesByCode[$code]->id,
+                    'value' => $this->normalizeValue($attributesByCode[$code], $value),
+                ])
+                ->values()
+                ->all();
+
+            $service->create(new CreateProductData(
+                name: $definition['name'],
+                description: $definition['description'] ?? null,
+                cost: (float) $definition['cost'],
+                price: (float) $definition['price'],
+                categoryId: $category->id,
+                productType: ProductType::Service,
+                attributes: $attributeValues,
+            ));
+        }
+    }
+
+    /**
+     * ENUM values are already the option's `value` string (resolved to its
+     * option_id by ProductAttributeValueWriter); every other type passes
+     * through unchanged — the taxonomy already carries the right PHP type
+     * per data_type (int/float/bool/string).
+     */
+    private function normalizeValue(Attribute $attribute, mixed $value): mixed
+    {
+        return $attribute->data_type === AttributeType::Enum ? (string) $value : $value;
     }
 }

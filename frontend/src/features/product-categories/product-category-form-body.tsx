@@ -4,8 +4,9 @@ import { FolderTree, ListChecks } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { Form, FormControl } from '@/components/ui/form'
+import { Form, FormControl, FormDescription } from '@/components/ui/form'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
@@ -42,17 +43,22 @@ export function ProductCategoryFormBody({ mode, onSuccess, onCancel }: ProductCa
   const treeQuery = useProductCategoryTree()
 
   const parentId = form.watch('parent_id')
+  const inheritsAttributes = form.watch('inherits_attributes')
   const inheritedQuery = useEffectiveAttributes(parentId)
+  // Opting out is a barrier: the category inherits nothing, so the read-only
+  // inherited list must reflect that immediately (not just after save).
   const inherited: ProductCategoryInheritedAttribute[] = useMemo(
     () =>
-      (inheritedQuery.data ?? []).map((attribute) => ({
-        attribute_id: attribute.id,
-        code: attribute.code,
-        name: attribute.name,
-        data_type: attribute.data_type,
-        is_required: attribute.is_required,
-      })),
-    [inheritedQuery.data],
+      inheritsAttributes
+        ? (inheritedQuery.data ?? []).map((attribute) => ({
+            attribute_id: attribute.id,
+            code: attribute.code,
+            name: attribute.name,
+            data_type: attribute.data_type,
+            is_required: attribute.is_required,
+          }))
+        : [],
+    [inheritedQuery.data, inheritsAttributes],
   )
 
   const parentOptions = useMemo(() => {
@@ -157,6 +163,30 @@ export function ProductCategoryFormBody({ mode, onSuccess, onCancel }: ProductCa
               title={t('productCategories.form.sections.attributes.title')}
               description={t('productCategories.form.sections.attributes.description')}
             >
+              {parentId !== null && (
+                <MetaField
+                  control={form.control}
+                  name="inherits_attributes"
+                  metaKey="inherits_attributes"
+                  label={t('productCategories.form.inheritsAttributes')}
+                  description={
+                    <FormDescription>
+                      {t('productCategories.form.inheritsAttributesHint')}
+                    </FormDescription>
+                  }
+                >
+                  {({ field, disabled }) => (
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={disabled}
+                      />
+                    </FormControl>
+                  )}
+                </MetaField>
+              )}
+
               <MetaField
                 control={form.control}
                 name="attributes"

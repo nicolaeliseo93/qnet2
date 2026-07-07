@@ -4,6 +4,7 @@ use App\Tables\AttributesTableDefinition;
 use App\Tables\BusinessFunctionsTableDefinition;
 use App\Tables\CompaniesTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
+use App\Tables\ProductCategoriesTableDefinition;
 use App\Tables\ProductsTableDefinition;
 use App\Tables\ReferentsTableDefinition;
 use App\Tables\ReferentTypesTableDefinition;
@@ -41,6 +42,7 @@ return [
         'referent-types' => ReferentTypesTableDefinition::class,
         'referents' => ReferentsTableDefinition::class,
         'attributes' => AttributesTableDefinition::class,
+        'product-categories' => ProductCategoriesTableDefinition::class,
         'products' => ProductsTableDefinition::class,
     ],
 

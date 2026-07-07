@@ -11,6 +11,7 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { Badge } from '@/components/ui/badge'
+import { enumLabelOf } from '@/features/config/enum-label'
 import { formatDateTime } from '@/features/table/cell-renderers'
 import { formatDecimal } from '@/features/products/column-renderers'
 import type { ProductDetail } from '@/features/products/types'
@@ -53,6 +54,9 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
       <DetailSection title={t('products.detail.details')}>
         <DetailGrid>
+          <DetailField label={t('products.columns.product_type')}>
+            <Badge variant="secondary">{enumLabelOf('product_type', product.product_type)}</Badge>
+          </DetailField>
           {product.description ? (
             <DetailField label={t('products.columns.description')} full>
               {product.description}

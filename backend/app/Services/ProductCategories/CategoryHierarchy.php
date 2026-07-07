@@ -26,6 +26,9 @@ final class CategoryHierarchy
 
     /**
      * $category's ancestors, ROOT-FIRST (does not include $category itself).
+     * This is the STRUCTURAL walk — it ignores `inherits_attributes` and is
+     * used only by the anti-cycle guard, which must see the full chain
+     * regardless of any inheritance barrier.
      *
      * @return Collection<int, ProductCategory>
      */
@@ -51,6 +54,49 @@ final class CategoryHierarchy
     }
 
     /**
+     * The ancestors $category actually INHERITS from, ROOT-FIRST — the
+     * structural walk truncated at the first inheritance barrier. A node whose
+     * `inherits_attributes` is false does not pull in its own parent, so the
+     * walk stops there: if $category itself opts out, this is empty; otherwise
+     * it climbs while each node keeps inheriting, cutting off everything above
+     * the first opted-out ancestor (that ancestor's OWN attributes still count,
+     * as it is a direct ancestor $category inherits).
+     *
+     * @return Collection<int, ProductCategory>
+     */
+    private function inheritedAncestors(ProductCategory $category): Collection
+    {
+        if (! $category->inherits_attributes) {
+            return collect();
+        }
+
+        $chain = [];
+        $node = $category;
+        $depth = 0;
+
+        while ($node->parent_id !== null && $depth < self::MAX_DEPTH) {
+            $parent = ProductCategory::find($node->parent_id);
+
+            if ($parent === null) {
+                break;
+            }
+
+            $chain[] = $parent;
+
+            // Barrier: this ancestor contributes its own attributes but, having
+            // opted out, pulls nothing further up — stop climbing.
+            if (! $parent->inherits_attributes) {
+                break;
+            }
+
+            $node = $parent;
+            $depth++;
+        }
+
+        return collect(array_reverse($chain));
+    }
+
+    /**
      * Whether $candidateAncestorId is among $category's ancestors — the
      * anti-cycle check: reparenting $category under a node that descends
      * from $category would create a cycle.
@@ -61,8 +107,10 @@ final class CategoryHierarchy
     }
 
     /**
-     * $category's EFFECTIVE attributes: its own assignments UNION every
-     * ancestor's, root-first (AC-008). When the same attribute is assigned at
+     * $category's EFFECTIVE attributes: its own assignments UNION those of the
+     * ancestors it actually inherits from (see inheritedAncestors — the chain
+     * is cut at the first `inherits_attributes = false` node), root-first
+     * (AC-008). When the same attribute is assigned at
      * multiple levels, the MOST SPECIFIC one wins (own overrides an ancestor,
      * a closer ancestor overrides a farther one) — but its position in the
      * output stays where it FIRST appeared walking root→self, so the overall
@@ -73,7 +121,7 @@ final class CategoryHierarchy
      */
     public function effectiveAttributes(ProductCategory $category): Collection
     {
-        $chain = $this->ancestors($category)->push($category);
+        $chain = $this->inheritedAncestors($category)->push($category);
 
         $ordered = [];
         $index = [];
@@ -106,9 +154,10 @@ final class CategoryHierarchy
     }
 
     /**
-     * The attributes owned by $category's ANCESTORS only (deduped, a closer
-     * ancestor wins), for the show endpoint's read-only `inherited_attributes`
-     * side list — never merged with $category's own assignments.
+     * The attributes owned by the ANCESTORS $category inherits from (deduped, a
+     * closer ancestor wins; empty when $category opts out of inheritance), for
+     * the show endpoint's read-only `inherited_attributes` side list — never
+     * merged with $category's own assignments.
      *
      * @return Collection<int, array<string, mixed>>
      */
@@ -117,7 +166,7 @@ final class CategoryHierarchy
         $ordered = [];
         $index = [];
 
-        foreach ($this->ancestors($category) as $ancestor) {
+        foreach ($this->inheritedAncestors($category) as $ancestor) {
             foreach ($this->ownAttributeRows($ancestor) as $attribute) {
                 $entry = [
                     'attribute_id' => $attribute->id,

@@ -50,6 +50,7 @@ class ProductService
                 'cost' => $data->cost,
                 'price' => $data->price,
                 'category_id' => $data->categoryId,
+                'product_type' => $data->productType,
             ]);
 
             $this->valueWriter->replaceValues($product, $effective, $submitted);

@@ -14,6 +14,7 @@ function original(overrides: Partial<ProductDetail> = {}): ProductDetail {
     price: 1200,
     category_id: 3,
     category: { id: 3, name: 'Laptops' },
+    product_type: 'SERVICE',
     attributes: [
       { attribute_id: 9, code: 'ram', name: 'RAM', data_type: 'INTEGER', value: 16 },
     ],
@@ -30,6 +31,7 @@ describe('buildCreatePayload', () => {
       cost: 800,
       price: 1200,
       category_id: 3,
+      product_type: 'SERVICE',
       attributes: { '9': 16 },
     }
 
@@ -39,6 +41,7 @@ describe('buildCreatePayload', () => {
       cost: 800,
       price: 1200,
       category_id: 3,
+      product_type: 'SERVICE',
       attributes: [{ attribute_id: 9, value: 16 }],
     })
   })
@@ -52,6 +55,7 @@ describe('buildUpdatePayload', () => {
       cost: 800,
       price: 1200,
       category_id: 3,
+      product_type: 'SERVICE',
       attributes: { '9': 16 },
     }
 
@@ -65,6 +69,7 @@ describe('buildUpdatePayload', () => {
       cost: 800,
       price: 1200,
       category_id: 3,
+      product_type: 'SERVICE',
       attributes: { '9': 16 },
     }
 
@@ -78,6 +83,7 @@ describe('buildUpdatePayload', () => {
       cost: 800,
       price: 1200,
       category_id: 3,
+      product_type: 'SERVICE',
       attributes: { '9': 32 },
     }
 

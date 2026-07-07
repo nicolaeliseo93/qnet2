@@ -16,11 +16,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * hierarchy. A category's EFFECTIVE attributes are its own `attributes()`
  * assignments UNION every ancestor's (see ProductCategoryService).
  */
-#[Fillable(['name', 'parent_id', 'description'])]
+#[Fillable(['name', 'parent_id', 'inherits_attributes', 'description'])]
 class ProductCategory extends BaseModel
 {
     /** @use HasFactory<ProductCategoryFactory> */
     use HasFactory, LogsModelActivity;
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'inherits_attributes' => 'boolean',
+        ];
+    }
 
     public function parent(): BelongsTo
     {

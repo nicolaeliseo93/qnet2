@@ -2,6 +2,7 @@
 
 namespace App\Tables;
 
+use App\Enums\ProductType;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\User;
@@ -98,6 +99,31 @@ class ProductsTableDefinition extends AbstractTableDefinition
     }
 
     /**
+     * Badge metadata for the `product_type` column, driven by ProductType
+     * (mirrors AttributesTableDefinition's `data_type`).
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    protected function badgesFor(string $columnId, User $actor): ?array
+    {
+        if ($columnId !== 'product_type') {
+            return null;
+        }
+
+        return array_map(static fn ($meta): array => $meta->toArray(), ProductType::options());
+    }
+
+    /**
+     * The `product_type` badge is driven by ProductType, exposed to the
+     * frontend config under the `product_type` enum key (config/config.php
+     * form_enums), so the client can localize the badge label.
+     */
+    protected function enumKeyFor(string $columnId, User $actor): ?string
+    {
+        return $columnId === 'product_type' ? 'product_type' : null;
+    }
+
+    /**
      * Map a Product to the row payload. `actions` is attached by the generic
      * TableService via actionsFor().
      *
@@ -110,9 +136,10 @@ class ProductsTableDefinition extends AbstractTableDefinition
             'id' => $row->id,
             'name' => $row->name,
             'description' => $row->description,
-            'cost' => $row->cost,
-            'price' => $row->price,
+            'cost' => $row->cost === null ? null : (float) $row->cost,
+            'price' => $row->price === null ? null : (float) $row->price,
             'category' => $this->categorySummary($row->category),
+            'product_type' => $row->product_type,
             'created_at' => $row->created_at,
         ];
     }
@@ -220,10 +247,21 @@ class ProductsTableDefinition extends AbstractTableDefinition
      */
     public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
     {
-        if ($columnId !== 'category') {
-            return null;
-        }
+        return match ($columnId) {
+            'category' => $this->distinctCategoryNames($search, $query, $limit),
+            'product_type' => $this->distinctProductTypes($search, $query, $limit),
+            default => null,
+        };
+    }
 
+    /**
+     * Distinct related category NAMES among the products matching `$query`.
+     *
+     * @param  Builder<Product>  $query
+     * @return array<int, string>
+     */
+    private function distinctCategoryNames(?string $search, Builder $query, int $limit): array
+    {
         $categoryIds = (clone $query)->select('products.category_id');
 
         return DB::table('product_categories')
@@ -236,6 +274,32 @@ class ProductsTableDefinition extends AbstractTableDefinition
             ->limit($limit)
             ->pluck('name')
             ->map(static fn (mixed $name): string => (string) $name)
+            ->all();
+    }
+
+    /**
+     * Distinct `product_type` values among the products matching `$query`, via
+     * a plain DB::table query on the raw column (never through Eloquent, which
+     * would hydrate the ProductType cast and fail to stringify it — mirrors
+     * AttributesTableDefinition's `data_type`).
+     *
+     * @param  Builder<Product>  $query
+     * @return array<int, string>
+     */
+    private function distinctProductTypes(?string $search, Builder $query, int $limit): array
+    {
+        $productIds = (clone $query)->select('products.id');
+
+        return DB::table('products')
+            ->whereIn('id', $productIds)
+            ->when($search !== null && $search !== '', function ($builder) use ($search): void {
+                $builder->where('product_type', 'like', '%'.$this->escapeLike($search).'%');
+            })
+            ->distinct()
+            ->orderBy('product_type')
+            ->limit($limit)
+            ->pluck('product_type')
+            ->map(static fn (mixed $value): string => (string) $value)
             ->all();
     }
 

@@ -10,6 +10,9 @@ import type { AttributeDataType } from '@/features/attributes/types'
 /** A typed dynamic-attribute field value, resolved from the matching `value_*` column. */
 export type AttributeFieldValue = string | number | boolean | null
 
+/** Product classification (spec 0017). SERVICE-only for now; mirrors the `ProductType` enum. */
+export type ProductType = 'SERVICE'
+
 /** Minimal category projection hydrating the product's grid/detail. */
 export interface ProductCategorySummary {
   id: number
@@ -38,6 +41,7 @@ export interface ProductDetail {
   price: number | null
   category_id: number
   category: ProductCategorySummary | null
+  product_type: ProductType
   attributes: ProductAttributeValue[]
   created_at: string
 }
@@ -64,9 +68,10 @@ export interface ProductAttributeValueInput {
 export interface CreateProductPayload {
   name: string
   description?: string | null
-  cost?: number | null
-  price?: number | null
+  cost: number
+  price: number
   category_id: number
+  product_type: ProductType
   attributes?: ProductAttributeValueInput[]
 }
 

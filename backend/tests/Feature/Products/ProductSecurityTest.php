@@ -63,11 +63,14 @@ it('update: a generic field made non-editable by the DB matrix and changed → 4
         Permission::findOrCreate("products.{$ability}");
     }
 
-    $role = Role::create(['name' => 'product-price-locked']);
+    // `description` is the only non-mandatory generic field: cost/price/
+    // product_type are mandatory (spec 0008) and therefore bypass the DB
+    // matrix intersect, so the matrix can only lock a non-mandatory field.
+    $role = Role::create(['name' => 'product-description-locked']);
     $role->givePermissionTo(['products.view', 'products.update']);
     $role->fieldPermissions()->create([
         'resource' => 'products',
-        'field' => 'price',
+        'field' => 'description',
         'visible' => true,
         'editable' => false,
         'required' => false,
@@ -76,13 +79,13 @@ it('update: a generic field made non-editable by the DB matrix and changed → 4
     $actor = User::factory()->create();
     $actor->assignRole($role);
 
-    $product = Product::factory()->create(['price' => 10]);
+    $product = Product::factory()->create(['description' => 'locked']);
     Sanctum::actingAs($actor);
 
-    $this->patchJson("/api/products/{$product->id}", ['price' => 999])
-        ->assertStatus(422)->assertJsonValidationErrors('price');
+    $this->patchJson("/api/products/{$product->id}", ['description' => 'changed'])
+        ->assertStatus(422)->assertJsonValidationErrors('description');
 
-    expect((float) $product->fresh()->price)->toBe(10.0);
+    expect($product->fresh()->description)->toBe('locked');
 });
 
 it('update: an untouched non-editable field is a harmless no-op (unrelated field still updates)', function () {
@@ -90,11 +93,11 @@ it('update: an untouched non-editable field is a harmless no-op (unrelated field
         Permission::findOrCreate("products.{$ability}");
     }
 
-    $role = Role::create(['name' => 'product-price-locked-2']);
+    $role = Role::create(['name' => 'product-description-locked-2']);
     $role->givePermissionTo(['products.view', 'products.update']);
     $role->fieldPermissions()->create([
         'resource' => 'products',
-        'field' => 'price',
+        'field' => 'description',
         'visible' => true,
         'editable' => false,
         'required' => false,
@@ -103,12 +106,12 @@ it('update: an untouched non-editable field is a harmless no-op (unrelated field
     $actor = User::factory()->create();
     $actor->assignRole($role);
 
-    $product = Product::factory()->create(['name' => 'Before', 'price' => 10]);
+    $product = Product::factory()->create(['name' => 'Before', 'description' => 'keep']);
     Sanctum::actingAs($actor);
 
-    // Re-submits the SAME persisted value (the decimal cast reads back
-    // "10.00") — a harmless no-op on the locked field, not a "change".
-    $this->patchJson("/api/products/{$product->id}", ['name' => 'After', 'price' => '10.00'])
+    // Re-submits the SAME persisted value on the locked field — a harmless
+    // no-op, not a "change" — while a different, editable field updates.
+    $this->patchJson("/api/products/{$product->id}", ['name' => 'After', 'description' => 'keep'])
         ->assertOk()
         ->assertJsonPath('data.name', 'After');
 });

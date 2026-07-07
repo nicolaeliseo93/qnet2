@@ -6,6 +6,7 @@ use App\Enums\GenderEnum;
 use App\Enums\LocaleEnum;
 use App\Enums\NotificationLevelEnum;
 use App\Enums\PersonalDataTypeEnum;
+use App\Enums\ProductType;
 use App\Enums\ReferentContactScopeEnum;
 
 return [
@@ -52,6 +53,9 @@ return [
         // Dynamic product-attribute data type (spec 0017): the attribute form's
         // "Data type" select and the products table's `data_type` badge.
         'attribute_type' => AttributeType::class,
+        // Product classification (spec 0017): the products table's
+        // `product_type` badge. SERVICE-only for now.
+        'product_type' => ProductType::class,
     ],
 
 ];

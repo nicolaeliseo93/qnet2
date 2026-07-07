@@ -10,8 +10,14 @@ export interface AttributeCatalogEntry {
   data_type: AttributeDataType
 }
 
-/** Upper bound of attributes fetched for a picker; the catalog is expected to stay small (global, reusable). */
-const ATTRIBUTE_CATALOG_LIMIT = 200
+/**
+ * Upper bound of attributes fetched for a picker; the catalog is expected to stay small
+ * (global, reusable). Capped at the generic rows endpoint's max block size (MAX_LIMIT = 100):
+ * a single `/tables/attributes/rows` request rejects a block larger than 100 (422), so a
+ * higher value here silently empties the picker. If the catalog ever outgrows 100, switch to
+ * a search-driven/paginated source instead of raising this.
+ */
+const ATTRIBUTE_CATALOG_LIMIT = 100
 
 /**
  * Loads the full attribute catalog for assignment pickers (e.g. the

@@ -22,10 +22,12 @@ export function buildCreatePayload(values: ProductFormValues): CreateProductPayl
   return {
     name: values.name,
     description: values.description,
-    cost: values.cost,
-    price: values.price,
-    // Validated non-null by the schema's `category_id` superRefine before submit.
+    // cost/price/category_id are validated non-null by the schema's
+    // required-value superRefine before submit.
+    cost: values.cost as number,
+    price: values.price as number,
     category_id: values.category_id as number,
+    product_type: values.product_type,
     attributes: attributesRecordToArray(values.attributes),
   }
 }
@@ -58,6 +60,9 @@ export function buildUpdatePayload(
   }
   if (values.category_id !== original.category_id) {
     payload.category_id = values.category_id as number
+  }
+  if (values.product_type !== original.product_type) {
+    payload.product_type = values.product_type
   }
   if (attributesDirty) {
     payload.attributes = attributesRecordToArray(values.attributes)

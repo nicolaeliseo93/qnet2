@@ -22,7 +22,13 @@ import type {
 } from '@/features/product-categories/types'
 
 /** Server-side field names mapped onto the form for 422 handling. */
-const SERVER_ERROR_FIELDS = ['name', 'parent_id', 'description', 'attributes'] as const
+const SERVER_ERROR_FIELDS = [
+  'name',
+  'parent_id',
+  'inherits_attributes',
+  'description',
+  'attributes',
+] as const
 
 export type ProductCategoryFormValues = CreateProductCategoryFormValues
 
@@ -55,6 +61,7 @@ export function useProductCategoryForm({ mode, onSuccess }: UseProductCategoryFo
       return {
         name: category.name,
         parent_id: category.parent_id,
+        inherits_attributes: category.inherits_attributes,
         description: category.description,
         attributes: category.attributes.map((assignment) => ({
           attribute_id: assignment.attribute_id,
@@ -63,7 +70,13 @@ export function useProductCategoryForm({ mode, onSuccess }: UseProductCategoryFo
         })),
       }
     }
-    return { name: '', parent_id: mode.parentId, description: null, attributes: [] }
+    return {
+      name: '',
+      parent_id: mode.parentId,
+      inherits_attributes: true,
+      description: null,
+      attributes: [],
+    }
   }, [mode])
 
   const form = useForm<ProductCategoryFormValues>({

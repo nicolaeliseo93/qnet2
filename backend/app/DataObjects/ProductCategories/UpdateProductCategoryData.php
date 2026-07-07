@@ -24,6 +24,8 @@ final readonly class UpdateProductCategoryData
         public ?string $name = null,
         public ?int $parentId = null,
         public bool $parentIdSubmitted = false,
+        public ?bool $inheritsAttributes = null,
+        public bool $inheritsAttributesSubmitted = false,
         public ?string $description = null,
         public bool $descriptionSubmitted = false,
         public ?array $attributes = null,
@@ -40,6 +42,8 @@ final readonly class UpdateProductCategoryData
             name: array_key_exists('name', $data) ? (string) $data['name'] : null,
             parentId: array_key_exists('parent_id', $data) && $data['parent_id'] !== null ? (int) $data['parent_id'] : null,
             parentIdSubmitted: array_key_exists('parent_id', $data),
+            inheritsAttributes: array_key_exists('inherits_attributes', $data) ? (bool) $data['inherits_attributes'] : null,
+            inheritsAttributesSubmitted: array_key_exists('inherits_attributes', $data),
             description: array_key_exists('description', $data) ? $data['description'] : null,
             descriptionSubmitted: array_key_exists('description', $data),
             attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
@@ -77,6 +81,10 @@ final readonly class UpdateProductCategoryData
 
         if ($this->parentIdSubmitted) {
             $attributes['parent_id'] = $this->parentId;
+        }
+
+        if ($this->inheritsAttributesSubmitted) {
+            $attributes['inherits_attributes'] = $this->inheritsAttributes;
         }
 
         if ($this->descriptionSubmitted) {

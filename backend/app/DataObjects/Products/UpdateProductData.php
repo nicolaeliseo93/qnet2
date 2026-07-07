@@ -2,6 +2,8 @@
 
 namespace App\DataObjects\Products;
 
+use App\Enums\ProductType;
+
 /**
  * Validated payload for a partial (PATCH) product update
  * (PUT/PATCH /api/products/{product}, spec 0017).
@@ -31,6 +33,8 @@ final readonly class UpdateProductData
         public bool $priceSubmitted = false,
         public ?int $categoryId = null,
         public bool $categoryIdSubmitted = false,
+        public ?ProductType $productType = null,
+        public bool $productTypeSubmitted = false,
         public ?array $attributes = null,
     ) {}
 
@@ -51,6 +55,8 @@ final readonly class UpdateProductData
             priceSubmitted: array_key_exists('price', $data),
             categoryId: array_key_exists('category_id', $data) && $data['category_id'] !== null ? (int) $data['category_id'] : null,
             categoryIdSubmitted: array_key_exists('category_id', $data),
+            productType: array_key_exists('product_type', $data) && $data['product_type'] !== null ? ProductType::from((string) $data['product_type']) : null,
+            productTypeSubmitted: array_key_exists('product_type', $data),
             attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
         );
     }
@@ -94,6 +100,10 @@ final readonly class UpdateProductData
 
         if ($this->categoryIdSubmitted) {
             $attributes['category_id'] = $this->categoryId;
+        }
+
+        if ($this->productTypeSubmitted) {
+            $attributes['product_type'] = $this->productType;
         }
 
         return $attributes;

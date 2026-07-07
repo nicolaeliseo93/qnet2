@@ -62,4 +62,8 @@ export const enums = {
     BOOLEAN: 'Yes/No',
     ENUM: 'List of options',
   },
+  // Product classification (spec 0017).
+  product_type: {
+    SERVICE: 'Service',
+  },
 }

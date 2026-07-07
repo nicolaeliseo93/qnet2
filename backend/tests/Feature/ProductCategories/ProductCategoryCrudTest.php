@@ -90,6 +90,23 @@ it('create: 201 + persists, syncing attribute assignments with pivot data', func
     $this->assertDatabaseHas('attribute_category', ['attribute_id' => $attribute->id, 'is_required' => 1, 'sort_order' => 2]);
 });
 
+it('create: inherits_attributes defaults to true and can be opted out', function () {
+    $actor = productCategoryUserWith(['create']);
+    $root = ProductCategory::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/product-categories', ['name' => 'Default'])
+        ->assertCreated()->assertJsonPath('data.inherits_attributes', true);
+
+    $this->postJson('/api/product-categories', [
+        'name' => 'OptOut',
+        'parent_id' => $root->id,
+        'inherits_attributes' => false,
+    ])->assertCreated()->assertJsonPath('data.inherits_attributes', false);
+
+    $this->assertDatabaseHas('product_categories', ['name' => 'OptOut', 'inherits_attributes' => 0]);
+});
+
 it('create: 403 without product-categories.create', function () {
     $actor = productCategoryUserWith([]);
     Sanctum::actingAs($actor);
@@ -132,6 +149,22 @@ it('update: attributes is a full-replace sync preserving pivot data', function (
 
     expect($category->fresh()->attributes->pluck('id')->all())->toBe([$newAttribute->id]);
     $this->assertDatabaseHas('attribute_category', ['attribute_id' => $newAttribute->id, 'is_required' => 1, 'sort_order' => 5]);
+});
+
+it('update: toggling inherits_attributes off empties the inherited_attributes side list', function () {
+    $actor = productCategoryUserWith(['view', 'update']);
+    $root = ProductCategory::factory()->create();
+    $child = ProductCategory::factory()->childOf($root)->create();
+    $rootAttr = Attribute::factory()->create(['code' => 'root_attr']);
+    $root->attributes()->attach($rootAttr->id, ['is_required' => false, 'sort_order' => 0]);
+    Sanctum::actingAs($actor);
+
+    $before = $this->getJson("/api/product-categories/{$child->id}")->assertOk();
+    expect(collect($before->json('data.inherited_attributes'))->pluck('code')->all())->toBe(['root_attr']);
+
+    $after = $this->patchJson("/api/product-categories/{$child->id}", ['inherits_attributes' => false])
+        ->assertOk()->assertJsonPath('data.inherits_attributes', false);
+    expect($after->json('data.inherited_attributes'))->toBe([]);
 });
 
 it('update: parent_id = self → 422 (anti-cycle)', function () {

@@ -33,7 +33,7 @@ if (! function_exists('productUserWith')) {
 // AC-018 — columns config
 // ---------------------------------------------------------------------------
 
-it('returns the 6 columns in order with the declared flags, 403 without viewAny', function () {
+it('returns the 7 columns in order with the declared flags, 403 without viewAny', function () {
     $actor = productUserWith([]);
     Sanctum::actingAs($actor);
     $this->getJson('/api/tables/products/columns')->assertForbidden();
@@ -48,11 +48,13 @@ it('returns the 6 columns in order with the declared flags, 403 without viewAny'
         ->and($data['searchable'])->toBe(['name']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['name', 'description', 'cost', 'price', 'category', 'created_at']);
+    expect($ids)->toBe(['name', 'description', 'cost', 'price', 'category', 'product_type', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['description']['sortable'])->toBeFalse()
-        ->and($columns['category']['filterType'])->toBe('set');
+        ->and($columns['category']['filterType'])->toBe('set')
+        ->and($columns['product_type']['type'])->toBe('badge')
+        ->and($columns['product_type']['filterType'])->toBe('set');
 });
 
 // ---------------------------------------------------------------------------
@@ -71,6 +73,30 @@ it('rows expose id/name/description/cost/price/category{id,name}/created_at + pe
     expect($row)->not->toBeNull()
         ->and($row['category'])->toBe(['id' => $category->id, 'name' => 'Electronics'])
         ->and($row['actions'])->toEqualCanonicalizing(['view', 'edit', 'delete']);
+});
+
+it('rows expose product_type (defaulting to SERVICE) and its badge metadata', function () {
+    $actor = productUserWith(['viewAny']);
+    Product::factory()->create(['name' => 'Consulting']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/products/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('name', 'Consulting');
+    expect($row['product_type'])->toBe('SERVICE');
+
+    $columns = collect($this->getJson('/api/tables/products/columns')->json('data.columns'))->keyBy('id');
+    $badges = collect($columns['product_type']['badges'] ?? [])->pluck('value')->all();
+    expect($badges)->toContain('SERVICE')
+        ->and($columns['product_type']['enumKey'] ?? null)->toBe('product_type');
+});
+
+it('values: product_type → distinct product types', function () {
+    $actor = productUserWith(['viewAny']);
+    Product::factory()->count(2)->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/products/values', ['columnId' => 'product_type'])->assertOk();
+    expect($response->json('data.values'))->toBe(['SERVICE']);
 });
 
 it('rows: no N+1 on the category relation', function () {

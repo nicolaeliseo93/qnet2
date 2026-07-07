@@ -20,6 +20,7 @@ class ProductCategoryFactory extends Factory
         return [
             'name' => fake()->unique()->words(2, true),
             'parent_id' => null,
+            'inherits_attributes' => true,
             'description' => fake()->optional()->sentence(),
         ];
     }
@@ -27,5 +28,11 @@ class ProductCategoryFactory extends Factory
     public function childOf(ProductCategory $parent): static
     {
         return $this->state(fn (): array => ['parent_id' => $parent->id]);
+    }
+
+    /** A category that opts out of inheriting its ancestors' attributes. */
+    public function notInheriting(): static
+    {
+        return $this->state(fn (): array => ['inherits_attributes' => false]);
     }
 }

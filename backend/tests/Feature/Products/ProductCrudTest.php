@@ -31,6 +31,20 @@ if (! function_exists('productUserWith')) {
     }
 }
 
+if (! function_exists('productGenericFields')) {
+    /**
+     * The now-required generic fields (cost/price/product_type) a valid create
+     * must carry, merged into each create call's payload.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    function productGenericFields(array $overrides = []): array
+    {
+        return array_merge(['cost' => 10, 'price' => 20, 'product_type' => 'SERVICE'], $overrides);
+    }
+}
+
 /**
  * A category carrying one attribute of each data type, all optional except
  * the caller-flagged required one.
@@ -104,7 +118,7 @@ it('create: 201, every value routed to its typed column', function () {
     $option = $enum->options->first();
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/products', [
+    $this->postJson('/api/products', productGenericFields([
         'name' => 'Widget', 'category_id' => $category->id,
         'attributes' => [
             ['attribute_id' => $string->id, 'value' => 'nylon'],
@@ -113,9 +127,12 @@ it('create: 201, every value routed to its typed column', function () {
             ['attribute_id' => $boolean->id, 'value' => true],
             ['attribute_id' => $enum->id, 'value' => $option->value],
         ],
-    ])->assertCreated();
+    ]))->assertCreated();
 
     $product = Product::where('name', 'Widget')->firstOrFail();
+    expect($product->product_type->value)->toBe('SERVICE')
+        ->and((float) $product->cost)->toBe(10.0)
+        ->and((float) $product->price)->toBe(20.0);
     $this->assertDatabaseHas('product_attribute_values', ['product_id' => $product->id, 'attribute_id' => $string->id, 'value_string' => 'nylon']);
     $this->assertDatabaseHas('product_attribute_values', ['product_id' => $product->id, 'attribute_id' => $integer->id, 'value_integer' => 12]);
     $this->assertDatabaseHas('product_attribute_values', ['product_id' => $product->id, 'attribute_id' => $decimal->id, 'value_decimal' => 1.25]);
@@ -129,10 +146,10 @@ it('create: attribute not in the category effective attributes → 422', functio
     $foreignAttribute = Attribute::factory()->create();
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/products', [
+    $this->postJson('/api/products', productGenericFields([
         'name' => 'X', 'category_id' => $category->id,
         'attributes' => [['attribute_id' => $foreignAttribute->id, 'value' => 'x']],
-    ])->assertStatus(422);
+    ]))->assertStatus(422);
 });
 
 it('create: value incoherent with the data_type → 422', function () {
@@ -140,10 +157,10 @@ it('create: value incoherent with the data_type → 422', function () {
     ['category' => $category, 'integer' => $integer] = categoryWithOneOfEachAttributeType();
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/products', [
+    $this->postJson('/api/products', productGenericFields([
         'name' => 'X', 'category_id' => $category->id,
         'attributes' => [['attribute_id' => $integer->id, 'value' => 'not-a-number']],
-    ])->assertStatus(422);
+    ]))->assertStatus(422);
 });
 
 it('create: ENUM value outside the options → 422', function () {
@@ -151,10 +168,10 @@ it('create: ENUM value outside the options → 422', function () {
     ['category' => $category, 'enum' => $enum] = categoryWithOneOfEachAttributeType();
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/products', [
+    $this->postJson('/api/products', productGenericFields([
         'name' => 'X', 'category_id' => $category->id,
         'attributes' => [['attribute_id' => $enum->id, 'value' => 'not-an-option']],
-    ])->assertStatus(422);
+    ]))->assertStatus(422);
 });
 
 it('create: a required attribute missing → 422', function () {
@@ -162,19 +179,31 @@ it('create: a required attribute missing → 422', function () {
     ['category' => $category] = categoryWithOneOfEachAttributeType(requiredKey: 'integer');
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/products', ['name' => 'X', 'category_id' => $category->id])->assertStatus(422);
+    $this->postJson('/api/products', productGenericFields(['name' => 'X', 'category_id' => $category->id]))->assertStatus(422);
 });
 
-it('create: 403 without products.create / 422 without name or category_id', function () {
+it('create: 403 without products.create / 422 without the required generic fields', function () {
     $category = ProductCategory::factory()->create();
 
     $actor = productUserWith([]);
     Sanctum::actingAs($actor);
-    $this->postJson('/api/products', ['name' => 'X', 'category_id' => $category->id])->assertForbidden();
+    $this->postJson('/api/products', productGenericFields(['name' => 'X', 'category_id' => $category->id]))->assertForbidden();
 
     $actor = productUserWith(['create']);
     Sanctum::actingAs($actor);
-    $this->postJson('/api/products', [])->assertStatus(422)->assertJsonValidationErrors(['name', 'category_id']);
+    $this->postJson('/api/products', [])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['name', 'category_id', 'cost', 'price', 'product_type']);
+});
+
+it('create: invalid product_type → 422', function () {
+    $actor = productUserWith(['create']);
+    $category = ProductCategory::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/products', productGenericFields([
+        'name' => 'X', 'category_id' => $category->id, 'product_type' => 'GOODS',
+    ]))->assertStatus(422)->assertJsonValidationErrors('product_type');
 });
 
 // ---------------------------------------------------------------------------
@@ -213,6 +242,18 @@ it('update: changing category_id prunes stale values and requires the new requir
 
     $remaining = $product->fresh()->attributeValues;
     expect($remaining->pluck('attribute_id')->all())->toBe([$newRequiredAttribute->id]);
+});
+
+it('update: product_type patch is validated against the enum (invalid → 422, valid → 200)', function () {
+    $actor = productUserWith(['update']);
+    $product = Product::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/products/{$product->id}", ['product_type' => 'GOODS'])
+        ->assertStatus(422)->assertJsonValidationErrors('product_type');
+
+    $this->patchJson("/api/products/{$product->id}", ['product_type' => 'SERVICE'])->assertOk();
+    expect($product->fresh()->product_type->value)->toBe('SERVICE');
 });
 
 it('update: 403 without products.update / 404 for a non-existent product', function () {

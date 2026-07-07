@@ -87,6 +87,41 @@ it('effective-attributes: A→B→C inherits a1,a2,a3 ancestors-first with corre
     expect(collect($data)->firstWhere('code', 'a1')['is_required'])->toBeTrue();
 });
 
+it('effective-attributes: a category opting out inherits nothing — only its own', function () {
+    $actor = productCategoryUserWith(['view']);
+    $root = ProductCategory::factory()->create(['name' => 'Root']);
+    $child = ProductCategory::factory()->childOf($root)->notInheriting()->create(['name' => 'Child']);
+    $rootAttr = Attribute::factory()->create(['code' => 'root_attr']);
+    $childAttr = Attribute::factory()->create(['code' => 'child_attr']);
+    $root->attributes()->attach($rootAttr->id, ['is_required' => false, 'sort_order' => 0]);
+    $child->attributes()->attach($childAttr->id, ['is_required' => false, 'sort_order' => 0]);
+    Sanctum::actingAs($actor);
+
+    $data = $this->getJson("/api/product-categories/{$child->id}/effective-attributes")->assertOk()->json('data');
+
+    expect(collect($data)->pluck('code')->all())->toBe(['child_attr']);
+});
+
+it('effective-attributes: barrier cuts a descendant off from everything above the opted-out node', function () {
+    // Root[A] → Child(inherit=OFF)[B] → Grandchild(inherit=ON)[C] ⇒ grandchild sees B,C (A cut).
+    $actor = productCategoryUserWith(['view']);
+    $root = ProductCategory::factory()->create(['name' => 'Root']);
+    $child = ProductCategory::factory()->childOf($root)->notInheriting()->create(['name' => 'Child']);
+    $grandchild = ProductCategory::factory()->childOf($child)->create(['name' => 'Grandchild']);
+    $a = Attribute::factory()->create(['code' => 'a']);
+    $b = Attribute::factory()->create(['code' => 'b']);
+    $c = Attribute::factory()->create(['code' => 'c']);
+    $root->attributes()->attach($a->id, ['is_required' => false, 'sort_order' => 0]);
+    $child->attributes()->attach($b->id, ['is_required' => false, 'sort_order' => 0]);
+    $grandchild->attributes()->attach($c->id, ['is_required' => false, 'sort_order' => 0]);
+    Sanctum::actingAs($actor);
+
+    $data = $this->getJson("/api/product-categories/{$grandchild->id}/effective-attributes")->assertOk()->json('data');
+
+    expect(collect($data)->pluck('code')->all())->toBe(['b', 'c']);
+    expect(collect($data)->pluck('inherited')->all())->toBe([true, false]);
+});
+
 it('effective-attributes: ENUM attribute carries its options', function () {
     $actor = productCategoryUserWith(['view']);
     $category = ProductCategory::factory()->create();

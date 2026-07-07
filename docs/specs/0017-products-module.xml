@@ -12,7 +12,10 @@
   - Products grid shows ONLY generic fields; dynamic attributes live in the
     product form + detail (no dynamic grid columns in this spec).
   - Attributes are reusable entities assigned to categories via a pivot;
-    a category's effective attributes = own assignments UNION all ancestors'.
+    a category's effective attributes = own assignments UNION those of the
+    ancestors it inherits from. Each category carries an `inherits_attributes`
+    flag (default true): when false it becomes an inheritance ROOT — a barrier
+    that cuts it AND its descendants off from every attribute above it.
   - Three management surfaces / menu entries: Attributes, Product Categories, Products.
 
   Naming: greenfield, English identifiers (engineering.md §1.2).
@@ -111,10 +114,11 @@
 
       <!-- PRODUCT CATEGORIES -->
       <item>Migrazione `product_categories` (id, name, parent_id nullable FK→self restrictOnDelete, description text null, timestamps; index parent_id,name) + pivot `attribute_category` (id, attribute_id FK cascade, category_id FK cascade, is_required bool default false, sort_order int default 0, timestamps, unique[attribute_id,category_id]).</item>
-      <item>Model `ProductCategory` (fillable name/parent_id/description, relazioni parent()/children()/attributes() belongsToMany withPivot[is_required,sort_order], LogsModelActivity) + Factory. Morph `product_category`.</item>
-      <item>Service `ProductCategoryService`: crea/aggiorna con guardia anti-ciclo (parent non può essere se stesso né un discendente); `effectiveAttributes(ProductCategory): Collection` = attributi propri UNION antenati, ordinati (antenati prima, poi per sort_order); `ancestors()`/`descendants()` helper; delete restrittivo (409/422 se ha figli o prodotti). NB implementativa: la risalita degli antenati è un walk iterativo di `parent_id` in PHP (portabile SQLite/MySQL, zero SQL grezzo — supera il vincolo anti-SQLi), NON una CTE `WITH RECURSIVE`. Decisione presa in fase di dispatch dal lead; spec allineata all'implementazione.</item>
-      <item>Policy `ProductCategoryPolicy` (resource 'product-categories'); Authorization `ProductCategoriesAuthorization` (fields name/parent_id/description/attributes); Requests Store/Update (attributes = array di {attribute_id, is_required, sort_order}), DTO, Resource; Controller; registrazioni config.</item>
-      <item>Endpoint albero `GET /api/product-categories/tree` (nodi annidati id/name/children + counts) e `GET /api/product-categories/{productCategory}/effective-attributes` → [{ id, code, name, data_type, is_required, options:[{value,label}] }] inclusi gli ereditati (per il form prodotto). CRUD standard show/store/update/destroy.</item>
+      <item>Model `ProductCategory` (fillable name/parent_id/inherits_attributes/description, cast inherits_attributes→bool, relazioni parent()/children()/attributes() belongsToMany withPivot[is_required,sort_order], LogsModelActivity) + Factory (+state notInheriting()). Morph `product_category`. Colonna `inherits_attributes` bool default true aggiunta in migrazione dedicata (110700).</item>
+      <item>Service `ProductCategoryService`: crea/aggiorna con guardia anti-ciclo (parent non può essere se stesso né un discendente); `effectiveAttributes(ProductCategory): Collection` = attributi propri UNION antenati EREDITATI, ordinati (antenati prima, poi per sort_order); la catena si taglia al primo nodo con `inherits_attributes=false` (barriera: se la categoria stessa opta out non eredita nulla; l'antenato opted-out contribuisce i propri attributi ma non risale oltre). `ancestors()` (walk strutturale completo, usato SOLO dalla guardia anti-ciclo) distinto da `inheritedAncestors()` (walk con barriera); delete restrittivo (409/422 se ha figli o prodotti). NB implementativa: la risalita degli antenati è un walk iterativo di `parent_id` in PHP (portabile SQLite/MySQL, zero SQL grezzo — supera il vincolo anti-SQLi), NON una CTE `WITH RECURSIVE`. Decisione presa in fase di dispatch dal lead; spec allineata all'implementazione.</item>
+      <item>Policy `ProductCategoryPolicy` (resource 'product-categories'); Authorization `ProductCategoriesAuthorization` (fields name/parent_id/inherits_attributes/description/attributes); Requests Store/Update (attributes = array di {attribute_id, is_required, sort_order}), DTO, Resource; Controller; registrazioni config.</item>
+      <item>Endpoint `GET /api/product-categories/{productCategory}/effective-attributes` → [{ id, code, name, data_type, is_required, options:[{value,label}] }] inclusi gli ereditati (per il form prodotto). CRUD standard show/store/update/destroy.</item>
+      <item>REV 2026-07-07 (richiesta utente): la LISTA categorie è una griglia AG Grid SSRM come gli altri moduli (NON più vista ad albero). `ProductCategoriesTableDefinition` + `ProductCategoryColumnCatalog` registrati in config/tables.php; colonne name/parent(derived)/description/attributes_count/products_count/created_at; `parent` con derived filter/sort/distinct come `category` sui prodotti. Endpoint `GET /product-categories/tree` MANTENUTO solo come sorgente del parent-picker nel form (flatten client-side).</item>
 
       <!-- PRODUCTS -->
       <item>Migrazione `products` (id, name, description text null, cost decimal(15,2) null, price decimal(15,2) null, category_id FK→product_categories restrictOnDelete, timestamps; index name,category_id,created_at) + `product_attribute_values` (id, product_id FK cascade, attribute_id FK cascade, value_string text null, value_integer bigint null, value_decimal decimal(20,6) null, value_boolean bool null, option_id nullable FK→attribute_options nullOnDelete, timestamps, unique[product_id,attribute_id]).</item>
@@ -125,7 +129,7 @@
       <!-- SHARED / FRONTEND -->
       <item>Nodi navigazione in `config/navigation.php`: sezione o voci `attributes`, `product-categories`, `products` con permesso `.view`. Morph map in AppServiceProvider per i 3 model. DemoDataSeeder: `DemoProductCatalogSeeder` (attributi + albero categorie + prodotti demo) idempotente, richiamato da `DemoDataSeeder`.</item>
       <item>Frontend feature `features/attributes/`: griglia + form (data_type select; editor opzioni ENUM condizionale) + detail + renderer (badge data_type) + pagina + rotta.</item>
-      <item>Frontend feature `features/product-categories/`: vista ALBERO (componente tree custom su `components/ui/`, nessuna dipendenza nuova) con create/edit/delete nodo; form categoria (name, parent select, description, editor assegnazione attributi con is_required/sort_order + visualizzazione ereditati read-only); pagina + rotta.</item>
+      <item>Frontend feature `features/product-categories/`: griglia AG Grid SSRM (adapter `TableView domain="product-categories"`) con CRUD in Sheet (view/edit/delete, gestione 409 delete restrittivo); form categoria (name, parent select alimentato da /tree flatten, description, editor assegnazione attributi con is_required/sort_order + visualizzazione ereditati read-only); pagina + rotta. REV 2026-07-07: sostituita la precedente vista ad albero.</item>
       <item>Frontend feature `features/products/`: griglia (soli campi generici) + form con category picker (AsyncPaginatedSelect) che alla selezione carica `effective-attributes` e genera i campi dinamici tipizzati (STRING→input, INTEGER/DECIMAL→number, BOOLEAN→checkbox, ENUM→select da options); detail con sezione attributi; payload builder create/sparse-PATCH; renderer.</item>
       <item>i18n `en-products.ts`/`it-products.ts` (blocchi attributes/productCategories/products + navigation) agganciati al bundle; icone in icon-map; route in router.tsx + breadcrumbs.</item>
       <item>Test: Pest backend (≥90% Service/Policy/Authorization; ≥85% controller/table; unit su CTE ereditarietà e routing typed value) + Vitest frontend (form dinamico prodotto, tree categorie, renderer, payload).</item>
@@ -192,14 +196,14 @@
       <errors>403 senza permesso; 404 categoria inesistente.</errors>
     </endpoint>
     <endpoint method="GET" path="/api/meta/product-categories">
-      <response status="200">fields=[name(text,mandatory),parent_id(select),description(textarea),attributes(custom)] + permissions.</response>
+      <response status="200">fields=[name(text,mandatory),parent_id(select),inherits_attributes(boolean),description(textarea),attributes(custom)] + permissions.</response>
     </endpoint>
     <endpoint method="GET" path="/api/product-categories/{productCategory}">
-      <response status="200">okWithPermissions: data={ id, name, parent_id, parent:{id,name}|null, description, attributes:[{ attribute_id, code, name, data_type, is_required, sort_order }], inherited_attributes:[{ attribute_id, code, name, data_type, is_required }], created_at } + permissions.</response>
+      <response status="200">okWithPermissions: data={ id, name, parent_id, parent:{id,name}|null, inherits_attributes:bool, description, attributes:[{ attribute_id, code, name, data_type, is_required, sort_order }], inherited_attributes:[{ attribute_id, code, name, data_type, is_required }] (vuoto se inherits_attributes=false), created_at } + permissions.</response>
       <errors>403 senza view; 404.</errors>
     </endpoint>
     <endpoint method="POST" path="/api/product-categories">
-      <request>{ name:req max191, parent_id?:nullable exists:product_categories, description?:nullable, attributes?:[{ attribute_id:exists, is_required?:bool, sort_order?:int }] distinct per attribute_id }.</request>
+      <request>{ name:req max191, parent_id?:nullable exists:product_categories, inherits_attributes?:bool (default true), description?:nullable, attributes?:[{ attribute_id:exists, is_required?:bool, sort_order?:int }] distinct per attribute_id }.</request>
       <response status="201">okWithPermissions(ProductCategoryResource).</response>
       <errors>403; 422 (parent inesistente, ciclo, attribute_id inesistente/duplicato); 422 campo non-editable.</errors>
     </endpoint>
@@ -277,6 +281,7 @@
     <criterion id="AC-007">Migrazione: `product_categories` (parent_id nullable FK self restrictOnDelete) + pivot `attribute_category` (unique[attribute_id,category_id], is_required, sort_order); down() rimuove. (schema)</criterion>
     <criterion id="AC-008">Dato un albero A→B→C con A assegna a1, B assegna a2, C assegna a3, quando GET /product-categories/{C}/effective-attributes, allora ricevo a1,a2,a3 (ereditati inclusi) con flag `inherited` corretto e ordinati (antenati prima). (risalita `parent_id` in PHP — CategoryHierarchy)</criterion>
     <criterion id="AC-009">POST/PATCH categoria con parent_id = se stessa o un proprio discendente → 422 (anti-ciclo). (service guard)</criterion>
+    <criterion id="AC-008b">Dato Root[A]→Child(inherits_attributes=false)[B]→Grandchild(inherits_attributes=true)[C]: effective-attributes(B)=[B] (nessun ereditato); effective-attributes(C)=[B,C] con A tagliato dalla barriera. `inherits_attributes` default true su create; toggling off in PATCH svuota `inherited_attributes`. La guardia anti-ciclo resta indipendente dal flag (walk strutturale completo). (CategoryHierarchy barrier)</criterion>
     <criterion id="AC-010">PATCH categoria: `attributes` = full-replace sync con pivot is_required/sort_order preservato. (update sync)</criterion>
     <criterion id="AC-011">DELETE categoria: 204 se senza figli e senza prodotti; 409/422 altrimenti. (destroy guard)</criterion>
     <criterion id="AC-012">GET /product-categories/tree con viewAny → struttura annidata radici→figli con attributes_count/products_count; senza viewAny → 403. (tree endpoint)</criterion>
@@ -293,7 +298,7 @@
 
     <!-- FRONTEND -->
     <criterion id="AC-021">Pagina Attributi: gate `<Can attributes.viewAny>`; monta `<TableView domain="attributes">`; il form mostra il select data_type e l'editor opzioni SOLO quando data_type=ENUM. (page+form)</criterion>
-    <criterion id="AC-022">Pagina Categorie: vista ad albero padre/figlio; creando/modificando una categoria posso assegnare attributi (con is_required/sort_order) e vedo in sola lettura gli attributi ereditati dagli antenati. (tree+form)</criterion>
+    <criterion id="AC-022">Pagina Categorie: griglia AG Grid SSRM (colonne name/parent/description/attributes_count/products_count/created_at, filtro/sort/export come gli altri moduli); creando/modificando una categoria in Sheet posso assegnare attributi (con is_required/sort_order) e vedo in sola lettura gli attributi ereditati dagli antenati; la colonna parent mostra il nome del padre (root → vuoto). (grid+form)</criterion>
     <criterion id="AC-023">Form Prodotto: selezionata la categoria, il form chiama effective-attributes e genera i campi dinamici tipizzati (STRING→text, INTEGER/DECIMAL→number, BOOLEAN→checkbox, ENUM→select da options); cambiando categoria i campi si rigenerano. (dynamic form)</criterion>
     <criterion id="AC-024">Submit Prodotto: create → payload { name,description,cost,price,category_id,attributes:[{attribute_id,value}] }; update → PATCH con solo i campi generici cambiati + attributes se toccati; 422 mappato inline via applyServerValidationErrors. (payload+errors)</criterion>
     <criterion id="AC-025">Griglia Prodotti: colonne name/description/cost/price/category/created_at; la cella category mostra il nome; filtro set su category funziona; export backend-driven disponibile con products.export. (grid)</criterion>

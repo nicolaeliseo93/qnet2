@@ -37,6 +37,7 @@ class StoreProductCategoryRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:191'],
             'parent_id' => ['nullable', 'integer', 'exists:product_categories,id'],
+            'inherits_attributes' => ['sometimes', 'boolean'],
             'description' => ['nullable', 'string'],
             'attributes' => ['sometimes', 'array'],
             'attributes.*.attribute_id' => ['required', 'integer', 'exists:attributes,id', 'distinct'],

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\ProductType;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -24,6 +25,7 @@ class ProductFactory extends Factory
             'cost' => fake()->randomFloat(2, 1, 500),
             'price' => fake()->randomFloat(2, 1, 1000),
             'category_id' => ProductCategory::factory(),
+            'product_type' => ProductType::Service,
         ];
     }
 }

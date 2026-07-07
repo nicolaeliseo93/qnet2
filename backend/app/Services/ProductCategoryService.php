@@ -28,6 +28,7 @@ class ProductCategoryService
             $category = ProductCategory::create([
                 'name' => $data->name,
                 'parent_id' => $data->parentId,
+                'inherits_attributes' => $data->inheritsAttributes,
                 'description' => $data->description,
             ]);
 

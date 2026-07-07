@@ -73,6 +73,19 @@ final class ProductColumnCatalog
                 'filterType' => 'set',
             ],
             [
+                // Real DB column rendered as a badge (ProductType), driven by
+                // config/config.php form_enums `product_type`. Set-filtered/
+                // sorted/distinct-resolved like AttributesTableDefinition's
+                // `data_type`.
+                'id' => 'product_type',
+                'label' => 'products.columns.product_type',
+                'type' => 'badge',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
                 'id' => 'created_at',
                 'label' => 'products.columns.created_at',
                 'type' => 'datetime',
@@ -95,6 +108,7 @@ final class ProductColumnCatalog
             ['columnId' => 'cost', 'type' => 'number'],
             ['columnId' => 'price', 'type' => 'number'],
             ['columnId' => 'category', 'type' => 'set'],
+            ['columnId' => 'product_type', 'type' => 'set'],
             ['columnId' => 'created_at', 'type' => 'date'],
         ];
     }

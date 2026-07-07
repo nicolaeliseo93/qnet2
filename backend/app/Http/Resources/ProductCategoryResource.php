@@ -26,6 +26,7 @@ class ProductCategoryResource extends JsonResource
             'name' => $this->name,
             'parent_id' => $this->parent_id,
             'parent' => $this->parent !== null ? ['id' => $this->parent->id, 'name' => $this->parent->name] : null,
+            'inherits_attributes' => (bool) $this->inherits_attributes,
             'description' => $this->description,
             'attributes' => $this->attributes->map(fn (Attribute $attribute): array => [
                 'attribute_id' => $attribute->id,

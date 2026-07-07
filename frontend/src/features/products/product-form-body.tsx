@@ -7,13 +7,21 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Form, FormControl } from '@/components/ui/form'
 import { SearchableSelect } from '@/components/ui/searchable-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
+import { useEnumOptions } from '@/features/config/use-config'
 import { useProductCategoryTree } from '@/features/product-categories/use-product-category-tree'
 import { flattenCategoryTree } from '@/features/product-categories/flatten-tree'
 import { useProductForm } from '@/features/products/use-product-form'
 import { ProductDynamicAttributeFields } from '@/features/products/product-dynamic-attribute-fields'
-import type { ProductDetail, ProductFormMode } from '@/features/products/types'
+import type { ProductDetail, ProductFormMode, ProductType } from '@/features/products/types'
 
 interface ProductFormBodyProps {
   mode: ProductFormMode
@@ -38,6 +46,7 @@ export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyPr
   const { field: fieldPermission } = useResourcePermissions()
   const { form, serverError, onSubmit } = useProductForm({ mode, onSuccess })
   const treeQuery = useProductCategoryTree()
+  const productTypeOptions = useEnumOptions('product_type')
 
   const categoryOptions = useMemo(
     () => flattenCategoryTree(treeQuery.data ?? []),
@@ -50,7 +59,8 @@ export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyPr
     fieldPermission('description').visible ||
     fieldPermission('cost').visible ||
     fieldPermission('price').visible ||
-    fieldPermission('category_id').visible
+    fieldPermission('category_id').visible ||
+    fieldPermission('product_type').visible
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -176,6 +186,34 @@ export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyPr
                       }}
                     />
                   </FormControl>
+                )}
+              </MetaField>
+
+              <MetaField
+                control={form.control}
+                name="product_type"
+                metaKey="product_type"
+                label={t('products.form.productType')}
+              >
+                {({ field, disabled }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={(next) => field.onChange(next as ProductType)}
+                    disabled={disabled}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {productTypeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               </MetaField>
             </FormSection>

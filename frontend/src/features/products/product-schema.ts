@@ -21,28 +21,34 @@ function baseFields(t: TFunction) {
       .min(1, t('products.form.nameRequired'))
       .max(NAME_MAX_LENGTH, t('products.form.nameMax')),
     description: z.string().nullable(),
+    // cost/price/category_id are held nullable so the controlled inputs can
+    // represent "empty"; the required-value superRefine below rejects a null
+    // at submit, mirroring the backend's `required` rules.
     cost: z.number().nonnegative(t('products.form.costInvalid')).nullable(),
     price: z.number().nonnegative(t('products.form.priceInvalid')).nullable(),
     category_id: z.number().nullable(),
+    product_type: z.enum(['SERVICE']),
     attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
   }
 }
 
-function withCategoryRequiredRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
+function withRequiredValueRules<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
   return schema.superRefine((values, ctx) => {
-    const record = values as { category_id: number | null }
+    const record = values as { category_id: number | null; cost: number | null; price: number | null }
     if (record.category_id === null) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['category_id'],
-        message: t('products.form.categoryRequired'),
-      })
+      ctx.addIssue({ code: 'custom', path: ['category_id'], message: t('products.form.categoryRequired') })
+    }
+    if (record.cost === null) {
+      ctx.addIssue({ code: 'custom', path: ['cost'], message: t('products.form.costRequired') })
+    }
+    if (record.price === null) {
+      ctx.addIssue({ code: 'custom', path: ['price'], message: t('products.form.priceRequired') })
     }
   })
 }
 
 export function buildCreateProductSchema(t: TFunction) {
-  return withCategoryRequiredRule(z.object({ ...baseFields(t) }), t)
+  return withRequiredValueRules(z.object({ ...baseFields(t) }), t)
 }
 
 export function buildUpdateProductSchema(t: TFunction) {

@@ -21,6 +21,7 @@ class DemoDataSeeder extends Seeder
         $this->call(DatabaseSeeder::class);
 
         $this->call(DemoReferentTypeSeeder::class);
+        $this->call(DemoReferentSeeder::class);
         $this->call(DemoRolesSeeder::class);
         $this->call(DemoUsersSeeder::class);
         $this->call(DemoPersonalDataSeeder::class);

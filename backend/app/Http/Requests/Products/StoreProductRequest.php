@@ -3,10 +3,12 @@
 namespace App\Http\Requests\Products;
 
 use App\DataObjects\Products\CreateProductData;
+use App\Enums\ProductType;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for POST /api/products (spec 0017). Only the
@@ -41,9 +43,10 @@ class StoreProductRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:191'],
             'description' => ['nullable', 'string'],
-            'cost' => ['nullable', 'numeric'],
-            'price' => ['nullable', 'numeric'],
+            'cost' => ['required', 'numeric'],
+            'price' => ['required', 'numeric'],
             'category_id' => ['required', 'integer', 'exists:product_categories,id'],
+            'product_type' => ['required', Rule::enum(ProductType::class)],
             'attributes' => ['sometimes', 'array'],
             'attributes.*.attribute_id' => ['required', 'integer', 'exists:attributes,id', 'distinct'],
             'attributes.*.value' => ['nullable'],

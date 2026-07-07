@@ -35,6 +35,7 @@ class ProductCategoriesAuthorization extends AbstractResourceAuthorization
         return [
             new FieldDefinition('name', 'text', mandatory: true),
             new FieldDefinition('parent_id', 'select'),
+            new FieldDefinition('inherits_attributes', 'boolean'),
             new FieldDefinition('description', 'textarea'),
             new FieldDefinition('attributes', 'custom'),
         ];
@@ -58,6 +59,7 @@ class ProductCategoriesAuthorization extends AbstractResourceAuthorization
         return [
             'name' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'parent_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'inherits_attributes' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'description' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'attributes' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];
