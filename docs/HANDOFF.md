@@ -2,6 +2,67 @@
 
 > Injected at session start. Update at every green state.
 
+## Feature — Company Sites module ("Società Sedi") — GREEN (2026-07-07)
+
+Spec `docs/specs/0020-company-sites.xml` (contract-first, frozen before dispatch; user-approved
+decisions via AskUserQuestion). Built by an agent team (backend + frontend teammates in parallel,
+disjoint ownership backend/ vs frontend/src/; independent `verifier` gate). Thin adapter over the
+generic frameworks — ZERO changes to the generic engines. On branch `feat/company-sites-module`
+(NOT pushed). Renumbered 0018→0020 to resolve a spec-number collision with the concurrent,
+already-committed ea-sectors/sources (0018) + tags (0019) modules.
+
+User-approved decisions: (1) address/geo = the EXISTING polymorphic `addresses` table + normalized
+GeoSelect cascade Country→State(regione)→Province→City + postal_code (the brief's flat columns
+`city`/`zip`/`province_id`/`nation` were only an example; `nation`→`country_id`, there is NO nation
+table). (2) default-site flag = `is_default` boolean + dedicated exclusive endpoint
+POST /company-sites/{id}/set-default (button shows only when not already default); the brief's SECOND
+`active` (the "Altro" one) kept SEPARATE as read-only `status`. (3) "Altro" section fields = FK where
+the target table exists (responsible_*/accounting_manager→users, company_id←societa_aziendale_id→
+companies, default_bank_id→company_site_banks), plain nullable columns (no FK) elsewhere
+(quotation_*, *_category, payment_status_*, default_payment/vat, store); brief NOT NULL relaxed to
+nullable for flexibility, all read-only for now ("poi definiremo il da farsi").
+
+Data model (2 migrations, both run against SQLite AND real MySQL up/rollback/up): `company_sites`
+(name/email NOT NULL + profile/settings + is_default + all "Altro" cols + `old_id` unsignedBigInteger
+nullable unique after('id') for external migration 0013) and `company_site_banks` (id, company_site_id
+FK cascade, name, iban, notes, old_id) 1→N via HasMany (real FK, not morph). FK cycle default_bank_id↔
+banks broken by adding default_bank_id FK in the SECOND migration. Real bug caught here: `->after('id')`
+is ALTER-only and errors inside Schema::create() on MySQL (SQLite silently ignores it) — fixed.
+
+Backend layers (mirror companies): CompanySite (HasAddresses+HasAttachments+LogsModelActivity, logo
+via 'logo' attachment collection = avatar pattern → logoDataUri()) + CompanySiteBank models; Policy;
+CompanySitesAuthorization (fields grouped profile/settings/banks/other, "Altro" ceiling=visibleReadonly
+so never editable, `address` IS a field-permission key like companies); CompanySiteService
+(create/update/delete/setDefault/loadTree, address via AddressService, banks via new BankService::sync
+diff-by-id, LogoService=avatar pattern); DTOs; Store/Update/SetDefault/UploadLogo Requests
+(EnforcesFieldPermissions); Resources; thin Controller; TableDefinition + ColumnCatalog +
+CompanySiteAddressColumns (derived city/province/region/postal_code — NO country column, per the
+machine-checked data_contract). Registered in config/{tables,authorization,attachments,navigation}.php,
+morph alias `company_site`, routes (literal set-default/logo BEFORE {companySite} wildcard),
+DemoCompanySiteSeeder. `permissions:sync` → 7 company-sites.* permissions. IBAN rule aligned to the FE
+regex (`{1,30}`, case-insensitive — server never stricter than client).
+
+Frontend (features/company-sites/): 4-tab metadata-driven form (Profilo/Impostazioni/Banche/Altro) via
+form-tab-strip; banks-manager cloned from contacts-manager (buffered, banks[] sent authoritatively);
+logo via avatar-upload (deferred on create); geo-select cascade; responsibles via async-paginated-select
+on users/for-select; default_bank_id select fed client-side from the banks buffer; "Altro" tab all
+read-only via CompanySiteReadonlyField; "Set default site" button in the detail sheet. Wiring: route,
+breadcrumb, icon-map key `building-2`→Building2 (matches backend nav token), split i18n en/it-company-sites.
+
+Verification (independent verifier, re-run on final state): BACKEND Pest module 69/69 (526 assertions),
+full suite 1535/1539 — the 4 residual are PRE-EXISTING and unrelated (AbstractMigrationSourcePreviewTest
+belongs to ea-sectors/sources/tags; 2× ZipArchive-not-found = php-zip extension absent in this env);
+pint --test passed. FRONTEND tsc --noEmit clean, ESLint clean on changed files, Vitest module 29/29,
+full 619/622 (3 residual = PRE-EXISTING i18n locale leak in features/table/cell-renderers.test.tsx, git
+diff empty on that file). Integration seams A–G all GREEN after fixes (icon token building-2 reconciled,
+IBAN BE↔FE aligned, no conflict markers repo-wide, company-sites registered in both registries,
+test/setup.ts MemoryStorage polyfill is a legit env fix — Node 25 exposes a broken native localStorage).
+
+NOTE: the two shared registry configs (config/tables.php, config/authorization.php) had been left in git
+`UU` state by the concurrent already-committed ea-sectors/sources/tags branch; content was clean (both
+company-sites AND those modules registered, no markers) — resolved with `git add`. graphify-out/ not
+committed. Changes committed on `feat/company-sites-module` — awaiting user go for push/PR.
+
 ## Correction — Tags producer swapped from Referent to EaSector — GREEN (2026-07-07)
 
 Post-build correction to spec `docs/specs/0019-tags-module.xml` (see `<ea-sector-wiring>` +

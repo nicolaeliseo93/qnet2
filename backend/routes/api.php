@@ -9,6 +9,7 @@ use App\Http\Controllers\BusinessFunctions\BusinessFunctionController;
 use App\Http\Controllers\BusinessFunctions\BusinessFunctionForSelectController;
 use App\Http\Controllers\Companies\CompanyController;
 use App\Http\Controllers\Companies\CompanyForSelectController;
+use App\Http\Controllers\CompanySites\CompanySiteController;
 use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\Contacts\ContactController;
 use App\Http\Controllers\Export\ExportController;
@@ -387,6 +388,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('products', [ProductController::class, 'store']);
         Route::match(['put', 'patch'], 'products/{product}', [ProductController::class, 'update']);
         Route::delete('products/{product}', [ProductController::class, 'destroy']);
+    });
+
+    // Company sites CRUD + logo/set-default (spec 0020). Authorization
+    // (company-sites.view/create/update/delete) is enforced server-side in
+    // CompanySiteController via CompanySitePolicy on every endpoint. No
+    // for-select in this slice. The `set-default`/`logo` literal segments are
+    // declared ABOVE the plain show/update/destroy routes, mirroring the
+    // for-select precedent, so a literal segment never risks losing to the
+    // bound {companySite} wildcard.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::post('company-sites/{companySite}/set-default', [CompanySiteController::class, 'setDefault']);
+        Route::post('company-sites/{companySite}/logo', [CompanySiteController::class, 'uploadLogo']);
+        Route::delete('company-sites/{companySite}/logo', [CompanySiteController::class, 'deleteLogo']);
+
+        Route::get('company-sites/{companySite}', [CompanySiteController::class, 'show']);
+        Route::post('company-sites', [CompanySiteController::class, 'store']);
+        Route::match(['put', 'patch'], 'company-sites/{companySite}', [CompanySiteController::class, 'update']);
+        Route::delete('company-sites/{companySite}', [CompanySiteController::class, 'destroy']);
     });
 
     // In-app user notifications (Laravel native `database` channel). Every

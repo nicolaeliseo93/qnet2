@@ -8,6 +8,7 @@ use App\Models\Attachment;
 use App\Models\Attribute;
 use App\Models\BusinessFunction;
 use App\Models\Company;
+use App\Models\CompanySite;
 use App\Models\Contact;
 use App\Models\EaSector;
 use App\Models\EmploymentProfile;
@@ -67,6 +68,7 @@ class AppServiceProvider extends ServiceProvider
             'user_table_preference' => UserTablePreference::class,
             'business_function' => BusinessFunction::class,
             'company' => Company::class,
+            'company_site' => CompanySite::class,
             'operational_site' => OperationalSite::class,
             'employment_profile' => EmploymentProfile::class,
             'referent' => Referent::class,

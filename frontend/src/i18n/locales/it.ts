@@ -2,6 +2,7 @@ import type { TranslationResources } from '@/i18n/locales/en'
 import { personalData, personalDataFieldLabels } from './it-personal-data'
 import { enums } from './it-enums'
 import { companies } from './it-companies'
+import { companySites } from './it-company-sites'
 import { operationalSites } from './it-operational-sites'
 import { imports } from './it-imports'
 import { exports } from './it-exports'
@@ -47,6 +48,7 @@ export const it: TranslationResources = {
     users: 'Utenti',
     roles: 'Ruoli',
     companies: 'Società aziendali',
+    companySites: 'Società sedi',
     businessFunctions: 'Funzioni aziendali',
     referents: 'Referenti',
     referentTypes: 'Tipi referente',
@@ -256,6 +258,7 @@ export const it: TranslationResources = {
     },
   },
   companies,
+  companySites,
   settings: {
     title: 'Impostazioni',
     subtitle: 'Gestisci le preferenze del tuo account.',

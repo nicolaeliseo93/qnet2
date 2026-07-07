@@ -1,0 +1,150 @@
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import i18n from '@/i18n'
+import { CompanySiteDetailView } from '@/features/company-sites/company-site-detail'
+import type { CompanySiteDetailWithPermissions } from '@/features/company-sites/types'
+
+/**
+ * Spec 0020 AC-020: the "Set as default site" action appears only when the
+ * site is not already the default, calls `set-default` and notifies the
+ * caller so the grid can refresh.
+ */
+
+const fetchCompanySiteMock = vi.fn()
+const setDefaultCompanySiteMock = vi.fn()
+
+vi.mock('@/features/company-sites/api', () => ({
+  fetchCompanySite: (...args: unknown[]) => fetchCompanySiteMock(...args),
+  setDefaultCompanySite: (...args: unknown[]) => setDefaultCompanySiteMock(...args),
+}))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+function site(overrides: Partial<CompanySiteDetailWithPermissions> = {}): CompanySiteDetailWithPermissions {
+  return {
+    id: 1,
+    name: 'Sede Nord',
+    email: 'nord@acme.test',
+    fiscal_code: null,
+    vat_number: null,
+    phone: null,
+    pec: null,
+    fax: null,
+    notes: null,
+    is_default: false,
+    logo_url: null,
+    address: null,
+    banks: [],
+    default_bank_id: null,
+    responsible_rda_id: null,
+    responsible_rda: null,
+    responsible_tickets_id: null,
+    responsible_tickets: null,
+    responsible_validation_contracts_id: null,
+    responsible_validation_contracts: null,
+    responsible_validation_contracts_two_id: null,
+    responsible_validation_contracts_two: null,
+    proforma_progressive: null,
+    invoice_progressive: null,
+    quotation_layout_id: null,
+    quotation_header_id: null,
+    quotation_footer_id: null,
+    company_id: null,
+    accounting_manager_id: null,
+    store_id: null,
+    company_type: null,
+    commissions: null,
+    order_sites: null,
+    payment_status_assign_technician: null,
+    payment_status_deposit: null,
+    payment_status_balance: null,
+    default_payment_id: null,
+    default_vat_id: null,
+    other_category_id: null,
+    iso_category_id: null,
+    soa_category_id: null,
+    sic_category_id: null,
+    avv_category_id: null,
+    gdpr_category_id: null,
+    res_category_id: null,
+    pal_category_id: null,
+    quattro_category_id: null,
+    finage_category_id: null,
+    fondi_category_id: null,
+    gare_category_id: null,
+    partnership_category_id: null,
+    progetti_category_id: null,
+    status: null,
+    color: null,
+    surface_sqm: null,
+    created_at: null,
+    permissions: {
+      resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+      fields: {},
+      actions: { set_default: true },
+    },
+    ...overrides,
+  }
+}
+
+function renderDetail(companySite: CompanySiteDetailWithPermissions, onDefaultChange = vi.fn()) {
+  fetchCompanySiteMock.mockResolvedValue(companySite)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <CompanySiteDetailView companySiteId={companySite.id} onDefaultChange={onDefaultChange} />
+    </QueryClientProvider>,
+  )
+}
+
+beforeAll(async () => {
+  await i18n.changeLanguage('en')
+})
+
+beforeEach(() => {
+  fetchCompanySiteMock.mockReset()
+  setDefaultCompanySiteMock.mockReset()
+})
+
+describe('CompanySiteDetailView — set-default (AC-020)', () => {
+  it('shows the action when the site is not the default', async () => {
+    renderDetail(site({ is_default: false }))
+    await waitFor(() => expect(screen.getByText('Sede Nord')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /Set as default site/ })).toBeInTheDocument()
+  })
+
+  it('hides the action when the site is already the default', async () => {
+    renderDetail(site({ is_default: true }))
+    await waitFor(() => expect(screen.getByText('Sede Nord')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Set as default site/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Default')).toBeInTheDocument()
+  })
+
+  it('hides the action when the actor lacks the set_default permission', async () => {
+    renderDetail(
+      site({
+        is_default: false,
+        permissions: {
+          resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+          fields: {},
+          actions: { set_default: false },
+        },
+      }),
+    )
+    await waitFor(() => expect(screen.getByText('Sede Nord')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Set as default site/ })).not.toBeInTheDocument()
+  })
+
+  it('calls set-default and notifies the caller on click', async () => {
+    const onDefaultChange = vi.fn()
+    setDefaultCompanySiteMock.mockResolvedValue(site({ is_default: true }))
+    renderDetail(site({ is_default: false }), onDefaultChange)
+
+    await waitFor(() => expect(screen.getByText('Sede Nord')).toBeInTheDocument())
+    screen.getByRole('button', { name: /Set as default site/ }).click()
+
+    await waitFor(() => expect(setDefaultCompanySiteMock).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(onDefaultChange).toHaveBeenCalledTimes(1))
+  })
+})

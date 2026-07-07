@@ -32,6 +32,7 @@ class DemoDataSeeder extends Seeder
         $this->call(DemoUserAddressSeeder::class);
         $this->call(DemoOperationalSiteSeeder::class);
         $this->call(DemoCompanySeeder::class);
+        $this->call(DemoCompanySiteSeeder::class);
         $this->call(DemoBusinessFunctionSeeder::class);
         $this->call(DemoEmploymentProfileSeeder::class);
         $this->call(DemoProductCatalogSeeder::class);

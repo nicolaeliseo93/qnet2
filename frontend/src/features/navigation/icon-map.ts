@@ -29,6 +29,7 @@ const iconMap: Record<string, LucideIcon> = {
   briefcase: Briefcase,
   building: Building2,
   'map-pin': MapPin,
+  'building-2': Building2,
   layers: Layers,
   'database-zap': DatabaseZap,
   'contact-round': ContactRound,

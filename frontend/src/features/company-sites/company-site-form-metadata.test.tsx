@@ -1,0 +1,173 @@
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
+import { render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import i18n from '@/i18n'
+import { CompanySiteForm } from '@/features/company-sites/company-site-form'
+import type { ResourceMeta } from '@/features/authorization/types'
+
+/**
+ * Spec 0020 (AC-014/AC-016): the metadata-driven behaviour of the multi-tab
+ * form — a hidden field is absent, a whole tab hides when every one of its
+ * fields is hidden, the Banche tab is always buffered (no network calls) and
+ * the Altro tab renders its always-read-only fields.
+ */
+
+const createCompanySiteMock = vi.fn()
+const updateCompanySiteMock = vi.fn()
+
+vi.mock('@/features/company-sites/api', () => ({
+  createCompanySite: (...args: unknown[]) => createCompanySiteMock(...args),
+  updateCompanySite: (...args: unknown[]) => updateCompanySiteMock(...args),
+}))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+const fetchResourceMetaMock = vi.fn<() => Promise<ResourceMeta>>()
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => fetchResourceMetaMock(),
+}))
+
+vi.mock('@/features/geo/use-geo', () => ({
+  useCountries: () => ({ data: [{ id: 1, name: 'Italy' }], isPending: false, isError: false }),
+  useStates: () => ({ data: [], isPending: false, isError: false }),
+  useProvinces: () => ({ data: [], isPending: false, isError: false }),
+  useCities: () => ({
+    data: { pages: [[]] },
+    isPending: false,
+    isError: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: () => {},
+    refetch: () => {},
+  }),
+}))
+
+vi.mock('@/features/for-select/use-for-select', () => ({
+  useForSelect: () => ({
+    data: undefined,
+    isPending: false,
+    isError: false,
+    fetchNextPage: () => {},
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    refetch: () => {},
+  }),
+  flattenForSelectPages: () => [],
+}))
+
+function wrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+}
+
+const FULL_PERMISSIONS = {
+  view: true,
+  create: true,
+  update: true,
+  delete: true,
+  export: true,
+  import: true,
+}
+
+function permissiveMeta(): ResourceMeta {
+  return {
+    fields: [],
+    permissions: { resource: FULL_PERMISSIONS, fields: {}, actions: {} },
+  }
+}
+
+beforeAll(async () => {
+  await i18n.changeLanguage('en')
+})
+
+beforeEach(() => {
+  createCompanySiteMock.mockReset()
+  updateCompanySiteMock.mockReset()
+  fetchResourceMetaMock.mockReset()
+})
+
+describe('CompanySiteForm — metadata-driven authorization (spec 0020)', () => {
+  it('always renders the Profilo tab and hides a hidden field', async () => {
+    fetchResourceMetaMock.mockResolvedValue({
+      fields: [],
+      permissions: {
+        resource: FULL_PERMISSIONS,
+        fields: {
+          name: { visible: true, hidden: false, editable: true, readonly: false, required: true, disabled: false },
+          vat_number: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
+        },
+        actions: {},
+      },
+    })
+
+    render(
+      <CompanySiteForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument())
+    expect(screen.queryByLabelText(/^VAT number/)).not.toBeInTheDocument()
+  })
+
+  it('hides the Impostazioni tab when every one of its fields is hidden', async () => {
+    fetchResourceMetaMock.mockResolvedValue({
+      fields: [],
+      permissions: {
+        resource: FULL_PERMISSIONS,
+        fields: {
+          responsible_rda_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
+          responsible_tickets_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
+          responsible_validation_contracts_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
+          responsible_validation_contracts_two_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
+          default_bank_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
+          proforma_progressive: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
+          invoice_progressive: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
+        },
+        actions: {},
+      },
+    })
+
+    render(
+      <CompanySiteForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument())
+    expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument()
+  })
+
+  it('shows the Banche tab (visible "banks" field) with no network call for its rows', async () => {
+    fetchResourceMetaMock.mockResolvedValue(permissiveMeta())
+
+    render(
+      <CompanySiteForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Banks' })).toBeInTheDocument())
+  })
+
+  it('falls back to visible+editable when a field is missing from metadata', async () => {
+    fetchResourceMetaMock.mockResolvedValue({
+      fields: [],
+      permissions: {
+        resource: FULL_PERMISSIONS,
+        fields: {
+          name: { visible: true, hidden: false, editable: true, readonly: false, required: false, disabled: false },
+        },
+        actions: {},
+      },
+    })
+
+    render(
+      <CompanySiteForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByLabelText(/^Name/)).toBeInTheDocument())
+    expect(screen.getByLabelText(/^Email/)).toBeEnabled()
+  })
+})

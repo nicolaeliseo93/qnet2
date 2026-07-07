@@ -3,6 +3,7 @@
 use App\Authorization\AttributesAuthorization;
 use App\Authorization\BusinessFunctionsAuthorization;
 use App\Authorization\CompaniesAuthorization;
+use App\Authorization\CompanySitesAuthorization;
 use App\Authorization\EaSectorsAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
 use App\Authorization\ProductCategoriesAuthorization;
@@ -40,6 +41,7 @@ return [
         'roles' => RolesAuthorization::class,
         'business-functions' => BusinessFunctionsAuthorization::class,
         'companies' => CompaniesAuthorization::class,
+        'company-sites' => CompanySitesAuthorization::class,
         'operational-sites' => OperationalSitesAuthorization::class,
         'referent-types' => ReferentTypesAuthorization::class,
         'referents' => ReferentsAuthorization::class,

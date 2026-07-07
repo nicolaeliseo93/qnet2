@@ -1,0 +1,136 @@
+<?php
+
+namespace App\Http\Requests\CompanySites;
+
+use App\DataObjects\CompanySites\CreateCompanySiteData;
+use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\Rule;
+
+/**
+ * Validates the payload for POST /api/company-sites (spec 0020).
+ *
+ * Authorization is intentionally NOT handled here (it stays in the controller
+ * via authorize('create', CompanySite::class)). The nested `address` rules
+ * mirror StoreCompanyRequest's (a site owns at most one address); `banks` are
+ * validated per-row (BankService::sync). "Altro" fields and `is_default` are
+ * never accepted here — EnforcesFieldPermissions (spec 0004) additionally
+ * rejects any submitted field the actor cannot edit (create-context, model =
+ * null), which already covers "Altro" (ceiling visibleReadonly).
+ */
+class StoreCompanySiteRequest extends FormRequest
+{
+    use EnforcesFieldPermissions;
+
+    public function authorize(): bool
+    {
+        // Authorization handled in the controller via CompanySitePolicy.
+        return true;
+    }
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    public function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:191'],
+            'email' => ['required', 'email', 'max:191'],
+            'fiscal_code' => ['nullable', 'string', 'max:20'],
+            'vat_number' => ['nullable', 'string', 'max:20'],
+            'phone' => ['nullable', 'string', 'max:191'],
+            'pec' => ['nullable', 'string', 'max:191'],
+            'fax' => ['nullable', 'string', 'max:191'],
+            'notes' => ['nullable', 'string'],
+            'logo' => ['nullable', 'image', 'mimes:jpeg,png,gif,webp', 'extensions:jpeg,png,gif,webp', 'max:'.(int) config('attachments.max_size')],
+
+            'address' => ['sometimes', 'nullable', 'array'],
+            'address.line1' => ['required_with:address', 'string', 'max:255'],
+            'address.line2' => ['nullable', 'string', 'max:255'],
+            'address.postal_code' => ['nullable', 'string', 'max:20'],
+            'address.city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')],
+            'address.province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
+            'address.state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
+            'address.country_id' => ['nullable', 'integer', Rule::exists('countries', 'id')],
+
+            'banks' => ['sometimes', 'array'],
+            'banks.*.id' => ['sometimes', 'integer', 'min:1'],
+            'banks.*.name' => ['required', 'string', 'max:191'],
+            // ISO 13616 shape, aligned with the frontend's client-side regex
+            // (`^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$`) so client and server never
+            // diverge on what an IBAN "looks like" — case-insensitive here
+            // only to be at least as permissive as the client, never less.
+            'banks.*.iban' => ['nullable', 'string', 'max:50', 'regex:/^[A-Za-z]{2}[0-9]{2}[A-Za-z0-9]{1,30}$/'],
+            'banks.*.notes' => ['nullable', 'string', 'max:191'],
+            'default_bank_id' => ['nullable', 'integer'],
+
+            'responsible_rda_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'responsible_tickets_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'responsible_validation_contracts_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'responsible_validation_contracts_two_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'proforma_progressive' => ['nullable', 'integer'],
+            'invoice_progressive' => ['nullable', 'integer'],
+        ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $this->enforceFieldPermissions($validator);
+            $this->validateDefaultBankId($validator);
+        });
+    }
+
+    /**
+     * `default_bank_id`, if given, must match one of the submitted banks' ids
+     * (spec 0020 contract). On create no bank has a persisted id yet, so this
+     * structurally accepts only null — a brand new default is set via a
+     * follow-up update once the bank ids are known.
+     */
+    private function validateDefaultBankId(Validator $validator): void
+    {
+        $defaultBankId = $this->input('default_bank_id');
+
+        if ($defaultBankId === null) {
+            return;
+        }
+
+        $submittedIds = collect($this->input('banks', []))
+            ->pluck('id')
+            ->filter()
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        if (! in_array((int) $defaultBankId, $submittedIds, true)) {
+            $validator->errors()->add('default_bank_id', 'The selected bank is not among the submitted banks.');
+        }
+    }
+
+    protected function authorizationResource(): string
+    {
+        return 'company-sites';
+    }
+
+    protected function authorizationModel(): ?Model
+    {
+        return null;
+    }
+
+    /**
+     * The validated payload as a typed DTO (no magic array crosses into the
+     * Service — see standards/architecture.md → Data Transfer Objects).
+     */
+    public function toData(): CreateCompanySiteData
+    {
+        /** @var array<string, mixed> $validated */
+        $validated = $this->validated();
+
+        /** @var UploadedFile|null $logo */
+        $logo = $this->file('logo');
+
+        return CreateCompanySiteData::fromValidated($validated, $logo);
+    }
+}

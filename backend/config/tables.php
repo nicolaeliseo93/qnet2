@@ -3,6 +3,7 @@
 use App\Tables\AttributesTableDefinition;
 use App\Tables\BusinessFunctionsTableDefinition;
 use App\Tables\CompaniesTableDefinition;
+use App\Tables\CompanySitesTableDefinition;
 use App\Tables\EaSectorsTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
 use App\Tables\ProductCategoriesTableDefinition;
@@ -41,6 +42,7 @@ return [
         'roles' => RolesTableDefinition::class,
         'business-functions' => BusinessFunctionsTableDefinition::class,
         'companies' => CompaniesTableDefinition::class,
+        'company-sites' => CompanySitesTableDefinition::class,
         'operational-sites' => OperationalSitesTableDefinition::class,
         'referent-types' => ReferentTypesTableDefinition::class,
         'referents' => ReferentsTableDefinition::class,

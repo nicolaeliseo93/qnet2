@@ -1,0 +1,172 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Abstracts\BaseModel;
+use App\Models\Concerns\HasAddresses;
+use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\LogsModelActivity;
+use Database\Factories\CompanySiteFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Support\Facades\Storage;
+
+/**
+ * Company site entity (spec 0020 — "Società Sedi"): a flexible site
+ * anagraphic under a Company. Reuses the same building blocks as `Company`
+ * (single polymorphic address) and `User` (polymorphic logo, avatar
+ * pattern), plus an owned bank list via a real FK (not a morph).
+ *
+ * The "Altro" section attributes (company/accountingManager/store/...) are
+ * read-only for now (CompanySitesAuthorization ceiling + EnforcesFieldPermissions
+ * on the write path) — the schema itself carries no such restriction.
+ */
+class CompanySite extends BaseModel
+{
+    /** @use HasFactory<CompanySiteFactory> */
+    use HasAddresses, HasAttachments, HasFactory, LogsModelActivity;
+
+    /**
+     * Attachment collection that holds the site's logo. A site keeps at most
+     * one logo: uploading a new one replaces the previous (see LogoService).
+     */
+    public const string LOGO_COLLECTION = 'logo';
+
+    protected $fillable = [
+        'name', 'email', 'fiscal_code', 'vat_number', 'phone', 'pec', 'fax', 'notes', 'is_default',
+        'responsible_rda_id', 'responsible_tickets_id', 'responsible_validation_contracts_id',
+        'responsible_validation_contracts_two_id', 'default_bank_id', 'proforma_progressive',
+        'invoice_progressive', 'quotation_layout_id', 'quotation_header_id', 'quotation_footer_id',
+        'company_id', 'accounting_manager_id', 'store_id', 'company_type', 'commissions', 'order_sites',
+        'payment_status_assign_technician', 'payment_status_deposit', 'payment_status_balance',
+        'default_payment_id', 'default_vat_id',
+        'other_category_id', 'iso_category_id', 'soa_category_id', 'sic_category_id', 'avv_category_id',
+        'gdpr_category_id', 'res_category_id', 'pal_category_id', 'quattro_category_id', 'finage_category_id',
+        'fondi_category_id', 'gare_category_id', 'partnership_category_id', 'progetti_category_id',
+        'status', 'color', 'surface_sqm',
+    ];
+
+    protected $casts = [
+        'is_default' => 'boolean',
+        'proforma_progressive' => 'integer',
+        'invoice_progressive' => 'integer',
+        'quotation_layout_id' => 'integer',
+        'quotation_header_id' => 'integer',
+        'quotation_footer_id' => 'integer',
+        'company_type' => 'integer',
+        'commissions' => 'integer',
+        'order_sites' => 'integer',
+        'payment_status_assign_technician' => 'integer',
+        'payment_status_deposit' => 'integer',
+        'payment_status_balance' => 'integer',
+        'default_payment_id' => 'integer',
+        'default_vat_id' => 'integer',
+        'other_category_id' => 'integer',
+        'iso_category_id' => 'integer',
+        'soa_category_id' => 'integer',
+        'sic_category_id' => 'integer',
+        'avv_category_id' => 'integer',
+        'gdpr_category_id' => 'integer',
+        'res_category_id' => 'integer',
+        'pal_category_id' => 'integer',
+        'quattro_category_id' => 'integer',
+        'finage_category_id' => 'integer',
+        'fondi_category_id' => 'integer',
+        'gare_category_id' => 'integer',
+        'partnership_category_id' => 'integer',
+        'progetti_category_id' => 'integer',
+        'status' => 'integer',
+        'surface_sqm' => 'integer',
+        // Spec 0013 — external data migration: guarded (not in $fillable), only
+        // ever set by property assignment post-create.
+        'old_id' => 'integer',
+    ];
+
+    public function banks(): HasMany
+    {
+        return $this->hasMany(CompanySiteBank::class);
+    }
+
+    public function defaultBank(): BelongsTo
+    {
+        return $this->belongsTo(CompanySiteBank::class, 'default_bank_id');
+    }
+
+    public function responsibleRda(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'responsible_rda_id');
+    }
+
+    public function responsibleTickets(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'responsible_tickets_id');
+    }
+
+    public function responsibleValidationContracts(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'responsible_validation_contracts_id');
+    }
+
+    public function responsibleValidationContractsTwo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'responsible_validation_contracts_two_id');
+    }
+
+    public function accountingManager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'accounting_manager_id');
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * The site's current logo (latest file in the logo collection), if any.
+     * Eager-loadable to avoid N+1 when exposing logos (mirrors User::avatar()).
+     */
+    public function logo(): MorphOne
+    {
+        return $this->morphOne(Attachment::class, 'attachable')
+            ->where('collection', self::LOGO_COLLECTION)
+            ->latestOfMany();
+    }
+
+    /**
+     * The current logo as an inline `data:` URI (base64), or null when unset
+     * or the file is missing on disk (mirrors User::avatarDataUri()).
+     */
+    public function logoDataUri(): ?string
+    {
+        $logo = $this->logo;
+
+        if (! $logo) {
+            return null;
+        }
+
+        $disk = Storage::disk($logo->disk);
+
+        if (! $disk->exists($logo->path)) {
+            return null;
+        }
+
+        return 'data:'.$logo->mime_type.';base64,'.base64_encode($disk->get($logo->path));
+    }
+
+    /**
+     * The site's single address, read off the `addresses` morph (first
+     * primary row, falling back to any owned row) — mirrors Company::primaryAddress.
+     */
+    protected function primaryAddress(): Attribute
+    {
+        return Attribute::get(function (): ?Address {
+            $addresses = $this->addresses;
+
+            return $addresses->firstWhere('is_primary', true) ?? $addresses->first();
+        });
+    }
+}

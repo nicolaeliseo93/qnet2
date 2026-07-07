@@ -9,6 +9,7 @@
 import { personalData, personalDataFieldLabels } from './en-personal-data'
 import { enums } from './en-enums'
 import { companies } from './en-companies'
+import { companySites } from './en-company-sites'
 import { operationalSites } from './en-operational-sites'
 import { imports } from './en-imports'
 import { exports } from './en-exports'
@@ -54,6 +55,7 @@ export const en = {
     users: 'Users',
     roles: 'Roles',
     companies: 'Companies',
+    companySites: 'Company Sites',
     businessFunctions: 'Business Functions',
     referents: 'Referents',
     referentTypes: 'Referent Types',
@@ -265,6 +267,7 @@ export const en = {
     },
   },
   companies,
+  companySites,
   settings: {
     title: 'Settings',
     subtitle: 'Manage your account preferences.',

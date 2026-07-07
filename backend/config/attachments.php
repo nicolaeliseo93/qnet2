@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\CompanySite;
 use App\Models\User;
 
 return [
@@ -82,6 +83,7 @@ return [
 
     'attachable_types' => [
         'user' => User::class,
+        'company_site' => CompanySite::class,
     ],
 
 ];

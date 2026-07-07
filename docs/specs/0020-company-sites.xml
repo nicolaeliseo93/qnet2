@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0020 — Company Sites module (it: "Società Sedi").
+  (Renumbered from 0018 → 0020 to resolve a collision with the concurrent, already-committed
+   ea-sectors/sources specs that also claimed 0018; tags took 0019, so 0020 is the first free.)
+  Contract-first. English identifiers (engineering.md §1.2); UI labels in Italian via i18n.
+  The module is a THIN adapter over the generic frameworks already in place (TableRegistry,
+  Authorization metadata, metadata-driven forms, field permissions, filters, saved views,
+  toolbar/search, backend-driven export). It adds ONLY the new domain classes + config rows,
+  reusing verbatim: polymorphic addresses (HasAddresses/AddressService/GeoSelect), polymorphic
+  attachments (HasAttachments/AttachmentService, avatar pattern → "logo"), the child-collection
+  sync pattern (ContactService → new BankService), and users/for-select (responsibles).
+
+  User-approved decisions (2026-07-07):
+    - Address/geo = polymorphic `addresses` table + normalized cascade
+      Country → State(regione) → Province(provincia) → City(comune) + postal_code.
+      The brief's flat columns were only an example. Mapping:
+        address→line1, address2→line2, city→city_id, zip→postal_code,
+        province_id→province_id, nation→country_id (there is NO "nation" table: it is Country).
+    - Default-site flag = `is_default` (boolean). Exclusive single-default enforced server-side
+      in a transaction; dedicated action POST /company-sites/{id}/set-default; the button shows
+      only when the site is not already default. The brief's SECOND `active` (the "Altro" one)
+      is a SEPARATE read-only legacy `status` int.
+    - "Altro" section fields ≈ read-only for now: FK where the target table exists
+      (responsible_* + accounting_manager → users; company_id ← societa_aziendale_id → companies;
+      default_bank_id → company_site_banks), plain nullable columns (no FK) where it does not
+      (quotation_*, *_category, payment_status_*, default_payment/vat, store, color, surface).
+      Brief NOT NULL relaxed to nullable for flexibility (greenfield, values arrive via old_id).
+
+  Verified references (real names, not hypothesised — from repo scan 2026-07-07):
+    - Generic infra to REUSE unchanged: app/Tables/Abstract* (+ TableRegistry, config/tables.php),
+      app/Authorization/Abstract* (+ AuthorizationRegistry, config/authorization.php),
+      TableController, MetaController, generic tables/meta/export routes.
+    - Envelope: BaseApiController → ok, okWithPermissions, noContent, fail, paginatedResponse,
+      handleControllerException, MAX_LIMIT.
+    - Policy: App\Policies\Abstracts\BasePolicy → abilities viewAny/view/create/update/delete/
+      export/import. Auto-discovered by SyncPermissions (glob Policies + navigation permissions).
+    - Address: table `addresses` (nullableMorphs addressable, is_primary, line1/line2,
+      postal_code, city_id/state_id/province_id/country_id). Trait HasAddresses (morphMany +
+      cascade). AddressService::createFor(Model,CreateAddress)/update(Address,CreateAddress).
+      DTO App\DataObjects\PersonalData\CreateAddress. AddressResource emits geo ids + names.
+      Cascade: GeoController /api/countries|states|provinces|cities. FE features/geo/geo-select.
+      Precedent for derived grid geo columns: App\Tables\Companies\CompanyAddressColumns
+      (city/province/region/postal_code/country derived from the primary address).
+    - Attachments: table `attachments` (nullableMorphs attachable, collection, disk, path,
+      original_name, mime_type, extension, size, uploaded_by). Trait HasAttachments
+      (attachments(): MorphMany, attach()). AttachmentService::storeFor. AvatarService pattern
+      (collection 'avatar', morphOne latestOfMany, data-URI via avatarDataUri()). config/
+      attachments.php `attachable_types` allowlist (currently ['user'=>User::class]) — ADD
+      'company_site'. FE components/avatar-upload.tsx (immediate|deferred), avatar-validation.ts.
+    - Child 1→N inline: precedent contacts↔personal_data. Service diff-by-id sync in a
+      transaction (App\Services\ContactService::sync), DTO *Input{?int id, CreateX data},
+      nested FormRequest rules (contacts.*.field), FE contacts-manager.tsx (buffer + dialog).
+      For banks we use a real FK (company_site_id) + HasMany (not morph).
+    - Users for-select: GET users/for-select (UserForSelectController) → paginatedResponse of
+      UserForSelectResource {id,label,subtitle,avatar_url}. FE features/for-select/* +
+      components/ui/async-paginated-select.tsx (single). USERS_FOR_SELECT_RESOURCE='users'.
+    - Field permissions: AbstractResourceAuthorization (fields():FieldDefinition[], actions(),
+      resource(), fieldPermissionCeiling()); FieldDefinition(key,type,group,mandatory);
+      FieldPermission (visible/editable/required/disabled + derived hidden/readonly); trait
+      EnforcesFieldPermissions (authorizationResource()/authorizationModel(), change-based 422).
+    - Enums for fixed-set selects: config/config.php `form_enums` → PUBLIC GET /api/config
+      (only non-sensitive presentation metadata). Backed enums with ::options(). NOT needed in
+      this spec: the int/enum "Altro" fields are read-only, no editable enum is exposed now.
+    - MorphMap STRICT: AppServiceProvider::boot enforceMorphMap([...16 aliases...]) → ADD
+      'company_site' => CompanySite::class (and 'company_site_bank' if it appears in a morph
+      column / activity log). Navigation: config/navigation.php items. Icon: FE
+      features/navigation/icon-map.ts. Menu is backend-driven (GET /navigation).
+    - old_id: additive `unsignedBigInteger('old_id')->nullable()->after('id'); unique('old_id')`
+      (spec 0013 external migration). Declared INLINE in the create migration (greenfield).
+    - FE module shape (reference features/users + features/companies): api.ts, types.ts,
+      *-schema.ts (Zod factory with t), use-*-form-meta.ts, use-*-form.ts, *-form-payload.ts,
+      *-form.tsx, *-form-body.tsx (+ extracted tab modules), *-table.tsx (adapter over
+      <TableView domain renderers onAction importSlot>), *-detail.tsx, column-renderers.tsx.
+      Multi-tab form precedent: features/users/user-form-body.tsx + components/form-tab-strip
+      (FORM_TAB_LIST_CLASS, FORM_TAB_TRIGGER_CLASS, TabErrorDot). Detail kit components/detail/
+      detail-panel. Wiring: routes/router.tsx, routes/breadcrumbs.tsx (SEGMENT_LABELS),
+      features/navigation/icon-map.ts, i18n locales en.ts/it.ts (+ split en-*/it-* files).
+-->
+<spec id="0020-company-sites" status="draft" owner="tu" date="2026-07-07">
+
+  <goal>
+    Nuovo modulo "Società Sedi" (resource key `company-sites`): l'anagrafica flessibile delle sedi
+    di una società, gestita con la stessa esperienza degli altri moduli — tabella AG Grid SSRM
+    (colonne, filtri excel-like, valori distinti, toolbar/ricerca, viste salvate, preferenze,
+    export backend-driven), CRUD, form metadata-driven multi-tab (Profilo / Impostazioni / Banche /
+    Altro), permessi di risorsa e permessi sui campi per-ruolo, voce di navigazione, i18n. La scheda
+    riusa: l'indirizzo polimorfico (`addresses` + cascata geo), il logo come attachment polimorfico
+    (pattern avatar, data-URI), una collezione figlia 1→N di banche gestita inline nel form, i
+    select-con-ricerca sugli Utenti per i responsabili, e il flag "sede di default" esclusivo.
+  </goal>
+
+  <context>
+    Stack e convenzioni: CLAUDE.md + rules/. Naming DB/route/permessi/campi in INGLESE
+    (engineering.md §1.2); label UI in italiano via i18n. Il modulo NON modifica alcun framework
+    generico: aggiunge SOLO le classi/righe di config del nuovo dominio (nessun controller/route
+    generico nuovo). Riferimenti reali già verificati nel commento di testa (registry, envelope,
+    Policy, addresses, attachments, child-sync, for-select, field permissions, morphMap,
+    navigation, old_id, shape FE). Precedenti diretti da imitare: modulo `companies` (0010,
+    entità + indirizzo singolo polimorfico) e `users` (form multi-tab + logo/avatar + for-select).
+  </context>
+
+  <naming>
+    <item>Dominio/resource/permesso: `company-sites`. Route-model binding {companySite}.</item>
+    <item>Model `CompanySite`, tabella `company_sites`, morph alias `company_site`.</item>
+    <item>Figlio: model `CompanySiteBank`, tabella `company_site_banks`, FK reale `company_site_id`
+      (HasMany, non morph). Alias morph `company_site_bank` solo se compare in activity log.</item>
+    <item>Field key mapping (brief → schema inglese):
+      fiscalcode→fiscal_code, piva→vat_number, note→notes, active(Profilo)→is_default,
+      address→line1, address2→line2, city→city_id, zip→postal_code, province_id→province_id,
+      nation→country_id, quotation_layout→quotation_layout_id, quotation_header→
+      quotation_header_id, quotation_footer→quotation_footer_id, responsible_rda→
+      responsible_rda_id, responsible_tickets→responsible_tickets_id,
+      responsible_validation_contracts→responsible_validation_contracts_id,
+      responsible_validation_contracts_two→responsible_validation_contracts_two_id,
+      bank_id→default_bank_id, accounting_manager→accounting_manager_id,
+      stato_pagamento_assegna_tecnico→payment_status_assign_technician,
+      stato_pagamento_acconto→payment_status_deposit, stato_pagamento_saldo→
+      payment_status_balance, pagamento_default→default_payment_id, iva_default→default_vat_id,
+      colore→color, superfice_mq→surface_sqm, societa_aziendale_id→company_id, active(Altro)→
+      status. Le *_category mantengono il prefisso di dominio esistente: iso_category→
+      iso_category_id, soa→soa_category_id, sic, avv, gdpr, res, pal, quattro, finage, fondi,
+      gare, partnership, progetti (+ altro_category→other_category_id) come nullable bigint.</item>
+  </naming>
+
+  <schema>
+    <!-- Migrazione company_sites (reversibile). old_id INLINE. Molte colonne = dati, non logica. -->
+    <table name="company_sites">
+      <col>id BIGINT UNSIGNED PK</col>
+      <col>old_id UNSIGNED BIGINT NULLABLE, UNIQUE, after('id') — mapping migrazione esterna (0013)</col>
+      <!-- Profilo -->
+      <col>name VARCHAR(191) NOT NULL</col>
+      <col>email VARCHAR(191) NOT NULL</col>
+      <col>fiscal_code VARCHAR(20) NULLABLE</col>
+      <col>vat_number VARCHAR(20) NULLABLE</col>
+      <col>phone VARCHAR(191) NULLABLE</col>
+      <col>pec VARCHAR(191) NULLABLE</col>
+      <col>fax VARCHAR(191) NULLABLE</col>
+      <col>notes TEXT NULLABLE</col>
+      <col>is_default BOOLEAN NOT NULL DEFAULT false, INDEX — sede di default esclusiva</col>
+      <!-- L'indirizzo (line1/line2/city_id/postal_code/province_id/country_id + state_id) NON è
+           qui: vive sulla tabella polimorfica `addresses` (addressable_type='company_site',
+           is_primary=true), come companies. Il logo NON è qui: attachment collection 'logo'. -->
+      <!-- Impostazioni -->
+      <col>responsible_rda_id BIGINT UNSIGNED NULLABLE, FK users nullOnDelete</col>
+      <col>responsible_tickets_id BIGINT UNSIGNED NULLABLE, FK users nullOnDelete</col>
+      <col>responsible_validation_contracts_id BIGINT UNSIGNED NULLABLE, FK users nullOnDelete</col>
+      <col>responsible_validation_contracts_two_id BIGINT UNSIGNED NULLABLE, FK users nullOnDelete</col>
+      <col>default_bank_id BIGINT UNSIGNED NULLABLE, FK company_site_banks nullOnDelete — banca di default (scelta tra le banche della sede)</col>
+      <col>proforma_progressive INT NULLABLE</col>
+      <col>invoice_progressive INT NULLABLE</col>
+      <col>quotation_layout_id BIGINT NULLABLE (no FK: target non esiste)</col>
+      <col>quotation_header_id BIGINT NULLABLE (no FK)</col>
+      <col>quotation_footer_id BIGINT NULLABLE (no FK)</col>
+      <!-- Altro (read-only per ora) -->
+      <col>company_id BIGINT UNSIGNED NULLABLE, FK companies nullOnDelete (ex societa_aziendale_id)</col>
+      <col>accounting_manager_id BIGINT UNSIGNED NULLABLE, FK users nullOnDelete</col>
+      <col>store_id BIGINT NULLABLE (no FK)</col>
+      <col>company_type SMALLINT NULLABLE</col>
+      <col>commissions TINYINT NULLABLE</col>
+      <col>order_sites INT NULLABLE</col>
+      <col>payment_status_assign_technician SMALLINT NULLABLE</col>
+      <col>payment_status_deposit SMALLINT NULLABLE</col>
+      <col>payment_status_balance SMALLINT NULLABLE</col>
+      <col>default_payment_id BIGINT NULLABLE (no FK)</col>
+      <col>default_vat_id BIGINT NULLABLE (no FK)</col>
+      <col>other_category_id, iso_category_id, soa_category_id, sic_category_id, avv_category_id,
+           gdpr_category_id, res_category_id, pal_category_id, quattro_category_id,
+           finage_category_id, fondi_category_id, gare_category_id, partnership_category_id,
+           progetti_category_id — BIGINT NULLABLE (no FK: target non esistono)</col>
+      <col>status SMALLINT NULLABLE (ex `active` della sezione Altro, legacy read-only)</col>
+      <col>color VARCHAR(20) NULLABLE</col>
+      <col>surface_sqm INT NULLABLE</col>
+      <col>timestamps</col>
+    </table>
+
+    <table name="company_site_banks">
+      <col>id BIGINT UNSIGNED PK</col>
+      <col>old_id UNSIGNED BIGINT NULLABLE, UNIQUE, after('id')</col>
+      <col>company_site_id BIGINT UNSIGNED NOT NULL, FK company_sites cascadeOnDelete, INDEX</col>
+      <col>name VARCHAR(191) NOT NULL</col>
+      <col>iban VARCHAR(50) NULLABLE</col>
+      <col>notes VARCHAR(191) NULLABLE</col>
+      <col>timestamps</col>
+      <note>default_bank_id su company_sites e company_site_id qui formano un ciclo: creare i banks
+        PRIMA di settare default_bank_id (post-sync, dentro la stessa transazione). FK entrambe
+        nullable/cascade coerenti. Su delete della sede i banks cascadano; default_bank_id nullOnDelete
+        della banca.</note>
+    </table>
+  </schema>
+
+  <scope>
+    <in>
+      <item>Migrazioni `create_company_sites_table` e `create_company_site_banks_table` (schema sopra), reversibili.</item>
+      <item>Model `CompanySite` (BaseModel) con `HasAddresses` + `HasAttachments` + `LogsModelActivity`; `$fillable` esplicito (tutti i campi scrivibili tranne id/timestamps); `$casts` (is_default bool, progressivi int); helper `logo(): MorphOne` (collection 'logo', latestOfMany) + `logoDataUri(): ?string`; `banks(): HasMany`; `defaultBank(): BelongsTo`; le 4 relazioni `responsible*(): BelongsTo(User)`; `accountingManager(): BelongsTo(User)`; `company(): BelongsTo(Company)`; helper indirizzo primario (`primaryAddress()`). Const `LOGO_COLLECTION='logo'`.</item>
+      <item>Model `CompanySiteBank` (BaseModel) `$fillable=['name','iban','notes']`; `companySite(): BelongsTo`.</item>
+      <item>Factory `CompanySiteFactory` (+ stato `withAddress`, `default`) e `CompanySiteBankFactory`.</item>
+      <item>Alias morph `company_site` (e, se serve per activity log, `company_site_bank`) in `AppServiceProvider::enforceMorphMap`. Aggiunta `'company_site' => CompanySite::class` in `config/attachments.php` `attachable_types`.</item>
+      <item>`CompanySitePolicy extends BasePolicy` (resource `company-sites`) → permessi company-sites.* via `permissions:sync`. Nessun override.</item>
+      <item>`LogoService` (thin, pattern `AvatarService`, collection 'logo', DI `AttachmentService`) — `set(CompanySite,UploadedFile)`, `remove(CompanySite)`.</item>
+      <item>`BankService` — `sync(CompanySite, array $inputs): void` diff-by-id in transazione (create/update/delete degli owned, sicurezza: id non appartenente = create, mai update altrui), modellato su `ContactService::sync`.</item>
+      <item>`CompanySiteService` — `create`/`update`/`delete` in transazione: upsert sito, indirizzo primario via `AddressService::createFor`/`update`, banks via `BankService::sync`, risoluzione `default_bank_id` DOPO il sync (validato ⊆ banks della sede), logo deferred (se create con file). `setDefault(CompanySite): void` (transazione: azzera is_default di tutte le altre, setta questa). `loadTree(CompanySite)` per l'eager loading (indirizzo+geo, banks, responsabili, logo).</item>
+      <item>DataObjects: `CreateCompanySiteData`/`UpdateCompanySiteData` (campi Profilo/Impostazioni; Altro read-only NON nei DTO di scrittura), `BankInput{?int id, CreateBank data}`, `CreateBank{name,?iban,?notes}`; riuso `CreateAddress`.</item>
+      <item>FormRequests `StoreCompanySiteRequest`/`UpdateCompanySiteRequest` con trait `EnforcesFieldPermissions` (authorizationResource='company-sites', authorizationModel=sito|null); regole indirizzo annidato (line1/city_id/postal_code/country_id/state_id/province_id + exists) e banks nested (`banks`, `banks.*.id`, `banks.*.name` required, `banks.*.iban` nullable max:50 + validazione formato IBAN via regex, `banks.*.notes`); `default_bank_id` validato appartenente ai banks inviati; `SetDefaultCompanySiteRequest` (vuoto, authz via Policy update).</item>
+      <item>`CompanySiteResource` (id, name, email, fiscal_code, vat_number, phone, pec, fax, notes, is_default, logo_url (data-URI), address{id geo + NOMI, is_primary}, banks[CompanySiteBankResource], default_bank_id, responsible_*_id + oggetti {id,label} responsabili, proforma/invoice_progressive, quotation_*_id, campi "Altro" read-only, created_at). `CompanySiteBankResource` (id, name, iban, notes).</item>
+      <item>`CompanySiteController extends BaseApiController` (thin): show/store/update/destroy con `okWithPermissions`, uploadLogo/deleteLogo (gated update), setDefault (gated update). try/catch → handleControllerException. Blocco rotte in `routes/api.php` (letterali `company-sites/{companySite}/set-default`, `.../logo` PRIMA del wildcard). NESSUN for-select (le sedi non sono selezionate da altri moduli in questa spec).</item>
+      <item>`CompanySitesAuthorization extends AbstractResourceAuthorization` + riga in `config/authorization.php`. `fields()` con `group` (profile/settings/banks/other): campi editabili Profilo+Impostazioni + `banks` (type 'collection') + campi "Altro" con ceiling `visibleReadonly` (mai editabili); `mandatory` su name+email. `actions()`=['delete','export','import','upload_logo','delete_logo','set_default'] con `actionPermissions()`.</item>
+      <item>`CompanySitesTableDefinition` + `CompanySiteColumnCatalog` (colonne dichiarative) + collaboratore `CompanySiteAddressColumns` (city/province/region/postal_code/country derivate dall'indirizzo primario, clone di `CompanyAddressColumns` con join diretto addressable_type='company_site') + riga in `config/tables.php`. `mapRow` include `is_default` e `logo_url`.</item>
+      <item>Nodo navigazione `company-sites` in `config/navigation.php` (permission `company-sites.view`, icon token nuovo) + righe matrice in `RolePermissionSeeder` + `DemoCompanySiteSeeder` (in `DemoDataSeeder`, prefisso Demo, idempotente).</item>
+      <item>Frontend feature `features/company-sites/`: api.ts, types.ts, company-site-schema.ts (Zod factory: profilo + geo cascade + banks array), use-company-site-form-meta.ts, use-company-site-form.ts, company-site-form-payload.ts, company-site-form.tsx, company-site-form-body.tsx (multi-tab Profilo/Impostazioni/Banche/Altro via form-tab-strip) + moduli tab estratti (profile-tab, settings-tab, banks-tab, other-tab), banks-manager.tsx (clone di contacts-manager), company-sites-table.tsx (adapter), company-site-detail.tsx, column-renderers.tsx. Riuso: geo-select, avatar-upload (logo), async-paginated-select (responsabili users), MetaField, TableView, useResourceMeta, detail-panel, textarea.</item>
+      <item>Wiring FE: `pages/company-sites-page.tsx`, route lazy `company-sites` in `router.tsx`, `breadcrumbs.tsx` (`'company-sites': 'navigation.companySites'`), `navigation/icon-map.ts` (token), i18n en+it (`companySites.*`, `navigation.companySites`).</item>
+      <item>Test: BE Pest (Model/Policy/Authorization/Service ≥90%, Table/Controller ≥85%): migrazioni, morph, CRUD, address create/update, banks sync (add/edit/remove/diff), default esclusivo, logo upload/remove, field-permission enforcement (Altro non editabile → 422), table columns/rows/values, permissions:sync/navigation. FE Vitest (form multi-tab metadata, banks-manager add/remove, payload builder create/update diff, renderers, page gating, default button).</item>
+    </in>
+    <out>
+      <item>NESSUNA modifica ai framework generici (features/table, features/authorization, features/geo, components/data-table, app/Tables/Abstract*, app/Authorization/Abstract*, TableController, MetaController, rotte generiche, export engine). Solo config + nuove classi di dominio.</item>
+      <item>NESSUN endpoint `company-sites/for-select`.</item>
+      <item>NESSUNA gestione editabile dei campi "Altro" (read-only in questa spec; nessun nuovo `form_enums`/backed-enum ora). NESSUN picker per quotation_*/store/categorie/pagamenti/iva (target inesistenti): mostrati read-only.</item>
+      <item>NESSUN lookup automatico CAP→comune (il comune si sceglie via cascata, il CAP è libero).</item>
+      <item>NESSUNA modifica ai moduli esistenti (users/companies/personal-data/address/attachment): solo riuso.</item>
+      <item>NESSUNA migrazione dati effettiva da legacy in questa spec (solo la colonna `old_id` predisposta).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- ============ CRUD company-sites (CompanySiteController) ============ -->
+    <endpoint method="GET" path="/api/company-sites/{companySite}">
+      <request>path: id. auth:sanctum, throttle:60,1.</request>
+      <response status="200">
+        { success:true, message, data: CompanySite, permissions } dove CompanySite =
+        {
+          id:int, name:string, email:string, fiscal_code:string|null, vat_number:string|null,
+          phone:string|null, pec:string|null, fax:string|null, notes:string|null, is_default:bool,
+          logo_url:string|null,   // data-URI base64 o null
+          address: { id,line1,line2,postal_code, country_id,state_id,province_id,city_id,
+                     country,region,province,city, is_primary } | null,
+          banks: [{ id,name,iban,notes }],
+          default_bank_id:int|null,
+          responsible_rda_id:int|null, responsible_rda:{id,label}|null,
+          responsible_tickets_id:int|null, responsible_tickets:{id,label}|null,
+          responsible_validation_contracts_id:int|null, responsible_validation_contracts:{id,label}|null,
+          responsible_validation_contracts_two_id:int|null, responsible_validation_contracts_two:{id,label}|null,
+          proforma_progressive:int|null, invoice_progressive:int|null,
+          quotation_layout_id:int|null, quotation_header_id:int|null, quotation_footer_id:int|null,
+          // Altro (read-only)
+          company_id:int|null, accounting_manager_id:int|null, store_id:int|null,
+          company_type:int|null, commissions:int|null, order_sites:int|null,
+          payment_status_assign_technician:int|null, payment_status_deposit:int|null, payment_status_balance:int|null,
+          default_payment_id:int|null, default_vat_id:int|null,
+          other_category_id:int|null, iso_category_id:int|null, soa_category_id:int|null, sic_category_id:int|null,
+          avv_category_id:int|null, gdpr_category_id:int|null, res_category_id:int|null, pal_category_id:int|null,
+          quattro_category_id:int|null, finage_category_id:int|null, fondi_category_id:int|null, gare_category_id:int|null,
+          partnership_category_id:int|null, progetti_category_id:int|null,
+          status:int|null, color:string|null, surface_sqm:int|null,
+          created_at:string|null
+        }
+        permissions = { resource{view,create,update,delete,export,import}, fields{[key]{visible,hidden,editable,readonly,required,disabled}}, actions{delete,export,import,upload_logo,delete_logo,set_default} }
+      </response>
+      <errors>403 senza company-sites.view; 404.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/company-sites">
+      <request>
+        multipart/form-data se include il logo, altrimenti JSON. body:
+        {
+          name:string (required,max:191), email:string (required,email,max:191),
+          fiscal_code?:string|null(max:20), vat_number?:string|null(max:20), phone?:string|null(max:191),
+          pec?:string|null(max:191), fax?:string|null(max:191), notes?:string|null,
+          address?: { line1:string(required se address presente,max:255), line2?:string|null,
+                      postal_code?:string|null(max:20), country_id?:int|null(exists:countries),
+                      state_id?:int|null(exists:states), province_id?:int|null(exists:provinces),
+                      city_id?:int|null(exists:cities) },
+          banks?: [ { id?:int, name:string(required,max:191), iban?:string|null(max:50,formato IBAN),
+                      notes?:string|null(max:191) } ],
+          default_bank_id?:int|null (deve corrispondere a uno dei banks inviati),
+          responsible_rda_id?:int|null(exists:users), responsible_tickets_id?:int|null(exists:users),
+          responsible_validation_contracts_id?:int|null(exists:users),
+          responsible_validation_contracts_two_id?:int|null(exists:users),
+          proforma_progressive?:int|null, invoice_progressive?:int|null,
+          logo?:file(image,mimes:jpeg,png,gif,webp,max:attachments.max_size)
+          // I campi "Altro" e is_default NON sono accettati qui (Altro read-only; default via set-default).
+        }
+      </request>
+      <response status="201">{ success:true, message:'Created', data: CompanySite, permissions }</response>
+      <errors>403 senza company-sites.create; 422 validazione (name/email, geo/user id inesistenti, IBAN non valido, default_bank_id non tra i banks); 422 campo non editable (EnforcesFieldPermissions, es. un campo "Altro" inviato modificato).</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/company-sites/{companySite}">
+      <request>Come POST, tutti i campi `sometimes` (PATCH diff, solo chiavi presenti scritte). `address` presente riscrive l'unico indirizzo (update se esiste, create se assente). `banks` presente = lista AUTORITATIVA (righe senza id create, con id aggiornate, mancanti eliminate) via BankService::sync. `default_bank_id` risolto post-sync.</request>
+      <response status="200">{ success:true, message, data: CompanySite, permissions }</response>
+      <errors>403 senza company-sites.update; 404; 422 validazione o campo non editable.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/company-sites/{companySite}">
+      <request>path: id.</request>
+      <response status="204">no content. Cascade: indirizzo (HasAddresses), banks (FK cascade), logo (HasAttachments).</response>
+      <errors>403 senza company-sites.delete; 404.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/company-sites/{companySite}/set-default">
+      <request>Nessun body. Gated company-sites.update (+ action set_default).</request>
+      <response status="200">{ success:true, message, data: CompanySite (is_default=true), permissions } — in transazione azzera is_default di ogni altra sede e setta questa.</response>
+      <errors>403 senza update; 404.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/company-sites/{companySite}/logo">
+      <request>multipart, campo `logo` (image, mimes jpeg/png/gif/webp, max attachments.max_size). Gated update.</request>
+      <response status="200">{ success:true, message, data: CompanySite (logo_url aggiornato), permissions }</response>
+      <errors>403 senza update; 404; 422 file non valido.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/company-sites/{companySite}/logo">
+      <request>Nessun body. Gated update.</request>
+      <response status="200">{ success:true, message, data: CompanySite (logo_url=null), permissions }</response>
+      <errors>403 senza update; 404.</errors>
+    </endpoint>
+
+    <!-- ============ Generici (solo config + Definition/Authorization) ============ -->
+    <endpoint method="GET" path="/api/meta/company-sites">
+      <request>auth:sanctum, throttle:60,1. Gate `company-sites.viewAny`. Create-context (model null).</request>
+      <response status="200">
+        { success:true, data:{ fields:[{key,type,group,mandatory}] }, permissions }
+        fields (create-context) raggruppati: group 'profile' [name(text,mandatory), email(email,mandatory),
+        fiscal_code(text), vat_number(text), phone(text), pec(text), fax(text), notes(textarea), logo(image)],
+        'settings' [responsible_rda_id(select), responsible_tickets_id(select),
+        responsible_validation_contracts_id(select), responsible_validation_contracts_two_id(select),
+        default_bank_id(select), proforma_progressive(number), invoice_progressive(number),
+        quotation_layout_id(number,readonly), quotation_header_id(number,readonly),
+        quotation_footer_id(number,readonly)], 'banks' [banks(collection)], 'other' [tutti i campi
+        Altro con permesso visibleReadonly]. NB: address non è un field-permission key (l'indirizzo
+        segue il pattern di companies: chiave/gruppo `address` type collection).
+        permissions come nel GET show.
+      </response>
+      <errors>403 senza company-sites.viewAny; 404 resource non registrato.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/tables/company-sites/columns">
+      <request>Gate `company-sites.viewAny`.</request>
+      <response status="200">
+        { success, data:{ resource:'company-sites', columns:[...], filters:[...], actions:[...],
+          defaultSort:[{columnId:'created_at',direction:'desc'}], defaultPagination:{limit:25},
+          searchable:['name','email','vat_number'] } }
+        columns (id/type/visible/sortable/filterable/filterType):
+          id(number,hidden,filter number),
+          is_default(boolean,visible,sortable,filter set) — badge "Default",
+          name(text,visible,sortable,filter text,searchable),
+          email(text,visible,sortable,filter text,searchable),
+          vat_number(text,visible,sortable,filter text,searchable),
+          phone(text,visible,sortable,filter text),
+          city(text,visible,sortable,filter set) — derivata address primary,
+          province(text,hidden,sortable,filter set) — derivata,
+          region(text,hidden,sortable,filter set) — derivata,
+          postal_code(text,hidden,sortable,filter text) — derivata,
+          created_at(datetime,visible,sortable,filter date)
+        actions [view,edit,delete] filtrate per permesso.
+      </response>
+      <errors>403 senza company-sites.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/company-sites/rows">
+      <request>payload SSRM standard (offset/limit, sortModel, filterModel, search). Gate viewAny. Sort/filter/search SOLO da allow-list; geo derivato via whereHas/subquery; search OR-LIKE piatto su name/email/vat_number.</request>
+      <response status="200">
+        { success, data:{ items:[{ id, is_default, name, email, vat_number, phone, city, province,
+          region, postal_code, created_at, logo_url, actions:string[] }], pagination:{...} } }
+        city/province/region/postal_code derivati dall'indirizzo primario. actions per riga via Policy.
+        Eager loading indirizzo primario + geo (no N+1).
+      </response>
+      <errors>403 senza viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/company-sites/values">
+      <request>{ columnId (allow-list), search?, filterModel? }. Gate viewAny.</request>
+      <response status="200">{ success, data:{ values:string[] } } — distinti in-uso per le colonne set
+        (is_default, city, province, region), presi dagli indirizzi con addressable_type='company_site' is_primary per le geo.</response>
+      <errors>403; 422 columnId non consentito.</errors>
+    </endpoint>
+    <!-- preferences / filters / filter-views / export: pipeline generica, nessuna specifica aggiuntiva. -->
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- BACKEND -->
+    <criterion id="AC-001">Migrazione: esistono `company_sites` (colonne dello schema, incl. old_id unique nullable, is_default default false, FK users/companies/company_site_banks nullOnDelete) e `company_site_banks` (company_site_id cascade); `down()` rimuove entrambe nell'ordine corretto. (Pest schema/migration + rollback)</criterion>
+    <criterion id="AC-002">Model `CompanySite`: `addresses()` MorphMany, `logo()` MorphOne collection 'logo', `banks()` HasMany, `defaultBank()`/`responsible*`/`accountingManager`/`company` BelongsTo; morph alias `company_site` risolve; `company_site` nell'allowlist attachments; LogsModelActivity attivo; cascade su delete rimuove indirizzo+banks+logo. (Pest unit + feature)</criterion>
+    <criterion id="AC-003">GET /tables/company-sites/columns con viewAny → colonne nell'ordine e coi flag dichiarati (is_default/city/province/region set, name/email/vat_number/phone/postal_code text, created_at date), searchable=['name','email','vat_number']; senza viewAny → 403. (Pest)</criterion>
+    <criterion id="AC-004">POST /tables/company-sites/rows → ogni row espone is_default, name, email, vat_number, phone, city/province/region/postal_code derivati dall'indirizzo primario, logo_url, actions[] coerenti con la Policy; nessun N+1 (query count costante). (Pest rows + preventLazyLoading)</criterion>
+    <criterion id="AC-005">/values su city|province|region → nomi geo distinti in uso tra i soli indirizzi 'company_site' is_primary; is_default → valori distinti; columnId fuori allow-list → 422; sort/filter set su geo funziona via whereHas/subquery (nessun *Raw su input). (Pest derived filter/sort/values)</criterion>
+    <criterion id="AC-006">GET /meta/company-sites con viewAny → fields raggruppati profile/settings/banks/other coi mandatory su name+email e i campi 'other' con permesso readonly; senza viewAny → 403. (Pest)</criterion>
+    <criterion id="AC-007">POST /company-sites con name+email(+address+banks) e company-sites.create → 201; creati sito, indirizzo primario (via AddressService), banks (via BankService::sync), default_bank_id risolto ⊆ banks; senza create → 403; name/email mancanti o geo/user id inesistenti o IBAN invalido o default_bank_id estraneo → 422. (Pest create)</criterion>
+    <criterion id="AC-008">PATCH parziale: solo i campi inviati sono scritti; `address` aggiorna l'unico indirizzo (non duplica); `banks` autoritativo (add/update/delete diff), righe con id altrui non aggiornabili; `default_bank_id` coerente post-sync. (Pest update + BankService diff)</criterion>
+    <criterion id="AC-009">Field-permission: un attore con update che invia un campo 'other' (es. company_type) MODIFICATO → 422 "field not editable" (ceiling readonly); un campo reso non-editable dalla matrice DB → 422; senza update base → 403 prima di ogni 422. (Pest EnforcesFieldPermissions)</criterion>
+    <criterion id="AC-010">POST /company-sites/{id}/set-default con update → is_default=true su questa e false su TUTTE le altre in una transazione (invariante: al più una default); senza update → 403; 404 id inesistente. (Pest setDefault esclusivo)</criterion>
+    <criterion id="AC-011">Logo: POST /company-sites/{id}/logo (image) con update → attachment collection 'logo' creato, i precedenti rimossi, logo_url = data-URI; DELETE → logo_url null; file non-immagine o troppo grande → 422; senza update → 403. (Pest logo upload/remove come avatar)</criterion>
+    <criterion id="AC-012">DELETE /company-sites/{id} con delete → 204 e indirizzo+banks+logo rimossi; senza delete → 403; 404. (Pest destroy + cleanup)</criterion>
+    <criterion id="AC-013">Dopo permissions:sync → esistono company-sites.{viewAny,view,create,update,delete,export,import}; il seeder assegna le matrici ruolo; il nodo /company-sites appare in GET /navigation solo con company-sites.view; super-admin bypassa via Gate::before. (Pest SyncPermissions + Navigation)</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-014">Pagina Società Sedi: senza company-sites.viewAny `<Can>` mostra il fallback e non monta la tabella; con il permesso monta `<TableView domain="company-sites">`; il pulsante "nuova sede" è dietro `<Can permission="company-sites.create">`. (Vitest page gating)</criterion>
+    <criterion id="AC-015">Griglia: la row mostra il badge is_default ("Default"), name/email/vat_number/phone e city/province derivati; toolbar/search/filtri excel/export presenti come negli altri moduli (componenti generici, nessun restyle). (Vitest renderer + presenza toolbar/export)</criterion>
+    <criterion id="AC-016">Form create multi-tab: tab Profilo (campi + logo via avatar-upload deferred + cascata geo via geo-select), Impostazioni (responsabili via async-paginated-select su users, progressivi, default_bank_id da select client-side popolato dai banks del tab Banche, quotation_* read-only), Banche (banks-manager add/edit/remove), Altro (campi read-only). I MetaField derivano visibilità/editabilità da useResourceMeta('company-sites'). Un tab con errori mostra il TabErrorDot. (Vitest form create metadata + tab)</criterion>
+    <criterion id="AC-017">Form edit: idratato dal detail; un campo hidden assente, readonly non editabile, required con asterisco; la cascata geo pre-idratata; i banks pre-caricati nel manager; un 422 server mappato inline via applyServerValidationErrors. (Vitest form edit + idratazione)</criterion>
+    <criterion id="AC-018">Banks-manager (clone di contacts-manager): aggiungere/modificare/eliminare righe nel buffer aggiorna lo stato del form; l'IBAN è validato client-side (schema Zod) coerente col server; default_bank_id offre solo i banks presenti nel buffer. (Vitest banks-manager)</criterion>
+    <criterion id="AC-019">Payload builder: create invia name/email/profilo/address/banks/default_bank_id/responsabili/progressivi (+ logo separato se presente); update = diff PATCH (solo campi cambiati; banks inviati solo se modificati; campi 'other' mai inviati). (Vitest payload create/update)</criterion>
+    <criterion id="AC-020">Pulsante "Società di Default": nel detail/edit compare SOLO se la sede non è is_default; il click chiama POST set-default, invalida le query e aggiorna la tabella (la vecchia default perde il flag). (Vitest default button behavior)</criterion>
+    <criterion id="AC-021">Wiring: la voce menu "Società Sedi" appare backend-driven con icona mappata; route `/company-sites` lazy; breadcrumb con label i18n; chiavi `companySites.*`/`navigation.companySites` presenti in en.ts e it.ts. (Vitest/typecheck + ispezione)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie già presenti (composer/npm). Nessuna nuova dipendenza.</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/route/permessi/resource key/campi). Label UI italiane solo via i18n. Resource=`company-sites`, model CompanySite, tabelle company_sites/company_site_banks, morph company_site.</item>
+    <item>Authz server-side su OGNI endpoint (CompanySitePolicy/authorize); l'UI nasconde, il backend autorizza. Campi "Altro" read-only enforced server-side (ceiling visibleReadonly + EnforcesFieldPermissions), non solo lato UI.</item>
+    <item>Nessun nuovo controller/route generico: tabella/meta/field-catalogue/saved-views/preferenze/filtri/export dalla pipeline esistente (config + Definition/Authorization).</item>
+    <item>Ordinamento/filtri/search derivati da allow-list di colonne + whereHas/subquery parametrizzate — mai orderByRaw/interpolazione su input. Cardinalità WHERE IN dei set-filter limitata (come UserGeoColumns::MAX_FILTER_VALUES).</item>
+    <item>Mass assignment: `$fillable` esplicito su entrambi i model; nessun raw model in output (solo Resource); envelope { success, message, data, permissions? } rispettato; errori senza leak di classi interne.</item>
+    <item>Invarianti delegate a service riusati/coerenti: single-primary address (AddressService), single logo (LogoService, pattern avatar), banks diff-by-id (BankService, pattern ContactService), single-default (CompanySiteService::setDefault in transazione). Ciclo default_bank_id↔banks risolto post-sync nella stessa transazione. `CompanySite` nel morphMap strict o l'app lancia.</item>
+    <item>Upload: regola `image` + `mimes:jpeg,png,gif,webp` + `max:attachments.max_size`; il MIME reale è validato server-side (allowlist config/attachments.php). File salvato su disco privato, servito come data-URI (mai path statico).</item>
+    <item>File ≤300 righe soft / 500 hard: split obbligatorio (TableDefinition→ColumnCatalog+AddressColumns; form→body+tab modules+hook+payload; migration company_sites grande = solo colonne, accettabile). Dead code zero, nessuna emoticon. Pint + ESLint + `tsc --noEmit` puliti.</item>
+    <item>Coverage per-layer (backend.md §8): Policy/FormRequest ≥95/90, Authorization/Service ≥90, Controller/Table ≥85. Test ESEGUITI davvero (Pest/Vitest).</item>
+    <item>Ownership file disgiunta tra teammate. Questo contratto = punto di sincronizzazione congelato: backend (backend/) e frontend (frontend/src/) procedono in parallelo; il verifier è il cancello indipendente prima del checkpoint git. Delta residui peer-to-peer via SendMessage.</item>
+  </constraints>
+
+</spec>

@@ -23,6 +23,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   users: 'navigation.users',
   roles: 'navigation.roles',
   companies: 'navigation.companies',
+  'company-sites': 'navigation.companySites',
   'business-functions': 'navigation.businessFunctions',
   attributes: 'navigation.attributes',
   'product-categories': 'navigation.productCategories',

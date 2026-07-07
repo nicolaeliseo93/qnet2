@@ -88,6 +88,15 @@ return [
                             'permission' => 'companies.view',
                         ],
                         [
+                            // Company Sites (spec 0020): flexible site
+                            // anagraphic under a Company.
+                            'key' => 'company-sites',
+                            'label' => 'navigation.companySites',
+                            'icon' => 'building-2',
+                            'route' => '/company-sites',
+                            'permission' => 'company-sites.view',
+                        ],
+                        [
                             'key' => 'operational-sites',
                             'label' => 'navigation.operationalSites',
                             'icon' => 'map-pin',
