@@ -8,6 +8,9 @@ import { exports } from './it-exports'
 import { table } from './it-table'
 import { referents, referentTypes } from './it-referents'
 import { attributes, productCategories, products } from './it-products'
+import { eaSectors } from './it-ea-sectors'
+import { sources } from './it-sources'
+import { tags } from './it-tags'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -50,7 +53,10 @@ export const it: TranslationResources = {
     operationalSites: 'Sedi operative',
     attributes: 'Attributi',
     productCategories: 'Categorie Prodotto',
+    eaSectors: 'Settori EA',
     products: 'Prodotti',
+    sources: 'Fonti',
+    tags: 'Tag',
     faCompaniesServices: 'FA Società & Servizi',
     settings: 'Impostazioni',
     toggleSidebar: 'Apri/chiudi sidebar',
@@ -438,5 +444,8 @@ export const it: TranslationResources = {
   referentTypes,
   attributes,
   productCategories,
+  eaSectors,
   products,
+  sources,
+  tags,
 }

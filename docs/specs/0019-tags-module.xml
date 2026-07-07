@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0019" title="Tags module (reusable polymorphic lookup/support table)">
+  <meta>
+    <status>approved</status>
+    <date>2026-07-07</date>
+    <summary>
+      New standalone lookup/support table "Tags", a thin adapter over the generic
+      table/authorization/for-select framework, mirroring the Sources module (spec 0018)
+      and ReferentTypes (spec 0016) 1:1. Single business field: name (required text).
+      Unlike Sources, Tags are REUSABLE: a Tag attaches to any entity through a POLYMORPHIC
+      `taggables` pivot. First producer wired now = Referents (spec 0016), so the module is
+      real and its delete-guard is testable. Deleting a Tag that is attached to at least one
+      record is BLOCKED with an explicit 409 message.
+    </summary>
+    <decisions>
+      <decision>Model=Tag, table=tags, resource key / permission prefix / i18n namespace /
+        table domain = "tags", route param {tag}.</decision>
+      <decision>User-approved (AskUserQuestion): association is POLYMORPHIC via a `taggables`
+        pivot (tag_id + taggable morph), so a Tag is attachable to ANY entity without schema
+        changes. Delete is blocked if ANY taggables row references the tag.</decision>
+      <decision>User-approved: minimal initial wiring on the EA-Sectors ("settori attività") side to
+        produce real associations — EaSector morphToMany(Tag,'taggable'); the ea-sector create/edit
+        form gains a `tag_ids` multi-select. No other module is wired now (extensible later).</decision>
+      <decision>CORRECTION (2026-07-07, post-build): tags were first mis-wired to Referents. The
+        producer is EaSector, NOT Referent. The Referent tag wiring (relation, tag_ids field, form
+        multi-select, resource keys, tagging tests) is fully REMOVED; the identical wiring is added to
+        EaSector. The standalone Tag module and the polymorphic `taggables` pivot are unchanged.</decision>
+      <decision>Delete-guard pattern mirrors spec 0017 ProductCategoryService::delete:
+        TagService::delete checks dependents via ->exists() and abort(409, friendly message);
+        frontend runDelete branches 409|422 -> deleteInUse toast, 403 -> deleteForbidden toast.</decision>
+      <decision>No old_id / external-migration source now (add later if Tags needs import).</decision>
+    </decisions>
+  </meta>
+
+  <data-model>
+    <table name="tags">
+      <column name="id" type="bigint" pk="true"/>
+      <column name="name" type="string" nullable="false"/>
+      <column name="created_at" type="timestamp"/>
+      <column name="updated_at" type="timestamp"/>
+    </table>
+    <table name="taggables" note="polymorphic pivot; taggable_id has NO db FK (morph); tag_id restrictOnDelete as a db-level backstop behind the service guard">
+      <column name="tag_id" type="bigint" nullable="false" fk="tags.id restrictOnDelete"/>
+      <column name="taggable_id" type="bigint" nullable="false"/>
+      <column name="taggable_type" type="string" nullable="false"/>
+      <unique columns="tag_id, taggable_id, taggable_type"/>
+      <index columns="taggable_id, taggable_type" note="morph lookup"/>
+      <note>No timestamps needed. up+down reversible.</note>
+    </table>
+  </data-model>
+
+  <permissions prefix="tags">
+    <permission>tags.viewAny</permission>
+    <permission>tags.view</permission>
+    <permission>tags.create</permission>
+    <permission>tags.update</permission>
+    <permission>tags.delete</permission>
+    <permission>tags.export</permission>
+    <permission>tags.import</permission>
+    <note>Generated automatically by permissions:sync from TagPolicy + the navigation entry.
+      No manual permission-string list.</note>
+    <field-permissions>
+      <field name="name" type="text" mandatory="true"/>
+    </field-permissions>
+  </permissions>
+
+  <api base="/api" throttle="60,1">
+    <endpoint method="GET" path="/tags/for-select" ability="viewAny"
+      note="declared FIRST so the literal wins over the {tag} wildcard"/>
+    <endpoint method="GET" path="/tags/{tag}" ability="view"/>
+    <endpoint method="POST" path="/tags" ability="create" response="201"/>
+    <endpoint method="PUT|PATCH" path="/tags/{tag}" ability="update"/>
+    <endpoint method="DELETE" path="/tags/{tag}" ability="delete" response="204"
+      note="409 if attached to any record (taggables exists)"/>
+    <endpoint method="GET" path="/meta/tags" note="generic MetaController via TagsAuthorization"/>
+    <endpoint path="table domain 'tags'" note="generic TableController via TagsTableDefinition"/>
+  </api>
+
+  <contract>
+    <resource name="TagResource">{ id, name, created_at }</resource>
+    <resource name="TagForSelectResource">{ id, label:name }</resource>
+    <create-payload>{ name: string }</create-payload>
+    <update-payload>{ name?: string }</update-payload>
+    <validation field="name">required|string|max:191 (update: sometimes|required|string|max:191)</validation>
+    <table domain="tags">
+      <column id="name" type="text" sortable="true" filterType="text" searchable="true"/>
+      <column id="created_at" type="datetime" sortable="true" filterType="date"/>
+      <default-sort>name asc</default-sort>
+      <row-actions>view, edit, delete (gated by policy)</row-actions>
+      <export enabled="true" note="generic export via table framework"/>
+    </table>
+    <ea-sector-wiring note="minimal producer of associations — EaSector is the taggable entity">
+      <relation>EaSector morphToMany(Tag::class, 'taggable') as tags()</relation>
+      <relation>Tag morphedByMany(EaSector::class, 'taggable') as eaSectors() [used only for cleanliness/tests]</relation>
+      <hook>EaSector 'deleting' model event detaches its tags (pivot cleanup; taggable_id has no db FK)</hook>
+      <payload>EaSector Store/Update gains optional tag_ids: number[] (each exists:tags,id); EaSectorService syncs via tags()->sync()</payload>
+      <resource>EaSectorResource exposes tags: [{ id, name }] AND tag_ids: number[] (detail + edit-form hydration/default value)</resource>
+      <authorization>EaSectorsAuthorization gains field tag_ids type 'multiselect' honoring the field-permission matrix</authorization>
+      <frontend>EaSector create/edit form gains a tags multi-select bound to /tags/for-select; schema tag_ids: number[] optional; payload builders send tag_ids on create and diff on update</frontend>
+      <removed>ALL Referent tag wiring is removed: Referent::tags() + deleting hook, tagIds in Create/UpdateReferentData, tag_ids rules in Store/UpdateReferentRequest, ReferentService sync, tags/tag_ids in ReferentResource, tag_ids field in ReferentsAuthorization, ReferentMetaTest field-list revert, ReferentTaggingTest deleted; frontend features/referents tag_ids in types/schema/payload/use-referent-form/form-details-tab/form-body + referents i18n tag strings + test fixtures.</removed>
+    </ea-sector-wiring>
+  </contract>
+
+  <acceptance-criteria>
+    <ac id="AC-001">Migration creates tags + taggables tables; up+down reversible; taggables has unique(tag_id,taggable_id,taggable_type).</ac>
+    <ac id="AC-002">Full CRUD via REST returns the standard envelope; store=201, destroy=204.</ac>
+    <ac id="AC-003">Every endpoint authorizes server-side; user without permission -> 403.</ac>
+    <ac id="AC-004">GET /meta/tags returns field metadata (name text, mandatory) honoring the per-role field-permission matrix.</ac>
+    <ac id="AC-005">Table domain 'tags' returns rows with name+created_at, supports filter/sort/search; generic export works.</ac>
+    <ac id="AC-006">for-select returns { id, label } paginated + hydrates explicit ids.</ac>
+    <ac id="AC-007">DELETE /tags/{tag} on a tag attached to >=1 record returns 409 with an explicit message and does NOT delete; DELETE on an unattached tag returns 204.</ac>
+    <ac id="AC-008">An EaSector can be created/updated with tag_ids; the pivot reflects the selection; EaSectorResource returns tags + tag_ids; deleting an EaSector detaches its tags (no orphan pivot rows). Referents no longer have any tag field.</ac>
+    <ac id="AC-009">Frontend: tags list page (grid + toolbar), create/edit/view sheet forms, Can-gated New button and route, i18n en/it, deleteForbidden(403) + deleteInUse(409) toasts; the EA-SECTOR form shows a working tags multi-select; the referent form no longer shows a tags field.</ac>
+    <ac id="AC-010">Navigation entry tags -> /tags visible with tags.view.</ac>
+    <ac id="AC-011">Backend Pest (crud, for-select, meta, security, table, delete-guard, referent-tagging) + frontend vitest green; Pint + tsc + ESLint clean.</ac>
+  </acceptance-criteria>
+</spec>

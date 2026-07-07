@@ -1,0 +1,21 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Abstracts\BaseModel;
+use App\Models\Concerns\LogsModelActivity;
+use Database\Factories\SourceFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
+/**
+ * Source lookup entity (spec 0018): a full-CRUD classification (name only)
+ * used to classify the provenance of registry records ("Anagrafiche"). The
+ * target foreign key is deferred until that entity exists (see spec 0018).
+ */
+#[Fillable(['name'])]
+class Source extends BaseModel
+{
+    /** @use HasFactory<SourceFactory> */
+    use HasFactory, LogsModelActivity;
+}

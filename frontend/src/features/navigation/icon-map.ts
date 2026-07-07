@@ -11,8 +11,10 @@ import {
   Package,
   ShieldCheck,
   SlidersHorizontal,
+  Tag,
   Tags,
   Users,
+  Waypoints,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -30,7 +32,9 @@ const iconMap: Record<string, LucideIcon> = {
   layers: Layers,
   'database-zap': DatabaseZap,
   'contact-round': ContactRound,
+  tag: Tag,
   tags: Tags,
+  waypoints: Waypoints,
   'sliders-horizontal': SlidersHorizontal,
   'list-tree': ListTree,
   package: Package,

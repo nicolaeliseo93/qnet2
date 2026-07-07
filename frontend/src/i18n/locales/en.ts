@@ -15,6 +15,9 @@ import { exports } from './en-exports'
 import { table } from './en-table'
 import { referents, referentTypes } from './en-referents'
 import { attributes, productCategories, products } from './en-products'
+import { eaSectors } from './en-ea-sectors'
+import { sources } from './en-sources'
+import { tags } from './en-tags'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -57,7 +60,10 @@ export const en = {
     operationalSites: 'Operational Sites',
     attributes: 'Attributes',
     productCategories: 'Product Categories',
+    eaSectors: 'EA Sectors',
     products: 'Products',
+    sources: 'Sources',
+    tags: 'Tags',
     faCompaniesServices: 'FA Companies & Services',
     settings: 'Settings',
     toggleSidebar: 'Toggle sidebar',
@@ -453,7 +459,10 @@ export const en = {
   referentTypes,
   attributes,
   productCategories,
+  eaSectors,
   products,
+  sources,
+  tags,
 }
 
 export type TranslationResources = typeof en

@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0018 — Modulo "Settori EA" (EA Sectors).
+  Contract-first. Naming identificatori in INGLESE (ea_sectors / EaSector / ea-sectors),
+  label UI "Settori EA" via i18n. Adapter sottile sui motori generici (table/authorization/
+  navigation), ZERO modifiche ai motori generici. Template: modulo product-categories
+  (gerarchia self-referencing) alleggerito + adapter tabellare stile referent-types.
+-->
+<spec id="0018-ea-sectors-module" status="draft" owner="qualifica.ia" date="2026-07-07">
+
+  <goal>
+    Fornire un modulo CRUD "Settori EA" — tabella di supporto (lookup) del dominio
+    Anagrafiche — con struttura gerarchica self-referencing padre/figlio a profondita
+    illimitata, per classificare in futuro le Anagrafiche in modo ordinato ed estendibile.
+    Solo la tabella: nessuna associazione con altre entita in questa spec.
+  </goal>
+
+  <context>
+    Stack e convenzioni: vedi CLAUDE.md + rules/. Envelope di progetto e permessi/campi
+    gestiti dai motori generici gia esistenti. Decisioni congelate (AskUserQuestion 2026-07-07):
+    - Identificatori: tabella `ea_sectors`, model `EaSector`, dominio `ea-sectors`,
+      route `/api/ea-sectors`. Label UI "Settori EA".
+    - Nessuna relazione con Referent (Anagrafiche) ORA: solo la tabella standalone.
+    Template reali verificati nel repo (da riusare, non reinventare):
+    - Backend gerarchia: `ProductCategory` + `ProductCategoryService` + `CategoryHierarchy`
+      (walk parent_id, MAX_DEPTH, anti-cycle `isAncestorOf`), migration self-FK
+      `parent_id -> product_categories restrictOnDelete` + index `[parent_id, name]`,
+      `ProductCategoriesTableDefinition` + `ProductCategoryColumnCatalog` (colonna `parent`
+      DERIVATA: filtro `whereHas('parent', whereIn name)`, sort via subquery self-join),
+      `ProductCategoriesAuthorization` (fields name/parent_id), Policy estende BasePolicy
+      (`resource()`), DTO Create/Update con flag `*Submitted` per PATCH nullable.
+    - Registrazioni: `config/tables.php`, `config/authorization.php`, `config/navigation.php`
+      (gruppo `referents-group`), morph map in `AppServiceProvider`. Permessi auto-generati
+      da `permissions:sync` (BasePolicy + navigation) — nessun seed manuale.
+    - Frontend gerarchia: `features/product-categories/` — `SearchableSelect`
+      (`components/ui/searchable-select`) alimentato da `GET /product-categories/tree`
+      + `flatten-tree` (opzioni indentate, sentinel ROOT=0) + `collectSubtreeIds`
+      (esclude il proprio sottoalbero in edit = anti-cycle UX). Tabella server-driven via
+      `TableView` (domain-based) + adapter sottile (stile `referent-types-table.tsx`).
+    - i18n: side file importato negli aggregatori `it.ts`/`en.ts`; `navigation.*` inline.
+    - Routing FE: `router.tsx` (lazy page) + `pages/<x>-page.tsx` (Can-gated) +
+      `breadcrumbs.tsx` SEGMENT_LABELS; sidebar server-driven (backend navigation).
+    Campi del modulo: SOLO `name` (string) e `parent_id` (self-FK nullable). Nessuna
+    `description` (non richiesta, YAGNI).
+  </context>
+
+  <scope>
+    <in>
+      <item>Migration `create_ea_sectors_table`: `id`, `name` string(191), `parent_id`
+        nullable self-FK -> `ea_sectors` `restrictOnDelete`, `timestamps`, index `[parent_id, name]`.</item>
+      <item>Model `EaSector` (BaseModel; `#[Fillable(['name','parent_id'])]`; HasFactory;
+        LogsModelActivity; relazioni `parent()` BelongsTo self, `children()` HasMany self)
+        + morph alias `ea_sector` in AppServiceProvider.</item>
+      <item>`EaSectorService` (create/update/delete in transazione) + `EaSectors/EaSectorHierarchy`
+        (walk parent_id con MAX_DEPTH, `isAncestorOf`, `tree()` nested per il picker).</item>
+      <item>DTO `EaSectors/CreateEaSectorData` e `UpdateEaSectorData` (flag `parentIdSubmitted`
+        per PATCH nullable, come UpdateProductCategoryData).</item>
+      <item>FormRequest `EaSectors/StoreEaSectorRequest` e `UpdateEaSectorRequest`
+        (EnforcesFieldPermissions; `authorizationResource() = 'ea-sectors'`).</item>
+      <item>`EaSectorResource` (id, name, parent_id, parent{id,name}|null, created_at).</item>
+      <item>Policy `EaSectorPolicy` extends BasePolicy (`resource() = 'ea-sectors'`).</item>
+      <item>Controller `EaSectors/EaSectorController` (tree, show, store, update, destroy)
+        con authz per-metodo e `okWithPermissions`.</item>
+      <item>Route block in `routes/api.php` (`ea-sectors/tree` PRIMA del wildcard
+        `{eaSector}`), dentro il gruppo throttle esistente.</item>
+      <item>`EaSectorsTableDefinition` + `EaSectors/EaSectorColumnCatalog` (colonne `name`,
+        `parent` DERIVATA, `created_at`; filtri/sort/distinct come product-categories;
+        `deleteModel()` delega al Service per rispettare il guard in bulk-delete)
+        registrata in `config/tables.php`.</item>
+      <item>`EaSectorsAuthorization` (fields `name` mandatory, `parent_id` select; actions
+        delete/export/import) registrata in `config/authorization.php` (abilita permessi CRUD
+        e permessi sui campi + assegnabilita nel form Ruoli).</item>
+      <item>Voce navigation sotto `referents-group` in `config/navigation.php`
+        (key `ea-sectors`, route `/ea-sectors`, permission `ea-sectors.view`, icon `list-tree`).</item>
+      <item>Delete guard: bloccato se il settore ha figli (409 + messaggio esplicativo).</item>
+      <item>Anti-cycle in update: 422 se `parent_id` = se stesso o un proprio discendente.</item>
+      <item>Export: fornito dal motore generico (action + permesso `ea-sectors.export`),
+        nessun codice dedicato oltre la registrazione TableDefinition.</item>
+      <item>Frontend `features/ea-sectors/` completo: api, types, zod schema, query-keys,
+        use-ea-sector-tree, flatten-tree, form (create/edit/view) con `SearchableSelect`
+        per parent, adapter tabellare `ea-sectors-table.tsx`, column-renderers, hook meta/form.</item>
+      <item>Page `pages/ea-sectors-page.tsx` (Can-gated) + route `ea-sectors` in `router.tsx`
+        + SEGMENT_LABELS in `breadcrumbs.tsx`.</item>
+      <item>i18n `it-ea-sectors.ts` / `en-ea-sectors.ts` (blocco `eaSectors`) importati negli
+        aggregatori + `navigation.eaSectors` inline in `it.ts`/`en.ts`.</item>
+      <item>Factory `EaSectorFactory` (+ state `childOf`) e test Pest/Vitest per gli AC.</item>
+    </in>
+    <out>
+      <item>Qualsiasi relazione tra EaSector e Referent/Anagrafica (colonna/pivot,
+        wiring del placeholder "Settori attivita" nel form Referent). RINVIATA a spec futura.</item>
+      <item>Guard di cancellazione "associato ad almeno un'Anagrafica": non implementabile ora
+        (nessuna relazione). Il guard corrente copre SOLO i figli; sara esteso quando la
+        relazione arrivera.</item>
+      <item>Endpoint `for-select` di ea-sectors per consumo da altri moduli. RINVIATO
+        (nessun consumatore ora; il picker parent usa `/tree` + SearchableSelect).</item>
+      <item>Campo `description` o altri campi oltre `name`/`parent_id`.</item>
+      <item>Import massivo dedicato (l'action import generica resta disponibile ma non e
+        oggetto di test/AC in questa spec).</item>
+      <item>Modifiche ai motori generici (table engine, authorization engine, navigation engine).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Envelope di progetto: { success, message, data } salvo dove indicato.
+         Le route generiche /api/tables/ea-sectors/* e /api/meta/ea-sectors derivano
+         automaticamente dalla registrazione (stesso contratto degli altri domini). -->
+
+    <endpoint method="GET" path="/api/ea-sectors/tree">
+      <request>Nessun parametro. Authz: ea-sectors.viewAny.</request>
+      <response status="200">
+        data: EaSectorTreeNode[] (radici). EaSectorTreeNode = {
+          id: number, name: string, parent_id: number|null,
+          children: EaSectorTreeNode[]
+        }. Ordinamento per name. Profondita illimitata.
+      </response>
+      <errors>403 senza ea-sectors.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/ea-sectors/{eaSector}">
+      <request>Route model binding. Authz: ea-sectors.view.</request>
+      <response status="200">
+        data: { id, name, parent_id: number|null, parent: {id,name}|null, created_at }.
+        permissions: ResourcePermissions (CRUD + campi) via okWithPermissions.
+      </response>
+      <errors>403 senza ea-sectors.view; 404 id inesistente.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/ea-sectors">
+      <request>
+        body: { name: string (required, max 191), parent_id?: number|null (exists:ea_sectors,id) }.
+        Authz: ea-sectors.create. Campi filtrati da EnforcesFieldPermissions.
+      </request>
+      <response status="201">data: EaSectorResource (come show, con permissions).</response>
+      <errors>403 senza create; 422 name mancante/troppo lungo o parent_id inesistente.</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/ea-sectors/{eaSector}">
+      <request>
+        body parziale: { name?: string, parent_id?: number|null }. `parent_id` distingue
+        "non inviato" da "inviato null" (flag Submitted nel DTO). Authz: ea-sectors.update.
+      </request>
+      <response status="200">data: EaSectorResource aggiornata (con permissions).</response>
+      <errors>
+        403 senza update; 404 inesistente;
+        422 validazione; 422 anti-cycle (parent_id = self o discendente) con messaggio esplicativo.
+      </errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/ea-sectors/{eaSector}">
+      <request>Route model binding. Authz: ea-sectors.delete.</request>
+      <response status="204">Nessun corpo.</response>
+      <errors>
+        403 senza delete; 404 inesistente;
+        409 se il settore ha figli — messaggio esplicativo (es. "Questo settore ha
+        sotto-settori e non puo essere eliminato."). Envelope { success:false, message }.
+      </errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/ea-sectors/rows">
+      <request>Generico SSRM (start/end/sort/filter/search). Authz: ea-sectors.viewAny.</request>
+      <response status="200">
+        rows con shape mapRow: { id, name, parent: {id,name}|null, created_at, __actions }.
+        Colonna `parent` derivata: filtrabile (set, whereHas) e ordinabile (subquery self-join).
+      </response>
+      <errors>403 senza viewAny; 422 columnId non in allow-list su distinct/sort.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- Backend (Pest) -->
+    <criterion id="AC-001">La migration crea la tabella `ea_sectors` con colonne `id, name,
+      parent_id (nullable), created_at, updated_at`, self-FK su parent_id con restrictOnDelete
+      e index [parent_id, name]; `down()` la rimuove (up/down reversibili). (test: Unit model/schema)</criterion>
+    <criterion id="AC-002">`EaSector`: `parent()` e BelongsTo(self, parent_id), `children()`
+      e HasMany(self, parent_id); `#[Fillable]` = [name, parent_id]; LogsModelActivity attivo;
+      morph alias `ea_sector` registrato. (test: Unit relazioni/fillable/morph)</criterion>
+    <criterion id="AC-003">POST /api/ea-sectors con name valido e parent_id null crea un
+      settore radice -> 201, data.parent = null. (test: Feature CRUD happy path)</criterion>
+    <criterion id="AC-004">POST /api/ea-sectors con parent_id di un settore esistente crea un
+      figlio -> 201, data.parent = {id,name} del padre. (test: Feature CRUD)</criterion>
+    <criterion id="AC-005">POST senza name -> 422; con parent_id inesistente -> 422. (test: Feature error path)</criterion>
+    <criterion id="AC-006">POST/PATCH/DELETE senza il permesso corrispondente -> 403;
+      GET show/tree senza viewAny/view -> 403; show di id inesistente -> 404. (test: Feature authz)</criterion>
+    <criterion id="AC-007">PATCH aggiorna name e/o sposta parent_id (incluso set a null =
+      promuove a radice) -> 200 con shape aggiornata. (test: Feature CRUD update parziale)</criterion>
+    <criterion id="AC-008">PATCH con parent_id = se stesso -> 422; con parent_id = un proprio
+      discendente -> 422 (anti-cycle), messaggio esplicativo. (test: Feature anti-cycle)</criterion>
+    <criterion id="AC-009">DELETE di un settore foglia (senza figli) -> 204 e riga rimossa.
+      (test: Feature delete happy path)</criterion>
+    <criterion id="AC-010">DELETE di un settore CON figli -> 409, envelope
+      { success:false, message } con messaggio esplicativo; la riga NON viene rimossa.
+      (test: Feature delete guard)</criterion>
+    <criterion id="AC-011">GET /api/ea-sectors/tree -> 200, albero nested radici->children a
+      piu livelli, ordinato per name, ogni nodo { id, name, parent_id, children[] }.
+      (test: Feature tree)</criterion>
+    <criterion id="AC-012">GET /tables/ea-sectors/columns espone colonne name, parent,
+      created_at; senza viewAny -> 403. (test: Feature table config/authz)</criterion>
+    <criterion id="AC-013">POST /tables/ea-sectors/rows: filtro `set` su `parent` (whereHas su
+      nome padre) e ordinamento su `parent` (subquery) funzionano; distinct-values su colonna
+      non in allow-list -> 422; nessun N+1 sul parent (eager load). (test: Feature table)</criterion>
+    <criterion id="AC-014">Bulk-delete via tabella rispetta il guard figli (delega al Service):
+      un settore con figli non viene eliminato in massa. (test: Feature table bulk-delete)</criterion>
+    <criterion id="AC-015">`permissions:sync` crea i 7 permessi `ea-sectors.*`
+      (viewAny/view/create/update/delete/export/import); la voce navigation `ea-sectors` e
+      visibile solo con `ea-sectors.view`. (test: Feature security/navigation)</criterion>
+    <criterion id="AC-016">Field permissions: EnforcesFieldPermissions blocca la scrittura di
+      un campo non consentito dal ceiling; `name` resta required nel ceiling readonly.
+      (test: Feature field-permission)</criterion>
+    <!-- Frontend (Vitest) -->
+    <criterion id="AC-017">Il form create/edit rende i campi `name` (Input) e `parent_id`
+      (SearchableSelect ricercabile con opzione "Nessun settore padre" = radice), meta-driven
+      via MetaField; validazione zod (name min 1 / max 191). (test: Vitest form)</criterion>
+    <criterion id="AC-018">In edit il SearchableSelect esclude il nodo stesso e il suo
+      sottoalbero (collectSubtreeIds) dalle opzioni parent. (test: Vitest form edit)</criterion>
+    <criterion id="AC-019">Il payload builder invia parent_id null come radice; l'update
+      invia solo i campi modificati (diff parziale). (test: Vitest payload)</criterion>
+    <criterion id="AC-020">L'adapter `ea-sectors-table.tsx` monta TableView domain="ea-sectors",
+      gestisce le action view/edit/delete via Sheet e mappa 409/403 sul delete a messaggi
+      esplicativi. (test: Vitest table adapter / renderers)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie gia presenti in composer.json / package.json. Nessuna nuova dipendenza.</item>
+    <item>Authz server-side su OGNI endpoint (Policy/can) + field permissions via i motori
+      generici. L'UI nasconde, il backend autorizza.</item>
+    <item>Nessuna query raw dinamica: filtri/sort derivati da allow-list (colonna `parent` via
+      whereHas + subquery, mai input grezzo). `whereRaw/orderByRaw` vietati sull'input.</item>
+    <item>Mass assignment: `#[Fillable]` esplicito; FormRequest + `safe()` (mai `only()` nudo).</item>
+    <item>Layering Laravel: Controller thin -> FormRequest -> Service -> DTO -> Resource -> Policy.
+      Nessuna sovra-astrazione (niente Repository su Eloquent).</item>
+    <item>ZERO modifiche ai motori generici: EaSector e un adapter sottile come product-categories.</item>
+    <item>Naming identificatori in INGLESE (ea_sectors/EaSector/ea-sectors); label utente via i18n.</item>
+    <item>File entro 300/500 righe; niente dead code; Pint/ESLint puliti; `tsc --noEmit` pulito;
+      test Pest/Vitest ESEGUITI (non solo scritti).</item>
+    <item>Frontend: server state via TanStack Query (mai useEffect+fetch); axios client
+      configurato; SearchableSelect da components/ui (riuso, non duplicazione).</item>
+  </constraints>
+
+</spec>

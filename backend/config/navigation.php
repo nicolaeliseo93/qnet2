@@ -123,7 +123,43 @@ return [
                             'route' => '/referent-types',
                             'permission' => 'referent-types.view',
                         ],
+                        [
+                            // EA sectors (spec 0018): a standalone lookup used
+                            // to classify Anagrafiche in the future (no such
+                            // relation exists yet — see spec 0018 scope).
+                            'key' => 'ea-sectors',
+                            'label' => 'navigation.eaSectors',
+                            'icon' => 'list-tree',
+                            'route' => '/ea-sectors',
+                            'permission' => 'ea-sectors.view',
+                        ],
+                        [
+                            // Tags (spec 0019): a reusable, polymorphic
+                            // lookup attached to any entity via the
+                            // `taggables` pivot. EaSector is its first
+                            // producer, so it nests here alongside
+                            // referent-types/ea-sectors. Uses a different
+                            // icon than referent-types ('tags') to stay
+                            // visually distinct.
+                            'key' => 'tags',
+                            'label' => 'navigation.tags',
+                            'icon' => 'tag',
+                            'route' => '/tags',
+                            'permission' => 'tags.view',
+                        ],
                     ],
+                ],
+                [
+                    // Sources (spec 0018): a standalone lookup used to
+                    // classify the provenance of registry records
+                    // ("Anagrafiche"). Flat sibling entry (no group of its
+                    // own children yet), placed next to the other support
+                    // lookups (referent-types).
+                    'key' => 'sources',
+                    'label' => 'navigation.sources',
+                    'icon' => 'waypoints',
+                    'route' => '/sources',
+                    'permission' => 'sources.view',
                 ],
                 [
                     // Products (spec 0017): a configurable catalogue —

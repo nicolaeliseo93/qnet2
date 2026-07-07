@@ -2,6 +2,153 @@
 
 > Injected at session start. Update at every green state.
 
+## Correction — Tags producer swapped from Referent to EaSector — GREEN (2026-07-07)
+
+Post-build correction to spec `docs/specs/0019-tags-module.xml` (see `<ea-sector-wiring>` +
+CORRECTION decision + AC-008): the tag association was mis-wired to Referents; the correct
+taggable producer is **EaSector** ("settori attività"). The polymorphic `taggables` pivot and the
+standalone Tag module are UNCHANGED — this was purely a swap of the producer side.
+
+Backend, done by the `backend` teammate (frontend swap done separately by `frontend`):
+- REMOVED all Referent tag wiring: `Referent::tags()`+`deleting` hook, `tagIds` on
+  Create/UpdateReferentData (+`*Submitted`), `tag_ids` rules on Store/UpdateReferentRequest,
+  `tags()->sync()` + eager-load in `ReferentService`, `tags`/`tag_ids` in `ReferentResource`,
+  `tag_ids` field in `ReferentsAuthorization`, `ReferentMetaTest` field-list reverted,
+  `ReferentTaggingTest` deleted.
+- ADDED the identical wiring to EaSector: `EaSector::tags()` morphToMany + `deleting` hook
+  (`tags()->detach()`, no orphan pivot rows — `taggable_id` has no db FK); `Tag::eaSectors()`
+  morphedByMany (renamed from `referents()`); `tagIds` on Create/UpdateEaSectorData (Update uses
+  the `*Submitted` flag pattern already there); `tag_ids` rules (`sometimes|array` +
+  `integer|exists:tags,id`) on Store/UpdateEaSectorRequest; `EaSectorService` syncs
+  `tags()->sync()` in the existing transaction and eager-loads `tags` alongside `parent` on
+  create/update; `EaSectorResource` returns BOTH `tags:[{id,name}]` AND `tag_ids:number[]`
+  (same reasoning as the old Referent shape — `tag_ids` feeds the edit-form default value,
+  `tags` hydrates the chip display); `EaSectorsAuthorization` field `tag_ids` type `multiselect`.
+- `TagDeleteGuardTest` fixture switched from attaching a Referent to attaching an EaSector (the
+  guard itself is generic — queries the `taggables` pivot directly — so no Service change needed).
+- NEW `tests/Feature/EaSectors/EaSectorTaggingTest.php` mirrors the deleted ReferentTaggingTest
+  1:1 (create/update sync, 422 on nonexistent tag id, resource shape, delete detaches).
+- Stale comment fixed in `config/navigation.php` (said "Referents is its first producer").
+
+Names to respect going forward: `EaSector::tags()` / `Tag::eaSectors()` (NOT `referents()`
+anymore), `EaSectorResource` keys `tags`+`tag_ids`, `EaSectorsAuthorization` field `tag_ids`.
+Referent has ZERO tag-related code (verified via grep, clean).
+
+Verified GREEN (real execution): `pint --test` clean; `php artisan test --filter='Tag|EaSector|
+Referent'` 208/208 passed (983 assertions). Full suite 1468/1470 (1 skip, 1 pre-existing
+unrelated failure `AbstractMigrationSourcePreviewTest` — RolesSource `description` column, not
+touched by this file, untracked in git status). Backend-only (`backend/`); frontend swap is a
+separate teammate's task. NOT yet committed.
+
+## Chore — Demo seeders for lookups (Fonti / Settori EA / Tag) — GREEN (2026-07-07)
+
+Added the two missing demo seeders so all three lookups ship fixtures (Sources already had
+`DemoSourceSeeder`). Both idempotent via `firstOrCreate(['name'])`, both wired into `DemoDataSeeder`
+right after `DemoSourceSeeder` (clean-seed rule respected: `Demo` prefix, only reached from
+`DemoDataSeeder`, never `DatabaseSeeder`).
+- `DemoTagSeeder` — flat catalogue of 8 tags (Prospect/Customer/Supplier/…).
+- `DemoEaSectorSeeder` — 2-level tree, 5 root sectors + children (17), via `parent_id` on `firstOrCreate`.
+Verified real execution: seeders run twice (idempotent — counts stable), Pint passed. Counts after run:
+ea_sectors=22 (5 roots+17), tags=8+preexisting. NOT committed.
+
+## Feature — Tags module (reusable POLYMORPHIC lookup) + Referent tagging — GREEN (2026-07-07)
+
+Spec `docs/specs/0019-tags-module.xml` (contract-first, user-approved via AskUserQuestion). Built by
+star subagents (backend + frontend) + independent verifier. A thin adapter over the generic
+table/authz/for-select framework, mirroring Sources (0018) / ReferentTypes (0016) 1:1. Single business
+field: `name` (required text). Model=Tag, table=tags, prefix/domain/i18n/route param = `tags`/{tag}.
+
+User-approved decisions: association is POLYMORPHIC via a `taggables` pivot (tag_id + taggable morph) →
+a Tag attaches to ANY entity with no schema change. Delete is BLOCKED (409, explicit message) if the tag
+is attached to >=1 record. First producer wired now = Referents (minimal): the referent create/edit form
+gains a `tag_ids` multi-select; no other module wired yet (extensible later).
+
+Data model (2 migrations, up+down verified): `tags` (id, name, timestamps); `taggables` (tag_id FK
+restrictOnDelete, taggable_id [NO db FK — polymorphic], taggable_type, UNIQUE(tag_id,taggable_id,
+taggable_type), index(taggable_id,taggable_type), no timestamps).
+
+Backend (mirror Sources, renamed): Model (morphedByMany referents), Policy (auto → tags.* perms via
+permissions:sync), Factory, DTOs, Requests, TagService (create/update/forSelect + **delete guard**:
+`DB::table('taggables')->where('tag_id',...)->exists()` → abort(409)), TagResource {id,name,created_at},
+TagForSelectResource {id,label}, Controllers, TagsAuthorization (field name/text/mandatory), TableDefinition
++ TagColumnCatalog (name+created_at, default sort name asc). Config wiring: config/tables.php,
+config/authorization.php, config/navigation.php ('tags' under referents-group, icon 'tag'). Added
+`'tag' => Tag::class` to the enforced morph map (AppServiceProvider).
+
+STRUCTURAL NOTE: adding Tags pushed `routes/api.php` past the 500-line HARD limit, so the Sources/Tags/
+EA-sectors lookup CRUD blocks were extracted into `routes/api/lookups.php` (required inside the
+auth:sanctum group at routes/api.php:339). Behavior-preserving — `route:list` for all four lookups
+unchanged; for-select still declared before `{tag}`.
+
+Referent wiring (backend): Referent::tags() morphToMany + `deleting` hook `tags()->detach()` (no orphan
+pivot rows — taggable_id has no FK); Create/UpdateReferentData tagIds (+*Submitted flag); Store/Update
+requests `tag_ids: sometimes|array`, `tag_ids.*: integer|exists:tags,id`; ReferentService `tags()->sync()`
+in the existing transaction (added to WRITE_RESULT_RELATIONS + eager-loaded on show/create/update);
+**ReferentResource returns BOTH `tags: [{id,name}] AND `tag_ids: number[]`** (frontend uses tag_ids as the
+edit-form default value, tags for chip hydration — returning only `tags` would wipe tags on edit-save);
+ReferentsAuthorization field `tag_ids` type `'multiselect'` (matches existing multi-relation convention,
+NOT the spec's placeholder 'foreignId').
+
+Frontend (features/tags, mirror referent-types): types, tag-schema, api, for-select-api, column-renderers,
+tag-form/-body/-detail, use-tag-form/-meta, tag-form-payload, tags-table, tags-page + i18n en-tags/it-tags.
+Delete handler branches 403 → deleteForbidden toast, **409|422 → new deleteInUse toast** (mirrors
+product-categories). Router `/tags` lazy + Can-gated; navigation.tags en/it. Referents delta: tag_ids in
+types/schema/payload (create always sends; update diffs via order-insensitive sameIdSet), use-referent-form
+defaults + selectedTagItems hydration, `AsyncPaginatedMultiSelect` (REUSED, no new component) in
+referent-form-details-tab bound to /tags/for-select.
+
+Verified GREEN (independent verifier, real execution): backend `pint --test` clean, `test --filter=Tag|Referent`
+169 passed / 882 assertions; full suite 1468/1470 (1 skip, 1 pre-existing unrelated fail
+`AbstractMigrationSourcePreviewTest` — confirmed via git stash on clean tree). Migration up/down clean,
+7 tags.* perms synced. Frontend `tsc --noEmit` clean, eslint clean, vitest tags+referents+pages 43 passed;
+full 588/591 (3 pre-existing unrelated fails `cell-renderers.test.tsx` i18n leak — confirmed on clean tree).
+No file over 500 lines. NOT yet committed.
+
+## Feature — Sources module (lookup/support table "Fonti") — GREEN (2026-07-07)
+
+Spec `docs/specs/0018-sources-module.xml`. New STANDALONE lookup table `sources` (resource key /
+permission prefix / table domain / i18n namespace / authorization key all = `sources`, model `Source`,
+route param `{source}`), to classify the provenance of registry records. Built by an agent team
+(backend + frontend teammates, disjoint ownership, independent verifier gate), mirroring the
+ReferentTypes module (spec 0016) 1:1. Thin adapter over the generic table/authorization/for-select
+framework — ZERO changes to generic engines. Single business field: `name` (required string, max 191).
+
+USER-APPROVED SCOPE DECISION (AskUserQuestion): there is NO module literally named "Anagrafiche" in the
+code (the word maps to the personal-data/identity concept; closest registry is Referents). So only the
+standalone Sources table was built now. The requested delete-protection ("cannot delete a Fonte linked to
+>=1 Anagrafica") is DEFERRED because it needs a foreign key on the still-undefined target entity.
+`SourceService::delete` is a plain delete for now. TO WIRE LATER (when the target entity + `source_id`
+FK are defined): make the referencing FK `restrictOnDelete`, add a `->exists()` dependents guard in
+`SourceService::delete` -> `abort(409, <friendly>)`, and branch `409|422` to a `deleteInUse` toast in
+the frontend `runDelete` (pattern: `ProductCategoryService`/product-categories-table, spec 0017).
+
+Backend files: migration `2026_07_07_110800_create_sources_table`, `Models/Source` (Fillable[name],
+LogsModelActivity, no relations/casts), `Policies/SourcePolicy`, `Http/Requests/Sources/{Store,Update,
+SourceForSelect}Request`, `DataObjects/Sources/{Create,Update}SourceData`, `Http/Resources/{Source,
+SourceForSelect}Resource`, `Http/Controllers/Sources/{Source,SourceForSelect}Controller`,
+`Services/SourceService` (create/update/forSelect/plain delete), `Authorization/SourcesAuthorization`
+(field name text mandatory), `Tables/SourcesTableDefinition` + `Tables/Sources/SourceColumnCatalog`
+(cols name+created_at, sort name asc, actions view/edit/delete), `factories/SourceFactory`,
+`seeders/DemoSourceSeeder` (added to DemoDataSeeder only). Shared registrations: `config/authorization.php`,
+`config/tables.php`, `routes/api.php` (sources/for-select FIRST, throttle 60,1), `config/navigation.php`
+(node -> /sources, perm sources.view, icon waypoints). IMPORTANT: `AppServiceProvider` morph map gained
+`'source' => Source::class` — MANDATORY for any new LogsModelActivity model or every request 500s with
+ClassMorphViolationException. Permissions auto-generated by `permissions:sync` from SourcePolicy + nav.
+
+Frontend files: whole `features/sources/` (api, for-select-api, types, source-schema, source-form-payload,
+use-source-form, use-source-form-meta, source-form, source-form-body, source-detail, column-renderers,
+sources-table), `pages/sources-page` (Can-gated), router child route `sources`, i18n `en-sources.ts`/
+`it-sources.ts` (IT: "Fonti"/"Fonte"/"Nome") registered in `en.ts`/`it.ts` incl `navigation.sources`.
+
+Verified GREEN (independent verifier, real runs): backend Pest `tests/Feature/Sources` +
+`tests/Unit/Models/SourceTest` = 38/38 (122 assertions); Pint 0 issues; frontend vitest
+`src/features/sources` 4 files / 12 tests; `tsc --noEmit` clean; ESLint clean. Two full-suite anomalies,
+BOTH out of Sources scope: (1) `AbstractMigrationSourcePreviewTest` fails on clean `main` too (pre-existing,
+confirmed via git stash); (2) `TableDefinitionContractTest` errors "No morph map for App\Models\EaSector"
+— caused by a SEPARATE in-flight "EA Sectors" module (untracked `ea-sectors` registered in config but
+`EaSector` missing from AppServiceProvider morph map). NEITHER caused by Sources; flagged to that module's
+owner (add `EaSector` to the morph map before the EA Sectors checkpoint).
+
 ## Change — Demo product catalogue reworked from physical goods to SERVICES — GREEN (2026-07-07)
 
 `ProductCatalogTaxonomy` (data for `DemoProductCatalogSeeder`) rewritten: was Elettronica/Arredamento

@@ -3,12 +3,15 @@
 use App\Authorization\AttributesAuthorization;
 use App\Authorization\BusinessFunctionsAuthorization;
 use App\Authorization\CompaniesAuthorization;
+use App\Authorization\EaSectorsAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
 use App\Authorization\ProductCategoriesAuthorization;
 use App\Authorization\ProductsAuthorization;
 use App\Authorization\ReferentsAuthorization;
 use App\Authorization\ReferentTypesAuthorization;
 use App\Authorization\RolesAuthorization;
+use App\Authorization\SourcesAuthorization;
+use App\Authorization\TagsAuthorization;
 use App\Authorization\UsersAuthorization;
 
 return [
@@ -40,9 +43,12 @@ return [
         'operational-sites' => OperationalSitesAuthorization::class,
         'referent-types' => ReferentTypesAuthorization::class,
         'referents' => ReferentsAuthorization::class,
+        'ea-sectors' => EaSectorsAuthorization::class,
         'attributes' => AttributesAuthorization::class,
         'product-categories' => ProductCategoriesAuthorization::class,
         'products' => ProductsAuthorization::class,
+        'sources' => SourcesAuthorization::class,
+        'tags' => TagsAuthorization::class,
     ],
 
 ];

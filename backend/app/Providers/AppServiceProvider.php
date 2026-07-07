@@ -9,6 +9,7 @@ use App\Models\Attribute;
 use App\Models\BusinessFunction;
 use App\Models\Company;
 use App\Models\Contact;
+use App\Models\EaSector;
 use App\Models\EmploymentProfile;
 use App\Models\OperationalSite;
 use App\Models\PersonalData;
@@ -17,6 +18,8 @@ use App\Models\ProductCategory;
 use App\Models\Referent;
 use App\Models\ReferentType;
 use App\Models\Role;
+use App\Models\Source;
+use App\Models\Tag;
 use App\Models\User;
 use App\Models\UserTablePreference;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -71,6 +74,9 @@ class AppServiceProvider extends ServiceProvider
             'attribute' => Attribute::class,
             'product_category' => ProductCategory::class,
             'product' => Product::class,
+            'source' => Source::class,
+            'ea_sector' => EaSector::class,
+            'tag' => Tag::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

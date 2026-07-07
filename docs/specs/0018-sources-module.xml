@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0018" title="Sources module (lookup/support table)">
+  <meta>
+    <status>approved</status>
+    <date>2026-07-07</date>
+    <summary>
+      New standalone lookup/support table "Sources" (IT domain "Fonti"), used to classify the
+      provenance of registry records ("Anagrafiche"). Built as a thin adapter over the generic
+      table/authorization/for-select framework, mirroring the ReferentTypes module 1:1
+      (spec 0016). Single business field: name (required text).
+    </summary>
+    <decisions>
+      <decision>Model=Source, table=sources, resource key/permission prefix/i18n namespace/table
+        domain = "sources", route param {source}.</decision>
+      <decision>User-approved (AskUserQuestion): build ONLY the standalone Sources table now. The
+        target foreign key (anagrafiche.source_id) and the restrict-on-delete guard are DEFERRED
+        and wired later, when the target entity is defined. Until then Source::delete is a plain
+        delete (mirrors ReferentType).</decision>
+      <decision>Delete-protection requirement is acknowledged but out of scope now because it needs
+        the target FK. When wired: referencing FK = restrictOnDelete + SourceService::delete
+        checks dependents via ->exists() and abort(409, friendly message); frontend runDelete
+        branches 409|422 to a deleteInUse toast. See spec 0017 ProductCategoryService for the pattern.</decision>
+    </decisions>
+  </meta>
+
+  <data-model>
+    <table name="sources">
+      <column name="id" type="bigint" pk="true"/>
+      <column name="name" type="string" nullable="false"/>
+      <column name="created_at" type="timestamp"/>
+      <column name="updated_at" type="timestamp"/>
+    </table>
+    <note>No old_id / external-migration source now (add later if Sources needs import).</note>
+  </data-model>
+
+  <permissions prefix="sources">
+    <permission>sources.viewAny</permission>
+    <permission>sources.view</permission>
+    <permission>sources.create</permission>
+    <permission>sources.update</permission>
+    <permission>sources.delete</permission>
+    <permission>sources.export</permission>
+    <permission>sources.import</permission>
+    <note>Generated automatically by permissions:sync from SourcePolicy + the navigation entry.
+      No manual permission-string list.</note>
+    <field-permissions>
+      <field name="name" type="text" mandatory="true"/>
+    </field-permissions>
+  </permissions>
+
+  <api base="/api" throttle="60,1">
+    <endpoint method="GET" path="/sources/for-select" ability="viewAny"
+      note="declared FIRST so the literal wins over the {source} wildcard"/>
+    <endpoint method="GET" path="/sources/{source}" ability="view"/>
+    <endpoint method="POST" path="/sources" ability="create"/>
+    <endpoint method="PUT|PATCH" path="/sources/{source}" ability="update"/>
+    <endpoint method="DELETE" path="/sources/{source}" ability="delete" response="204"/>
+    <endpoint method="GET" path="/meta/sources" note="generic MetaController via SourcesAuthorization"/>
+    <endpoint path="table domain 'sources'" note="generic TableController via SourcesTableDefinition"/>
+  </api>
+
+  <contract>
+    <resource name="SourceResource">{ id, name, created_at }</resource>
+    <resource name="SourceForSelectResource">{ id, label:name }</resource>
+    <create-payload>{ name: string }</create-payload>
+    <update-payload>{ name?: string }</update-payload>
+    <validation field="name">required|string|max:191 (update: sometimes|required|string|max:191)</validation>
+    <table domain="sources">
+      <column id="name" type="text" sortable="true" filterType="text" searchable="true"/>
+      <column id="created_at" type="datetime" sortable="true" filterType="date"/>
+      <default-sort>name asc</default-sort>
+      <row-actions>view, edit, delete (gated by policy)</row-actions>
+      <export enabled="true" note="generic export via table framework"/>
+    </table>
+  </contract>
+
+  <acceptance-criteria>
+    <ac id="AC-001">Migration creates sources table; up+down reversible.</ac>
+    <ac id="AC-002">Full CRUD via REST returns the standard envelope; store=201, destroy=204.</ac>
+    <ac id="AC-003">Every endpoint authorizes server-side; user without permission -> 403.</ac>
+    <ac id="AC-004">GET /meta/sources returns field metadata (name text, mandatory) honoring the
+      per-role field-permission matrix.</ac>
+    <ac id="AC-005">Table domain 'sources' returns rows with name+created_at, supports filter/sort/search;
+      generic export works.</ac>
+    <ac id="AC-006">for-select returns { id, label } paginated + hydrates explicit ids.</ac>
+    <ac id="AC-007">Frontend: list page (grid + toolbar), create/edit/view sheet forms, Can-gated
+      New button and route, i18n en/it, deleteForbidden(403) toast.</ac>
+    <ac id="AC-008">Navigation entry sources -> /sources visible with sources.view.</ac>
+    <ac id="AC-009">Backend Pest (crud, for-select, meta, security, table) + frontend vitest green;
+      Pint + tsc + ESLint clean.</ac>
+  </acceptance-criteria>
+</spec>
