@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AttributeType;
 use App\Enums\ContactTypeEnum;
 use App\Enums\GenderEnum;
 use App\Enums\LocaleEnum;
@@ -48,6 +49,9 @@ return [
         // Referent contact scope (spec 0016): internal/external classification
         // shown on the referent form's "Contact scope" select.
         'referent_contact_scope' => ReferentContactScopeEnum::class,
+        // Dynamic product-attribute data type (spec 0017): the attribute form's
+        // "Data type" select and the products table's `data_type` badge.
+        'attribute_type' => AttributeType::class,
     ],
 
 ];

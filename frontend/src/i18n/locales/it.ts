@@ -7,6 +7,7 @@ import { imports } from './it-imports'
 import { exports } from './it-exports'
 import { table } from './it-table'
 import { referents, referentTypes } from './it-referents'
+import { attributes, productCategories, products } from './it-products'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -47,6 +48,9 @@ export const it: TranslationResources = {
     referents: 'Referenti',
     referentTypes: 'Tipi referente',
     operationalSites: 'Sedi operative',
+    attributes: 'Attributi',
+    productCategories: 'Categorie Prodotto',
+    products: 'Prodotti',
     faCompaniesServices: 'FA Società & Servizi',
     settings: 'Impostazioni',
     toggleSidebar: 'Apri/chiudi sidebar',
@@ -432,4 +436,7 @@ export const it: TranslationResources = {
   exports,
   referents,
   referentTypes,
+  attributes,
+  productCategories,
+  products,
 }

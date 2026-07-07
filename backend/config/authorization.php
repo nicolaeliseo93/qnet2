@@ -1,8 +1,11 @@
 <?php
 
+use App\Authorization\AttributesAuthorization;
 use App\Authorization\BusinessFunctionsAuthorization;
 use App\Authorization\CompaniesAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
+use App\Authorization\ProductCategoriesAuthorization;
+use App\Authorization\ProductsAuthorization;
 use App\Authorization\ReferentsAuthorization;
 use App\Authorization\ReferentTypesAuthorization;
 use App\Authorization\RolesAuthorization;
@@ -37,6 +40,9 @@ return [
         'operational-sites' => OperationalSitesAuthorization::class,
         'referent-types' => ReferentTypesAuthorization::class,
         'referents' => ReferentsAuthorization::class,
+        'attributes' => AttributesAuthorization::class,
+        'product-categories' => ProductCategoriesAuthorization::class,
+        'products' => ProductsAuthorization::class,
     ],
 
 ];

@@ -93,7 +93,7 @@ it('requires authentication to save or reset filters', function () {
 it('returns 404 when saving filters for an unregistered domain', function () {
     Sanctum::actingAs(userWithUserAbilities(['viewAny']));
 
-    $this->postJson('/api/tables/products/filters', ['filterModel' => []])
+    $this->postJson('/api/tables/nonexistent-domain/filters', ['filterModel' => []])
         ->assertNotFound()
         ->assertJson(['success' => false]);
 });

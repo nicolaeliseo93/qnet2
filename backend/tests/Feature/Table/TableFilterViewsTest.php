@@ -246,8 +246,8 @@ it('returns 404 for a bound filterView whose domain does not match the route dom
 it('returns 404 for filter-views on an unregistered domain', function () {
     Sanctum::actingAs(userWithUserAbilities(['viewAny']));
 
-    $this->getJson('/api/tables/products/filter-views')->assertNotFound()->assertJson(['success' => false]);
-    $this->postJson('/api/tables/products/filter-views', [
+    $this->getJson('/api/tables/nonexistent-domain/filter-views')->assertNotFound()->assertJson(['success' => false]);
+    $this->postJson('/api/tables/nonexistent-domain/filter-views', [
         'name' => 'x', 'filters' => [], 'visibility' => 'private',
     ])->assertNotFound();
 });

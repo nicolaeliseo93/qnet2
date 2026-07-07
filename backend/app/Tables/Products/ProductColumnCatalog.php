@@ -1,0 +1,134 @@
+<?php
+
+namespace App\Tables\Products;
+
+/**
+ * Declarative column/filter/action catalogue for the `products` domain
+ * (spec 0017). Extracted out of ProductsTableDefinition (file-size split,
+ * engineering.md §6): pure data (no logic), mirroring BusinessFunctionColumnCatalog.
+ *
+ * `name`/`description`/`cost`/`price`/`created_at` are real DB columns
+ * handled entirely by the generic engine. `category` has no real column of
+ * its own (it is the related category's name) and is DERIVED: its set
+ * filter/sort/distinct-values are resolved by ProductsTableDefinition,
+ * mirroring BusinessFunctionsTableDefinition's `manager` derived column. No
+ * dynamic attribute ever appears here (spec 0017 decision — the products
+ * grid shows only generic fields).
+ */
+final class ProductColumnCatalog
+{
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public static function columns(): array
+    {
+        return [
+            [
+                'id' => 'name',
+                'label' => 'products.columns.name',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'text',
+                'searchable' => true,
+            ],
+            [
+                'id' => 'description',
+                'label' => 'products.columns.description',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => false,
+                'filterable' => true,
+                'filterType' => 'text',
+            ],
+            [
+                'id' => 'cost',
+                'label' => 'products.columns.cost',
+                'type' => 'number',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'number',
+            ],
+            [
+                'id' => 'price',
+                'label' => 'products.columns.price',
+                'type' => 'number',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'number',
+            ],
+            [
+                // The category's name, derived from the category() relation.
+                // Sorted via a correlated subquery, filtered via whereHas
+                // (both in the definition).
+                'id' => 'category',
+                'label' => 'products.columns.category',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
+                'id' => 'created_at',
+                'label' => 'products.columns.created_at',
+                'type' => 'datetime',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'date',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public static function filters(): array
+    {
+        return [
+            ['columnId' => 'name', 'type' => 'text'],
+            ['columnId' => 'description', 'type' => 'text'],
+            ['columnId' => 'cost', 'type' => 'number'],
+            ['columnId' => 'price', 'type' => 'number'],
+            ['columnId' => 'category', 'type' => 'set'],
+            ['columnId' => 'created_at', 'type' => 'date'],
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public static function actions(): array
+    {
+        return [
+            [
+                'key' => 'view',
+                'label' => 'actions.view',
+                'icon' => 'eye',
+                'type' => 'link',
+                'confirm' => false,
+                'permission' => 'products.view',
+            ],
+            [
+                'key' => 'edit',
+                'label' => 'actions.edit',
+                'icon' => 'pencil',
+                'type' => 'link',
+                'confirm' => false,
+                'permission' => 'products.update',
+            ],
+            [
+                'key' => 'delete',
+                'label' => 'actions.delete',
+                'icon' => 'trash',
+                'type' => 'danger',
+                'confirm' => true,
+                'permission' => 'products.delete',
+            ],
+        ];
+    }
+}

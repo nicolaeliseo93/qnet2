@@ -1,0 +1,80 @@
+<?php
+
+namespace App\Http\Requests\ProductCategories;
+
+use App\DataObjects\ProductCategories\UpdateProductCategoryData;
+use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Models\ProductCategory;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Http\FormRequest;
+
+/**
+ * Validates the payload for PUT/PATCH /api/product-categories/{productCategory}
+ * (spec 0017). Every field is `sometimes` to support partial PATCH updates:
+ * `attributes`, when submitted, is a full-replace sync. The anti-cycle guard
+ * (parent_id cannot be the category itself or one of its own descendants) is
+ * enforced by ProductCategoryService, not here (it needs to walk the tree).
+ * Authorization is intentionally NOT handled here (it stays in the controller
+ * via authorize('update', $productCategory)). EnforcesFieldPermissions (spec
+ * 0004) additionally rejects any submitted field the actor cannot edit on
+ * this specific model.
+ */
+class UpdateProductCategoryRequest extends FormRequest
+{
+    use EnforcesFieldPermissions;
+
+    public function authorize(): bool
+    {
+        // Authorization handled in the controller via ProductCategoryPolicy.
+        return true;
+    }
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    public function rules(): array
+    {
+        return [
+            'name' => ['sometimes', 'required', 'string', 'max:191'],
+            'parent_id' => ['sometimes', 'nullable', 'integer', 'exists:product_categories,id'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'attributes' => ['sometimes', 'array'],
+            'attributes.*.attribute_id' => ['required', 'integer', 'exists:attributes,id', 'distinct'],
+            'attributes.*.is_required' => ['sometimes', 'boolean'],
+            'attributes.*.sort_order' => ['sometimes', 'integer'],
+        ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $this->enforceFieldPermissions($validator);
+        });
+    }
+
+    protected function authorizationResource(): string
+    {
+        return 'product-categories';
+    }
+
+    protected function authorizationModel(): ?Model
+    {
+        /** @var ProductCategory $productCategory */
+        $productCategory = $this->route('productCategory');
+
+        return $productCategory;
+    }
+
+    /**
+     * The validated payload as a typed DTO (no magic array crosses into the
+     * Service — see standards/architecture.md → Data Transfer Objects).
+     */
+    public function toData(): UpdateProductCategoryData
+    {
+        /** @var array<string, mixed> $validated */
+        $validated = $this->validated();
+
+        return UpdateProductCategoryData::fromValidated($validated);
+    }
+}

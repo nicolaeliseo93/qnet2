@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0017 — Products module (Prodotti configurabili via EAV).
+  Contract-first. Mirrors the generic framework used by `business-functions` /
+  `referent-types`: SSRM table (AG Grid), backend-driven column/filter config,
+  metadata-driven form (spec 0004), field permissions (spec 0006), Policy authz
+  server-side, response envelope { success, message, data, permissions? }.
+
+  User-approved decisions (AskUserQuestion):
+  - EAV value storage = typed columns (product_attribute_values with
+    value_string/value_integer/value_decimal/value_boolean + option_id).
+  - Products grid shows ONLY generic fields; dynamic attributes live in the
+    product form + detail (no dynamic grid columns in this spec).
+  - Attributes are reusable entities assigned to categories via a pivot;
+    a category's effective attributes = own assignments UNION all ancestors'.
+  - Three management surfaces / menu entries: Attributes, Product Categories, Products.
+
+  Naming: greenfield, English identifiers (engineering.md §1.2).
+  Domains/resources/permissions (kebab): `attributes`, `product-categories`, `products`.
+  Tables (snake): attributes, attribute_options, product_categories,
+  attribute_category (pivot), products, product_attribute_values.
+  Morph aliases: attribute, product_category, product.
+-->
+<spec id="0017-products-module" status="draft" owner="tu" date="2026-07-07">
+
+  <goal>
+    Sistema Prodotti completamente configurabile: basta creare una categoria e definirne
+    gli attributi per ottenere una nuova tipologia di prodotto, senza nuove tabelle/form/logiche.
+    Tre entità: (1) Attributi — catalogo globale riusabile di attributi dinamici tipizzati
+    (STRING/INTEGER/DECIMAL/BOOLEAN/ENUM); (2) Categorie prodotto — albero padre/figlio a
+    profondità illimitata, ogni categoria assegna attributi ed EREDITA ricorsivamente quelli
+    di tutti gli antenati; (3) Prodotti — scheda con campi generici (name, description, cost,
+    price, category) + sezione attributi dinamici generata dagli attributi effettivi della
+    categoria selezionata (propri + ereditati). Ogni entità è IDENTICA per UX agli altri
+    moduli: griglia AG Grid SSRM (attributi, prodotti), form metadata-driven, permessi
+    risorsa + campi, envelope di progetto. Le categorie usano una vista ad ALBERO dedicata.
+  </goal>
+
+  <context>
+    Verificato sul repo (nomi reali). Ogni modulo è un adapter sottile su framework generici
+    che NON vanno modificati.
+
+    Backend — riuso obbligatorio (nessuna rotta generica nuova):
+    - Envelope: `App\Http\Controllers\Abstract\BaseApiController` → `ok`, `okWithPermissions`,
+      `paginatedResponse`, `noContent`, `fail`, `handleControllerException`, `HttpStatusEnum`.
+    - Model base `App\Models\Abstracts\BaseModel`; fillable via attributo PHP `#[Fillable([...])]`;
+      cast via metodo `casts()`; trait `App\Models\Concerns\LogsModelActivity`. Morph map
+      registrata in `App\Providers\AppServiceProvider::enforceMorphMap` (obbligatoria: la map
+      stretta lancia altrimenti).
+    - Policy: `App\Policies\Abstracts\BasePolicy` (abilities viewAny/view/create/update/delete/
+      export/import → `{resource}.{ability}`). Auto-discovery Laravel; `permissions:sync`
+      scopre ogni Policy via glob → crea i permessi (nessuna lista manuale). Seeder invariato
+      (`RolePermissionSeeder`).
+    - Table SSRM: `App\Tables\AbstractTableDefinition` (+ interface `App\Tables\TableDefinition`),
+      registry `App\Tables\TableRegistry` da `config/tables.php`. `authorizeViewAny` fail-closed
+      via `Gate::allows('viewAny', modelClass())`. Colonne derivate: hooks `applyDerivedFilter`,
+      `applyDerivedSort`, `distinctValues`, `applyDerivedSearch`. Catalogo dichiarativo in una
+      classe `*ColumnCatalog`. Endpoint generici già montati: `GET tables/{domain}/columns`,
+      `POST tables/{domain}/rows|values`, `POST .../bulk-delete`, preferences/filters/filter-views.
+      Reference minimale: `App\Tables\ReferentTypesTableDefinition` +
+      `App\Tables\ReferentTypes\ReferentTypeColumnCatalog`.
+    - Export backend-driven: generico via `POST /api/exports/{domain}` (ExportController/
+      ExportService/GenerateExportJob) — si accende registrando la TableDefinition. Nessun codice.
+    - Authorization metadata (spec 0004/0006): `App\Authorization\AbstractResourceAuthorization`
+      (implementi `resource()`, `fields()`, `actions()`, `fieldPermissionCeiling()`; il metodo
+      `fieldPermissions()` è FINAL = intersect(ceiling, matrice DB)), registry
+      `App\Authorization\AuthorizationRegistry` da `config/authorization.php`, endpoint generico
+      `GET meta/{resource}` (`MetaController`). Value objects `FieldDefinition`, `FieldPermission`
+      (named ctors visibleEditable/visibleReadonly/hidden/disabled). Reference:
+      `App\Authorization\ReferentTypesAuthorization`.
+    - Write-path field enforcement: trait `App\Http\Requests\Concerns\EnforcesFieldPermissions`
+      (422 sui campi non-editable modificati); gestisce relazioni to-many top-level e scalari dot-path.
+    - CRUD sottile: vedi `ReferentTypeController`/`BusinessFunctionController` (thin, try/catch →
+      handleControllerException, `okWithPermissions`). Navigation backend-driven:
+      `config/navigation.php` (NavigationService filtra per permesso; alimenta anche permissions:sync).
+    - `config/config.php` `form_enums` (endpoint pubblico `GET /api/config`): mappa `snake_key => BackedEnum`
+      per select/badge NON sensibili. `attribute_type => AttributeType::class` va qui (serve al form/badge).
+
+    Frontend — riuso obbligatorio (feature = adapter sottile):
+    - `features/referent-types/` e `features/business-functions/` come reference: `api.ts`, `types.ts`,
+      `*-schema.ts` (Zod factory con `t`), `use-*-form.ts`, `use-*-form-meta.ts`, `*-form-payload.ts`,
+      `*-form.tsx` (+ `-form-body.tsx`), `*-table.tsx` (adapter su `<TableView domain renderers onAction>`),
+      `*-detail.tsx`, `column-renderers.tsx`.
+    - Motori generici INVARIATI: `features/table/table-view.tsx` (`TableView`), `components/data-table/`,
+      `features/table/ssrm-datasource.ts`, `features/table/api.ts`, `renderer-registry.ts`.
+    - Form metadata-driven: `features/authorization/` — `ResourcePermissionsProvider`,
+      `useResourcePermissions`, `<MetaField>`, `useResourceMeta(resource)`.
+    - Permessi: `<Can permission>` (`features/auth/can.tsx`), `useAbilities()` (`features/auth/use-abilities.ts`).
+    - Select async con paginazione: `components/ui/async-paginated-select.tsx` /
+      `async-paginated-multi-select.tsx` (per category picker sul prodotto).
+    - Detail fresh-on-open: `hooks/use-entity-detail.ts`. Server validation inline:
+      `applyServerValidationErrors` (`features/auth/form-errors`).
+    - Routing: `routes/router.tsx` (lazy child di ProtectedRoute→AppLayout) + `routes/breadcrumbs.tsx`
+      (`SEGMENT_LABELS`). Nav tree = backend (`/navigation`); icona in `features/navigation/icon-map.ts`.
+    - i18n: file per-modulo `i18n/locales/{en,it}-products.ts` (nuovo split), agganciati al bundle come
+      gli altri moduli recenti; chiave `navigation.*`.
+
+    Decisioni approvate: EAV a colonne tipizzate; griglia prodotti = soli campi generici; attributi
+    riusabili + pivot con ereditarietà ricorsiva; 3 moduli/voci menu; categorie ad albero; delete
+    restrittivo su categorie/attributi in uso; field-permissions solo sui campi generici del prodotto
+    (attributi dinamici autorizzati a livello risorsa `products.update`).
+  </context>
+
+  <scope>
+    <in>
+      <!-- ATTRIBUTES -->
+      <item>Migrazione `attributes` (id, code unique, name, data_type, timestamps) + `attribute_options` (id, attribute_id FK cascade, value, label, sort_order, timestamps, unique[attribute_id,value]).</item>
+      <item>Enum `App\Enums\AttributeType` (STRING/INTEGER/DECIMAL/BOOLEAN/ENUM, HasMeta) — punto di estensione per nuovi tipi. Registrato in `config/config.php` form_enums come `attribute_type`.</item>
+      <item>Model `Attribute` (fillable code/name/data_type, cast data_type→AttributeType, relazione options() hasMany, categories() belongsToMany, LogsModelActivity) + `AttributeOption` (fillable, sort). Factory per entrambi. Morph `attribute`.</item>
+      <item>Policy `AttributePolicy` (resource 'attributes'); Authorization `AttributesAuthorization` (fields code/name/data_type/options); TableDefinition + `ProductAttributeColumnCatalog`; Requests Store/Update (options nested), DTO, Service (gestisce options in transazione), Resource; Controller; rotte; registrazioni config/tables+authorization+navigation.</item>
+
+      <!-- PRODUCT CATEGORIES -->
+      <item>Migrazione `product_categories` (id, name, parent_id nullable FK→self restrictOnDelete, description text null, timestamps; index parent_id,name) + pivot `attribute_category` (id, attribute_id FK cascade, category_id FK cascade, is_required bool default false, sort_order int default 0, timestamps, unique[attribute_id,category_id]).</item>
+      <item>Model `ProductCategory` (fillable name/parent_id/description, relazioni parent()/children()/attributes() belongsToMany withPivot[is_required,sort_order], LogsModelActivity) + Factory. Morph `product_category`.</item>
+      <item>Service `ProductCategoryService`: crea/aggiorna con guardia anti-ciclo (parent non può essere se stesso né un discendente); `effectiveAttributes(ProductCategory): Collection` = attributi propri UNION antenati, ordinati (antenati prima, poi per sort_order); `ancestors()`/`descendants()` helper; delete restrittivo (409/422 se ha figli o prodotti). NB implementativa: la risalita degli antenati è un walk iterativo di `parent_id` in PHP (portabile SQLite/MySQL, zero SQL grezzo — supera il vincolo anti-SQLi), NON una CTE `WITH RECURSIVE`. Decisione presa in fase di dispatch dal lead; spec allineata all'implementazione.</item>
+      <item>Policy `ProductCategoryPolicy` (resource 'product-categories'); Authorization `ProductCategoriesAuthorization` (fields name/parent_id/description/attributes); Requests Store/Update (attributes = array di {attribute_id, is_required, sort_order}), DTO, Resource; Controller; registrazioni config.</item>
+      <item>Endpoint albero `GET /api/product-categories/tree` (nodi annidati id/name/children + counts) e `GET /api/product-categories/{productCategory}/effective-attributes` → [{ id, code, name, data_type, is_required, options:[{value,label}] }] inclusi gli ereditati (per il form prodotto). CRUD standard show/store/update/destroy.</item>
+
+      <!-- PRODUCTS -->
+      <item>Migrazione `products` (id, name, description text null, cost decimal(15,2) null, price decimal(15,2) null, category_id FK→product_categories restrictOnDelete, timestamps; index name,category_id,created_at) + `product_attribute_values` (id, product_id FK cascade, attribute_id FK cascade, value_string text null, value_integer bigint null, value_decimal decimal(20,6) null, value_boolean bool null, option_id nullable FK→attribute_options nullOnDelete, timestamps, unique[product_id,attribute_id]).</item>
+      <item>Model `Product` (fillable name/description/cost/price/category_id, cast cost/price decimal, relazioni category() belongsTo, attributeValues() hasMany, category attributes via categoria, LogsModelActivity) + `ProductAttributeValue` (typed accessor `value` che risolve la colonna giusta per data_type). Factory. Morph `product`.</item>
+      <item>Policy `ProductPolicy` (resource 'products'); Authorization `ProductsAuthorization` (fields generici: name mandatory, description, cost, price, category_id mandatory); TableDefinition + `ProductColumnCatalog` (name text/searchable, description text, cost/price number, category derived text/set/sortable, created_at datetime); derived filter/sort/distinct per `category`.</item>
+      <item>Requests Store/Update (name required; category_id required exists; cost/price nullable decimal; description nullable; `attributes` array di {attribute_id, value}) con EnforcesFieldPermissions sui soli campi generici; DTO; `ProductService` che valida gli attributi dinamici (⊆ effectiveAttributes(category); coerenza per data_type; ENUM ∈ options; is_required rispettati) e fa upsert su product_attribute_values instradando nel value_* giusto; Resource (campi generici + category summary + attributes idratati [{attribute_id, code, name, data_type, value, option_id?}]); Controller; rotte; registrazioni config.</item>
+
+      <!-- SHARED / FRONTEND -->
+      <item>Nodi navigazione in `config/navigation.php`: sezione o voci `attributes`, `product-categories`, `products` con permesso `.view`. Morph map in AppServiceProvider per i 3 model. DemoDataSeeder: `DemoProductCatalogSeeder` (attributi + albero categorie + prodotti demo) idempotente, richiamato da `DemoDataSeeder`.</item>
+      <item>Frontend feature `features/attributes/`: griglia + form (data_type select; editor opzioni ENUM condizionale) + detail + renderer (badge data_type) + pagina + rotta.</item>
+      <item>Frontend feature `features/product-categories/`: vista ALBERO (componente tree custom su `components/ui/`, nessuna dipendenza nuova) con create/edit/delete nodo; form categoria (name, parent select, description, editor assegnazione attributi con is_required/sort_order + visualizzazione ereditati read-only); pagina + rotta.</item>
+      <item>Frontend feature `features/products/`: griglia (soli campi generici) + form con category picker (AsyncPaginatedSelect) che alla selezione carica `effective-attributes` e genera i campi dinamici tipizzati (STRING→input, INTEGER/DECIMAL→number, BOOLEAN→checkbox, ENUM→select da options); detail con sezione attributi; payload builder create/sparse-PATCH; renderer.</item>
+      <item>i18n `en-products.ts`/`it-products.ts` (blocchi attributes/productCategories/products + navigation) agganciati al bundle; icone in icon-map; route in router.tsx + breadcrumbs.</item>
+      <item>Test: Pest backend (≥90% Service/Policy/Authorization; ≥85% controller/table; unit su CTE ereditarietà e routing typed value) + Vitest frontend (form dinamico prodotto, tree categorie, renderer, payload).</item>
+    </in>
+    <out>
+      <item>NESSUNA modifica ai framework generici (features/table, features/authorization, components/data-table, ssrm-datasource, TableController, TableService, MetaController, ExportController, AbstractTableDefinition, AbstractResourceAuthorization, BasePolicy, BaseApiController, EnforcesFieldPermissions).</item>
+      <item>NESSUNA colonna dinamica nella griglia prodotti (attributi solo nel form/detail). NESSUN filtro/sort/export su attributi dinamici in questa spec.</item>
+      <item>NESSUN campo prodotto oltre name/description/cost/price/category_id (gli altri "poi").</item>
+      <item>NESSUN endpoint `*/for-select` per prodotti/categorie/attributi verso altri moduli (fuori scope). Il category picker del prodotto usa un for-select dedicato SOLO per categorie se necessario, altrimenti l'endpoint tree/list.</item>
+      <item>NESSUNA field-permission per-ruolo sugli attributi dinamici (autorizzati a livello risorsa products.update). NESSUNA migrazione dati legacy (greenfield).</item>
+      <item>NESSUNA nuova dipendenza npm/composer (albero categorie costruito con primitivi UI esistenti).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- ================= ATTRIBUTES ================= -->
+    <endpoint method="GET" path="/api/tables/attributes/columns">
+      <response status="200">
+        Columns: [ code(text,sortable,filterable:text,searchable), name(text,sortable,filterable:text,searchable),
+        data_type(enum/badge,sortable,filterable:set), created_at(datetime,sortable,filterable:date) ].
+        defaultSort created_at desc; actions view/edit/delete filtrate per permesso; label `attributes.columns.*`.
+      </response>
+      <errors>403 senza attributes.viewAny (fail-closed).</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/tables/attributes/rows">
+      <response status="200">{ items:[{ id, code, name, data_type, options_count, created_at, actions[] }], pagination }.</response>
+    </endpoint>
+    <endpoint method="GET" path="/api/meta/attributes">
+      <response status="200">fields=[code(text,mandatory),name(text,mandatory),data_type(select,mandatory),options(multiselect/custom)] + permissions{resource,fields,actions}.</response>
+    </endpoint>
+    <endpoint method="GET" path="/api/attributes/{attribute}">
+      <response status="200">okWithPermissions: data={ id, code, name, data_type, options:[{ id, value, label, sort_order }], created_at } + permissions.</response>
+      <errors>403 senza attributes.view; 404.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/attributes">
+      <request>{ code:string(req,max64,unique,snake), name:string(req,max191), data_type:in(STRING,INTEGER,DECIMAL,BOOLEAN,ENUM) req, options?:[{ value:string, label:string, sort_order?:int }] }. options obbligatorio/non-vuoto SSE data_type=ENUM; ignorato altrimenti. value unici per attributo.</request>
+      <response status="201">okWithPermissions(AttributeResource). Stessa shape del GET show.</response>
+      <errors>403 senza create; 422 (code duplicato, data_type invalido, ENUM senza options, value duplicati); 422 campo non-editable.</errors>
+    </endpoint>
+    <endpoint method="PUT|PATCH" path="/api/attributes/{attribute}">
+      <request>Come POST, campi `sometimes`. `options` = full-replace (le opzioni non più presenti sono rimosse; option_id referenziati con nullOnDelete sui valori). `data_type` immutabile se l'attributo ha già valori prodotto (422).</request>
+      <response status="200">okWithPermissions(AttributeResource).</response>
+      <errors>403 senza update; 404; 422.</errors>
+    </endpoint>
+    <endpoint method="DELETE" path="/api/attributes/{attribute}">
+      <response status="204">No content SE non assegnato ad alcuna categoria e senza valori.</response>
+      <errors>403 senza delete; 404; 409/422 se in uso (assegnato o con valori).</errors>
+    </endpoint>
+
+    <!-- ================= PRODUCT CATEGORIES ================= -->
+    <endpoint method="GET" path="/api/product-categories/tree">
+      <request>Nessun body. Auth sanctum. Autorizza product-categories.viewAny.</request>
+      <response status="200">
+        ok: data=[ { id, name, parent_id, children:[...ricorsivo...], attributes_count, products_count } ] radici → discendenti.
+      </response>
+      <errors>403 senza viewAny.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/product-categories/{productCategory}/effective-attributes">
+      <request>Nessun body. Autorizza product-categories.view (usato anche dal form prodotto: richiede almeno products.view lato prodotto → vedi nota controller).</request>
+      <response status="200">
+        ok: data=[ { id, code, name, data_type, is_required, inherited:boolean, options:[{ value, label }] } ]
+        ordinati (antenati prima, poi per sort_order). Include gli attributi ereditati da tutti gli antenati.
+      </response>
+      <errors>403 senza permesso; 404 categoria inesistente.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/meta/product-categories">
+      <response status="200">fields=[name(text,mandatory),parent_id(select),description(textarea),attributes(custom)] + permissions.</response>
+    </endpoint>
+    <endpoint method="GET" path="/api/product-categories/{productCategory}">
+      <response status="200">okWithPermissions: data={ id, name, parent_id, parent:{id,name}|null, description, attributes:[{ attribute_id, code, name, data_type, is_required, sort_order }], inherited_attributes:[{ attribute_id, code, name, data_type, is_required }], created_at } + permissions.</response>
+      <errors>403 senza view; 404.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/product-categories">
+      <request>{ name:req max191, parent_id?:nullable exists:product_categories, description?:nullable, attributes?:[{ attribute_id:exists, is_required?:bool, sort_order?:int }] distinct per attribute_id }.</request>
+      <response status="201">okWithPermissions(ProductCategoryResource).</response>
+      <errors>403; 422 (parent inesistente, ciclo, attribute_id inesistente/duplicato); 422 campo non-editable.</errors>
+    </endpoint>
+    <endpoint method="PUT|PATCH" path="/api/product-categories/{productCategory}">
+      <request>Come POST, `sometimes`. `attributes` = full-replace sync (con pivot is_required/sort_order). `parent_id` non può creare ciclo (né self né discendente) → 422.</request>
+      <response status="200">okWithPermissions(ProductCategoryResource).</response>
+      <errors>403; 404; 422 (ciclo).</errors>
+    </endpoint>
+    <endpoint method="DELETE" path="/api/product-categories/{productCategory}">
+      <response status="204">No content SE senza figli e senza prodotti.</response>
+      <errors>403; 404; 409/422 se ha figli o prodotti associati.</errors>
+    </endpoint>
+
+    <!-- ================= PRODUCTS ================= -->
+    <endpoint method="GET" path="/api/tables/products/columns">
+      <response status="200">
+        Columns: [ name(text,sortable,filterable:text,searchable), description(text,sortable:false,filterable:text),
+        cost(number,sortable,filterable:number), price(number,sortable,filterable:number),
+        category(text,sortable,filterable:set)  <!-- derived: nome categoria -->,
+        created_at(datetime,sortable,filterable:date) ].
+        defaultSort created_at desc; actions view/edit/delete; label `products.columns.*`.
+      </response>
+      <errors>403 senza products.viewAny.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/tables/products/rows">
+      <response status="200">{ items:[{ id, name, description, cost, price, category:{id,name}|null, created_at, actions[] }], pagination }. Eager load category (no N+1).</response>
+    </endpoint>
+    <endpoint method="POST" path="/api/tables/products/values">
+      <response status="200">columnId='category' → nomi categoria distinti (allow-list). columnId fuori allow-list → 422.</response>
+    </endpoint>
+    <endpoint method="GET" path="/api/meta/products">
+      <response status="200">fields=[name(text,mandatory),description(textarea),cost(number),price(number),category_id(select,mandatory)] + permissions. (Gli attributi dinamici NON sono nel meta: arrivano da effective-attributes.)</response>
+    </endpoint>
+    <endpoint method="GET" path="/api/products/{product}">
+      <response status="200">
+        okWithPermissions: data={ id, name, description, cost, price, category_id, category:{id,name}|null,
+        attributes:[{ attribute_id, code, name, data_type, value, option_id? }], created_at } + permissions.
+        `value` è il valore tipizzato (string|number|boolean) risolto dalla colonna value_*.
+      </response>
+      <errors>403 senza products.view; 404.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/products">
+      <request>
+        { name:req max191, description?:nullable, cost?:nullable decimal, price?:nullable decimal,
+          category_id:req exists:product_categories,
+          attributes?:[{ attribute_id:exists, value:mixed }] }.
+        Validazione Service: ogni attribute_id ∈ effectiveAttributes(category_id); `value` coerente col data_type
+        (INTEGER intero, DECIMAL numerico, BOOLEAN bool, ENUM ∈ options.value, STRING stringa); attributi con
+        is_required nella categoria devono essere presenti e non vuoti. Upsert su product_attribute_values nel value_* giusto.
+      </request>
+      <response status="201">okWithPermissions(ProductResource). Shape del GET show.</response>
+      <errors>403 senza create; 422 (name/category mancanti, attribute non nella categoria, value incoerente col tipo, ENUM fuori options, required mancante); 422 campo generico non-editable.</errors>
+    </endpoint>
+    <endpoint method="PUT|PATCH" path="/api/products/{product}">
+      <request>Come POST, campi generici `sometimes`. Se `attributes` presente = full-replace dei valori dinamici (validato contro la categoria corrente/nuova). Cambio `category_id` → i valori non più pertinenti sono rimossi; i required della nuova categoria diventano obbligatori.</request>
+      <response status="200">okWithPermissions(ProductResource).</response>
+      <errors>403 senza update; 404; 422.</errors>
+    </endpoint>
+    <endpoint method="DELETE" path="/api/products/{product}">
+      <response status="204">No content. I product_attribute_values sono rimossi (cascade).</response>
+      <errors>403 senza delete; 404.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- ATTRIBUTES -->
+    <criterion id="AC-001">Eseguita la migrazione, esistono `attributes` (code unique NOT NULL, name NOT NULL, data_type NOT NULL) e `attribute_options` (attribute_id FK cascade, unique[attribute_id,value]); `down()` le rimuove. (test schema)</criterion>
+    <criterion id="AC-002">Model `Attribute`: cast data_type→AttributeType enum; options() hasMany; categories() belongsToMany; LogsModelActivity; morph 'attribute'. (unit)</criterion>
+    <criterion id="AC-003">POST /attributes con data_type=ENUM senza options → 422; con options valide → 201 e le opzioni sono persistite con value unici; data_type non-ENUM ignora options. (crud+validation)</criterion>
+    <criterion id="AC-004">PATCH /attributes: options = full-replace; tentare di cambiare data_type con valori prodotto esistenti → 422. (update)</criterion>
+    <criterion id="AC-005">DELETE /attributes: 204 se libero; 409/422 se assegnato a una categoria o con valori prodotto; senza delete → 403. (destroy guard)</criterion>
+    <criterion id="AC-006">GET /tables/attributes/columns con viewAny → 4 colonne coi flag dichiarati; data_type come badge/enum; senza permesso → 403. (table config)</criterion>
+
+    <!-- CATEGORIES + INHERITANCE -->
+    <criterion id="AC-007">Migrazione: `product_categories` (parent_id nullable FK self restrictOnDelete) + pivot `attribute_category` (unique[attribute_id,category_id], is_required, sort_order); down() rimuove. (schema)</criterion>
+    <criterion id="AC-008">Dato un albero A→B→C con A assegna a1, B assegna a2, C assegna a3, quando GET /product-categories/{C}/effective-attributes, allora ricevo a1,a2,a3 (ereditati inclusi) con flag `inherited` corretto e ordinati (antenati prima). (risalita `parent_id` in PHP — CategoryHierarchy)</criterion>
+    <criterion id="AC-009">POST/PATCH categoria con parent_id = se stessa o un proprio discendente → 422 (anti-ciclo). (service guard)</criterion>
+    <criterion id="AC-010">PATCH categoria: `attributes` = full-replace sync con pivot is_required/sort_order preservato. (update sync)</criterion>
+    <criterion id="AC-011">DELETE categoria: 204 se senza figli e senza prodotti; 409/422 altrimenti. (destroy guard)</criterion>
+    <criterion id="AC-012">GET /product-categories/tree con viewAny → struttura annidata radici→figli con attributes_count/products_count; senza viewAny → 403. (tree endpoint)</criterion>
+
+    <!-- PRODUCTS + EAV -->
+    <criterion id="AC-013">Migrazione: `products` (category_id FK restrictOnDelete) + `product_attribute_values` (unique[product_id,attribute_id], typed columns + option_id nullOnDelete); down() rimuove. (schema)</criterion>
+    <criterion id="AC-014">POST /products con category e attributes validi → 201 e ogni valore è salvato nella colonna value_* corretta per data_type (INTEGER→value_integer, DECIMAL→value_decimal, BOOLEAN→value_boolean, STRING→value_string, ENUM→option_id). (typed routing)</criterion>
+    <criterion id="AC-015">POST /products con un attribute_id NON appartenente agli effectiveAttributes della categoria → 422; con value incoerente col data_type → 422; con ENUM fuori dalle options → 422; con un attributo is_required mancante → 422. (EAV validation)</criterion>
+    <criterion id="AC-016">GET /products/{id} → attributes idratati con `value` tipizzato risolto dalla colonna giusta (+ option_id per ENUM); category summary; blocco permissions. (show)</criterion>
+    <criterion id="AC-017">PATCH /products con `attributes` = full-replace; cambio category_id rimuove i valori non pertinenti e impone i required della nuova categoria. (update)</criterion>
+    <criterion id="AC-018">POST /tables/products/rows → row con category {id,name}|null e nessun N+1 (preventLazyLoading); /values category → nomi distinti; columnId fuori allow-list → 422. (table rows/values)</criterion>
+    <criterion id="AC-019">EnforcesFieldPermissions: campo generico reso non-editable dalla matrice DB e inviato cambiato → 422; authz base (senza products.update) → 403 prima del 422. (field perms parità)</criterion>
+    <criterion id="AC-020">Dopo permissions:sync esistono attributes.*, product-categories.*, products.* (viewAny/view/create/update/delete/export/import); i nodi navigazione compaiono in /navigation solo per chi ha il rispettivo .view. (permissions+nav)</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-021">Pagina Attributi: gate `<Can attributes.viewAny>`; monta `<TableView domain="attributes">`; il form mostra il select data_type e l'editor opzioni SOLO quando data_type=ENUM. (page+form)</criterion>
+    <criterion id="AC-022">Pagina Categorie: vista ad albero padre/figlio; creando/modificando una categoria posso assegnare attributi (con is_required/sort_order) e vedo in sola lettura gli attributi ereditati dagli antenati. (tree+form)</criterion>
+    <criterion id="AC-023">Form Prodotto: selezionata la categoria, il form chiama effective-attributes e genera i campi dinamici tipizzati (STRING→text, INTEGER/DECIMAL→number, BOOLEAN→checkbox, ENUM→select da options); cambiando categoria i campi si rigenerano. (dynamic form)</criterion>
+    <criterion id="AC-024">Submit Prodotto: create → payload { name,description,cost,price,category_id,attributes:[{attribute_id,value}] }; update → PATCH con solo i campi generici cambiati + attributes se toccati; 422 mappato inline via applyServerValidationErrors. (payload+errors)</criterion>
+    <criterion id="AC-025">Griglia Prodotti: colonne name/description/cost/price/category/created_at; la cella category mostra il nome; filtro set su category funziona; export backend-driven disponibile con products.export. (grid)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm): solo librerie già presenti.</item>
+    <item>Authz server-side su OGNI endpoint (Policy/permessi). L'UI nasconde, il backend autorizza.</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/rotte/permessi/chiavi/enum). Domini `attributes`/`product-categories`/`products`.</item>
+    <item>Envelope { success, message, data, permissions? }. Mai model Eloquent raw: sempre via Resource. Errori senza leak di classi interne.</item>
+    <item>Mass assignment: fillable esplicito (`#[Fillable]`). Query via Eloquent/parametrizzate; SSRM filtri/sort SOLO da allow-list colonne; ereditarietà categorie via walk `parent_id` in PHP (nessun SQL grezzo). option_id e FK con integrità referenziale.</item>
+    <item>Riuso obbligatorio dei framework generici e componenti esistenti (TableView, MetaField, useResourceMeta, AsyncPaginatedSelect, Can). Nessuna duplicazione. Nessuna modifica ai motori generici.</item>
+    <item>File entro 300/500 righe; dead code zero; nessuna emoticon; Pint + ESLint + `tsc --noEmit` puliti.</item>
+    <item>Coverage per-layer: Policy/Authorization/Service ≥90%; controller/table ≥85%. Test ESEGUITI, non solo scritti.</item>
+    <item>Ownership file disgiunta tra teammate. Contratto qui congelato = punto di sincronizzazione: backend e frontend in parallelo.</item>
+  </constraints>
+
+</spec>

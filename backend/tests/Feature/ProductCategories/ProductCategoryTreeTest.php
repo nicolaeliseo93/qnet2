@@ -1,0 +1,125 @@
+<?php
+
+use App\Models\Attribute;
+use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Permission;
+
+uses(RefreshDatabase::class);
+
+if (! function_exists('productCategoryUserWith')) {
+    /**
+     * @param  array<int, string>  $abilities
+     */
+    function productCategoryUserWith(array $abilities): User
+    {
+        foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import'] as $ability) {
+            Permission::findOrCreate("product-categories.{$ability}");
+        }
+
+        $user = User::factory()->create();
+
+        foreach ($abilities as $ability) {
+            $user->givePermissionTo("product-categories.{$ability}");
+        }
+
+        return $user;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AC-012 — GET /api/product-categories/tree
+// ---------------------------------------------------------------------------
+
+it('tree: 403 without product-categories.viewAny', function () {
+    $actor = productCategoryUserWith([]);
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/product-categories/tree')->assertForbidden();
+});
+
+it('tree: nested roots→children with attributes_count/products_count', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $root = ProductCategory::factory()->create(['name' => 'Root']);
+    $child = ProductCategory::factory()->childOf($root)->create(['name' => 'Child']);
+    $attribute = Attribute::factory()->create();
+    $root->attributes()->attach($attribute->id, ['is_required' => false, 'sort_order' => 0]);
+    Product::factory()->create(['category_id' => $child->id]);
+    Sanctum::actingAs($actor);
+
+    $data = $this->getJson('/api/product-categories/tree')->assertOk()->json('data');
+
+    $rootNode = collect($data)->firstWhere('name', 'Root');
+    expect($rootNode['attributes_count'])->toBe(1)
+        ->and($rootNode['products_count'])->toBe(0);
+
+    $childNode = collect($rootNode['children'])->firstWhere('name', 'Child');
+    expect($childNode)->not->toBeNull()
+        ->and($childNode['products_count'])->toBe(1)
+        ->and($childNode['children'])->toBe([]);
+});
+
+// ---------------------------------------------------------------------------
+// AC-008 — GET /api/product-categories/{productCategory}/effective-attributes
+// ---------------------------------------------------------------------------
+
+it('effective-attributes: A→B→C inherits a1,a2,a3 ancestors-first with correct `inherited` flags', function () {
+    $actor = productCategoryUserWith(['view']);
+    $a = ProductCategory::factory()->create(['name' => 'A']);
+    $b = ProductCategory::factory()->childOf($a)->create(['name' => 'B']);
+    $c = ProductCategory::factory()->childOf($b)->create(['name' => 'C']);
+    $a1 = Attribute::factory()->create(['code' => 'a1']);
+    $a2 = Attribute::factory()->create(['code' => 'a2']);
+    $a3 = Attribute::factory()->create(['code' => 'a3']);
+    $a->attributes()->attach($a1->id, ['is_required' => true, 'sort_order' => 0]);
+    $b->attributes()->attach($a2->id, ['is_required' => false, 'sort_order' => 0]);
+    $c->attributes()->attach($a3->id, ['is_required' => false, 'sort_order' => 0]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/product-categories/{$c->id}/effective-attributes")->assertOk();
+    $data = $response->json('data');
+
+    expect(collect($data)->pluck('code')->all())->toBe(['a1', 'a2', 'a3']);
+    expect(collect($data)->pluck('inherited')->all())->toBe([true, true, false]);
+    expect(collect($data)->firstWhere('code', 'a1')['is_required'])->toBeTrue();
+});
+
+it('effective-attributes: ENUM attribute carries its options', function () {
+    $actor = productCategoryUserWith(['view']);
+    $category = ProductCategory::factory()->create();
+    $enum = Attribute::factory()->enum(2)->create();
+    $category->attributes()->attach($enum->id, ['is_required' => false, 'sort_order' => 0]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/product-categories/{$category->id}/effective-attributes")->assertOk();
+
+    expect($response->json('data.0.options'))->toHaveCount(2);
+});
+
+it('effective-attributes: 403 for an actor with no product-categories/products access', function () {
+    $actor = productCategoryUserWith([]);
+    $category = ProductCategory::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/product-categories/{$category->id}/effective-attributes")->assertForbidden();
+});
+
+it('effective-attributes: allowed for an actor with only products.create (no product-categories access)', function () {
+    Permission::findOrCreate('products.create');
+    $actor = User::factory()->create();
+    $actor->givePermissionTo('products.create');
+    $category = ProductCategory::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/product-categories/{$category->id}/effective-attributes")->assertOk();
+});
+
+it('effective-attributes: 404 for a non-existent category', function () {
+    $actor = productCategoryUserWith(['view']);
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/product-categories/999999/effective-attributes')->assertNotFound();
+});

@@ -1,0 +1,40 @@
+import { apiClient } from '@/api/client'
+import type { ApiResponse, ApiResponseWithPermissions } from '@/api/types'
+import type { ResourcePermissions } from '@/features/authorization/types'
+import type {
+  CreateProductPayload,
+  ProductDetail,
+  ProductDetailWithPermissions,
+  UpdateProductPayload,
+} from '@/features/products/types'
+
+/**
+ * Fetches a single product detail together with the actor's authorization
+ * metadata for it (`permissions`, a top-level envelope sibling of `data`).
+ */
+export async function fetchProduct(id: number): Promise<ProductDetailWithPermissions> {
+  const { data } = await apiClient.get<
+    ApiResponseWithPermissions<ProductDetail, ResourcePermissions>
+  >(`/products/${id}`)
+  return { ...data.data, permissions: data.permissions }
+}
+
+/** Creates a product. Returns the created resource from the envelope `data`. */
+export async function createProduct(payload: CreateProductPayload): Promise<ProductDetail> {
+  const { data } = await apiClient.post<ApiResponse<ProductDetail>>('/products', payload)
+  return data.data
+}
+
+/** Partially updates a product (PATCH). Returns the updated resource. */
+export async function updateProduct(
+  id: number,
+  payload: UpdateProductPayload,
+): Promise<ProductDetail> {
+  const { data } = await apiClient.patch<ApiResponse<ProductDetail>>(`/products/${id}`, payload)
+  return data.data
+}
+
+/** Deletes a product. Backend responds 204 with no body. */
+export async function deleteProduct(id: number): Promise<void> {
+  await apiClient.delete(`/products/${id}`)
+}

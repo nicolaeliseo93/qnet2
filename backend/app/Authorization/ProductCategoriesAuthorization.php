@@ -1,0 +1,77 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Authorization;
+
+use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * ResourceAuthorization for the `product-categories` resource (spec 0017).
+ *
+ * No contextual rules: every field's ceiling is simply visible+editable when
+ * the actor may write (create/update), else visible+readonly. `attributes`
+ * is a nested, custom-rendered editor (attribute_id/is_required/sort_order
+ * rows); inherited attributes are read-only metadata, never submitted here.
+ */
+class ProductCategoriesAuthorization extends AbstractResourceAuthorization
+{
+    public function __construct(FieldPermissionRepository $fieldPermissionRepository)
+    {
+        parent::__construct($fieldPermissionRepository);
+    }
+
+    public function resource(): string
+    {
+        return 'product-categories';
+    }
+
+    /**
+     * @return array<int, FieldDefinition>
+     */
+    public function fields(): array
+    {
+        return [
+            new FieldDefinition('name', 'text', mandatory: true),
+            new FieldDefinition('parent_id', 'select'),
+            new FieldDefinition('description', 'textarea'),
+            new FieldDefinition('attributes', 'custom'),
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function actions(): array
+    {
+        return ['delete', 'export', 'import'];
+    }
+
+    /**
+     * @return array<string, FieldPermission>
+     */
+    protected function fieldPermissionCeiling(User $actor, ?Model $model): array
+    {
+        $mayWrite = $this->actorMayWrite($actor, $model);
+
+        return [
+            'name' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
+            'parent_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'description' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'attributes' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+        ];
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    public function actionPermissions(User $actor, ?Model $model): array
+    {
+        return [
+            'delete' => $model !== null && $actor->can('product-categories.delete'),
+            'export' => $actor->can('product-categories.export'),
+            'import' => $actor->can('product-categories.import'),
+        ];
+    }
+}

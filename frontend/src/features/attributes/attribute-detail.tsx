@@ -1,0 +1,72 @@
+import { useTranslation } from 'react-i18next'
+import { SlidersHorizontal } from 'lucide-react'
+import {
+  DetailField,
+  DetailGrid,
+  DetailHero,
+  DetailMeta,
+  DetailMonogram,
+  DetailPanel,
+  DetailSection,
+} from '@/components/detail/detail-panel'
+import { Badge } from '@/components/ui/badge'
+import { formatDateTime } from '@/features/table/cell-renderers'
+import { enumLabelOf } from '@/features/config/enum-label'
+import type { AttributeDetail } from '@/features/attributes/types'
+
+interface AttributeDetailViewProps {
+  attribute: AttributeDetail
+}
+
+/**
+ * Read-only detail of a single attribute. Purely presentational: the caller
+ * (the table's "view" sheet) fetches the fresh detail and passes it down
+ * (mirrors `ReferentTypeDetailView`). ENUM attributes additionally list their
+ * options, ordered by `sort_order`.
+ */
+export function AttributeDetailView({ attribute }: AttributeDetailViewProps) {
+  const { t } = useTranslation()
+  const createdAt = formatDateTime(attribute.created_at)
+  const sortedOptions = [...attribute.options].sort((a, b) => a.sort_order - b.sort_order)
+
+  return (
+    <DetailPanel>
+      <DetailHero
+        media={<DetailMonogram name={attribute.name} icon={<SlidersHorizontal />} />}
+        title={attribute.name}
+        subtitle={attribute.code}
+      />
+
+      <DetailSection title={t('attributes.detail.details')}>
+        <DetailGrid>
+          <DetailField label={t('attributes.columns.data_type')}>
+            <Badge variant="secondary">{enumLabelOf('attribute_type', attribute.data_type)}</Badge>
+          </DetailField>
+        </DetailGrid>
+      </DetailSection>
+
+      {attribute.data_type === 'ENUM' && (
+        <DetailSection title={t('attributes.detail.options')}>
+          {sortedOptions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('attributes.form.optionsEmpty')}</p>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {sortedOptions.map((option) => (
+                <li key={option.id} className="flex items-center gap-2 text-sm">
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {option.value}
+                  </Badge>
+                  <span className="text-foreground">{option.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DetailSection>
+      )}
+
+      {createdAt ? (
+        <DetailMeta label={t('attributes.detail.created_at')}>{createdAt}</DetailMeta>
+      ) : null}
+    </DetailPanel>
+  )
+}

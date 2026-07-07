@@ -1,0 +1,73 @@
+import { apiClient } from '@/api/client'
+import type { ApiResponse, ApiResponseWithPermissions } from '@/api/types'
+import type { ResourcePermissions } from '@/features/authorization/types'
+import type {
+  CreateProductCategoryPayload,
+  EffectiveAttribute,
+  ProductCategoryDetail,
+  ProductCategoryDetailWithPermissions,
+  ProductCategoryTreeNode,
+  UpdateProductCategoryPayload,
+} from '@/features/product-categories/types'
+
+/** Fetches the full category tree (roots → descendants), for the tree view and the product form's category picker. */
+export async function fetchProductCategoryTree(): Promise<ProductCategoryTreeNode[]> {
+  const { data } = await apiClient.get<ApiResponse<ProductCategoryTreeNode[]>>(
+    '/product-categories/tree',
+  )
+  return data.data
+}
+
+/**
+ * Fetches a category's effective attributes (own + every ancestor's), the
+ * source for the product form's dynamic attribute fields (spec AC-023).
+ */
+export async function fetchEffectiveAttributes(
+  categoryId: number,
+): Promise<EffectiveAttribute[]> {
+  const { data } = await apiClient.get<ApiResponse<EffectiveAttribute[]>>(
+    `/product-categories/${categoryId}/effective-attributes`,
+  )
+  return data.data
+}
+
+/**
+ * Fetches a single category detail together with the actor's authorization
+ * metadata for it (`permissions`, a top-level envelope sibling of `data`).
+ */
+export async function fetchProductCategory(
+  id: number,
+): Promise<ProductCategoryDetailWithPermissions> {
+  const { data } = await apiClient.get<
+    ApiResponseWithPermissions<ProductCategoryDetail, ResourcePermissions>
+  >(`/product-categories/${id}`)
+  return { ...data.data, permissions: data.permissions }
+}
+
+/** Creates a category. Returns the created resource from the envelope `data`. */
+export async function createProductCategory(
+  payload: CreateProductCategoryPayload,
+): Promise<ProductCategoryDetail> {
+  const { data } = await apiClient.post<ApiResponse<ProductCategoryDetail>>(
+    '/product-categories',
+    payload,
+  )
+  return data.data
+}
+
+/** Partially updates a category (PATCH). Returns the updated resource. */
+export async function updateProductCategory(
+  id: number,
+  payload: UpdateProductCategoryPayload,
+): Promise<ProductCategoryDetail> {
+  const { data } = await apiClient.patch<ApiResponse<ProductCategoryDetail>>(
+    `/product-categories/${id}`,
+    payload,
+  )
+  return data.data
+}
+
+/** Deletes a category. Backend responds 204 with no body (409/422 if in use). */
+export async function deleteProductCategory(id: number): Promise<void> {
+  await apiClient.delete(`/product-categories/${id}`)
+}

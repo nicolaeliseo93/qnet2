@@ -41,7 +41,7 @@ it('returns 404 for an unregistered domain, before ids validation', function () 
     Sanctum::actingAs($actor);
 
     // Malformed payload (empty ids) AND unknown domain: 404 wins, never 422.
-    $this->postJson('/api/tables/products/bulk-delete', ['ids' => []])
+    $this->postJson('/api/tables/nonexistent-domain/bulk-delete', ['ids' => []])
         ->assertNotFound()
         ->assertJson(['success' => false])
         ->assertJsonStructure(['success', 'message']);

@@ -125,6 +125,41 @@ return [
                         ],
                     ],
                 ],
+                [
+                    // Products (spec 0017): a configurable catalogue —
+                    // Attributes (reusable dynamic fields), Product
+                    // Categories (the attribute-assignment tree) and Products
+                    // itself. The route-less group is dropped automatically
+                    // when the actor can see none of its children.
+                    'key' => 'products-group',
+                    'label' => 'navigation.products',
+                    'icon' => 'package',
+                    'route' => null,
+                    'permission' => null,
+                    'children' => [
+                        [
+                            'key' => 'products',
+                            'label' => 'navigation.products',
+                            'icon' => 'package',
+                            'route' => '/products',
+                            'permission' => 'products.view',
+                        ],
+                        [
+                            'key' => 'product-categories',
+                            'label' => 'navigation.productCategories',
+                            'icon' => 'list-tree',
+                            'route' => '/product-categories',
+                            'permission' => 'product-categories.view',
+                        ],
+                        [
+                            'key' => 'attributes',
+                            'label' => 'navigation.attributes',
+                            'icon' => 'sliders-horizontal',
+                            'route' => '/attributes',
+                            'permission' => 'attributes.view',
+                        ],
+                    ],
+                ],
             ],
         ],
         [

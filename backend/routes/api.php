@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Addresses\AddressController;
 use App\Http\Controllers\Attachments\AttachmentController;
+use App\Http\Controllers\Attributes\AttributeController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Authorization\FieldCatalogueController;
 use App\Http\Controllers\BusinessFunctions\BusinessFunctionController;
@@ -20,6 +21,8 @@ use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\OperationalSites\OperationalSiteController;
 use App\Http\Controllers\OperationalSites\OperationalSiteForSelectController;
 use App\Http\Controllers\PersonalData\PersonalDataController;
+use App\Http\Controllers\ProductCategories\ProductCategoryController;
+use App\Http\Controllers\Products\ProductController;
 use App\Http\Controllers\Referents\ReferentController;
 use App\Http\Controllers\ReferentTypes\ReferentTypeController;
 use App\Http\Controllers\ReferentTypes\ReferentTypeForSelectController;
@@ -339,6 +342,45 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('referents', [ReferentController::class, 'store']);
         Route::match(['put', 'patch'], 'referents/{referent}', [ReferentController::class, 'update']);
         Route::delete('referents/{referent}', [ReferentController::class, 'destroy']);
+    });
+
+    // Attributes CRUD (spec 0017): the global, reusable dynamic-attribute
+    // catalogue assignable to product categories. Authorization
+    // (attributes.view/create/update/delete) is enforced server-side in
+    // AttributeController via AttributePolicy on every endpoint.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('attributes/{attribute}', [AttributeController::class, 'show']);
+        Route::post('attributes', [AttributeController::class, 'store']);
+        Route::match(['put', 'patch'], 'attributes/{attribute}', [AttributeController::class, 'update']);
+        Route::delete('attributes/{attribute}', [AttributeController::class, 'destroy']);
+    });
+
+    // Product categories: CRUD + the dedicated tree view + the product form's
+    // effective-attributes lookup (spec 0017). `tree` and
+    // `{productCategory}/effective-attributes` are declared ABOVE the plain
+    // `{productCategory}` show route so their literal segments win over the
+    // bound wildcard. Authorization (product-categories.view/create/update/
+    // delete, plus the effective-attributes cross-resource rule) is enforced
+    // server-side in ProductCategoryController via ProductCategoryPolicy.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('product-categories/tree', [ProductCategoryController::class, 'tree']);
+        Route::get('product-categories/{productCategory}/effective-attributes', [ProductCategoryController::class, 'effectiveAttributes']);
+
+        Route::get('product-categories/{productCategory}', [ProductCategoryController::class, 'show']);
+        Route::post('product-categories', [ProductCategoryController::class, 'store']);
+        Route::match(['put', 'patch'], 'product-categories/{productCategory}', [ProductCategoryController::class, 'update']);
+        Route::delete('product-categories/{productCategory}', [ProductCategoryController::class, 'destroy']);
+    });
+
+    // Products CRUD (spec 0017): generic fields + category-driven dynamic
+    // attribute values (EAV, see ProductService). Authorization
+    // (products.view/create/update/delete) is enforced server-side in
+    // ProductController via ProductPolicy on every endpoint.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('products/{product}', [ProductController::class, 'show']);
+        Route::post('products', [ProductController::class, 'store']);
+        Route::match(['put', 'patch'], 'products/{product}', [ProductController::class, 'update']);
+        Route::delete('products/{product}', [ProductController::class, 'destroy']);
     });
 
     // In-app user notifications (Laravel native `database` channel). Every

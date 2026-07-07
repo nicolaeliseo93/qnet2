@@ -1,0 +1,50 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Abstracts\BaseModel;
+use App\Models\Concerns\LogsModelActivity;
+use Database\Factories\ProductCategoryFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+/**
+ * Product category tree node (spec 0017): unlimited-depth parent/child
+ * hierarchy. A category's EFFECTIVE attributes are its own `attributes()`
+ * assignments UNION every ancestor's (see ProductCategoryService).
+ */
+#[Fillable(['name', 'parent_id', 'description'])]
+class ProductCategory extends BaseModel
+{
+    /** @use HasFactory<ProductCategoryFactory> */
+    use HasFactory, LogsModelActivity;
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /**
+     * Attributes assigned directly to THIS category (own assignments — not
+     * including attributes only inherited from an ancestor).
+     */
+    public function attributes(): BelongsToMany
+    {
+        return $this->belongsToMany(Attribute::class, 'attribute_category', 'category_id', 'attribute_id')
+            ->withPivot(['is_required', 'sort_order'])
+            ->withTimestamps();
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class, 'category_id');
+    }
+}

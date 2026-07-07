@@ -5,12 +5,15 @@ namespace App\Providers;
 use App\Authorization\FieldPermissionRepository;
 use App\Models\Address;
 use App\Models\Attachment;
+use App\Models\Attribute;
 use App\Models\BusinessFunction;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Models\EmploymentProfile;
 use App\Models\OperationalSite;
 use App\Models\PersonalData;
+use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\Referent;
 use App\Models\ReferentType;
 use App\Models\Role;
@@ -65,6 +68,9 @@ class AppServiceProvider extends ServiceProvider
             'employment_profile' => EmploymentProfile::class,
             'referent' => Referent::class,
             'referent_type' => ReferentType::class,
+            'attribute' => Attribute::class,
+            'product_category' => ProductCategory::class,
+            'product' => Product::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

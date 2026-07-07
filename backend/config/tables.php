@@ -1,8 +1,10 @@
 <?php
 
+use App\Tables\AttributesTableDefinition;
 use App\Tables\BusinessFunctionsTableDefinition;
 use App\Tables\CompaniesTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
+use App\Tables\ProductsTableDefinition;
 use App\Tables\ReferentsTableDefinition;
 use App\Tables\ReferentTypesTableDefinition;
 use App\Tables\RolesTableDefinition;
@@ -38,6 +40,8 @@ return [
         'operational-sites' => OperationalSitesTableDefinition::class,
         'referent-types' => ReferentTypesTableDefinition::class,
         'referents' => ReferentsTableDefinition::class,
+        'attributes' => AttributesTableDefinition::class,
+        'products' => ProductsTableDefinition::class,
     ],
 
 ];

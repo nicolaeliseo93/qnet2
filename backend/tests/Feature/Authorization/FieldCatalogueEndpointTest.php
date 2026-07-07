@@ -65,11 +65,13 @@ it('200 with the catalogue for users and roles, keys matching each resolver\'s f
     $resources = collect($response->json('data.resources'))->keyBy('resource');
 
     // spec 0010 registered `business-functions` AND `companies`, spec 0011
-    // `operational-sites`, spec 0016 `referent-types` AND `referents`, all in
-    // the same generic registry (config/authorization.php), so this
-    // registry-driven catalogue legitimately grows to include them.
+    // `operational-sites`, spec 0016 `referent-types` AND `referents`, spec
+    // 0017 `attributes`, `product-categories` AND `products`, all in the same
+    // generic registry (config/authorization.php), so this registry-driven
+    // catalogue legitimately grows to include them.
     expect($resources->keys()->all())->toEqualCanonicalizing([
         'users', 'roles', 'business-functions', 'companies', 'operational-sites', 'referent-types', 'referents',
+        'attributes', 'product-categories', 'products',
     ]);
 
     $userFieldKeys = collect($resources['users']['fields'])->pluck('key')->all();

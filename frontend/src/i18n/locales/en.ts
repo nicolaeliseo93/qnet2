@@ -14,6 +14,7 @@ import { imports } from './en-imports'
 import { exports } from './en-exports'
 import { table } from './en-table'
 import { referents, referentTypes } from './en-referents'
+import { attributes, productCategories, products } from './en-products'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -54,6 +55,9 @@ export const en = {
     referents: 'Referents',
     referentTypes: 'Referent Types',
     operationalSites: 'Operational Sites',
+    attributes: 'Attributes',
+    productCategories: 'Product Categories',
+    products: 'Products',
     faCompaniesServices: 'FA Companies & Services',
     settings: 'Settings',
     toggleSidebar: 'Toggle sidebar',
@@ -447,6 +451,9 @@ export const en = {
   exports,
   referents,
   referentTypes,
+  attributes,
+  productCategories,
+  products,
 }
 
 export type TranslationResources = typeof en

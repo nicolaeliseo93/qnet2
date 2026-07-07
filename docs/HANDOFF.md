@@ -2,6 +2,66 @@
 
 > Injected at session start. Update at every green state.
 
+## Feature — Products module (configurable EAV: attributes + category tree + products) — GREEN (2026-07-07)
+
+Spec `docs/specs/0017-products-module.xml` (contract-first, user-approved via AskUserQuestion). Built by
+an agent team (backend + frontend teammates in parallel, disjoint ownership, independent verifier gate).
+Three new resources, each a thin adapter on the generic framework — ZERO changes to generic engines.
+
+User-approved decisions: EAV value storage = TYPED COLUMNS (not JSON); products grid shows ONLY generic
+fields (dynamic attrs live in the product form/detail, no dynamic grid columns); attributes are reusable
+entities assigned to categories via a pivot with recursive inheritance; three separate menu entries.
+
+Data model (6 migrations, dev MySQL, up+down verified):
+- `attributes` (code unique, name, data_type) + `attribute_options` (value/label/sort_order, unique[attribute_id,value]).
+- `product_categories` (parent_id nullable self-FK restrictOnDelete — adjacency-list tree) + pivot
+  `attribute_category` (is_required, sort_order, unique[attribute_id,category_id]).
+- `products` (name, description, cost/price decimal(15,2), category_id FK restrictOnDelete) +
+  `product_attribute_values` (typed cols value_string/value_integer/value_decimal/value_boolean + option_id
+  nullOnDelete, unique[product_id,attribute_id]).
+- Enum `App\Enums\AttributeType` (STRING/INTEGER/DECIMAL/BOOLEAN/ENUM) — extension point; registered in
+  config/config.php form_enums as `attribute_type`.
+
+Inheritance: `App\Services\ProductCategories\CategoryHierarchy::effectiveAttributes()` = own attrs UNION all
+ancestors', ancestors-first + sort_order. IMPLEMENTED as an iterative PHP `parent_id` walk (NOT a
+`WITH RECURSIVE` CTE) — portable SQLite/MySQL, zero raw SQL (exceeds the anti-SQLi constraint). The lead
+authorized this at dispatch; spec 0017 scope/AC-008/constraints were updated to match the implementation.
+
+Backend layers (mirror business-functions/referent-types): Policies (auto-discovered), *Authorization
+(config/authorization.php), TableDefinitions for `attributes`+`products` only (categories = tree view, no
+SSRM grid) with derived `category` filter/sort/distinct, Requests/DTO/Services/Resources/thin Controllers.
+Key endpoints beyond CRUD: `GET /product-categories/tree` (nested + counts) and
+`GET /product-categories/{id}/effective-attributes` (feeds the dynamic product form) — both declared ABOVE
+the `{productCategory}` wildcard so literals win. ProductService validates dynamic attrs (⊆ effective set,
+type-coherent, ENUM ∈ options, required enforced) and upserts into the correct value_* column.
+Restrictive deletes → 409 (attribute in use / category with children or products). Morph map + nav nodes
+(icons package/list-tree/sliders-horizontal, matched to frontend icon-map) + DemoProductCatalogSeeder added.
+`permissions:sync` → 21 new permissions (attributes.*/product-categories.*/products.*, 7 abilities each).
+
+Frontend (features/attributes, features/product-categories, features/products): TableView adapters for
+attributes+products grids; attribute form shows the ENUM options editor only when data_type===ENUM;
+categories use a custom recursive TREE view (built from existing components/ui, no new dep) with
+attribute-assignment editor (is_required/sort_order) + read-only inherited list; product form's category
+picker calls effective-attributes and generates typed dynamic fields (STRING→text, INTEGER/DECIMAL→number,
+BOOLEAN→checkbox, ENUM→select), regenerating on category change. Category/parent pickers flatten the tree
+client-side; the attribute-assignment picker reuses POST /tables/attributes/rows — NO new for-select
+endpoints (per spec). Routes + breadcrumbs + icon-map + split i18n en/it-products.ts wired.
+
+Verification (independent verifier, all re-run): 25/25 acceptance criteria PASS with file:line evidence;
+integration seams A-F PASS (icon tokens, enum values, effective-attributes/tree/rows shapes, permission/route
+alignment). Backend Pest 1321/1323 pass (1 skip; 1 pre-existing unrelated failure
+`AbstractMigrationSourcePreviewTest` — RolesSource emits extra `description:null`, untouched by this work).
+`pint --test` exit 0 (lead re-confirmed after backend fix-mode reformatted 6 test files). Frontend tsc
+--noEmit clean, ESLint clean on changed files, Vitest 531 pass / 3 pre-existing unrelated failures
+(`features/table/cell-renderers.test.tsx` ContactsCell — i18n locale not set to 'en' in that suite,
+confirmed pre-existing). Coverage above targets (Policy/Authorization/Service ≥90%, controller/table ≥85%).
+
+NOTE for the field-permission matrix: dynamic product attributes are authorized at RESOURCE level
+(`products.update`) only — the per-role field matrix (spec 0006) covers just the generic product fields
+(name/description/cost/price/category_id). Products table is minimal by design ("poi la completeremo").
+Two known PRE-EXISTING failures above are NOT from this work. Changes NOT yet committed (82 files) — awaiting
+user go for the git checkpoint.
+
 ## Change — Referents `primary_contact` column made IDENTICAL to Users — GREEN (2026-07-06)
 
 Ad-hoc request: the referents `primary_contact` table column must be identical to the users one,

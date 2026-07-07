@@ -96,7 +96,7 @@ it('requires authentication to save or reset preferences', function () {
 it('returns 404 when saving preferences for an unregistered domain', function () {
     Sanctum::actingAs(userWithUserAbilities(['viewAny']));
 
-    $this->postJson('/api/tables/products/preferences', ['columns' => [['id' => 'name']]])
+    $this->postJson('/api/tables/nonexistent-domain/preferences', ['columns' => [['id' => 'name']]])
         ->assertNotFound()
         ->assertJson(['success' => false]);
 });

@@ -55,7 +55,7 @@ it('returns 404 on the rows endpoint for an unregistered domain (before validati
 
     // Unknown domain must 404 BEFORE validation, even with a malformed payload
     // (404, never 422), AND the body must follow the uniform fail() envelope.
-    $this->postJson('/api/tables/products/rows', ['startRow' => 5, 'endRow' => 0])
+    $this->postJson('/api/tables/nonexistent-domain/rows', ['startRow' => 5, 'endRow' => 0])
         ->assertNotFound()
         ->assertJson(['success' => false])
         ->assertJsonStructure(['success', 'message']);

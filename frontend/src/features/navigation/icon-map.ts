@@ -6,8 +6,11 @@ import {
   DatabaseZap,
   Layers,
   LayoutDashboard,
+  ListTree,
   MapPin,
+  Package,
   ShieldCheck,
+  SlidersHorizontal,
   Tags,
   Users,
   type LucideIcon,
@@ -28,6 +31,9 @@ const iconMap: Record<string, LucideIcon> = {
   'database-zap': DatabaseZap,
   'contact-round': ContactRound,
   tags: Tags,
+  'sliders-horizontal': SlidersHorizontal,
+  'list-tree': ListTree,
+  package: Package,
 }
 
 export function resolveIcon(name: string | null): LucideIcon {

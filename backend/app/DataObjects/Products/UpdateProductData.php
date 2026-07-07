@@ -1,0 +1,101 @@
+<?php
+
+namespace App\DataObjects\Products;
+
+/**
+ * Validated payload for a partial (PATCH) product update
+ * (PUT/PATCH /api/products/{product}, spec 0017).
+ *
+ * Declared DTO (no "magic flying array") so the UpdateProductRequest →
+ * ProductService contract is explicit. `description`/`cost`/`price`/
+ * `category_id` are all legitimately nullable-or-changeable VALUES, so a
+ * plain null property cannot distinguish "not submitted" from "submitted as
+ * null" — the `*Submitted` flags carry that distinction, mirroring
+ * UpdateBusinessFunctionData/UpdateProductCategoryData. `attributes`, when
+ * submitted, is a full-replace of the product's dynamic values (spec 0017);
+ * when NOT submitted but `category_id` changes, ProductService prunes
+ * values no longer relevant and enforces the new category's required set.
+ */
+final readonly class UpdateProductData
+{
+    /**
+     * @param  array<int, array{attribute_id: int, value: mixed}>|null  $attributes
+     */
+    public function __construct(
+        public ?string $name = null,
+        public ?string $description = null,
+        public bool $descriptionSubmitted = false,
+        public ?float $cost = null,
+        public bool $costSubmitted = false,
+        public ?float $price = null,
+        public bool $priceSubmitted = false,
+        public ?int $categoryId = null,
+        public bool $categoryIdSubmitted = false,
+        public ?array $attributes = null,
+    ) {}
+
+    /**
+     * Build from the validated UpdateProductRequest payload.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromValidated(array $data): self
+    {
+        return new self(
+            name: array_key_exists('name', $data) ? (string) $data['name'] : null,
+            description: array_key_exists('description', $data) ? $data['description'] : null,
+            descriptionSubmitted: array_key_exists('description', $data),
+            cost: array_key_exists('cost', $data) && $data['cost'] !== null ? (float) $data['cost'] : null,
+            costSubmitted: array_key_exists('cost', $data),
+            price: array_key_exists('price', $data) && $data['price'] !== null ? (float) $data['price'] : null,
+            priceSubmitted: array_key_exists('price', $data),
+            categoryId: array_key_exists('category_id', $data) && $data['category_id'] !== null ? (int) $data['category_id'] : null,
+            categoryIdSubmitted: array_key_exists('category_id', $data),
+            attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
+        );
+    }
+
+    public function hasCategoryId(): bool
+    {
+        return $this->categoryIdSubmitted;
+    }
+
+    public function hasAttributes(): bool
+    {
+        return $this->attributes !== null;
+    }
+
+    /**
+     * Only the plain scalar attributes the client actually submitted, ready
+     * for a partial mass-assignment update. `attributes` (the EAV values)
+     * are synced separately.
+     *
+     * @return array<string, mixed>
+     */
+    public function submittedAttributes(): array
+    {
+        $attributes = [];
+
+        if ($this->name !== null) {
+            $attributes['name'] = $this->name;
+        }
+
+        if ($this->descriptionSubmitted) {
+            $attributes['description'] = $this->description;
+        }
+
+        if ($this->costSubmitted) {
+            $attributes['cost'] = $this->cost;
+        }
+
+        if ($this->priceSubmitted) {
+            $attributes['price'] = $this->price;
+        }
+
+        if ($this->categoryIdSubmitted) {
+            $attributes['category_id'] = $this->categoryId;
+        }
+
+        return $attributes;
+    }
+}

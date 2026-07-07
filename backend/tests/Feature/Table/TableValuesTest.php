@@ -121,7 +121,7 @@ it('returns 404 on the values endpoint for an unregistered domain (before valida
     $user = userWithUserAbilities(['viewAny']);
     Sanctum::actingAs($user);
 
-    $this->postJson('/api/tables/products/values', ['columnId' => 'nope'])
+    $this->postJson('/api/tables/nonexistent-domain/values', ['columnId' => 'nope'])
         ->assertNotFound()
         ->assertJson(['success' => false])
         ->assertJsonStructure(['success', 'message']);

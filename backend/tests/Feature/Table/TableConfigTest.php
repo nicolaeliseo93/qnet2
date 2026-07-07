@@ -47,7 +47,7 @@ it('returns 404 on the config endpoint for an unregistered domain', function () 
 
     // Only config-mapped domains resolve; anything else is unreachable.
     // 404 must carry the uniform fail() envelope ({success:false, message}).
-    $this->getJson('/api/tables/products/columns')
+    $this->getJson('/api/tables/nonexistent-domain/columns')
         ->assertNotFound()
         ->assertJson(['success' => false])
         ->assertJsonStructure(['success', 'message']);

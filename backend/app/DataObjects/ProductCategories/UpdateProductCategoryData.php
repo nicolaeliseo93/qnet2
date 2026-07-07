@@ -1,0 +1,88 @@
+<?php
+
+namespace App\DataObjects\ProductCategories;
+
+/**
+ * Validated payload for a partial (PATCH) product category update
+ * (PUT/PATCH /api/product-categories/{productCategory}, spec 0017).
+ *
+ * Declared DTO (no "magic flying array") so the UpdateProductCategoryRequest
+ * → ProductCategoryService contract is explicit. `parent_id` and
+ * `description` are both legitimately nullable VALUES (moving to root,
+ * clearing the description), so a plain null property cannot distinguish
+ * "not submitted" from "submitted as null" — the `*Submitted` flags carry
+ * that distinction explicitly, mirroring UpdateBusinessFunctionData.
+ * `attributes`, when submitted, is a full-replace sync of the category's own
+ * assignments.
+ */
+final readonly class UpdateProductCategoryData
+{
+    /**
+     * @param  array<int, array{attribute_id: int, is_required?: bool, sort_order?: int}>|null  $attributes
+     */
+    public function __construct(
+        public ?string $name = null,
+        public ?int $parentId = null,
+        public bool $parentIdSubmitted = false,
+        public ?string $description = null,
+        public bool $descriptionSubmitted = false,
+        public ?array $attributes = null,
+    ) {}
+
+    /**
+     * Build from the validated UpdateProductCategoryRequest payload.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromValidated(array $data): self
+    {
+        return new self(
+            name: array_key_exists('name', $data) ? (string) $data['name'] : null,
+            parentId: array_key_exists('parent_id', $data) && $data['parent_id'] !== null ? (int) $data['parent_id'] : null,
+            parentIdSubmitted: array_key_exists('parent_id', $data),
+            description: array_key_exists('description', $data) ? $data['description'] : null,
+            descriptionSubmitted: array_key_exists('description', $data),
+            attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
+        );
+    }
+
+    public function hasParentId(): bool
+    {
+        return $this->parentIdSubmitted;
+    }
+
+    public function hasDescription(): bool
+    {
+        return $this->descriptionSubmitted;
+    }
+
+    public function hasAttributes(): bool
+    {
+        return $this->attributes !== null;
+    }
+
+    /**
+     * Only the attributes the client actually submitted, ready for a partial
+     * mass-assignment update. `attributes` (the pivot) is synced separately.
+     *
+     * @return array<string, mixed>
+     */
+    public function submittedAttributes(): array
+    {
+        $attributes = [];
+
+        if ($this->name !== null) {
+            $attributes['name'] = $this->name;
+        }
+
+        if ($this->parentIdSubmitted) {
+            $attributes['parent_id'] = $this->parentId;
+        }
+
+        if ($this->descriptionSubmitted) {
+            $attributes['description'] = $this->description;
+        }
+
+        return $attributes;
+    }
+}

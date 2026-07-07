@@ -1,0 +1,227 @@
+import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Package, SlidersHorizontal } from 'lucide-react'
+import { FormSection } from '@/components/form-section'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Form, FormControl } from '@/components/ui/form'
+import { SearchableSelect } from '@/components/ui/searchable-select'
+import { MetaField } from '@/features/authorization/MetaField'
+import { useResourcePermissions } from '@/features/authorization/permissions'
+import { useProductCategoryTree } from '@/features/product-categories/use-product-category-tree'
+import { flattenCategoryTree } from '@/features/product-categories/flatten-tree'
+import { useProductForm } from '@/features/products/use-product-form'
+import { ProductDynamicAttributeFields } from '@/features/products/product-dynamic-attribute-fields'
+import type { ProductDetail, ProductFormMode } from '@/features/products/types'
+
+interface ProductFormBodyProps {
+  mode: ProductFormMode
+  onSuccess: (product: ProductDetail) => void
+  onCancel: () => void
+}
+
+/** Formats a raw numeric field's RHF value for a controlled `<input type="number">`. */
+function numberInputValue(value: number | null): string {
+  return value === null ? '' : String(value)
+}
+
+/**
+ * The product create/edit form UI: generic fields (name, description, cost,
+ * price, category) wrapped in `MetaField` (spec 0004), followed by the
+ * category-driven dynamic attribute fields (spec AC-023) — NOT
+ * metadata-gated, per the spec's field-permission scope. All non-render
+ * logic lives in `useProductForm`.
+ */
+export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyProps) {
+  const { t } = useTranslation()
+  const { field: fieldPermission } = useResourcePermissions()
+  const { form, serverError, onSubmit } = useProductForm({ mode, onSuccess })
+  const treeQuery = useProductCategoryTree()
+
+  const categoryOptions = useMemo(
+    () => flattenCategoryTree(treeQuery.data ?? []),
+    [treeQuery.data],
+  )
+  const categoryId = form.watch('category_id')
+
+  const identityVisible =
+    fieldPermission('name').visible ||
+    fieldPermission('description').visible ||
+    fieldPermission('cost').visible ||
+    fieldPermission('price').visible ||
+    fieldPermission('category_id').visible
+
+  return (
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex flex-col gap-4 p-4"
+          noValidate
+        >
+          {identityVisible && (
+            <FormSection
+              icon={Package}
+              title={t('products.form.sections.identity.title')}
+              description={t('products.form.sections.identity.description')}
+            >
+              <MetaField
+                control={form.control}
+                name="name"
+                metaKey="name"
+                label={t('products.form.name')}
+              >
+                {({ field, disabled, readOnly }) => (
+                  <FormControl>
+                    <Input autoComplete="off" disabled={disabled} readOnly={readOnly} {...field} />
+                  </FormControl>
+                )}
+              </MetaField>
+
+              <MetaField
+                control={form.control}
+                name="description"
+                metaKey="description"
+                label={t('products.form.description')}
+              >
+                {({ field, disabled, readOnly }) => (
+                  <FormControl>
+                    <Textarea
+                      disabled={disabled}
+                      readOnly={readOnly}
+                      value={field.value ?? ''}
+                      onChange={(event) => field.onChange(event.target.value || null)}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                )}
+              </MetaField>
+
+              <MetaField
+                control={form.control}
+                name="cost"
+                metaKey="cost"
+                label={t('products.form.cost')}
+              >
+                {({ field, disabled, readOnly }) => (
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      disabled={disabled}
+                      readOnly={readOnly}
+                      value={numberInputValue(field.value)}
+                      onChange={(event) =>
+                        field.onChange(event.target.value === '' ? null : Number(event.target.value))
+                      }
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                )}
+              </MetaField>
+
+              <MetaField
+                control={form.control}
+                name="price"
+                metaKey="price"
+                label={t('products.form.price')}
+              >
+                {({ field, disabled, readOnly }) => (
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      disabled={disabled}
+                      readOnly={readOnly}
+                      value={numberInputValue(field.value)}
+                      onChange={(event) =>
+                        field.onChange(event.target.value === '' ? null : Number(event.target.value))
+                      }
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                )}
+              </MetaField>
+
+              <MetaField
+                control={form.control}
+                name="category_id"
+                metaKey="category_id"
+                label={t('products.form.category')}
+              >
+                {({ field, disabled }) => (
+                  <FormControl>
+                    <SearchableSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      options={categoryOptions}
+                      isPending={treeQuery.isPending}
+                      isError={treeQuery.isError}
+                      onRetry={() => void treeQuery.refetch()}
+                      disabled={disabled}
+                      labels={{
+                        placeholder: t('products.form.categoryPlaceholder'),
+                        searchPlaceholder: t('products.form.categorySearch'),
+                        empty: t('products.form.categoryEmpty'),
+                        noMatch: t('products.form.categoryNoMatch'),
+                        error: t('products.form.categoryError'),
+                        retry: t('common.retry'),
+                      }}
+                    />
+                  </FormControl>
+                )}
+              </MetaField>
+            </FormSection>
+          )}
+
+          <FormSection
+            icon={SlidersHorizontal}
+            title={t('products.form.sections.attributes.title')}
+            description={t('products.form.sections.attributes.description')}
+          >
+            {categoryId === null ? (
+              <p className="text-sm text-muted-foreground">
+                {t('products.form.attributesNeedCategory')}
+              </p>
+            ) : (
+              <ProductDynamicAttributeFields
+                categoryId={categoryId}
+                value={form.watch('attributes')}
+                onChange={(next) =>
+                  form.setValue('attributes', next, { shouldDirty: true, shouldValidate: false })
+                }
+              />
+            )}
+          </FormSection>
+
+          {serverError && (
+            <p className="text-sm font-medium text-destructive" role="alert">
+              {serverError}
+            </p>
+          )}
+
+          <div className="mt-auto flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              disabled={form.formState.isSubmitting}
+            >
+              {t('products.form.cancel')}
+            </Button>
+            <Button type="submit" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting ? t('products.form.saving') : t('products.form.save')}
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </div>
+  )
+}
