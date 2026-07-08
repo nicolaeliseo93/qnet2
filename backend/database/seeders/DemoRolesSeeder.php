@@ -50,6 +50,9 @@ class DemoRolesSeeder extends Seeder
                 'addresses' => ['viewAny', 'view'],
                 'attachments' => ['viewAny', 'view'],
                 'companies' => ['viewAny', 'view', 'create', 'update'],
+                // Registries (spec 0020, "Anagrafiche"): an anagraphic entity
+                // analogous to companies — same role policy.
+                'registries' => ['viewAny', 'view', 'create', 'update'],
                 'operational-sites' => ['viewAny', 'view', 'create', 'update'],
                 'business-functions' => ['viewAny', 'view', 'create', 'update'],
             ],
@@ -67,6 +70,8 @@ class DemoRolesSeeder extends Seeder
                 'addresses' => ['viewAny', 'view', 'create', 'update'],
                 'attachments' => ['viewAny', 'view', 'create', 'update'],
                 'companies' => ['viewAny', 'view'],
+                // Registries (spec 0020): same role policy as companies.
+                'registries' => ['viewAny', 'view'],
                 'operational-sites' => ['viewAny', 'view'],
                 'business-functions' => ['viewAny', 'view'],
             ],

@@ -27,6 +27,9 @@ it('exposes data.enums with the allowlisted snake_case keys', function () {
                     'contact_type',
                     'notification_level',
                     'referent_contact_scope',
+                    'site_type',
+                    'agreement_status',
+                    'size_class',
                 ],
             ],
         ]);
@@ -77,7 +80,10 @@ it('exposes the expected option count per enum', function () {
         ->and($enums['personal_data_type'])->toHaveCount(2)
         ->and($enums['contact_type'])->toHaveCount(6)
         ->and($enums['notification_level'])->toHaveCount(4)
-        ->and($enums['referent_contact_scope'])->toHaveCount(2);
+        ->and($enums['referent_contact_scope'])->toHaveCount(2)
+        ->and($enums['site_type'])->toHaveCount(4)
+        ->and($enums['agreement_status'])->toHaveCount(3)
+        ->and($enums['size_class'])->toHaveCount(4);
 });
 
 // ---------------------------------------------------------------------------
@@ -90,6 +96,34 @@ it('exposes data.enums.referent_contact_scope with internal/external, internal d
     expect(collect($options)->pluck('value')->all())->toBe(['internal', 'external'])
         ->and(collect($options)->firstWhere('value', 'internal')['is_default'])->toBeTrue()
         ->and(collect($options)->firstWhere('value', 'external')['is_default'])->toBeFalse();
+});
+
+// ---------------------------------------------------------------------------
+// AC-001 (spec 0020) — site_type / agreement_status / size_class options
+// ---------------------------------------------------------------------------
+
+it('exposes data.enums.site_type with legal_seat/delivery/billing/operational_site, billing default', function () {
+    $options = $this->getJson('/api/config')->assertOk()->json('data.enums.site_type');
+
+    expect(collect($options)->pluck('value')->all())
+        ->toBe(['legal_seat', 'delivery', 'billing', 'operational_site'])
+        ->and(collect($options)->firstWhere('value', 'billing')['is_default'])->toBeTrue()
+        ->and(collect($options)->firstWhere('value', 'legal_seat')['is_default'])->toBeFalse();
+});
+
+it('exposes data.enums.agreement_status with negotiating/rejected/agreed, negotiating default', function () {
+    $options = $this->getJson('/api/config')->assertOk()->json('data.enums.agreement_status');
+
+    expect(collect($options)->pluck('value')->all())
+        ->toBe(['negotiating', 'rejected', 'agreed'])
+        ->and(collect($options)->firstWhere('value', 'negotiating')['is_default'])->toBeTrue();
+});
+
+it('exposes data.enums.size_class with micro/small/medium/large and no default', function () {
+    $options = $this->getJson('/api/config')->assertOk()->json('data.enums.size_class');
+
+    expect(collect($options)->pluck('value')->all())->toBe(['micro', 'small', 'medium', 'large'])
+        ->and(collect($options)->pluck('is_default')->unique()->all())->toBe([false]);
 });
 
 it('filters out cases flagged hiddenOnForm', function () {

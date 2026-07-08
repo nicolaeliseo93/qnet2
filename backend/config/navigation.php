@@ -162,6 +162,17 @@ return [
                     'permission' => 'sources.view',
                 ],
                 [
+                    // Registries (spec 0020, "Anagrafiche"): a client/supplier
+                    // record reusing the users/referents anagraphic stack.
+                    // Flat sibling entry (no group of its own children),
+                    // placed next to the other top-level anagraphic modules.
+                    'key' => 'registries',
+                    'label' => 'navigation.registries',
+                    'icon' => 'book-user',
+                    'route' => '/registries',
+                    'permission' => 'registries.view',
+                ],
+                [
                     // Products (spec 0017): a configurable catalogue —
                     // Attributes (reusable dynamic fields), Product
                     // Categories (the attribute-assignment tree) and Products

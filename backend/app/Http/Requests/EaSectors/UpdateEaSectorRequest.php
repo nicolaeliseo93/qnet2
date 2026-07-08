@@ -8,7 +8,6 @@ use App\Models\EaSector;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for PUT/PATCH /api/ea-sectors/{eaSector}
@@ -38,8 +37,6 @@ class UpdateEaSectorRequest extends FormRequest
         return [
             'name' => ['sometimes', 'required', 'string', 'max:191'],
             'parent_id' => ['sometimes', 'nullable', 'integer', 'exists:ea_sectors,id'],
-            'tag_ids' => ['sometimes', 'array'],
-            'tag_ids.*' => ['integer', Rule::exists('tags', 'id')],
         ];
     }
 

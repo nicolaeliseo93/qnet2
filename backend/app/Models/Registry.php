@@ -1,0 +1,110 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\AgreementStatusEnum;
+use App\Enums\SizeClassEnum;
+use App\Models\Abstracts\BaseModel;
+use App\Models\Concerns\HasPersonalData;
+use App\Models\Concerns\LogsModelActivity;
+use Database\Factories\RegistryFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+/**
+ * A client/supplier record (spec 0020, "Anagrafiche") that reuses the
+ * `users`/`referents` anagraphic stack unchanged via `HasPersonalData` (morph
+ * `personable`): the registry owns a personal-data card, which in turn owns
+ * its own contacts/addresses.
+ *
+ * `name` is denormalized display data derived from the card (mirrors
+ * `referents.name`, see RegistryProfileWriter). A registry represents
+ * primarily a client but, via `is_supplier`, the SAME entity can also be
+ * managed as a supplier (no duplication).
+ */
+#[Fillable([
+    'name',
+    'source_id',
+    'vat_group',
+    'is_supplier',
+    'is_qualified_supplier',
+    'agreement_status',
+    'agreement_notes',
+    'size_class',
+    'supervisor_id',
+    'commercial_id',
+    'reporter_id',
+    'employee_count',
+])]
+class Registry extends BaseModel
+{
+    /** @use HasFactory<RegistryFactory> */
+    use HasFactory, HasPersonalData, LogsModelActivity;
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_supplier' => 'bool',
+            'is_qualified_supplier' => 'bool',
+            'agreement_status' => AgreementStatusEnum::class,
+            'size_class' => SizeClassEnum::class,
+            'employee_count' => 'integer',
+        ];
+    }
+
+    /**
+     * The registry's provenance classification, if any (nullOnDelete:
+     * removing the source just clears it here, it never cascades a delete).
+     */
+    public function source(): BelongsTo
+    {
+        return $this->belongsTo(Source::class);
+    }
+
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(Referent::class, 'supervisor_id');
+    }
+
+    public function commercial(): BelongsTo
+    {
+        return $this->belongsTo(Referent::class, 'commercial_id');
+    }
+
+    public function reporter(): BelongsTo
+    {
+        return $this->belongsTo(Referent::class, 'reporter_id');
+    }
+
+    /**
+     * The EA sectors / competences this registry is classified under
+     * ("Settore EA / Competenze", multi).
+     */
+    public function eaSectors(): BelongsToMany
+    {
+        return $this->belongsToMany(EaSector::class, 'ea_sector_registry');
+    }
+
+    /**
+     * The referents (contact people) associated with this registry
+     * ("Referenti per azienda", multi).
+     */
+    public function referents(): BelongsToMany
+    {
+        return $this->belongsToMany(Referent::class, 'referent_registry');
+    }
+
+    /**
+     * The internal users managing this registry ("Gestori interni", max 4 —
+     * validation-layer only, see StoreRegistryRequest).
+     */
+    public function managers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'registry_user');
+    }
+}

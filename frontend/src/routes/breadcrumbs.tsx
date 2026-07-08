@@ -24,6 +24,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   roles: 'navigation.roles',
   companies: 'navigation.companies',
   'business-functions': 'navigation.businessFunctions',
+  registries: 'navigation.registries',
   attributes: 'navigation.attributes',
   'product-categories': 'navigation.productCategories',
   'ea-sectors': 'navigation.eaSectors',

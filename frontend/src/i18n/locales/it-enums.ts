@@ -66,4 +66,17 @@ export const enums = {
   product_type: {
     SERVICE: 'Servizio',
   },
+  // Stato convenzione anagrafica (spec 0020).
+  agreement_status: {
+    negotiating: 'In trattativa',
+    rejected: 'Respinta',
+    agreed: 'Concordata',
+  },
+  // Classe dimensionale anagrafica (spec 0020).
+  size_class: {
+    micro: 'Micro',
+    small: 'Piccola',
+    medium: 'Media',
+    large: 'Grande',
+  },
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\EaSectors\EaSectorController;
+use App\Http\Controllers\EaSectors\EaSectorForSelectController;
 use App\Http\Controllers\Sources\SourceController;
 use App\Http\Controllers\Sources\SourceForSelectController;
 use App\Http\Controllers\Tags\TagController;
@@ -54,14 +55,21 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::delete('tags/{tag}', [TagController::class, 'destroy']);
 });
 
-// EA sectors: CRUD + the dedicated tree view (spec 0018) — a standalone
-// lookup used to classify Anagrafiche in the future (no such relation
-// exists yet). `tree` is declared ABOVE the plain `{eaSector}` show
-// route so its literal segment wins over the bound wildcard.
-// Authorization (ea-sectors.view/create/update/delete) is enforced
-// server-side in EaSectorController via EaSectorPolicy.
+// EA sectors: CRUD + the dedicated tree view (spec 0018) — a lookup used to
+// classify Anagrafiche (spec 0020, "Settore EA / Competenze", multi via
+// ea_sector_registry). `tree` and `for-select` are declared ABOVE the plain
+// `{eaSector}` show route so their literal segments win over the bound
+// wildcard. Authorization (ea-sectors.view/create/update/delete/viewAny) is
+// enforced server-side in EaSectorController/EaSectorForSelectController via
+// EaSectorPolicy.
 Route::middleware('throttle:60,1')->group(function () {
     Route::get('ea-sectors/tree', [EaSectorController::class, 'tree']);
+
+    // Minimal searchable/paginated EA-sector list for entity-backed selects
+    // (for-select standard, ADR 0011, spec 0020 — first producer: the
+    // Registries form). Gated by ea-sectors.viewAny server-side in
+    // EaSectorForSelectController.
+    Route::get('ea-sectors/for-select', EaSectorForSelectController::class);
 
     Route::get('ea-sectors/{eaSector}', [EaSectorController::class, 'show']);
     Route::post('ea-sectors', [EaSectorController::class, 'store']);

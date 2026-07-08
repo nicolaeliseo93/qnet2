@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\SiteTypeEnum;
 use App\Models\Address;
 use App\Models\City;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -31,6 +32,7 @@ class AddressFactory extends Factory
             'line1' => $this->faker->streetAddress(),
             'line2' => $this->faker->optional()->secondaryAddress(),
             'postal_code' => $this->faker->postcode(),
+            'site_type' => SiteTypeEnum::Billing->value,
             'city_id' => null,
             'province_id' => null,
             'state_id' => null,

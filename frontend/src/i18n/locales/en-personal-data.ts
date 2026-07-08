@@ -82,6 +82,13 @@ export const personalData = {
     line1: 'Address',
     line2: 'Address line 2',
     postalCode: 'Postal code',
+    // Site type (spec 0020): rendered only when the container opts in
+    // (Registries module); every other owner keeps this out of view.
+    siteType: 'Site type',
+    siteTypeLegalSeat: 'Registered office',
+    siteTypeDelivery: 'Delivery',
+    siteTypeBilling: 'Billing',
+    siteTypeOperationalSite: 'Operational site',
     primary: 'Primary address',
     primaryBadge: 'Primary',
     save: 'Save',

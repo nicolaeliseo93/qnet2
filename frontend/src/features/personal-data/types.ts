@@ -20,6 +20,15 @@ export type PersonalDataType = 'individual' | 'company'
 /** Biological sex of a natural-person card (GenderEnum). Null for a company. */
 export type Gender = 'male' | 'female'
 
+/**
+ * Site type of an address (SiteTypeEnum), a column shared by every address
+ * owner. The select is rendered only when the container opts in via
+ * `showSiteType` (Registries module); every other owner keeps the backend
+ * default (`billing`) with no UI change (spec 0020).
+ */
+export const SITE_TYPES = ['legal_seat', 'delivery', 'billing', 'operational_site'] as const
+export type SiteType = (typeof SITE_TYPES)[number]
+
 /** A single contact channel (ContactResource). */
 export interface Contact {
   id: number
@@ -45,6 +54,7 @@ export interface Address {
   latitude: string | null
   longitude: string | null
   is_primary: boolean
+  site_type: SiteType
   addressable_type: string
   addressable_id: number
   created_at: string | null
@@ -126,6 +136,8 @@ export interface AddressFields {
   latitude?: string | null
   longitude?: string | null
   is_primary?: boolean
+  /** Nullable in input: absent/null ⇒ backend default `billing`. */
+  site_type?: SiteType | null
 }
 
 /** POST /api/addresses — address fields plus the owner. */
@@ -180,6 +192,8 @@ export interface AddressDraft {
   state_id: number | null
   country_id: number | null
   is_primary: boolean
+  /** `null` = not chosen yet; the form defaults new drafts to `billing`. */
+  site_type: SiteType | null
 }
 
 /* -------------------------------------------------------------------------- */

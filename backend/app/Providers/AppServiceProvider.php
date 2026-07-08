@@ -17,6 +17,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Referent;
 use App\Models\ReferentType;
+use App\Models\Registry;
 use App\Models\Role;
 use App\Models\Source;
 use App\Models\Tag;
@@ -77,6 +78,7 @@ class AppServiceProvider extends ServiceProvider
             'source' => Source::class,
             'ea_sector' => EaSector::class,
             'tag' => Tag::class,
+            'registry' => Registry::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

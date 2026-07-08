@@ -1,0 +1,259 @@
+import { useMemo, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslation } from 'react-i18next'
+import { useQueryClient } from '@tanstack/react-query'
+import axios from 'axios'
+import { toast } from 'sonner'
+import { useResourcePermissions } from '@/features/authorization/permissions'
+import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { cardToDraft, emptyPersonalDataDraft } from '@/features/personal-data/drafts'
+import { buildPersonalDataSchema } from '@/features/personal-data/personal-data-schema'
+import type {
+  PersonalDataDraft,
+  PersonalDataFieldPermission,
+} from '@/features/personal-data/types'
+import type { ForSelectItem } from '@/features/for-select/types'
+import { createRegistry, updateRegistry } from '@/features/registries/api'
+import { buildCreatePayload, buildUpdatePayload } from '@/features/registries/registry-form-payload'
+import {
+  buildCreateRegistrySchema,
+  buildUpdateRegistrySchema,
+  type CreateRegistryFormValues,
+  type UpdateRegistryFormValues,
+} from '@/features/registries/registry-schema'
+import type { RegistryDetail, RegistryFormMode } from '@/features/registries/types'
+
+/**
+ * Server-side field names mapped onto the form for 422 handling. The nested
+ * `personal_data.*` paths are NOT here — that buffer lives outside RHF (see
+ * `personalDataServerErrorMessage` below) — mirroring `referents`.
+ */
+const SERVER_ERROR_FIELDS = [
+  'source_id',
+  'ea_sector_ids',
+  'referent_ids',
+  'manager_ids',
+  'supervisor_id',
+  'commercial_id',
+  'reporter_id',
+  'vat_group',
+  'is_supplier',
+  'is_qualified_supplier',
+  'agreement_status',
+  'agreement_notes',
+  'size_class',
+  'employee_count',
+] as const
+
+export type RegistryFormValues = CreateRegistryFormValues & UpdateRegistryFormValues
+
+interface UseRegistryFormArgs {
+  mode: RegistryFormMode
+  /** Called after a successful create/update so the caller can close + refresh. */
+  onSuccess: (registry: RegistryDetail) => void
+}
+
+/**
+ * Collects every `personal_data.*` (or bare `personal_data`) message from a
+ * 422 response into a single banner string. The buffered anagraphic draft is
+ * NOT an RHF field (mirroring `referents`), so its server errors cannot be
+ * routed inline into `PersonalDataCardForm`/`ContactsManager`/
+ * `AddressesManager` (owner-agnostic, reused unchanged) — they surface here
+ * instead, alongside the per-field mapped scalar errors.
+ */
+function personalDataServerErrorMessage(error: unknown): string | null {
+  if (!axios.isAxiosError(error) || error.response?.status !== 422) {
+    return null
+  }
+  const errors = error.response.data?.errors as Record<string, string[]> | undefined
+  if (!errors) {
+    return null
+  }
+  const messages = Object.entries(errors)
+    .filter(([key]) => key === 'personal_data' || key.startsWith('personal_data.'))
+    .flatMap(([, fieldMessages]) => fieldMessages)
+  return messages.length > 0 ? messages.join(' ') : null
+}
+
+/**
+ * Owns every non-render concern of `RegistryForm`: RHF/Zod wiring, the
+ * buffered personal-data card, the relation selects' hydration and server 422
+ * mapping. The component stays UI-only; this hook is the orchestration point
+ * (`onSubmit`). Like `referents`, the card is NOT fetched separately: the
+ * registry `show` endpoint already embeds `personal_data`, so edit mode seeds
+ * the buffer straight from `mode.registry.personal_data` (spec 0020).
+ */
+export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const { field: fieldPermission } = useResourcePermissions()
+
+  // Adapts the resolved authorization metadata to the personal-data domain's
+  // own gating shape (spec 0008 D3): the shared PersonalDataCardForm/
+  // ContactsManager/AddressesManager stay decoupled from `@/features/authorization`.
+  const personalDataFieldPermission = (key: string): PersonalDataFieldPermission => {
+    const permission = fieldPermission(key)
+    return {
+      visible: permission.visible,
+      editable: permission.editable,
+      required: permission.required,
+      disabled: permission.disabled,
+      readonly: permission.readonly,
+    }
+  }
+
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [profileDraft, setProfileDraft] = useState<PersonalDataDraft>(() =>
+    mode.type === 'edit' && mode.registry.personal_data
+      ? cardToDraft(mode.registry.personal_data)
+      : emptyPersonalDataDraft(),
+  )
+
+  const isEdit = mode.type === 'edit'
+
+  const schema = useMemo(
+    () => (isEdit ? buildUpdateRegistrySchema(t) : buildCreateRegistrySchema(t)),
+    [isEdit, t],
+  )
+
+  const defaultValues = useMemo<RegistryFormValues>(() => {
+    if (mode.type === 'edit') {
+      const registry = mode.registry
+      return {
+        source_id: registry.source_id,
+        ea_sector_ids: registry.ea_sector_ids,
+        referent_ids: registry.referent_ids,
+        manager_ids: registry.manager_ids,
+        supervisor_id: registry.supervisor_id,
+        commercial_id: registry.commercial_id,
+        reporter_id: registry.reporter_id,
+        vat_group: registry.vat_group ?? '',
+        is_supplier: registry.is_supplier,
+        is_qualified_supplier: registry.is_qualified_supplier,
+        agreement_status: registry.agreement_status,
+        agreement_notes: registry.agreement_notes ?? '',
+        size_class: registry.size_class,
+        employee_count: registry.employee_count,
+      }
+    }
+    return {
+      source_id: null,
+      ea_sector_ids: [],
+      referent_ids: [],
+      manager_ids: [],
+      supervisor_id: null,
+      commercial_id: null,
+      reporter_id: null,
+      vat_group: '',
+      is_supplier: false,
+      is_qualified_supplier: false,
+      agreement_status: null,
+      agreement_notes: '',
+      size_class: null,
+      employee_count: null,
+    }
+  }, [mode])
+
+  // EDIT: pre-known {id, label} for every relation picker, so it shows its
+  // current selection immediately (no hydration round-trip).
+  const selectedItems = useMemo(() => {
+    if (mode.type !== 'edit') {
+      return {
+        source: null,
+        eaSectors: [],
+        referents: [],
+        managers: [],
+        supervisor: null,
+        commercial: null,
+        reporter: null,
+      }
+    }
+    const registry = mode.registry
+    const toItem = (ref: { id: number; name: string } | null): ForSelectItem | null =>
+      ref ? { id: ref.id, label: ref.name } : null
+    const toItems = (refs: { id: number; name: string }[]): ForSelectItem[] =>
+      refs.map((ref) => ({ id: ref.id, label: ref.name }))
+    return {
+      source: toItem(registry.source),
+      eaSectors: toItems(registry.ea_sectors),
+      referents: toItems(registry.referents),
+      managers: toItems(registry.managers),
+      supervisor: toItem(registry.supervisor),
+      commercial: toItem(registry.commercial),
+      reporter: toItem(registry.reporter),
+    }
+  }, [mode])
+
+  const form = useForm<RegistryFormValues>({
+    resolver: zodResolver(schema),
+    defaultValues,
+  })
+
+  // The anagraphic card is mandatory (create requires it; edit always shows
+  // one): block the save until the required identity fields are valid. The
+  // card form shows the field-level messages inline.
+  const profileValid = useMemo(
+    () =>
+      buildPersonalDataSchema(t).safeParse({
+        type: profileDraft.type,
+        first_name: profileDraft.first_name ?? undefined,
+        last_name: profileDraft.last_name ?? undefined,
+        company_name: profileDraft.company_name ?? undefined,
+        tax_code: profileDraft.tax_code ?? undefined,
+        vat_number: profileDraft.vat_number ?? undefined,
+        birth_date: profileDraft.birth_date ?? undefined,
+      }).success,
+    [profileDraft, t],
+  )
+
+  const onSubmit = async (values: RegistryFormValues) => {
+    setServerError(null)
+
+    if (!profileValid) {
+      setServerError(t('personalData.section.incomplete'))
+      return
+    }
+
+    try {
+      if (mode.type === 'edit') {
+        const saved = await updateRegistry(
+          mode.registry.id,
+          buildUpdatePayload(values, mode.registry, profileDraft, personalDataFieldPermission),
+        )
+        queryClient.setQueryData(['registries', 'detail', mode.registry.id], saved)
+        toast.success(t('registries.form.updated'))
+        onSuccess(saved)
+        return
+      }
+
+      const created = await createRegistry(
+        buildCreatePayload(values, profileDraft, personalDataFieldPermission),
+      )
+      toast.success(t('registries.form.created'))
+      onSuccess(created)
+    } catch (error) {
+      const mappedScalar = applyServerValidationErrors(error, form.setError, [
+        ...SERVER_ERROR_FIELDS,
+      ])
+      const personalDataMessage = personalDataServerErrorMessage(error)
+      if (personalDataMessage) {
+        setServerError(personalDataMessage)
+      } else if (!mappedScalar) {
+        setServerError(t('registries.form.genericError'))
+      }
+    }
+  }
+
+  return {
+    form,
+    isEdit,
+    serverError,
+    profileDraft,
+    setProfileDraft,
+    profileValid,
+    selectedItems,
+    onSubmit,
+    personalDataFieldPermission,
+  }
+}

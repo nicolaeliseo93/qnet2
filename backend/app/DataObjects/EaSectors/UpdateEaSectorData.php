@@ -11,21 +11,14 @@ namespace App\DataObjects\EaSectors;
  * nullable VALUE (moving to root), so a plain null property cannot
  * distinguish "not submitted" from "submitted as null" — the
  * `parentIdSubmitted` flag carries that distinction explicitly, mirroring
- * UpdateProductCategoryData. `tagIds` (spec 0019) follows the same
- * `*Submitted` pattern: an omitted `tag_ids` leaves the current associations
- * untouched, while an explicit `[]` clears them.
+ * UpdateProductCategoryData.
  */
 final readonly class UpdateEaSectorData
 {
-    /**
-     * @param  array<int, int>  $tagIds
-     */
     public function __construct(
         public ?string $name = null,
         public ?int $parentId = null,
         public bool $parentIdSubmitted = false,
-        public array $tagIds = [],
-        public bool $tagIdsSubmitted = false,
     ) {}
 
     /**
@@ -39,19 +32,12 @@ final readonly class UpdateEaSectorData
             name: array_key_exists('name', $data) ? (string) $data['name'] : null,
             parentId: array_key_exists('parent_id', $data) && $data['parent_id'] !== null ? (int) $data['parent_id'] : null,
             parentIdSubmitted: array_key_exists('parent_id', $data),
-            tagIds: array_key_exists('tag_ids', $data) ? array_map('intval', $data['tag_ids']) : [],
-            tagIdsSubmitted: array_key_exists('tag_ids', $data),
         );
     }
 
     public function hasParentId(): bool
     {
         return $this->parentIdSubmitted;
-    }
-
-    public function hasTagIds(): bool
-    {
-        return $this->tagIdsSubmitted;
     }
 
     /**

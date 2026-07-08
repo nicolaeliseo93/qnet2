@@ -52,6 +52,7 @@ function address(overrides: Partial<AddressDraft> = {}): AddressDraft {
     state_id: null,
     country_id: null,
     is_primary: false,
+    site_type: 'billing',
     ...overrides,
   }
 }
@@ -142,5 +143,54 @@ describe('AddressForm (controlled)', () => {
     expect(geo).toHaveAttribute('data-state', '2')
     expect(geo).toHaveAttribute('data-province', '4')
     expect(geo).toHaveAttribute('data-city', '3')
+  })
+
+  it('does not render the site type select by default (Users/Referents/Companies)', () => {
+    render(<AddressForm onSubmit={() => {}} onCancel={() => {}} />)
+
+    expect(screen.queryByText('Site type')).not.toBeInTheDocument()
+  })
+
+  it('does not render the site type select when address has one but showSiteType is off', () => {
+    render(
+      <AddressForm
+        address={address({ site_type: 'legal_seat' })}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    )
+
+    expect(screen.queryByText('Site type')).not.toBeInTheDocument()
+  })
+
+  it('renders the site type select and defaults it to billing when showSiteType is on', async () => {
+    const onSubmit = vi.fn()
+    render(<AddressForm onSubmit={onSubmit} onCancel={() => {}} showSiteType />)
+
+    expect(screen.getByText('Site type')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Site type' })).toHaveTextContent('Billing')
+
+    fireEvent.change(screen.getByLabelText(/^Address\*?$/), {
+      target: { value: '221B Baker Street' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit.mock.calls[0][0].site_type).toBe('billing')
+  })
+
+  it('preselects the persisted site type when editing with showSiteType on', () => {
+    render(
+      <AddressForm
+        address={address({ site_type: 'operational_site' })}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+        showSiteType
+      />,
+    )
+
+    expect(screen.getByRole('combobox', { name: 'Site type' })).toHaveTextContent(
+      'Operational site',
+    )
   })
 })

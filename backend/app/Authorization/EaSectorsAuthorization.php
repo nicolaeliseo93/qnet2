@@ -33,7 +33,6 @@ class EaSectorsAuthorization extends AbstractResourceAuthorization
         return [
             new FieldDefinition('name', 'text', mandatory: true),
             new FieldDefinition('parent_id', 'select'),
-            new FieldDefinition('tag_ids', 'multiselect'),
         ];
     }
 

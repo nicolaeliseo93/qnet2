@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AgreementStatusEnum;
 use App\Enums\AttributeType;
 use App\Enums\ContactTypeEnum;
 use App\Enums\GenderEnum;
@@ -8,6 +9,8 @@ use App\Enums\NotificationLevelEnum;
 use App\Enums\PersonalDataTypeEnum;
 use App\Enums\ProductType;
 use App\Enums\ReferentContactScopeEnum;
+use App\Enums\SiteTypeEnum;
+use App\Enums\SizeClassEnum;
 
 return [
 
@@ -56,6 +59,13 @@ return [
         // Product classification (spec 0017): the products table's
         // `product_type` badge. SERVICE-only for now.
         'product_type' => ProductType::class,
+        // Address site type (spec 0020): shared `addresses.site_type` column,
+        // rendered only by the Registries form (showSiteType opt-in).
+        'site_type' => SiteTypeEnum::class,
+        // Registry commercial agreement status (spec 0020).
+        'agreement_status' => AgreementStatusEnum::class,
+        // Registry size class (spec 0020).
+        'size_class' => SizeClassEnum::class,
     ],
 
 ];

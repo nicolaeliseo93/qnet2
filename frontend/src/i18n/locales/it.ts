@@ -7,6 +7,7 @@ import { imports } from './it-imports'
 import { exports } from './it-exports'
 import { table } from './it-table'
 import { referents, referentTypes } from './it-referents'
+import { registries } from './it-registries'
 import { attributes, productCategories, products } from './it-products'
 import { eaSectors } from './it-ea-sectors'
 import { sources } from './it-sources'
@@ -50,6 +51,7 @@ export const it: TranslationResources = {
     businessFunctions: 'Funzioni aziendali',
     referents: 'Referenti',
     referentTypes: 'Tipi referente',
+    registries: 'Anagrafiche',
     operationalSites: 'Sedi operative',
     attributes: 'Attributi',
     productCategories: 'Categorie Prodotto',
@@ -442,6 +444,7 @@ export const it: TranslationResources = {
   exports,
   referents,
   referentTypes,
+  registries,
   attributes,
   productCategories,
   eaSectors,

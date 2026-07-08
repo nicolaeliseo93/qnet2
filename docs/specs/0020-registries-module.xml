@@ -1,0 +1,382 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0020 — Registries module (it: "Anagrafiche": clienti + fornitori nella stessa entita').
+  Contract-first. Identificatori in INGLESE (engineering.md §1.2); label UI in italiano via i18n.
+
+  Il modulo `registries` MIRRORA `referents` (spec 0016) per l'esperienza anagrafica: RIUSA lo
+  stack polimorfico personal-data invariato (personal_data card + contacts + addresses) via
+  `use HasPersonalData`, la tabella generica SSRM (AG Grid), il form metadata-driven (0004),
+  i field permissions (0006/0008), la Policy server-side, l'envelope { success, message, data,
+  permissions? }. Aggiunge i campi business-specifici (cliente/fornitore) + relazioni.
+
+  Decisioni approvate dall'utente (questa sessione, via AskUserQuestion):
+    - Naming: resource/route/permission = `registries`; model `Registry`; tabella `registries`.
+      Il modulo COESISTE con `companies` (gia' costruito, entita' semplice), NON lo sostituisce.
+    - "Settore EA / Competenze" = relazione MULTIPLA (many-to-many): pivot `ea_sector_registry`.
+    - "Codici ATECO" = SOLO placeholder frontend disabilitato (come `activity_sectors` in Referenti):
+      NON persistito, NON nel data_contract, NON nella meta dei campi.
+    - "Tipo sede" (site_type) = colonna enum sulla tabella CONDIVISA `addresses`, DB default `billing`
+      (fatturazione) per gli altri owner; il select compare SOLO nel form Anagrafiche via prop opt-in
+      `showSiteType` (default off) → zero cambio UX per Utenti/Referenti/Companies.
+
+  Riferimenti reali VERIFICATI sul codice (non ipotizzati), da clonare/riusare:
+    - Blueprint modulo ricco: `app/Models/Referent.php` (use HasPersonalData, name derivato dalla
+      card via displayName()), `ReferentProfileWriter`, `ReferentService` (transazione + reload),
+      `ReferentResource`, `ReferentController`, `ReferentsTableDefinition` + `Referents/ReferentColumnCatalog`
+      (derived source/scope/primary_contact), `ReferentsAuthorization` (11 field personal_data.* mirror),
+      `StoreReferentRequest`/`UpdateReferentRequest` (EnforcesFieldPermissions + trait ValidatesUserProfile,
+      profileRequired()=true su store).
+    - Reuse invariato: `HasPersonalData`, `PersonalDataService`/`ContactService`/`AddressService`,
+      DTO `PersonalData\{CreatePersonalData,CreateContact,CreateAddress}` + wrapper
+      `Users\{ProfileData,ContactInput,AddressInput}`, trait `ValidatesUserProfile`,
+      `PersonalDataResource`/`AddressResource`/`ContactResource`.
+    - Enum: pattern `HasMeta` + attributi `#[Label]/#[Icon]/#[IsDefault]` (es. `ReferentContactScopeEnum`);
+      cast sul model; esposizione al FE via `config/config.php` `form_enums` (PUBLIC, security-reviewed) →
+      `GET /api/config` → FE `useEnumOptions(key)` + i18n `enums.<key>.<value>` + `enumLabelOf`.
+    - for-select (ADR 0011): controller invokable + `ForSelectResource` ({id,label}) + `*ForSelectRequest`
+      + metodo Service `forSelect()` + rotta literal PRIMA del wildcard {model}. Gia' presenti: `users`,
+      `sources`. DA AGGIUNGERE (moduli esterni, write-surface disgiunta): `referents/for-select`,
+      `ea-sectors/for-select` (ea_sectors oggi ha solo `tree`).
+    - Pivot: `belongsToMany` standard (es. `business_function_user`) + sync da DTO in transazione
+      (`EaSectorService::tags()->sync($data->tagIds)`). MultiSelect FE: `AsyncPaginatedMultiSelect`
+      (value:number[], selectedItems per idratazione). Single: `AsyncPaginatedSelect`.
+    - FE toggle: `Switch` (es. users `is_active`); visibilita' condizionata: `form.watch(...)`
+      (es. `product-category-form-body.tsx`); number input controllato `numberInputValue` (products);
+      textarea null-mapping (`value={field.value ?? ''}`).
+    - Wiring FE centrale: `routes/router.tsx`, `routes/breadcrumbs.tsx` (SEGMENT_LABELS),
+      `features/navigation/icon-map.ts`, i18n `i18n/locales/{en,it}.ts` (+ file split `*-registries.ts`).
+      Menu BACKEND-DRIVEN (`config/navigation.php` → `GET /navigation`).
+    - MorphMap STRICT (`Relation::enforceMorphMap` in `AppServiceProvider::boot`): il nuovo model
+      polimorfico/audited DEVE avere l'alias `registry` o lancia.
+    - Vincolo strutturale: `routes/api.php` e' al limite HARD 500 righe (i lookup sono gia' estratti in
+      `routes/api/lookups.php`). Il blocco CRUD `registries` va in un NUOVO `routes/api/registries.php`
+      richiesto dentro il gruppo `auth:sanctum` (behavior-preserving), per non sforare le 500 righe.
+    - Nessun nuovo primitivo UI: `textarea`, `switch`, `AsyncPaginatedSelect`/`MultiSelect` esistono gia'
+      → `ui-design` NON necessario.
+-->
+<spec id="0020-registries-module" status="draft" owner="tu" date="2026-07-07">
+
+  <goal>
+    Nuovo modulo "Anagrafiche" (resource key `registries`): un'anagrafica rappresenta principalmente
+    un cliente ma, tramite un flag, la STESSA entita' puo' essere gestita anche come fornitore (nessuna
+    duplicazione: cliente, fornitore o entrambi). Riusa integralmente l'anagrafica del modulo Referenti/
+    Utenti (personal data card + contatti + indirizzi) e aggiunge i campi/relazioni business: settori EA
+    (multi), fonte, gruppo IVA, referenti per azienda (multi), fornitore/fornitore qualificato, stato e
+    note convenzione, classe dimensionale, gestori interni (users, max 4), supervisore/commerciale/
+    segnalatore (referenti), numero dipendenti. Coerenza 100% con gli altri moduli: tabella AG Grid SSRM
+    (filtri/ordinamenti/ricerca/paginazione/export), form metadata-driven, permessi di risorsa + sui campi,
+    CRUD create/edit/view/delete, in Visualizzazione e Modifica.
+  </goal>
+
+  <context>
+    Modulo greenfield, inglese-first, adapter sottile sopra i framework generici gia' pronti
+    (registry-driven: 1 classe + 1 riga di config per tabella/authz, nessuna rotta generica nuova).
+    Vedi il blocco commento in testa per i nomi reali verificati e le decisioni utente.
+
+    Reuse cardine (come Referenti, blast radius zero sul codice Utenti): `Registry` ottiene la carta
+    anagrafica con `use HasPersonalData` (morph `personable`, nullable) — nessuna migrazione sulle tabelle
+    condivise `personal_data`/`contacts`. La scrittura atomica riusa `PersonalDataService`/`ContactService`/
+    `AddressService` tramite un nuovo writer sottile `RegistryProfileWriter` (deriva `registries.name` da
+    `CreatePersonalData::displayName()`, come `ReferentProfileWriter`). Validazione annidata via trait
+    `ValidatesUserProfile` (chiave `personal_data`, profileRequired()=true su store). Output via
+    `PersonalDataResource`/`AddressResource`/`ContactResource`.
+
+    ESTENSIONE CONDIVISA (unica modifica ai file personal-data): la tabella polimorfica `addresses` guadagna
+    una colonna enum `site_type` NOT NULL default `billing`. Backend: nuovo `SiteTypeEnum`, `Address`
+    (fillable+cast), `AddressResource`, DTO `CreateAddress` (+toAttributes), `ValidatesUserProfile`
+    (regola + buildAddresses), `StoreAddressRequest` (domainRules+toData), `AddressFactory`. Frontend:
+    `features/personal-data` types/drafts/schema/`address-form`/`addresses-manager` con select `site_type`
+    reso SOLO quando il contenitore passa `showSiteType` (default false) → Utenti/Referenti/Companies
+    invariati e i loro indirizzi ereditano il default `billing`. I test indirizzo esistenti vanno aggiornati.
+
+    Relazioni business:
+    - Fonte: belongsTo `Source` (`source_id`, nullable). `sources/for-select` esiste.
+    - Settore EA / Competenze: belongsToMany `EaSector` via pivot `ea_sector_registry`. Richiede il NUOVO
+      `ea-sectors/for-select` (oggi ea_sectors ha solo `tree`).
+    - Referenti per azienda: belongsToMany `Referent` via pivot `referent_registry`. Richiede il NUOVO
+      `referents/for-select`.
+    - Gestori interni: belongsToMany `User` via pivot `registry_user`, MAX 4 (validazione, non vincolo DB).
+      `users/for-select` esiste.
+    - Supervisore/Commerciale/Segnalatore: 3 belongsTo `Referent` (`supervisor_id`/`commercial_id`/
+      `reporter_id`, nullable, nullOnDelete). Consumano `referents/for-select`.
+
+    Enum nuovi (pattern HasMeta), registrati in `config/config.php` form_enums (PUBLIC → review Security):
+    - `site_type` = SiteTypeEnum: legal_seat, delivery, billing (#[IsDefault]), operational_site.
+    - `agreement_status` = AgreementStatusEnum: negotiating (#[IsDefault]), rejected, agreed. Colonna nullable.
+    - `size_class` = SizeClassEnum: micro, small, medium, large. Colonna nullable.
+
+    Regola di dominio: `is_qualified_supplier` ha senso solo se `is_supplier` = true. Il server NORMALIZZA
+    (`is_qualified_supplier` forzato false quando `is_supplier` false); il frontend NASCONDE il toggle quando
+    `is_supplier` = false (form.watch).
+
+    Codici ATECO: SOLO placeholder frontend disabilitato ("Prossimamente"), non persistito, fuori contratto.
+  </context>
+
+  <scope>
+    <in>
+      <!-- ===== Enums condivisi/nuovi ===== -->
+      <item>Enum `SiteTypeEnum`, `AgreementStatusEnum`, `SizeClassEnum` (string, use HasMeta, #[Label]/#[Icon]/#[IsDefault]) in `app/Enums/`, registrati in `config/config.php` form_enums (`site_type`/`agreement_status`/`size_class`).</item>
+
+      <!-- ===== Estensione condivisa addresses (site_type) — GATE ===== -->
+      <item>Migrazione reversibile `add_site_type_to_addresses_table` (string NOT NULL default 'billing', dopo `postal_code`). `Address` fillable+cast (`site_type`=>SiteTypeEnum). `AddressResource` emette `site_type`. DTO `CreateAddress` (+param `?SiteTypeEnum $siteType` default Billing, +`toAttributes`). `ValidatesUserProfile` (regola `personal_data.addresses.*.site_type` nullable enum + `buildAddresses` set siteType). `StoreAddressRequest` (`domainRules`+`toData`). `AddressFactory` emette site_type. Aggiornamento dei test indirizzo esistenti (backend + frontend).</item>
+
+      <!-- ===== for-select su moduli esterni (write-surface disgiunta) ===== -->
+      <item>NUOVO `referents/for-select`: `ReferentForSelectController` + `ReferentForSelectResource` ({id,label=name}) + `ReferentForSelectRequest` + `ReferentService::forSelect()` + rotta literal (gated `referents.viewAny`).</item>
+      <item>NUOVO `ea-sectors/for-select`: `EaSectorForSelectController` + `EaSectorForSelectResource` ({id,label=name}) + `EaSectorForSelectRequest` + `EaSectorService::forSelect()` + rotta literal in `routes/api/lookups.php` PRIMA di `ea-sectors/{eaSector}` (gated `ea-sectors.viewAny`).</item>
+
+      <!-- ===== Registries (modulo principale) ===== -->
+      <item>Migrazione `create_registries_table` (id, name, source_id nullable FK→sources nullOnDelete, vat_group string nullable, is_supplier bool default false, is_qualified_supplier bool default false, agreement_status string nullable, agreement_notes text nullable, size_class string nullable, supervisor_id/commercial_id/reporter_id nullable FK→referents nullOnDelete, employee_count unsignedInteger nullable, timestamps) + factory. Reversibile.</item>
+      <item>Migrazioni pivot: `ea_sector_registry` (ea_sector_id/registry_id FK cascadeOnDelete, unique), `referent_registry` (referent_id/registry_id, unique), `registry_user` (registry_id/user_id, unique). Tutte reversibili.</item>
+      <item>Model `Registry` (BaseModel; use HasFactory, HasPersonalData, LogsModelActivity; alias morphMap `registry` in AppServiceProvider; fillable espliciti; casts is_supplier/is_qualified_supplier bool, agreement_status/size_class enum, employee_count int; relazioni source(), supervisor()/commercial()/reporter() belongsTo Referent, eaSectors()/referents()/managers() belongsToMany).</item>
+      <item>Policy `RegistryPolicy extends BasePolicy` (resource `registries`), auto-discovered → permessi `registries.*` via `permissions:sync`.</item>
+      <item>`RegistryProfileWriter` (riusa i 3 service personal-data; deriva registries.name da displayName()).</item>
+      <item>CRUD: `Store/UpdateRegistryRequest` (EnforcesFieldPermissions + ValidatesUserProfile, profileRequired()=true su store), `Create/UpdateRegistryData` (scalari registry-specifici + array pivot + ProfileData riusata), `RegistryResource` (embed PersonalDataResource + relazioni idratate + *_ids), `RegistryService` (create/update/delete in transazione: writer profilo + sync 3 pivot + set 4 belongsTo + normalizzazione is_qualified_supplier), `RegistryController` (show/store/update/destroy, okWithPermissions), blocco rotte in NUOVO `routes/api/registries.php`.</item>
+      <item>`RegistriesTableDefinition` + `Tables/Registries/RegistryColumnCatalog` (colonne: name, source [derivata], is_supplier, agreement_status, size_class, primary_contact [derivata condivisa], created_at) + derived filter/sort/distinct per source; distinct via toBase per is_supplier/agreement_status/size_class. Registrata in `config/tables.php`.</item>
+      <item>`RegistriesAuthorization extends AbstractResourceAuthorization` (field registry-specifici + 11 personal_data.* mirror), registrata in `config/authorization.php`.</item>
+      <item>Nodo navigazione `registries` (permission `registries.view`, icona) in `config/navigation.php`; matrice ruoli in `RolePermissionSeeder` per `registries`; `DemoRegistrySeeder` (dati fake, prefisso Demo, agganciato a `DemoDataSeeder`).</item>
+      <item>Frontend `features/registries/` completo (api, types, registry-schema, registry-form + body + details-tab, use-registry-form, use-registry-form-meta, registry-form-payload, registries-table, column-renderers, registry-detail) + `features/referents/for-select-api.ts` e `features/ea-sectors/for-select-api.ts` nuovi + pagina + rotta + breadcrumbs + icon-map + i18n en/it.</item>
+      <item>Test: Pest (backend, Policy/Authorization/Service ≥90%, controller/table ≥85%) + Vitest (frontend). ESEGUITI.</item>
+    </in>
+    <out>
+      <item>NESSUNA modifica ai framework generici (app/Tables/Abstract*, app/Authorization/Abstract*, TableController, MetaController, rotte generiche, features/table, features/authorization, features/for-select, hooks/use-entity-detail).</item>
+      <item>NESSUNA modifica a `ProfileWriter`/`PersonalDataService`/`ContactService`/`AddressService`/`PersonalDataResource`/`ContactResource` ne' ai componenti `PersonalDataCardForm`/`ContactsManager`: si RIUSANO invariati. (Estensione circoscritta AMMESSA solo per `site_type`: Address/AddressResource/CreateAddress/ValidatesUserProfile/StoreAddressRequest/AddressFactory + `address-form`/`addresses-manager`/drafts/schema personal-data.)</item>
+      <item>Codici ATECO NON persistiti: solo placeholder disabilitato frontend; fuori dal data_contract e dalla meta dei campi.</item>
+      <item>NESSUN endpoint `registries/for-select` (nessun modulo seleziona un'anagrafica in questa spec).</item>
+      <item>NESSUN modulo `companies` toccato: `registries` e' un modulo distinto e coesiste.</item>
+      <item>NESSUN import/migrazione-source di dati legacy anagrafiche (greenfield; niente `old_id`/Import/Source in questa spec).</item>
+      <item>MAX 4 gestori interni = regola di VALIDAZIONE (422), non vincolo DB.</item>
+      <item>`is_qualified_supplier` NON e' un modulo/entita' separata: e' un flag sulla stessa anagrafica.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- =====================================================================
+         REGISTRIES (domain/resource/permission: registries). Route-model binding {registry}.
+         Envelope { success, message, data, permissions? }. auth:sanctum + throttle:60,1 su CRUD;
+         generic table/meta throttle:60,1. Riusa il sub-contratto personal-data congelato (0003/0008):
+         personal_data = { type,title?,first_name,last_name,company_name,tax_code,vat_number,sdi_code,
+           birth_date?,gender?, contacts:[{id?,type,value,label?,is_primary}],
+           addresses:[{id?,line1,line2?,postal_code?,city_id?,province_id?,state_id?,country_id?,
+                       latitude?,longitude?,is_primary, site_type?}] }
+         NOTA: addresses.*.site_type nuovo, nullable in input (assente ⇒ default 'billing' lato DB),
+         enum ∈ {legal_seat,delivery,billing,operational_site}.
+         ===================================================================== -->
+
+    <endpoint method="GET" path="/api/tables/registries/columns">
+      <request>Nessun body. Generico (registry). Gate `registries.viewAny`.</request>
+      <response status="200">
+        TableConfig, columns nell'ordine:
+        [
+          { id:'name', type:'text', sortable:true, filterable:true, filterType:'text', searchable:true, visible:true },
+          { id:'source', type:'text', sortable:true, filterable:true, filterType:'set', visible:true },              <!-- derived: nome fonte -->
+          { id:'is_supplier', type:'text', sortable:true, filterable:true, filterType:'set', visible:true },          <!-- bool → badge -->
+          { id:'agreement_status', type:'text', sortable:true, filterable:true, filterType:'set', visible:true },     <!-- enum -->
+          { id:'size_class', type:'text', sortable:true, filterable:true, filterType:'set', visible:true },           <!-- enum -->
+          { id:'primary_contact', type:'text', sortable:false, filterable:false, visible:true },                      <!-- derived: contatto primario carta -->
+          { id:'created_at', type:'datetime', sortable:true, filterable:true, filterType:'date', visible:true }
+        ]
+        + defaultSort [{columnId:'created_at', direction:'desc'}], defaultPagination {limit:25},
+        + actions [view(registries.view), edit(registries.update), delete(registries.delete)] filtrate per permesso,
+        + searchable ['name']. Label = chiavi i18n `registries.columns.*`.
+      </response>
+      <errors>403 se manca registries.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/registries/rows">
+      <request>Payload SSRM generico. Whitelist sort/filter/search = colonne dichiarate; `source`/`is_supplier`/`agreement_status`/`size_class` filtro set via allow-list.</request>
+      <response status="200">
+        { items:[ {
+          id:number, name:string,
+          source: { id:number, name:string } | null,
+          is_supplier: boolean,
+          agreement_status: 'negotiating'|'rejected'|'agreed' | null,
+          size_class: 'micro'|'small'|'medium'|'large' | null,
+          primary_contact: { type:string, value:string } | null,
+          created_at:string, actions:string[]
+        } ], pagination:{ total, offset, limit, total_pages } }
+        Eager loading di source + personalData.contacts (no N+1); nessun campo sensibile.
+      </response>
+      <errors>403 se manca registries.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/registries/values">
+      <request>{ columnId, search?, filterModel? } — allow-list columnId (source, is_supplier, agreement_status, size_class).</request>
+      <response status="200">source → nomi fonti distinti; is_supplier → valori bool distinti; agreement_status/size_class → valori enum distinti (via toBase, bypass cast).</response>
+      <errors>403 senza viewAny; 422 columnId fuori allow-list.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/meta/registries">
+      <response status="200">
+        { success, message, data:{ fields }, permissions:{ resource, fields, actions } }
+        data.fields (chiavi registry-specifiche + mirror personal_data.*):
+        [
+          { key:'source_id', type:'select' },
+          { key:'ea_sector_ids', type:'multiselect' },
+          { key:'referent_ids', type:'multiselect' },
+          { key:'manager_ids', type:'multiselect' },
+          { key:'supervisor_id', type:'select' },
+          { key:'commercial_id', type:'select' },
+          { key:'reporter_id', type:'select' },
+          { key:'vat_group', type:'text' },
+          { key:'is_supplier', type:'boolean' },
+          { key:'is_qualified_supplier', type:'boolean' },
+          { key:'agreement_status', type:'select' },
+          { key:'agreement_notes', type:'text' },
+          { key:'size_class', type:'select' },
+          { key:'employee_count', type:'number' },
+          { key:'personal_data.type', type:'select', mandatory:true },
+          { key:'personal_data.first_name', type:'text', mandatory:true },
+          { key:'personal_data.last_name', type:'text', mandatory:true },
+          { key:'personal_data.company_name', type:'text', mandatory:true },
+          { key:'personal_data.tax_code', type:'text' },
+          { key:'personal_data.vat_number', type:'text' },
+          { key:'personal_data.sdi_code', type:'text' },
+          { key:'personal_data.birth_date', type:'date' },
+          { key:'personal_data.gender', type:'select' },
+          { key:'personal_data.contacts', type:'collection' },
+          { key:'personal_data.addresses', type:'collection' }
+        ]
+        permissions.actions = { delete, export, import }.
+        NOTA: i type field 'boolean'/'multiselect'/'number' devono usare le stringhe-type esatte gia' in uso
+        nel codice (verificare UsersAuthorization is_active e BusinessFunctionsAuthorization users); se non
+        esistono, ricadere sul type generico gia' supportato dal MetaField senza inventarne di nuovi.
+      </response>
+      <errors>403 se manca registries.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/registries/{registry}">
+      <response status="200">
+        okWithPermissions: data =
+        {
+          id:number, name:string,
+          source_id:number|null, source:{id,name}|null,
+          ea_sector_ids:number[], ea_sectors:[{id,name}],
+          referent_ids:number[], referents:[{id,name}],
+          manager_ids:number[], managers:[{id,name}],
+          supervisor_id:number|null, supervisor:{id,name}|null,
+          commercial_id:number|null, commercial:{id,name}|null,
+          reporter_id:number|null, reporter:{id,name}|null,
+          vat_group:string|null,
+          is_supplier:boolean, is_qualified_supplier:boolean,
+          agreement_status:'negotiating'|'rejected'|'agreed'|null,
+          agreement_notes:string|null,
+          size_class:'micro'|'small'|'medium'|'large'|null,
+          employee_count:number|null,
+          personal_data: PersonalDataResource | null,   <!-- carta + contacts[] + addresses[](con site_type) -->
+          created_at:string
+        }
+        permissions = blocco spec 0004/0008 contestuale (include personal_data.*).
+      </response>
+      <errors>403 senza registries.view; 404.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/registries">
+      <request>
+        {
+          source_id?: number|null (exists:sources,id),
+          ea_sector_ids?: number[] (array; .* exists:ea_sectors,id),
+          referent_ids?: number[] (array; .* exists:referents,id),
+          manager_ids?: number[] (array, max:4; .* exists:users,id),
+          supervisor_id?: number|null (exists:referents,id),
+          commercial_id?: number|null (exists:referents,id),
+          reporter_id?: number|null (exists:referents,id),
+          vat_group?: string|null (max:191),
+          is_supplier: boolean,
+          is_qualified_supplier?: boolean,           <!-- server forza false se is_supplier=false -->
+          agreement_status?: 'negotiating'|'rejected'|'agreed'|null (Rule::enum),
+          agreement_notes?: string|null (max:5000),
+          size_class?: 'micro'|'small'|'medium'|'large'|null (Rule::enum),
+          employee_count?: number|null (integer, min:0),
+          personal_data: { ...carta..., contacts?:[...], addresses?:[...con site_type] }  (REQUIRED su create — name derivato dalla carta)
+        }
+      </request>
+      <response status="201">okWithPermissions(RegistryResource, permissions, 'Created', 201). Stessa shape di data del GET show. `name` = displayName() della carta; pivot sincronizzati; is_qualified_supplier normalizzato.</response>
+      <errors>403 senza registries.create; 422 (personal_data mancante, manager_ids>4, id relazionali inesistenti, enum non valido); 422 campo non-editable (EnforcesFieldPermissions, incl. personal_data.*).</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/registries/{registry}">
+      <request>Come POST ma tutti `sometimes` (PATCH parziale). `personal_data` opzionale (se presente, contacts/addresses = full-replace sync). Gli array pivot presenti = sync autoritativo (array vuoto = detach tutti; assente = invariato). FK singole: valore = set, `null` = rimuove. Se la carta cambia, `name` ri-derivato.</request>
+      <response status="200">okWithPermissions(RegistryResource, permissions). Shape di data del GET show.</response>
+      <errors>403 senza registries.update; 404; 422 validazione / campo non-editable.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/registries/{registry}">
+      <response status="204">No content. La carta personal_data (+contatti/indirizzi) cascade via HasPersonalData; le righe pivot cascadeOnDelete.</response>
+      <errors>403 senza registries.delete; 404.</errors>
+    </endpoint>
+
+    <!-- ===== for-select nuovi (moduli esterni) ===== -->
+    <endpoint method="GET" path="/api/referents/for-select">
+      <request>Query: search?, limit?, offset?, ids?[] (idratazione). Gated `referents.viewAny`.</request>
+      <response status="200">paginatedResponse di ReferentForSelectResource: { items:[{ id:number, label:string }], pagination }. label = referents.name.</response>
+      <errors>403 senza referents.viewAny.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/ea-sectors/for-select">
+      <request>Query: search?, limit?, offset?, ids?[]. Gated `ea-sectors.viewAny`. Rotta literal PRIMA di `ea-sectors/{eaSector}`.</request>
+      <response status="200">paginatedResponse di EaSectorForSelectResource: { items:[{ id:number, label:string }], pagination }. label = ea_sectors.name.</response>
+      <errors>403 senza ea-sectors.viewAny.</errors>
+    </endpoint>
+
+    <!-- ===== config pubblico ===== -->
+    <endpoint method="GET" path="/api/config">
+      <request>Pubblico (invariato, rate-limited). Aggiunta chiavi enum.</request>
+      <response status="200">data.enums.site_type / agreement_status / size_class = rispettivi ::options() → [{ value, label, color?, icon?, is_default, hidden_on_form }].</response>
+      <errors>Nessuno nuovo.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- ===== Enums + estensione addresses (site_type) ===== -->
+    <criterion id="AC-001">Esistono `SiteTypeEnum`(legal_seat/delivery/billing[default]/operational_site), `AgreementStatusEnum`(negotiating[default]/rejected/agreed), `SizeClassEnum`(micro/small/medium/large) con HasMeta; GET /config (pubblico) include data.enums.site_type/agreement_status/size_class con le option attese. (test: enum options + config endpoint)</criterion>
+    <criterion id="AC-002">La migrazione aggiunge `addresses.site_type` NOT NULL default 'billing'; `down()` la rimuove; un indirizzo creato SENZA site_type esplicito (path Utenti/Referenti/Companies invariato) persiste 'billing'; `AddressResource` espone `site_type`. (test: schema + default + resource shape)</criterion>
+    <criterion id="AC-003">In un payload personal_data con `addresses.*.site_type='legal_seat'`, l'indirizzo persiste quel valore (via CreateAddress DTO + ValidatesUserProfile::buildAddresses); un site_type fuori enum → 422. (test: nested address validation + persistence)</criterion>
+
+    <!-- ===== for-select esterni ===== -->
+    <criterion id="AC-004">GET /referents/for-select con referents.viewAny → { items:[{id,label=name}], pagination } filtrato da search + idratazione via ids[]; senza viewAny → 403. (test: for-select shape + authz)</criterion>
+    <criterion id="AC-005">GET /ea-sectors/for-select con ea-sectors.viewAny → { items:[{id,label=name}], pagination }; la rotta literal risolve PRIMA del wildcard {eaSector}; senza viewAny → 403. (test: for-select shape + route order + authz)</criterion>
+
+    <!-- ===== Registries backend — schema/model ===== -->
+    <criterion id="AC-006">La migrazione `registries` crea le colonne dichiarate (FK source/supervisor/commercial/reporter nullOnDelete, is_supplier/is_qualified_supplier default false, employee_count unsigned nullable); i pivot `ea_sector_registry`/`referent_registry`/`registry_user` hanno FK cascadeOnDelete + unique; tutti i `down()` sono reversibili; NESSUNA nuova colonna su personal_data/contacts. (test: schema + rollback)</criterion>
+    <criterion id="AC-007">Il model `Registry` usa HasPersonalData → personalData() MorphOne; source() BelongsTo; supervisor()/commercial()/reporter() BelongsTo(Referent) sulle FK giuste; eaSectors()/referents()/managers() BelongsToMany sui pivot giusti; casts enum+bool+int attivi; alias morphMap `registry` risolve; LogsModelActivity attivo. (test: unit relazioni + cast + morph)</criterion>
+
+    <!-- ===== Registries backend — CRUD ===== -->
+    <criterion id="AC-008">Con registries.create, POST {is_supplier, personal_data:{card+contacts+addresses}, source_id, ea_sector_ids, referent_ids, manager_ids, supervisor/commercial/reporter_id} → 201; l'anagrafica possiede la carta personal_data (morph personable=registry), i 3 pivot sincronizzati, le 4 belongsTo settate, `name`=displayName(). (test: create atomico + pivot sync + name)</criterion>
+    <criterion id="AC-009">POST senza `personal_data` → 422 (profileRequired su create); manager_ids con 5 elementi → 422 (max:4); id relazionale inesistente (source/ea_sector/referent/user) → 422; agreement_status/size_class fuori enum → 422. (test: validazione)</criterion>
+    <criterion id="AC-010">POST con is_supplier=false e is_qualified_supplier=true → l'anagrafica persiste is_qualified_supplier=false (normalizzazione server). (test: business rule)</criterion>
+    <criterion id="AC-011">GET /registries/{id} con registries.view → data con tutte le relazioni idratate ({id,name}) + i rispettivi *_ids + personal_data{carta,contacts,addresses(con site_type)} + blocco permissions; senza view → 403; id inesistente → 404. (test: show + permissions)</criterion>
+    <criterion id="AC-012">PATCH parziale con solo `ea_sector_ids=[]` fa detach di tutti i settori lasciando invariato il resto; PATCH {supervisor_id:null} rimuove il supervisore; PATCH con solo `personal_data.contacts` fa full-replace dei contatti; cambio carta ri-deriva `name`. (test: update parziale + sync pivot + relazioni)</criterion>
+    <criterion id="AC-013">Senza registries.update, PATCH → 403 (base authz) prima di ogni 422 di campo; con update ma un campo (es. `vat_group` o `personal_data.*`) reso non-editable dalla matrice DB, l'invio di un valore CAMBIATO → 422 su quel campo (EnforcesFieldPermissions). (test: field permissions)</criterion>
+    <criterion id="AC-014">DELETE con registries.delete → 204 e carta personal_data + contatti + indirizzi rimossi (cascade HasPersonalData) e righe pivot rimosse (cascadeOnDelete); senza delete → 403. (test: destroy + cascade)</criterion>
+
+    <!-- ===== Registries backend — tabella/meta/permessi ===== -->
+    <criterion id="AC-015">POST /tables/registries/rows → ogni row espone name, source{id,name}|null, is_supplier(bool), agreement_status|null, size_class|null, primary_contact{type,value}|null, created_at, actions[] coerenti con la Policy per-row; nessun N+1 (query count costante con preventLazyLoading). (test: rows shape + eager loading)</criterion>
+    <criterion id="AC-016">/values su columnId='source' → nomi fonti distinti; 'is_supplier' → valori bool distinti; 'agreement_status'/'size_class' → valori enum distinti (via toBase); ordinamento+filtro set su `source` (subquery/whereHas, allow-list, nessuna SQL injection) funziona; columnId fuori allow-list → 422. (test: distinctValues + derived sort/filter)</criterion>
+    <criterion id="AC-017">GET /meta/registries con viewAny → data.fields = [i 14 campi registry + i 11 personal_data.*] coi type dichiarati e permissions con i 6 flag per campo; senza viewAny → 403. (test: meta shape)</criterion>
+    <criterion id="AC-018">Dopo `permissions:sync`, esistono `registries.{viewAny,view,create,update,delete,export,import}`; il seeder li assegna alle matrici ruolo previste; super-admin bypassa via Gate::before; il nodo `/registries` compare in GET /navigation solo con registries.view. (test: SyncPermissions + seeder + Navigation)</criterion>
+
+    <!-- ===== Frontend ===== -->
+    <criterion id="AC-019">La pagina Anagrafiche senza registries.viewAny mostra il fallback `<Can>` e non monta la tabella; col permesso monta `<TableView domain="registries">`; il pulsante "nuova anagrafica" e' dietro `<Can permission="registries.create">`. (test: page gating)</criterion>
+    <criterion id="AC-020">Il form di creazione mostra, metadata-driven: la sezione anagrafica (PersonalDataCardForm + ContactsManager + AddressesManager con `showSiteType` → select tipo sede per indirizzo), il select source (AsyncPaginatedSelect 'sources'), i multiselect ea_sector_ids ('ea-sectors') / referent_ids ('referents') / manager_ids ('users'), i single-select supervisor/commercial/reporter_id ('referents'), l'input vat_group, il toggle is_supplier, gli enum agreement_status/size_class, la textarea agreement_notes, il number employee_count, e il placeholder DISABILITATO "Codici ATECO". Il meta arriva da useResourceMeta('registries'). (test: form create + MetaField + campi)</criterion>
+    <criterion id="AC-021">Il toggle `is_qualified_supplier` e' renderizzato SOLO quando `is_supplier` e' attivo (form.watch); spegnendo is_supplier il campo scompare e il payload non lo invia (o lo invia false). (test: visibilita' condizionata)</criterion>
+    <criterion id="AC-022">Il form di modifica consuma detail.permissions: un campo `hidden` non e' renderizzato, `readonly` non editabile, `required` con asterisco; un 422 dal server e' mappato inline (applyServerValidationErrors), inclusi i path `personal_data.*`; i multiselect/single-select sono idratati da `*_ids`/relazioni via selectedItems/selectedItem. (test: form edit metadata + idratazione)</criterion>
+    <criterion id="AC-023">Al submit create il payload e' {scalari registry, ea_sector_ids/referent_ids/manager_ids, supervisor/commercial/reporter_id, personal_data:{card,contacts,addresses con site_type}} (draftToPayload + omitNonEditableFields); al submit update il builder PATCH include SOLO i campi cambiati (scalari per !==; array pivot via set-compare tipo sameIdSet; personal_data solo se il draft serializzato differisce). (test: payload builder create/update)</criterion>
+    <criterion id="AC-024">La tabella Anagrafiche rende: name, source (nome), is_supplier (badge Si/No), agreement_status (badge), size_class (badge/testo), primary_contact (cella contatto), created_at; le row-action view/edit/delete aprono lo stesso flusso Sheet degli altri moduli. (test: renderers + azioni)</criterion>
+    <criterion id="AC-025">Il select "tipo sede" compare SOLO nel form Anagrafiche (showSiteType); i form indirizzo di Utenti/Referenti/Companies restano invariati (nessun select site_type) e i loro test esistenti passano; `tsc --noEmit` + ESLint puliti. (test: address-form showSiteType on/off + regressione moduli esistenti + typecheck)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm): solo librerie gia' presenti. Nessun nuovo primitivo UI (textarea/switch/AsyncPaginatedSelect/MultiSelect esistono).</item>
+    <item>Authz server-side su OGNI endpoint (Policy/permessi). L'UI nasconde, il backend autorizza.</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/rotte/permessi/chiavi). Dominio `registries`. Label UI "Anagrafiche" solo via i18n.</item>
+    <item>Envelope { success, message, data, permissions? } rispettato. Mai model Eloquent raw: sempre via Resource.</item>
+    <item>Mass assignment: $fillable esplicito su Registry. Filtri/sort SSRM SOLO da allow-list di colonne (mai input grezzo in *Raw). Sync pivot da DTO validato (mai da input non validato).</item>
+    <item>RIUSO OBBLIGATORIO invariato di: HasPersonalData, PersonalData/Contact/Address services+DTO (eccetto l'estensione circoscritta site_type in CreateAddress/Address/AddressResource/StoreAddressRequest/ValidatesUserProfile/AddressFactory), PersonalDataResource/AddressResource/ContactResource, features/personal-data/* (con l'aggiunta opt-in `showSiteType` in address-form/addresses-manager, default off), TableView, MetaField, useResourceMeta, AsyncPaginatedSelect/MultiSelect, for-select. Duplicazione AMMESSA e circoscritta: `RegistryProfileWriter` (deriva registries.name) e l'helper personalDataFieldPermissions in RegistriesAuthorization — per NON toccare il codice Users (blast radius zero).</item>
+    <item>Regola di dominio server-side: is_qualified_supplier forzato false quando is_supplier false. MAX 4 gestori via validazione (422).</item>
+    <item>File entro 300/500 righe; dead code zero; nessuna emoticon; Pint + ESLint + `tsc --noEmit` puliti. Blocco rotte registries in NUOVO routes/api/registries.php per non sforare le 500 righe di routes/api.php.</item>
+    <item>config/config.php e' PUBLIC e sensibile: l'aggiunta di site_type/agreement_status/size_class richiede la review dell'agente Security prima del verde.</item>
+    <item>Coverage per-layer: Policy/Authorization/Service ≥90%; controller/table ≥85%. Test ESEGUITI, non solo scritti.</item>
+    <item>Ownership file disgiunta tra teammate. Contratto qui congelato = punto di sincronizzazione: backend e frontend procedono in parallelo. L'estensione condivisa site_type (BE + FE) e' un GATE che precede il consumo nel form Anagrafiche.</item>
+  </constraints>
+
+</spec>

@@ -14,6 +14,7 @@ const RolesPage = lazy(() => import('@/pages/roles-page'))
 const CompaniesPage = lazy(() => import('@/pages/companies-page'))
 const BusinessFunctionsPage = lazy(() => import('@/pages/business-functions-page'))
 const ReferentsPage = lazy(() => import('@/pages/referents-page'))
+const RegistriesPage = lazy(() => import('@/pages/registries-page'))
 const ReferentTypesPage = lazy(() => import('@/pages/referent-types-page'))
 const OperationalSitesPage = lazy(() => import('@/pages/operational-sites-page'))
 const AttributesPage = lazy(() => import('@/pages/attributes-page'))
@@ -69,6 +70,10 @@ export const router = createBrowserRouter([
           {
             path: 'referents',
             element: <ReferentsPage />,
+          },
+          {
+            path: 'registries',
+            element: <RegistriesPage />,
           },
           {
             path: 'referent-types',

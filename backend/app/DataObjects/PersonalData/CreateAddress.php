@@ -2,6 +2,8 @@
 
 namespace App\DataObjects\PersonalData;
 
+use App\Enums\SiteTypeEnum;
+
 /**
  * Declared payload for creating/updating an Address (see
  * standards/architecture.md → Data Transfer Objects). Built at the HTTP
@@ -25,6 +27,7 @@ final readonly class CreateAddress
         public ?string $latitude = null,
         public ?string $longitude = null,
         public bool $isPrimary = false,
+        public ?SiteTypeEnum $siteType = null,
     ) {}
 
     /**
@@ -39,6 +42,11 @@ final readonly class CreateAddress
             'line1' => $this->line1,
             'line2' => $this->line2,
             'postal_code' => $this->postalCode,
+            // Absent siteType defaults to Billing here (not left out for the DB
+            // default) so a freshly created/updated model reflects the value
+            // in-memory immediately — behavior-preserving for every owner that
+            // never submits site_type (Users/Referents/Companies).
+            'site_type' => ($this->siteType ?? SiteTypeEnum::Billing)->value,
             'city_id' => $this->cityId,
             'province_id' => $this->provinceId,
             'state_id' => $this->stateId,
