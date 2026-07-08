@@ -97,14 +97,12 @@ it('navigation: the tags node only shows with tags.view', function () {
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    $settings = collect($this->getJson('/api/navigation')->json('data'))->firstWhere('key', 'settings');
-    $referentsGroup = collect(data_get($settings, 'children', []))->firstWhere('key', 'referents-group');
-    expect(collect(data_get($referentsGroup, 'children', []))->pluck('key'))->not->toContain('tags');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->not->toContain('tags');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('tags.view');
     Sanctum::actingAs($withView);
-    $settings = collect($this->getJson('/api/navigation')->json('data'))->firstWhere('key', 'settings');
-    $referentsGroup = collect(data_get($settings, 'children', []))->firstWhere('key', 'referents-group');
-    expect(collect(data_get($referentsGroup, 'children', []))->pluck('key'))->toContain('tags');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->toContain('tags');
 });

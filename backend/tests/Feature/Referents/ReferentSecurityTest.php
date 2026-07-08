@@ -157,14 +157,12 @@ it('navigation: the referents node only shows with referents.view', function () 
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    $settings = collect($this->getJson('/api/navigation')->json('data'))->firstWhere('key', 'settings');
-    $group = collect(data_get($settings, 'children', []))->firstWhere('key', 'referents-group');
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->not->toContain('referents');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+        ->not->toContain('referents');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('referents.view');
     Sanctum::actingAs($withView);
-    $settings = collect($this->getJson('/api/navigation')->json('data'))->firstWhere('key', 'settings');
-    $group = collect(data_get($settings, 'children', []))->firstWhere('key', 'referents-group');
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->toContain('referents');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+        ->toContain('referents');
 });

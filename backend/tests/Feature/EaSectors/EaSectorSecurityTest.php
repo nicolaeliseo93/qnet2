@@ -50,16 +50,14 @@ it('navigation: the ea-sectors node only shows with ea-sectors.view', function (
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    $settings = collect($this->getJson('/api/navigation')->json('data'))->firstWhere('key', 'settings');
-    $group = collect(data_get($settings, 'children', []))->firstWhere('key', 'referents-group');
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->not->toContain('ea-sectors');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->not->toContain('ea-sectors');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('ea-sectors.view');
     Sanctum::actingAs($withView);
-    $settings = collect($this->getJson('/api/navigation')->json('data'))->firstWhere('key', 'settings');
-    $group = collect(data_get($settings, 'children', []))->firstWhere('key', 'referents-group');
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->toContain('ea-sectors');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->toContain('ea-sectors');
 });
 
 // ---------------------------------------------------------------------------

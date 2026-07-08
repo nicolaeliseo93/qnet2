@@ -97,12 +97,12 @@ it('navigation: the sources node only shows with sources.view', function () {
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    $settings = collect($this->getJson('/api/navigation')->json('data'))->firstWhere('key', 'settings');
-    expect(collect(data_get($settings, 'children', []))->pluck('key'))->not->toContain('sources');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->not->toContain('sources');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('sources.view');
     Sanctum::actingAs($withView);
-    $settings = collect($this->getJson('/api/navigation')->json('data'))->firstWhere('key', 'settings');
-    expect(collect(data_get($settings, 'children', []))->pluck('key'))->toContain('sources');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->toContain('sources');
 });

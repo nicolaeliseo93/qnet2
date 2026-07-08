@@ -29,19 +29,6 @@ if (! function_exists('productUserWith')) {
     }
 }
 
-if (! function_exists('productsNavigationGroup')) {
-    /**
-     * @param  array<int, array<string, mixed>>  $data
-     * @return array<string, mixed>|null
-     */
-    function productsNavigationGroup(array $data): ?array
-    {
-        $settings = collect($data)->firstWhere('key', 'settings');
-
-        return collect(data_get($settings, 'children', []))->firstWhere('key', 'products-group');
-    }
-}
-
 // ---------------------------------------------------------------------------
 // AC-019 — a base-authz 403 takes precedence over a field-level 422
 // ---------------------------------------------------------------------------
@@ -137,12 +124,12 @@ it('navigation: the products node only shows with products.view', function () {
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    $group = productsNavigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->not->toContain('products');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+        ->not->toContain('products');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('products.view');
     Sanctum::actingAs($withView);
-    $group = productsNavigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->toContain('products');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+        ->toContain('products');
 });

@@ -7,19 +7,6 @@ use Spatie\Permission\Models\Permission;
 
 uses(RefreshDatabase::class);
 
-if (! function_exists('productsNavigationGroup')) {
-    /**
-     * @param  array<int, array<string, mixed>>  $data
-     * @return array<string, mixed>|null
-     */
-    function productsNavigationGroup(array $data): ?array
-    {
-        $settings = collect($data)->firstWhere('key', 'settings');
-
-        return collect(data_get($settings, 'children', []))->firstWhere('key', 'products-group');
-    }
-}
-
 // ---------------------------------------------------------------------------
 // AC-020 — permissions:sync creates the 7 standard permissions
 // ---------------------------------------------------------------------------
@@ -41,12 +28,12 @@ it('navigation: the product-categories node only shows with product-categories.v
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    $group = productsNavigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->not->toContain('product-categories');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->not->toContain('product-categories');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('product-categories.view');
     Sanctum::actingAs($withView);
-    $group = productsNavigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->toContain('product-categories');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->toContain('product-categories');
 });

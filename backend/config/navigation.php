@@ -44,9 +44,128 @@ return [
             'route' => '/dashboard',
             'permission' => null,
         ],
+
+        // "Gestione": the day-to-day operational records (master data). Flat
+        // leaves under a section label — no collapsible sub-groups. Ordered
+        // from the central anagraphic entity outward.
         [
-            'key' => 'settings',
-            'label' => 'navigation.settings',
+            'key' => 'management',
+            'label' => 'navigation.management',
+            'icon' => null,
+            'route' => null,
+            'permission' => null,
+            'type' => 'section',
+            'children' => [
+                [
+                    'key' => 'registries',
+                    'label' => 'navigation.registries',
+                    'icon' => 'book-user',
+                    'route' => '/registries',
+                    'permission' => 'registries.view',
+                ],
+                [
+                    'key' => 'referents',
+                    'label' => 'navigation.referents',
+                    'icon' => 'contact-round',
+                    'route' => '/referents',
+                    'permission' => 'referents.view',
+                ],
+                [
+                    'key' => 'companies',
+                    'label' => 'navigation.companies',
+                    'icon' => 'building',
+                    'route' => '/companies',
+                    'permission' => 'companies.view',
+                ],
+                [
+                    'key' => 'operational-sites',
+                    'label' => 'navigation.operationalSites',
+                    'icon' => 'map-pin',
+                    'route' => '/operational-sites',
+                    'permission' => 'operational-sites.view',
+                ],
+                [
+                    'key' => 'products',
+                    'label' => 'navigation.products',
+                    'icon' => 'package',
+                    'route' => '/products',
+                    'permission' => 'products.view',
+                ],
+            ],
+        ],
+
+        // "Configurazione": every support/lookup table gathered in one place
+        // (grant the operational modules their reference values). This is the
+        // single settings area the product asked for — mirrors the Setup areas
+        // of Salesforce/Zoho where pick-lists and reusable fields live apart
+        // from the daily-work records.
+        [
+            'key' => 'configuration',
+            'label' => 'navigation.configuration',
+            'icon' => null,
+            'route' => null,
+            'permission' => null,
+            'type' => 'section',
+            'children' => [
+                [
+                    'key' => 'business-functions',
+                    'label' => 'navigation.businessFunctions',
+                    'icon' => 'briefcase',
+                    'route' => '/business-functions',
+                    'permission' => 'business-functions.view',
+                ],
+                [
+                    'key' => 'referent-types',
+                    'label' => 'navigation.referentTypes',
+                    'icon' => 'tags',
+                    'route' => '/referent-types',
+                    'permission' => 'referent-types.view',
+                ],
+                [
+                    'key' => 'ea-sectors',
+                    'label' => 'navigation.eaSectors',
+                    'icon' => 'list-tree',
+                    'route' => '/ea-sectors',
+                    'permission' => 'ea-sectors.view',
+                ],
+                [
+                    'key' => 'tags',
+                    'label' => 'navigation.tags',
+                    'icon' => 'tag',
+                    'route' => '/tags',
+                    'permission' => 'tags.view',
+                ],
+                [
+                    'key' => 'sources',
+                    'label' => 'navigation.sources',
+                    'icon' => 'waypoints',
+                    'route' => '/sources',
+                    'permission' => 'sources.view',
+                ],
+                [
+                    'key' => 'product-categories',
+                    'label' => 'navigation.productCategories',
+                    'icon' => 'list-tree',
+                    'route' => '/product-categories',
+                    'permission' => 'product-categories.view',
+                ],
+                [
+                    'key' => 'attributes',
+                    'label' => 'navigation.attributes',
+                    'icon' => 'sliders-horizontal',
+                    'route' => '/attributes',
+                    'permission' => 'attributes.view',
+                ],
+            ],
+        ],
+
+        // "Amministrazione": system-level access control and data migration.
+        // Separate from the reference-data configuration above (who-can-do-what
+        // vs reference values). The section is dropped automatically when the
+        // actor can see none of its children.
+        [
+            'key' => 'administration',
+            'label' => 'navigation.administration',
             'icon' => null,
             'route' => null,
             'permission' => null,
@@ -67,157 +186,16 @@ return [
                     'permission' => 'roles.view',
                 ],
                 [
-                    'key' => 'fa-companies-services',
-                    'label' => 'navigation.faCompaniesServices',
-                    'icon' => 'layers',
-                    'route' => null,
+                    'key' => 'migrations',
+                    // Namespaced i18n key: `migrations` strings live in their own
+                    // i18next namespace (see frontend i18n/index.ts).
+                    'label' => 'migrations:nav.label',
+                    'icon' => 'database-zap',
+                    'route' => '/migrations',
                     'permission' => null,
-                    'children' => [
-                        [
-                            'key' => 'business-functions',
-                            'label' => 'navigation.businessFunctions',
-                            'icon' => 'briefcase',
-                            'route' => '/business-functions',
-                            'permission' => 'business-functions.view',
-                        ],
-                        [
-                            'key' => 'companies',
-                            'label' => 'navigation.companies',
-                            'icon' => 'building',
-                            'route' => '/companies',
-                            'permission' => 'companies.view',
-                        ],
-                        [
-                            'key' => 'operational-sites',
-                            'label' => 'navigation.operationalSites',
-                            'icon' => 'map-pin',
-                            'route' => '/operational-sites',
-                            'permission' => 'operational-sites.view',
-                        ],
-                    ],
-                ],
-                [
-                    // Referents (spec 0016): a contact person/entity reusing the
-                    // users anagraphic stack. Modelled as a collapsible group
-                    // (same shape as `fa-companies-services`) so its full-CRUD
-                    // lookup `referent-types` nests UNDER referents instead of
-                    // sitting as a flat sibling. The route-less group is dropped
-                    // automatically when the actor can see none of its children.
-                    'key' => 'referents-group',
-                    'label' => 'navigation.referents',
-                    'icon' => 'contact-round',
-                    'route' => null,
-                    'permission' => null,
-                    'children' => [
-                        [
-                            'key' => 'referents',
-                            'label' => 'navigation.referents',
-                            'icon' => 'contact-round',
-                            'route' => '/referents',
-                            'permission' => 'referents.view',
-                        ],
-                        [
-                            'key' => 'referent-types',
-                            'label' => 'navigation.referentTypes',
-                            'icon' => 'tags',
-                            'route' => '/referent-types',
-                            'permission' => 'referent-types.view',
-                        ],
-                        [
-                            // EA sectors (spec 0018): a standalone lookup used
-                            // to classify Anagrafiche in the future (no such
-                            // relation exists yet — see spec 0018 scope).
-                            'key' => 'ea-sectors',
-                            'label' => 'navigation.eaSectors',
-                            'icon' => 'list-tree',
-                            'route' => '/ea-sectors',
-                            'permission' => 'ea-sectors.view',
-                        ],
-                        [
-                            // Tags (spec 0019): a reusable, polymorphic
-                            // lookup attached to any entity via the
-                            // `taggables` pivot. EaSector is its first
-                            // producer, so it nests here alongside
-                            // referent-types/ea-sectors. Uses a different
-                            // icon than referent-types ('tags') to stay
-                            // visually distinct.
-                            'key' => 'tags',
-                            'label' => 'navigation.tags',
-                            'icon' => 'tag',
-                            'route' => '/tags',
-                            'permission' => 'tags.view',
-                        ],
-                    ],
-                ],
-                [
-                    // Sources (spec 0018): a standalone lookup used to
-                    // classify the provenance of registry records
-                    // ("Anagrafiche"). Flat sibling entry (no group of its
-                    // own children yet), placed next to the other support
-                    // lookups (referent-types).
-                    'key' => 'sources',
-                    'label' => 'navigation.sources',
-                    'icon' => 'waypoints',
-                    'route' => '/sources',
-                    'permission' => 'sources.view',
-                ],
-                [
-                    // Registries (spec 0020, "Anagrafiche"): a client/supplier
-                    // record reusing the users/referents anagraphic stack.
-                    // Flat sibling entry (no group of its own children),
-                    // placed next to the other top-level anagraphic modules.
-                    'key' => 'registries',
-                    'label' => 'navigation.registries',
-                    'icon' => 'book-user',
-                    'route' => '/registries',
-                    'permission' => 'registries.view',
-                ],
-                [
-                    // Products (spec 0017): a configurable catalogue —
-                    // Attributes (reusable dynamic fields), Product
-                    // Categories (the attribute-assignment tree) and Products
-                    // itself. The route-less group is dropped automatically
-                    // when the actor can see none of its children.
-                    'key' => 'products-group',
-                    'label' => 'navigation.products',
-                    'icon' => 'package',
-                    'route' => null,
-                    'permission' => null,
-                    'children' => [
-                        [
-                            'key' => 'products',
-                            'label' => 'navigation.products',
-                            'icon' => 'package',
-                            'route' => '/products',
-                            'permission' => 'products.view',
-                        ],
-                        [
-                            'key' => 'product-categories',
-                            'label' => 'navigation.productCategories',
-                            'icon' => 'list-tree',
-                            'route' => '/product-categories',
-                            'permission' => 'product-categories.view',
-                        ],
-                        [
-                            'key' => 'attributes',
-                            'label' => 'navigation.attributes',
-                            'icon' => 'sliders-horizontal',
-                            'route' => '/attributes',
-                            'permission' => 'attributes.view',
-                        ],
-                    ],
+                    'role' => 'super-admin',
                 ],
             ],
-        ],
-        [
-            'key' => 'migrations',
-            // Namespaced i18n key: `migrations` strings live in their own i18next
-            // namespace (see frontend i18n/index.ts), not the default bundle.
-            'label' => 'migrations:nav.label',
-            'icon' => 'database-zap',
-            'route' => '/migrations',
-            'permission' => null,
-            'role' => 'super-admin',
         ],
     ],
 

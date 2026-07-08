@@ -88,25 +88,12 @@ it('navigation: the attributes node only shows with attributes.view', function (
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    $group = productsNavigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->not->toContain('attributes');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->not->toContain('attributes');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('attributes.view');
     Sanctum::actingAs($withView);
-    $group = productsNavigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->toContain('attributes');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->toContain('attributes');
 });
-
-if (! function_exists('productsNavigationGroup')) {
-    /**
-     * @param  array<int, array<string, mixed>>  $data
-     * @return array<string, mixed>|null
-     */
-    function productsNavigationGroup(array $data): ?array
-    {
-        $settings = collect($data)->firstWhere('key', 'settings');
-
-        return collect(data_get($settings, 'children', []))->firstWhere('key', 'products-group');
-    }
-}
