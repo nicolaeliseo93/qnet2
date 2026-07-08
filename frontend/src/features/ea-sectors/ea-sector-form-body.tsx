@@ -6,14 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Form, FormControl } from '@/components/ui/form'
 import { SearchableSelect } from '@/components/ui/searchable-select'
-import { AsyncPaginatedMultiSelect } from '@/components/ui/async-paginated-multi-select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { useEaSectorTree } from '@/features/ea-sectors/use-ea-sector-tree'
 import { collectSubtreeIds, flattenEaSectorTree } from '@/features/ea-sectors/flatten-tree'
 import { useEaSectorForm } from '@/features/ea-sectors/use-ea-sector-form'
 import type { EaSectorDetail, EaSectorFormMode } from '@/features/ea-sectors/types'
-import { TAGS_FOR_SELECT_RESOURCE } from '@/features/tags/for-select-api'
 
 interface EaSectorFormBodyProps {
   mode: EaSectorFormMode
@@ -31,7 +29,7 @@ const ROOT_PARENT_VALUE = 0
 export function EaSectorFormBody({ mode, onSuccess, onCancel }: EaSectorFormBodyProps) {
   const { t } = useTranslation()
   const { field: fieldPermission } = useResourcePermissions()
-  const { form, serverError, selectedTagItems, onSubmit } = useEaSectorForm({ mode, onSuccess })
+  const { form, serverError, onSubmit } = useEaSectorForm({ mode, onSuccess })
   const treeQuery = useEaSectorTree()
 
   const parentOptions = useMemo(() => {
@@ -43,10 +41,7 @@ export function EaSectorFormBody({ mode, onSuccess, onCancel }: EaSectorFormBody
     ]
   }, [treeQuery.data, mode, t])
 
-  const identityVisible =
-    fieldPermission('name').visible ||
-    fieldPermission('parent_id').visible ||
-    fieldPermission('tag_ids').visible
+  const identityVisible = fieldPermission('name').visible || fieldPermission('parent_id').visible
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -71,34 +66,6 @@ export function EaSectorFormBody({ mode, onSuccess, onCancel }: EaSectorFormBody
                 {({ field, disabled, readOnly }) => (
                   <FormControl>
                     <Input autoComplete="off" disabled={disabled} readOnly={readOnly} {...field} />
-                  </FormControl>
-                )}
-              </MetaField>
-
-              <MetaField
-                control={form.control}
-                name="tag_ids"
-                metaKey="tag_ids"
-                label={t('eaSectors.form.tags')}
-              >
-                {({ field, disabled }) => (
-                  <FormControl>
-                    <AsyncPaginatedMultiSelect
-                      resource={TAGS_FOR_SELECT_RESOURCE}
-                      value={field.value}
-                      onChange={field.onChange}
-                      selectedItems={selectedTagItems}
-                      disabled={disabled}
-                      labels={{
-                        placeholder: t('eaSectors.form.tagsPlaceholder'),
-                        searchPlaceholder: t('eaSectors.form.tagsSearch'),
-                        empty: t('eaSectors.form.tagsEmpty'),
-                        error: t('eaSectors.form.tagsError'),
-                        removeLabel: t('eaSectors.form.tagsRemove'),
-                        triggerLabel: t('eaSectors.form.tags'),
-                        retry: t('common.retry'),
-                      }}
-                    />
                   </FormControl>
                 )}
               </MetaField>

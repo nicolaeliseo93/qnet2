@@ -2,6 +2,55 @@
 
 > Injected at session start. Update at every green state.
 
+## Reversal — Tag↔EaSector association RETIRED (taggables dropped) + Fonti/Tag/EA-sectors added to the Migrations import engine — GREEN (2026-07-08)
+
+Two coordinated pieces this session. NOT yet committed.
+
+### 1. Tag↔EaSector association fully removed (reverses the 2026-07-07 producer swap below)
+User product decision: sectors are no longer taggable, at EVERY layer. `Tag` STAYS a standalone
+lookup (table/CRUD/for-select/import untouched); only the association is gone.
+- DB: NEW migration `2026_07_08_120000_drop_taggables_table.php` DROPS the polymorphic `taggables`
+  pivot (reversible — `down()` recreates its original shape). The committed create migrations are
+  untouched.
+- Backend removed: `EaSector::tags()` + the `deleting` detach hook (whole `booted()` gone);
+  `Tag::eaSectors()`; `tagIds` on Create/UpdateEaSectorData (+ `hasTagIds`/`tagIdsSubmitted`);
+  `tag_ids` rules on Store/UpdateEaSectorRequest (+ unused `Rule` import); `tags()->sync()` +
+  `tags` eager-load in EaSectorService (now `fresh(['parent'])`); `tags`/`tag_ids` in
+  EaSectorResource; `tag_ids` field in EaSectorsAuthorization. `TagService::delete` is now a PLAIN
+  delete (the `taggables` guard is gone — it would query a dropped table).
+- Morph map (`AppServiceProvider`) KEPT `'ea_sector'`/`'tag'` — they are also activity-log
+  `subject_type` aliases (both models use `LogsModelActivity`); removing them would break auditing.
+- Frontend removed (done by a `frontend` teammate, vitest 20/20 + `tsc --noEmit` clean): the tags
+  multiselect from the EA-sector form (`ea-sector-form-body.tsx`), `tag_ids`/`tags`/`TagRef` from
+  `types.ts`/`ea-sector-schema.ts`/`ea-sector-form-payload.ts`/`use-ea-sector-form.ts`, the tag i18n
+  keys (en/it), and all tag assertions in the ea-sectors tests.
+- Tests: DELETED `EaSectorTaggingTest.php` + `TagDeleteGuardTest.php` (plain delete already covered
+  by `TagCrudTest`). `FieldCatalogueEndpointTest` unaffected (asserts ea-sectors presence, not its
+  fields).
+
+### 2. Fonti (`sources`), Tag (`tags`), Settori EA (`ea-sectors`) added to the /migrations import engine (spec 0013)
+Registry-driven: one `*Source` class + one config line each; the UI lists them from
+`GET /api/migrations` (no frontend change). Pattern mirrors ReferentTypesSource.
+- 3 additive `old_id` migrations (`2026_07_08_110000/110100/110200`), `old_id` integer cast (guarded)
+  on Source/Tag/EaSector models.
+- `SourcesSource` + `TagsSource` = plain lookups. `EaSectorsSource` = SELF-referential tree:
+  `parent_id` remapped via `old_id`; a child listed before its parent is created detached with a
+  warning, then relinked in `afterImport()` (second pass). All idempotent (skip by old_id).
+- Registered in `config/migrations.php` (`sources`/`tags`/`ea-sectors`) and `MigrationOrder` phase 1.
+- Tests: new Sources/Tags/EaSectorsSourceImportTest; OldIdSchemaTest extended (3 tables + property/
+  guarded-mass-assign); MigrationRegistryTest updated (map + count 8→11).
+
+Verified GREEN (real run, `XDEBUG_MODE=off`): Pint clean; full Pest **1563 passed, 1 skipped,
+1 failed**. The single failure is the SAME pre-existing, out-of-scope
+`AbstractMigrationSourcePreviewTest` (RolesSource `description` column) already documented below —
+NOT a regression from this work. (Note: `php artisan test` segfaults under Xdebug on this machine;
+run pest with `XDEBUG_MODE=off`.)
+
+FLAGGED (out of my ownership — untracked Registry module WIP, spec 0020): two now-stale COMMENTS
+reference the removed tag pattern — `DataObjects/Registries/CreateRegistryData.php:17`
+("mirrors CreateEaSectorData's tagIds") and `Services/RegistryService.php:126`
+("EaSectorService ... `if ($data->hasTagIds())` guard"). Harmless (comments), left for the Registry owner.
+
 ## Correction — Tags producer swapped from Referent to EaSector — GREEN (2026-07-07)
 
 Post-build correction to spec `docs/specs/0019-tags-module.xml` (see `<ea-sector-wiring>` +

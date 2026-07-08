@@ -3,10 +3,13 @@
 use App\Migrations\Sources\BusinessFunctionMembersSource;
 use App\Migrations\Sources\BusinessFunctionsSource;
 use App\Migrations\Sources\CompaniesSource;
+use App\Migrations\Sources\EaSectorsSource;
 use App\Migrations\Sources\OperationalSitesSource;
 use App\Migrations\Sources\ReferentsSource;
 use App\Migrations\Sources\ReferentTypesSource;
 use App\Migrations\Sources\RolesSource;
+use App\Migrations\Sources\SourcesSource;
+use App\Migrations\Sources\TagsSource;
 use App\Migrations\Sources\UsersSource;
 
 return [
@@ -62,6 +65,9 @@ return [
         'business-function-members' => BusinessFunctionMembersSource::class,
         'referent-types' => ReferentTypesSource::class,
         'referents' => ReferentsSource::class,
+        'sources' => SourcesSource::class,
+        'tags' => TagsSource::class,
+        'ea-sectors' => EaSectorsSource::class,
     ],
 
 ];

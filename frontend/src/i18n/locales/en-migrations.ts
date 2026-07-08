@@ -20,6 +20,9 @@ export const migrations = {
     'business-function-members': 'Business functions — reconcile manager & operators',
     'referent-types': 'Referent types',
     referents: 'Referents',
+    sources: 'Sources',
+    tags: 'Tags',
+    'ea-sectors': 'EA sectors',
   },
   page: {
     sourceLabel: 'Source',

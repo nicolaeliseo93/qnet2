@@ -22,26 +22,6 @@ vi.mock('@/features/ea-sectors/api', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 
-// Replace the async tags multiselect with a lightweight controllable stub so
-// this suite focuses on the form's own logic, not the network-backed select
-// (covered by its own component test).
-vi.mock('@/components/ui/async-paginated-multi-select', () => ({
-  AsyncPaginatedMultiSelect: ({
-    value,
-    onChange,
-  }: {
-    value: number[]
-    onChange: (value: number[]) => void
-  }) => (
-    <div>
-      <span data-testid="tags-value">{value.join(',')}</span>
-      <button type="button" onClick={() => onChange([...value, 3])}>
-        add-tag-3
-      </button>
-    </div>
-  ),
-}))
-
 /**
  * Not about authorization metadata: every field resolves as visible+editable
  * (the `MetaField` fallback, since `fields` is empty).
@@ -90,8 +70,6 @@ function sector(
     parent_id: 1,
     parent: { id: 1, name: 'Root A' },
     created_at: '2026-01-01T00:00:00Z',
-    tag_ids: [1],
-    tags: [{ id: 1, name: 'VIP' }],
     permissions: FULL_ACCESS_PERMISSIONS,
     ...overrides,
   }
@@ -169,41 +147,17 @@ describe('EaSectorForm — create/edit (AC-017)', () => {
     expect(createEaSectorMock).toHaveBeenCalledWith({
       name: 'New Sector',
       parent_id: null,
-      tag_ids: [],
     })
     await waitFor(() => expect(onSuccess).toHaveBeenCalled())
   })
 
-  it('hydrates name, parent and tags in edit mode', () => {
+  it('hydrates name and parent in edit mode', () => {
     render(
       <EaSectorForm mode={{ type: 'edit', sector: sector() }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
       { wrapper: wrapper() },
     )
 
     expect(screen.getByLabelText(/^Name/)).toHaveValue('Child A1')
-    expect(screen.getByTestId('tags-value')).toHaveTextContent('1')
-  })
-
-  it('submits the create payload with the selected tags', async () => {
-    createEaSectorMock.mockResolvedValue(sector({ id: 5, name: 'New Sector', parent_id: null, parent: null }))
-    const onSuccess = vi.fn()
-
-    render(
-      <EaSectorForm mode={{ type: 'create', parentId: null }} onSuccess={onSuccess} onCancel={vi.fn()} />,
-      { wrapper: wrapper() },
-    )
-
-    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'New Sector' } })
-    fireEvent.click(screen.getByText('add-tag-3'))
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => expect(createEaSectorMock).toHaveBeenCalledTimes(1))
-    expect(createEaSectorMock).toHaveBeenCalledWith({
-      name: 'New Sector',
-      parent_id: null,
-      tag_ids: [3],
-    })
-    await waitFor(() => expect(onSuccess).toHaveBeenCalled())
   })
 })
 
@@ -237,22 +191,5 @@ describe('EaSectorForm — parent picker anti-cycle exclusion (AC-018)', () => {
     const [id, payload] = updateEaSectorMock.mock.calls[0]
     expect(id).toBe(2)
     expect(payload).toEqual({ name: 'Renamed' })
-  })
-
-  it('sends the changed tag selection on a partial update', async () => {
-    updateEaSectorMock.mockResolvedValue(sector({ tag_ids: [1, 3] }))
-
-    render(
-      <EaSectorForm mode={{ type: 'edit', sector: sector() }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
-      { wrapper: wrapper() },
-    )
-
-    fireEvent.click(screen.getByText('add-tag-3'))
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => expect(updateEaSectorMock).toHaveBeenCalledTimes(1))
-    const [id, payload] = updateEaSectorMock.mock.calls[0]
-    expect(id).toBe(2)
-    expect(payload).toEqual({ tag_ids: [1, 3] })
   })
 })
