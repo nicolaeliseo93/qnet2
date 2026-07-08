@@ -2,6 +2,44 @@
 
 > Injected at session start. Update at every green state.
 
+## Navigation restyle — sidebar reorganised into Gestione / Configurazione / Amministrazione — GREEN (2026-07-08)
+
+Product ask: gather all lookup/support tables ("tabelle di appoggio") into ONE settings
+area and make the menu coherent (checked against Salesforce/Zoho/HubSpot: they split daily-work
+records from a Setup/Configuration area). Chosen scope: **sidebar tree reorg only** (no new hub
+page). NOT yet committed.
+
+The menu is backend-driven — the whole reorg is `backend/config/navigation.php` plus i18n labels.
+The old single catch-all `settings` section (with 3 collapsible sub-groups `fa-companies-services`
+/ `referents-group` / `products-group`) is REPLACED by three flat `type:'section'` groups:
+- **`management`** ("Gestione") — operational records: registries, referents, companies,
+  operational-sites, products.
+- **`configuration`** ("Configurazione") — every lookup gathered here: business-functions,
+  referent-types, ea-sectors, tags, sources, product-categories, attributes.
+- **`administration`** ("Amministrazione") — users, roles, and migrations (migrations MOVED from
+  top-level into this section; still `role:super-admin`).
+
+Note some leaves changed section vs the old grouping: `business-functions` was under the companies
+group but is a lookup → now in Configurazione. Sections render children FLAT (no collapsibles) —
+matches nav-main.tsx `NavSection`.
+
+i18n: added `navigation.management/configuration/administration` (it.ts + en.ts), removed the now
+orphaned `navigation.faCompaniesServices`. Frontend needed NO code change (renders whatever the API
+returns); `tsc --noEmit` clean.
+
+Tests: the `settings→group→leaf` traversal in the nav-node security tests no longer matches. Added a
+shared helper `navigationSectionKeys($data,$sectionKey)` in `tests/Pest.php` (replaces the old
+`navigationGroup()`), removed the 3 duplicated local `productsNavigationGroup` helpers, and repointed
+every nav-node assertion to its new section. `MigrationNavigationTest` now looks for `migrations`
+under the `administration` section instead of top-level. Verified GREEN with `XDEBUG_MODE=off`:
+targeted suite (Navigation + Migration + all 12 module security tests) **609 passed, 2730
+assertions**; Pint clean; frontend `tsc --noEmit` clean.
+
+FLAGGED (out of the chosen scope, left untouched): `app-sidebar.tsx` still has a footer gear link
+to `/settings` labelled `navigation.settings` = "Impostazioni" (→ SettingsPage). With the new
+"Configurazione" section this label now reads as a near-duplicate; worth reconciling (rename, or
+repurpose that page as the settings hub) if a future pass wants the full Salesforce-style Setup hub.
+
 ## Reversal — Tag↔EaSector association RETIRED (taggables dropped) + Fonti/Tag/EA-sectors added to the Migrations import engine — GREEN (2026-07-08)
 
 Two coordinated pieces this session. NOT yet committed.
