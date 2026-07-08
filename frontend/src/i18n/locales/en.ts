@@ -17,7 +17,7 @@ import { table } from './en-table'
 import { referents, referentTypes } from './en-referents'
 import { registries } from './en-registries'
 import { attributes, productCategories, products } from './en-products'
-import { eaSectors } from './en-ea-sectors'
+import { sectors } from './en-sectors'
 import { sources } from './en-sources'
 import { tags } from './en-tags'
 import {
@@ -64,7 +64,7 @@ export const en = {
     operationalSites: 'Operational Sites',
     attributes: 'Attributes',
     productCategories: 'Product Categories',
-    eaSectors: 'EA Sectors',
+    sectors: 'Sectors',
     products: 'Products',
     sources: 'Sources',
     tags: 'Tags',
@@ -467,7 +467,7 @@ export const en = {
   registries,
   attributes,
   productCategories,
-  eaSectors,
+  sectors,
   products,
   sources,
   tags,

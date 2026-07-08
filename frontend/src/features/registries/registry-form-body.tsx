@@ -64,7 +64,7 @@ export function RegistryFormBody({ mode, onSuccess, onCancel }: RegistryFormBody
   // always shown).
   const detailsVisible =
     fieldPermission('source_id').visible ||
-    fieldPermission('ea_sector_ids').visible ||
+    fieldPermission('sector_ids').visible ||
     fieldPermission('referent_ids').visible ||
     fieldPermission('manager_ids').visible ||
     fieldPermission('supervisor_id').visible ||

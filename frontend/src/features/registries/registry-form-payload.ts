@@ -32,7 +32,7 @@ export function buildCreatePayload(
 ): CreateRegistryPayload {
   return {
     source_id: values.source_id,
-    ea_sector_ids: values.ea_sector_ids,
+    sector_ids: values.sector_ids,
     referent_ids: values.referent_ids,
     manager_ids: values.manager_ids,
     supervisor_id: values.supervisor_id,
@@ -104,8 +104,8 @@ export function buildUpdatePayload(
     payload.employee_count = values.employee_count
   }
 
-  if (!sameIdSet(values.ea_sector_ids, original.ea_sector_ids)) {
-    payload.ea_sector_ids = values.ea_sector_ids
+  if (!sameIdSet(values.sector_ids, original.sector_ids)) {
+    payload.sector_ids = values.sector_ids
   }
   if (!sameIdSet(values.referent_ids, original.referent_ids)) {
     payload.referent_ids = values.referent_ids

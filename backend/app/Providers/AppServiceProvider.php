@@ -10,7 +10,6 @@ use App\Models\BusinessFunction;
 use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\Contact;
-use App\Models\EaSector;
 use App\Models\EmploymentProfile;
 use App\Models\OperationalSite;
 use App\Models\PersonalData;
@@ -20,6 +19,7 @@ use App\Models\Referent;
 use App\Models\ReferentType;
 use App\Models\Registry;
 use App\Models\Role;
+use App\Models\Sector;
 use App\Models\Source;
 use App\Models\Tag;
 use App\Models\User;
@@ -78,7 +78,7 @@ class AppServiceProvider extends ServiceProvider
             'product_category' => ProductCategory::class,
             'product' => Product::class,
             'source' => Source::class,
-            'ea_sector' => EaSector::class,
+            'sector' => Sector::class,
             'tag' => Tag::class,
             'registry' => Registry::class,
         ]);

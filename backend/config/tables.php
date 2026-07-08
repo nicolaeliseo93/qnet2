@@ -4,7 +4,6 @@ use App\Tables\AttributesTableDefinition;
 use App\Tables\BusinessFunctionsTableDefinition;
 use App\Tables\CompaniesTableDefinition;
 use App\Tables\CompanySitesTableDefinition;
-use App\Tables\EaSectorsTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
 use App\Tables\ProductCategoriesTableDefinition;
 use App\Tables\ProductsTableDefinition;
@@ -12,6 +11,7 @@ use App\Tables\ReferentsTableDefinition;
 use App\Tables\ReferentTypesTableDefinition;
 use App\Tables\RegistriesTableDefinition;
 use App\Tables\RolesTableDefinition;
+use App\Tables\SectorsTableDefinition;
 use App\Tables\SourcesTableDefinition;
 use App\Tables\TagsTableDefinition;
 use App\Tables\UsersTableDefinition;
@@ -48,7 +48,7 @@ return [
         'referent-types' => ReferentTypesTableDefinition::class,
         'referents' => ReferentsTableDefinition::class,
         'registries' => RegistriesTableDefinition::class,
-        'ea-sectors' => EaSectorsTableDefinition::class,
+        'sectors' => SectorsTableDefinition::class,
         'attributes' => AttributesTableDefinition::class,
         'product-categories' => ProductCategoriesTableDefinition::class,
         'products' => ProductsTableDefinition::class,

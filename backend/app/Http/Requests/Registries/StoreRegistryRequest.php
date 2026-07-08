@@ -61,8 +61,8 @@ class StoreRegistryRequest extends FormRequest
     {
         return array_merge([
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
-            'ea_sector_ids' => ['sometimes', 'array'],
-            'ea_sector_ids.*' => ['integer', Rule::exists('ea_sectors', 'id')],
+            'sector_ids' => ['sometimes', 'array'],
+            'sector_ids.*' => ['integer', Rule::exists('sectors', 'id')],
             'referent_ids' => ['sometimes', 'array'],
             'referent_ids.*' => ['integer', Rule::exists('referents', 'id')],
             // MAX 4 internal managers is a validation-layer rule (spec 0020

@@ -334,7 +334,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('referent-types/{referentType}', [ReferentTypeController::class, 'destroy']);
     });
 
-    // Sources / Tags / EA sectors: standalone lookup-table CRUD, extracted
+    // Sources / Tags / Sectors: standalone lookup-table CRUD, extracted
     // into routes/api/lookups.php (file-size split, engineering.md §6) so
     // this file stays within the 500-line hard limit. Required INSIDE this
     // auth:sanctum group so every route there inherits the same context.

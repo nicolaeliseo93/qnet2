@@ -139,7 +139,6 @@ describe('CompanySiteForm — metadata-driven authorization (spec 0020)', () => 
           responsible_tickets_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
           responsible_validation_contracts_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
           responsible_validation_contracts_two_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
-          default_bank_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
           proforma_progressive: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
           invoice_progressive: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
         },

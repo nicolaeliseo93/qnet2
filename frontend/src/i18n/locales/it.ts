@@ -10,7 +10,7 @@ import { table } from './it-table'
 import { referents, referentTypes } from './it-referents'
 import { registries } from './it-registries'
 import { attributes, productCategories, products } from './it-products'
-import { eaSectors } from './it-ea-sectors'
+import { sectors } from './it-sectors'
 import { sources } from './it-sources'
 import { tags } from './it-tags'
 import {
@@ -57,7 +57,7 @@ export const it: TranslationResources = {
     operationalSites: 'Sedi operative',
     attributes: 'Attributi',
     productCategories: 'Categorie Prodotto',
-    eaSectors: 'Settori EA',
+    sectors: 'Settori',
     products: 'Prodotti',
     sources: 'Fonti',
     tags: 'Tag',
@@ -452,7 +452,7 @@ export const it: TranslationResources = {
   registries,
   attributes,
   productCategories,
-  eaSectors,
+  sectors,
   products,
   sources,
   tags,

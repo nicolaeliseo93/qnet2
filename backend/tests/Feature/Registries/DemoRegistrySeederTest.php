@@ -5,24 +5,24 @@ use App\Models\Contact;
 use App\Models\PersonalData;
 use App\Models\Registry;
 use App\Models\User;
-use Database\Seeders\DemoEaSectorSeeder;
 use Database\Seeders\DemoReferentSeeder;
 use Database\Seeders\DemoReferentTypeSeeder;
 use Database\Seeders\DemoRegistrySeeder;
+use Database\Seeders\DemoSectorSeeder;
 use Database\Seeders\DemoSourceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
 /**
- * Seeds every lookup DemoRegistrySeeder depends on (sources/EA sectors/
+ * Seeds every lookup DemoRegistrySeeder depends on (sources/sectors/
  * referents + at least one internal manager), mirroring the dependency order
  * declared in DemoDataSeeder.
  */
 function seedRegistryDependencies(): void
 {
     test()->seed(DemoSourceSeeder::class);
-    test()->seed(DemoEaSectorSeeder::class);
+    test()->seed(DemoSectorSeeder::class);
     test()->seed(DemoReferentTypeSeeder::class);
     test()->seed(DemoReferentSeeder::class);
     User::factory()->count(3)->create();

@@ -5,7 +5,6 @@ namespace App\Services;
 use App\DataObjects\CompanySites\CreateCompanySiteData;
 use App\DataObjects\CompanySites\UpdateCompanySiteData;
 use App\DataObjects\Users\ProfileData;
-use App\Enums\HttpStatusEnum;
 use App\Models\CompanySite;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -16,10 +15,8 @@ use Illuminate\Support\Facades\DB;
  * + address) to CompanySiteProfileWriter and the banks diff to BankService —
  * the controller stays thin, this Service is the single authority.
  *
- * `default_bank_id` is resolved AFTER the bank sync (constraint: the FK cycle
- * default_bank_id <-> banks is broken by writing the site first, syncing its
- * banks, then re-validating default_bank_id against the resulting owned set —
- * all inside the same transaction, see resolveDefaultBank()).
+ * The "preferred bank" is a per-row `is_primary` flag on the banks themselves
+ * (single-primary invariant owned by BankService), not a site-level FK.
  */
 class CompanySiteService
 {
@@ -62,7 +59,6 @@ class CompanySiteService
             $this->profileWriter->write($companySite, $profile);
 
             $this->banks->sync($companySite, $data->banks);
-            $this->resolveDefaultBank($companySite, $data->defaultBankId, submitted: true);
 
             if ($data->hasLogo()) {
                 $this->logos->set($companySite, $data->logo);
@@ -85,10 +81,6 @@ class CompanySiteService
 
             if ($data->banksSubmitted) {
                 $this->banks->sync($companySite, $data->banks);
-            }
-
-            if ($data->defaultBankIdSubmitted) {
-                $this->resolveDefaultBank($companySite, $data->defaultBankId, submitted: true);
             }
 
             return $this->loadTree($companySite);
@@ -130,26 +122,5 @@ class CompanySiteService
     public function loadTree(CompanySite $companySite): CompanySite
     {
         return $companySite->fresh(self::HYDRATED_RELATIONS);
-    }
-
-    /**
-     * Resolve `default_bank_id` against the site's OWN banks, post-sync. A
-     * value that does not belong to this site (e.g. another site's bank, or a
-     * stale id from a bank just removed by the same request) is rejected —
-     * StoreCompanySiteRequest/UpdateCompanySiteRequest already validate this
-     * structurally against the submitted payload; this is the defence-in-depth
-     * check against the actually persisted set.
-     */
-    private function resolveDefaultBank(CompanySite $companySite, ?int $defaultBankId, bool $submitted): void
-    {
-        if (! $submitted) {
-            return;
-        }
-
-        if ($defaultBankId !== null && ! $companySite->banks()->whereKey($defaultBankId)->exists()) {
-            abort(HttpStatusEnum::UNPROCESSABLE_ENTITY->value, 'The selected bank does not belong to this company site.');
-        }
-
-        $companySite->update(['default_bank_id' => $defaultBankId]);
     }
 }

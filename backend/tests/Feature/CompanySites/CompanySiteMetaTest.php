@@ -55,7 +55,6 @@ it('200: field catalogue is grouped profile/personal_data/settings/banks/other, 
         ->and($fields['personal_data.addresses']['type'])->toBe('collection')
         ->and($fields['company_id']['group'])->toBe('settings')
         ->and($fields['responsible_rda_id']['group'])->toBe('settings')
-        ->and($fields['default_bank_id']['group'])->toBe('settings')
         ->and($fields['banks']['group'])->toBe('banks')
         ->and($fields['banks']['type'])->toBe('collection')
         ->and($fields['company_type']['group'])->toBe('other')

@@ -53,7 +53,6 @@ const SERVER_ERROR_FIELDS = [
   'responsible_tickets_id',
   'responsible_validation_contracts_id',
   'responsible_validation_contracts_two_id',
-  'default_bank_id',
   'proforma_progressive',
   'invoice_progressive',
 ] as const
@@ -148,7 +147,6 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
         responsible_tickets_id: site.responsible_tickets_id,
         responsible_validation_contracts_id: site.responsible_validation_contracts_id,
         responsible_validation_contracts_two_id: site.responsible_validation_contracts_two_id,
-        default_bank_id: site.default_bank_id,
         proforma_progressive: site.proforma_progressive,
         invoice_progressive: site.invoice_progressive,
       }
@@ -161,7 +159,6 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
       responsible_tickets_id: null,
       responsible_validation_contracts_id: null,
       responsible_validation_contracts_two_id: null,
-      default_bank_id: null,
       proforma_progressive: null,
       invoice_progressive: null,
     }

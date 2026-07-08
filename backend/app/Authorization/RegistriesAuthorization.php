@@ -38,7 +38,7 @@ class RegistriesAuthorization extends AbstractResourceAuthorization
     {
         return [
             new FieldDefinition('source_id', 'select'),
-            new FieldDefinition('ea_sector_ids', 'multiselect'),
+            new FieldDefinition('sector_ids', 'multiselect'),
             new FieldDefinition('referent_ids', 'multiselect'),
             new FieldDefinition('manager_ids', 'multiselect'),
             new FieldDefinition('supervisor_id', 'select'),
@@ -82,7 +82,7 @@ class RegistriesAuthorization extends AbstractResourceAuthorization
 
         return array_merge([
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'ea_sector_ids' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'sector_ids' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'referent_ids' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'manager_ids' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'supervisor_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),

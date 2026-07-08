@@ -28,7 +28,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   registries: 'navigation.registries',
   attributes: 'navigation.attributes',
   'product-categories': 'navigation.productCategories',
-  'ea-sectors': 'navigation.eaSectors',
+  sectors: 'navigation.sectors',
   products: 'navigation.products',
   // Namespaced key (`ns:key`): the migrations module registers its own
   // i18next namespace instead of merging into `en.ts`/`it.ts` (see

@@ -21,6 +21,7 @@ class CompanySiteBankFactory extends Factory
             'name' => fake()->company().' Bank',
             'iban' => fake()->optional()->iban('IT'),
             'notes' => fake()->optional()->sentence(),
+            'is_primary' => false,
         ];
     }
 }

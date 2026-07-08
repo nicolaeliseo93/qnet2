@@ -68,9 +68,6 @@ export const companySites = {
     responsibleSearch: 'Cerca utenti…',
     responsibleEmpty: 'Nessun utente trovato.',
     responsibleError: 'Impossibile caricare gli utenti.',
-    defaultBank: 'Banca predefinita',
-    defaultBankPlaceholder: 'Seleziona una banca…',
-    defaultBankNone: 'Nessuna',
     proformaProgressive: 'Progressivo proforma',
     invoiceProgressive: 'Progressivo fattura',
     quotationLayout: 'Layout preventivo',
@@ -110,7 +107,7 @@ export const companySites = {
       },
       banking: {
         title: 'Dati bancari',
-        description: 'Banca predefinita e progressivi documentali.',
+        description: 'Progressivi documentali.',
       },
       quotation: {
         title: 'Documenti preventivo',
@@ -134,6 +131,8 @@ export const companySites = {
       ibanMax: "L'IBAN può contenere al massimo 50 caratteri.",
       ibanInvalid: 'Inserisci un IBAN valido.',
       notesMax: 'Le note possono contenere al massimo 191 caratteri.',
+      preferred: 'Banca preferita',
+      preferredBadge: 'Preferita',
       add: 'Aggiungi banca',
       editAction: 'Modifica banca',
       deleteAction: 'Elimina banca',

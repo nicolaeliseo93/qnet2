@@ -42,7 +42,7 @@ class CompanySite extends BaseModel
     protected $fillable = [
         'name', 'notes', 'is_default',
         'responsible_rda_id', 'responsible_tickets_id', 'responsible_validation_contracts_id',
-        'responsible_validation_contracts_two_id', 'default_bank_id', 'proforma_progressive',
+        'responsible_validation_contracts_two_id', 'proforma_progressive',
         'invoice_progressive', 'quotation_layout_id', 'quotation_header_id', 'quotation_footer_id',
         'company_id', 'accounting_manager_id', 'store_id', 'company_type', 'commissions', 'order_sites',
         'payment_status_assign_technician', 'payment_status_deposit', 'payment_status_balance',
@@ -92,11 +92,6 @@ class CompanySite extends BaseModel
     public function banks(): HasMany
     {
         return $this->hasMany(CompanySiteBank::class);
-    }
-
-    public function defaultBank(): BelongsTo
-    {
-        return $this->belongsTo(CompanySiteBank::class, 'default_bank_id');
     }
 
     public function responsibleRda(): BelongsTo

@@ -13,7 +13,7 @@ use InvalidArgumentException;
 /**
  * Business logic for the `registries` resource (spec 0020): create/update/
  * delete, mirroring ReferentService's nested personal-data write discipline
- * plus the business-specific relations (source, EA sectors, referents,
+ * plus the business-specific relations (source, sectors, referents,
  * internal managers, supervisor/commercial/reporter) and the
  * is_qualified_supplier normalization.
  */
@@ -31,7 +31,7 @@ class RegistryService
         'supervisor',
         'commercial',
         'reporter',
-        'eaSectors',
+        'sectors',
         'referents',
         'managers',
         'personalData.contacts',
@@ -89,7 +89,7 @@ class RegistryService
      * $profile leaves the card untouched. Each pivot array is synced ONLY
      * when submitted (an omitted key leaves the current associations
      * untouched, an explicit empty array detaches all — mirrors
-     * EaSectorService::update).
+     * SectorService::update).
      */
     public function update(User $actor, Registry $registry, UpdateRegistryData $data, ?ProfileData $profile): Registry
     {
@@ -123,14 +123,14 @@ class RegistryService
     /**
      * Sync the 3 to-many relations from the DTO's submitted id arrays, each
      * independently guarded by its own hasXxxIds() (mirrors
-     * EaSectorService::create/update's `if ($data->hasTagIds())` guard): an
+     * SectorService::create/update's `if ($data->hasTagIds())` guard): an
      * omitted key leaves that relation untouched, a submitted array
      * (including empty) is an authoritative sync.
      */
     private function syncPivots(Registry $registry, CreateRegistryData|UpdateRegistryData $data): void
     {
-        if ($data->hasEaSectorIds()) {
-            $registry->eaSectors()->sync($data->eaSectorIds);
+        if ($data->hasSectorIds()) {
+            $registry->sectors()->sync($data->sectorIds);
         }
 
         if ($data->hasReferentIds()) {

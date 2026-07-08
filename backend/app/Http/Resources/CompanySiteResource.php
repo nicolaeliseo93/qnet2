@@ -82,7 +82,6 @@ class CompanySiteResource extends JsonResource
                 $this->relationLoaded('responsibleValidationContractsTwo') && $this->responsibleValidationContractsTwo !== null,
                 fn (): array => $this->reference($this->responsibleValidationContractsTwo),
             ),
-            'default_bank_id' => $this->default_bank_id,
             'proforma_progressive' => $this->proforma_progressive,
             'invoice_progressive' => $this->invoice_progressive,
             'quotation_layout_id' => $this->quotation_layout_id,

@@ -19,7 +19,7 @@ import type { ForSelectItem } from '@/features/for-select/types'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useEnumOptions } from '@/features/config/use-config'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
-import { EA_SECTORS_FOR_SELECT_RESOURCE } from '@/features/ea-sectors/for-select-api'
+import { SECTORS_FOR_SELECT_RESOURCE } from '@/features/sectors/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import type { RegistryFormValues } from '@/features/registries/use-registry-form'
@@ -27,7 +27,7 @@ import type { RegistryFormValues } from '@/features/registries/use-registry-form
 /** Every relation picker's edit-mode hydration, resolved once by the form hook. */
 export interface RegistrySelectedItems {
   source: ForSelectItem | null
-  eaSectors: ForSelectItem[]
+  sectors: ForSelectItem[]
   referents: ForSelectItem[]
   managers: ForSelectItem[]
   supervisor: ForSelectItem | null
@@ -48,7 +48,7 @@ function numberInputValue(value: number | null): string {
 }
 
 /**
- * "Registry details" section: relations (source, EA sectors, referents,
+ * "Registry details" section: relations (source, sectors, referents,
  * managers, supervisor/commercial/reporter) plus the "ATECO codes"
  * placeholder — a disabled control reserved for a future spec, never
  * persisted and never part of the meta/schema — followed by the
@@ -90,22 +90,22 @@ export function DetailsTabContent({ control, selectedItems, isSupplier }: Detail
           )}
         </MetaField>
 
-        <MetaField control={control} name="ea_sector_ids" metaKey="ea_sector_ids" label={t('registries.form.eaSectors')}>
+        <MetaField control={control} name="sector_ids" metaKey="sector_ids" label={t('registries.form.sectors')}>
           {({ field, disabled }) => (
             <FormControl>
               <AsyncPaginatedMultiSelect
-                resource={EA_SECTORS_FOR_SELECT_RESOURCE}
+                resource={SECTORS_FOR_SELECT_RESOURCE}
                 value={field.value}
                 onChange={field.onChange}
-                selectedItems={selectedItems.eaSectors}
+                selectedItems={selectedItems.sectors}
                 disabled={disabled}
                 labels={{
-                  placeholder: t('registries.form.eaSectorsPlaceholder'),
-                  searchPlaceholder: t('registries.form.eaSectorsSearch'),
-                  empty: t('registries.form.eaSectorsEmpty'),
-                  error: t('registries.form.eaSectorsError'),
-                  removeLabel: t('registries.form.eaSectorsRemove'),
-                  triggerLabel: t('registries.form.eaSectors'),
+                  placeholder: t('registries.form.sectorsPlaceholder'),
+                  searchPlaceholder: t('registries.form.sectorsSearch'),
+                  empty: t('registries.form.sectorsEmpty'),
+                  error: t('registries.form.sectorsError'),
+                  removeLabel: t('registries.form.sectorsRemove'),
+                  triggerLabel: t('registries.form.sectors'),
                   retry: t('common.retry'),
                 }}
               />

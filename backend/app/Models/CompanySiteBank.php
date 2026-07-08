@@ -21,9 +21,11 @@ class CompanySiteBank extends BaseModel
         'name',
         'iban',
         'notes',
+        'is_primary',
     ];
 
     protected $casts = [
+        'is_primary' => 'boolean',
         // Spec 0013 — external data migration: guarded (not in $fillable), only
         // ever set by property assignment post-create.
         'old_id' => 'integer',

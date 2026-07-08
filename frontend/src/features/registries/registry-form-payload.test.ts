@@ -53,8 +53,8 @@ function original(
     name: 'Ada Lovelace',
     source_id: 1,
     source: { id: 1, name: 'Website' },
-    ea_sector_ids: [10, 11],
-    ea_sectors: [{ id: 10, name: 'Sector A' }, { id: 11, name: 'Sector B' }],
+    sector_ids: [10, 11],
+    sectors: [{ id: 10, name: 'Sector A' }, { id: 11, name: 'Sector B' }],
     referent_ids: [20],
     referents: [{ id: 20, name: 'Referent A' }],
     manager_ids: [30],
@@ -85,7 +85,7 @@ function original(
 
 const formValues: RegistryFormValues = {
   source_id: 1,
-  ea_sector_ids: [10, 11],
+  sector_ids: [10, 11],
   referent_ids: [20],
   manager_ids: [30],
   supervisor_id: 40,
@@ -105,7 +105,7 @@ describe('buildCreatePayload', () => {
     const payload = buildCreatePayload(formValues, individualDraft())
 
     expect(payload.source_id).toBe(1)
-    expect(payload.ea_sector_ids).toEqual([10, 11])
+    expect(payload.sector_ids).toEqual([10, 11])
     expect(payload.manager_ids).toEqual([30])
     expect(payload.is_supplier).toBe(false)
     expect(payload.personal_data.first_name).toBe('Ada')
@@ -163,29 +163,29 @@ describe('buildUpdatePayload', () => {
 
   it('treats a reordered pivot array as unchanged (order-insensitive set compare)', () => {
     const payload = buildUpdatePayload(
-      { ...formValues, ea_sector_ids: [11, 10] },
+      { ...formValues, sector_ids: [11, 10] },
       original(),
       individualDraft(),
     )
-    expect(payload.ea_sector_ids).toBeUndefined()
+    expect(payload.sector_ids).toBeUndefined()
   })
 
   it('includes a pivot array when its id set actually changed', () => {
     const payload = buildUpdatePayload(
-      { ...formValues, ea_sector_ids: [10] },
+      { ...formValues, sector_ids: [10] },
       original(),
       individualDraft(),
     )
-    expect(payload.ea_sector_ids).toEqual([10])
+    expect(payload.sector_ids).toEqual([10])
   })
 
-  it('detaches all EA sectors when the array is sent empty', () => {
+  it('detaches all sectors when the array is sent empty', () => {
     const payload = buildUpdatePayload(
-      { ...formValues, ea_sector_ids: [] },
+      { ...formValues, sector_ids: [] },
       original(),
       individualDraft(),
     )
-    expect(payload.ea_sector_ids).toEqual([])
+    expect(payload.sector_ids).toEqual([])
   })
 
   it('includes personal_data only when the buffered draft actually differs', () => {

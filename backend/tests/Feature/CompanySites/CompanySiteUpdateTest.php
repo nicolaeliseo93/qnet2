@@ -142,31 +142,35 @@ it('update: a bank id belonging to ANOTHER site is treated as a create, never an
         ->and($target->banks()->first()->name)->toBe('Hijacked');
 });
 
-it('update: default_bank_id resolved post-sync against the site\'s own banks', function () {
+it('update: syncing a bank flagged primary persists is_primary', function () {
     $actor = userWithCompanySiteAbilities(['update']);
     $target = CompanySite::factory()->create();
     Sanctum::actingAs($actor);
 
-    $response = $this->patchJson("/api/company-sites/{$target->id}", [
-        'banks' => [['name' => 'Banca Uno']],
-    ])->assertOk();
+    $this->patchJson("/api/company-sites/{$target->id}", [
+        'banks' => [['name' => 'Banca Uno', 'is_primary' => true]],
+    ])->assertOk()
+        ->assertJsonPath('data.banks.0.is_primary', true);
 
-    $bankId = $response->json('data.banks.0.id');
-
-    $this->patchJson("/api/company-sites/{$target->id}", ['default_bank_id' => $bankId])
-        ->assertOk()
-        ->assertJsonPath('data.default_bank_id', $bankId);
+    $this->assertDatabaseHas('company_site_banks', ['name' => 'Banca Uno', 'is_primary' => true]);
 });
 
-it('update: default_bank_id foreign to this site is rejected', function () {
+it('update: promoting a new primary bank demotes the previous one (single-primary)', function () {
     $actor = userWithCompanySiteAbilities(['update']);
     $target = CompanySite::factory()->create();
-    $other = CompanySite::factory()->create();
-    $foreignBank = CompanySiteBank::factory()->for($other)->create();
+    $first = CompanySiteBank::factory()->for($target)->create(['name' => 'Banca Uno', 'is_primary' => true]);
+    $second = CompanySiteBank::factory()->for($target)->create(['name' => 'Banca Due', 'is_primary' => false]);
     Sanctum::actingAs($actor);
 
-    $this->patchJson("/api/company-sites/{$target->id}", ['default_bank_id' => $foreignBank->id])
-        ->assertStatus(422)->assertJsonValidationErrors('default_bank_id');
+    $this->patchJson("/api/company-sites/{$target->id}", [
+        'banks' => [
+            ['id' => $first->id, 'name' => 'Banca Uno', 'is_primary' => false],
+            ['id' => $second->id, 'name' => 'Banca Due', 'is_primary' => true],
+        ],
+    ])->assertOk();
+
+    expect($first->fresh()->is_primary)->toBeFalse()
+        ->and($second->fresh()->is_primary)->toBeTrue();
 });
 
 it('update: PATCH company_id sets the owning company and its nested reference', function () {

@@ -18,6 +18,8 @@ export interface CompanySiteBank {
   name: string
   iban: string | null
   notes: string | null
+  /** The site's preferred bank (single-primary, mirrors contacts/addresses). */
+  is_primary: boolean
 }
 
 /** A related user reference as returned inside a `responsible_*` field. */
@@ -42,7 +44,6 @@ export interface CompanySiteDetail {
    */
   personal_data: PersonalDataCard | null
   banks: CompanySiteBank[]
-  default_bank_id: number | null
   responsible_rda_id: number | null
   responsible_rda: CompanySiteResponsibleRef | null
   responsible_tickets_id: number | null
@@ -106,6 +107,7 @@ export interface CreateCompanySiteBankPayload {
   name: string
   iban?: string | null
   notes?: string | null
+  is_primary: boolean
 }
 
 /**
@@ -119,7 +121,6 @@ export interface CreateCompanySitePayload {
   notes?: string | null
   personal_data: PersonalDataPayload
   banks?: CreateCompanySiteBankPayload[]
-  default_bank_id?: number | null
   company_id?: number | null
   responsible_rda_id?: number | null
   responsible_tickets_id?: number | null
@@ -142,7 +143,6 @@ export interface UpdateCompanySitePayload {
   notes?: string | null
   personal_data?: PersonalDataPayload
   banks?: CreateCompanySiteBankPayload[]
-  default_bank_id?: number | null
   company_id?: number | null
   responsible_rda_id?: number | null
   responsible_tickets_id?: number | null
@@ -164,4 +164,6 @@ export interface BankDraft {
   name: string
   iban: string | null
   notes: string | null
+  /** The site's preferred bank (single-primary across the list). */
+  is_primary: boolean
 }

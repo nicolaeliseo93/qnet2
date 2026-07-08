@@ -68,9 +68,6 @@ export const companySites = {
     responsibleSearch: 'Search users…',
     responsibleEmpty: 'No users found.',
     responsibleError: 'Unable to load users.',
-    defaultBank: 'Default bank',
-    defaultBankPlaceholder: 'Select a bank…',
-    defaultBankNone: 'None',
     proformaProgressive: 'Proforma progressive',
     invoiceProgressive: 'Invoice progressive',
     quotationLayout: 'Quotation layout',
@@ -110,7 +107,7 @@ export const companySites = {
       },
       banking: {
         title: 'Banking',
-        description: 'Default bank and document progressives.',
+        description: 'Document progressives.',
       },
       quotation: {
         title: 'Quotation documents',
@@ -134,6 +131,8 @@ export const companySites = {
       ibanMax: 'IBAN must be at most 50 characters.',
       ibanInvalid: 'Enter a valid IBAN.',
       notesMax: 'Notes must be at most 191 characters.',
+      preferred: 'Preferred bank',
+      preferredBadge: 'Preferred',
       add: 'Add bank',
       editAction: 'Edit bank',
       deleteAction: 'Delete bank',

@@ -35,6 +35,9 @@ export function buildBankSchema(t: TFunction) {
         message: t('companySites.form.banks.ibanInvalid'),
       }),
     notes: z.string().max(NOTES_MAX_LENGTH, t('companySites.form.banks.notesMax')),
+    // The site's preferred bank; the manager enforces at most one across the
+    // list (single-primary, mirroring contacts/addresses).
+    is_primary: z.boolean(),
   })
 }
 

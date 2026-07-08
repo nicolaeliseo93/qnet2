@@ -12,21 +12,21 @@ namespace App\DataObjects\Registries;
  * clearing `source_id`/`agreement_status`), so a plain null property cannot
  * distinguish "not submitted" from "submitted as null" — the `*Submitted`
  * flags carry that distinction explicitly (mirrors UpdateReferentData). The
- * three pivot id arrays follow CreateRegistryData/UpdateEaSectorData's
+ * three pivot id arrays follow CreateRegistryData/UpdateSectorData's
  * simpler convention instead: null means "not submitted, leave untouched",
  * an array (including empty) is an authoritative sync.
  */
 final readonly class UpdateRegistryData
 {
     /**
-     * @param  array<int, int>|null  $eaSectorIds
+     * @param  array<int, int>|null  $sectorIds
      * @param  array<int, int>|null  $referentIds
      * @param  array<int, int>|null  $managerIds
      */
     public function __construct(
         public ?int $sourceId = null,
         public bool $sourceIdSubmitted = false,
-        public ?array $eaSectorIds = null,
+        public ?array $sectorIds = null,
         public ?array $referentIds = null,
         public ?array $managerIds = null,
         public ?int $supervisorId = null,
@@ -61,7 +61,7 @@ final readonly class UpdateRegistryData
         return new self(
             sourceId: array_key_exists('source_id', $data) && $data['source_id'] !== null ? (int) $data['source_id'] : null,
             sourceIdSubmitted: array_key_exists('source_id', $data),
-            eaSectorIds: array_key_exists('ea_sector_ids', $data) ? array_map('intval', $data['ea_sector_ids']) : null,
+            sectorIds: array_key_exists('sector_ids', $data) ? array_map('intval', $data['sector_ids']) : null,
             referentIds: array_key_exists('referent_ids', $data) ? array_map('intval', $data['referent_ids']) : null,
             managerIds: array_key_exists('manager_ids', $data) ? array_map('intval', $data['manager_ids']) : null,
             supervisorId: array_key_exists('supervisor_id', $data) && $data['supervisor_id'] !== null ? (int) $data['supervisor_id'] : null,
@@ -87,9 +87,9 @@ final readonly class UpdateRegistryData
         );
     }
 
-    public function hasEaSectorIds(): bool
+    public function hasSectorIds(): bool
     {
-        return $this->eaSectorIds !== null;
+        return $this->sectorIds !== null;
     }
 
     public function hasReferentIds(): bool

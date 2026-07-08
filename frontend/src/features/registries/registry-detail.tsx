@@ -98,8 +98,8 @@ export function RegistryDetailView({ registry }: RegistryDetailViewProps) {
           <DetailField label={t('registries.form.reporter')}>
             {registry.reporter?.name ?? <DetailEmpty />}
           </DetailField>
-          <DetailField label={t('registries.form.eaSectors')} full>
-            {refList(registry.ea_sectors)}
+          <DetailField label={t('registries.form.sectors')} full>
+            {refList(registry.sectors)}
           </DetailField>
           <DetailField label={t('registries.form.referents')} full>
             {refList(registry.referents)}

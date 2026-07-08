@@ -23,7 +23,9 @@ vi.mock('@/features/company-sites/bank-form', () => ({
     <button
       type="button"
       data-testid="stub-submit"
-      onClick={() => onSubmit({ name: 'Nuova Banca', iban: 'IT60X0542811101000000123456', notes: null })}
+      onClick={() =>
+        onSubmit({ name: 'Nuova Banca', iban: 'IT60X0542811101000000123456', notes: null, is_primary: true })
+      }
     >
       stub-save
     </button>
@@ -37,6 +39,7 @@ function bank(overrides: Partial<BankDraft> = {}): BankDraft {
     name: 'Banca Test',
     iban: 'IT60X0542811101000000123456',
     notes: null,
+    is_primary: false,
     ...overrides,
   }
 }
@@ -82,6 +85,25 @@ describe('BanksManager (controlled)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete bank' }))
 
     await waitFor(() => expect(onChange).toHaveBeenCalledWith([]))
+  })
+
+  it('shows the preferred badge on the primary bank', () => {
+    renderWithConfirm(<BanksManager value={[bank({ is_primary: true })]} onChange={() => {}} />)
+    expect(screen.getByText('Preferred')).toBeInTheDocument()
+  })
+
+  it('keeps at most one preferred bank: adding a preferred one demotes the others', () => {
+    const onChange = vi.fn()
+
+    renderWithConfirm(<BanksManager value={[bank({ is_primary: true })]} onChange={onChange} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add bank' }))
+    // The stub submits a bank with is_primary: true.
+    fireEvent.click(screen.getByTestId('stub-submit'))
+
+    const next = onChange.mock.calls[0][0] as BankDraft[]
+    expect(next).toHaveLength(2)
+    expect(next[0].is_primary).toBe(false)
+    expect(next[1].is_primary).toBe(true)
   })
 
   it('does not render add/edit/remove affordances when read-only', () => {

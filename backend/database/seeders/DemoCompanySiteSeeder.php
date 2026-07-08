@@ -6,7 +6,6 @@ use App\Models\Address;
 use App\Models\City;
 use App\Models\Company;
 use App\Models\CompanySite;
-use App\Models\CompanySiteBank;
 use App\Models\Contact;
 use App\Models\PersonalData;
 use Faker\Factory as FakerFactory;
@@ -143,16 +142,13 @@ class DemoCompanySiteSeeder extends Seeder
         $bankCount = $sequence % 3; // 0, 1 or 2 banks.
 
         for ($bank = 0; $bank < $bankCount; $bank++) {
-            /** @var CompanySiteBank $created */
-            $created = $companySite->banks()->create([
+            $companySite->banks()->create([
                 'name' => $faker->company().' Bank',
                 'iban' => $faker->iban('IT'),
                 'notes' => $faker->optional()->sentence(),
+                // The first bank is the site's preferred one (single-primary).
+                'is_primary' => $bank === 0,
             ]);
-
-            if ($bank === 0) {
-                $companySite->update(['default_bank_id' => $created->id]);
-            }
         }
     }
 }

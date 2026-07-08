@@ -33,7 +33,7 @@ function baseFields(t: TFunction) {
     commercial_id: z.number().nullable(),
     reporter_id: z.number().nullable(),
     // Multiselect relations (for-select standard): ids, full-replace.
-    ea_sector_ids: z.array(z.number()),
+    sector_ids: z.array(z.number()),
     referent_ids: z.array(z.number()),
     manager_ids: z.array(z.number()).max(MAX_MANAGERS, t('registries.form.managersMax')),
     // Empty string = "no VAT group", mapped to `null` at the payload boundary.

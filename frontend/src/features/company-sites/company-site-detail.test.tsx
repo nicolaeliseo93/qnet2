@@ -30,7 +30,6 @@ function site(overrides: Partial<CompanySiteDetailWithPermissions> = {}): Compan
     logo_url: null,
     personal_data: null,
     banks: [],
-    default_bank_id: null,
     responsible_rda_id: null,
     responsible_rda: null,
     responsible_tickets_id: null,

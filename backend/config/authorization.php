@@ -4,7 +4,6 @@ use App\Authorization\AttributesAuthorization;
 use App\Authorization\BusinessFunctionsAuthorization;
 use App\Authorization\CompaniesAuthorization;
 use App\Authorization\CompanySitesAuthorization;
-use App\Authorization\EaSectorsAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
 use App\Authorization\ProductCategoriesAuthorization;
 use App\Authorization\ProductsAuthorization;
@@ -12,6 +11,7 @@ use App\Authorization\ReferentsAuthorization;
 use App\Authorization\ReferentTypesAuthorization;
 use App\Authorization\RegistriesAuthorization;
 use App\Authorization\RolesAuthorization;
+use App\Authorization\SectorsAuthorization;
 use App\Authorization\SourcesAuthorization;
 use App\Authorization\TagsAuthorization;
 use App\Authorization\UsersAuthorization;
@@ -47,7 +47,7 @@ return [
         'referent-types' => ReferentTypesAuthorization::class,
         'referents' => ReferentsAuthorization::class,
         'registries' => RegistriesAuthorization::class,
-        'ea-sectors' => EaSectorsAuthorization::class,
+        'sectors' => SectorsAuthorization::class,
         'attributes' => AttributesAuthorization::class,
         'product-categories' => ProductCategoriesAuthorization::class,
         'products' => ProductsAuthorization::class,

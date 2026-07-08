@@ -13,6 +13,7 @@ final readonly class CreateBank
         public string $name,
         public ?string $iban = null,
         public ?string $notes = null,
+        public bool $isPrimary = false,
     ) {}
 
     /**
@@ -26,6 +27,7 @@ final readonly class CreateBank
             'name' => $this->name,
             'iban' => $this->iban,
             'notes' => $this->notes,
+            'is_primary' => $this->isPrimary,
         ];
     }
 }

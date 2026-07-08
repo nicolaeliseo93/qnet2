@@ -20,7 +20,7 @@ const ReferentTypesPage = lazy(() => import('@/pages/referent-types-page'))
 const OperationalSitesPage = lazy(() => import('@/pages/operational-sites-page'))
 const AttributesPage = lazy(() => import('@/pages/attributes-page'))
 const ProductCategoriesPage = lazy(() => import('@/pages/product-categories-page'))
-const EaSectorsPage = lazy(() => import('@/pages/ea-sectors-page'))
+const SectorsPage = lazy(() => import('@/pages/sectors-page'))
 const ProductsPage = lazy(() => import('@/pages/products-page'))
 const SourcesPage = lazy(() => import('@/pages/sources-page'))
 const TagsPage = lazy(() => import('@/pages/tags-page'))
@@ -97,8 +97,8 @@ export const router = createBrowserRouter([
             element: <ProductCategoriesPage />,
           },
           {
-            path: 'ea-sectors',
-            element: <EaSectorsPage />,
+            path: 'sectors',
+            element: <SectorsPage />,
           },
           {
             path: 'products',

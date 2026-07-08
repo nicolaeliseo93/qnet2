@@ -30,7 +30,7 @@ it('creates the company_sites table with the expected columns (no flat contact c
     expect(Schema::hasColumns('company_sites', [
         'id', 'old_id', 'name', 'notes', 'is_default',
         'responsible_rda_id', 'responsible_tickets_id', 'responsible_validation_contracts_id',
-        'responsible_validation_contracts_two_id', 'default_bank_id', 'proforma_progressive', 'invoice_progressive',
+        'responsible_validation_contracts_two_id', 'proforma_progressive', 'invoice_progressive',
         'quotation_layout_id', 'quotation_header_id', 'quotation_footer_id',
         'company_id', 'accounting_manager_id', 'store_id', 'company_type', 'commissions', 'order_sites',
         'payment_status_assign_technician', 'payment_status_deposit', 'payment_status_balance',
@@ -45,11 +45,14 @@ it('creates the company_sites table with the expected columns (no flat contact c
     expect(Schema::hasColumn('company_sites', 'phone'))->toBeFalse();
     expect(Schema::hasColumn('company_sites', 'pec'))->toBeFalse();
     expect(Schema::hasColumn('company_sites', 'fax'))->toBeFalse();
+
+    // The site-level "preferred bank" FK moved onto the bank rows (is_primary).
+    expect(Schema::hasColumn('company_sites', 'default_bank_id'))->toBeFalse();
 });
 
 it('creates the company_site_banks table with the expected columns and cascade FK', function () {
     expect(Schema::hasTable('company_site_banks'))->toBeTrue();
-    expect(Schema::hasColumns('company_site_banks', ['id', 'old_id', 'company_site_id', 'name', 'iban', 'notes', 'created_at', 'updated_at']))->toBeTrue();
+    expect(Schema::hasColumns('company_site_banks', ['id', 'old_id', 'company_site_id', 'name', 'iban', 'notes', 'is_primary', 'created_at', 'updated_at']))->toBeTrue();
 });
 
 it('name is required at the database level', function () {
@@ -106,12 +109,11 @@ it('banks() is a real hasMany to CompanySiteBank', function () {
         ->and($companySite->banks->first()->is($bank))->toBeTrue();
 });
 
-it('defaultBank() resolves the chosen bank', function () {
+it('a bank can be flagged primary (is_primary cast to bool)', function () {
     $companySite = CompanySite::factory()->create();
-    $bank = CompanySiteBank::factory()->for($companySite)->create();
-    $companySite->update(['default_bank_id' => $bank->id]);
+    $bank = CompanySiteBank::factory()->for($companySite)->create(['is_primary' => true]);
 
-    expect($companySite->fresh()->defaultBank->is($bank))->toBeTrue();
+    expect($bank->fresh()->is_primary)->toBeTrue();
 });
 
 it('the 4 responsible relations and company()/accountingManager() are BelongsTo(User)/(Company)', function () {

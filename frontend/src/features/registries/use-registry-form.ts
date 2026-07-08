@@ -35,7 +35,7 @@ import type { RegistryDetail, RegistryFormMode } from '@/features/registries/typ
  */
 const SERVER_ERROR_FIELDS = [
   'source_id',
-  'ea_sector_ids',
+  'sector_ids',
   'referent_ids',
   'manager_ids',
   'supervisor_id',
@@ -126,7 +126,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
       const registry = mode.registry
       return {
         source_id: registry.source_id,
-        ea_sector_ids: registry.ea_sector_ids,
+        sector_ids: registry.sector_ids,
         referent_ids: registry.referent_ids,
         manager_ids: registry.manager_ids,
         supervisor_id: registry.supervisor_id,
@@ -143,7 +143,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
     }
     return {
       source_id: null,
-      ea_sector_ids: [],
+      sector_ids: [],
       referent_ids: [],
       manager_ids: [],
       supervisor_id: null,
@@ -165,7 +165,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
     if (mode.type !== 'edit') {
       return {
         source: null,
-        eaSectors: [],
+        sectors: [],
         referents: [],
         managers: [],
         supervisor: null,
@@ -180,7 +180,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
       refs.map((ref) => ({ id: ref.id, label: ref.name }))
     return {
       source: toItem(registry.source),
-      eaSectors: toItems(registry.ea_sectors),
+      sectors: toItems(registry.sectors),
       referents: toItems(registry.referents),
       managers: toItems(registry.managers),
       supervisor: toItem(registry.supervisor),

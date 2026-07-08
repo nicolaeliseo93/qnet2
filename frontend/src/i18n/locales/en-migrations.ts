@@ -22,7 +22,7 @@ export const migrations = {
     referents: 'Referents',
     sources: 'Sources',
     tags: 'Tags',
-    'ea-sectors': 'EA sectors',
+    sectors: 'Sectors',
   },
   page: {
     sourceLabel: 'Source',

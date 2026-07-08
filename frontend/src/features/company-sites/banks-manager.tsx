@@ -37,21 +37,34 @@ type EditingState = 'new' | string | null
  * Reusable CRUD list for a site's banks, cloned from `ContactsManager` but
  * always buffered (spec 0020: `banks[]` is sent authoritatively with the rest
  * of the site payload — there is no per-row endpoint to persist against
- * immediately). The create/edit form opens in a dialog; `default_bank_id`
- * (settings tab) is populated exclusively from this buffer.
+ * immediately). The create/edit form opens in a dialog. The site's preferred
+ * bank is a per-row `is_primary` flag toggled in that form; the list keeps at
+ * most one primary (enforcePrimary), mirroring contacts/addresses.
  */
 export function BanksManager({ value, onChange, readOnly = false }: BanksManagerProps) {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const [editing, setEditing] = useState<EditingState>(null)
 
+  // Demotes every other bank when one is marked preferred, so the list keeps at
+  // most one primary (mirrors ContactsManager's single-primary rule; here the
+  // whole list is the scope, there is no per-type dimension).
+  const enforcePrimary = (banks: BankDraft[], primaryKey: string): BankDraft[] =>
+    banks.map((bank) =>
+      bank._key !== primaryKey && bank.is_primary ? { ...bank, is_primary: false } : bank,
+    )
+
   const handleAdd = (fields: Omit<BankDraft, '_key'>) => {
-    onChange([...value, { ...fields, _key: nextBankKey() }])
+    const draft: BankDraft = { ...fields, _key: nextBankKey() }
+    const next = [...value, draft]
+    onChange(draft.is_primary ? enforcePrimary(next, draft._key) : next)
     setEditing(null)
   }
 
   const handleEdit = (key: string, fields: Omit<BankDraft, '_key'>) => {
-    onChange(value.map((bank) => (bank._key === key ? { ...fields, _key: key } : bank)))
+    const draft: BankDraft = { ...fields, _key: key }
+    const next = value.map((bank) => (bank._key === key ? draft : bank))
+    onChange(draft.is_primary ? enforcePrimary(next, key) : next)
     setEditing(null)
   }
 
@@ -91,6 +104,9 @@ export function BanksManager({ value, onChange, readOnly = false }: BanksManager
                 <span className="truncate text-xs text-muted-foreground">{bank.iban}</span>
               )}
             </div>
+            {bank.is_primary && (
+              <Badge variant="secondary">{t('companySites.form.banks.preferredBadge')}</Badge>
+            )}
             {!readOnly && (
               <div className="flex shrink-0 gap-1">
                 <Button

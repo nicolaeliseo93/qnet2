@@ -57,13 +57,12 @@ const formValues: CompanySiteFormValues = {
   responsible_tickets_id: null,
   responsible_validation_contracts_id: null,
   responsible_validation_contracts_two_id: null,
-  default_bank_id: null,
   proforma_progressive: 1,
   invoice_progressive: 1,
 }
 
 const banks: BankDraft[] = [
-  { _key: 'bank-1', id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null },
+  { _key: 'bank-1', id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null, is_primary: false },
 ]
 
 function original(
@@ -76,8 +75,7 @@ function original(
     is_default: false,
     logo_url: null,
     personal_data: card(),
-    banks: [{ id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null }],
-    default_bank_id: null,
+    banks: [{ id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null, is_primary: false }],
     responsible_rda_id: 7,
     responsible_rda: { id: 7, label: 'Ada Lovelace' },
     responsible_tickets_id: null,
@@ -138,7 +136,7 @@ describe('buildCreatePayload', () => {
     expect(payload.personal_data.company_name).toBe('ACME S.p.A.')
     expect(payload.personal_data.vat_number).toBe('IT12345678901')
     expect(payload.banks).toEqual([
-      { id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null },
+      { id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null, is_primary: false },
     ])
   })
 
@@ -214,11 +212,24 @@ describe('buildUpdatePayload', () => {
     const unchanged = buildUpdatePayload(formValues, original(), banks, companyDraft())
     expect('banks' in unchanged).toBe(false)
 
-    const added: BankDraft[] = [...banks, { _key: 'bank-new', name: 'Nuova Banca', iban: null, notes: null }]
+    const added: BankDraft[] = [
+      ...banks,
+      { _key: 'bank-new', name: 'Nuova Banca', iban: null, notes: null, is_primary: false },
+    ]
     const changed = buildUpdatePayload(formValues, original(), added, companyDraft())
     expect(changed.banks).toEqual([
-      { id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null },
-      { name: 'Nuova Banca', iban: null, notes: null },
+      { id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null, is_primary: false },
+      { name: 'Nuova Banca', iban: null, notes: null, is_primary: false },
+    ])
+  })
+
+  it('includes banks when only the preferred flag changed (single-primary toggle)', () => {
+    const promoted: BankDraft[] = [
+      { _key: 'bank-1', id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null, is_primary: true },
+    ]
+    const changed = buildUpdatePayload(formValues, original(), promoted, companyDraft())
+    expect(changed.banks).toEqual([
+      { id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null, is_primary: true },
     ])
   })
 

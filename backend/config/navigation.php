@@ -131,11 +131,11 @@ return [
                     'permission' => 'referent-types.view',
                 ],
                 [
-                    'key' => 'ea-sectors',
-                    'label' => 'navigation.eaSectors',
+                    'key' => 'sectors',
+                    'label' => 'navigation.sectors',
                     'icon' => 'list-tree',
-                    'route' => '/ea-sectors',
-                    'permission' => 'ea-sectors.view',
+                    'route' => '/sectors',
+                    'permission' => 'sectors.view',
                 ],
                 [
                     'key' => 'tags',

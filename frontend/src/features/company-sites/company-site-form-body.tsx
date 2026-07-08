@@ -38,8 +38,9 @@ interface CompanySiteFormTab {
 /**
  * The company-site create/edit form UI, organized into the four tabs of spec
  * 0020: Profilo (identity, logo, address), Impostazioni (responsibles,
- * default bank, progressives, read-only quotation ids), Banche (the inline
- * banks collection) and Altro (always read-only). Every editable field is
+ * progressives, read-only quotation ids), Banche (the inline banks collection,
+ * where one bank can be flagged preferred) and Altro (always read-only). Every
+ * editable field is
  * wrapped in `MetaField` (spec 0004): hidden fields are absent, non-editable
  * fields render disabled, `required` comes from the resolved
  * `ResourcePermissions`. All non-render logic lives in `useCompanySiteForm`;
@@ -91,7 +92,6 @@ export function CompanySiteFormBody({
     fieldPermission('responsible_tickets_id').visible ||
     fieldPermission('responsible_validation_contracts_id').visible ||
     fieldPermission('responsible_validation_contracts_two_id').visible ||
-    fieldPermission('default_bank_id').visible ||
     fieldPermission('proforma_progressive').visible ||
     fieldPermission('invoice_progressive').visible
   const banksPermission = fieldPermission('banks')
@@ -110,7 +110,6 @@ export function CompanySiteFormBody({
       errors.responsible_tickets_id ||
       errors.responsible_validation_contracts_id ||
       errors.responsible_validation_contracts_two_id ||
-      errors.default_bank_id ||
       errors.proforma_progressive ||
       errors.invoice_progressive,
   )
@@ -164,7 +163,6 @@ export function CompanySiteFormBody({
                 <SettingsTabContent
                   control={form.control}
                   companySite={companySite}
-                  banksDraft={banksDraft}
                   selectedCompanyItem={selectedCompanyItem}
                   selectedResponsibleRdaItem={selectedResponsibleRdaItem}
                   selectedResponsibleTicketsItem={selectedResponsibleTicketsItem}

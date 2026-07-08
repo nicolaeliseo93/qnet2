@@ -34,9 +34,9 @@ export interface RegistryDetail {
   source_id: number | null
   /** Hydrates the "Source" single-select control. */
   source: ReferenceRef | null
-  ea_sector_ids: number[]
-  /** Hydrates the "EA sectors" multiselect control. */
-  ea_sectors: ReferenceRef[]
+  sector_ids: number[]
+  /** Hydrates the "Sectors" multiselect control. */
+  sectors: ReferenceRef[]
   referent_ids: number[]
   /** Hydrates the "Referents" multiselect control. */
   referents: ReferenceRef[]
@@ -82,7 +82,7 @@ export interface RegistryDetailWithPermissions extends RegistryDetail {
  */
 export interface CreateRegistryPayload {
   source_id?: number | null
-  ea_sector_ids?: number[]
+  sector_ids?: number[]
   referent_ids?: number[]
   manager_ids?: number[]
   supervisor_id?: number | null
@@ -106,7 +106,7 @@ export interface CreateRegistryPayload {
  */
 export interface UpdateRegistryPayload {
   source_id?: number | null
-  ea_sector_ids?: number[]
+  sector_ids?: number[]
   referent_ids?: number[]
   manager_ids?: number[]
   supervisor_id?: number | null

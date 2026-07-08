@@ -52,7 +52,7 @@ class UpdateCompanySiteRequest extends FormRequest
             // only to be at least as permissive as the client, never less.
             'banks.*.iban' => ['nullable', 'string', 'max:50', 'regex:/^[A-Za-z]{2}[0-9]{2}[A-Za-z0-9]{1,30}$/'],
             'banks.*.notes' => ['nullable', 'string', 'max:191'],
-            'default_bank_id' => ['sometimes', 'nullable', 'integer'],
+            'banks.*.is_primary' => ['sometimes', 'boolean'],
 
             'company_id' => ['sometimes', 'nullable', 'integer', Rule::exists('companies', 'id')],
             'responsible_rda_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')],
@@ -86,43 +86,7 @@ class UpdateCompanySiteRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $this->validateProfile($validator);
             $this->enforceFieldPermissions($validator);
-            $this->validateDefaultBankId($validator);
         });
-    }
-
-    /**
-     * `default_bank_id`, if given, must match either a bank submitted in THIS
-     * request, or — when `banks` was not resubmitted — one of the site's
-     * currently owned banks (a plain "change the default" PATCH that leaves
-     * the bank list untouched). CompanySiteService::resolveDefaultBank
-     * re-checks the actually persisted set as defence in depth.
-     */
-    private function validateDefaultBankId(Validator $validator): void
-    {
-        $defaultBankId = $this->input('default_bank_id');
-
-        if (! $this->has('default_bank_id') || $defaultBankId === null) {
-            return;
-        }
-
-        $submittedIds = collect($this->input('banks', []))
-            ->pluck('id')
-            ->filter()
-            ->map(static fn (mixed $id): int => (int) $id)
-            ->all();
-
-        if (in_array((int) $defaultBankId, $submittedIds, true)) {
-            return;
-        }
-
-        /** @var CompanySite $companySite */
-        $companySite = $this->route('companySite');
-
-        if (! $this->has('banks') && $companySite->banks()->whereKey($defaultBankId)->exists()) {
-            return;
-        }
-
-        $validator->errors()->add('default_bank_id', 'The selected bank does not belong to this company site.');
     }
 
     protected function authorizationResource(): string

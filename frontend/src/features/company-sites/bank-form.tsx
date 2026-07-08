@@ -40,6 +40,7 @@ export function BankForm({ bank, onSubmit, onCancel }: BankFormProps) {
       name: bank?.name ?? '',
       iban: bank?.iban ?? '',
       notes: bank?.notes ?? '',
+      is_primary: bank?.is_primary ?? false,
     },
   })
 
@@ -49,6 +50,7 @@ export function BankForm({ bank, onSubmit, onCancel }: BankFormProps) {
       name: values.name,
       iban: values.iban || null,
       notes: values.notes || null,
+      is_primary: values.is_primary,
     })
   }
 
@@ -92,6 +94,25 @@ export function BankForm({ bank, onSubmit, onCancel }: BankFormProps) {
               <FormControl>
                 <Input autoComplete="off" {...field} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="is_primary"
+          render={({ field }) => (
+            <FormItem>
+              <label className="flex items-center gap-2 text-sm font-normal">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={field.value}
+                  onChange={(event) => field.onChange(event.target.checked)}
+                />
+                {t('companySites.form.banks.preferred')}
+              </label>
               <FormMessage />
             </FormItem>
           )}
