@@ -114,13 +114,14 @@ it('show: 404 for a non-existent site', function () {
 
 it('create: 201 + persists the site with card, address and banks, default_bank_id resolved', function () {
     $actor = userWithCompanySiteAbilities(['create']);
+    $city = City::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/company-sites', [
         'name' => 'Sede Sud',
         'personal_data' => companySiteCompanyProfile([
             'vat_number' => 'IT12345678901',
-            'addresses' => [['line1' => 'Via Napoli 5']],
+            'addresses' => [['line1' => 'Via Napoli 5', 'city_id' => $city->id]],
             'contacts' => [['type' => 'email', 'value' => 'sud@acme.test', 'is_primary' => true]],
         ]),
         'banks' => [['name' => 'Banca Uno', 'iban' => 'IT60X0542811101000000123456']],
@@ -168,6 +169,20 @@ it('create: 422 when a geo/user id does not exist', function () {
         ]),
         'responsible_rda_id' => 999999,
     ])->assertStatus(422)->assertJsonValidationErrors(['personal_data.addresses.0.city_id', 'responsible_rda_id']);
+});
+
+it('create: 422 when a nested address is missing city_id (product decision: geo-located on create)', function () {
+    $actor = userWithCompanySiteAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/company-sites', [
+        'name' => 'X',
+        'personal_data' => companySiteCompanyProfile([
+            'addresses' => [['line1' => 'Via X']],
+        ]),
+    ])->assertStatus(422)->assertJsonValidationErrors('personal_data.addresses.0.city_id');
+
+    $this->assertDatabaseMissing('company_sites', ['name' => 'X']);
 });
 
 it('create: 422 when personal_data.addresses carries more than one address (max 1)', function () {

@@ -1,0 +1,164 @@
+import { useTranslation } from 'react-i18next'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { GeoSelect, type GeoValue } from '@/features/geo/geo-select'
+import {
+  DEFAULT_SITE_TYPE,
+  SITE_TYPE_LABEL_KEYS,
+} from '@/features/personal-data/address-site-type'
+import { nextDraftKey } from '@/features/personal-data/drafts'
+import { SITE_TYPES, type AddressDraft, type SiteType } from '@/features/personal-data/types'
+
+/** The "nothing typed yet" baseline: every field blank, no `_key` allocated. */
+const BLANK_ADDRESS: AddressDraft = {
+  _key: '',
+  line1: '',
+  line2: null,
+  postal_code: null,
+  city_id: null,
+  province_id: null,
+  state_id: null,
+  country_id: null,
+  is_primary: true,
+  site_type: DEFAULT_SITE_TYPE,
+}
+
+/** True once any field carries user input — drives the required-once-started rule. */
+function isStarted(draft: AddressDraft): boolean {
+  return Boolean(
+    draft.line1 || draft.line2 || draft.postal_code || draft.city_id || draft.country_id,
+  )
+}
+
+interface AddressCreateFieldProps {
+  /** The buffered single address, or an empty array (not started yet). */
+  value: AddressDraft[]
+  /** Emits the next buffer: `[]` once every field is blank, else `[draft]`. */
+  onChange: (next: AddressDraft[]) => void
+  /**
+   * Renders the "site type" select (spec 0020). Opt-in, default `false`,
+   * forwarded verbatim from `AddressesManager`.
+   */
+  showSiteType?: boolean
+}
+
+/**
+ * Single inline, fully-controlled address form for the quick-create flow: no
+ * list, no dialog, no "Add" button — an owner has at most one address here and
+ * it starts blank (optional). Writes the buffer directly on every change: an
+ * address with every field empty clears it, any input creates/updates the sole
+ * draft. Once started, `line1` and the city are required (validated inline).
+ * Extracted from `AddressesManager` to keep it within the file size limits.
+ */
+export function AddressCreateField({
+  value,
+  onChange,
+  showSiteType = false,
+}: AddressCreateFieldProps) {
+  const { t } = useTranslation()
+  const fields = value[0] ?? BLANK_ADDRESS
+
+  const commit = (next: AddressDraft) => {
+    if (!isStarted(next)) {
+      onChange([])
+      return
+    }
+    onChange([{ ...next, _key: next._key || nextDraftKey(), is_primary: true }])
+  }
+
+  const geoValue: GeoValue = {
+    country_id: fields.country_id,
+    state_id: fields.state_id,
+    province_id: fields.province_id,
+    city_id: fields.city_id,
+  }
+
+  const started = isStarted(fields)
+  const line1Error = started && !fields.line1 ? t('personalData.addresses.line1Required') : null
+  const cityError = started && fields.city_id == null ? t('personalData.addresses.cityRequired') : null
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="address-create-line1" className="text-sm font-medium">
+          {t('personalData.addresses.line1')}
+        </label>
+        <Input
+          id="address-create-line1"
+          autoComplete="address-line1"
+          value={fields.line1}
+          onChange={(event) => commit({ ...fields, line1: event.target.value })}
+          aria-invalid={line1Error !== null}
+          aria-describedby={line1Error ? 'address-create-line1-error' : undefined}
+        />
+        {line1Error && (
+          <span id="address-create-line1-error" role="alert" className="text-sm text-destructive">
+            {line1Error}
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="address-create-line2" className="text-sm font-medium">
+          {t('personalData.addresses.line2')}
+        </label>
+        <Input
+          id="address-create-line2"
+          autoComplete="address-line2"
+          value={fields.line2 ?? ''}
+          onChange={(event) => commit({ ...fields, line2: event.target.value || null })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="address-create-postal-code" className="text-sm font-medium">
+          {t('personalData.addresses.postalCode')}
+        </label>
+        <Input
+          id="address-create-postal-code"
+          autoComplete="postal-code"
+          value={fields.postal_code ?? ''}
+          onChange={(event) => commit({ ...fields, postal_code: event.target.value || null })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <GeoSelect value={geoValue} onChange={(next) => commit({ ...fields, ...next })} />
+        {cityError && (
+          <span role="alert" className="text-sm text-destructive">
+            {cityError}
+          </span>
+        )}
+      </div>
+
+      {showSiteType && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="address-create-site-type" className="text-sm font-medium">
+            {t('personalData.addresses.siteType')}
+          </label>
+          <Select
+            value={fields.site_type ?? DEFAULT_SITE_TYPE}
+            onValueChange={(next) => commit({ ...fields, site_type: next as SiteType })}
+          >
+            <SelectTrigger id="address-create-site-type" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SITE_TYPES.map((siteType) => (
+                <SelectItem key={siteType} value={siteType}>
+                  {t(SITE_TYPE_LABEL_KEYS[siteType])}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -249,12 +249,15 @@ interface ContactsTabContentProps {
   profileDraft: PersonalDataDraft
   setProfileDraft: (next: PersonalDataDraft) => void
   personalDataFieldPermission: PersonalDataFieldPermissionResolver
+  /** Forwarded to the shared manager's quick-create fields (create mode only). */
+  createMode: boolean
 }
 
 export function ContactsTabContent({
   profileDraft,
   setProfileDraft,
   personalDataFieldPermission,
+  createMode,
 }: ContactsTabContentProps) {
   const { t } = useTranslation()
 
@@ -271,6 +274,7 @@ export function ContactsTabContent({
         fieldPermission={personalDataFieldPermission}
         showHeader={false}
         persistence={cardOwnerRef(profileDraft)}
+        createMode={createMode}
       />
     </FormSection>
   )
@@ -280,6 +284,7 @@ export function AddressesTabContent({
   profileDraft,
   setProfileDraft,
   personalDataFieldPermission,
+  createMode,
 }: ContactsTabContentProps) {
   const { t } = useTranslation()
 
@@ -296,6 +301,7 @@ export function AddressesTabContent({
         fieldPermission={personalDataFieldPermission}
         showHeader={false}
         persistence={cardOwnerRef(profileDraft)}
+        createMode={createMode}
       />
     </FormSection>
   )

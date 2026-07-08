@@ -158,6 +158,7 @@ export function RegistryFormBody({ mode, onSuccess, onCancel }: RegistryFormBody
                       fieldPermission={personalDataFieldPermission}
                       showHeader={false}
                       persistence={persistence}
+                      createMode={mode.type === 'create'}
                     />
                   </FormSection>
                 )}
@@ -176,6 +177,7 @@ export function RegistryFormBody({ mode, onSuccess, onCancel }: RegistryFormBody
                       showHeader={false}
                       persistence={persistence}
                       showSiteType
+                      createMode={mode.type === 'create'}
                     />
                   </FormSection>
                 )}

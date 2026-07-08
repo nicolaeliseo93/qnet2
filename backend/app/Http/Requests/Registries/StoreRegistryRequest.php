@@ -44,6 +44,17 @@ class StoreRegistryRequest extends FormRequest
     }
 
     /**
+     * A present address must be geo-located on create (product decision): both
+     * `line1` and `city_id` are required. Update keeps `city_id` optional
+     * (ValidatesUserProfile default) so legacy addresses without a city stay
+     * editable.
+     */
+    protected function addressCityRequired(): bool
+    {
+        return true;
+    }
+
+    /**
      * @return array<string, array<int, mixed>>
      */
     public function rules(): array

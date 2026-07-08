@@ -36,7 +36,7 @@ function fullProfilePayload(array $overrides = []): array
             ['type' => 'email', 'value' => 'ada@example.com', 'label' => 'Work', 'is_primary' => true],
         ],
         'addresses' => [
-            ['line1' => '10 Analytical St', 'postal_code' => '00100', 'is_primary' => true],
+            ['line1' => '10 Analytical St', 'postal_code' => '00100', 'city_id' => City::factory()->create()->id, 'is_primary' => true],
         ],
     ], $overrides);
 }
@@ -146,6 +146,39 @@ it('create: 422 on non-existent city_id, rolls back the user', function () {
         ->assertJsonValidationErrors('personal_data.addresses.0.city_id');
 
     $this->assertDatabaseMissing('users', ['email' => 'new.person@example.com']);
+});
+
+it('create: 422 when an address is submitted without city_id (product decision: geo-located on create)', function () {
+    $actor = userWithUserAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/users', userAccountPayload([
+        'personal_data' => fullProfilePayload([
+            'addresses' => [['line1' => 'Somewhere']],
+        ]),
+    ]))->assertStatus(422)
+        ->assertJsonValidationErrors('personal_data.addresses.0.city_id');
+
+    $this->assertDatabaseMissing('users', ['email' => 'new.person@example.com']);
+});
+
+it('update: a legacy address without city_id still succeeds (city_id stays optional on update)', function () {
+    $actor = userWithUserAbilities(['update']);
+    $target = User::factory()->create();
+    $card = PersonalData::factory()->for($target, 'personable')->create();
+    $legacy = Address::factory()->for($card, 'addressable')->create(['city_id' => null]);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/users/{$target->id}", [
+        'personal_data' => [
+            'type' => 'individual',
+            'first_name' => 'Ada',
+            'last_name' => 'Lovelace',
+            'addresses' => [['id' => $legacy->id, 'line1' => 'Still no city']],
+        ],
+    ])->assertOk();
+
+    $this->assertDatabaseHas('addresses', ['id' => $legacy->id, 'line1' => 'Still no city', 'city_id' => null]);
 });
 
 it('create: 422 when an individual is missing its required name', function () {

@@ -7,6 +7,10 @@ import axios from 'axios'
 import { toast } from 'sonner'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import {
+  areCreateContactsValid,
+  isCreateAddressValid,
+} from '@/features/personal-data/create-validation'
 import { cardToDraft, emptyPersonalDataDraft } from '@/features/personal-data/drafts'
 import { buildPersonalDataSchema } from '@/features/personal-data/personal-data-schema'
 import type {
@@ -159,6 +163,19 @@ export function useReferentForm({ mode, onSuccess }: UseReferentFormArgs) {
     if (!profileValid) {
       setServerError(t('personalData.section.incomplete'))
       return
+    }
+
+    // Create only: the quick-create fields are fully controlled and never
+    // block typing, so an invalid buffer is caught once, right here.
+    if (mode.type === 'create') {
+      if (!isCreateAddressValid(profileDraft.addresses)) {
+        setServerError(t('personalData.section.addressIncomplete'))
+        return
+      }
+      if (!areCreateContactsValid(profileDraft.contacts, t)) {
+        setServerError(t('personalData.section.contactsInvalid'))
+        return
+      }
     }
 
     try {

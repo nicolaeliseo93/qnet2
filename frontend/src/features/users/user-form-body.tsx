@@ -232,6 +232,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
                     profileDraft={profileDraft}
                     setProfileDraft={setProfileDraft}
                     personalDataFieldPermission={personalDataFieldPermission}
+                    createMode={!isEdit}
                   />
                 )}
                 {addressesRenderable && (
@@ -239,6 +240,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
                     profileDraft={profileDraft}
                     setProfileDraft={setProfileDraft}
                     personalDataFieldPermission={personalDataFieldPermission}
+                    createMode={!isEdit}
                   />
                 )}
               </TabsContent>

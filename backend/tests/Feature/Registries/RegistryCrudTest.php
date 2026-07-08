@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\City;
 use App\Models\EaSector;
 use App\Models\Referent;
 use App\Models\Registry;
@@ -140,6 +141,34 @@ it('create: is_supplier=false normalizes is_qualified_supplier to false (AC-010)
     ])->assertCreated()->assertJsonPath('data.is_qualified_supplier', false);
 
     expect(Registry::first()->is_qualified_supplier)->toBeFalse();
+});
+
+it('create: 201 with a nested address carrying line1 + city_id', function () {
+    $actor = registryUserWith(['create']);
+    $city = City::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/registries', [
+        'is_supplier' => false,
+        'personal_data' => minimalRegistryProfilePayload([
+            'addresses' => [['line1' => 'Via Roma 1', 'city_id' => $city->id]],
+        ]),
+    ])->assertCreated()
+        ->assertJsonPath('data.personal_data.addresses.0.city_id', $city->id);
+});
+
+it('create: 422 when a nested address is missing city_id (product decision: geo-located on create)', function () {
+    $actor = registryUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/registries', [
+        'is_supplier' => false,
+        'personal_data' => minimalRegistryProfilePayload([
+            'addresses' => [['line1' => 'Via Roma 1']],
+        ]),
+    ])->assertStatus(422)->assertJsonValidationErrors('personal_data.addresses.0.city_id');
+
+    expect(Registry::count())->toBe(0);
 });
 
 it('create: 403 without registries.create', function () {

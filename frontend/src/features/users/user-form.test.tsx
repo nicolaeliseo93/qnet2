@@ -84,6 +84,38 @@ vi.mock('@/features/config/use-config', () => ({
   useEnumOptions: (key: string) => enums[key] ?? [],
 }))
 
+// Create mode now mounts `AddressCreateField` (quick-create UX) as soon as the
+// Contact info tab is shown, so it talks to `GeoSelect` directly — stub it with
+// a controllable button, mirroring `address-form.test.tsx`/`addresses-manager.test.tsx`.
+vi.mock('@/features/geo/geo-select', () => ({
+  GeoSelect: ({
+    value,
+    onChange,
+  }: {
+    value: {
+      country_id: number | null
+      state_id: number | null
+      province_id: number | null
+      city_id: number | null
+    }
+    onChange: (next: {
+      country_id: number | null
+      state_id: number | null
+      province_id: number | null
+      city_id: number | null
+    }) => void
+  }) => (
+    <button
+      type="button"
+      data-testid="geo-select"
+      data-city={value.city_id ?? ''}
+      onClick={() => onChange({ country_id: 5, state_id: 6, province_id: 8, city_id: 7 })}
+    >
+      geo
+    </button>
+  ),
+}))
+
 // Control the edit-mode card seed without hitting the network.
 const personalDataData = vi.fn<() => PersonalDataCard | null | undefined>()
 vi.mock('@/features/personal-data/use-personal-data', () => ({
@@ -280,6 +312,60 @@ describe('UserForm — atomic personal data', () => {
     await waitFor(() =>
       expect(
         screen.getByText('Complete the required personal data fields.'),
+      ).toBeInTheDocument(),
+    )
+    expect(createUserMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks the save when a create-mode quick contact is invalid', async () => {
+    render(
+      <UserForm mode={{ type: 'create' }} onSuccess={() => {}} onCancel={() => {}} />,
+      { wrapper: wrapper() },
+    )
+
+    fireEvent.change(screen.getByLabelText(/^First name/), { target: { value: 'Ada' } })
+    fireEvent.change(screen.getByLabelText(/^Last name/), { target: { value: 'Lovelace' } })
+
+    switchTab('Account')
+    fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: 'ada@example.com' } })
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'secret123' } })
+    fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: 'secret123' } })
+
+    // A malformed value in the quick email field (Contact info tab).
+    switchTab('Contact info')
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'not-an-email' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('Fix the invalid contacts before saving.')).toBeInTheDocument(),
+    )
+    expect(createUserMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks the save when a create-mode address is started but missing the city', async () => {
+    render(
+      <UserForm mode={{ type: 'create' }} onSuccess={() => {}} onCancel={() => {}} />,
+      { wrapper: wrapper() },
+    )
+
+    fireEvent.change(screen.getByLabelText(/^First name/), { target: { value: 'Ada' } })
+    fireEvent.change(screen.getByLabelText(/^Last name/), { target: { value: 'Lovelace' } })
+
+    switchTab('Account')
+    fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: 'ada@example.com' } })
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'secret123' } })
+    fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: 'secret123' } })
+
+    // The inline address is started (line1 filled) but no city is chosen.
+    switchTab('Contact info')
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'Via Roma 1' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Enter the street and city to complete the address.'),
       ).toBeInTheDocument(),
     )
     expect(createUserMock).not.toHaveBeenCalled()

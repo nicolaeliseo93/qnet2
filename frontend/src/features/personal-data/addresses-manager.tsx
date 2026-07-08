@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useConfirm } from '@/components/confirm-dialog-context'
+import { AddressCreateField } from '@/features/personal-data/address-create-field'
 import { AddressForm } from '@/features/personal-data/address-form'
 import { createAddress, deleteAddress, updateAddress } from '@/features/personal-data/api'
 import { addressToDraft, nextDraftKey } from '@/features/personal-data/drafts'
@@ -58,6 +59,14 @@ interface AddressesManagerProps {
    * unbounded behaviour (registries/self-service profile).
    */
   maxItems?: number
+  /**
+   * Renders a single, fully-controlled inline address form instead of the
+   * list/dialog/"Add" affordance: no list, no dialog, just `line1`/`line2`/
+   * postal code/`GeoSelect`/(optionally) site type, bound to `value[0]`.
+   * Default `false` keeps today's exact CRUD-only behaviour; only meaningful
+   * in create mode.
+   */
+  createMode?: boolean
 }
 
 /** `new` = the add form is open; a string = that address `_key` is being edited. */
@@ -68,7 +77,9 @@ type EditingState = 'new' | string | null
  * dialog. Two write modes via `persistence`: buffered (ADR 0012) or immediate
  * (persist each change, sync the buffer with the server row whose `is_primary`
  * is authoritative — the backend auto-primaries the first). Single primary per
- * owner, mirroring the backend (ADR 0010).
+ * owner, mirroring the backend (ADR 0010). In `createMode`, the list/dialog are
+ * replaced by a single inline form (`AddressCreateField`): an owner has at most
+ * one address here, and it starts optional.
  */
 export function AddressesManager({
   value,
@@ -78,6 +89,7 @@ export function AddressesManager({
   persistence,
   showSiteType = false,
   maxItems,
+  createMode = false,
 }: AddressesManagerProps) {
   const { t } = useTranslation()
   const confirm = useConfirm()
@@ -91,6 +103,17 @@ export function AddressesManager({
   const readOnly = permission ? permission.disabled || !permission.editable : false
   // Hide the "Add" affordance once read-only or the cap (if any) is reached.
   const canAdd = !readOnly && (maxItems === undefined || value.length < maxItems)
+
+  if (createMode) {
+    return (
+      <section className="flex flex-col gap-2">
+        {showHeader && (
+          <h4 className="text-sm font-medium">{t('personalData.addresses.title')}</h4>
+        )}
+        <AddressCreateField value={value} onChange={onChange} showSiteType={showSiteType} />
+      </section>
+    )
+  }
 
   /**
    * Single-primary invariant: a forced key wins (rest demoted); otherwise, when

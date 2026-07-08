@@ -135,6 +135,7 @@ export function ProfileTabContent({
             fieldPermission={personalDataFieldPermission}
             showHeader={false}
             persistence={persistence}
+            createMode={mode.type === 'create'}
           />
         </FormSection>
       )}
@@ -153,6 +154,7 @@ export function ProfileTabContent({
             persistence={persistence}
             showSiteType
             maxItems={MAX_ADDRESSES}
+            createMode={mode.type === 'create'}
           />
         </FormSection>
       )}

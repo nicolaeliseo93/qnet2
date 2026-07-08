@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
@@ -170,5 +170,91 @@ describe('ContactsManager (controlled)', () => {
 
     await waitFor(() => expect(deleteContactMock).toHaveBeenCalledWith(1))
     await waitFor(() => expect(onChange).toHaveBeenCalledWith([]))
+  })
+})
+
+/** Owns the buffer across renders, mirroring how a parent form would. */
+function ControlledContacts({ initial = [] }: { initial?: ContactDraft[] }) {
+  const [value, setValue] = useState<ContactDraft[]>(initial)
+  return <ContactsManager value={value} onChange={setValue} createMode />
+}
+
+describe('ContactsManager (createMode)', () => {
+  beforeAll(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('renders a quick field for email, phone, pec and fax', () => {
+    renderWithConfirm(<ContactsManager value={[]} onChange={() => {}} createMode />)
+    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Phone')).toBeInTheDocument()
+    expect(screen.getByLabelText('PEC')).toBeInTheDocument()
+    expect(screen.getByLabelText('Fax')).toBeInTheDocument()
+  })
+
+  it('creates a draft when typing into an empty quick field', () => {
+    const onChange = vi.fn()
+    renderWithConfirm(<ContactsManager value={[]} onChange={onChange} createMode />)
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'new@example.com' },
+    })
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const next = onChange.mock.calls[0][0] as ContactDraft[]
+    expect(next).toHaveLength(1)
+    expect(next[0]).toMatchObject({
+      type: 'email',
+      value: 'new@example.com',
+      label: null,
+      is_primary: true,
+    })
+  })
+
+  it('replaces the value of the existing quick-owned draft', () => {
+    const onChange = vi.fn()
+    const existing = contact({ _key: 'draft-1', id: undefined, type: 'email', value: 'a@example.com' })
+    renderWithConfirm(<ContactsManager value={[existing]} onChange={onChange} createMode />)
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'b@example.com' },
+    })
+
+    expect(onChange).toHaveBeenCalledWith([{ ...existing, value: 'b@example.com' }])
+  })
+
+  it('removes the draft once its quick field is emptied', () => {
+    const onChange = vi.fn()
+    const existing = contact({ _key: 'draft-1', id: undefined, type: 'phone', value: '+39 02 1234567' })
+    renderWithConfirm(<ContactsManager value={[existing]} onChange={onChange} createMode />)
+
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '' } })
+
+    expect(onChange).toHaveBeenCalledWith([])
+  })
+
+  it('shows an accessible error for an invalid quick email', () => {
+    renderWithConfirm(<ControlledContacts />)
+    const email = screen.getByLabelText('Email')
+
+    fireEvent.change(email, { target: { value: 'not-an-email' } })
+
+    expect(email).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid email address.')
+  })
+
+  it('still allows adding an extra contact via the dialog, excluded from the quick fields', () => {
+    renderWithConfirm(<ControlledContacts />)
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'first@example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add contact' }))
+    fireEvent.click(screen.getByTestId('stub-submit'))
+
+    // The dialog-added contact shows in the list; the quick-owned one does not.
+    expect(screen.getByText('new@example.com')).toBeInTheDocument()
+    expect(screen.queryByText('first@example.com')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveValue('first@example.com')
   })
 })

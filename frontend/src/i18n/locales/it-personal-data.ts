@@ -28,6 +28,8 @@ export const personalData = {
     loadError: 'Impossibile caricare i dati anagrafici. Riprova.',
     createHint: 'Salva prima la scheda per aggiungere contatti e indirizzi.',
     incomplete: 'Completa i campi obbligatori dei dati anagrafici.',
+    addressIncomplete: "Inserisci l'indirizzo e la città per completare l'indirizzo.",
+    contactsInvalid: 'Correggi i contatti non validi prima di salvare.',
   },
   form: {
     type: personalDataFieldLabels.type,
@@ -74,6 +76,12 @@ export const personalData = {
     editAction: 'Modifica contatto',
     deleteAction: 'Elimina contatto',
     deleteConfirm: 'Eliminare questo contatto?',
+    // Campi rapidi del flusso di creazione (quick-create): un input per tipo,
+    // sopra l'elenco CRUD.
+    quickEmail: 'Email',
+    quickPhone: 'Telefono',
+    quickPec: 'PEC',
+    quickFax: 'Fax',
   },
   addresses: {
     title: 'Indirizzi',
@@ -99,6 +107,7 @@ export const personalData = {
     deleted: 'Indirizzo eliminato con successo.',
     genericError: 'Si è verificato un errore. Riprova.',
     line1Required: "L'indirizzo è obbligatorio.",
+    cityRequired: 'La città è obbligatoria.',
     editAction: 'Modifica indirizzo',
     deleteAction: 'Elimina indirizzo',
     deleteConfirm: 'Eliminare questo indirizzo?',

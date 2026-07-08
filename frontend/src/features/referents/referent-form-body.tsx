@@ -143,6 +143,7 @@ export function ReferentFormBody({ mode, onSuccess, onCancel }: ReferentFormBody
                       fieldPermission={personalDataFieldPermission}
                       showHeader={false}
                       persistence={persistence}
+                      createMode={mode.type === 'create'}
                     />
                   </FormSection>
                 )}
@@ -160,6 +161,7 @@ export function ReferentFormBody({ mode, onSuccess, onCancel }: ReferentFormBody
                       fieldPermission={personalDataFieldPermission}
                       showHeader={false}
                       persistence={persistence}
+                      createMode={mode.type === 'create'}
                     />
                   </FormSection>
                 )}

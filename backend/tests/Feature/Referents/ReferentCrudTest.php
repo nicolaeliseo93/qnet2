@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\City;
 use App\Models\PersonalData;
 use App\Models\Referent;
 use App\Models\ReferentType;
@@ -127,6 +128,7 @@ it('create: 201 persists card and derives name from the card', function () {
 it('create: with a referent type + contacts/addresses persists the whole tree', function () {
     $actor = referentUserWith(['create']);
     $type = ReferentType::factory()->create();
+    $city = City::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/referents', [
@@ -135,7 +137,7 @@ it('create: with a referent type + contacts/addresses persists the whole tree', 
         'notes' => 'Some notes',
         'personal_data' => minimalReferentProfilePayload([
             'contacts' => [['type' => 'email', 'value' => 'ada@example.com', 'is_primary' => true]],
-            'addresses' => [['line1' => '10 Analytical St', 'is_primary' => true]],
+            'addresses' => [['line1' => '10 Analytical St', 'city_id' => $city->id, 'is_primary' => true]],
         ]),
     ])->assertCreated()
         ->assertJsonPath('data.referent_type.id', $type->id)
@@ -147,13 +149,14 @@ it('create: with a referent type + contacts/addresses persists the whole tree', 
 it('create: nested personal_data.addresses.*.site_type persists on the address (spec 0020, AC-003)', function () {
     $actor = referentUserWith(['create']);
     $type = ReferentType::factory()->create();
+    $city = City::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/referents', [
         'referent_type_id' => $type->id,
         'contact_scope' => 'external',
         'personal_data' => minimalReferentProfilePayload([
-            'addresses' => [['line1' => '10 Analytical St', 'is_primary' => true, 'site_type' => 'legal_seat']],
+            'addresses' => [['line1' => '10 Analytical St', 'city_id' => $city->id, 'is_primary' => true, 'site_type' => 'legal_seat']],
         ]),
     ])->assertCreated()
         ->assertJsonPath('data.personal_data.addresses.0.site_type', 'legal_seat');
@@ -162,15 +165,30 @@ it('create: nested personal_data.addresses.*.site_type persists on the address (
 it('create: 422 when nested personal_data.addresses.*.site_type is outside the enum (spec 0020, AC-003)', function () {
     $actor = referentUserWith(['create']);
     $type = ReferentType::factory()->create();
+    $city = City::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/referents', [
         'referent_type_id' => $type->id,
         'contact_scope' => 'external',
         'personal_data' => minimalReferentProfilePayload([
-            'addresses' => [['line1' => '10 Analytical St', 'site_type' => 'not-a-site-type']],
+            'addresses' => [['line1' => '10 Analytical St', 'city_id' => $city->id, 'site_type' => 'not-a-site-type']],
         ]),
     ])->assertStatus(422)->assertJsonValidationErrors('personal_data.addresses.0.site_type');
+});
+
+it('create: 422 when a nested address is missing city_id (product decision: geo-located on create)', function () {
+    $actor = referentUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/referents', [
+        'contact_scope' => 'internal',
+        'personal_data' => minimalReferentProfilePayload([
+            'addresses' => [['line1' => '10 Analytical St']],
+        ]),
+    ])->assertStatus(422)->assertJsonValidationErrors('personal_data.addresses.0.city_id');
+
+    expect(Referent::count())->toBe(0);
 });
 
 it('create: 422 without personal_data (required as the name source)', function () {

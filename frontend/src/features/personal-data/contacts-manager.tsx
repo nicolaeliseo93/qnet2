@@ -11,8 +11,10 @@ import {
 } from '@/components/ui/dialog'
 import { useConfirm } from '@/components/confirm-dialog-context'
 import { ContactForm } from '@/features/personal-data/contact-form'
+import { ContactsCreateFields } from '@/features/personal-data/contacts-create-fields'
 import { createContact, deleteContact, updateContact } from '@/features/personal-data/api'
 import { contactToDraft, nextDraftKey } from '@/features/personal-data/drafts'
+import { quickOwnedKeys } from '@/features/personal-data/quick-contacts'
 import { useImmediatePersist } from '@/features/personal-data/use-immediate-persist'
 import { useEnumOptions } from '@/features/config/use-config'
 import type {
@@ -48,6 +50,13 @@ interface ContactsManagerProps {
    * (create mode, or edit of an owner with no card yet).
    */
   persistence?: OwnerRef
+  /**
+   * Renders the quick-create fields (email/phone/pec/fax) above the list and
+   * hides them from it (`quickOwnedKeys`), so typing there and the "Add
+   * contact" dialog never double-show the same row. Default `false` keeps
+   * today's exact CRUD-only behaviour; only meaningful in create mode.
+   */
+  createMode?: boolean
 }
 
 /** `new` = the add form is open; a string = that contact `_key` is being edited. */
@@ -58,7 +67,10 @@ type EditingState = 'new' | string | null
  * dialog. Two write modes, chosen by `persistence`: buffered (mutate through
  * `onChange`, persisted with the parent user payload — ADR 0012) or immediate
  * (persist each change straight away and sync the buffer with the server row).
- * Enforces one primary contact per type, mirroring the backend.
+ * Enforces one primary contact per type, mirroring the backend. In
+ * `createMode`, four quick fields (email/phone/pec/fax) sit above the list,
+ * each bound to the first draft of its type; the list then shows only the
+ * remaining, non-quick-owned contacts.
  */
 export function ContactsManager({
   value,
@@ -66,6 +78,7 @@ export function ContactsManager({
   fieldPermission,
   showHeader = true,
   persistence,
+  createMode = false,
 }: ContactsManagerProps) {
   const { t } = useTranslation()
   const confirm = useConfirm()
@@ -78,6 +91,11 @@ export function ContactsManager({
     return null
   }
   const readOnly = permission ? permission.disabled || !permission.editable : false
+  // Create mode: the quick fields own the first draft of each quick type, so
+  // the CRUD list excludes those rows (they render above, never in the list).
+  const visibleContacts = createMode
+    ? value.filter((contact) => !quickOwnedKeys(value).has(contact._key))
+    : value
 
   /** Resolves a contact `type` enum value to its localized label. */
   const typeLabelOf = (type: string) =>
@@ -195,14 +213,16 @@ export function ContactsManager({
         </div>
       )}
 
-      {value.length === 0 && (
+      {createMode && <ContactsCreateFields value={value} onChange={onChange} />}
+
+      {visibleContacts.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {t('personalData.contacts.empty')}
         </p>
       )}
 
       <ul className="flex flex-col gap-2">
-        {value.map((contact) => (
+        {visibleContacts.map((contact) => (
           <li
             key={contact._key}
             className="flex flex-wrap items-center gap-2 rounded-lg border p-3"

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
@@ -59,6 +59,38 @@ vi.mock('@/features/personal-data/api', () => ({
   createAddress: (...a: unknown[]) => createAddressMock(...a),
   updateAddress: (...a: unknown[]) => updateAddressMock(...a),
   deleteAddress: (...a: unknown[]) => deleteAddressMock(...a),
+}))
+
+// `createMode` renders `AddressCreateField`, which talks to `GeoSelect`
+// directly (not through the stubbed dialog `AddressForm` above). A
+// controllable stub, mirroring `address-form.test.tsx`.
+vi.mock('@/features/geo/geo-select', () => ({
+  GeoSelect: ({
+    value,
+    onChange,
+  }: {
+    value: {
+      country_id: number | null
+      state_id: number | null
+      province_id: number | null
+      city_id: number | null
+    }
+    onChange: (next: {
+      country_id: number | null
+      state_id: number | null
+      province_id: number | null
+      city_id: number | null
+    }) => void
+  }) => (
+    <button
+      type="button"
+      data-testid="geo-select"
+      data-city={value.city_id ?? ''}
+      onClick={() => onChange({ country_id: 5, state_id: 6, province_id: 8, city_id: 7 })}
+    >
+      geo
+    </button>
+  ),
 }))
 
 function address(overrides: Partial<AddressDraft> = {}): AddressDraft {
@@ -210,5 +242,66 @@ describe('AddressesManager (controlled)', () => {
 
     await waitFor(() => expect(deleteAddressMock).toHaveBeenCalledWith(1))
     await waitFor(() => expect(onChange).toHaveBeenCalledWith([]))
+  })
+})
+
+/** Owns the buffer across renders, mirroring how a parent form would. */
+function ControlledAddresses() {
+  const [value, setValue] = useState<AddressDraft[]>([])
+  return <AddressesManager value={value} onChange={setValue} createMode />
+}
+
+describe('AddressesManager (createMode)', () => {
+  beforeAll(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('renders a single inline form: no list, no dialog, no Add button', () => {
+    renderWithConfirm(<AddressesManager value={[]} onChange={() => {}} createMode />)
+
+    expect(screen.queryByRole('button', { name: 'Add address' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Address')).toBeInTheDocument()
+  })
+
+  it('creates the sole draft once any field is typed', () => {
+    const onChange = vi.fn()
+    renderWithConfirm(<AddressesManager value={[]} onChange={onChange} createMode />)
+
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'Via Roma 1' } })
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const next = onChange.mock.calls[0][0] as AddressDraft[]
+    expect(next).toHaveLength(1)
+    expect(next[0]).toMatchObject({ line1: 'Via Roma 1', is_primary: true })
+  })
+
+  it('clears the buffer once every field is emptied again (optional address)', () => {
+    renderWithConfirm(<ControlledAddresses />)
+    const line1 = screen.getByLabelText('Address')
+
+    fireEvent.change(line1, { target: { value: 'Via Roma 1' } })
+    fireEvent.change(line1, { target: { value: '' } })
+
+    expect(line1).toHaveValue('')
+    expect(screen.queryByText('The address is required.')).not.toBeInTheDocument()
+  })
+
+  it('requires line1 and the city once the address is started', () => {
+    renderWithConfirm(<ControlledAddresses />)
+
+    // Choosing a geo value alone "starts" the address without a line1 yet.
+    fireEvent.click(screen.getByTestId('geo-select'))
+
+    expect(screen.getByText('The address is required.')).toBeInTheDocument()
+  })
+
+  it('is valid once line1 and the city are both set', () => {
+    renderWithConfirm(<ControlledAddresses />)
+
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'Via Roma 1' } })
+    fireEvent.click(screen.getByTestId('geo-select'))
+
+    expect(screen.queryByText('The address is required.')).not.toBeInTheDocument()
+    expect(screen.queryByText('The city is required.')).not.toBeInTheDocument()
   })
 })

@@ -44,6 +44,21 @@ trait ValidatesUserProfile
     }
 
     /**
+     * Whether a present address row must also carry `city_id`, on top of the
+     * always-required `line1`.
+     *
+     * Product decision: on CREATE, an inline address is only useful once it is
+     * geo-located, so `city_id` becomes mandatory there. UPDATE stays optional
+     * (default false) so editing a legacy address whose city was never
+     * captured keeps working — Store* requests override this to true, Update*
+     * requests never override it.
+     */
+    protected function addressCityRequired(): bool
+    {
+        return false;
+    }
+
+    /**
      * Validation rules for the nested `personal_data.*` object. Merged into each
      * request's own account-field rules; they never change the account rules.
      *
@@ -109,7 +124,11 @@ trait ValidatesUserProfile
             'personal_data.addresses.*.line2' => ['nullable', 'string', 'max:255'],
             'personal_data.addresses.*.postal_code' => ['nullable', 'string', 'max:20'],
             'personal_data.addresses.*.site_type' => ['nullable', Rule::enum(SiteTypeEnum::class)],
-            'personal_data.addresses.*.city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')],
+            'personal_data.addresses.*.city_id' => [
+                $this->addressCityRequired() ? 'required' : 'nullable',
+                'integer',
+                Rule::exists('cities', 'id'),
+            ],
             'personal_data.addresses.*.province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
             'personal_data.addresses.*.state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
             'personal_data.addresses.*.country_id' => ['nullable', 'integer', Rule::exists('countries', 'id')],

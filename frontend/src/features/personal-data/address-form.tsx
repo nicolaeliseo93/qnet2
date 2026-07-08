@@ -25,21 +25,11 @@ import {
   buildAddressSchema,
   type AddressFormValues,
 } from '@/features/personal-data/address-schema'
+import {
+  DEFAULT_SITE_TYPE,
+  SITE_TYPE_LABEL_KEYS,
+} from '@/features/personal-data/address-site-type'
 import { SITE_TYPES, type AddressDraft, type SiteType } from '@/features/personal-data/types'
-
-/**
- * i18n key per site type, kept out of the JSX so the option list stays a
- * plain map (mirrors `TYPE_LABEL_KEYS` in the business-functions form).
- */
-const SITE_TYPE_LABEL_KEYS: Record<SiteType, string> = {
-  legal_seat: 'personalData.addresses.siteTypeLegalSeat',
-  delivery: 'personalData.addresses.siteTypeDelivery',
-  billing: 'personalData.addresses.siteTypeBilling',
-  operational_site: 'personalData.addresses.siteTypeOperationalSite',
-}
-
-/** DB default (`SiteTypeEnum::Billing`): preselected for a brand new address. */
-const DEFAULT_SITE_TYPE: SiteType = 'billing'
 
 /**
  * Bridges the cascading <GeoSelect> to the three geo id fields of the form,

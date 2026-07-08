@@ -28,6 +28,8 @@ export const personalData = {
     loadError: 'Unable to load the personal data. Please try again.',
     createHint: 'Save the card first to add contacts and addresses.',
     incomplete: 'Complete the required personal data fields.',
+    addressIncomplete: 'Enter the street and city to complete the address.',
+    contactsInvalid: 'Fix the invalid contacts before saving.',
   },
   form: {
     type: personalDataFieldLabels.type,
@@ -74,6 +76,11 @@ export const personalData = {
     editAction: 'Edit contact',
     deleteAction: 'Delete contact',
     deleteConfirm: 'Delete this contact?',
+    // Quick-create flow fields: one input per type, above the CRUD list.
+    quickEmail: 'Email',
+    quickPhone: 'Phone',
+    quickPec: 'PEC',
+    quickFax: 'Fax',
   },
   addresses: {
     title: 'Addresses',
@@ -99,6 +106,7 @@ export const personalData = {
     deleted: 'Address deleted successfully.',
     genericError: 'Something went wrong. Please try again.',
     line1Required: 'The address is required.',
+    cityRequired: 'The city is required.',
     editAction: 'Edit address',
     deleteAction: 'Delete address',
     deleteConfirm: 'Delete this address?',

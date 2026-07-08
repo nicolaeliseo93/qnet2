@@ -46,6 +46,17 @@ class StoreCompanySiteRequest extends FormRequest
     }
 
     /**
+     * A present address must be geo-located on create (product decision): both
+     * `line1` and `city_id` are required. Update keeps `city_id` optional
+     * (ValidatesUserProfile default) so a legacy address without a city stays
+     * editable.
+     */
+    protected function addressCityRequired(): bool
+    {
+        return true;
+    }
+
+    /**
      * @return array<string, array<int, mixed>>
      */
     public function rules(): array
@@ -66,6 +77,7 @@ class StoreCompanySiteRequest extends FormRequest
             'banks.*.notes' => ['nullable', 'string', 'max:191'],
             'default_bank_id' => ['nullable', 'integer'],
 
+            'company_id' => ['nullable', 'integer', Rule::exists('companies', 'id')],
             'responsible_rda_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'responsible_tickets_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'responsible_validation_contracts_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
