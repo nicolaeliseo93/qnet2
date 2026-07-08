@@ -128,12 +128,12 @@ it('navigation: the companies node only shows with companies.view', function () 
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    $group = navigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->not->toContain('companies');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+        ->not->toContain('companies');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('companies.view');
     Sanctum::actingAs($withView);
-    $group = navigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->toContain('companies');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+        ->toContain('companies');
 });

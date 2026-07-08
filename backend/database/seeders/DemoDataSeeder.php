@@ -36,6 +36,9 @@ class DemoDataSeeder extends Seeder
         $this->call(DemoBusinessFunctionSeeder::class);
         $this->call(DemoEmploymentProfileSeeder::class);
         $this->call(DemoProductCatalogSeeder::class);
+        // Depends on sources/EA sectors/referents (lookups, seeded above) and
+        // users (internal managers, seeded above) — must run after all of them.
+        $this->call(DemoRegistrySeeder::class);
         $this->call(DemoNotificationSeeder::class);
     }
 }

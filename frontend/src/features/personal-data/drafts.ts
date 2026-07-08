@@ -16,6 +16,7 @@ import type {
   PersonalDataDraft,
   PersonalDataFieldPermissionResolver,
   PersonalDataType,
+  SiteType,
 } from '@/features/personal-data/types'
 
 let keyCounter = 0
@@ -92,6 +93,7 @@ export function addressToDraft(address: Address): AddressDraft {
     state_id: address.state_id,
     country_id: address.country_id,
     is_primary: address.is_primary,
+    site_type: address.site_type,
   }
 }
 
@@ -139,6 +141,7 @@ export interface PersonalDataAddressPayload {
   state_id: number | null
   country_id: number | null
   is_primary: boolean
+  site_type: SiteType | null
 }
 
 /**
@@ -182,6 +185,7 @@ function addressToPayload(draft: AddressDraft): PersonalDataAddressPayload {
     state_id: draft.state_id,
     country_id: draft.country_id,
     is_primary: draft.is_primary,
+    site_type: draft.site_type,
   }
 }
 

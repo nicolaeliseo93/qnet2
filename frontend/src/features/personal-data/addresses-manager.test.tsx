@@ -42,6 +42,7 @@ vi.mock('@/features/personal-data/address-form', () => ({
           state_id: null,
           country_id: null,
           is_primary: false,
+          site_type: 'billing',
         })
       }
     >
@@ -72,6 +73,7 @@ function address(overrides: Partial<AddressDraft> = {}): AddressDraft {
     state_id: null,
     country_id: null,
     is_primary: false,
+    site_type: 'billing',
     ...overrides,
   }
 }
@@ -160,6 +162,7 @@ describe('AddressesManager (controlled)', () => {
       state_id: null,
       country_id: null,
       is_primary: true,
+      site_type: 'billing',
       addressable_type: 'personal_data',
       addressable_id: 99,
       created_at: null,

@@ -10,6 +10,7 @@ use App\Tables\ProductCategoriesTableDefinition;
 use App\Tables\ProductsTableDefinition;
 use App\Tables\ReferentsTableDefinition;
 use App\Tables\ReferentTypesTableDefinition;
+use App\Tables\RegistriesTableDefinition;
 use App\Tables\RolesTableDefinition;
 use App\Tables\SourcesTableDefinition;
 use App\Tables\TagsTableDefinition;
@@ -46,6 +47,7 @@ return [
         'operational-sites' => OperationalSitesTableDefinition::class,
         'referent-types' => ReferentTypesTableDefinition::class,
         'referents' => ReferentsTableDefinition::class,
+        'registries' => RegistriesTableDefinition::class,
         'ea-sectors' => EaSectorsTableDefinition::class,
         'attributes' => AttributesTableDefinition::class,
         'product-categories' => ProductCategoriesTableDefinition::class,

@@ -10,6 +10,7 @@ use App\Authorization\ProductCategoriesAuthorization;
 use App\Authorization\ProductsAuthorization;
 use App\Authorization\ReferentsAuthorization;
 use App\Authorization\ReferentTypesAuthorization;
+use App\Authorization\RegistriesAuthorization;
 use App\Authorization\RolesAuthorization;
 use App\Authorization\SourcesAuthorization;
 use App\Authorization\TagsAuthorization;
@@ -45,6 +46,7 @@ return [
         'operational-sites' => OperationalSitesAuthorization::class,
         'referent-types' => ReferentTypesAuthorization::class,
         'referents' => ReferentsAuthorization::class,
+        'registries' => RegistriesAuthorization::class,
         'ea-sectors' => EaSectorsAuthorization::class,
         'attributes' => AttributesAuthorization::class,
         'product-categories' => ProductCategoriesAuthorization::class,

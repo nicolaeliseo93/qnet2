@@ -11,6 +11,7 @@ use App\DataObjects\Users\ProfileData;
 use App\Enums\ContactTypeEnum;
 use App\Enums\GenderEnum;
 use App\Enums\PersonalDataTypeEnum;
+use App\Enums\SiteTypeEnum;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -107,6 +108,7 @@ trait ValidatesUserProfile
             'personal_data.addresses.*.line1' => ['required', 'string', 'max:255'],
             'personal_data.addresses.*.line2' => ['nullable', 'string', 'max:255'],
             'personal_data.addresses.*.postal_code' => ['nullable', 'string', 'max:20'],
+            'personal_data.addresses.*.site_type' => ['nullable', Rule::enum(SiteTypeEnum::class)],
             'personal_data.addresses.*.city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')],
             'personal_data.addresses.*.province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
             'personal_data.addresses.*.state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
@@ -232,6 +234,7 @@ trait ValidatesUserProfile
                     line1: (string) ($row['line1'] ?? ''),
                     line2: $row['line2'] ?? null,
                     postalCode: $row['postal_code'] ?? null,
+                    siteType: isset($row['site_type']) ? SiteTypeEnum::from((string) $row['site_type']) : null,
                     cityId: isset($row['city_id']) ? (int) $row['city_id'] : null,
                     provinceId: isset($row['province_id']) ? (int) $row['province_id'] : null,
                     stateId: isset($row['state_id']) ? (int) $row['state_id'] : null,

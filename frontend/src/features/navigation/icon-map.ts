@@ -1,4 +1,5 @@
 import {
+  BookUser,
   Briefcase,
   Building2,
   Circle,
@@ -33,6 +34,7 @@ const iconMap: Record<string, LucideIcon> = {
   layers: Layers,
   'database-zap': DatabaseZap,
   'contact-round': ContactRound,
+  'book-user': BookUser,
   tag: Tag,
   tags: Tags,
   waypoints: Waypoints,

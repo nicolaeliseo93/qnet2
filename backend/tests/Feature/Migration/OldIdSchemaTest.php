@@ -2,10 +2,13 @@
 
 use App\Models\BusinessFunction;
 use App\Models\Company;
+use App\Models\EaSector;
 use App\Models\OperationalSite;
 use App\Models\Referent;
 use App\Models\ReferentType;
 use App\Models\Role;
+use App\Models\Source;
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\QueryException;
@@ -26,6 +29,9 @@ dataset('old_id_tables', [
     'operational_sites' => ['operational_sites', '2026_07_04_100400_add_old_id_to_operational_sites_table.php'],
     'referent_types' => ['referent_types', '2026_07_07_100200_add_old_id_to_referent_types_table.php'],
     'referents' => ['referents', '2026_07_07_100300_add_old_id_to_referents_table.php'],
+    'sources' => ['sources', '2026_07_08_110000_add_old_id_to_sources_table.php'],
+    'tags' => ['tags', '2026_07_08_110100_add_old_id_to_tags_table.php'],
+    'ea_sectors' => ['ea_sectors', '2026_07_08_110200_add_old_id_to_ea_sectors_table.php'],
 ]);
 
 /**
@@ -42,6 +48,9 @@ function oldIdFactoryFor(string $table): Factory
         'operational_sites' => OperationalSite::factory(),
         'referent_types' => ReferentType::factory(),
         'referents' => Referent::factory(),
+        'sources' => Source::factory(),
+        'tags' => Tag::factory(),
+        'ea_sectors' => EaSector::factory(),
     };
 }
 
@@ -178,4 +187,46 @@ it('does not mass-assign old_id on Referent::create()', function () {
     $referent = Referent::create(['name' => 'John Doe', 'contact_scope' => 'internal', 'old_id' => 999]);
 
     expect($referent->old_id)->toBeNull();
+});
+
+it('persists old_id set by property assignment on Source', function () {
+    $source = Source::factory()->create();
+    $source->old_id = 507;
+    $source->save();
+
+    expect($source->fresh()->old_id)->toBe(507);
+});
+
+it('does not mass-assign old_id on Source::create()', function () {
+    $source = Source::create(['name' => 'Website', 'old_id' => 999]);
+
+    expect($source->old_id)->toBeNull();
+});
+
+it('persists old_id set by property assignment on Tag', function () {
+    $tag = Tag::factory()->create();
+    $tag->old_id = 508;
+    $tag->save();
+
+    expect($tag->fresh()->old_id)->toBe(508);
+});
+
+it('does not mass-assign old_id on Tag::create()', function () {
+    $tag = Tag::create(['name' => 'Prospect', 'old_id' => 999]);
+
+    expect($tag->old_id)->toBeNull();
+});
+
+it('persists old_id set by property assignment on EaSector', function () {
+    $sector = EaSector::factory()->create();
+    $sector->old_id = 509;
+    $sector->save();
+
+    expect($sector->fresh()->old_id)->toBe(509);
+});
+
+it('does not mass-assign old_id on EaSector::create()', function () {
+    $sector = EaSector::create(['name' => 'Manufacturing', 'old_id' => 999]);
+
+    expect($sector->old_id)->toBeNull();
 });

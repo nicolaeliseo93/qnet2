@@ -19,6 +19,9 @@ export const migrations = {
     'business-function-members': 'Funzioni aziendali — riconcilia responsabile e operatori',
     'referent-types': 'Tipi di referente',
     referents: 'Referenti',
+    sources: 'Fonti',
+    tags: 'Tag',
+    'ea-sectors': 'Settori EA',
   },
   page: {
     sourceLabel: 'Sorgente',

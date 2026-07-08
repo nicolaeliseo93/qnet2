@@ -131,12 +131,12 @@ it('navigation: the business-functions node only shows with business-functions.v
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    $group = navigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->not->toContain('business-functions');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->not->toContain('business-functions');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('business-functions.view');
     Sanctum::actingAs($withView);
-    $group = navigationGroup($this->getJson('/api/navigation')->json('data'));
-    expect(collect(data_get($group, 'children', []))->pluck('key'))->toContain('business-functions');
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
+        ->toContain('business-functions');
 });

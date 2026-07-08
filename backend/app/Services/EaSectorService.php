@@ -4,8 +4,11 @@ namespace App\Services;
 
 use App\DataObjects\EaSectors\CreateEaSectorData;
 use App\DataObjects\EaSectors\UpdateEaSectorData;
+use App\DataObjects\Shared\ForSelectQuery;
+use App\DataObjects\Shared\ForSelectResult;
 use App\Models\EaSector;
 use App\Services\EaSectors\EaSectorHierarchy;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -28,11 +31,7 @@ class EaSectorService
                 'parent_id' => $data->parentId,
             ]);
 
-            if ($data->hasTagIds()) {
-                $sector->tags()->sync($data->tagIds);
-            }
-
-            return $sector->fresh(['parent', 'tags']);
+            return $sector->fresh(['parent']);
         });
     }
 
@@ -49,11 +48,7 @@ class EaSectorService
                 $sector->update($attributes);
             }
 
-            if ($data->hasTagIds()) {
-                $sector->tags()->sync($data->tagIds);
-            }
-
-            return $sector->fresh(['parent', 'tags']);
+            return $sector->fresh(['parent']);
         });
     }
 
@@ -77,6 +72,69 @@ class EaSectorService
     public function tree(): array
     {
         return $this->hierarchy->tree();
+    }
+
+    /**
+     * Minimal, searchable, paginated EA-sector list for the for-select
+     * standard (ADR 0011, spec 0020), mirroring SourceService::forSelect.
+     */
+    public function forSelect(ForSelectQuery $query): ForSelectResult
+    {
+        $base = EaSector::query()->select(['id', 'name']);
+
+        if ($query->hasSearch()) {
+            $base->where('name', 'like', '%'.$query->search.'%');
+        }
+
+        $total = (clone $base)->count();
+
+        /** @var Collection<int, EaSector> $page */
+        $page = $base->orderBy('name')
+            ->orderBy('id')
+            ->offset($query->offset)
+            ->limit($query->limit)
+            ->get();
+
+        $items = $this->appendHydratedIds($page, $query);
+
+        return new ForSelectResult(
+            items: $items,
+            total: $total,
+            offset: $query->offset,
+            limit: $query->limit,
+        );
+    }
+
+    /**
+     * Append the explicitly-requested `ids[]` (edit-mode hydration) that are
+     * not already on the page, deduplicated. They bypass search and the same
+     * id/name projection applies. Total is unaffected.
+     *
+     * @param  Collection<int, EaSector>  $page
+     * @return Collection<int, EaSector>
+     */
+    private function appendHydratedIds(Collection $page, ForSelectQuery $query): Collection
+    {
+        if (! $query->hasIds()) {
+            return $page;
+        }
+
+        $presentIds = $page->pluck('id')->all();
+        $missingIds = array_values(array_diff($query->ids, $presentIds));
+
+        if ($missingIds === []) {
+            return $page;
+        }
+
+        /** @var Collection<int, EaSector> $hydrated */
+        $hydrated = EaSector::query()
+            ->select(['id', 'name'])
+            ->whereIn('id', $missingIds)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+
+        return $page->concat($hydrated);
     }
 
     /**

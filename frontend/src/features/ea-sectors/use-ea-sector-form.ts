@@ -14,10 +14,9 @@ import {
 } from '@/features/ea-sectors/ea-sector-schema'
 import { eaSectorKeys } from '@/features/ea-sectors/query-keys'
 import type { EaSectorDetail, EaSectorFormMode } from '@/features/ea-sectors/types'
-import type { ForSelectItem } from '@/features/for-select/types'
 
 /** Server-side field names mapped onto the form for 422 handling. */
-const SERVER_ERROR_FIELDS = ['name', 'parent_id', 'tag_ids'] as const
+const SERVER_ERROR_FIELDS = ['name', 'parent_id'] as const
 
 export type EaSectorFormValues = CreateEaSectorFormValues
 
@@ -49,20 +48,10 @@ export function useEaSectorForm({ mode, onSuccess }: UseEaSectorFormArgs) {
       return {
         name: mode.sector.name,
         parent_id: mode.sector.parent_id,
-        tag_ids: mode.sector.tag_ids,
       }
     }
-    return { name: '', parent_id: mode.parentId, tag_ids: [] }
+    return { name: '', parent_id: mode.parentId }
   }, [mode])
-
-  // EDIT: pre-known {id, label} for the tags multi-select, so it shows its
-  // current selection immediately (no hydration round-trip) — the names
-  // come from the resource itself.
-  const selectedTagItems = useMemo<ForSelectItem[]>(
-    () =>
-      mode.type === 'edit' ? mode.sector.tags.map((tag) => ({ id: tag.id, label: tag.name })) : [],
-    [mode],
-  )
 
   const form = useForm<EaSectorFormValues>({
     resolver: zodResolver(schema),
@@ -96,7 +85,6 @@ export function useEaSectorForm({ mode, onSuccess }: UseEaSectorFormArgs) {
     form,
     isEdit,
     serverError,
-    selectedTagItems,
     onSubmit,
   }
 }

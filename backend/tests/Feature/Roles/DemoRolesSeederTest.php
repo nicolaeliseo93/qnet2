@@ -30,3 +30,25 @@ it('creates the non-privileged application roles with coherent permission sets',
             fn (string $permission): bool => str_ends_with($permission, '.viewAny') || str_ends_with($permission, '.view')
         ))->toBeTrue();
 });
+
+it('AC-018: registries mirrors companies in the manager/operator/user/viewer matrices (spec 0020)', function () {
+    $this->seed(RolePermissionSeeder::class);
+    $this->seed(DemoRolesSeeder::class);
+
+    $manager = Role::findByName('manager');
+    $operator = Role::findByName('operator');
+    $user = Role::findByName('user');
+    $viewer = Role::findByName('viewer');
+
+    // The abilities a role holds on $resource, as a bare (unprefixed) sorted list.
+    $abilitiesOn = fn (Role $role, string $resource): array => $role->permissions->pluck('name')
+        ->filter(fn (string $permission): bool => str_starts_with($permission, "{$resource}."))
+        ->map(fn (string $permission): string => substr($permission, strlen($resource) + 1))
+        ->sort()->values()->all();
+
+    expect($abilitiesOn($manager, 'registries'))->toBe($abilitiesOn($manager, 'companies'))
+        ->and($abilitiesOn($operator, 'registries'))->toBe($abilitiesOn($operator, 'companies'))
+        ->and($abilitiesOn($user, 'registries'))->toBe($abilitiesOn($user, 'companies'))
+        ->and($viewer->permissions->pluck('name'))->toContain('registries.viewAny', 'registries.view')
+        ->and($viewer->permissions->pluck('name'))->not->toContain('registries.create', 'registries.update', 'registries.delete');
+});

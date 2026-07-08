@@ -89,8 +89,6 @@ function sector(): EaSectorDetailWithPermissions {
     parent_id: null,
     parent: null,
     created_at: '2026-01-01T00:00:00Z',
-    tag_ids: [],
-    tags: [],
     permissions: FULL_ACCESS,
   }
 }

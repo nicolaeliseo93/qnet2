@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Tests\TestCase;
 
 /*
@@ -50,16 +51,15 @@ function something()
 }
 
 /**
- * Locate the "FA Società & Servizi" group nested inside the settings
- * navigation section, given the `/api/navigation` `data` payload.
+ * Pluck the leaf keys of a top-level navigation section (management,
+ * configuration, administration) from the `/api/navigation` `data` payload.
  *
  * @param  array<int, array<string, mixed>>  $data
- * @return array<string, mixed>|null
+ * @return Collection<int, string>
  */
-function navigationGroup(array $data): ?array
+function navigationSectionKeys(array $data, string $sectionKey): Collection
 {
-    $settings = collect($data)->firstWhere('key', 'settings');
+    $section = collect($data)->firstWhere('key', $sectionKey);
 
-    return collect(data_get($settings, 'children', []))
-        ->firstWhere('key', 'fa-companies-services');
+    return collect(data_get($section, 'children', []))->pluck('key');
 }

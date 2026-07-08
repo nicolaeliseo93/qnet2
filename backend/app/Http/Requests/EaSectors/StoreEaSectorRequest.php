@@ -7,7 +7,6 @@ use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for POST /api/ea-sectors (spec 0018).
@@ -38,8 +37,6 @@ class StoreEaSectorRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:191'],
             'parent_id' => ['nullable', 'integer', 'exists:ea_sectors,id'],
-            'tag_ids' => ['sometimes', 'array'],
-            'tag_ids.*' => ['integer', Rule::exists('tags', 'id')],
         ];
     }
 

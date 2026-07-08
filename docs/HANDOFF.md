@@ -63,6 +63,93 @@ NOTE: the two shared registry configs (config/tables.php, config/authorization.p
 company-sites AND those modules registered, no markers) — resolved with `git add`. graphify-out/ not
 committed. Changes committed on `feat/company-sites-module` — awaiting user go for push/PR.
 
+## Navigation restyle — sidebar reorganised into Gestione / Configurazione / Amministrazione — GREEN (2026-07-08)
+
+Product ask: gather all lookup/support tables ("tabelle di appoggio") into ONE settings
+area and make the menu coherent (checked against Salesforce/Zoho/HubSpot: they split daily-work
+records from a Setup/Configuration area). Chosen scope: **sidebar tree reorg only** (no new hub
+page). NOT yet committed.
+
+The menu is backend-driven — the whole reorg is `backend/config/navigation.php` plus i18n labels.
+The old single catch-all `settings` section (with 3 collapsible sub-groups `fa-companies-services`
+/ `referents-group` / `products-group`) is REPLACED by three flat `type:'section'` groups:
+- **`management`** ("Gestione") — operational records: registries, referents, companies,
+  operational-sites, products.
+- **`configuration`** ("Configurazione") — every lookup gathered here: business-functions,
+  referent-types, ea-sectors, tags, sources, product-categories, attributes.
+- **`administration`** ("Amministrazione") — users, roles, and migrations (migrations MOVED from
+  top-level into this section; still `role:super-admin`).
+
+Note some leaves changed section vs the old grouping: `business-functions` was under the companies
+group but is a lookup → now in Configurazione. Sections render children FLAT (no collapsibles) —
+matches nav-main.tsx `NavSection`.
+
+i18n: added `navigation.management/configuration/administration` (it.ts + en.ts), removed the now
+orphaned `navigation.faCompaniesServices`. Frontend needed NO code change (renders whatever the API
+returns); `tsc --noEmit` clean.
+
+Tests: the `settings→group→leaf` traversal in the nav-node security tests no longer matches. Added a
+shared helper `navigationSectionKeys($data,$sectionKey)` in `tests/Pest.php` (replaces the old
+`navigationGroup()`), removed the 3 duplicated local `productsNavigationGroup` helpers, and repointed
+every nav-node assertion to its new section. `MigrationNavigationTest` now looks for `migrations`
+under the `administration` section instead of top-level. Verified GREEN with `XDEBUG_MODE=off`:
+targeted suite (Navigation + Migration + all 12 module security tests) **609 passed, 2730
+assertions**; Pint clean; frontend `tsc --noEmit` clean.
+
+FLAGGED (out of the chosen scope, left untouched): `app-sidebar.tsx` still has a footer gear link
+to `/settings` labelled `navigation.settings` = "Impostazioni" (→ SettingsPage). With the new
+"Configurazione" section this label now reads as a near-duplicate; worth reconciling (rename, or
+repurpose that page as the settings hub) if a future pass wants the full Salesforce-style Setup hub.
+
+## Reversal — Tag↔EaSector association RETIRED (taggables dropped) + Fonti/Tag/EA-sectors added to the Migrations import engine — GREEN (2026-07-08)
+
+Two coordinated pieces this session. NOT yet committed.
+
+### 1. Tag↔EaSector association fully removed (reverses the 2026-07-07 producer swap below)
+User product decision: sectors are no longer taggable, at EVERY layer. `Tag` STAYS a standalone
+lookup (table/CRUD/for-select/import untouched); only the association is gone.
+- DB: NEW migration `2026_07_08_120000_drop_taggables_table.php` DROPS the polymorphic `taggables`
+  pivot (reversible — `down()` recreates its original shape). The committed create migrations are
+  untouched.
+- Backend removed: `EaSector::tags()` + the `deleting` detach hook (whole `booted()` gone);
+  `Tag::eaSectors()`; `tagIds` on Create/UpdateEaSectorData (+ `hasTagIds`/`tagIdsSubmitted`);
+  `tag_ids` rules on Store/UpdateEaSectorRequest (+ unused `Rule` import); `tags()->sync()` +
+  `tags` eager-load in EaSectorService (now `fresh(['parent'])`); `tags`/`tag_ids` in
+  EaSectorResource; `tag_ids` field in EaSectorsAuthorization. `TagService::delete` is now a PLAIN
+  delete (the `taggables` guard is gone — it would query a dropped table).
+- Morph map (`AppServiceProvider`) KEPT `'ea_sector'`/`'tag'` — they are also activity-log
+  `subject_type` aliases (both models use `LogsModelActivity`); removing them would break auditing.
+- Frontend removed (done by a `frontend` teammate, vitest 20/20 + `tsc --noEmit` clean): the tags
+  multiselect from the EA-sector form (`ea-sector-form-body.tsx`), `tag_ids`/`tags`/`TagRef` from
+  `types.ts`/`ea-sector-schema.ts`/`ea-sector-form-payload.ts`/`use-ea-sector-form.ts`, the tag i18n
+  keys (en/it), and all tag assertions in the ea-sectors tests.
+- Tests: DELETED `EaSectorTaggingTest.php` + `TagDeleteGuardTest.php` (plain delete already covered
+  by `TagCrudTest`). `FieldCatalogueEndpointTest` unaffected (asserts ea-sectors presence, not its
+  fields).
+
+### 2. Fonti (`sources`), Tag (`tags`), Settori EA (`ea-sectors`) added to the /migrations import engine (spec 0013)
+Registry-driven: one `*Source` class + one config line each; the UI lists them from
+`GET /api/migrations` (no frontend change). Pattern mirrors ReferentTypesSource.
+- 3 additive `old_id` migrations (`2026_07_08_110000/110100/110200`), `old_id` integer cast (guarded)
+  on Source/Tag/EaSector models.
+- `SourcesSource` + `TagsSource` = plain lookups. `EaSectorsSource` = SELF-referential tree:
+  `parent_id` remapped via `old_id`; a child listed before its parent is created detached with a
+  warning, then relinked in `afterImport()` (second pass). All idempotent (skip by old_id).
+- Registered in `config/migrations.php` (`sources`/`tags`/`ea-sectors`) and `MigrationOrder` phase 1.
+- Tests: new Sources/Tags/EaSectorsSourceImportTest; OldIdSchemaTest extended (3 tables + property/
+  guarded-mass-assign); MigrationRegistryTest updated (map + count 8→11).
+
+Verified GREEN (real run, `XDEBUG_MODE=off`): Pint clean; full Pest **1563 passed, 1 skipped,
+1 failed**. The single failure is the SAME pre-existing, out-of-scope
+`AbstractMigrationSourcePreviewTest` (RolesSource `description` column) already documented below —
+NOT a regression from this work. (Note: `php artisan test` segfaults under Xdebug on this machine;
+run pest with `XDEBUG_MODE=off`.)
+
+FLAGGED (out of my ownership — untracked Registry module WIP, spec 0020): two now-stale COMMENTS
+reference the removed tag pattern — `DataObjects/Registries/CreateRegistryData.php:17`
+("mirrors CreateEaSectorData's tagIds") and `Services/RegistryService.php:126`
+("EaSectorService ... `if ($data->hasTagIds())` guard"). Harmless (comments), left for the Registry owner.
+
 ## Correction — Tags producer swapped from Referent to EaSector — GREEN (2026-07-07)
 
 Post-build correction to spec `docs/specs/0019-tags-module.xml` (see `<ea-sector-wiring>` +

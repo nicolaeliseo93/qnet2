@@ -82,6 +82,13 @@ export const personalData = {
     line1: 'Indirizzo',
     line2: 'Indirizzo (riga 2)',
     postalCode: 'CAP',
+    // Tipo sede (spec 0020): visibile solo quando il contenitore lo abilita
+    // (modulo Anagrafiche); tutti gli altri owner non mostrano il campo.
+    siteType: 'Tipo sede',
+    siteTypeLegalSeat: 'Sede legale',
+    siteTypeDelivery: 'Consegna',
+    siteTypeBilling: 'Fatturazione',
+    siteTypeOperationalSite: 'Sede operativa',
     primary: 'Indirizzo principale',
     primaryBadge: 'Principale',
     save: 'Salva',

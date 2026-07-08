@@ -9,13 +9,11 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\MorphToMany;
 
 /**
  * EA sector tree node (spec 0018): unlimited-depth parent/child hierarchy,
  * a standalone lookup used to classify Anagrafiche in the future (no such
- * relation exists yet — see spec 0018 scope). Also the first producer of
- * tag associations (spec 0019) via the polymorphic `taggables` pivot.
+ * relation exists yet — see spec 0018 scope).
  */
 #[Fillable(['name', 'parent_id'])]
 class EaSector extends BaseModel
@@ -24,15 +22,17 @@ class EaSector extends BaseModel
     use HasFactory, LogsModelActivity;
 
     /**
-     * Detach the sector's tags on delete: `taggables.taggable_id` has no db
-     * foreign key (polymorphic morph), so this prevents an orphan pivot row
-     * (spec 0019).
+     * @return array<string, string>
      */
-    protected static function booted(): void
+    protected function casts(): array
     {
-        static::deleting(function (EaSector $sector): void {
-            $sector->tags()->detach();
-        });
+        return [
+            // Spec 0013 — external data migration: the source system's id for a
+            // migrated sector, guarded (not in #[Fillable]) so it is only ever
+            // set by property assignment post-create. Also the remap key for the
+            // self-referential `parent_id` (child → parent via old_id).
+            'old_id' => 'integer',
+        ];
     }
 
     public function parent(): BelongsTo
@@ -43,14 +43,5 @@ class EaSector extends BaseModel
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id');
-    }
-
-    /**
-     * Tags attached to this sector via the polymorphic `taggables` pivot
-     * (spec 0019).
-     */
-    public function tags(): MorphToMany
-    {
-        return $this->morphToMany(Tag::class, 'taggable');
     }
 }

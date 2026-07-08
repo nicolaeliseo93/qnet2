@@ -222,6 +222,62 @@ it('create: 422 when the owner is missing', function () {
 });
 
 // ---------------------------------------------------------------------------
+// site_type (spec 0020, AC-002/AC-003)
+// ---------------------------------------------------------------------------
+
+it('create: 201 defaults site_type to billing when absent (behavior-preserving)', function () {
+    $actor = userWithAddressAbilities(['create']);
+    $card = PersonalData::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/addresses', [
+        'addressable_type' => 'personal_data',
+        'addressable_id' => $card->id,
+        'line1' => '1 Infinite Loop',
+    ])
+        ->assertCreated()
+        ->assertJsonPath('data.site_type', 'billing');
+
+    $this->assertDatabaseHas('addresses', [
+        'addressable_id' => $card->id,
+        'site_type' => 'billing',
+    ]);
+});
+
+it('create: 201 persists an explicit site_type', function () {
+    $actor = userWithAddressAbilities(['create']);
+    $card = PersonalData::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/addresses', [
+        'addressable_type' => 'personal_data',
+        'addressable_id' => $card->id,
+        'line1' => '1 Infinite Loop',
+        'site_type' => 'legal_seat',
+    ])
+        ->assertCreated()
+        ->assertJsonPath('data.site_type', 'legal_seat');
+
+    $this->assertDatabaseHas('addresses', [
+        'addressable_id' => $card->id,
+        'site_type' => 'legal_seat',
+    ]);
+});
+
+it('create: 422 when site_type is outside the enum', function () {
+    $actor = userWithAddressAbilities(['create']);
+    $card = PersonalData::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/addresses', [
+        'addressable_type' => 'personal_data',
+        'addressable_id' => $card->id,
+        'line1' => '1 Infinite Loop',
+        'site_type' => 'not-a-site-type',
+    ])->assertStatus(422)->assertJsonValidationErrors('site_type');
+});
+
+// ---------------------------------------------------------------------------
 // update — PUT/PATCH /api/addresses/{address}
 // ---------------------------------------------------------------------------
 

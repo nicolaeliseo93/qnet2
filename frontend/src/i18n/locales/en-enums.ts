@@ -66,4 +66,17 @@ export const enums = {
   product_type: {
     SERVICE: 'Service',
   },
+  // Registry convention status (spec 0020).
+  agreement_status: {
+    negotiating: 'Negotiating',
+    rejected: 'Rejected',
+    agreed: 'Agreed',
+  },
+  // Registry size class (spec 0020).
+  size_class: {
+    micro: 'Micro',
+    small: 'Small',
+    medium: 'Medium',
+    large: 'Large',
+  },
 }

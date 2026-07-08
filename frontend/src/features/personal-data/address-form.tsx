@@ -12,13 +12,34 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { GeoSelect } from '@/features/geo/geo-select'
 import type { GeoValue } from '@/features/geo/geo-select'
 import {
   buildAddressSchema,
   type AddressFormValues,
 } from '@/features/personal-data/address-schema'
-import type { AddressDraft } from '@/features/personal-data/types'
+import { SITE_TYPES, type AddressDraft, type SiteType } from '@/features/personal-data/types'
+
+/**
+ * i18n key per site type, kept out of the JSX so the option list stays a
+ * plain map (mirrors `TYPE_LABEL_KEYS` in the business-functions form).
+ */
+const SITE_TYPE_LABEL_KEYS: Record<SiteType, string> = {
+  legal_seat: 'personalData.addresses.siteTypeLegalSeat',
+  delivery: 'personalData.addresses.siteTypeDelivery',
+  billing: 'personalData.addresses.siteTypeBilling',
+  operational_site: 'personalData.addresses.siteTypeOperationalSite',
+}
+
+/** DB default (`SiteTypeEnum::Billing`): preselected for a brand new address. */
+const DEFAULT_SITE_TYPE: SiteType = 'billing'
 
 /**
  * Bridges the cascading <GeoSelect> to the three geo id fields of the form,
@@ -67,6 +88,12 @@ interface AddressFormProps {
   onCancel: () => void
   /** True while an immediate write is in flight: disables the actions. */
   submitting?: boolean
+  /**
+   * Renders the "site type" select (spec 0020). Opt-in, default `false`: every
+   * owner but the Registries module keeps this field out of view and the
+   * backend default (`billing`) applies untouched.
+   */
+  showSiteType?: boolean
 }
 
 /**
@@ -75,7 +102,13 @@ interface AddressFormProps {
  * back through `onSubmit`; the manager decides whether to buffer them or persist
  * them immediately. Owner-agnostic.
  */
-export function AddressForm({ address, onSubmit, onCancel, submitting = false }: AddressFormProps) {
+export function AddressForm({
+  address,
+  onSubmit,
+  onCancel,
+  submitting = false,
+  showSiteType = false,
+}: AddressFormProps) {
   const { t } = useTranslation()
   const schema = useMemo(() => buildAddressSchema(t), [t])
 
@@ -90,6 +123,7 @@ export function AddressForm({ address, onSubmit, onCancel, submitting = false }:
       province_id: address?.province_id ?? null,
       city_id: address?.city_id ?? null,
       is_primary: address?.is_primary ?? false,
+      site_type: address?.site_type ?? DEFAULT_SITE_TYPE,
     },
   })
 
@@ -104,6 +138,7 @@ export function AddressForm({ address, onSubmit, onCancel, submitting = false }:
       province_id: values.province_id ?? null,
       city_id: values.city_id ?? null,
       is_primary: values.is_primary,
+      site_type: values.site_type ?? DEFAULT_SITE_TYPE,
     })
   }
 
@@ -179,6 +214,36 @@ export function AddressForm({ address, onSubmit, onCancel, submitting = false }:
             </FormItem>
           )}
         />
+
+        {showSiteType && (
+          <FormField
+            control={form.control}
+            name="site_type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('personalData.addresses.siteType')}</FormLabel>
+                <Select
+                  value={field.value ?? DEFAULT_SITE_TYPE}
+                  onValueChange={(next) => field.onChange(next as SiteType)}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {SITE_TYPES.map((siteType) => (
+                      <SelectItem key={siteType} value={siteType}>
+                        {t(SITE_TYPE_LABEL_KEYS[siteType])}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <div className="flex justify-end gap-2">
           <Button

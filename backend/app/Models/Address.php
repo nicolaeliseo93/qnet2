@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SiteTypeEnum;
 use App\Models\Abstracts\BaseModel;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\AddressFactory;
@@ -28,6 +29,7 @@ class Address extends BaseModel
         'line1',
         'line2',
         'postal_code',
+        'site_type',
         'city_id',
         'state_id',
         'province_id',
@@ -41,6 +43,7 @@ class Address extends BaseModel
         'line1' => 'string',
         'line2' => 'string',
         'postal_code' => 'string',
+        'site_type' => SiteTypeEnum::class,
         'city_id' => 'int',
         'state_id' => 'int',
         'province_id' => 'int',

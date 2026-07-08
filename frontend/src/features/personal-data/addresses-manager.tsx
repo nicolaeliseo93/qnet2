@@ -47,6 +47,11 @@ interface AddressesManagerProps {
    * (create mode, or edit of an owner with no card yet).
    */
   persistence?: OwnerRef
+  /**
+   * Renders the "site type" select in the create/edit dialog (spec 0020).
+   * Opt-in, default `false`: forwarded verbatim to `AddressForm`.
+   */
+  showSiteType?: boolean
 }
 
 /** `new` = the add form is open; a string = that address `_key` is being edited. */
@@ -65,6 +70,7 @@ export function AddressesManager({
   fieldPermission,
   showHeader = true,
   persistence,
+  showSiteType = false,
 }: AddressesManagerProps) {
   const { t } = useTranslation()
   const confirm = useConfirm()
@@ -148,6 +154,7 @@ export function AddressesManager({
             state_id: fields.state_id,
             country_id: fields.country_id,
             is_primary: fields.is_primary,
+            site_type: fields.site_type,
           })
           replaceDraft(key, { ...addressToDraft(updated), _key: key })
         },
@@ -291,6 +298,7 @@ export function AddressesManager({
               }
               onCancel={() => setEditing(null)}
               submitting={pending}
+              showSiteType={showSiteType}
             />
           )}
         </DialogContent>

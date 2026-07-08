@@ -19,8 +19,6 @@ function baseFields(t: TFunction) {
       .min(1, t('eaSectors.form.nameRequired'))
       .max(NAME_MAX_LENGTH, t('eaSectors.form.nameMax')),
     parent_id: z.number().nullable(),
-    // Multiselect tags (for-select standard): ids, full-replace (spec 0019).
-    tag_ids: z.array(z.number()),
   }
 }
 

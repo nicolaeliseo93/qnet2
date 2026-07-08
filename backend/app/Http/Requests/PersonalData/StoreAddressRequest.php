@@ -3,6 +3,7 @@
 namespace App\Http\Requests\PersonalData;
 
 use App\DataObjects\PersonalData\CreateAddress;
+use App\Enums\SiteTypeEnum;
 use App\Http\Requests\Concerns\ResolvesOwner;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -47,6 +48,7 @@ class StoreAddressRequest extends FormRequest
             'line1' => ['required', 'string', 'max:255'],
             'line2' => ['nullable', 'string', 'max:255'],
             'postal_code' => ['nullable', 'string', 'max:20'],
+            'site_type' => ['nullable', Rule::enum(SiteTypeEnum::class)],
             'city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')],
             'province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
             'state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
@@ -89,6 +91,7 @@ class StoreAddressRequest extends FormRequest
             line1: $this->string('line1')->toString(),
             line2: $this->input('line2'),
             postalCode: $this->input('postal_code'),
+            siteType: $this->filled('site_type') ? SiteTypeEnum::from((string) $this->input('site_type')) : null,
             cityId: $this->filled('city_id') ? (int) $this->input('city_id') : null,
             provinceId: $this->filled('province_id') ? (int) $this->input('province_id') : null,
             stateId: $this->filled('state_id') ? (int) $this->input('state_id') : null,

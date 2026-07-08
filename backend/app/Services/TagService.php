@@ -8,13 +8,12 @@ use App\DataObjects\Tags\CreateTagData;
 use App\DataObjects\Tags\UpdateTagData;
 use App\Models\Tag;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Business logic for the `tags` resource (spec 0019): a plain lookup entity
- * (id, name), mirroring SourceService, plus a restrictive delete — a tag
- * still attached to at least one record via the polymorphic `taggables`
- * pivot cannot be removed (it would silently orphan the association).
+ * (id, name), mirroring SourceService. The polymorphic tagging of other
+ * entities was retired (the `taggables` pivot is dropped), so delete is a
+ * plain delete with no association guard.
  */
 class TagService
 {
@@ -35,15 +34,11 @@ class TagService
     }
 
     /**
-     * Restrictive delete: a tag attached to any record (taggables pivot)
-     * cannot be removed, mirroring ProductCategoryService::delete.
+     * Plain delete: the polymorphic tagging relation was retired (the
+     * `taggables` pivot is dropped), so there is no association to guard.
      */
     public function delete(Tag $tag): void
     {
-        if (DB::table('taggables')->where('tag_id', $tag->id)->exists()) {
-            abort(409, 'This tag is attached to one or more records and cannot be deleted.');
-        }
-
         $tag->delete();
     }
 

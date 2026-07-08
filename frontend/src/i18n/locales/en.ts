@@ -15,6 +15,7 @@ import { imports } from './en-imports'
 import { exports } from './en-exports'
 import { table } from './en-table'
 import { referents, referentTypes } from './en-referents'
+import { registries } from './en-registries'
 import { attributes, productCategories, products } from './en-products'
 import { eaSectors } from './en-ea-sectors'
 import { sources } from './en-sources'
@@ -59,6 +60,7 @@ export const en = {
     businessFunctions: 'Business Functions',
     referents: 'Referents',
     referentTypes: 'Referent Types',
+    registries: 'Registries',
     operationalSites: 'Operational Sites',
     attributes: 'Attributes',
     productCategories: 'Product Categories',
@@ -66,7 +68,9 @@ export const en = {
     products: 'Products',
     sources: 'Sources',
     tags: 'Tags',
-    faCompaniesServices: 'FA Companies & Services',
+    management: 'Management',
+    configuration: 'Configuration',
+    administration: 'Administration',
     settings: 'Settings',
     toggleSidebar: 'Toggle sidebar',
   },
@@ -460,6 +464,7 @@ export const en = {
   exports,
   referents,
   referentTypes,
+  registries,
   attributes,
   productCategories,
   eaSectors,

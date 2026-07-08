@@ -25,6 +25,7 @@ use App\Http\Controllers\PersonalData\PersonalDataController;
 use App\Http\Controllers\ProductCategories\ProductCategoryController;
 use App\Http\Controllers\Products\ProductController;
 use App\Http\Controllers\Referents\ReferentController;
+use App\Http\Controllers\Referents\ReferentForSelectController;
 use App\Http\Controllers\ReferentTypes\ReferentTypeController;
 use App\Http\Controllers\ReferentTypes\ReferentTypeForSelectController;
 use App\Http\Controllers\Roles\RoleController;
@@ -341,15 +342,28 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Referents CRUD (spec 0016): a contact person/entity reusing the `users`
     // anagraphic stack (personal-data card + contacts + addresses) unchanged
-    // via HasPersonalData. No for-select (no module selects a referent in this
-    // spec). Authorization (referents.view/create/update/delete) is enforced
-    // server-side in ReferentController via ReferentPolicy on every endpoint.
+    // via HasPersonalData. Authorization (referents.view/create/update/delete)
+    // is enforced server-side in ReferentController via ReferentPolicy on
+    // every endpoint.
     Route::middleware('throttle:60,1')->group(function () {
+        // Minimal searchable/paginated referent list for entity-backed
+        // selects (for-select standard, ADR 0011, spec 0020 — first producer:
+        // the Registries form). Declared ABOVE referents/{referent} so the
+        // literal `for-select` segment wins over the bound wildcard. Gated
+        // by referents.viewAny server-side in ReferentForSelectController.
+        Route::get('referents/for-select', ReferentForSelectController::class);
+
         Route::get('referents/{referent}', [ReferentController::class, 'show']);
         Route::post('referents', [ReferentController::class, 'store']);
         Route::match(['put', 'patch'], 'referents/{referent}', [ReferentController::class, 'update']);
         Route::delete('referents/{referent}', [ReferentController::class, 'destroy']);
     });
+
+    // Registries CRUD (spec 0020, "Anagrafiche"): extracted into
+    // routes/api/registries.php (file-size split, engineering.md §6) so this
+    // file stays within the 500-line hard limit. Required INSIDE this
+    // auth:sanctum group so every route there inherits the same context.
+    require __DIR__.'/api/registries.php';
 
     // Attributes CRUD (spec 0017): the global, reusable dynamic-attribute
     // catalogue assignable to product categories. Authorization

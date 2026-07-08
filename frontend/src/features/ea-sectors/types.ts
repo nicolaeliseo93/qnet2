@@ -9,12 +9,6 @@
 
 import type { ResourcePermissions } from '@/features/authorization/types'
 
-/** A tag reference as hydrated in the ea-sector resource ({id, name}). */
-export interface TagRef {
-  id: number
-  name: string
-}
-
 /** A node of the sector tree, as returned by `GET /ea-sectors/tree`. */
 export interface EaSectorTreeNode {
   id: number
@@ -33,10 +27,6 @@ export interface EaSectorDetail {
   parent_id: number | null
   parent: { id: number; name: string } | null
   created_at: string
-  /** Ids of the tags currently attached to this sector (spec 0019). */
-  tag_ids: number[]
-  /** Hydrates the tags multi-select control. */
-  tags: TagRef[]
 }
 
 /**
@@ -52,7 +42,6 @@ export interface EaSectorDetailWithPermissions extends EaSectorDetail {
 export interface CreateEaSectorPayload {
   name: string
   parent_id?: number | null
-  tag_ids?: number[]
 }
 
 /** Payload for PATCH /ea-sectors/{id} (partial update). */

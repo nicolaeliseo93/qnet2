@@ -144,6 +144,35 @@ it('create: with a referent type + contacts/addresses persists the whole tree', 
         ->assertJsonPath('data.personal_data.addresses.0.line1', '10 Analytical St');
 });
 
+it('create: nested personal_data.addresses.*.site_type persists on the address (spec 0020, AC-003)', function () {
+    $actor = referentUserWith(['create']);
+    $type = ReferentType::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/referents', [
+        'referent_type_id' => $type->id,
+        'contact_scope' => 'external',
+        'personal_data' => minimalReferentProfilePayload([
+            'addresses' => [['line1' => '10 Analytical St', 'is_primary' => true, 'site_type' => 'legal_seat']],
+        ]),
+    ])->assertCreated()
+        ->assertJsonPath('data.personal_data.addresses.0.site_type', 'legal_seat');
+});
+
+it('create: 422 when nested personal_data.addresses.*.site_type is outside the enum (spec 0020, AC-003)', function () {
+    $actor = referentUserWith(['create']);
+    $type = ReferentType::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/referents', [
+        'referent_type_id' => $type->id,
+        'contact_scope' => 'external',
+        'personal_data' => minimalReferentProfilePayload([
+            'addresses' => [['line1' => '10 Analytical St', 'site_type' => 'not-a-site-type']],
+        ]),
+    ])->assertStatus(422)->assertJsonValidationErrors('personal_data.addresses.0.site_type');
+});
+
 it('create: 422 without personal_data (required as the name source)', function () {
     $actor = referentUserWith(['create']);
     Sanctum::actingAs($actor);
