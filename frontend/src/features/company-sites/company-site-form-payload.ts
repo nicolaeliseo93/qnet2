@@ -70,6 +70,7 @@ export function buildCreatePayload(
     personal_data: toPersonalDataPayload(profileDraft, fieldPermission),
     ...(banks.length > 0 ? { banks: toBanksPayload(banks) } : {}),
     default_bank_id: values.default_bank_id,
+    company_id: values.company_id,
     responsible_rda_id: values.responsible_rda_id,
     responsible_tickets_id: values.responsible_tickets_id,
     responsible_validation_contracts_id: values.responsible_validation_contracts_id,
@@ -116,6 +117,7 @@ export function buildUpdatePayload(
   }
 
   assignIfChanged(payload, 'default_bank_id', values.default_bank_id, original.default_bank_id)
+  assignIfChanged(payload, 'company_id', values.company_id, original.company?.id ?? null)
   assignIfChanged(
     payload,
     'responsible_rda_id',

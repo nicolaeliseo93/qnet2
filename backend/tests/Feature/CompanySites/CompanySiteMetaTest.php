@@ -53,6 +53,7 @@ it('200: field catalogue is grouped profile/personal_data/settings/banks/other, 
         ->and($fields['personal_data.contacts']['type'])->toBe('collection')
         ->and($fields['personal_data.addresses']['group'])->toBe('personal_data')
         ->and($fields['personal_data.addresses']['type'])->toBe('collection')
+        ->and($fields['company_id']['group'])->toBe('settings')
         ->and($fields['responsible_rda_id']['group'])->toBe('settings')
         ->and($fields['default_bank_id']['group'])->toBe('settings')
         ->and($fields['banks']['group'])->toBe('banks')
@@ -85,6 +86,7 @@ it('200: profile/settings fields are editable when the actor may create', functi
         ->assertOk()
         ->assertJsonPath('permissions.fields.name.editable', true)
         ->assertJsonPath('permissions.fields.name.required', true)
+        ->assertJsonPath('permissions.fields.company_id.editable', true)
         ->assertJsonPath('permissions.fields.responsible_rda_id.editable', true)
         ->assertJsonPath('permissions.fields.banks.editable', true);
 });

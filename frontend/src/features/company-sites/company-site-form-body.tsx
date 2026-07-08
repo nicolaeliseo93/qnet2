@@ -63,6 +63,7 @@ export function CompanySiteFormBody({
     personalDataFieldPermission,
     banksDraft,
     setBanksDraft,
+    selectedCompanyItem,
     selectedResponsibleRdaItem,
     selectedResponsibleTicketsItem,
     selectedResponsibleValidationContractsItem,
@@ -85,6 +86,7 @@ export function CompanySiteFormBody({
   // uses: a tab is only worth rendering if at least one of its fields is
   // visible. Profilo has mandatory name/email, so it is always shown.
   const settingsVisible =
+    fieldPermission('company_id').visible ||
     fieldPermission('responsible_rda_id').visible ||
     fieldPermission('responsible_tickets_id').visible ||
     fieldPermission('responsible_validation_contracts_id').visible ||
@@ -103,7 +105,8 @@ export function CompanySiteFormBody({
   // outside RHF) or the site's own name/notes carry a validation error.
   const profileHasError = !profileValid || Boolean(errors.name || errors.notes)
   const settingsHasError = Boolean(
-    errors.responsible_rda_id ||
+    errors.company_id ||
+      errors.responsible_rda_id ||
       errors.responsible_tickets_id ||
       errors.responsible_validation_contracts_id ||
       errors.responsible_validation_contracts_two_id ||
@@ -162,6 +165,7 @@ export function CompanySiteFormBody({
                   control={form.control}
                   companySite={companySite}
                   banksDraft={banksDraft}
+                  selectedCompanyItem={selectedCompanyItem}
                   selectedResponsibleRdaItem={selectedResponsibleRdaItem}
                   selectedResponsibleTicketsItem={selectedResponsibleTicketsItem}
                   selectedResponsibleValidationContractsItem={

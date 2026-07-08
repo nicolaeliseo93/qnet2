@@ -48,6 +48,7 @@ export type CompanySiteFormValues = CreateCompanySiteFormValues & UpdateCompanyS
 const SERVER_ERROR_FIELDS = [
   'name',
   'notes',
+  'company_id',
   'responsible_rda_id',
   'responsible_tickets_id',
   'responsible_validation_contracts_id',
@@ -142,6 +143,7 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
       return {
         name: site.name,
         notes: site.notes ?? '',
+        company_id: site.company?.id ?? null,
         responsible_rda_id: site.responsible_rda_id,
         responsible_tickets_id: site.responsible_tickets_id,
         responsible_validation_contracts_id: site.responsible_validation_contracts_id,
@@ -154,6 +156,7 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
     return {
       name: '',
       notes: '',
+      company_id: null,
       responsible_rda_id: null,
       responsible_tickets_id: null,
       responsible_validation_contracts_id: null,
@@ -168,6 +171,13 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
   // each picker shows its label immediately without an extra hydration fetch.
   const responsibleItem = (ref: { id: number; label: string } | null): ForSelectItem | null =>
     ref ? { id: ref.id, label: ref.label } : null
+
+  // EDIT: pre-known {id, label} for the company picker, so it shows its
+  // current selection immediately without a hydration round-trip.
+  const selectedCompanyItem = useMemo<ForSelectItem | null>(
+    () => (mode.type === 'edit' ? responsibleItem(mode.companySite.company) : null),
+    [mode],
+  )
 
   const selectedResponsibleRdaItem = useMemo(
     () => (mode.type === 'edit' ? responsibleItem(mode.companySite.responsible_rda) : null),
@@ -333,6 +343,7 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
     setPendingLogo,
     banksDraft,
     setBanksDraft,
+    selectedCompanyItem,
     selectedResponsibleRdaItem,
     selectedResponsibleTicketsItem,
     selectedResponsibleValidationContractsItem,

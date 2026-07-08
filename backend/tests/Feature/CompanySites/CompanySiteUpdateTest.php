@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Address;
+use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\CompanySiteBank;
 use App\Models\PersonalData;
@@ -166,6 +167,29 @@ it('update: default_bank_id foreign to this site is rejected', function () {
 
     $this->patchJson("/api/company-sites/{$target->id}", ['default_bank_id' => $foreignBank->id])
         ->assertStatus(422)->assertJsonValidationErrors('default_bank_id');
+});
+
+it('update: PATCH company_id sets the owning company and its nested reference', function () {
+    $actor = userWithCompanySiteAbilities(['update']);
+    $target = CompanySite::factory()->create();
+    $company = Company::factory()->create(['denomination' => 'Acme Holding SpA']);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/company-sites/{$target->id}", ['company_id' => $company->id])
+        ->assertOk()
+        ->assertJsonPath('data.company_id', $company->id)
+        ->assertJsonPath('data.company.label', 'Acme Holding SpA');
+
+    expect($target->fresh()->company_id)->toBe($company->id);
+});
+
+it('update: 422 when company_id does not reference an existing company', function () {
+    $actor = userWithCompanySiteAbilities(['update']);
+    $target = CompanySite::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/company-sites/{$target->id}", ['company_id' => 999999])
+        ->assertStatus(422)->assertJsonValidationErrors('company_id');
 });
 
 it('update: 403 without company-sites.update', function () {

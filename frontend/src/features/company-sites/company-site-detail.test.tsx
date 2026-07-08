@@ -44,7 +44,7 @@ function site(overrides: Partial<CompanySiteDetailWithPermissions> = {}): Compan
     quotation_layout_id: null,
     quotation_header_id: null,
     quotation_footer_id: null,
-    company_id: null,
+    company: null,
     accounting_manager_id: null,
     store_id: null,
     company_type: null,

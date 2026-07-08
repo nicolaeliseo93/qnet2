@@ -26,6 +26,7 @@ final readonly class CreateCompanySiteData
     public function __construct(
         public string $name,
         public ?string $notes = null,
+        public ?int $companyId = null,
         public ?int $responsibleRdaId = null,
         public ?int $responsibleTicketsId = null,
         public ?int $responsibleValidationContractsId = null,
@@ -47,6 +48,7 @@ final readonly class CreateCompanySiteData
         return new self(
             name: (string) $data['name'],
             notes: $data['notes'] ?? null,
+            companyId: isset($data['company_id']) ? (int) $data['company_id'] : null,
             responsibleRdaId: isset($data['responsible_rda_id']) ? (int) $data['responsible_rda_id'] : null,
             responsibleTicketsId: isset($data['responsible_tickets_id']) ? (int) $data['responsible_tickets_id'] : null,
             responsibleValidationContractsId: isset($data['responsible_validation_contracts_id']) ? (int) $data['responsible_validation_contracts_id'] : null,
@@ -74,6 +76,7 @@ final readonly class CreateCompanySiteData
         return [
             'name' => $this->name,
             'notes' => $this->notes,
+            'company_id' => $this->companyId,
             'responsible_rda_id' => $this->responsibleRdaId,
             'responsible_tickets_id' => $this->responsibleTicketsId,
             'responsible_validation_contracts_id' => $this->responsibleValidationContractsId,

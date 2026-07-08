@@ -18,10 +18,11 @@ function baseFields(t: TFunction) {
       .min(1, t('companySites.form.nameRequired'))
       .max(NAME_MAX_LENGTH, t('companySites.form.nameMax')),
     notes: z.string().optional(),
-    // Settings tab: responsibles (users for-select ids), banking default and
-    // the two document progressives. The read-only "Altro"/quotation_* fields
-    // are display-only and intentionally NOT part of this schema (never
-    // submitted — see `company-site-form-payload.ts`).
+    // Settings tab: the owning company, responsibles (users for-select ids),
+    // banking default and the two document progressives. The read-only
+    // "Altro"/quotation_* fields are display-only and intentionally NOT part
+    // of this schema (never submitted — see `company-site-form-payload.ts`).
+    company_id: z.number().nullable(),
     responsible_rda_id: z.number().nullable(),
     responsible_tickets_id: z.number().nullable(),
     responsible_validation_contracts_id: z.number().nullable(),

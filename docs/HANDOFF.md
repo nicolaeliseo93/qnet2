@@ -2,6 +2,88 @@
 
 > Injected at session start. Update at every green state.
 
+## Feature — Company Sites: LOGO avatar column + editable COMPANY link — GREEN (2026-07-08)
+
+Two small additions to the Company Sites module, built by backend + frontend teammates in parallel
+(disjoint ownership backend/ vs frontend/src) against a frozen contract + independent verifier (all
+5 AC GREEN). On branch `feat/company-sites-module-complete` (NOT committed — awaiting user go).
+
+(A) LOGO avatar grid column, mirroring the Users `avatar_url` avatar column. Backend already emitted
+`logo_url` (base64 data URI|null) in `CompanySitesTableDefinition::mapRow` + `CompanySiteResource`;
+only 3 gaps closed: `logo_url` entry (FIRST column, width 56, not sortable/filterable) in
+`CompanySiteColumnCatalog`; a `LogoCell` in FE `column-renderers.tsx` reusing `<UserAvatar src=value
+name=data.name>`; i18n `companySites.columns.logo`.
+
+(B) `company_id` (società aziendale → companies) turned from a READ-ONLY "Altro" field into an
+EDITABLE, validated, displayed relationship. Column/FK/`company()` belongsTo/`$fillable`/service
+eager-load already existed. Changes: Authorization — removed `company_id` from `OTHER_FIELDS`, added
+`FieldDefinition('company_id','select','settings')` + `writableOrReadonly` ceiling (mirrors
+`responsible_rda_id`). Requests — `Rule::exists('companies','id')` (Store + Update `sometimes`). DTOs
+— `companyId`(+`companyIdSubmitted`). Resource — removed scalar `company_id` from `otherFields()`,
+added nested `company:{id,label(=denomination)}|null` in settings (like `responsibleRda`). Grid —
+new `company` column (sortable + `set` filter) replicating the Referents `referent_type` belongsTo
+pattern (mapRow `{id,name(=denomination)}|null`, whereHas-denomination filter, correlated-subquery
+sort, distinct-denomination `/values`). FE — schema `company_id: z.number().nullable()`, payload
+wiring (`buildCreate` unconditional / `buildUpdate` diffed via `original.company?.id`),
+`selectedCompanyItem` hydration, an `AsyncPaginatedSelect resource=COMPANIES_FOR_SELECT_RESOURCE` in
+the settings tab, removed the read-only entry from `company-site-other-fields.ts`.
+
+SEAM (intentional, both implemented): grid `company` = `{id,name}`; detail/resource nested `company`
+= `{id,label}`; write payload = top-level scalar `company_id`. i18n keys `companySites.columns.logo`,
+`columns.company`, `form.company` in BOTH it-/en-company-sites.ts.
+
+Verifier evidence: BACKEND `--filter=CompanySite` 82/82 (594 assert); neighbors
+`Registr|PersonalData|Referent` 328/328 (1835 assert, no regression); pint clean on all changed
+files. FRONTEND tsc clean, vitest 96/96 (company-sites+personal-data), eslint clean. Same TWO
+PRE-EXISTING branch failures persist unchanged and unrelated: `AbstractMigrationSourcePreviewTest`
+(roles.description migration-preview diff) and `pint --test` on `FieldCatalogueEndpointTest.php`
+(inherited from main, untouched here). KNOWN DEBT flagged by FE: `use-company-site-form.ts` now 362
+lines (>300 soft limit; already 351 before this change) — candidate for a future `selectedX`-memo
+extraction, out of scope here.
+
+## Feature — Personal-data QUICK-CREATE UX (Contacts + Addresses) — GREEN (2026-07-08)
+
+Improved the create-time UX of the shared personal-data toolkit, applied to ALL four consumers
+(registries, referents, company-sites, users). Built by frontend + backend teammates in parallel
+(disjoint ownership frontend/src vs backend/) + independent verifier (all 8 AC GREEN). On branch
+`feat/company-sites-module-complete` (NOT committed — awaiting user go).
+
+Mechanism: new `createMode?: boolean` prop (default false = today's CRUD, unchanged for edit + the
+user self-profile `personal-data-section.tsx`, which never passes it) on both `ContactsManager` and
+`AddressesManager`. Consumers pass `createMode={mode.type==='create'}`.
+
+CONTACTS create: 4 quick inline fields (email/phone/pec/fax) instead of the empty CRUD list — each
+controlled, bound to the FIRST draft of its type (`quick-contacts.ts` `firstOfType`/`quickOwnedKeys`),
+`is_primary:true`, per-type inline validation. New `contacts-create-fields.tsx`. The "Aggiungi
+contatto" dialog still adds extra contacts of any type; the CRUD list in createMode excludes the
+quick-owned rows (no double-show). EDIT = old CRUD unchanged.
+
+ADDRESSES create: exactly ONE inline address form (new `address-create-field.tsx`, fully controlled,
+no list/dialog/Add). Optional-until-touched — empty = valid (address optional); once any field is
+filled, `line1` + `city_id` (Città) become REQUIRED and block save. Site-type label consts moved to
+shared `address-site-type.ts` (DRY with the dialog `AddressForm`). EDIT = full CRUD unchanged.
+
+SAVE-GATE (create only): new `create-validation.ts` — `isCreateAddressValid(addresses)` (empty OR
+line1 && city_id!=null) + `areCreateContactsValid(contacts, t)` (each valid per buildContactSchema).
+Wired into onSubmit of ALL FOUR hooks (use-registry-form / use-referent-form / use-company-site-form
+/ use-user-form), `mode.type==='create'` only, edit path untouched. Error keys
+`personalData.section.addressIncomplete` / `contactsInvalid` (+ quick labels + `addresses.cityRequired`)
+added to it-/en-personal-data.ts in sync.
+
+BACKEND (create-only, legacy-safe): `ValidatesUserProfile.php` new overridable hook
+`addressCityRequired()` (default false) toggles `personal_data.addresses.*.city_id` required/nullable
+(wildcard rule → only fires when the address row exists). The four `Store*Request` override it to true;
+NO `Update*Request` overrides (legacy addresses without city still PATCH fine — same split already used
+by `profileRequired()`, zero shared-rule risk). `line1` stays unconditionally required. Wire shape
+unchanged; 422 lands at `personal_data.addresses.{i}.city_id`.
+
+Verifier evidence: FE tsc clean, eslint clean (19 files), vitest 190/190 on the touched feature dirs
+(full suite 668 pass / 3 fail = PRE-EXISTING `features/table/cell-renderers.test.tsx` i18n leak,
+identical on stashed clean tree). BE filtered 448/448 (2535 assert); full suite 1640 pass / 1 fail =
+PRE-EXISTING `AbstractMigrationSourcePreviewTest`. Pint clean on touched files; no lint/test/config
+files touched. NOTE: users form (`use-user-form.ts`) save-gate was the last piece added (initially
+out of the FE brief) — it is present and mirrors the other three exactly.
+
 ## Feature — Company Sites ANAGRAPHIC REWORK (flat cols → HasPersonalData) — GREEN (2026-07-08)
 
 User rejected the first cut: the `company_sites` migration flattened `email/fiscal_code/vat_number/

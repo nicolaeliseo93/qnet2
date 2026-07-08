@@ -57,6 +57,11 @@ class CompanySiteResource extends JsonResource
     private function settingsFields(): array
     {
         return [
+            'company_id' => $this->company_id,
+            'company' => $this->when(
+                $this->relationLoaded('company') && $this->company !== null,
+                fn (): array => ['id' => $this->company->id, 'label' => $this->company->denomination],
+            ),
             'responsible_rda_id' => $this->responsible_rda_id,
             'responsible_rda' => $this->when(
                 $this->relationLoaded('responsibleRda') && $this->responsibleRda !== null,
@@ -95,7 +100,6 @@ class CompanySiteResource extends JsonResource
     private function otherFields(): array
     {
         return [
-            'company_id' => $this->company_id,
             'accounting_manager_id' => $this->accounting_manager_id,
             'store_id' => $this->store_id,
             'company_type' => $this->company_type,

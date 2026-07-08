@@ -2,6 +2,7 @@
 
 use App\Models\Address;
 use App\Models\City;
+use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\Contact;
 use App\Models\Country;
@@ -72,7 +73,7 @@ function companySiteWithAddress(?City $city, array $siteAttrs = [], array $addre
 // AC-003 — columns config
 // ---------------------------------------------------------------------------
 
-it('returns the 9 columns in order with the declared flags, 403 without viewAny', function () {
+it('returns the 11 columns in order with the declared flags, 403 without viewAny', function () {
     $actor = userWithCompanySiteAbilities([]);
     Sanctum::actingAs($actor);
     $this->getJson('/api/tables/company-sites/columns')->assertForbidden();
@@ -91,13 +92,17 @@ it('returns the 9 columns in order with the declared flags, 403 without viewAny'
         ->and($data['searchable'])->toBe(['name']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['id', 'is_default', 'name', 'primary_contact', 'city', 'province', 'region', 'postal_code', 'created_at']);
+    expect($ids)->toBe(['logo_url', 'id', 'is_default', 'name', 'company', 'primary_contact', 'city', 'province', 'region', 'postal_code', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
-    expect($columns['is_default']['type'])->toBe('boolean')
+    expect($columns['logo_url']['sortable'])->toBeFalse()
+        ->and($columns['logo_url']['filterable'])->toBeFalse()
+        ->and($columns['is_default']['type'])->toBe('boolean')
         ->and($columns['is_default']['filterType'])->toBe('set')
         ->and($columns['is_default']['visible'])->toBeTrue()
         ->and($columns['name']['filterType'])->toBe('text')
+        ->and($columns['company']['filterType'])->toBe('set')
+        ->and($columns['company']['sortable'])->toBeTrue()
         ->and($columns['primary_contact']['type'])->toBe('tags')
         ->and($columns['primary_contact']['sortable'])->toBeFalse()
         ->and($columns['primary_contact']['filterable'])->toBeFalse()
@@ -128,10 +133,11 @@ it('hides action keys the user has no permission for', function () {
 // AC-004 — rows shape (derived contact/geo/postal_code), actions, no N+1
 // ---------------------------------------------------------------------------
 
-it('rows expose is_default, the derived primary_contact/geo/postal_code fields, logo_url and per-row actions', function () {
+it('rows expose is_default, the derived primary_contact/geo/postal_code/company fields, logo_url and per-row actions', function () {
     $actor = userWithCompanySiteAbilities(['viewAny', 'view', 'update', 'delete']);
     $geo = companySiteTableGeoChain('Milano', 'Milano', 'Lombardia', 'Italia');
-    $target = companySiteWithAddress($geo['city'], ['name' => 'Finance Site', 'is_default' => true], ['postal_code' => '20100']);
+    $company = Company::factory()->create(['denomination' => 'Acme Holding']);
+    $target = companySiteWithAddress($geo['city'], ['name' => 'Finance Site', 'is_default' => true, 'company_id' => $company->id], ['postal_code' => '20100']);
     Contact::factory()->email()->primary()->for($target->personalData, 'contactable')->create(['value' => 'finance@acme.test']);
     Sanctum::actingAs($actor);
 
@@ -146,8 +152,66 @@ it('rows expose is_default, the derived primary_contact/geo/postal_code fields, 
         ->and($row['region'])->toBe('Lombardia')
         ->and($row['postal_code'])->toBe('20100')
         ->and($row)->toHaveKey('logo_url')
+        ->and($row['company'])->toBe(['id' => $company->id, 'name' => 'Acme Holding'])
         ->and(collect($row['primary_contact'])->pluck('value'))->toContain('finance@acme.test')
         ->and($row['actions'])->toEqualCanonicalizing(['view', 'edit', 'delete']);
+});
+
+it('a site with no company has a null company row field', function () {
+    $actor = userWithCompanySiteAbilities(['viewAny']);
+    CompanySite::factory()->create(['name' => 'No Company Site']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/company-sites/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('name', 'No Company Site');
+
+    expect($row['company'])->toBeNull();
+});
+
+it('filters rows by the derived company set filter (whereHas by denomination)', function () {
+    $actor = userWithCompanySiteAbilities(['viewAny']);
+    $acme = Company::factory()->create(['denomination' => 'Acme SpA']);
+    $globex = Company::factory()->create(['denomination' => 'Globex SpA']);
+    CompanySite::factory()->create(['name' => 'Acme Site', 'company_id' => $acme->id]);
+    CompanySite::factory()->create(['name' => 'Globex Site', 'company_id' => $globex->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/company-sites/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['company' => ['filterType' => 'set', 'values' => ['Acme SpA']]],
+    ])->assertOk();
+
+    $names = collect($response->json('items'))->pluck('name');
+    expect($names->all())->toBe(['Acme Site']);
+});
+
+it('sorts rows by the derived company denomination via a correlated subquery', function () {
+    $actor = userWithCompanySiteAbilities(['viewAny']);
+    $zed = Company::factory()->create(['denomination' => 'Zeta Corp']);
+    $amy = Company::factory()->create(['denomination' => 'Amy Corp']);
+    CompanySite::factory()->create(['name' => 'Z-site', 'company_id' => $zed->id]);
+    CompanySite::factory()->create(['name' => 'A-site', 'company_id' => $amy->id]);
+    Sanctum::actingAs($actor);
+
+    $names = $this->postJson('/api/tables/company-sites/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'company', 'sort' => 'asc']],
+    ])->assertOk()->json('items.*.name');
+
+    expect(array_search('A-site', $names, true))->toBeLessThan(array_search('Z-site', $names, true));
+});
+
+it('resolves distinct company denominations via /values', function () {
+    $actor = userWithCompanySiteAbilities(['viewAny']);
+    $acme = Company::factory()->create(['denomination' => 'Acme SpA']);
+    CompanySite::factory()->create(['company_id' => $acme->id]);
+    CompanySite::factory()->create(); // no company
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/company-sites/values', ['columnId' => 'company'])->assertOk();
+    expect($response->json('data.values'))->toBe(['Acme SpA']);
 });
 
 it('a site with no card has empty primary_contact and null derived geo/postal_code fields', function () {

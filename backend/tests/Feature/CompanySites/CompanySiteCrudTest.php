@@ -2,6 +2,7 @@
 
 use App\Models\Address;
 use App\Models\City;
+use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\CompanySiteBank;
 use App\Models\Country;
@@ -93,6 +94,31 @@ it('show: 200 with the full data shape, personal_data (card+address) + banks + p
     expect($response->json('permissions'))->toHaveKeys(['resource', 'fields', 'actions']);
 });
 
+it('show: exposes company_id and the nested company reference when set', function () {
+    $actor = userWithCompanySiteAbilities(['view']);
+    $company = Company::factory()->create(['denomination' => 'Acme Holding SpA']);
+    $target = CompanySite::factory()->create(['company_id' => $company->id]);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/company-sites/{$target->id}")
+        ->assertOk()
+        ->assertJsonPath('data.company_id', $company->id)
+        ->assertJsonPath('data.company.id', $company->id)
+        ->assertJsonPath('data.company.label', 'Acme Holding SpA');
+});
+
+it('show: company is absent from the payload when the site has no company', function () {
+    $actor = userWithCompanySiteAbilities(['view']);
+    $target = CompanySite::factory()->create(['company_id' => null]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/company-sites/{$target->id}")
+        ->assertOk()
+        ->assertJsonPath('data.company_id', null);
+
+    expect($response->json('data'))->not->toHaveKey('company');
+});
+
 it('show: 403 without company-sites.view', function () {
     $actor = userWithCompanySiteAbilities([]);
     $target = CompanySite::factory()->create();
@@ -148,6 +174,27 @@ it('create: 201 without personal_data/banks (card is null)', function () {
         ->assertCreated()
         ->assertJsonPath('data.personal_data', null)
         ->assertJsonPath('data.banks', []);
+});
+
+it('create: 201 + persists company_id when it references an existing company', function () {
+    $actor = userWithCompanySiteAbilities(['create']);
+    $company = Company::factory()->create(['denomination' => 'Acme Holding SpA']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/company-sites', ['name' => 'Sede Est', 'company_id' => $company->id])
+        ->assertCreated()
+        ->assertJsonPath('data.company_id', $company->id)
+        ->assertJsonPath('data.company.label', 'Acme Holding SpA');
+
+    $this->assertDatabaseHas('company_sites', ['name' => 'Sede Est', 'company_id' => $company->id]);
+});
+
+it('create: 422 when company_id does not reference an existing company', function () {
+    $actor = userWithCompanySiteAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/company-sites', ['name' => 'X', 'company_id' => 999999])
+        ->assertStatus(422)->assertJsonValidationErrors('company_id');
 });
 
 it('create: 422 when name is missing', function () {

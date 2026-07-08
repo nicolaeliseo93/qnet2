@@ -8,7 +8,6 @@ import type { CompanySiteDetail } from '@/features/company-sites/types'
  * `OTHER_FIELD_KEYS` for the tab's visibility gate without pulling in JSX.
  */
 export const OTHER_FIELDS = [
-  { key: 'company_id', labelKey: 'companyId' },
   { key: 'accounting_manager_id', labelKey: 'accountingManagerId' },
   { key: 'store_id', labelKey: 'storeId' },
   { key: 'company_type', labelKey: 'companyType' },

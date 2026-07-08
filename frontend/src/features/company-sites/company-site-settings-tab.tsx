@@ -1,6 +1,6 @@
 import type { ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Landmark, Settings, Users } from 'lucide-react'
+import { Building2, Landmark, Settings, Users } from 'lucide-react'
 import type { Control } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { MetaField } from '@/features/authorization/MetaField'
+import { COMPANIES_FOR_SELECT_RESOURCE } from '@/features/companies/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import type { ForSelectItem } from '@/features/for-select/types'
 import { CompanySiteReadonlyField } from '@/features/company-sites/company-site-readonly-field'
@@ -28,6 +29,7 @@ interface SettingsTabContentProps {
   /** Read-only display of the site's `quotation_*` ids (edit mode only). */
   companySite: CompanySiteDetail | null
   banksDraft: BankDraft[]
+  selectedCompanyItem: ForSelectItem | null
   selectedResponsibleRdaItem: ForSelectItem | null
   selectedResponsibleTicketsItem: ForSelectItem | null
   selectedResponsibleValidationContractsItem: ForSelectItem | null
@@ -47,16 +49,17 @@ function numberFieldProps(
 }
 
 /**
- * Impostazioni tab: the four users-backed responsibles, the client-side
- * `default_bank_id` select (populated exclusively from the Banche tab's
- * buffer — spec 0020), the two document progressives, and the always
- * read-only `quotation_*` ids (backend ceiling forces them readonly
+ * Impostazioni tab: the owning company, the four users-backed responsibles,
+ * the client-side `default_bank_id` select (populated exclusively from the
+ * Banche tab's buffer — spec 0020), the two document progressives, and the
+ * always read-only `quotation_*` ids (backend ceiling forces them readonly
  * regardless of role, so they use `CompanySiteReadonlyField`, not `MetaField`).
  */
 export function SettingsTabContent({
   control,
   companySite,
   banksDraft,
+  selectedCompanyItem,
   selectedResponsibleRdaItem,
   selectedResponsibleTicketsItem,
   selectedResponsibleValidationContractsItem,
@@ -97,6 +100,40 @@ export function SettingsTabContent({
 
   return (
     <>
+      <FormSection
+        icon={Building2}
+        title={t('companySites.form.sections.company.title')}
+        description={t('companySites.form.sections.company.description')}
+      >
+        <MetaField
+          control={control}
+          name="company_id"
+          metaKey="company_id"
+          label={t('companySites.form.company')}
+        >
+          {({ field, disabled }) => (
+            <FormControl>
+              <AsyncPaginatedSelect
+                resource={COMPANIES_FOR_SELECT_RESOURCE}
+                value={field.value}
+                onChange={field.onChange}
+                selectedItem={selectedCompanyItem}
+                disabled={disabled}
+                labels={{
+                  placeholder: t('companySites.form.companyPlaceholder'),
+                  searchPlaceholder: t('companySites.form.companySearch'),
+                  empty: t('companySites.form.companyEmpty'),
+                  error: t('companySites.form.companyError'),
+                  clearLabel: t('common.clear'),
+                  triggerLabel: t('companySites.form.company'),
+                  retry: t('common.retry'),
+                }}
+              />
+            </FormControl>
+          )}
+        </MetaField>
+      </FormSection>
+
       <FormSection
         icon={Users}
         title={t('companySites.form.sections.responsibles.title')}

@@ -56,8 +56,9 @@ export interface CompanySiteDetail {
   quotation_layout_id: number | null
   quotation_header_id: number | null
   quotation_footer_id: number | null
+  /** The company (società) this site belongs to, editable in the Impostazioni tab. */
+  company: { id: number; label: string } | null
   // "Altro" section (read-only in this spec): plain ids/scalars, no nested refs.
-  company_id: number | null
   accounting_manager_id: number | null
   store_id: number | null
   company_type: number | null
@@ -119,6 +120,7 @@ export interface CreateCompanySitePayload {
   personal_data: PersonalDataPayload
   banks?: CreateCompanySiteBankPayload[]
   default_bank_id?: number | null
+  company_id?: number | null
   responsible_rda_id?: number | null
   responsible_tickets_id?: number | null
   responsible_validation_contracts_id?: number | null
@@ -141,6 +143,7 @@ export interface UpdateCompanySitePayload {
   personal_data?: PersonalDataPayload
   banks?: CreateCompanySiteBankPayload[]
   default_bank_id?: number | null
+  company_id?: number | null
   responsible_rda_id?: number | null
   responsible_tickets_id?: number | null
   responsible_validation_contracts_id?: number | null

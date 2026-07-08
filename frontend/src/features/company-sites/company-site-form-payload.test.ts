@@ -52,6 +52,7 @@ function card(overrides: Partial<PersonalDataCard> = {}): PersonalDataCard {
 const formValues: CompanySiteFormValues = {
   name: 'Sede Nord',
   notes: '',
+  company_id: null,
   responsible_rda_id: 7,
   responsible_tickets_id: null,
   responsible_validation_contracts_id: null,
@@ -90,7 +91,7 @@ function original(
     quotation_layout_id: null,
     quotation_header_id: null,
     quotation_footer_id: null,
-    company_id: null,
+    company: null,
     accounting_manager_id: null,
     store_id: null,
     company_type: null,
@@ -172,8 +173,12 @@ describe('buildCreatePayload', () => {
   it('never includes an "Altro" field or is_default', () => {
     const payload = buildCreatePayload(formValues, banks, companyDraft())
     expect('status' in payload).toBe(false)
-    expect('company_id' in payload).toBe(false)
     expect('is_default' in payload).toBe(false)
+  })
+
+  it('carries the owning company id (settings field, not an "Altro" field)', () => {
+    const payload = buildCreatePayload({ ...formValues, company_id: 3 }, banks, companyDraft())
+    expect(payload.company_id).toBe(3)
   })
 })
 
@@ -223,14 +228,21 @@ describe('buildUpdatePayload', () => {
   })
 
   it('never sends an "Altro" field or is_default even when the original differs', () => {
-    const payload = buildUpdatePayload(
-      formValues,
-      original({ status: 3, company_id: 9 }),
+    const payload = buildUpdatePayload(formValues, original({ status: 3 }), banks, companyDraft())
+    expect('status' in payload).toBe(false)
+    expect('is_default' in payload).toBe(false)
+  })
+
+  it('includes the owning company id only when it changed (settings field, not an "Altro" field)', () => {
+    const unchanged = buildUpdatePayload(formValues, original(), banks, companyDraft())
+    expect('company_id' in unchanged).toBe(false)
+
+    const changed = buildUpdatePayload(
+      { ...formValues, company_id: 5 },
+      original({ company: { id: 3, label: 'ACME' } }),
       banks,
       companyDraft(),
     )
-    expect('status' in payload).toBe(false)
-    expect('company_id' in payload).toBe(false)
-    expect('is_default' in payload).toBe(false)
+    expect(changed.company_id).toBe(5)
   })
 })

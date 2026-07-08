@@ -14,7 +14,11 @@ namespace App\Tables\CompanySites;
  * address, handled by CompanySiteAddressColumns. Email/vat_number/phone are no
  * longer real columns (they live on the card / its contacts), so they are not
  * grid columns of their own — `primary_contact` surfaces the contact channels
- * instead.
+ * instead. `logo_url` is a derived data: URI (mirrors UserColumnCatalog's
+ * `avatar_url`), display-only. `company` has no real DB column of its own
+ * either — it is the owning Company's denomination, derived from the
+ * `company_id` FK, handled by CompanySitesTableDefinition (mirrors Referents'
+ * `referent_type`).
  */
 final class CompanySiteColumnCatalog
 {
@@ -24,6 +28,21 @@ final class CompanySiteColumnCatalog
     public static function columns(): array
     {
         return [
+            [
+                // Logo, embedded inline as a data: URI; the frontend renders it
+                // via a custom avatar cell (not sortable nor filterable — it is
+                // a derived value, not a real column). Mirrors UserColumnCatalog's
+                // avatar_url.
+                'id' => 'logo_url',
+                'label' => 'companySites.columns.logo',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => false,
+                'filterable' => false,
+                'filterType' => null,
+                // Narrow, fixed default: the cell only holds a small logo.
+                'width' => 56,
+            ],
             [
                 'id' => 'id',
                 'label' => 'companySites.columns.id',
@@ -54,6 +73,19 @@ final class CompanySiteColumnCatalog
                 'filterType' => 'text',
                 // Global quick-search spans this real column (spec 0009).
                 'searchable' => true,
+            ],
+            [
+                // The owning Company's denomination, derived from the
+                // company() belongsTo relation. Sortable via a correlated
+                // subquery, set-filterable by name — mirrors Referents'
+                // `referent_type`.
+                'id' => 'company',
+                'label' => 'companySites.columns.company',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
             ],
             [
                 // The card's primary contacts (shared PrimaryContactColumn),
@@ -129,6 +161,7 @@ final class CompanySiteColumnCatalog
         return [
             ['columnId' => 'is_default', 'type' => 'set'],
             ['columnId' => 'name', 'type' => 'text'],
+            ['columnId' => 'company', 'type' => 'set'],
             // Geo set filters: options resolved dynamically in optionsFor().
             ['columnId' => 'city', 'type' => 'set'],
             ['columnId' => 'province', 'type' => 'set'],

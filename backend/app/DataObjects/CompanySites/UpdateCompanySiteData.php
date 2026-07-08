@@ -25,6 +25,8 @@ final readonly class UpdateCompanySiteData
         public ?string $name = null,
         public ?string $notes = null,
         public bool $notesSubmitted = false,
+        public ?int $companyId = null,
+        public bool $companyIdSubmitted = false,
         public ?int $responsibleRdaId = null,
         public bool $responsibleRdaIdSubmitted = false,
         public ?int $responsibleTicketsId = null,
@@ -54,6 +56,8 @@ final readonly class UpdateCompanySiteData
             name: array_key_exists('name', $data) ? (string) $data['name'] : null,
             notes: array_key_exists('notes', $data) ? $data['notes'] : null,
             notesSubmitted: array_key_exists('notes', $data),
+            companyId: self::nullableInt($data, 'company_id'),
+            companyIdSubmitted: array_key_exists('company_id', $data),
             responsibleRdaId: self::nullableInt($data, 'responsible_rda_id'),
             responsibleRdaIdSubmitted: array_key_exists('responsible_rda_id', $data),
             responsibleTicketsId: self::nullableInt($data, 'responsible_tickets_id'),
@@ -90,6 +94,7 @@ final readonly class UpdateCompanySiteData
 
         foreach ([
             'notes' => ['notesSubmitted', 'notes'],
+            'company_id' => ['companyIdSubmitted', 'companyId'],
             'responsible_rda_id' => ['responsibleRdaIdSubmitted', 'responsibleRdaId'],
             'responsible_tickets_id' => ['responsibleTicketsIdSubmitted', 'responsibleTicketsId'],
             'responsible_validation_contracts_id' => ['responsibleValidationContractsIdSubmitted', 'responsibleValidationContractsId'],
