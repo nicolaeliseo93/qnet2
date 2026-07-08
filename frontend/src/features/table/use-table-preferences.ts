@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { ColumnState } from 'ag-grid-community'
+import { SELECTION_COLUMN_ID, type ColumnState } from 'ag-grid-community'
 import {
   resetTablePreferences,
   saveTablePreferences,
@@ -12,6 +12,10 @@ import type { ColumnPreferenceInput } from '@/features/table/types'
  *
  * Pure and side-effect free so it is unit-testable without a live grid:
  *  - the synthetic row-actions column is excluded (it is not a real column);
+ *  - AG Grid's synthetic selection column (`SELECTION_COLUMN_ID`, present in the
+ *    column state whenever checkbox selection is enabled) is excluded too: it is
+ *    not a catalogue column, so sending it makes the backend reject the whole
+ *    payload with `columns.0.id is invalid`;
  *  - `order` is the column's current display position;
  *  - `visible` is the inverse of AG Grid's `hide`;
  *  - `width` is sent only when it is a real number (omitted, never null, so it
@@ -25,7 +29,11 @@ export function toColumnPreferences(
   actionsColumnId: string,
 ): ColumnPreferenceInput[] {
   return state
-    .filter((column) => column.colId !== actionsColumnId)
+    .filter(
+      (column) =>
+        column.colId !== actionsColumnId &&
+        column.colId !== SELECTION_COLUMN_ID,
+    )
     .map((column, index) => {
       const preference: ColumnPreferenceInput = {
         id: column.colId,

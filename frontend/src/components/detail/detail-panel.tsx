@@ -51,7 +51,7 @@ export function DetailHero({ media, title, subtitle, badges, className }: Detail
   return (
     <header
       className={cn(
-        'relative isolate overflow-hidden border-b px-6 pt-9 pb-5',
+        'relative isolate shrink-0 overflow-hidden border-b px-6 pt-9 pb-5',
         'bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent',
         className,
       )}

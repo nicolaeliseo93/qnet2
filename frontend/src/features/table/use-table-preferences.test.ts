@@ -1,4 +1,4 @@
-import type { ColumnState } from 'ag-grid-community'
+import { SELECTION_COLUMN_ID, type ColumnState } from 'ag-grid-community'
 import { describe, expect, it } from 'vitest'
 import { toColumnPreferences } from '@/features/table/use-table-preferences'
 
@@ -34,6 +34,21 @@ describe('toColumnPreferences', () => {
     const result = toColumnPreferences(state, ACTIONS)
 
     expect(result.map((column) => column.id)).toEqual(['name'])
+  })
+
+  it('excludes AG Grid synthetic selection column, keeping order 0-based', () => {
+    const state = [
+      columnState({ colId: SELECTION_COLUMN_ID, hide: false }),
+      columnState({ colId: 'name', hide: false }),
+      columnState({ colId: 'email', hide: false }),
+    ]
+
+    const result = toColumnPreferences(state, ACTIONS)
+
+    expect(result).toEqual([
+      { id: 'name', visible: true, order: 0 },
+      { id: 'email', visible: true, order: 1 },
+    ])
   })
 
   it('omits width when it is not a number (never sends null)', () => {
