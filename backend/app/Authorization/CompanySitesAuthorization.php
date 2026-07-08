@@ -27,7 +27,6 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
      * @var array<string, string>
      */
     private const array OTHER_FIELDS = [
-        'company_id' => 'select',
         'accounting_manager_id' => 'select',
         'store_id' => 'number',
         'company_type' => 'number',
@@ -96,6 +95,7 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('personal_data.sdi_code', 'text', 'personal_data'),
             new FieldDefinition('personal_data.contacts', 'collection', 'personal_data'),
             new FieldDefinition('personal_data.addresses', 'collection', 'personal_data'),
+            new FieldDefinition('company_id', 'select', 'settings'),
             new FieldDefinition('responsible_rda_id', 'select', 'settings'),
             new FieldDefinition('responsible_tickets_id', 'select', 'settings'),
             new FieldDefinition('responsible_validation_contracts_id', 'select', 'settings'),
@@ -140,6 +140,7 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
             'personal_data.sdi_code' => $this->writableOrReadonly($actor, $model),
             'personal_data.contacts' => $this->writableOrReadonly($actor, $model),
             'personal_data.addresses' => $this->writableOrReadonly($actor, $model),
+            'company_id' => $this->writableOrReadonly($actor, $model),
             'responsible_rda_id' => $this->writableOrReadonly($actor, $model),
             'responsible_tickets_id' => $this->writableOrReadonly($actor, $model),
             'responsible_validation_contracts_id' => $this->writableOrReadonly($actor, $model),

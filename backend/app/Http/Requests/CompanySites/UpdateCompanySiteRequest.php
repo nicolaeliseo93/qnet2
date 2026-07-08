@@ -54,6 +54,7 @@ class UpdateCompanySiteRequest extends FormRequest
             'banks.*.notes' => ['nullable', 'string', 'max:191'],
             'default_bank_id' => ['sometimes', 'nullable', 'integer'],
 
+            'company_id' => ['sometimes', 'nullable', 'integer', Rule::exists('companies', 'id')],
             'responsible_rda_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')],
             'responsible_tickets_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')],
             'responsible_validation_contracts_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')],
