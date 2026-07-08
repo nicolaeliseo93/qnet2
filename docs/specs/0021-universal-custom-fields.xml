@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0021 — Universal Custom Fields (campi personalizzati agnostici, backend-driven).
+  Contract-first. Trasforma il framework in piattaforma configurabile: ogni modulo
+  (presente e futuro) puo' essere esteso con N campi personalizzati SENZA nuove
+  migration/model/controller/request/resource/API/frontend per campo. La definizione
+  di un campo vive nel DB ed e' gestita da un pannello admin.
+
+  Decisioni utente approvate (AskUserQuestion, 2026-07-08):
+  - Storage = JSON-per-entita' + registro metadati + indicizzazione opt-in.
+    (NON EAV riga-per-valore: nel workload griglia SSRM filtrare k campi = 1 join JSON
+     vs k join EAV; l'EAV prodotti resta separato e scoped.)
+  - Tipi MVP = text, textarea, integer, decimal, boolean, enum (select/multiselect/
+    radio/badge), relation (1-1 / 1-N / N-N via ForSelect).
+  - Procedere con spec formale + piano microtask.
+
+  Principio architetturale: il sistema si innesta UNA VOLTA nelle astrazioni generiche
+  tramite DECORATOR ai due registry (TableRegistry, AuthorizationRegistry), cosi' ogni
+  modolo eredita i custom field a costo zero. Questo e' un cambiamento intenzionale e
+  autorizzato ai motori generici (a differenza di spec 0017 che li congelava): e' il
+  senso stesso di "core feature".
+
+  Naming: greenfield, identificatori INGLESE (engineering.md 1.2).
+  Domain/resource/permessi (kebab): custom-fields.
+  Tabelle (snake): custom_field_definitions, custom_field_options, custom_field_values.
+  Morph alias: custom_field, custom_field_option.
+-->
+<spec id="0021-universal-custom-fields" status="draft" owner="tu" date="2026-07-08">
+
+  <goal>
+    Sistema universale di campi personalizzati: da un pannello admin si definisce un campo
+    (tipo, label, validazioni, permessi per-ruolo, gruppo/tab/ordine, opzioni enum, relazione)
+    e da quel momento il campo compare AUTOMATICAMENTE nel form Create/Edit, nel dettaglio View,
+    nella griglia AG Grid (colonna/filtro/sort/search/export) e nelle API di qualunque modulo
+    bersaglio, senza scrivere codice. Il frontend non conosce i campi: riceve uno schema dal
+    backend e lo renderizza. Aggiungere un nuovo TIPO di campo richiede solo una classe handler
+    backend + un componente frontend registrati. Progettato per milioni di record e molti campi.
+  </goal>
+
+  <context>
+    Verificato sul repo (nomi reali). Il framework e' gia' backend-driven: le griglie leggono
+    colonne/filtri da `GET /tables/{domain}/columns` e mappano le righe via `mapRow`; il form
+    e' metadata-gated via `GET /meta/{resource}` + `<MetaField>`; i permessi per-ruolo/campo
+    esistono (`role_field_permissions`). I seam per iniettare i custom field ci sono gia'.
+
+    Riuso obbligatorio (backend):
+    - Envelope: `App\Http\Controllers\Abstract\BaseApiController` (`ok`, `okWithPermissions`,
+      `paginatedResponse`, `noContent`, `fail`, `handleControllerException`). QUI si inietta
+      `custom_fields` nell'output di dettaglio (vedi sotto), una volta sola.
+    - Table SSRM: `App\Tables\AbstractTableDefinition` (+ `App\Tables\TableDefinition`), registry
+      `App\Tables\TableRegistry` (da `config/tables.php`). Colonne derivate via hook
+      `applyDerivedFilter`/`applyDerivedSort`/`distinctValues`/`applyDerivedSearch`; allow-list
+      sortable/filterable/searchable DERIVATE dai flag di colonna. `TableQueryBuilder` e'
+      injection-safe (solo bound params, mai whereRaw su input) — vincolo da rispettare.
+    - Authorization metadata (spec 0004/0006): `App\Authorization\AbstractResourceAuthorization`
+      (`fields()`, `fieldPermissionCeiling()`; `fieldPermissions()` e' FINAL = intersect(ceiling,
+      matrice DB)), registry `App\Authorization\AuthorizationRegistry` (da `config/authorization.php`),
+      endpoint `GET /meta/{resource}` (`MetaController`). Value objects `FieldDefinition`,
+      `FieldPermission`. Matrice per-ruolo: tabella `role_field_permissions` + `FieldPermissionRepository`
+      (`forRoleIds`, memoizzato), validata contro `resolve($resource)->fields()` in
+      `ValidatesFieldPermissionsMatrix` → i custom field, comparendo in `fields()`, entrano
+      automaticamente nella matrice e nel gate write-path.
+    - Write-path: `App\Http\Requests\Concerns\EnforcesFieldPermissions` (gestisce i campi NATIVI).
+      I custom field usano un pipeline dedicato (vedi ingestion) ma la stessa semantica.
+    - Model base `App\Models\Abstracts\BaseModel` (fillable via `#[Fillable]`, `casts()`,
+      `LogsModelActivity`). QUI si aggiunge il trait `HasCustomFields` (una volta) → ogni model
+      registrato diventa custom-fieldable. Morph map stretta in `AppServiceProvider::enforceMorphMap`.
+    - Policy: `App\Policies\Abstracts\BasePolicy`; `permissions:sync` scopre le Policy via glob
+      (nessuna lista manuale). ForSelect: `App\Http\Resources\Abstracts\ForSelectResource`
+      (`{id,label,subtitle?,avatar?}`) + endpoint `{resource}/for-select` per le relazioni.
+    - Config-driven: `config/tables.php`, `config/authorization.php`, `config/navigation.php`,
+      `config/config.php` (form_enums), nuovo `config/custom-fields.php`.
+
+    Riuso obbligatorio (frontend):
+    - Motori generici INVARIATI nella struttura: `features/table/table-view.tsx`,
+      `components/data-table/`, `features/table/ssrm-datasource.ts`. Estensione minima e
+      generica del fallback renderer per colonne `source:'custom'`.
+    - Form metadata-driven: `features/authorization/` (`ResourcePermissionsProvider`,
+      `useResourcePermissions`, `<MetaField>`, `useResourceMeta`). Primitivi campo:
+      `components/ui/async-paginated-select.tsx` / `async-paginated-multi-select.tsx` (relazioni),
+      `useEnumOptions` (enum), pattern Zod-factory. PRIOR ART diretta da generalizzare:
+      `features/products/ProductDynamicAttributeFields` (mappa data_type→controllo dinamicamente).
+    - `<Can>` (`features/auth/can.tsx`), `useAbilities`. i18n per-modulo `i18n/locales/{en,it}-*.ts`.
+
+    Decisioni approvate: storage JSON-ibrido; decorator ai registry (zero codice per-modulo su
+    read/grid/meta/permessi); write via middleware→bag→trait (zero codice per-modulo su create/update);
+    permessi per-ruolo riusando `role_field_permissions`; entity_type = domain key derivato dai
+    registry esistenti (ogni modulo con TableDefinition+Authorization e' custom-fieldable di default);
+    promozione a colonna generata/indice = opt-in (`is_indexed`), lane finale opzionale;
+    EAV prodotti fuori scope (assorbibile in futuro).
+  </context>
+
+  <scope>
+    <in>
+      <!-- STORAGE + METADATA -->
+      <item>Migrazione `custom_field_definitions` (id, entity_type string idx, `key` string, type string, label string, description text null, help_text text null, placeholder string null, icon string null, `group` string null, tab string null, sort_order int default 0, default_value json null, config json null, validation json null, relation_target json null, is_indexed bool default false, is_active bool default true, timestamps; unique[entity_type,key]; index[entity_type,is_active,sort_order]).</item>
+      <item>Migrazione `custom_field_options` (id, definition_id FK cascade, value string, label string, color string null, icon string null, sort_order int default 0, is_default bool default false, timestamps; unique[definition_id,value]).</item>
+      <item>Migrazione `custom_field_values` (id, entity_type string, entity_id unsignedBigInteger, `values` json, timestamps; unique[entity_type,entity_id]; index[entity_type,entity_id]). UNA riga per record: `values` = mappa {key: valore tipizzato}. Relazioni N-N come array di id nel JSON.</item>
+      <item>Model `CustomFieldDefinition` (fillable dei campi sopra; cast default_value/config/validation/relation_target→array, is_indexed/is_active→bool; relazioni options() hasMany ordinata; LogsModelActivity; morph 'custom_field'), `CustomFieldOption` (fillable, cast is_default→bool, sort; morph 'custom_field_option'), `CustomFieldValue` (fillable entity_type/entity_id/values; cast values→array; NO LogsModelActivity). Factory per i tre.</item>
+
+      <!-- FIELD TYPE STRATEGY (estendibilita' OCP) -->
+      <item>Interfaccia `App\CustomFields\Types\FieldTypeHandler`: `key()`, `storageType()` (string|integer|decimal|boolean|json), `validationRules(CustomFieldDefinition): array`, `normalizeForStore(mixed): mixed`, `resolveForRead(mixed, CustomFieldDefinition): mixed`, `columnType(): string`, `filterType(): string`, `applyFilter(Builder, string $jsonPath, array $filter): void`, `applySort(Builder, string $jsonPath, string $direction): void`, `distinctValues(Builder, string $jsonPath): array`, `toMeta(CustomFieldDefinition): array` (descrittore ricco per il FE). Handler MVP: `TextFieldType`, `TextareaFieldType`, `IntegerFieldType`, `DecimalFieldType`, `BooleanFieldType`, `EnumFieldType` (config display=select|multiselect|radio|badge; multi via array), `RelationFieldType` (relation_target={entity_type,cardinality:one|many,for_select_resource}). Registry `App\CustomFields\FieldTypeRegistry` da `config/custom-fields.php` `types`.</item>
+
+      <!-- ENTITY REGISTRY + PROVIDER -->
+      <item>`App\CustomFields\CustomFieldEntityRegistry`: risolve entity_type↔{model_class, resource, domain} derivando da `config/tables.php` (domain→TableDefinition→modelClass()); un'entita' e' custom-fieldable se ha sia TableDefinition sia Authorization registrati. `entities(): array` (per il picker admin, con label i18n), `isCustomFieldable(string): bool`, `entityTypeForModel(Model): ?string`. Costruzione mappa memoizzata/cache.</item>
+      <item>`App\CustomFields\CustomFieldProvider`: per un entity_type restituisce le `CustomFieldDefinition` attive (cache-ate, invalidate su create/update/delete definizione). Namespacing chiavi campo: `custom.<key>` (evita collisione con campi nativi). Metodi: `definitionsFor(entityType): Collection`, `fieldDefinitions(entityType): FieldDefinition[]` (per Authorization), `columns(entityType): array` (per Table).</item>
+
+      <!-- INNESTO READ/GRID/META/PERMESSI (decorator, zero codice per-modulo) -->
+      <item>`App\Authorization\CustomFieldAwareAuthorization` (decorator di `ResourceAuthorization`): `fields()` = inner + `CustomFieldProvider::fieldDefinitions()`; `fieldPermissions(User,?Model)` = inner (final, sui nativi) UNITO ai permessi dei custom field calcolati con la stessa matrice DB (`role_field_permissions` su resource+`custom.<key>`) e ceiling dalla definizione (default visibleEditable; required da validation; super-admin bypass). `AuthorizationRegistry::resolve()` avvolge nel decorator SOLO se l'entita' e' custom-fieldable (1 riga nel registry).</item>
+      <item>`App\Tables\CustomFieldAwareTableDefinition` (decorator di `TableDefinition`): `columns()` = inner + colonne custom (id=`custom.<key>`, `source:'custom'`, flag da handler: type/filterType/sortable/filterable/searchable/visible=false di default); `baseQuery()` = inner + LEFT JOIN/eager-load di `custom_field_values` (una join a prescindere dal numero di campi); `mapRow()` = inner + merge dei valori JSON risolti per handler (batch-hydrate label relazioni per pagina → no N+1); hook derivati per gli id `custom.*` delegati all'handler su JSON path (bound, allow-list = chiavi definite → injection-safe), fall-through all'inner per i nativi. `TableRegistry::resolve()` avvolge nel decorator se custom-fieldable (1 riga).</item>
+      <item>Estensione `MetaController`/descrittore: per i custom field, `GET /meta/{resource}` emette FieldDescriptor ARRICCHITO: `{key:'custom.<key>', type, label, description, help_text, placeholder, icon, group, tab, sort_order, source:'custom', config, options?:[{value,label,color,icon}], relation?:{for_select_resource,cardinality}, mandatory}` oltre al blocco `permissions.fields['custom.<key>']`. I campi nativi restano col descrittore minimale attuale (invariato).</item>
+      <item>Iniezione `custom_fields` nell'output di dettaglio: in `BaseApiController` (una volta) — quando la Resource avvolge un model `HasCustomFields`, il payload `data` include `custom_fields: {<key>: value}` (relazioni = id o [id]; enum = value o [value]). Nessuna modifica alle Resource per-modulo.</item>
+
+      <!-- INNESTO WRITE (middleware + trait, zero codice per-modulo) -->
+      <item>Trait `App\Models\Concerns\HasCustomFields` su `BaseModel`: accessor `custom_fields` (legge/idrata da `custom_field_values`), observer `saved` → `CustomFieldWriter::write(model, bag)` (upsert transazionale) e `deleting` → cleanup dei valori. Legge i valori in ingresso da `App\CustomFields\CustomFieldRequestBag` (scoped, popolato dal middleware), applicati al model il cui entity_type combacia con la resource in rotta. NON accoppia il model ad HTTP (legge un bag iniettato, testabile).</item>
+      <item>Middleware `App\Http\Middleware\CaptureCustomFields` sul gruppo api: estrae `request('custom_fields')` nel `CustomFieldRequestBag`. `App\CustomFields\CustomFieldValidator`: compila le regole Laravel da handler+definizione+permessi e valida i valori in ingresso in `saving`; su errore lancia `ValidationException` con chiavi `custom_fields.<key>` (Laravel → 422). Gate permessi: un custom field non-editable per il ruolo, inviato cambiato → 422 (parita' con `EnforcesFieldPermissions`); required non presente → 422; enum fuori options → 422; relation id inesistente (exists sul target) → 422.</item>
+
+      <!-- ADMIN CRUD DEFINIZIONI (e' a sua volta un modulo del framework) -->
+      <item>Policy `CustomFieldPolicy` (resource 'custom-fields'); Authorization `CustomFieldsAuthorization` (fields: entity_type, key, type, label, description, help_text, placeholder, icon, group, tab, sort_order, config, validation, relation_target, is_indexed, is_active, options); TableDefinition `CustomFieldsTableDefinition` + `CustomFields\CustomFieldColumnCatalog` (colonne entity_type/key/label/type badge/group/is_active/created_at); Requests Store/Update (options + config + validation nested; `key` snake unique per entity_type; enum richiede options; relation richiede relation_target valido) con `EnforcesFieldPermissions`; DTO; `CustomFieldService` (crea/aggiorna con options full-replace in transazione, invalida cache provider); Resource; Controller; rotte; registrazioni config/tables+authorization+navigation.</item>
+      <item>Endpoint `GET /api/custom-fields/entities` → `[{entity_type, label}]` (moduli custom-fieldable, per il picker admin). Autorizza `custom-fields.viewAny`.</item>
+
+      <!-- PERFORMANCE / INDICIZZAZIONE (lane finale, opt-in) -->
+      <item>Cache: definizioni per entity_type cache-ate (bust su mutazione); `FieldTypeRegistry` risolto una volta. Eager-load `custom_field_values` per pagina (una query). Set-filter `/values` con cap `MAX_SET_FILTER_VALUES=500`.</item>
+      <item>Promozione a indice (opt-in, `is_indexed=true`): job `PromoteCustomFieldIndexJob` che provisiona una colonna generata `STORED` da `values->>'$.<key>'` + indice B-tree su `custom_field_values` (unico DDL, generico e automatizzato); l'handler usa la colonna generata in filter/sort quando presente, altrimenti JSON path. Multiselect → multi-valued index. NB: senza promozione il campo funziona comunque (JSON path bound). Questa e' l'ULTIMA lane, indipendente dall'MVP funzionale.</item>
+
+      <!-- FRONTEND -->
+      <item>Feature `features/custom-fields/` (renderer generico riusabile): `field-component-registry.ts` (type→componente: text→Input, textarea→Textarea, integer/decimal→Input number, boolean→Checkbox/Switch da config, enum→Select/MultiSelect/Radio/Badge da config+options, relation→AsyncPaginatedSelect/MultiSelect su for_select_resource); `CustomFieldsSection.tsx` (legge i FieldDescriptor `source:'custom'` dal resource meta, ordina per group/tab/sort_order, rende ogni campo dentro `<MetaField>`; generalizza ProductDynamicAttributeFields); `build-custom-fields-schema.ts` (Zod dinamico da meta+config, messaggi i18n); `custom-fields-payload.ts` (build `custom_fields` object: create=tutti, update=diff); `types.ts`; `api.ts` (entities). NIENTE per-modulo: i form montano `<CustomFieldsSection resource="..." />`.</item>
+      <item>Griglia: estensione generica del fallback in `components/data-table/` — le colonne con `source:'custom'` scelgono un cell renderer per `type` (text/number/boolean/enum-badge/relation-label) e il filtro per `filterType` (gia' derivato). Nessun renderer per-id hardcoded (gli id custom sono dinamici).</item>
+      <item>Pannello admin `features/custom-fields/`: griglia definizioni (`<TableView domain="custom-fields">`) + form definizione (picker entity_type da /entities; picker type; editor config per-tipo condizionale; editor options per enum con label/color/icon/sort/default; picker relation_target+for_select_resource+cardinality per relation; validation builder required/min/max/regex/unique/exists; group/tab/sort_order; is_indexed toggle) + detail + renderer + pagina + rotta.</item>
+      <item>Integrazione modulo PILOTA (Companies): montaggio `<CustomFieldsSection resource="companies" />` nel form; le colonne custom compaiono in griglia gratis (decorator backend). Dimostra il rollout zero-codice.</item>
+      <item>i18n `en-custom-fields.ts`/`it-custom-fields.ts` (admin + navigation + label tipi/validazioni); icone in icon-map; route in router.tsx + breadcrumbs.</item>
+      <item>Test: Pest backend (schema; FieldTypeHandler per tipo; provider+cache; decorator Authorization/Table; write pipeline validate+persist+permessi; admin CRUD ≥90% service/policy/authorization, ≥85% controller/table) + Vitest frontend (CustomFieldsSection per tipo, schema dinamico, payload create/diff, cell renderer custom, admin form condizionale).</item>
+    </in>
+    <out>
+      <item>NESSUN codice per-modulo per read/grid/meta/permessi (garantito dai decorator). NESSUN codice per-modulo per il write (garantito da middleware+trait). L'unica integrazione per-modulo e' FE: montare `<CustomFieldsSection>` nel form (fatto qui solo su Companies come pilota; rollout agli altri moduli = follow-up banale, fuori da questa spec).</item>
+      <item>Tipi campo OLTRE l'MVP (date, datetime, time, email, url, password, phone, color, money, percentage, coordinate, json, file, image, signature, rating, rich text, markdown, formula, computed, lookup, repeater, group, table, address, contact): FUORI SCOPE. L'estendibilita' e' garantita (nuovo tipo = 1 handler BE + 1 componente FE), ma non implementati qui.</item>
+      <item>Assorbimento dell'EAV prodotti (`ProductAttributeValue`) nel sistema universale: FUORI SCOPE (concern separato, migrabile in seguito).</item>
+      <item>Ricerca globale cross-dominio: FUORI SCOPE (non esiste oggi). I custom field SONO inclusi nella ricerca per-tabella via flag searchable.</item>
+      <item>Permessi per-UTENTE: FUORI SCOPE (solo per-ruolo, come oggi).</item>
+      <item>Workflow/notifiche/import legacy dei valori custom: FUORI SCOPE.</item>
+      <item>NESSUNA nuova dipendenza composer/npm.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- ========== ADMIN CRUD DEFINIZIONI ========== -->
+    <endpoint method="GET" path="/api/custom-fields/entities">
+      <request>Nessun body. Autorizza custom-fields.viewAny.</request>
+      <response status="200">ok: data=[{ entity_type:string, label:string }] (moduli custom-fieldable).</response>
+      <errors>403 senza viewAny.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/tables/custom-fields/columns">
+      <response status="200">Columns: [ entity_type(text/set,sortable,filterable), key(text,sortable,filterable,searchable), label(text,sortable,searchable), type(enum/badge,filterable:set), group(text), is_active(boolean,filterable), created_at(datetime,filterable:date) ]. actions view/edit/delete per permesso; label `customFields.columns.*`.</response>
+      <errors>403 senza custom-fields.viewAny.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/tables/custom-fields/rows">
+      <response status="200">{ items:[{ id, entity_type, key, label, type, group, is_active, created_at, actions[] }], pagination }.</response>
+    </endpoint>
+    <endpoint method="GET" path="/api/meta/custom-fields">
+      <response status="200">fields=[entity_type(select,mandatory),key(text,mandatory),type(select,mandatory),label(text,mandatory),description,help_text,placeholder,icon,group,tab,sort_order(number),config(custom),validation(custom),relation_target(custom),is_indexed(boolean),is_active(boolean),options(custom)] + permissions.</response>
+    </endpoint>
+    <endpoint method="GET" path="/api/custom-fields/{customField}">
+      <response status="200">okWithPermissions: data={ id, entity_type, key, type, label, description, help_text, placeholder, icon, group, tab, sort_order, default_value, config, validation, relation_target, is_indexed, is_active, options:[{ id, value, label, color, icon, sort_order, is_default }], created_at } + permissions.</response>
+      <errors>403 senza view; 404.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/custom-fields">
+      <request>{ entity_type:req in(entities), key:req snake max64 unique-per-entity_type, type:req in(text,textarea,integer,decimal,boolean,enum,relation), label:req max191, description?, help_text?, placeholder?, icon?, group?, tab?, sort_order?:int, default_value?, config?:object (per-tipo: text{minLength,maxLength,regex,transform}; textarea{rows,maxLength}; integer/decimal{min,max,step,decimals}; boolean{display:checkbox|switch}; enum{display:select|multiselect|radio|badge}), validation?:object (required,unique,min,max,between,regex,email,url,exists,distinct), relation_target?:object{entity_type:in(entities),cardinality:in(one,many),for_select_resource} (req sse type=relation), is_indexed?:bool, is_active?:bool, options?:[{ value, label, color?, icon?, sort_order?, is_default? }] (req/non-vuoto sse type=enum; value unici) }.</request>
+      <response status="201">okWithPermissions(CustomFieldResource). Shape del GET show.</response>
+      <errors>403 senza create; 422 (key duplicata per entity_type, type invalido, enum senza options, relation senza relation_target valido, entity_type non custom-fieldable); 422 campo non-editable.</errors>
+    </endpoint>
+    <endpoint method="PUT|PATCH" path="/api/custom-fields/{customField}">
+      <request>Come POST, `sometimes`. `options` = full-replace. `entity_type` e `type` IMMUTABILI se esistono gia' valori per il campo (422). `key` immutabile (422 se cambiata con valori esistenti).</request>
+      <response status="200">okWithPermissions(CustomFieldResource). Se is_indexed passa a true → dispatch PromoteCustomFieldIndexJob.</response>
+      <errors>403 senza update; 404; 422.</errors>
+    </endpoint>
+    <endpoint method="DELETE" path="/api/custom-fields/{customField}">
+      <response status="204">No content. I valori in `custom_field_values` per quella key sono rimossi (cleanup); cache provider invalidata.</response>
+      <errors>403 senza delete; 404.</errors>
+    </endpoint>
+
+    <!-- ========== CONSUMO SU UN MODULO BERSAGLIO (esempio: companies) ========== -->
+    <endpoint method="GET" path="/api/meta/companies">
+      <response status="200">
+        fields = [ ...campi nativi (descrittore minimale invariato)..., ...campi custom con descrittore ARRICCHITO:
+        { key:'custom.<key>', type, label, description, help_text, placeholder, icon, group, tab, sort_order,
+          source:'custom', config, options?:[{value,label,color,icon}], relation?:{for_select_resource,cardinality}, mandatory } ]
+        + permissions.fields inclusi i 'custom.<key>' (visible/editable/required per ruolo).
+      </response>
+      <errors>403 senza companies.viewAny.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/companies/{company}">
+      <response status="200">okWithPermissions: data={ ...campi nativi..., custom_fields:{ '<key>': value } } + permissions. value: scalare | id | id[] (relation) | value | value[] (enum).</response>
+      <errors>403 senza companies.view; 404.</errors>
+    </endpoint>
+    <endpoint method="POST|PUT|PATCH" path="/api/companies (e /{company})">
+      <request>{ ...campi nativi..., custom_fields?:{ '<key>': value } }. Il middleware cattura `custom_fields`; validazione dinamica (handler+definizione+permessi) in `saving`; persistenza upsert su `custom_field_values` in `saved` (transazione col record). PATCH: `custom_fields` = merge parziale (solo le key inviate).</request>
+      <response status="201|200">okWithPermissions(CompanyResource) con `custom_fields` nel data.</response>
+      <errors>422 con chiavi `custom_fields.<key>` (required mancante, tipo incoerente, enum fuori options, relation id inesistente, regex/min/max, custom field non-editable per il ruolo); authz risorsa base invariata (403).</errors>
+    </endpoint>
+
+    <!-- ========== GRIGLIA CON COLONNE CUSTOM (esempio: companies) ========== -->
+    <endpoint method="GET" path="/api/tables/companies/columns">
+      <response status="200">Columns = [ ...native..., ...custom { id:'custom.<key>', label, type (da handler), source:'custom', visible:false default, sortable/filterable/searchable/filterType da handler, options?/badges? per enum } ]. Le custom entrano nelle allow-list sortable/filterable/searchable via i loro flag.</response>
+    </endpoint>
+    <endpoint method="POST" path="/api/tables/companies/rows">
+      <response status="200">{ items:[{ ...native..., 'custom.<key>': value }], pagination }. Una sola join a custom_field_values (no N-join); relazioni idratate a label per pagina (no N+1).</response>
+    </endpoint>
+    <endpoint method="POST" path="/api/tables/companies/values">
+      <response status="200">columnId='custom.<key>' (enum/relation/testo con set) → valori distinti (allow-list = chiavi definite); columnId fuori allow-list → 422.</response>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- STORAGE + MODELS -->
+    <criterion id="AC-001">Eseguite le migrazioni esistono `custom_field_definitions` (unique[entity_type,key]), `custom_field_options` (unique[definition_id,value], FK cascade), `custom_field_values` (unique[entity_type,entity_id], `values` json); `down()` le rimuove. (schema)</criterion>
+    <criterion id="AC-002">Model: `CustomFieldDefinition` cast config/validation/relation_target/default_value→array, options() hasMany ordinata, morph 'custom_field', LogsModelActivity; `CustomFieldValue` cast values→array, nessun activity log. (unit)</criterion>
+
+    <!-- FIELD TYPE STRATEGY -->
+    <criterion id="AC-003">`FieldTypeRegistry` risolve ciascun tipo MVP dal config; ogni handler dichiara storageType/columnType/filterType coerenti (text→string/text/text; integer→integer/number/number; boolean→boolean/boolean/boolean; enum→json|string/enum/set; relation→json/text/set). Tipo sconosciuto → eccezione. (registry)</criterion>
+    <criterion id="AC-004">`EnumFieldType::validationRules` impone value∈options; `RelationFieldType` impone exists sul target (single) o array-of-exists (multi); `IntegerFieldType`/`DecimalFieldType` rispettano min/max/step/decimals; `TextFieldType` minLength/maxLength/regex + transform (upper/lower/capitalize) applicata in normalizeForStore. (handlers)</criterion>
+
+    <!-- PROVIDER + ENTITY REGISTRY -->
+    <criterion id="AC-005">`CustomFieldEntityRegistry::entities()` elenca SOLO domini con TableDefinition+Authorization; `entityTypeForModel(Company)` → 'companies'; un dominio senza Authorization non e' custom-fieldable. (registry)</criterion>
+    <criterion id="AC-006">`CustomFieldProvider::definitionsFor('companies')` ritorna solo definizioni attive, cache-ata; creare/aggiornare/eliminare una definizione invalida la cache. Le chiavi campo sono namespacate `custom.<key>`. (provider+cache)</criterion>
+
+    <!-- DECORATOR AUTHORIZATION + META + PERMESSI -->
+    <criterion id="AC-007">Definito un custom field su companies, `GET /meta/companies` include il FieldDescriptor arricchito con `source:'custom'`, config, options/relation, e `permissions.fields['custom.<key>']`; i campi nativi restano col descrittore minimale invariato. (meta decorator)</criterion>
+    <criterion id="AC-008">La matrice `role_field_permissions` su (resource='companies', field='custom.<key>') e' rispettata: un ruolo con visible=false non vede il campo nel meta; editable=false → readonly; required=true → required. Super-admin bypassa (ceiling pieno). (field perms)</criterion>
+    <criterion id="AC-009">`ValidatesFieldPermissionsMatrix` accetta il salvataggio matrice per un `custom.<key>` esistente e rifiuta una key inesistente per la resource (il custom field entra in `fields()` via decorator). (matrix validation)</criterion>
+
+    <!-- WRITE PIPELINE -->
+    <criterion id="AC-010">POST /companies con `custom_fields` validi → 201 e i valori sono persistiti in `custom_field_values` (una riga per company, `values` JSON); GET /companies/{id} li ritorna in `data.custom_fields`. (write+read)</criterion>
+    <criterion id="AC-011">Validazione write: required mancante → 422 `custom_fields.<key>`; enum fuori options → 422; relation id inesistente → 422; tipo incoerente (es. testo in integer) → 422; regex/min/max violati → 422. (validator)</criterion>
+    <criterion id="AC-012">Permessi write: custom field reso non-editable dalla matrice e inviato cambiato → 422 (parita' con EnforcesFieldPermissions); PATCH invia solo un sottoinsieme di key → merge parziale (le altre restano invariate). (write perms)</criterion>
+    <criterion id="AC-013">DELETE definizione → i valori di quella key sono rimossi da `custom_field_values`; DELETE company → i suoi custom_field_values sono rimossi (cleanup observer). (cleanup)</criterion>
+
+    <!-- DECORATOR TABLE / GRID -->
+    <criterion id="AC-014">`GET /tables/companies/columns` include le colonne `custom.<key>` (visible:false default) coi flag da handler; entrano nelle allow-list sortable/filterable/searchable. (columns decorator)</criterion>
+    <criterion id="AC-015">`POST /tables/companies/rows` con 3 custom field filtrati esegue UNA sola join a `custom_field_values` (non 3); le righe includono i valori custom; relazioni idratate a label senza N+1 (preventLazyLoading). (rows perf)</criterion>
+    <criterion id="AC-016">Filtro su `custom.<key>`: text (contains/equals/startsWith/endsWith), number (equals/range/gt/lt), boolean, set (enum/relation) funzionano via JSON path con SOLI bound params (nessun whereRaw su input); columnId fuori allow-list → 422; `/values` ritorna i distinti. Sort su `custom.<key>` ordina correttamente. (filter/sort/injection-safe)</criterion>
+    <criterion id="AC-017">Export backend-driven su companies include le colonne custom selezionate (riusa TableQueryBuilder+mapRow del decorator) senza codice dedicato. (export)</criterion>
+
+    <!-- ADMIN CRUD -->
+    <criterion id="AC-018">POST /custom-fields type=enum senza options → 422; type=relation senza relation_target valido → 422; entity_type non custom-fieldable → 422; key duplicata per entity_type → 422; validi → 201 con options persistite. (admin validation)</criterion>
+    <criterion id="AC-019">PATCH /custom-fields: options full-replace; cambiare type/entity_type/key con valori esistenti → 422; is_indexed→true dispatcha PromoteCustomFieldIndexJob. (admin update)</criterion>
+    <criterion id="AC-020">Dopo permissions:sync esiste custom-fields.* (viewAny/view/create/update/delete/export/import); il nodo navigazione compare in /navigation solo per chi ha custom-fields.view. `GET /custom-fields/entities` elenca i moduli custom-fieldable. (perms+nav+entities)</criterion>
+
+    <!-- PERFORMANCE / INDEX -->
+    <criterion id="AC-021">Con is_indexed=true, PromoteCustomFieldIndexJob crea colonna generata STORED + indice su `custom_field_values`; l'handler usa la colonna generata in filter/sort quando presente (verificabile via EXPLAIN/uso colonna), altrimenti JSON path; il campo resta funzionante anche senza promozione. (index promotion)</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-022">`CustomFieldsSection` legge dal resource meta i campi `source:'custom'`, li ordina per group/tab/sort_order e rende per tipo (text→Input, integer/decimal→number, boolean→Checkbox/Switch da config, enum→Select/MultiSelect/Radio/Badge, relation→AsyncPaginatedSelect/Multi su for_select_resource), ognuno dentro `<MetaField>` (nascosto/readonly/required dai permessi). (dynamic render)</criterion>
+    <criterion id="AC-023">Lo schema Zod dinamico (`build-custom-fields-schema`) impone required/min/max/regex dai metadata con messaggi i18n; il payload builder produce `custom_fields` (create=tutti i valorizzati, update=solo diff); 422 mappato inline su `custom_fields.<key>`. (schema+payload+errors)</criterion>
+    <criterion id="AC-024">Griglia companies: le colonne `custom.<key>` (attivabili dal column-picker) mostrano il valore col renderer per type (badge per enum, label per relation) e filtrano per filterType; nessun renderer per-id hardcoded. (grid render)</criterion>
+    <criterion id="AC-025">Pannello admin: form definizione con entity_type da /entities, editor config condizionale per tipo, editor options per enum (label/color/icon/sort/default), picker relation_target+for_select_resource+cardinality per relation, validation builder, toggle is_indexed; griglia definizioni SSRM. (admin form)</criterion>
+    <criterion id="AC-026">Pilota: montato `<CustomFieldsSection resource="companies"/>`, creando/modificando una company posso valorizzare i custom field e vederli in dettaglio e (attivando la colonna) in griglia — senza alcun codice specifico companies oltre il montaggio della section. (rollout zero-code)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm): solo librerie gia' presenti.</item>
+    <item>Authz server-side su OGNI endpoint (Policy/permessi). L'UI nasconde, il backend autorizza. Custom field permessi per-ruolo via `role_field_permissions` (nessuna nuova tabella permessi).</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/rotte/permessi/chiavi/enum). Domain `custom-fields`. Chiavi campo namespacate `custom.<key>`.</item>
+    <item>Envelope { success, message, data, permissions? }; `custom_fields` dentro `data`. Mai model Eloquent raw: sempre via Resource. Errori senza leak di classi interne.</item>
+    <item>Mass assignment: fillable esplicito. Query via Eloquent/parametrizzate; filtri/sort SSRM (nativi e custom) SOLO da allow-list; JSON path con bound params, MAI whereRaw/orderByRaw su input (vincolo backend.md 8 / security.md 8).</item>
+    <item>Storage JSON-per-entita' (una riga per record): read = una join per pagina; filtro k custom field = una join (non k). Cache definizioni; eager-load valori; no N+1 nell'idratazione relazioni.</item>
+    <item>SOLID/OCP: nuovo tipo campo = 1 `FieldTypeHandler` (BE) + 1 componente nel registry (FE), zero altre modifiche. Innesto ai motori generici SOLO via decorator + trait + BaseApiController (una volta), non nei 15 moduli.</item>
+    <item>Riuso obbligatorio: TableView/DataTable/ssrm-datasource, MetaField/useResourceMeta/ResourcePermissionsProvider, AsyncPaginatedSelect, ForSelect, Can. Nessuna duplicazione. Generalizzare ProductDynamicAttributeFields, non riscriverlo da capo.</item>
+    <item>File entro 300/500 righe; dead code zero; nessuna emoticon; Pint + ESLint + `tsc --noEmit` puliti.</item>
+    <item>Coverage per-layer: Policy/Authorization/Service/FieldTypeHandler/Provider ≥90%; controller/table/decorator ≥85%. Test ESEGUITI, non solo scritti.</item>
+    <item>Ownership file disgiunta tra teammate. `data_contract` qui congelato = punto di sincronizzazione: backend e frontend in parallelo.</item>
+  </constraints>
+
+</spec>

@@ -4,6 +4,7 @@ use App\Authorization\AttributesAuthorization;
 use App\Authorization\BusinessFunctionsAuthorization;
 use App\Authorization\CompaniesAuthorization;
 use App\Authorization\CompanySitesAuthorization;
+use App\Authorization\CustomFieldsAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
 use App\Authorization\ProductCategoriesAuthorization;
 use App\Authorization\ProductsAuthorization;
@@ -49,6 +50,7 @@ return [
         'registries' => RegistriesAuthorization::class,
         'sectors' => SectorsAuthorization::class,
         'attributes' => AttributesAuthorization::class,
+        'custom-fields' => CustomFieldsAuthorization::class,
         'product-categories' => ProductCategoriesAuthorization::class,
         'products' => ProductsAuthorization::class,
         'sources' => SourcesAuthorization::class,

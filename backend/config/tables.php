@@ -4,6 +4,7 @@ use App\Tables\AttributesTableDefinition;
 use App\Tables\BusinessFunctionsTableDefinition;
 use App\Tables\CompaniesTableDefinition;
 use App\Tables\CompanySitesTableDefinition;
+use App\Tables\CustomFieldsTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
 use App\Tables\ProductCategoriesTableDefinition;
 use App\Tables\ProductsTableDefinition;
@@ -50,6 +51,7 @@ return [
         'registries' => RegistriesTableDefinition::class,
         'sectors' => SectorsTableDefinition::class,
         'attributes' => AttributesTableDefinition::class,
+        'custom-fields' => CustomFieldsTableDefinition::class,
         'product-categories' => ProductCategoriesTableDefinition::class,
         'products' => ProductsTableDefinition::class,
         'sources' => SourcesTableDefinition::class,

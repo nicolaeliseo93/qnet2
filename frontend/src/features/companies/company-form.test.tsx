@@ -33,6 +33,13 @@ vi.mock('@/features/companies/use-company-form-meta', () => ({
   useCompanyFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
+// `useCompanyForm` reads `/meta/companies` (spec 0021) to build the dynamic
+// custom-fields schema; this suite has no custom fields to exercise (covered
+// by `company-form-custom-fields.test.tsx`), so it resolves to an empty catalogue.
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => Promise.resolve({ fields: [], permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
 // The cascading geo selects are network-backed (covered by their own
 // component test); stub them so this suite focuses on the company form's own
 // logic without touching `@/features/geo/api`.

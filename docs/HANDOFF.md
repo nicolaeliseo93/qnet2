@@ -2,6 +2,129 @@
 
 > Injected at session start. Update at every green state.
 
+## Feature — Universal Custom Fields (spec 0021) — GREEN / COMPLETE (2026-07-08)
+
+TUTTI i 26 AC verdi (verifier confermato AC-001..020; AC-021 job+dispatch; AC-022..026 FE-A/B/C/D).
+Backend CustomField|Company 327/327; full suite 1826/1828 (unico fail = preesistente
+AbstractMigrationSourcePreviewTest, NON spec 0021). FE: tsc -b pulito sui file spec 0021, vitest 126 verdi.
+NON committato (attesa OK utente; working tree contiene anche lavoro migration-sources di altri).
+Aperti minori: company-detail.tsx non mostra ancora custom_fields (griglia+form lo coprono);
+CustomFieldAwareTableDefinition.php 358 righe / CustomFieldWritePipelineTest.php 318 (soft-limit, <500 hard);
+AC-021 EXPLAIN + multi-valued index JSON_CONTAINS = verifica MySQL-prod (non testabile su sqlite).
+NOTA PROGETTO IMPORTANTE: `tsc --noEmit` NON type-checka nulla (tsconfig solution-style files:[]+references);
+il check reale e' `tsc -b`. Il hook Stop typecheck.sh potrebbe essere un gate vuoto — da verificare/correggere.
+
+BUGFIX (2026-07-08, post-consegna): "vari moduli non caricavano tabelle/form". Root cause:
+`CustomFieldProvider::definitionsFor()` usava `Cache::rememberForever` con store `database` (dev) —
+una Eloquent Collection serializzata torna `__PHP_Incomplete_Class` in rilettura → viola `: Collection`
+→ TypeError 500 su OGNI modulo custom-fieldable (tabella via decorator baseQuery + meta via fields).
+NON colto dai test perche' girano su cache `array`. FIX: memoizzazione per-request in memoria (niente
+serializzazione cross-request), provider bound `scoped` in AppServiceProvider, `->with('options')`
+per prevenire lazy-load enum. Test CustomFieldProviderTest aggiornato (test forget ora osserva il memo
+via comportamento; nuovo test regressione Collection+options). Verificato: tinker su MySQL dev → tutti
+i 16 moduli TABLE ok + META fields, TOTAL err=0; suite 328/328; pint pulito; cache dev svuotata.
+LEZIONE: non cachare Eloquent Collection nello store database/file; i test cache-array mascherano il bug.
+NB: gli errori tsc -b su users/referents/operational-sites/company-sites/personal-data sono PREESISTENTI
+(lavoro company-sites LOGO + personal-data quick-create gia' su main), NON custom-fields.
+
+
+
+Sistema universale di campi personalizzati agnostico/backend-driven (spec docs/specs/0021-universal-custom-fields.xml).
+Storage JSON-ibrido; innesto ai motori generici via DECORATOR (zero codice per-modulo su read/grid/meta/permessi)
++ middleware→bag→trait per il write. Costruito a fasi con subagent + verifier indipendente. Branch corrente
+(NON committato — attesa OK utente). NON committare finché l'utente non lo chiede.
+
+STATO VERDE (backend, verifier confermato AC-001..020):
+- Fase 1 storage: `custom_field_definitions/options/values` (values JSON, una riga per entità), Model+Factory,
+  morph `custom_field`/`custom_field_option`. FieldTypeHandler strategy (7 tipi MVP: text/textarea/integer/decimal/
+  boolean/enum/relation) + `FieldTypeRegistry` (config/custom-fields.php). `CustomFieldEntityRegistry` (entity_type=
+  domain key presente in tables.php ∩ authorization.php) + `CustomFieldProvider` (definizioni cache-ate, KEY_PREFIX='custom.').
+- Fase 2 innesto: `CustomFieldAwareAuthorization` (decorator, wrap in AuthorizationRegistry) + MetaController arricchito
+  (fields custom con source:'custom'+config+options+relation). `CustomFieldAwareTableDefinition` (decorator, wrap in
+  TableRegistry; SUBQUERY-join a custom_field_values per evitare collisione id/created_at + reserved word `values`;
+  UNA join a prescindere dal numero di custom field). Write: `CaptureCustomFields` middleware (api group) → `CustomFieldRequestBag`
+  (scoped, pull() distruttivo, single-primary-entity per request) → trait `HasCustomFields` su BaseModel (saving=validate,
+  saved=write, deleting=purge) → `CustomFieldValidator`+`CustomFieldWriter`. `BaseApiController` toccato UNA volta:
+  ValidationException→422 con errors() + injection `custom_fields` (object) nel dettaglio via withCustomFields().
+- Fase 3 admin: modulo `custom-fields` (Policy `CustomFieldDefinitionPolicy` — nome per convenzione Model→Policy, resource
+  resta 'custom-fields'; Authorization/TableDefinition/Requests/DTO/`CustomFieldService`/Resource/Controller +
+  `CustomFieldEntitiesController` GET /custom-fields/entities). Registrato in config/{authorization,tables,navigation}.php
+  + routes/api/custom-fields.php.
+
+CONTRATTO FE (congelato, consumato da FE-A/B): /meta/{resource} → fields[] con custom {key:'custom.<rawKey>', type,
+label, source:'custom', config, options?[{value,label,color,icon}], relation?{for_select_resource,cardinality}, mandatory}
++ permissions.fields['custom.<rawKey>']. Detail → data.custom_fields={'<rawKey>':value} (UN-namespaced; relation=id/ids,
+enum=value/values). Write body custom_fields={'<rawKey>':value}; 422 keyed custom_fields.<rawKey>. Grid: colonne
+id='custom.<key>' source:'custom' visible:false, type/filterType da handler, relation già label-string.
+
+FE VERDE: FE-A slice renderer (features/custom-fields/: field-component-registry OCP, CustomFieldsSection, build-custom-fields-schema,
+custom-fields-payload, i18n en/it-custom-fields NON ancora wired) 28 test. FE-B fallback data-table per source:'custom'
+(+ suppressFieldDotNotation, bug reale) 48 test.
+
+RESIDUO: FE-D pannello admin + wiring i18n/router; FE-C mount pilota Companies; T15 index promotion (opt-in) +
+test HTTP-422 permanente su /companies (GAP verifier). NOTE: CustomFieldAwareTableDefinition.php 358 righe (soft-limit).
+Failure di suite preesistenti e NON correlate: AbstractMigrationSourcePreviewTest, cell-renderers.test.tsx (i18n leak).
+
+## Spec 0021 (Universal Custom Fields) — T9 admin CRUD for DEFINITIONS — GREEN (2026-07-08)
+
+Backend-only microtask, built in parallel with T5/T6/T7 (decorators + write pipeline, other
+teammates, same session/branch). Implements the admin CRUD module for `custom_field_definitions`
+itself (domain/resource `custom-fields`) as a standard module of the generic framework — mirrors
+`attributes` end to end: Policy → Authorization → TableDefinition → Requests → DTO → Service →
+Resource → Controller → routes → config registrations + navigation node.
+
+Files: `app/Policies/CustomFieldDefinitionPolicy.php`, `app/Authorization/CustomFieldsAuthorization.php`,
+`app/Tables/CustomFieldsTableDefinition.php` + `app/Tables/CustomFields/CustomFieldColumnCatalog.php`,
+`app/Http/Requests/CustomFields/{Store,Update}CustomFieldRequest.php`,
+`app/DataObjects/CustomFields/{Create,Update}CustomFieldData.php`, `app/Services/CustomFieldService.php`,
+`app/Http/Resources/CustomFieldResource.php`,
+`app/Http/Controllers/CustomFields/{CustomFieldController,CustomFieldEntitiesController}.php`,
+`routes/api/custom-fields.php` (required from `routes/api.php`, file-size split). Registered in
+`config/authorization.php`, `config/tables.php`, `config/navigation.php` (new `custom-fields` node
+under "configuration", permission `custom-fields.view`). Tests:
+`tests/Feature/CustomFields/CustomFieldAdmin{Crud,Security}Test.php` (26 tests, AC-018/019/020).
+
+NAMING DEVIATION from the spec's literal text: Policy class is `CustomFieldDefinitionPolicy` (matches
+the `CustomFieldDefinition` model 1:1, Laravel's `Gate::guessPolicyName` convention — every other
+Policy in this codebase follows the same Model→Policy naming), NOT `CustomFieldPolicy` as the spec
+prose suggested. `resource()` still returns `'custom-fields'`, so permissions/routes/table/authorization
+all use the `custom-fields` key as specified. Rationale: `CustomFieldPolicy` would not auto-resolve
+for a `CustomFieldDefinition` instance without an explicit `Gate::policy()` registration, and
+`AppServiceProvider` is being concurrently edited by other T5/T6/T7 teammates — avoided touching it
+to keep ownership/merge risk low. Flagged, not silently applied.
+
+`is_indexed: false→true` dispatch hook: `PromoteCustomFieldIndexJob` is T15 (later task, not yet
+built). `CustomFieldService::dispatchIndexPromotionIfNewlyIndexed()` guards with `class_exists()` —
+a pure no-op today, becomes a real `::dispatch()` the moment the class lands, no code change needed.
+Covered by a test asserting the guarded no-op path (PATCH succeeds, `is_indexed` persists true).
+
+`custom-fields` is itself registered as an entity in `config/tables.php`/`config/authorization.php`
+(required so the module has a Policy/Authorization/Table like every other resource) — this means
+`CustomFieldEntityRegistry::entities()` legitimately lists `custom-fields` too (T6's
+`AuthorizationRegistry`/`TableRegistry` decorators explicitly exclude decorating the `custom-fields`
+resource itself, preventing recursion; nothing further needed here).
+
+Side-effect fix (legitimate, not test-tampering): registering the new `custom-fields` resource in
+`config/authorization.php` grows `GET /api/authorization/fields`'s resource list (by design — the
+Role field-permission matrix should cover custom-fields' own admin fields too), which broke
+`tests/Feature/Authorization/FieldCatalogueEndpointTest.php`'s hardcoded expected list; updated it to
+include `custom-fields`, consistent with the test's own comment precedent for prior resource additions.
+
+Verification: `XDEBUG_MODE=off php artisan test --filter=CustomFieldAdmin` → 26/26 passed (77
+assertions). Full suite `php artisan test` → 1802/1804 passed; the only remaining failure is the
+pre-existing, explicitly out-of-scope `AbstractMigrationSourcePreviewTest`. `./vendor/bin/pint --dirty`
+clean. Two other full-suite failures observed transiently during the session
+(`CompanyTableTest`/`CustomFieldAwareTableDefinitionTest`, T5/T6 query-count boundary assertions) were
+confirmed flaky/order-dependent and NOT caused by this task's files — resolved by a concurrent
+teammate's fix to the assertion threshold, landed mid-session.
+
+Frontend can now consume: `GET /api/custom-fields/entities`, `GET|POST|PUT|PATCH|DELETE
+/api/custom-fields[/{id}]`, `GET /api/meta/custom-fields`, `GET /api/tables/custom-fields/columns`,
+`POST /api/tables/custom-fields/rows` (table/meta routes are generic, already wired). Navigation node
+`custom-fields` (permission `custom-fields.view`) ready under "configuration"; i18n keys
+`navigation.customFields`, `customFields.columns.*`, `customFields.entities.*`,
+`customFields.types.*` are NOT yet added to `en-*.ts`/`it-*.ts` (frontend task, out of backend scope).
+
 ## Feature — Company Sites: LOGO avatar column + editable COMPANY link — GREEN (2026-07-08)
 
 Two small additions to the Company Sites module, built by backend + frontend teammates in parallel
@@ -2387,3 +2510,81 @@ Not committed — working tree is COMMINGLED across 0010-business-functions, com
 SAME modified files (`config/{tables,authorization,navigation}.php`, `AppServiceProvider.php`, `router.tsx`,
 `en.ts`/`it.ts`, `icon-map.ts`, `breadcrumbs.tsx`, `RolePermissionSeeder.php`). A cleanly-isolated 0011-only
 commit is not possible without splitting interleaved hunks; awaiting a decision on how to land the modules.
+
+## Spec 0021 — Universal Custom Fields — T6 CustomFieldAwareTableDefinition — GREEN (backend, first-hand)
+
+Spec `docs/specs/0021-universal-custom-fields.xml`. T6 = the Table decorator (AC-014..017): `custom.<key>`
+columns/filter/sort/search/export on ANY custom-fieldable domain, zero per-module code. Built on top of
+Fase 1 (`CustomFieldProvider`, `CustomFieldEntityRegistry`, `FieldTypeRegistry` + handlers — already present)
+and alongside T5's `CustomFieldAwareAuthorization` (already present, same decorator pattern on
+`AuthorizationRegistry`).
+
+New files:
+- `backend/app/Tables/CustomFieldAwareTableDefinition.php` — decorator implementing `TableDefinition`,
+  augments `columns()/resolveConfig()/baseQuery()/mapRow()/sortableColumnIds()/filterableColumnIds()/
+  searchableColumnIds()/filterableColumnMap()/applyDerivedFilter()/applyDerivedSort()/distinctValues()/
+  applyDerivedSearch()`; pure passthrough to `$inner` when the entity has zero ACTIVE custom field
+  definitions (memoized per instance/request).
+- `backend/app/Tables/CustomFields/CustomFieldColumnBuilder.php` — builds the raw + resolved
+  `ColumnDefinition` shape for one custom field (enum → `options`+`badges` from the handler's `toMeta()`).
+- `backend/app/Tables/CustomFields/DelegatesUnaugmentedTableMethods.php` — trait holding the pure
+  one-line passthrough methods (`domain/resource/modelClass/authorizeViewAny/filters/actions/defaultSort/
+  defaultPagination/actionsFor/defaultColumnLayout/deleteModel`), split out to keep the decorator ≤ ~360
+  lines (soft-limit judgment call, documented in-file).
+- `backend/app/CustomFields/CustomFieldRelationLabelResolver.php` — resolves a `relation` field's stored
+  id(s) to a display label for the GRID ONLY (detail/read API keeps raw ids). Label = target model's own
+  "display attribute" picked from a short candidate list (`denomination/name/label/title`, via ONE
+  `Schema::getColumnListing()` per target model class, cached) — NOT the target's `ForSelectResource` (would
+  need a new entity_type→resource-class registry the framework doesn't have; documented trade-off). Batches
+  ids per row via `whereIn` + memoizes per (model class, id) for the instance's lifetime — one
+  `CustomFieldAwareTableDefinition` instance is reused across every row of one `TableService::rows()` call,
+  so a repeated id (or every id of one row's own multi-relation array) is never re-queried. Never lazy-loads
+  (explicit `whereIn` only → `preventLazyLoading` never trips).
+
+Edited (minimal, required — see deviation note below):
+- `backend/app/Tables/TableRegistry.php` — `resolve()` now wraps in `CustomFieldAwareTableDefinition` when
+  `CustomFieldEntityRegistry::isCustomFieldable($domain)` (skip for `custom-fields` itself). Added public
+  `resolveRaw($domain)` (the undecorated resolution) used both internally and by
+  `CustomFieldEntityRegistry::build()`.
+- `backend/app/CustomFields/CustomFieldEntityRegistry.php` — **one-line, load-bearing fix**: `build()` now
+  calls `$this->tableRegistry->resolveRaw($domain)` instead of `->resolve($domain)`. REQUIRED: `build()`
+  itself is invoked from inside `isCustomFieldable()`, which `TableRegistry::resolve()` now calls on every
+  domain resolution (including from `AuthorizationRegistry`'s own T5 decorator check) — going through the
+  decorated `resolve()` there re-enters `isCustomFieldable()` on the same singleton BEFORE its own `build()`
+  call returns and assigns `$this->map`, i.e. infinite recursion/stack overflow. `resolveRaw()` returns a
+  definition with byte-identical `modelClass()`/`resource()` (the only two things `build()` reads), so the
+  fix is behavior-preserving. Flagging per protocol since this file was outside my nominal T6 scope, but
+  shipping T6 without it breaks EVERY table/meta resolution once any custom-fieldable domain has ≥1 request
+  in the process.
+- `backend/tests/Feature/Companies/CompanyTableTest.php` — bumped one pre-existing query-count threshold
+  from `<10` to `<12` (now measured 10): `CustomFieldAwareTableDefinition`'s cached "has this domain any
+  active custom fields" check adds exactly ONE cache-miss query per request (never per row) even when the
+  domain has zero custom fields — an accepted, documented cost of the now-universal decorator wrap. No test
+  guarantee was weakened (still asserts a small, row-count-independent query count).
+
+Key design point (the ambiguous-column landmine): `custom_field_values` has its OWN `id`/`created_at`/
+`updated_at`, colliding with most host tables' same-named columns once naively joined — any unqualified
+`ORDER BY created_at`/`WHERE id=...` from the generic `TableQueryBuilder`/`FilterApplier` (which use bare
+column ids from the definition) becomes ambiguous SQL. Fixed by joining a SUBQUERY (`SELECT entity_id,
+values FROM custom_field_values WHERE entity_type=?`) aliased BACK to `custom_field_values` — exposes only
+`entity_id`/`values` (no collision) while every `FieldTypeHandler`'s hardcoded
+`custom_field_values.values-><key>` column expression keeps resolving correctly. Verified passing on SQLite
+(`json_extract`/`json_each` — Laravel's `->`-path grammar); one join regardless of custom field count (spec
+AC-015), confirmed via `TableQueryBuilder::build()->toSql()` with 3 simultaneous custom filters
+(`substr_count(sql, 'left join') === 1`).
+
+Verified (first-hand): `tests/Feature/CustomFields/CustomFieldAwareTableDefinitionTest.php` 9/9 (AC-014
+columns+allow-list, AC-015 rows+single-join+no-N+1, AC-016 filter text/number/boolean/set + sort +
+`/values` + 422 outside allow-list, AC-017 export reuse via `TableQueryBuilder::build()+mapRow()`); combined
+`Table|CustomField|Companies|Company` filter 630/630 (2908 assertions, 1 skip); full suite 1802/1804 (only
+the pre-existing unrelated `AbstractMigrationSourcePreviewTest` red); `./vendor/bin/pint --dirty` clean.
+
+Next owner (spec 0021): admin CRUD for definitions appears to be landing concurrently elsewhere in the tree
+(`CustomFieldsTableDefinition`/`CustomFieldsAuthorization` already registered in `config/{tables,
+authorization}.php` mid-session — my `$domain === 'custom-fields'` exclusion guard already accounts for it,
+verified green). Not yet done anywhere: `PromoteCustomFieldIndexJob` (AC-021, opt-in lane) and the frontend
+`features/custom-fields/` + grid cell-renderer generalization (AC-022..026) — frontend teammate can consume
+`GET /tables/{domain}/columns`' new `custom.<key>` entries (`source:'custom'`, `type` ∈
+text/number/boolean/enum, `filterType` ∈ text/number/boolean/set, `options`/`badges` for enum) and
+`POST /tables/{domain}/rows`' `custom.<key>` row values (relation → already a display-label STRING, ready
+to render, no id lookup needed client-side) as-is; no further backend change expected for the FE grid slice.

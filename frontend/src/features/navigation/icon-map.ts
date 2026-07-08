@@ -10,6 +10,7 @@ import {
   ListTree,
   MapPin,
   Package,
+  Puzzle,
   ShieldCheck,
   SlidersHorizontal,
   Tag,
@@ -41,6 +42,7 @@ const iconMap: Record<string, LucideIcon> = {
   'sliders-horizontal': SlidersHorizontal,
   'list-tree': ListTree,
   package: Package,
+  puzzle: Puzzle,
 }
 
 export function resolveIcon(name: string | null): LucideIcon {

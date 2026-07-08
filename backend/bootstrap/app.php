@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CaptureCustomFields;
 use App\Http\Middleware\EnsureSuperAdmin;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
@@ -21,6 +22,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'super-admin' => EnsureSuperAdmin::class,
         ]);
+
+        // spec 0021 — INNESTO WRITE: captures the request-wide `custom_fields`
+        // payload into the request-scoped CustomFieldRequestBag for every
+        // api/* request. Pure capture (no auth logic), appended so it never
+        // reorders the existing pipeline.
+        $middleware->api(append: [CaptureCustomFields::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

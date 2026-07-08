@@ -23,11 +23,20 @@ import {
   AG_GRID_LOCALE_IT,
 } from '@ag-grid-community/locale'
 import { toast } from 'sonner'
-import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
 import { buildColumnFilter } from '@/components/data-table/column-filters'
+import {
+  defaultValueFormatter,
+  resolveCellRenderer,
+  type CellRenderer,
+} from '@/components/data-table/column-defaults'
+import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
 import { Skeleton } from '@/components/ui/skeleton'
-import { BadgeCell } from '@/features/table/cell-renderers'
-import type { ColumnType, TableColumn, TableRow } from '@/features/table/types'
+import type { TableColumn, TableRow } from '@/features/table/types'
+
+// Re-exported so existing domain renderer maps (`features/table/renderer-registry.ts`)
+// keep importing `CellRenderer` from this module; the type itself now lives in
+// `column-defaults.tsx` alongside the fallback-selection logic that uses it.
+export type { CellRenderer }
 
 // Register enterprise modules + license once, at module load.
 setupAgGrid()
@@ -125,9 +134,6 @@ export function SkeletonLoadingCell({ colDef }: ICellRendererParams) {
   )
 }
 
-/** A custom cell renderer keyed by column id. Receives the AG Grid cell params. */
-export type CellRenderer = (params: ICellRendererParams) => React.ReactNode
-
 /** Renders the per-row actions cell (right-most column). */
 export type RowActionsRenderer = (params: ICellRendererParams) => React.ReactNode
 
@@ -195,15 +201,6 @@ interface DataTableProps {
   onSelectionChanged?: (ids: number[]) => void
 }
 
-/** Default cell value formatter for the given column type. */
-function defaultValueFormatter(type: ColumnType) {
-  if (type === 'tags') {
-    return (value: unknown): string =>
-      Array.isArray(value) ? value.join(', ') : String(value ?? '')
-  }
-  return undefined
-}
-
 /**
  * Backend-driven, reusable AG Grid wrapper.
  *
@@ -241,17 +238,12 @@ export function DataTable({
 
   const colDefs = useMemo<ColDef[]>(() => {
     const mapped: ColDef[] = columns.map((column) => {
-      const custom = cellRenderers?.[column.id]
-      // Generic, domain-agnostic fallback for `badge` columns: the cell is driven
-      // entirely by the backend-supplied badge metadata, so no domain has to
-      // register a renderer for it.
-      const badgeFallback =
-        !custom && column.type === 'badge'
-          ? (params: ICellRendererParams) => (
-              <BadgeCell {...params} badges={column.badges} enumKey={column.enumKey} />
-            )
-          : undefined
-      const renderer = custom ?? badgeFallback
+      // Generic, domain-agnostic renderer selection (badge/enum fallback) and
+      // value-formatter selection (custom boolean/number) — see
+      // column-defaults.tsx. No per-id renderer needed even for dynamic
+      // `custom.<key>` columns.
+      const renderer = resolveCellRenderer(column, cellRenderers)
+      const valueFormatter = renderer ? undefined : defaultValueFormatter(column, t)
       // A column with a persisted width uses it as a fixed width (flex:0 opts it
       // out of the flex layout); columns without one keep flexing to fill space
       // via defaultColDef.flex. Columns arrive already ordered by `order`.
@@ -281,11 +273,9 @@ export function DataTable({
         cellRenderer: renderer
           ? (params: ICellRendererParams) => renderer(params)
           : undefined,
-        valueFormatter: renderer
-          ? undefined
-          : defaultValueFormatter(column.type)
-            ? (params) => defaultValueFormatter(column.type)!(params.value)
-            : undefined,
+        valueFormatter: valueFormatter
+          ? (params) => valueFormatter(params.value)
+          : undefined,
       }
     })
 
@@ -386,6 +376,11 @@ export function DataTable({
     () => ({
       rowModelType: 'serverSide',
       serverSideDatasource: datasource,
+      // Universal custom field columns (spec 0021) use a dotted id
+      // (`custom.<key>`) as a FLAT row key, not a nested path. AG Grid's default
+      // dot-notation would otherwise read `field: 'custom.<key>'` as
+      // `row.data.custom.<key>` and render every custom column blank.
+      suppressFieldDotNotation: true,
       // Reveal the header filter and column-menu buttons only while the pointer
       // is over the column header; the v35 default keeps them always visible.
       suppressMenuHide: false,

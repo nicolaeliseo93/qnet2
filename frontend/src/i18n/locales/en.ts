@@ -17,6 +17,7 @@ import { table } from './en-table'
 import { referents, referentTypes } from './en-referents'
 import { registries } from './en-registries'
 import { attributes, productCategories, products } from './en-products'
+import { customFields } from './en-custom-fields'
 import { sectors } from './en-sectors'
 import { sources } from './en-sources'
 import { tags } from './en-tags'
@@ -63,6 +64,7 @@ export const en = {
     registries: 'Registries',
     operationalSites: 'Operational Sites',
     attributes: 'Attributes',
+    customFields: 'Custom Fields',
     productCategories: 'Product Categories',
     sectors: 'Sectors',
     products: 'Products',
@@ -466,6 +468,7 @@ export const en = {
   referentTypes,
   registries,
   attributes,
+  customFields,
   productCategories,
   sectors,
   products,

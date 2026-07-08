@@ -19,6 +19,7 @@ const RegistriesPage = lazy(() => import('@/pages/registries-page'))
 const ReferentTypesPage = lazy(() => import('@/pages/referent-types-page'))
 const OperationalSitesPage = lazy(() => import('@/pages/operational-sites-page'))
 const AttributesPage = lazy(() => import('@/pages/attributes-page'))
+const CustomFieldsPage = lazy(() => import('@/pages/custom-fields-page'))
 const ProductCategoriesPage = lazy(() => import('@/pages/product-categories-page'))
 const SectorsPage = lazy(() => import('@/pages/sectors-page'))
 const ProductsPage = lazy(() => import('@/pages/products-page'))
@@ -91,6 +92,10 @@ export const router = createBrowserRouter([
           {
             path: 'attributes',
             element: <AttributesPage />,
+          },
+          {
+            path: 'custom-fields',
+            element: <CustomFieldsPage />,
           },
           {
             path: 'product-categories',

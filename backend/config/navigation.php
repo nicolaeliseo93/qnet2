@@ -165,6 +165,16 @@ return [
                     'route' => '/attributes',
                     'permission' => 'attributes.view',
                 ],
+                [
+                    // Universal custom fields (spec 0021): the admin catalogue
+                    // of dynamic fields grafted onto every custom-fieldable
+                    // module.
+                    'key' => 'custom-fields',
+                    'label' => 'navigation.customFields',
+                    'icon' => 'puzzle',
+                    'route' => '/custom-fields',
+                    'permission' => 'custom-fields.view',
+                ],
             ],
         ],
 

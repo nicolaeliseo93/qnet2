@@ -2,14 +2,20 @@
 
 namespace App\Http\Controllers\Abstract;
 
+use App\CustomFields\CustomFieldEntityRegistry;
 use App\Enums\HttpStatusEnum;
 use App\Exceptions\ExternalApiException;
+use App\Models\Concerns\HasCustomFields;
 use App\Services\TeamsWebhookService;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
@@ -74,7 +80,7 @@ abstract class BaseApiController
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data' => $data,
+            'data' => $this->withCustomFields($data),
         ], $status->value);
     }
 
@@ -98,9 +104,36 @@ abstract class BaseApiController
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data' => $data,
+            'data' => $this->withCustomFields($data),
             'permissions' => $permissions,
         ], $status->value);
+    }
+
+    /**
+     * When the payload is a single Resource wrapping a custom-fieldable model,
+     * merge its custom field values as a sibling of the native fields
+     * (spec 0021: `data = { ...native, custom_fields: {...} }`). No-op otherwise,
+     * so every module gains custom fields in its detail output without touching
+     * its Resource.
+     */
+    protected function withCustomFields(mixed $data): mixed
+    {
+        if (! $data instanceof JsonResource || $data instanceof ResourceCollection) {
+            return $data;
+        }
+
+        $model = $data->resource;
+
+        if (! $model instanceof Model
+            || ! in_array(HasCustomFields::class, class_uses_recursive($model), true)
+            || app(CustomFieldEntityRegistry::class)->entityTypeForModel($model) === null) {
+            return $data;
+        }
+
+        $resolved = $data->resolve(request());
+        $resolved['custom_fields'] = (object) $model->custom_fields;
+
+        return $resolved;
     }
 
     protected function noContent(): JsonResponse
@@ -127,6 +160,19 @@ abstract class BaseApiController
      */
     protected function handleControllerException(Throwable $exception, string $method, array $parameters = []): JsonResponse
     {
+        // A validation error is a client (422) fault, not a backend incident:
+        // surface its field errors and skip the error log / Teams alert. This
+        // covers ValidationException thrown deep in a service or model event
+        // (e.g. the custom-field write pipeline, spec 0021) that would otherwise
+        // be caught here and degraded to a 500.
+        if ($exception instanceof ValidationException) {
+            return $this->fail(
+                $exception->getMessage(),
+                HttpStatusEnum::UNPROCESSABLE_ENTITY->value,
+                $exception->errors(),
+            );
+        }
+
         $status = $this->resolveExceptionStatus($exception);
         $message = $this->resolveExceptionMessage($exception, $status);
         $backendTimestamp = now()->toIso8601String();

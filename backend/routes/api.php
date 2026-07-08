@@ -376,6 +376,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('attributes/{attribute}', [AttributeController::class, 'destroy']);
     });
 
+    // Custom field definitions CRUD (spec 0021): routes/api/custom-fields.php
+    // (file-size split, engineering.md §6), required for the same context.
+    require __DIR__.'/api/custom-fields.php';
+
     // Product categories: CRUD + the dedicated tree view + the product form's
     // effective-attributes lookup (spec 0017). `tree` and
     // `{productCategory}/effective-attributes` are declared ABOVE the plain

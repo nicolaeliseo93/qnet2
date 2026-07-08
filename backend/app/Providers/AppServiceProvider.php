@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use App\Authorization\FieldPermissionRepository;
+use App\CustomFields\CustomFieldEntityRegistry;
+use App\CustomFields\CustomFieldProvider;
+use App\CustomFields\CustomFieldRequestBag;
 use App\Models\Address;
 use App\Models\Attachment;
 use App\Models\Attribute;
@@ -10,6 +13,8 @@ use App\Models\BusinessFunction;
 use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\Contact;
+use App\Models\CustomFieldDefinition;
+use App\Models\CustomFieldOption;
 use App\Models\EmploymentProfile;
 use App\Models\OperationalSite;
 use App\Models\PersonalData;
@@ -41,6 +46,25 @@ class AppServiceProvider extends ServiceProvider
         // ResourceAuthorization instances per request (e.g. the FormRequest's
         // EnforcesFieldPermissions AND the controller's permissions block).
         $this->app->singleton(FieldPermissionRepository::class);
+
+        // Singleton so the custom-fieldable entity map (spec 0021) — built by
+        // intersecting config/tables.php with config/authorization.php and
+        // resolving a TableDefinition per match — is computed at most once
+        // per request instead of once per call site (meta, table decorator,
+        // write pipeline all consult it).
+        $this->app->singleton(CustomFieldEntityRegistry::class);
+
+        // Scoped so the per-request memo of active custom field definitions
+        // (spec 0021) is shared by every decorator in ONE request (table, meta,
+        // write all resolve it) yet reset between requests.
+        $this->app->scoped(CustomFieldProvider::class);
+
+        // Scoped so the write pipeline's CustomFieldRequestBag (spec 0021 —
+        // INNESTO WRITE) is shared by every consumer within ONE request
+        // (CaptureCustomFields middleware writes it, HasCustomFields'
+        // saving/saved observers read it) but reset between requests under
+        // Octane/long-running workers.
+        $this->app->scoped(CustomFieldRequestBag::class);
     }
 
     /**
@@ -81,6 +105,8 @@ class AppServiceProvider extends ServiceProvider
             'sector' => Sector::class,
             'tag' => Tag::class,
             'registry' => Registry::class,
+            'custom_field' => CustomFieldDefinition::class,
+            'custom_field_option' => CustomFieldOption::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

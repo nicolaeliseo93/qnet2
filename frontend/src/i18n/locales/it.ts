@@ -10,6 +10,7 @@ import { table } from './it-table'
 import { referents, referentTypes } from './it-referents'
 import { registries } from './it-registries'
 import { attributes, productCategories, products } from './it-products'
+import { customFields } from './it-custom-fields'
 import { sectors } from './it-sectors'
 import { sources } from './it-sources'
 import { tags } from './it-tags'
@@ -56,6 +57,7 @@ export const it: TranslationResources = {
     registries: 'Anagrafiche',
     operationalSites: 'Sedi operative',
     attributes: 'Attributi',
+    customFields: 'Campi personalizzati',
     productCategories: 'Categorie Prodotto',
     sectors: 'Settori',
     products: 'Prodotti',
@@ -451,6 +453,7 @@ export const it: TranslationResources = {
   referentTypes,
   registries,
   attributes,
+  customFields,
   productCategories,
   sectors,
   products,

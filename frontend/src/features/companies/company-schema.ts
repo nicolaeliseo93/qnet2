@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import type { buildCustomFieldsSchema } from '@/features/custom-fields/build-custom-fields-schema'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /**
  * Zod schemas for the company create/edit form, built as factories so
@@ -84,14 +86,35 @@ function baseFields(t: TFunction) {
   }
 }
 
-/** Create schema. */
-export function buildCreateCompanySchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+/** The resource's dynamic custom-fields schema (spec 0021), built by the caller from `/meta/companies`. */
+type CustomFieldsSchema = ReturnType<typeof buildCustomFieldsSchema>
+
+/**
+ * `buildCustomFieldsSchema` builds its shape from a runtime-keyed
+ * `Record<string, ZodTypeAny>`, so Zod can only infer its output as
+ * `Record<string, unknown>` — this re-types the SAME schema instance to its
+ * actual value domain (`CustomFieldValue`) once embedded here, no runtime
+ * behaviour change.
+ */
+type TypedCustomFieldsSchema = z.ZodType<
+  Record<string, CustomFieldValue>,
+  Record<string, CustomFieldValue>
+>
+
+/** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateCompanySchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({
+    ...baseFields(t),
+    custom_fields: customFieldsSchema as unknown as TypedCustomFieldsSchema,
+  })
 }
 
 /** Edit schema (same shape; partial PATCH is computed by the caller). */
-export function buildUpdateCompanySchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+export function buildUpdateCompanySchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({
+    ...baseFields(t),
+    custom_fields: customFieldsSchema as unknown as TypedCustomFieldsSchema,
+  })
 }
 
 export type CreateCompanyFormValues = z.infer<ReturnType<typeof buildCreateCompanySchema>>

@@ -158,7 +158,11 @@ it('rows resolve the derived address fields with a bounded query count (no N+1)'
     DB::disableQueryLog();
 
     // A fixed, small number of queries regardless of row count, never one per row.
-    expect($queryCount)->toBeLessThan(10);
+    // Threshold includes +1 for CustomFieldAwareTableDefinition's cached
+    // "does this domain have any active custom fields" lookup (spec 0021,
+    // T6 — TableRegistry::resolve() now wraps every custom-fieldable domain;
+    // the check is a single cache-miss query, never one per row).
+    expect($queryCount)->toBeLessThan(12);
 });
 
 it('filters rows by the derived province set filter (whereHas by name)', function () {

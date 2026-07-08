@@ -133,9 +133,11 @@ const BOOLEAN_NO_KEY = 'common.no'
 /**
  * Maps a boolean column's raw distinct value to its localized Set Filter label.
  * Accepts both shapes the backend can emit — `"1"`/`"0"` strings (real columns)
- * and `true`/`false` (definition overrides). Display only.
+ * and `true`/`false` (definition overrides). Display only. Exported so the
+ * grid's generic `source:'custom'` boolean cell fallback (data-table.tsx)
+ * reuses the same coercion instead of re-implementing it.
  */
-function formatBooleanFilterValue(
+export function formatBooleanFilterValue(
   value: unknown,
   translate: (key: string) => string,
 ): string {
