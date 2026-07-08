@@ -29,6 +29,11 @@ class ProductCategory extends BaseModel
     {
         return [
             'inherits_attributes' => 'boolean',
+            // Spec 0013 — external data migration: the source system's id for a
+            // migrated category, guarded (not in #[Fillable]) so it is only ever
+            // set by property assignment post-create. Also the remap key for the
+            // self-referential `parent_id` (child → parent via old_id).
+            'old_id' => 'integer',
         ];
     }
 

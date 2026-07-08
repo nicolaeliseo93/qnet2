@@ -29,6 +29,10 @@ class Attribute extends BaseModel
     {
         return [
             'data_type' => AttributeType::class,
+            // Spec 0013 — external data migration: the source system's id for a
+            // migrated attribute, guarded (not in #[Fillable]) so it is only ever
+            // set by property assignment post-create.
+            'old_id' => 'integer',
         ];
     }
 

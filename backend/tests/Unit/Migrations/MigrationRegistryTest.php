@@ -1,10 +1,12 @@
 <?php
 
 use App\Migrations\MigrationRegistry;
+use App\Migrations\Sources\AttributesSource;
 use App\Migrations\Sources\BusinessFunctionMembersSource;
 use App\Migrations\Sources\BusinessFunctionsSource;
 use App\Migrations\Sources\CompaniesSource;
 use App\Migrations\Sources\OperationalSitesSource;
+use App\Migrations\Sources\ProductCategoriesSource;
 use App\Migrations\Sources\ReferentsSource;
 use App\Migrations\Sources\ReferentTypesSource;
 use App\Migrations\Sources\RolesSource;
@@ -47,16 +49,18 @@ it('config/migrations.php registers every source (spec 0013 Increment 2)', funct
         'sources' => SourcesSource::class,
         'tags' => TagsSource::class,
         'sectors' => SectorsSource::class,
+        'attributes' => AttributesSource::class,
+        'product-categories' => ProductCategoriesSource::class,
     ]);
 });
 
 it('all() resolves every registered source', function () {
     $sources = app(MigrationRegistry::class)->all();
 
-    expect($sources)->toHaveCount(11)
+    expect($sources)->toHaveCount(13)
         ->and(array_map(fn ($source) => $source->key(), $sources))->toBe([
             'roles', 'users', 'business-functions', 'companies', 'operational-sites',
             'business-function-members', 'referent-types', 'referents',
-            'sources', 'tags', 'sectors',
+            'sources', 'tags', 'sectors', 'attributes', 'product-categories',
         ]);
 });
