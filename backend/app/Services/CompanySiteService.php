@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\DataObjects\CompanySites\CreateCompanySiteData;
 use App\DataObjects\CompanySites\UpdateCompanySiteData;
+use App\DataObjects\Users\ProfileData;
 use App\Enums\HttpStatusEnum;
 use App\Models\CompanySite;
 use App\Models\User;
@@ -11,9 +12,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Business logic for the `company-sites` resource (spec 0020): create/
- * update/delete/setDefault, delegating the single-address invariant to
- * AddressService and the banks diff to BankService — the controller stays
- * thin, this Service is the single authority.
+ * update/delete/setDefault, delegating the nested personal-data card (contacts
+ * + address) to CompanySiteProfileWriter and the banks diff to BankService —
+ * the controller stays thin, this Service is the single authority.
  *
  * `default_bank_id` is resolved AFTER the bank sync (constraint: the FK cycle
  * default_bank_id <-> banks is broken by writing the site first, syncing its
@@ -24,33 +25,41 @@ class CompanySiteService
 {
     /**
      * Relations eager-loaded on every returned model, so CompanySiteResource
-     * never N+1s while hydrating the address' geo names, the banks and the
-     * responsible/company references.
+     * never N+1s while hydrating the card's contacts, the address' geo names,
+     * the banks and the responsible/company references. Mirrors
+     * RegistryService::WRITE_RESULT_RELATIONS' card tree, plus the geo tree the
+     * PersonalDataResource/AddressResource read.
      *
      * @var array<int, string>
      */
     private const array HYDRATED_RELATIONS = [
-        'addresses.country', 'addresses.state', 'addresses.province', 'addresses.city',
+        'personalData.contacts',
+        'personalData.addresses',
+        'personalData.addresses.country', 'personalData.addresses.state',
+        'personalData.addresses.province', 'personalData.addresses.city',
         'banks',
         'responsibleRda', 'responsibleTickets', 'responsibleValidationContracts', 'responsibleValidationContractsTwo',
         'accountingManager', 'company',
     ];
 
     public function __construct(
-        private readonly AddressService $addresses,
+        private readonly CompanySiteProfileWriter $profileWriter,
         private readonly BankService $banks,
         private readonly LogoService $logos,
     ) {}
 
-    public function create(User $actor, CreateCompanySiteData $data): CompanySite
+    /**
+     * Create a new site. `name` is the site's OWN required column (from the
+     * scalar payload, NOT derived from the card, unlike Registry); the optional
+     * `personal_data` profile carries the card + its contacts/address.
+     */
+    public function create(User $actor, CreateCompanySiteData $data, ?ProfileData $profile): CompanySite
     {
-        return DB::transaction(function () use ($data): CompanySite {
+        return DB::transaction(function () use ($data, $profile): CompanySite {
             /** @var CompanySite $companySite */
             $companySite = CompanySite::create($data->attributes());
 
-            if ($data->hasAddress()) {
-                $this->addresses->createFor($companySite, $data->address);
-            }
+            $this->profileWriter->write($companySite, $profile);
 
             $this->banks->sync($companySite, $data->banks);
             $this->resolveDefaultBank($companySite, $data->defaultBankId, submitted: true);
@@ -63,18 +72,16 @@ class CompanySiteService
         });
     }
 
-    public function update(User $actor, CompanySite $companySite, UpdateCompanySiteData $data): CompanySite
+    public function update(User $actor, CompanySite $companySite, UpdateCompanySiteData $data, ?ProfileData $profile): CompanySite
     {
-        return DB::transaction(function () use ($companySite, $data): CompanySite {
+        return DB::transaction(function () use ($companySite, $data, $profile): CompanySite {
             $attributes = $data->submittedAttributes();
 
             if ($attributes !== []) {
                 $companySite->update($attributes);
             }
 
-            if ($data->hasAddress()) {
-                $this->writeAddress($companySite, $data);
-            }
+            $this->profileWriter->write($companySite, $profile);
 
             if ($data->banksSubmitted) {
                 $this->banks->sync($companySite, $data->banks);
@@ -89,8 +96,9 @@ class CompanySiteService
     }
 
     /**
-     * The owned address (HasAddresses), banks (FK cascade) and logo
-     * (HasAttachments) all cascade away with the site.
+     * The owned personal-data card (and its own contacts/address, via
+     * HasPersonalData), banks (FK cascade) and logo (HasAttachments) all
+     * cascade away with the site.
      */
     public function delete(CompanySite $companySite): void
     {
@@ -122,23 +130,6 @@ class CompanySiteService
     public function loadTree(CompanySite $companySite): CompanySite
     {
         return $companySite->fresh(self::HYDRATED_RELATIONS);
-    }
-
-    /**
-     * A site owns AT MOST one address (invariant enforced here, not the
-     * schema): update the existing row when there is one, else create it.
-     */
-    private function writeAddress(CompanySite $companySite, UpdateCompanySiteData $data): void
-    {
-        $existing = $companySite->addresses()->first();
-
-        if ($existing !== null) {
-            $this->addresses->update($existing, $data->address);
-
-            return;
-        }
-
-        $this->addresses->createFor($companySite, $data->address);
     }
 
     /**

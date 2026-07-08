@@ -10,13 +10,13 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * @mixin CompanySite
  *
- * Full company-site shape (spec 0020): Profilo/Impostazioni fields, the
- * single address (reusing CompanyAddressResource verbatim — it is a generic
- * ids+geo-names projection of an Address, despite its name, see the
- * companies module) and the owned banks, plus the read-only "Altro" section.
- * The 4 `responsible_*` relations are emitted as {id,label} references
- * (mirrors EmploymentResource::reference) only when eager-loaded
- * (CompanySiteService::loadTree always does, so no N+1 in practice).
+ * Full company-site shape (spec 0020): the site's own fields plus its nested
+ * personal-data card (contacts + address) via PersonalDataResource — exactly
+ * like RegistryResource — the owned banks, the Impostazioni fields and the
+ * read-only "Altro" section. The 4 `responsible_*` relations are emitted as
+ * {id,label} references (mirrors EmploymentResource::reference) only when
+ * eager-loaded (CompanySiteService::loadTree always does, so no N+1 in
+ * practice).
  */
 class CompanySiteResource extends JsonResource
 {
@@ -36,16 +36,16 @@ class CompanySiteResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'email' => $this->email,
-            'fiscal_code' => $this->fiscal_code,
-            'vat_number' => $this->vat_number,
-            'phone' => $this->phone,
-            'pec' => $this->pec,
-            'fax' => $this->fax,
             'notes' => $this->notes,
             'is_default' => $this->is_default,
             'logo_url' => $this->logoDataUri(),
-            'address' => $this->primaryAddress !== null ? new CompanyAddressResource($this->primaryAddress) : null,
+            // The nested personal-data tree (card + contacts + address), or
+            // null — always present as a key (the Service always eager-loads
+            // `personalData.contacts`/`personalData.addresses`), mirrors
+            // RegistryResource.
+            'personal_data' => $this->personalData !== null
+                ? new PersonalDataResource($this->personalData)
+                : null,
             'banks' => CompanySiteBankResource::collection($this->whenLoaded('banks')),
             'created_at' => $this->created_at,
         ];

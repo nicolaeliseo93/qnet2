@@ -2,10 +2,10 @@
 
 use App\Models\Address;
 use App\Models\City;
-use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\CompanySiteBank;
 use App\Models\Country;
+use App\Models\PersonalData;
 use App\Models\Province;
 use App\Models\State;
 use App\Models\User;
@@ -50,16 +50,33 @@ if (! function_exists('companySiteGeoChain')) {
     }
 }
 
+if (! function_exists('companySiteCompanyProfile')) {
+    /**
+     * A minimal valid nested personal_data payload (company, no children).
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    function companySiteCompanyProfile(array $overrides = []): array
+    {
+        return array_merge([
+            'type' => 'company',
+            'company_name' => 'Acme SpA',
+        ], $overrides);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // show — GET /api/company-sites/{companySite} (AC-006 shape reference)
 // ---------------------------------------------------------------------------
 
-it('show: 200 with the full data shape, address + banks + permissions', function () {
+it('show: 200 with the full data shape, personal_data (card+address) + banks + permissions', function () {
     $actor = userWithCompanySiteAbilities(['view']);
     $geo = companySiteGeoChain();
-    $target = CompanySite::factory()->create(['name' => 'Sede Nord', 'email' => 'nord@acme.test']);
-    Address::factory()->primary()->forCity($geo['city'])->for($target, 'addressable')->create(['line1' => 'Via Roma 1']);
-    $bank = CompanySiteBank::factory()->for($target)->create(['name' => 'Banca Uno']);
+    $target = CompanySite::factory()->create(['name' => 'Sede Nord']);
+    $card = PersonalData::factory()->company()->for($target, 'personable')->create(['company_name' => 'Nord SpA']);
+    Address::factory()->primary()->forCity($geo['city'])->for($card, 'addressable')->create(['line1' => 'Via Roma 1']);
+    CompanySiteBank::factory()->for($target)->create(['name' => 'Banca Uno']);
     Sanctum::actingAs($actor);
 
     $response = $this->getJson("/api/company-sites/{$target->id}")
@@ -67,10 +84,10 @@ it('show: 200 with the full data shape, address + banks + permissions', function
         ->assertJsonPath('success', true)
         ->assertJsonPath('data.id', $target->id)
         ->assertJsonPath('data.name', 'Sede Nord')
-        ->assertJsonPath('data.email', 'nord@acme.test')
         ->assertJsonPath('data.is_default', false)
-        ->assertJsonPath('data.address.line1', 'Via Roma 1')
-        ->assertJsonPath('data.address.city', 'Milano')
+        ->assertJsonPath('data.personal_data.company_name', 'Nord SpA')
+        ->assertJsonPath('data.personal_data.addresses.0.line1', 'Via Roma 1')
+        ->assertJsonPath('data.personal_data.addresses.0.city_id', $geo['city']->id)
         ->assertJsonPath('data.banks.0.name', 'Banca Uno');
 
     expect($response->json('permissions'))->toHaveKeys(['resource', 'fields', 'actions']);
@@ -95,40 +112,49 @@ it('show: 404 for a non-existent site', function () {
 // create — POST /api/company-sites (AC-007)
 // ---------------------------------------------------------------------------
 
-it('create: 201 + persists the site with address and banks, default_bank_id resolved', function () {
+it('create: 201 + persists the site with card, address and banks, default_bank_id resolved', function () {
     $actor = userWithCompanySiteAbilities(['create']);
     Sanctum::actingAs($actor);
 
-    $response = $this->postJson('/api/company-sites', [
+    $this->postJson('/api/company-sites', [
         'name' => 'Sede Sud',
-        'email' => 'sud@acme.test',
-        'address' => ['line1' => 'Via Napoli 5'],
+        'personal_data' => companySiteCompanyProfile([
+            'vat_number' => 'IT12345678901',
+            'addresses' => [['line1' => 'Via Napoli 5']],
+            'contacts' => [['type' => 'email', 'value' => 'sud@acme.test', 'is_primary' => true]],
+        ]),
         'banks' => [['name' => 'Banca Uno', 'iban' => 'IT60X0542811101000000123456']],
     ])->assertCreated()
         ->assertJsonPath('data.name', 'Sede Sud')
-        ->assertJsonPath('data.address.line1', 'Via Napoli 5')
+        ->assertJsonPath('data.personal_data.company_name', 'Acme SpA')
+        ->assertJsonPath('data.personal_data.vat_number', 'IT12345678901')
+        ->assertJsonPath('data.personal_data.addresses.0.line1', 'Via Napoli 5')
+        ->assertJsonPath('data.personal_data.contacts.0.value', 'sud@acme.test')
         ->assertJsonPath('data.banks.0.name', 'Banca Uno');
 
-    $this->assertDatabaseHas('company_sites', ['name' => 'Sede Sud', 'email' => 'sud@acme.test']);
+    $site = CompanySite::first();
+    $this->assertDatabaseHas('company_sites', ['name' => 'Sede Sud']);
     $this->assertDatabaseHas('company_site_banks', ['name' => 'Banca Uno']);
+    expect($site->personalData)->not->toBeNull()
+        ->and($site->personalData->personable_type)->toBe('company_site');
 });
 
-it('create: 201 without address/banks', function () {
+it('create: 201 without personal_data/banks (card is null)', function () {
     $actor = userWithCompanySiteAbilities(['create']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/company-sites', ['name' => 'No Frills', 'email' => 'nf@acme.test'])
+    $this->postJson('/api/company-sites', ['name' => 'No Frills'])
         ->assertCreated()
-        ->assertJsonPath('data.address', null)
+        ->assertJsonPath('data.personal_data', null)
         ->assertJsonPath('data.banks', []);
 });
 
-it('create: 422 when name/email are missing', function () {
+it('create: 422 when name is missing', function () {
     $actor = userWithCompanySiteAbilities(['create']);
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/company-sites', [])
-        ->assertStatus(422)->assertJsonValidationErrors(['name', 'email']);
+        ->assertStatus(422)->assertJsonValidationErrors(['name']);
 });
 
 it('create: 422 when a geo/user id does not exist', function () {
@@ -136,10 +162,24 @@ it('create: 422 when a geo/user id does not exist', function () {
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/company-sites', [
-        'name' => 'X', 'email' => 'x@acme.test',
-        'address' => ['line1' => 'Via X', 'city_id' => 999999],
+        'name' => 'X',
+        'personal_data' => companySiteCompanyProfile([
+            'addresses' => [['line1' => 'Via X', 'city_id' => 999999]],
+        ]),
         'responsible_rda_id' => 999999,
-    ])->assertStatus(422)->assertJsonValidationErrors(['address.city_id', 'responsible_rda_id']);
+    ])->assertStatus(422)->assertJsonValidationErrors(['personal_data.addresses.0.city_id', 'responsible_rda_id']);
+});
+
+it('create: 422 when personal_data.addresses carries more than one address (max 1)', function () {
+    $actor = userWithCompanySiteAbilities(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/company-sites', [
+        'name' => 'X',
+        'personal_data' => companySiteCompanyProfile([
+            'addresses' => [['line1' => 'Via A'], ['line1' => 'Via B']],
+        ]),
+    ])->assertStatus(422)->assertJsonValidationErrors('personal_data.addresses');
 });
 
 it('create: 422 on an invalid IBAN', function () {
@@ -147,7 +187,7 @@ it('create: 422 on an invalid IBAN', function () {
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/company-sites', [
-        'name' => 'X', 'email' => 'x@acme.test',
+        'name' => 'X',
         'banks' => [['name' => 'Bad Bank', 'iban' => 'not-an-iban']],
     ])->assertStatus(422)->assertJsonValidationErrors('banks.0.iban');
 });
@@ -157,7 +197,7 @@ it('create: 422 when default_bank_id is not among the submitted banks', function
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/company-sites', [
-        'name' => 'X', 'email' => 'x@acme.test',
+        'name' => 'X',
         'banks' => [['name' => 'Banca Uno']],
         'default_bank_id' => 123456,
     ])->assertStatus(422)->assertJsonValidationErrors('default_bank_id');
@@ -167,14 +207,14 @@ it('create: 403 without company-sites.create', function () {
     $actor = userWithCompanySiteAbilities([]);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/company-sites', ['name' => 'Nope', 'email' => 'nope@acme.test'])->assertForbidden();
+    $this->postJson('/api/company-sites', ['name' => 'Nope'])->assertForbidden();
 });
 
 it('create: 403 (base authorization) takes precedence over the "Altro" 422', function () {
     $actor = userWithCompanySiteAbilities([]);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/company-sites', ['name' => 'X', 'email' => 'x@acme.test', 'company_type' => 2])
+    $this->postJson('/api/company-sites', ['name' => 'X', 'company_type' => 2])
         ->assertForbidden();
 });
 
@@ -182,16 +222,18 @@ it('create: 403 (base authorization) takes precedence over the "Altro" 422', fun
 // delete — DELETE /api/company-sites/{companySite} (AC-012)
 // ---------------------------------------------------------------------------
 
-it('delete: 204, removes the site and cascades address + banks', function () {
+it('delete: 204, removes the site and cascades card, address + banks', function () {
     $actor = userWithCompanySiteAbilities(['delete']);
     $target = CompanySite::factory()->create();
-    $address = Address::factory()->primary()->for($target, 'addressable')->create();
+    $card = PersonalData::factory()->company()->for($target, 'personable')->create();
+    $address = Address::factory()->primary()->for($card, 'addressable')->create();
     $bank = CompanySiteBank::factory()->for($target)->create();
     Sanctum::actingAs($actor);
 
     $this->deleteJson("/api/company-sites/{$target->id}")->assertNoContent();
 
     $this->assertDatabaseMissing('company_sites', ['id' => $target->id]);
+    $this->assertDatabaseMissing('personal_data', ['id' => $card->id]);
     $this->assertDatabaseMissing('addresses', ['id' => $address->id]);
     $this->assertDatabaseMissing('company_site_banks', ['id' => $bank->id]);
 });

@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\Address;
 use App\Models\CompanySite;
+use App\Models\PersonalData;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -20,24 +20,26 @@ class CompanySiteFactory extends Factory
     {
         return [
             'name' => fake()->unique()->company(),
-            'email' => fake()->unique()->companyEmail(),
-            'fiscal_code' => fake()->optional()->numerify('FISC###########'),
-            'vat_number' => fake()->optional()->numerify('IT###########'),
-            'phone' => fake()->optional()->phoneNumber(),
-            'pec' => fake()->optional()->safeEmail(),
-            'fax' => fake()->optional()->phoneNumber(),
             'notes' => fake()->optional()->sentence(),
             'is_default' => false,
         ];
     }
 
     /**
-     * Attach a primary address (reusing AddressFactory) to the site.
+     * Attach a personal-data card (morph `personable`, type company) to the
+     * site — mirrors RegistryFactory::withPersonalData. Unlike Registry the
+     * site's `name` is NOT re-derived from the card (it is the site's own
+     * column). Pass a callback to customize the card factory (e.g. add
+     * contacts/addresses under the card).
      */
-    public function withAddress(): static
+    public function withPersonalData(?callable $factory = null): static
     {
-        return $this->afterCreating(function (CompanySite $companySite): void {
-            Address::factory()->primary()->for($companySite, 'addressable')->create();
+        return $this->afterCreating(function (CompanySite $companySite) use ($factory): void {
+            $card = PersonalData::factory()->company();
+            $card = $factory !== null ? $factory($card) : $card;
+
+            /** @var PersonalData $card */
+            $card->for($companySite, 'personable')->create();
         });
     }
 

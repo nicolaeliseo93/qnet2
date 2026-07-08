@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Landmark, Mail, MapPin, Receipt, Star, Users } from 'lucide-react'
+import { IdCard, Landmark, MapPin, Phone, Receipt, Star, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/user-avatar'
@@ -18,9 +18,29 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { AddressesManager } from '@/features/personal-data/addresses-manager'
+import { ContactsManager } from '@/features/personal-data/contacts-manager'
+import { cardToDraft } from '@/features/personal-data/drafts'
+import type { PersonalDataFieldPermissionResolver } from '@/features/personal-data/types'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchCompanySite, setDefaultCompanySite } from '@/features/company-sites/api'
-import type { CompanySiteAddress, CompanySiteBank } from '@/features/company-sites/types'
+import type { CompanySiteBank } from '@/features/company-sites/types'
+
+/**
+ * Renders the (owner-agnostic, reused unchanged) contacts/addresses managers
+ * in pure read-only mode: visible, never editable — no add/edit/remove
+ * affordance shows up.
+ */
+const READ_ONLY_FIELD_PERMISSION: PersonalDataFieldPermissionResolver = () => ({
+  visible: true,
+  editable: false,
+  required: false,
+  disabled: false,
+  readonly: true,
+})
+
+/** No-op change handler: the read-only managers never call it. */
+function noopChange(): void {}
 
 interface CompanySiteDetailProps {
   companySiteId: number
@@ -80,13 +100,15 @@ export function CompanySiteDetailView({ companySiteId, onDefaultChange }: Compan
 
   const createdAt = formatDateTime(site.created_at)
   const canSetDefault = !site.is_default && site.permissions.actions.set_default
+  const card = site.personal_data
+  const draft = card ? cardToDraft(card) : null
 
   return (
     <DetailPanel>
       <DetailHero
         media={<UserAvatar name={site.name} src={site.logo_url} className="size-14" />}
         title={site.name}
-        subtitle={site.email}
+        subtitle={card?.company_name ?? undefined}
         badges={
           site.is_default ? (
             <Badge variant="secondary">{t('companySites.detail.defaultBadge')}</Badge>
@@ -109,23 +131,49 @@ export function CompanySiteDetailView({ companySiteId, onDefaultChange }: Compan
         </div>
       )}
 
-      <DetailSection title={t('companySites.form.sections.general.title')}>
-        <DetailGrid>
-          <DetailField label={t('companySites.form.fiscalCode')} icon={<Receipt />}>
-            {site.fiscal_code || <DetailEmpty />}
-          </DetailField>
-          <DetailField label={t('companySites.form.vatNumber')} icon={<Receipt />}>
-            {site.vat_number || <DetailEmpty />}
-          </DetailField>
-          <DetailField label={t('companySites.form.phone')}>{site.phone || <DetailEmpty />}</DetailField>
-          <DetailField label={t('companySites.form.pec')} icon={<Mail />}>
-            {site.pec || <DetailEmpty />}
-          </DetailField>
-        </DetailGrid>
+      <DetailSection title={t('companySites.form.sections.identity.title')} icon={<IdCard />}>
+        {card ? (
+          <DetailGrid>
+            <DetailField label={t('personalData.form.companyName')} full>
+              {card.company_name || <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('personalData.form.vatNumber')} icon={<Receipt />}>
+              {card.vat_number || <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('personalData.form.taxCode')} icon={<Receipt />}>
+              {card.tax_code || <DetailEmpty />}
+            </DetailField>
+          </DetailGrid>
+        ) : (
+          <DetailEmpty />
+        )}
+      </DetailSection>
+
+      <DetailSection title={t('companySites.form.sections.contacts.title')} icon={<Phone />}>
+        {draft ? (
+          <ContactsManager
+            value={draft.contacts}
+            onChange={noopChange}
+            fieldPermission={READ_ONLY_FIELD_PERMISSION}
+            showHeader={false}
+          />
+        ) : (
+          <DetailEmpty />
+        )}
       </DetailSection>
 
       <DetailSection title={t('companySites.form.sections.address.title')} icon={<MapPin />}>
-        <AddressBlock address={site.address} />
+        {draft ? (
+          <AddressesManager
+            value={draft.addresses}
+            onChange={noopChange}
+            fieldPermission={READ_ONLY_FIELD_PERMISSION}
+            showHeader={false}
+            showSiteType
+          />
+        ) : (
+          <DetailEmpty />
+        )}
       </DetailSection>
 
       <DetailSection title={t('companySites.form.sections.banks.title')} icon={<Landmark />}>
@@ -153,25 +201,6 @@ export function CompanySiteDetailView({ companySiteId, onDefaultChange }: Compan
         <DetailMeta label={t('companySites.columns.created_at')}>{createdAt}</DetailMeta>
       ) : null}
     </DetailPanel>
-  )
-}
-
-/** Street lines followed by the muted postal/geo summary (mirrors CompanyDetailView). */
-function AddressBlock({ address }: { address: CompanySiteAddress | null }) {
-  if (!address) {
-    return <DetailEmpty />
-  }
-
-  const summary = [address.postal_code, address.city, address.province, address.region, address.country]
-    .filter(Boolean)
-    .join(', ')
-
-  return (
-    <div className="flex flex-col gap-0.5 text-sm text-foreground">
-      <span>{address.line1}</span>
-      {address.line2 ? <span>{address.line2}</span> : null}
-      {summary ? <span className="mt-1 text-muted-foreground">{summary}</span> : null}
-    </div>
   )
 }
 

@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\CompanySiteBank;
 use App\Models\Concerns\LogsModelActivity;
+use App\Models\PersonalData;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,10 +25,10 @@ uses(TestCase::class, RefreshDatabase::class);
 // AC-001 — schema
 // ---------------------------------------------------------------------------
 
-it('creates the company_sites table with the expected columns', function () {
+it('creates the company_sites table with the expected columns (no flat contact columns)', function () {
     expect(Schema::hasTable('company_sites'))->toBeTrue();
     expect(Schema::hasColumns('company_sites', [
-        'id', 'old_id', 'name', 'email', 'fiscal_code', 'vat_number', 'phone', 'pec', 'fax', 'notes', 'is_default',
+        'id', 'old_id', 'name', 'notes', 'is_default',
         'responsible_rda_id', 'responsible_tickets_id', 'responsible_validation_contracts_id',
         'responsible_validation_contracts_two_id', 'default_bank_id', 'proforma_progressive', 'invoice_progressive',
         'quotation_layout_id', 'quotation_header_id', 'quotation_footer_id',
@@ -35,6 +36,15 @@ it('creates the company_sites table with the expected columns', function () {
         'payment_status_assign_technician', 'payment_status_deposit', 'payment_status_balance',
         'default_payment_id', 'default_vat_id', 'status', 'color', 'surface_sqm', 'created_at', 'updated_at',
     ]))->toBeTrue();
+
+    // The flattened contact columns were removed: contacts/address now live on
+    // the personal-data card (HasPersonalData).
+    expect(Schema::hasColumn('company_sites', 'email'))->toBeFalse();
+    expect(Schema::hasColumn('company_sites', 'fiscal_code'))->toBeFalse();
+    expect(Schema::hasColumn('company_sites', 'vat_number'))->toBeFalse();
+    expect(Schema::hasColumn('company_sites', 'phone'))->toBeFalse();
+    expect(Schema::hasColumn('company_sites', 'pec'))->toBeFalse();
+    expect(Schema::hasColumn('company_sites', 'fax'))->toBeFalse();
 });
 
 it('creates the company_site_banks table with the expected columns and cascade FK', function () {
@@ -42,7 +52,7 @@ it('creates the company_site_banks table with the expected columns and cascade F
     expect(Schema::hasColumns('company_site_banks', ['id', 'old_id', 'company_site_id', 'name', 'iban', 'notes', 'created_at', 'updated_at']))->toBeTrue();
 });
 
-it('name/email are required at the database level', function () {
+it('name is required at the database level', function () {
     expect(fn () => DB::table('company_sites')->insert(['created_at' => now(), 'updated_at' => now()]))
         ->toThrow(QueryException::class);
 });
@@ -51,7 +61,7 @@ it('old_id is unique among company_sites when present', function () {
     CompanySite::factory()->create(['old_id' => 42]);
 
     expect(fn () => DB::table('company_sites')->insert([
-        'old_id' => 42, 'name' => 'Dup', 'email' => 'dup@example.test', 'created_at' => now(), 'updated_at' => now(),
+        'old_id' => 42, 'name' => 'Dup', 'created_at' => now(), 'updated_at' => now(),
     ]))->toThrow(QueryException::class);
 });
 
@@ -79,12 +89,13 @@ it('uses the "company_site" morph alias (enforced morphMap)', function () {
     expect((new CompanySite)->getMorphClass())->toBe('company_site');
 });
 
-it('addresses() is a polymorphic morphMany to Address', function () {
+it('personalData() is a polymorphic morphOne to PersonalData', function () {
     $companySite = CompanySite::factory()->create();
-    $address = Address::factory()->primary()->for($companySite, 'addressable')->create();
+    $card = PersonalData::factory()->company()->for($companySite, 'personable')->create();
 
-    expect($companySite->addresses)->toHaveCount(1)
-        ->and($companySite->addresses->first()->is($address))->toBeTrue();
+    expect($companySite->personalData)->not->toBeNull()
+        ->and($companySite->personalData->is($card))->toBeTrue()
+        ->and($card->personable_type)->toBe('company_site');
 });
 
 it('banks() is a real hasMany to CompanySiteBank', function () {
@@ -128,26 +139,21 @@ it('the 4 responsible relations and company()/accountingManager() are BelongsTo(
         ->and($companySite->company->is($company))->toBeTrue();
 });
 
-it('deleting a site cascades its address, banks and logo', function () {
+it('deleting a site cascades its card (contacts + address), banks and logo', function () {
     Storage::fake('local');
     $companySite = CompanySite::factory()->create();
-    $address = Address::factory()->primary()->for($companySite, 'addressable')->create();
+    $card = PersonalData::factory()->company()->for($companySite, 'personable')->create();
+    $address = Address::factory()->primary()->for($card, 'addressable')->create();
     $bank = CompanySiteBank::factory()->for($companySite)->create();
     $companySite->attach(UploadedFile::fake()->image('logo.png'), CompanySite::LOGO_COLLECTION);
     $attachmentId = $companySite->fresh()->logo->id;
 
     $companySite->delete();
 
-    expect(Address::find($address->id))->toBeNull()
+    expect(PersonalData::find($card->id))->toBeNull()
+        ->and(Address::find($address->id))->toBeNull()
         ->and(CompanySiteBank::find($bank->id))->toBeNull()
         ->and(Attachment::find($attachmentId))->toBeNull();
-});
-
-it('primaryAddress resolves the is_primary row, falling back to any owned row', function () {
-    $companySite = CompanySite::factory()->create();
-    $address = Address::factory()->primary()->for($companySite, 'addressable')->create();
-
-    expect($companySite->primaryAddress?->is($address))->toBeTrue();
 });
 
 it('logo()/logoDataUri() mirror the avatar pattern', function () {
@@ -167,9 +173,10 @@ it('logs model activity on the company_sites log channel', function () {
     expect(class_uses(CompanySite::class))->toHaveKey(LogsModelActivity::class);
 });
 
-it('factory withAddress()/default() states work', function () {
-    $companySite = CompanySite::factory()->withAddress()->default()->create();
+it('factory withPersonalData()/default() states work', function () {
+    $companySite = CompanySite::factory()->withPersonalData()->default()->create();
 
-    expect($companySite->addresses()->where('is_primary', true)->count())->toBe(1)
+    expect($companySite->personalData)->not->toBeNull()
+        ->and($companySite->personalData->type->value)->toBe('company')
         ->and($companySite->is_default)->toBeTrue();
 });

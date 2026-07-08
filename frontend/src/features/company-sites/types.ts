@@ -1,29 +1,16 @@
 /**
  * Company Sites CRUD types. The generic table types (columns/filters/actions/
  * rows) live in `features/table/types.ts`; this file holds only what is
- * genuinely company-sites-specific — the resource, its polymorphic address,
- * its inline banks collection and its create/update payloads. Source of
- * truth: the frozen spec 0020 `data_contract`.
+ * genuinely company-sites-specific — the resource, its embedded personal-data
+ * card (identity + contacts + single address), its inline banks collection and
+ * its create/update payloads. Source of truth: the frozen spec 0020
+ * `data_contract`; the nested `personal_data` sub-contract is reused unchanged
+ * from `features/personal-data` (mirrors the Registries module).
  */
 
+import type { PersonalDataCard } from '@/features/personal-data/types'
+import type { PersonalDataPayload } from '@/features/personal-data/drafts'
 import type { ResourcePermissions } from '@/features/authorization/types'
-
-/** The site's single address (polymorphic, same cascade as companies). */
-export interface CompanySiteAddress {
-  id: number
-  line1: string
-  line2: string | null
-  postal_code: string | null
-  country_id: number | null
-  state_id: number | null
-  province_id: number | null
-  city_id: number | null
-  country: string | null
-  region: string | null
-  province: string | null
-  city: string | null
-  is_primary: boolean
-}
 
 /** A single bank of the site's inline 1→N banks collection. */
 export interface CompanySiteBank {
@@ -46,16 +33,14 @@ export interface CompanySiteResponsibleRef {
 export interface CompanySiteDetail {
   id: number
   name: string
-  email: string
-  fiscal_code: string | null
-  vat_number: string | null
-  phone: string | null
-  pec: string | null
-  fax: string | null
   notes: string | null
   is_default: boolean
   logo_url: string | null
-  address: CompanySiteAddress | null
+  /**
+   * The site's personal-data card (identity + contacts + at most one address).
+   * `null` only in the pathological case of a site with no card yet.
+   */
+  personal_data: PersonalDataCard | null
   banks: CompanySiteBank[]
   default_bank_id: number | null
   responsible_rda_id: number | null
@@ -113,17 +98,6 @@ export interface CompanySiteDetailWithPermissions extends CompanySiteDetail {
   permissions: ResourcePermissions
 }
 
-/** The nested address block accepted by POST/PATCH /company-sites. */
-export interface CreateCompanySiteAddressPayload {
-  line1: string
-  line2?: string | null
-  postal_code?: string | null
-  country_id?: number | null
-  state_id?: number | null
-  province_id?: number | null
-  city_id?: number | null
-}
-
 /** A single bank row accepted by POST/PATCH /company-sites (`banks[]`). */
 export interface CreateCompanySiteBankPayload {
   /** Present = existing row to update; absent = new row to create. */
@@ -133,17 +107,16 @@ export interface CreateCompanySiteBankPayload {
   notes?: string | null
 }
 
-/** Payload for POST /company-sites (create). */
+/**
+ * Payload for POST /company-sites (create). `name` is the site's own required
+ * scalar (NOT derived from the card); `personal_data` is REQUIRED and always
+ * carries `type: 'company'` with at most one address (spec 0020, mirrors the
+ * Registries `personal_data` envelope).
+ */
 export interface CreateCompanySitePayload {
   name: string
-  email: string
-  fiscal_code?: string | null
-  vat_number?: string | null
-  phone?: string | null
-  pec?: string | null
-  fax?: string | null
   notes?: string | null
-  address?: CreateCompanySiteAddressPayload
+  personal_data: PersonalDataPayload
   banks?: CreateCompanySiteBankPayload[]
   default_bank_id?: number | null
   responsible_rda_id?: number | null
@@ -157,21 +130,15 @@ export interface CreateCompanySitePayload {
 /**
  * Payload for PATCH /company-sites/{id} (partial update). Every field is
  * optional so the request only carries what actually changed; a present
- * `address` fully rewrites the site's single address, a present `banks` is
- * the AUTHORITATIVE list (add/update/delete diff, resolved server-side by
- * `BankService::sync`). "Altro" fields and `is_default` are never sent (read-
- * only / dedicated `set-default` action).
+ * `personal_data` is a full-replace sync of the card + contacts + single
+ * address, a present `banks` is the AUTHORITATIVE list (add/update/delete
+ * diff, resolved server-side by `BankService::sync`). "Altro" fields and
+ * `is_default` are never sent (read-only / dedicated `set-default` action).
  */
 export interface UpdateCompanySitePayload {
   name?: string
-  email?: string
-  fiscal_code?: string | null
-  vat_number?: string | null
-  phone?: string | null
-  pec?: string | null
-  fax?: string | null
   notes?: string | null
-  address?: CreateCompanySiteAddressPayload
+  personal_data?: PersonalDataPayload
   banks?: CreateCompanySiteBankPayload[]
   default_bank_id?: number | null
   responsible_rda_id?: number | null

@@ -5,6 +5,7 @@ namespace App\Tables\CompanySites;
 use App\Models\Address;
 use App\Models\City;
 use App\Models\CompanySite;
+use App\Models\PersonalData;
 use App\Models\Province;
 use App\Models\State;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,15 +13,17 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * The 4 address-derived columns on the `company-sites` table — city/province/
- * region (geo names) and postal_code — each resolved from the site's PRIMARY
- * address (CompanySite -> Address, directly). Clone of CompanyAddressColumns
- * with a direct join on `addressable_type='company_site'`; NO `country`
- * column in this grid (spec 0020 contract, unlike companies').
+ * region (geo names) and postal_code — each resolved from the CARD's PRIMARY
+ * address (CompanySite -> personalData -> Address). The address lives on the
+ * personal-data card (morph `addressable_type='personal_data'`), which in turn
+ * belongs to the site (morph `personable_type='company_site'`), so every
+ * derivation hops through `personal_data`. NO `country` column in this grid
+ * (spec 0020 contract, unlike companies').
  *
  * Extracted out of CompanySitesTableDefinition (file-size split, engineering.md
  * §6): option resolution, the derived set/text filters, the derived sort and
  * the Excel-like distinct-values resolution for the 3 geo columns live in one
- * focused file, mirroring CompanyAddressColumns.
+ * focused file.
  */
 class CompanySiteAddressColumns
 {
@@ -68,8 +71,14 @@ class CompanySiteAddressColumns
                     ->from('addresses')
                     ->where('is_primary', true)
                     ->whereNotNull($foreignKey)
-                    // Morph alias (enforced morphMap), not the FQCN.
-                    ->where('addressable_type', (new CompanySite)->getMorphClass());
+                    // The address belongs to the site's card (morph alias),
+                    // and the card belongs to a company site.
+                    ->where('addressable_type', (new PersonalData)->getMorphClass())
+                    ->whereIn('addressable_id', function ($cardQuery): void {
+                        $cardQuery->select('id')
+                            ->from('personal_data')
+                            ->where('personable_type', (new CompanySite)->getMorphClass());
+                    });
             })
             ->orderBy('name')
             ->pluck('name')
@@ -113,7 +122,7 @@ class CompanySiteAddressColumns
 
         $relation = self::GEO_COLUMNS[$columnId]['relation'];
 
-        $query->whereHas('addresses', static function (Builder $addressQuery) use ($relation, $names): void {
+        $query->whereHas('personalData.addresses', static function (Builder $addressQuery) use ($relation, $names): void {
             $addressQuery->where('is_primary', true)
                 ->whereHas($relation, static function (Builder $geoQuery) use ($names): void {
                     $geoQuery->whereIn('name', $names);
@@ -136,7 +145,7 @@ class CompanySiteAddressColumns
             return;
         }
 
-        $query->whereHas('addresses', function (Builder $addressQuery) use ($needle): void {
+        $query->whereHas('personalData.addresses', function (Builder $addressQuery) use ($needle): void {
             $addressQuery->where('is_primary', true)->where('postal_code', 'like', $needle);
         });
     }
@@ -156,14 +165,16 @@ class CompanySiteAddressColumns
         return $model::query()
             ->select("{$geoTable}.name")
             ->join('addresses', "addresses.{$foreignKey}", '=', "{$geoTable}.id")
-            ->whereColumn('addresses.addressable_id', 'company_sites.id')
-            ->where('addresses.addressable_type', (new CompanySite)->getMorphClass())
+            ->join('personal_data', 'personal_data.id', '=', 'addresses.addressable_id')
+            ->where('addresses.addressable_type', (new PersonalData)->getMorphClass())
+            ->whereColumn('personal_data.personable_id', 'company_sites.id')
+            ->where('personal_data.personable_type', (new CompanySite)->getMorphClass())
             ->where('addresses.is_primary', true)
             ->limit(1);
     }
 
     /**
-     * Subquery selecting the primary address' postal code for a site.
+     * Subquery selecting the card's primary address' postal code for a site.
      *
      * @return Builder<Model>
      */
@@ -171,8 +182,10 @@ class CompanySiteAddressColumns
     {
         return Address::query()
             ->select('postal_code')
-            ->whereColumn('addresses.addressable_id', 'company_sites.id')
-            ->where('addresses.addressable_type', (new CompanySite)->getMorphClass())
+            ->join('personal_data', 'personal_data.id', '=', 'addresses.addressable_id')
+            ->where('addresses.addressable_type', (new PersonalData)->getMorphClass())
+            ->whereColumn('personal_data.personable_id', 'company_sites.id')
+            ->where('personal_data.personable_type', (new CompanySite)->getMorphClass())
             ->where('addresses.is_primary', true)
             ->limit(1);
     }

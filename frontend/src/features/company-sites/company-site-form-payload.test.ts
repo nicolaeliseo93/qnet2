@@ -1,38 +1,57 @@
 import { describe, expect, it } from 'vitest'
-import { buildCreatePayload, buildUpdatePayload } from '@/features/company-sites/company-site-form-payload'
+import { emptyPersonalDataDraft } from '@/features/personal-data/drafts'
+import type { PersonalDataCard, PersonalDataDraft } from '@/features/personal-data/types'
+import {
+  buildCreatePayload,
+  buildUpdatePayload,
+} from '@/features/company-sites/company-site-form-payload'
 import type { BankDraft, CompanySiteDetailWithPermissions } from '@/features/company-sites/types'
 import type { CompanySiteFormValues } from '@/features/company-sites/use-company-site-form'
 
-/** Spec 0020 AC-019: create payload shape, update payload diffs only changes. */
+/**
+ * Spec 0020: the create payload keeps `name` as the site's own scalar and
+ * always carries the nested `personal_data` tree (type `company`, at most one
+ * address); the update payload diffs only what changed, including the buffered
+ * anagraphic card.
+ */
 
-const EMPTY_ADDRESS: CompanySiteFormValues['address'] = {
-  line1: '',
-  line2: '',
-  postal_code: '',
-  country_id: null,
-  state_id: null,
-  province_id: null,
-  city_id: null,
+/** A company card draft matching `card()` below, so defaults compare equal. */
+function companyDraft(overrides: Partial<PersonalDataDraft> = {}): PersonalDataDraft {
+  return {
+    ...emptyPersonalDataDraft('company'),
+    company_name: 'ACME S.p.A.',
+    vat_number: 'IT12345678901',
+    tax_code: 'ACMFSC80A01H501U',
+    ...overrides,
+  }
+}
+
+function card(overrides: Partial<PersonalDataCard> = {}): PersonalDataCard {
+  return {
+    id: 99,
+    type: 'company',
+    first_name: null,
+    last_name: null,
+    company_name: 'ACME S.p.A.',
+    full_name: 'ACME S.p.A.',
+    ceo: null,
+    tax_code: 'ACMFSC80A01H501U',
+    vat_number: 'IT12345678901',
+    sdi_code: null,
+    birth_date: null,
+    gender: null,
+    personable_type: 'company_site',
+    personable_id: 7,
+    contacts: [],
+    addresses: [],
+    created_at: null,
+    ...overrides,
+  }
 }
 
 const formValues: CompanySiteFormValues = {
   name: 'Sede Nord',
-  email: 'nord@acme.test',
-  fiscal_code: 'ACMFSC80A01H501U',
-  vat_number: 'IT12345678901',
-  phone: '0123456789',
-  pec: 'nord@pec.acme.test',
-  fax: '',
   notes: '',
-  address: {
-    line1: '221B Baker Street',
-    line2: '',
-    postal_code: '20100',
-    country_id: 1,
-    state_id: 10,
-    province_id: 50,
-    city_id: 100,
-  },
   responsible_rda_id: 7,
   responsible_tickets_id: null,
   responsible_validation_contracts_id: null,
@@ -42,7 +61,9 @@ const formValues: CompanySiteFormValues = {
   invoice_progressive: 1,
 }
 
-const banks: BankDraft[] = [{ _key: 'bank-1', id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null }]
+const banks: BankDraft[] = [
+  { _key: 'bank-1', id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null },
+]
 
 function original(
   overrides: Partial<CompanySiteDetailWithPermissions> = {},
@@ -50,30 +71,10 @@ function original(
   return {
     id: 7,
     name: 'Sede Nord',
-    email: 'nord@acme.test',
-    fiscal_code: 'ACMFSC80A01H501U',
-    vat_number: 'IT12345678901',
-    phone: '0123456789',
-    pec: 'nord@pec.acme.test',
-    fax: null,
     notes: null,
     is_default: false,
     logo_url: null,
-    address: {
-      id: 3,
-      line1: '221B Baker Street',
-      line2: null,
-      postal_code: '20100',
-      country_id: 1,
-      state_id: 10,
-      province_id: 50,
-      city_id: 100,
-      country: 'Italy',
-      region: 'Lombardy',
-      province: 'Milan',
-      city: 'Milan',
-      is_primary: true,
-    },
+    personal_data: card(),
     banks: [{ id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null }],
     default_bank_id: null,
     responsible_rda_id: 7,
@@ -128,43 +129,48 @@ function original(
 }
 
 describe('buildCreatePayload', () => {
-  it('includes the scalar fields, the address and the banks buffer', () => {
-    const payload = buildCreatePayload(formValues, banks)
+  it('keeps name as the site scalar and always carries a company personal_data tree', () => {
+    const payload = buildCreatePayload(formValues, banks, companyDraft())
 
     expect(payload.name).toBe('Sede Nord')
-    expect(payload.email).toBe('nord@acme.test')
-    expect(payload.address).toEqual({
-      line1: '221B Baker Street',
-      line2: null,
-      postal_code: '20100',
-      country_id: 1,
-      state_id: 10,
-      province_id: 50,
-      city_id: 100,
-    })
+    expect(payload.personal_data.type).toBe('company')
+    expect(payload.personal_data.company_name).toBe('ACME S.p.A.')
+    expect(payload.personal_data.vat_number).toBe('IT12345678901')
     expect(payload.banks).toEqual([
       { id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null },
     ])
   })
 
-  it('sends null for blank optional scalars', () => {
-    const payload = buildCreatePayload({ ...formValues, fax: '', notes: '' }, banks)
-    expect(payload.fax).toBeNull()
+  it('maps a blank notes string to null', () => {
+    const payload = buildCreatePayload({ ...formValues, notes: '' }, banks, companyDraft())
     expect(payload.notes).toBeNull()
   })
 
-  it('omits the address entirely when every field is left blank', () => {
-    const payload = buildCreatePayload({ ...formValues, address: EMPTY_ADDRESS }, banks)
-    expect('address' in payload).toBe(false)
-  })
-
   it('omits banks when the buffer is empty', () => {
-    const payload = buildCreatePayload(formValues, [])
+    const payload = buildCreatePayload(formValues, [], companyDraft())
     expect('banks' in payload).toBe(false)
   })
 
+  it('caps personal_data.addresses to a single entry', () => {
+    const twoAddresses = companyDraft({
+      addresses: [
+        {
+          _key: 'a1', line1: 'First', line2: null, postal_code: null, city_id: null,
+          province_id: null, state_id: null, country_id: null, is_primary: true, site_type: 'legal_seat',
+        },
+        {
+          _key: 'a2', line1: 'Second', line2: null, postal_code: null, city_id: null,
+          province_id: null, state_id: null, country_id: null, is_primary: false, site_type: 'billing',
+        },
+      ],
+    })
+    const payload = buildCreatePayload(formValues, banks, twoAddresses)
+    expect(payload.personal_data.addresses).toHaveLength(1)
+    expect(payload.personal_data.addresses?.[0].line1).toBe('First')
+  })
+
   it('never includes an "Altro" field or is_default', () => {
-    const payload = buildCreatePayload(formValues, banks)
+    const payload = buildCreatePayload(formValues, banks, companyDraft())
     expect('status' in payload).toBe(false)
     expect('company_id' in payload).toBe(false)
     expect('is_default' in payload).toBe(false)
@@ -172,34 +178,39 @@ describe('buildCreatePayload', () => {
 })
 
 describe('buildUpdatePayload', () => {
-  it('omits every field when nothing changed', () => {
-    const payload = buildUpdatePayload(formValues, original(), banks)
+  it('omits every field, including personal_data, when nothing changed', () => {
+    const payload = buildUpdatePayload(formValues, original(), banks, companyDraft())
     expect(payload).toEqual({})
   })
 
   it('includes only the changed name', () => {
-    const payload = buildUpdatePayload({ ...formValues, name: 'Sede Nord EU' }, original(), banks)
+    const payload = buildUpdatePayload(
+      { ...formValues, name: 'Sede Nord EU' },
+      original(),
+      banks,
+      companyDraft(),
+    )
     expect(payload).toEqual({ name: 'Sede Nord EU' })
   })
 
-  it('includes the address only when it actually changed', () => {
-    const unchanged = buildUpdatePayload(formValues, original(), banks)
-    expect('address' in unchanged).toBe(false)
-
+  it('includes personal_data only when the buffered card actually differs', () => {
     const changed = buildUpdatePayload(
-      { ...formValues, address: { ...formValues.address, postal_code: '20121' } },
+      formValues,
       original(),
       banks,
+      companyDraft({ company_name: 'ACME International S.p.A.' }),
     )
-    expect(changed.address).toMatchObject({ postal_code: '20121' })
+    expect(changed.personal_data).toBeDefined()
+    expect(changed.personal_data?.company_name).toBe('ACME International S.p.A.')
+    expect(changed.name).toBeUndefined()
   })
 
   it('includes banks only when the buffer differs from the original collection (AC-019)', () => {
-    const unchanged = buildUpdatePayload(formValues, original(), banks)
+    const unchanged = buildUpdatePayload(formValues, original(), banks, companyDraft())
     expect('banks' in unchanged).toBe(false)
 
     const added: BankDraft[] = [...banks, { _key: 'bank-new', name: 'Nuova Banca', iban: null, notes: null }]
-    const changed = buildUpdatePayload(formValues, original(), added)
+    const changed = buildUpdatePayload(formValues, original(), added, companyDraft())
     expect(changed.banks).toEqual([
       { id: 1, name: 'Banca Test', iban: 'IT60X0542811101000000123456', notes: null },
       { name: 'Nuova Banca', iban: null, notes: null },
@@ -207,12 +218,17 @@ describe('buildUpdatePayload', () => {
   })
 
   it('includes banks when a row is removed from the buffer', () => {
-    const changed = buildUpdatePayload(formValues, original(), [])
+    const changed = buildUpdatePayload(formValues, original(), [], companyDraft())
     expect(changed.banks).toEqual([])
   })
 
   it('never sends an "Altro" field or is_default even when the original differs', () => {
-    const payload = buildUpdatePayload(formValues, original({ status: 3, company_id: 9 }), banks)
+    const payload = buildUpdatePayload(
+      formValues,
+      original({ status: 3, company_id: 9 }),
+      banks,
+      companyDraft(),
+    )
     expect('status' in payload).toBe(false)
     expect('company_id' in payload).toBe(false)
     expect('is_default' in payload).toBe(false)

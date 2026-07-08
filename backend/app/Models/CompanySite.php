@@ -3,11 +3,10 @@
 namespace App\Models;
 
 use App\Models\Abstracts\BaseModel;
-use App\Models\Concerns\HasAddresses;
 use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasPersonalData;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\CompanySiteFactory;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,9 +15,14 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Company site entity (spec 0020 — "Società Sedi"): a flexible site
- * anagraphic under a Company. Reuses the same building blocks as `Company`
- * (single polymorphic address) and `User` (polymorphic logo, avatar
- * pattern), plus an owned bank list via a real FK (not a morph).
+ * anagraphic under a Company. Reuses the users/referents anagraphic stack
+ * unchanged via `HasPersonalData` (morph `personable`): the site owns a
+ * personal-data card, which in turn owns its own contacts/addresses — the
+ * SAME discipline as the Registry module. A polymorphic logo (avatar pattern)
+ * and an owned bank list via a real FK (not a morph) complete it.
+ *
+ * Unlike Registry, `name` is the site's OWN required column (not derived from
+ * the card).
  *
  * The "Altro" section attributes (company/accountingManager/store/...) are
  * read-only for now (CompanySitesAuthorization ceiling + EnforcesFieldPermissions
@@ -27,7 +31,7 @@ use Illuminate\Support\Facades\Storage;
 class CompanySite extends BaseModel
 {
     /** @use HasFactory<CompanySiteFactory> */
-    use HasAddresses, HasAttachments, HasFactory, LogsModelActivity;
+    use HasAttachments, HasFactory, HasPersonalData, LogsModelActivity;
 
     /**
      * Attachment collection that holds the site's logo. A site keeps at most
@@ -36,7 +40,7 @@ class CompanySite extends BaseModel
     public const string LOGO_COLLECTION = 'logo';
 
     protected $fillable = [
-        'name', 'email', 'fiscal_code', 'vat_number', 'phone', 'pec', 'fax', 'notes', 'is_default',
+        'name', 'notes', 'is_default',
         'responsible_rda_id', 'responsible_tickets_id', 'responsible_validation_contracts_id',
         'responsible_validation_contracts_two_id', 'default_bank_id', 'proforma_progressive',
         'invoice_progressive', 'quotation_layout_id', 'quotation_header_id', 'quotation_footer_id',
@@ -155,18 +159,5 @@ class CompanySite extends BaseModel
         }
 
         return 'data:'.$logo->mime_type.';base64,'.base64_encode($disk->get($logo->path));
-    }
-
-    /**
-     * The site's single address, read off the `addresses` morph (first
-     * primary row, falling back to any owned row) — mirrors Company::primaryAddress.
-     */
-    protected function primaryAddress(): Attribute
-    {
-        return Attribute::get(function (): ?Address {
-            $addresses = $this->addresses;
-
-            return $addresses->firstWhere('is_primary', true) ?? $addresses->first();
-        });
     }
 }

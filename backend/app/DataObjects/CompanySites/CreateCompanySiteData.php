@@ -2,7 +2,6 @@
 
 namespace App\DataObjects\CompanySites;
 
-use App\DataObjects\PersonalData\CreateAddress;
 use Illuminate\Http\UploadedFile;
 
 /**
@@ -11,9 +10,12 @@ use Illuminate\Http\UploadedFile;
  * StoreCompanySiteRequest → CompanySiteService contract is explicit — see
  * standards/architecture.md → Data Transfer Objects.
  *
- * Only the Profilo + Impostazioni fields are writable here — the "Altro"
- * section and `is_default` are never accepted on this path (Altro is
- * read-only; the default flag is set exclusively via
+ * Only the site's OWN scalar fields (name/notes + Impostazioni) plus the banks
+ * are carried here. The nested `personal_data` card (contacts + address) is
+ * read separately by the controller via the request's toProfile()
+ * (ValidatesUserProfile) and handed to CompanySiteService as a ProfileData,
+ * mirroring Registry. The "Altro" section and `is_default` are never accepted
+ * on this path (Altro is read-only; the default flag is set exclusively via
  * POST /company-sites/{id}/set-default).
  */
 final readonly class CreateCompanySiteData
@@ -23,12 +25,6 @@ final readonly class CreateCompanySiteData
      */
     public function __construct(
         public string $name,
-        public string $email,
-        public ?string $fiscalCode = null,
-        public ?string $vatNumber = null,
-        public ?string $phone = null,
-        public ?string $pec = null,
-        public ?string $fax = null,
         public ?string $notes = null,
         public ?int $responsibleRdaId = null,
         public ?int $responsibleTicketsId = null,
@@ -36,7 +32,6 @@ final readonly class CreateCompanySiteData
         public ?int $responsibleValidationContractsTwoId = null,
         public ?int $proformaProgressive = null,
         public ?int $invoiceProgressive = null,
-        public ?CreateAddress $address = null,
         public array $banks = [],
         public ?int $defaultBankId = null,
         public ?UploadedFile $logo = null,
@@ -51,12 +46,6 @@ final readonly class CreateCompanySiteData
     {
         return new self(
             name: (string) $data['name'],
-            email: (string) $data['email'],
-            fiscalCode: $data['fiscal_code'] ?? null,
-            vatNumber: $data['vat_number'] ?? null,
-            phone: $data['phone'] ?? null,
-            pec: $data['pec'] ?? null,
-            fax: $data['fax'] ?? null,
             notes: $data['notes'] ?? null,
             responsibleRdaId: isset($data['responsible_rda_id']) ? (int) $data['responsible_rda_id'] : null,
             responsibleTicketsId: isset($data['responsible_tickets_id']) ? (int) $data['responsible_tickets_id'] : null,
@@ -64,16 +53,10 @@ final readonly class CreateCompanySiteData
             responsibleValidationContractsTwoId: isset($data['responsible_validation_contracts_two_id']) ? (int) $data['responsible_validation_contracts_two_id'] : null,
             proformaProgressive: isset($data['proforma_progressive']) ? (int) $data['proforma_progressive'] : null,
             invoiceProgressive: isset($data['invoice_progressive']) ? (int) $data['invoice_progressive'] : null,
-            address: self::buildAddress($data['address'] ?? null),
             banks: self::buildBanks($data['banks'] ?? []),
             defaultBankId: isset($data['default_bank_id']) ? (int) $data['default_bank_id'] : null,
             logo: $logo,
         );
-    }
-
-    public function hasAddress(): bool
-    {
-        return $this->address !== null;
     }
 
     public function hasLogo(): bool
@@ -90,12 +73,6 @@ final readonly class CreateCompanySiteData
     {
         return [
             'name' => $this->name,
-            'email' => $this->email,
-            'fiscal_code' => $this->fiscalCode,
-            'vat_number' => $this->vatNumber,
-            'phone' => $this->phone,
-            'pec' => $this->pec,
-            'fax' => $this->fax,
             'notes' => $this->notes,
             'responsible_rda_id' => $this->responsibleRdaId,
             'responsible_tickets_id' => $this->responsibleTicketsId,
@@ -104,26 +81,6 @@ final readonly class CreateCompanySiteData
             'proforma_progressive' => $this->proformaProgressive,
             'invoice_progressive' => $this->invoiceProgressive,
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>|null  $address
-     */
-    private static function buildAddress(?array $address): ?CreateAddress
-    {
-        if ($address === null) {
-            return null;
-        }
-
-        return new CreateAddress(
-            line1: (string) ($address['line1'] ?? ''),
-            line2: $address['line2'] ?? null,
-            postalCode: $address['postal_code'] ?? null,
-            cityId: isset($address['city_id']) ? (int) $address['city_id'] : null,
-            provinceId: isset($address['province_id']) ? (int) $address['province_id'] : null,
-            stateId: isset($address['state_id']) ? (int) $address['state_id'] : null,
-            countryId: isset($address['country_id']) ? (int) $address['country_id'] : null,
-        );
     }
 
     /**

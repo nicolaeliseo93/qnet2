@@ -7,10 +7,14 @@ namespace App\Tables\CompanySites;
  * (spec 0020).
  *
  * Extracted out of CompanySitesTableDefinition (file-size split, engineering.md
- * §6): pure data (no logic), mirroring CompanyColumnCatalog. The 3 geo/postal
- * columns (city/province/region/postal_code) have no real DB column of their
- * own — derived from the site's primary address, handled by
- * CompanySiteAddressColumns.
+ * §6): pure data (no logic), mirroring RegistryColumnCatalog. `primary_contact`
+ * is COMPUTED from the card's contacts (shared PrimaryContactColumn), like the
+ * Registry grid; the 4 geo/postal columns (city/province/region/postal_code)
+ * have no real DB column of their own — derived from the card's primary
+ * address, handled by CompanySiteAddressColumns. Email/vat_number/phone are no
+ * longer real columns (they live on the card / its contacts), so they are not
+ * grid columns of their own — `primary_contact` surfaces the contact channels
+ * instead.
  */
 final class CompanySiteColumnCatalog
 {
@@ -52,33 +56,15 @@ final class CompanySiteColumnCatalog
                 'searchable' => true,
             ],
             [
-                'id' => 'email',
-                'label' => 'companySites.columns.email',
-                'type' => 'text',
+                // The card's primary contacts (shared PrimaryContactColumn),
+                // display-only here: neither sortable nor filterable (mirrors
+                // the Registry grid, spec 0020 data contract).
+                'id' => 'primary_contact',
+                'label' => 'companySites.columns.primaryContact',
+                'type' => 'tags',
                 'visible' => true,
-                'sortable' => true,
-                'filterable' => true,
-                'filterType' => 'text',
-                'searchable' => true,
-            ],
-            [
-                'id' => 'vat_number',
-                'label' => 'companySites.columns.vatNumber',
-                'type' => 'text',
-                'visible' => true,
-                'sortable' => true,
-                'filterable' => true,
-                'filterType' => 'text',
-                'searchable' => true,
-            ],
-            [
-                'id' => 'phone',
-                'label' => 'companySites.columns.phone',
-                'type' => 'text',
-                'visible' => true,
-                'sortable' => true,
-                'filterable' => true,
-                'filterType' => 'text',
+                'sortable' => false,
+                'filterable' => false,
             ],
             [
                 // Geo name from the primary address. Set filter with
@@ -143,9 +129,6 @@ final class CompanySiteColumnCatalog
         return [
             ['columnId' => 'is_default', 'type' => 'set'],
             ['columnId' => 'name', 'type' => 'text'],
-            ['columnId' => 'email', 'type' => 'text'],
-            ['columnId' => 'vat_number', 'type' => 'text'],
-            ['columnId' => 'phone', 'type' => 'text'],
             // Geo set filters: options resolved dynamically in optionsFor().
             ['columnId' => 'city', 'type' => 'set'],
             ['columnId' => 'province', 'type' => 'set'],

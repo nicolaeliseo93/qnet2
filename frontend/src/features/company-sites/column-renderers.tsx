@@ -2,7 +2,7 @@
 import type { ICellRendererParams } from 'ag-grid-community'
 import i18n from '@/i18n'
 import { Badge } from '@/components/ui/badge'
-import { DateTimeCell } from '@/features/table/cell-renderers'
+import { ContactsCell, DateTimeCell } from '@/features/table/cell-renderers'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 
 /** Renders the `is_default` column as a "Default" badge, blank otherwise (AC-015). */
@@ -17,11 +17,14 @@ function DefaultBadgeCell({ value }: ICellRendererParams) {
 }
 
 /**
- * Custom cell renderers keyed by the backend column `id`. `city`/`province`
- * (geo-derived) and the scalar fields (`name`/`email`/`vat_number`/`phone`)
- * fall back to AG Grid defaults.
+ * Custom cell renderers keyed by the backend column `id`. `is_default`,
+ * `primary_contact` (the card's primary contacts, shared `PrimaryContactColumn`
+ * → compact count + tooltip) and `created_at` need special rendering; every
+ * other backend-declared column (`name`, the geo-derived city/province/region,
+ * postal_code) falls back to the AG Grid default cell.
  */
 export const companySiteColumnRenderers: TableRendererMap = {
   is_default: (params) => <DefaultBadgeCell {...params} />,
+  primary_contact: (params) => <ContactsCell {...params} />,
   created_at: (params) => <DateTimeCell {...params} />,
 }

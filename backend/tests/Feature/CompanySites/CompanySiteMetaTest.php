@@ -34,7 +34,7 @@ it('403 without company-sites.viewAny', function () {
     $this->getJson('/api/meta/company-sites')->assertForbidden();
 });
 
-it('200: field catalogue is grouped profile/settings/banks/other, mandatory on name+email', function () {
+it('200: field catalogue is grouped profile/personal_data/settings/banks/other, mandatory on name', function () {
     $actor = userWithCompanySiteAbilities(['viewAny', 'create']);
     Sanctum::actingAs($actor);
 
@@ -46,9 +46,13 @@ it('200: field catalogue is grouped profile/settings/banks/other, mandatory on n
 
     expect($fields['name']['group'])->toBe('profile')
         ->and($fields['name']['mandatory'])->toBeTrue()
-        ->and($fields['email']['mandatory'])->toBeTrue()
         ->and($fields['logo']['group'])->toBe('profile')
-        ->and($fields['address']['group'])->toBe('profile')
+        ->and($fields['personal_data.company_name']['group'])->toBe('personal_data')
+        ->and($fields['personal_data.vat_number']['group'])->toBe('personal_data')
+        ->and($fields['personal_data.contacts']['group'])->toBe('personal_data')
+        ->and($fields['personal_data.contacts']['type'])->toBe('collection')
+        ->and($fields['personal_data.addresses']['group'])->toBe('personal_data')
+        ->and($fields['personal_data.addresses']['type'])->toBe('collection')
         ->and($fields['responsible_rda_id']['group'])->toBe('settings')
         ->and($fields['default_bank_id']['group'])->toBe('settings')
         ->and($fields['banks']['group'])->toBe('banks')

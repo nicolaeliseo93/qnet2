@@ -3,9 +3,16 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
+import axios from 'axios'
 import { toast } from 'sonner'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { cardToDraft, emptyPersonalDataDraft } from '@/features/personal-data/drafts'
+import { buildPersonalDataSchema } from '@/features/personal-data/personal-data-schema'
+import type {
+  PersonalDataDraft,
+  PersonalDataFieldPermission,
+} from '@/features/personal-data/types'
 import {
   createCompanySite,
   deleteCompanySiteLogo,
@@ -29,34 +36,14 @@ import type { ForSelectItem } from '@/features/for-select/types'
 
 export type CompanySiteFormValues = CreateCompanySiteFormValues & UpdateCompanySiteFormValues
 
-/** The blank address block a new site (or one without an address) starts from. */
-const EMPTY_ADDRESS: CompanySiteFormValues['address'] = {
-  line1: '',
-  line2: '',
-  postal_code: '',
-  country_id: null,
-  state_id: null,
-  province_id: null,
-  city_id: null,
-}
-
-/** Server-side field names mapped onto the form for 422 handling. */
+/**
+ * Server-side scalar field names mapped onto the form for 422 handling. The
+ * nested `personal_data.*` paths are NOT here — that buffer lives outside RHF —
+ * their 422 messages surface in a banner (see `personalDataServerErrorMessage`).
+ */
 const SERVER_ERROR_FIELDS = [
   'name',
-  'email',
-  'fiscal_code',
-  'vat_number',
-  'phone',
-  'pec',
-  'fax',
   'notes',
-  'address.line1',
-  'address.line2',
-  'address.postal_code',
-  'address.country_id',
-  'address.state_id',
-  'address.province_id',
-  'address.city_id',
   'responsible_rda_id',
   'responsible_tickets_id',
   'responsible_validation_contracts_id',
@@ -65,6 +52,26 @@ const SERVER_ERROR_FIELDS = [
   'proforma_progressive',
   'invoice_progressive',
 ] as const
+
+/**
+ * Collects every `personal_data.*` (or bare `personal_data`) message from a
+ * 422 response into a single banner string. The buffered anagraphic draft is
+ * not an RHF field, so its server errors surface here rather than inline in the
+ * shared card/contacts/address components (mirrors the Registries module).
+ */
+function personalDataServerErrorMessage(error: unknown): string | null {
+  if (!axios.isAxiosError(error) || error.response?.status !== 422) {
+    return null
+  }
+  const errors = error.response.data?.errors as Record<string, string[]> | undefined
+  if (!errors) {
+    return null
+  }
+  const messages = Object.entries(errors)
+    .filter(([key]) => key === 'personal_data' || key.startsWith('personal_data.'))
+    .flatMap(([, fieldMessages]) => fieldMessages)
+  return messages.length > 0 ? messages.join(' ') : null
+}
 
 interface UseCompanySiteFormArgs {
   mode: CompanySiteFormMode
@@ -81,12 +88,35 @@ interface UseCompanySiteFormArgs {
 export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompanySiteFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { canAction } = useResourcePermissions()
+  const { canAction, field: fieldPermission } = useResourcePermissions()
   const [serverError, setServerError] = useState<string | null>(null)
   // CREATE mode only: logo chosen before the site exists, uploaded after save.
   const [pendingLogo, setPendingLogo] = useState<File | null>(null)
 
   const isEdit = mode.type === 'edit'
+
+  // Adapts the resolved authorization metadata to the personal-data domain's
+  // own gating shape (spec 0008 D3): the shared card/contacts/address
+  // components stay decoupled from `@/features/authorization`.
+  const personalDataFieldPermission = (key: string): PersonalDataFieldPermission => {
+    const permission = fieldPermission(key)
+    return {
+      visible: permission.visible,
+      editable: permission.editable,
+      required: permission.required,
+      disabled: permission.disabled,
+      readonly: permission.readonly,
+    }
+  }
+
+  // The buffered anagraphic card (identity + contacts + single address). Seeded
+  // from the loaded site's embedded card in edit mode; a blank company card
+  // otherwise. Its `type` is always `company` (locked in the card form).
+  const [profileDraft, setProfileDraft] = useState<PersonalDataDraft>(() =>
+    mode.type === 'edit' && mode.companySite.personal_data
+      ? cardToDraft(mode.companySite.personal_data)
+      : emptyPersonalDataDraft('company'),
+  )
 
   // The buffered banks collection (mirrors `ContactsManager`'s pattern): lives
   // outside RHF, seeded once from the loaded site and submitted as the
@@ -105,27 +135,9 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
   const defaultValues = useMemo<CompanySiteFormValues>(() => {
     if (mode.type === 'edit') {
       const site = mode.companySite
-      const address = site.address
       return {
         name: site.name,
-        email: site.email,
-        fiscal_code: site.fiscal_code ?? '',
-        vat_number: site.vat_number ?? '',
-        phone: site.phone ?? '',
-        pec: site.pec ?? '',
-        fax: site.fax ?? '',
         notes: site.notes ?? '',
-        address: address
-          ? {
-              line1: address.line1,
-              line2: address.line2 ?? '',
-              postal_code: address.postal_code ?? '',
-              country_id: address.country_id,
-              state_id: address.state_id,
-              province_id: address.province_id,
-              city_id: address.city_id,
-            }
-          : EMPTY_ADDRESS,
         responsible_rda_id: site.responsible_rda_id,
         responsible_tickets_id: site.responsible_tickets_id,
         responsible_validation_contracts_id: site.responsible_validation_contracts_id,
@@ -137,14 +149,7 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
     }
     return {
       name: '',
-      email: '',
-      fiscal_code: '',
-      vat_number: '',
-      phone: '',
-      pec: '',
-      fax: '',
       notes: '',
-      address: EMPTY_ADDRESS,
       responsible_rda_id: null,
       responsible_tickets_id: null,
       responsible_validation_contracts_id: null,
@@ -188,20 +193,48 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
     defaultValues,
   })
 
+  // The anagraphic card is mandatory (always a company): block the save until
+  // its required identity fields are valid. The card form shows the field-level
+  // messages inline (mirrors the Registries module).
+  const profileValid = useMemo(
+    () =>
+      buildPersonalDataSchema(t).safeParse({
+        type: profileDraft.type,
+        company_name: profileDraft.company_name ?? undefined,
+        tax_code: profileDraft.tax_code ?? undefined,
+        vat_number: profileDraft.vat_number ?? undefined,
+      }).success,
+    [profileDraft, t],
+  )
+
   const onSubmit = async (values: CompanySiteFormValues) => {
     setServerError(null)
+
+    if (!profileValid) {
+      setServerError(t('personalData.section.incomplete'))
+      return
+    }
+
     try {
       if (mode.type === 'edit') {
         const saved = await updateCompanySite(
           mode.companySite.id,
-          buildUpdatePayload(values, mode.companySite, banksDraft),
+          buildUpdatePayload(
+            values,
+            mode.companySite,
+            banksDraft,
+            profileDraft,
+            personalDataFieldPermission,
+          ),
         )
         toast.success(t('companySites.form.updated'))
         onSuccess(saved)
         return
       }
 
-      const created = await createCompanySite(buildCreatePayload(values, banksDraft))
+      const created = await createCompanySite(
+        buildCreatePayload(values, banksDraft, profileDraft, personalDataFieldPermission),
+      )
       toast.success(t('companySites.form.created'))
 
       // The site exists now; upload the deferred logo before handing off. A
@@ -219,7 +252,13 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
 
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      const mappedScalar = applyServerValidationErrors(error, form.setError, [
+        ...SERVER_ERROR_FIELDS,
+      ])
+      const personalDataMessage = personalDataServerErrorMessage(error)
+      if (personalDataMessage) {
+        setServerError(personalDataMessage)
+      } else if (!mappedScalar) {
         setServerError(t('companySites.form.genericError'))
       }
     }
@@ -269,6 +308,10 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
     form,
     isEdit,
     serverError,
+    profileDraft,
+    setProfileDraft,
+    profileValid,
+    personalDataFieldPermission,
     pendingLogo,
     setPendingLogo,
     banksDraft,

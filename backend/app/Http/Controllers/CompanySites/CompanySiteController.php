@@ -68,7 +68,7 @@ class CompanySiteController extends BaseApiController
         try {
             $this->authorize('create', CompanySite::class);
 
-            $companySite = $this->service->create($request->user(), $request->toData());
+            $companySite = $this->service->create($request->user(), $request->toData(), $request->toProfile());
 
             return $this->okWithPermissions(
                 new CompanySiteResource($companySite),
@@ -89,7 +89,7 @@ class CompanySiteController extends BaseApiController
         try {
             $this->authorize('update', $companySite);
 
-            $companySite = $this->service->update($request->user(), $companySite, $request->toData());
+            $companySite = $this->service->update($request->user(), $companySite, $request->toData(), $request->toProfile());
 
             return $this->okWithPermissions(new CompanySiteResource($companySite), $this->buildPermissions($request->user(), $companySite));
         } catch (Throwable $exception) {

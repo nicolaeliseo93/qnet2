@@ -6,11 +6,12 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Company site entity (spec 0020 — "Società Sedi"): a flexible site
- * anagraphic under a Company, with an address (polymorphic `addresses`,
- * HasAddresses), a logo (polymorphic `attachments`, HasAttachments) and an
- * owned bank list (`company_site_banks`, real FK). `old_id` is additive
- * (spec 0013 external migration), declared inline since this table is
- * greenfield.
+ * anagraphic under a Company. Its contacts + address live on a polymorphic
+ * personal-data card (`HasPersonalData`, morph `personable`), NOT as flat
+ * columns on this table — mirroring the Registry module. A logo (polymorphic
+ * `attachments`, HasAttachments) and an owned bank list (`company_site_banks`,
+ * real FK) complete it. `old_id` is additive (spec 0013 external migration),
+ * declared inline since this table is greenfield.
  *
  * `default_bank_id` is intentionally NOT foreign-keyed here: its target
  * table (`company_site_banks`) does not exist yet (created right after this
@@ -33,14 +34,10 @@ return new class extends Migration
             $table->unsignedBigInteger('old_id')->nullable();
             $table->unique('old_id');
 
-            // Profilo.
+            // Profilo. The site's own display name (NOT derived from the card,
+            // unlike Registry). Contacts + address live on the personal-data
+            // card (morph `personable`), not here.
             $table->string('name', 191);
-            $table->string('email', 191);
-            $table->string('fiscal_code', 20)->nullable();
-            $table->string('vat_number', 20)->nullable();
-            $table->string('phone', 191)->nullable();
-            $table->string('pec', 191)->nullable();
-            $table->string('fax', 191)->nullable();
             $table->text('notes')->nullable();
             $table->boolean('is_default')->default(false)->index();
 
@@ -87,11 +84,10 @@ return new class extends Migration
 
             $table->timestamps();
 
-            // Grid search/sort (spec 0020 contract: searchable name/email/vat_number,
-            // default sort created_at).
+            // Grid search/sort (spec 0020 contract: searchable name, default
+            // sort created_at). Email/vat_number are no longer real columns
+            // (they live on the personal-data card / its contacts).
             $table->index('name');
-            $table->index('email');
-            $table->index('vat_number');
             $table->index('created_at');
         });
     }

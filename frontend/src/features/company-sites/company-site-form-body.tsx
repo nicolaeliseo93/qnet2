@@ -57,6 +57,10 @@ export function CompanySiteFormBody({
   const {
     form,
     serverError,
+    profileDraft,
+    setProfileDraft,
+    profileValid,
+    personalDataFieldPermission,
     banksDraft,
     setBanksDraft,
     selectedResponsibleRdaItem,
@@ -95,17 +99,9 @@ export function CompanySiteFormBody({
 
   const errors = form.formState.errors
   const tabHasErrorsLabel = t('companySites.form.tabs.tabHasErrors')
-  const profileHasError = Boolean(
-    errors.name ||
-      errors.email ||
-      errors.fiscal_code ||
-      errors.vat_number ||
-      errors.phone ||
-      errors.pec ||
-      errors.fax ||
-      errors.notes ||
-      errors.address,
-  )
+  // Profilo error = the mandatory company card is invalid (its buffer lives
+  // outside RHF) or the site's own name/notes carry a validation error.
+  const profileHasError = !profileValid || Boolean(errors.name || errors.notes)
   const settingsHasError = Boolean(
     errors.responsible_rda_id ||
       errors.responsible_tickets_id ||
@@ -148,8 +144,10 @@ export function CompanySiteFormBody({
               <ProfileTabContent
                 mode={mode}
                 control={form.control}
-                setValue={form.setValue}
                 siteName={siteName}
+                profileDraft={profileDraft}
+                setProfileDraft={setProfileDraft}
+                personalDataFieldPermission={personalDataFieldPermission}
                 onLogoFileSelected={setPendingLogo}
                 onLogoUpload={handleLogoUpload}
                 onLogoRemove={handleLogoRemove}

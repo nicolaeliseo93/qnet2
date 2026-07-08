@@ -82,15 +82,20 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
     {
         $fields = [
             new FieldDefinition('name', 'text', 'profile', mandatory: true),
-            new FieldDefinition('email', 'email', 'profile', mandatory: true),
-            new FieldDefinition('fiscal_code', 'text', 'profile'),
-            new FieldDefinition('vat_number', 'text', 'profile'),
-            new FieldDefinition('phone', 'text', 'profile'),
-            new FieldDefinition('pec', 'text', 'profile'),
-            new FieldDefinition('fax', 'text', 'profile'),
             new FieldDefinition('notes', 'textarea', 'profile'),
             new FieldDefinition('logo', 'image', 'profile'),
-            new FieldDefinition('address', 'collection', 'profile'),
+            // The nested personal-data card (contacts + address), mirroring
+            // RegistriesAuthorization verbatim (dot-path shape of the write
+            // payload, spec 0008). `type` is always `company` here, but the
+            // catalogue keeps the full key set in lockstep with the shared
+            // ValidatesUserProfile surface, exactly like Registry.
+            new FieldDefinition('personal_data.type', 'select', 'personal_data'),
+            new FieldDefinition('personal_data.company_name', 'text', 'personal_data'),
+            new FieldDefinition('personal_data.tax_code', 'text', 'personal_data'),
+            new FieldDefinition('personal_data.vat_number', 'text', 'personal_data'),
+            new FieldDefinition('personal_data.sdi_code', 'text', 'personal_data'),
+            new FieldDefinition('personal_data.contacts', 'collection', 'personal_data'),
+            new FieldDefinition('personal_data.addresses', 'collection', 'personal_data'),
             new FieldDefinition('responsible_rda_id', 'select', 'settings'),
             new FieldDefinition('responsible_tickets_id', 'select', 'settings'),
             new FieldDefinition('responsible_validation_contracts_id', 'select', 'settings'),
@@ -126,15 +131,15 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
     {
         $ceiling = [
             'name' => $this->writableOrReadonly($actor, $model, required: true),
-            'email' => $this->writableOrReadonly($actor, $model, required: true),
-            'fiscal_code' => $this->writableOrReadonly($actor, $model),
-            'vat_number' => $this->writableOrReadonly($actor, $model),
-            'phone' => $this->writableOrReadonly($actor, $model),
-            'pec' => $this->writableOrReadonly($actor, $model),
-            'fax' => $this->writableOrReadonly($actor, $model),
             'notes' => $this->writableOrReadonly($actor, $model),
             'logo' => $this->writableOrReadonly($actor, $model),
-            'address' => $this->writableOrReadonly($actor, $model),
+            'personal_data.type' => $this->writableOrReadonly($actor, $model),
+            'personal_data.company_name' => $this->writableOrReadonly($actor, $model),
+            'personal_data.tax_code' => $this->writableOrReadonly($actor, $model),
+            'personal_data.vat_number' => $this->writableOrReadonly($actor, $model),
+            'personal_data.sdi_code' => $this->writableOrReadonly($actor, $model),
+            'personal_data.contacts' => $this->writableOrReadonly($actor, $model),
+            'personal_data.addresses' => $this->writableOrReadonly($actor, $model),
             'responsible_rda_id' => $this->writableOrReadonly($actor, $model),
             'responsible_tickets_id' => $this->writableOrReadonly($actor, $model),
             'responsible_validation_contracts_id' => $this->writableOrReadonly($actor, $model),

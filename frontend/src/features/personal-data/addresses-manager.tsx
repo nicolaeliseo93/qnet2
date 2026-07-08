@@ -52,6 +52,12 @@ interface AddressesManagerProps {
    * Opt-in, default `false`: forwarded verbatim to `AddressForm`.
    */
   showSiteType?: boolean
+  /**
+   * Caps the list length: once `value.length` reaches it the "Add" affordance
+   * is hidden (Company Sites allow at most one address). Omitting it keeps the
+   * unbounded behaviour (registries/self-service profile).
+   */
+  maxItems?: number
 }
 
 /** `new` = the add form is open; a string = that address `_key` is being edited. */
@@ -71,6 +77,7 @@ export function AddressesManager({
   showHeader = true,
   persistence,
   showSiteType = false,
+  maxItems,
 }: AddressesManagerProps) {
   const { t } = useTranslation()
   const confirm = useConfirm()
@@ -82,6 +89,8 @@ export function AddressesManager({
     return null
   }
   const readOnly = permission ? permission.disabled || !permission.editable : false
+  // Hide the "Add" affordance once read-only or the cap (if any) is reached.
+  const canAdd = !readOnly && (maxItems === undefined || value.length < maxItems)
 
   /**
    * Single-primary invariant: a forced key wins (rest demoted); otherwise, when
@@ -198,7 +207,7 @@ export function AddressesManager({
       {showHeader && (
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-medium">{t('personalData.addresses.title')}</h4>
-          {!readOnly && (
+          {canAdd && (
             <Button type="button" variant="outline" size="sm" onClick={() => setEditing('new')}>
               <Plus aria-hidden="true" />
               {t('personalData.addresses.add')}
@@ -259,7 +268,7 @@ export function AddressesManager({
         ))}
       </ul>
 
-      {!showHeader && !readOnly && (
+      {!showHeader && canAdd && (
         <Button
           type="button"
           variant="ghost"

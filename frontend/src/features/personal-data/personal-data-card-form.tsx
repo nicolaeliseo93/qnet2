@@ -27,6 +27,7 @@ import {
 import type {
   PersonalDataDraft,
   PersonalDataFieldPermissionResolver,
+  PersonalDataType,
 } from '@/features/personal-data/types'
 
 interface PersonalDataCardFormProps {
@@ -40,6 +41,13 @@ interface PersonalDataCardFormProps {
    * profile, AC-013).
    */
   fieldPermission?: PersonalDataFieldPermissionResolver
+  /**
+   * Locks the card to a single `type` (e.g. Company Sites are always a
+   * `company`): the individual/company toggle is hidden and every emitted
+   * draft carries this type. Omitting it keeps today's selectable behaviour
+   * (registries/self-service profile).
+   */
+  lockType?: PersonalDataType
 }
 
 interface FieldGate {
@@ -83,6 +91,7 @@ export function PersonalDataCardForm({
   value,
   onChange,
   fieldPermission,
+  lockType,
 }: PersonalDataCardFormProps) {
   const { t } = useTranslation()
   const typeOptions = useEnumOptions('personal_data_type')
@@ -93,7 +102,7 @@ export function PersonalDataCardForm({
     resolver: zodResolver(schema),
     mode: 'onChange',
     defaultValues: {
-      type: value.type,
+      type: lockType ?? value.type,
       first_name: value.first_name ?? '',
       last_name: value.last_name ?? '',
       company_name: value.company_name ?? '',
@@ -109,7 +118,7 @@ export function PersonalDataCardForm({
   // Watch every field so edits flow into the parent buffer. `useWatch` re-renders
   // this component on each change; `isCompany` toggles which fields render.
   const watched = useWatch({ control: form.control })
-  const isCompany = watched.type === 'company'
+  const isCompany = (lockType ?? watched.type) === 'company'
 
   const typeGate = resolveGate(fieldPermission, 'personal_data.type', true)
   const companyNameGate = resolveGate(fieldPermission, 'personal_data.company_name', true)
@@ -126,7 +135,7 @@ export function PersonalDataCardForm({
   // draft's id and its children. The no-op compare prevents an update loop.
   const next: PersonalDataDraft = {
     ...(value.id !== undefined ? { id: value.id } : {}),
-    type: (watched.type ?? value.type) as PersonalDataDraft['type'],
+    type: (lockType ?? watched.type ?? value.type) as PersonalDataDraft['type'],
     first_name: watched.first_name || null,
     last_name: watched.last_name || null,
     company_name: watched.company_name || null,
@@ -154,7 +163,7 @@ export function PersonalDataCardForm({
       {/* A div, not a form: this card is buffered and lives inside the user
           form, so it must never nest a <form> nor own a submit. */}
       <div className="flex flex-col gap-3">
-        {typeGate.visible && (
+        {!lockType && typeGate.visible && (
           <FormField
             control={form.control}
             name="type"

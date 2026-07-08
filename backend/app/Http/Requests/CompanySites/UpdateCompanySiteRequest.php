@@ -4,6 +4,7 @@ namespace App\Http\Requests\CompanySites;
 
 use App\DataObjects\CompanySites\UpdateCompanySiteData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Http\Requests\Concerns\ValidatesUserProfile;
 use App\Models\CompanySite;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
@@ -12,9 +13,10 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for PUT/PATCH /api/company-sites/{companySite}
- * (spec 0020). Every field is `sometimes` to support partial PATCH updates. A
- * present `address` key rewrites the site's single address; a present
- * `banks` key is AUTHORITATIVE (add/update/delete diff, BankService::sync).
+ * (spec 0020). Every field is `sometimes` to support partial PATCH updates.
+ * `personal_data` present rewrites the site's card (contacts + its single
+ * address); a present `banks` key is AUTHORITATIVE (add/update/delete diff,
+ * BankService::sync).
  *
  * Authorization is intentionally NOT handled here (it stays in the controller
  * via authorize('update', $companySite)). EnforcesFieldPermissions (spec 0004)
@@ -24,6 +26,7 @@ use Illuminate\Validation\Rule;
 class UpdateCompanySiteRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
+    use ValidatesUserProfile;
 
     public function authorize(): bool
     {
@@ -36,24 +39,9 @@ class UpdateCompanySiteRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        return array_merge([
             'name' => ['sometimes', 'required', 'string', 'max:191'],
-            'email' => ['sometimes', 'required', 'email', 'max:191'],
-            'fiscal_code' => ['sometimes', 'nullable', 'string', 'max:20'],
-            'vat_number' => ['sometimes', 'nullable', 'string', 'max:20'],
-            'phone' => ['sometimes', 'nullable', 'string', 'max:191'],
-            'pec' => ['sometimes', 'nullable', 'string', 'max:191'],
-            'fax' => ['sometimes', 'nullable', 'string', 'max:191'],
             'notes' => ['sometimes', 'nullable', 'string'],
-
-            'address' => ['sometimes', 'nullable', 'array'],
-            'address.line1' => ['required_with:address', 'string', 'max:255'],
-            'address.line2' => ['nullable', 'string', 'max:255'],
-            'address.postal_code' => ['nullable', 'string', 'max:20'],
-            'address.city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')],
-            'address.province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
-            'address.state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
-            'address.country_id' => ['nullable', 'integer', Rule::exists('countries', 'id')],
 
             'banks' => ['sometimes', 'array'],
             'banks.*.id' => ['sometimes', 'integer', 'min:1'],
@@ -72,12 +60,30 @@ class UpdateCompanySiteRequest extends FormRequest
             'responsible_validation_contracts_two_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')],
             'proforma_progressive' => ['sometimes', 'nullable', 'integer'],
             'invoice_progressive' => ['sometimes', 'nullable', 'integer'],
-        ];
+        ], $this->cappedProfileRules());
+    }
+
+    /**
+     * The shared nested-profile rules (ValidatesUserProfile), with the
+     * company-site cap of AT MOST ONE address applied on top: a site owns a
+     * single address, so `personal_data.addresses` is validated `max:1`. Clean
+     * array override (instead of an after-hook count check) so the cap is a
+     * first-class validation rule reported at the field path.
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    private function cappedProfileRules(): array
+    {
+        $rules = $this->profileRules();
+        $rules['personal_data.addresses'] = ['sometimes', 'array', 'max:1'];
+
+        return $rules;
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $this->validateProfile($validator);
             $this->enforceFieldPermissions($validator);
             $this->validateDefaultBankId($validator);
         });

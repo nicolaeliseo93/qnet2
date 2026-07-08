@@ -6,6 +6,7 @@ use App\Models\CompanySite;
 use App\Models\User;
 use App\Tables\CompanySites\CompanySiteAddressColumns;
 use App\Tables\CompanySites\CompanySiteColumnCatalog;
+use App\Tables\Shared\PrimaryContactColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -13,15 +14,20 @@ use Illuminate\Support\Facades\Gate;
 /**
  * Table definition for the `company-sites` domain (spec 0020).
  *
- * Real columns (id, is_default, name, email, vat_number, phone, created_at)
- * are handled entirely by the generic engine. The 4 address-derived columns
- * (city/region/province/postal_code) have no real DB column of their own —
- * resolved from the site's primary address by the CompanySiteAddressColumns
- * collaborator, mirroring CompaniesTableDefinition.
+ * Real columns (id, is_default, name, created_at) are handled entirely by the
+ * generic engine. `primary_contact` is COMPUTED from the card's eager-loaded
+ * contacts via the shared PrimaryContactColumn (display-only, like the Registry
+ * grid). The 4 address-derived columns (city/region/province/postal_code) have
+ * no real DB column of their own — resolved from the CARD's primary address
+ * (CompanySite → personalData → addresses) by the CompanySiteAddressColumns
+ * collaborator.
  */
 class CompanySitesTableDefinition extends AbstractTableDefinition
 {
-    public function __construct(private readonly CompanySiteAddressColumns $addressColumns) {}
+    public function __construct(
+        private readonly CompanySiteAddressColumns $addressColumns,
+        private readonly PrimaryContactColumn $contactColumn,
+    ) {}
 
     public function domain(): string
     {
@@ -45,11 +51,13 @@ class CompanySitesTableDefinition extends AbstractTableDefinition
      */
     public function baseQuery(): Builder
     {
-        // Eager-load ONLY the primary address (+ its geo relations) and the
-        // logo, so mapRow reads every derived field entirely from memory — a
-        // fixed number of queries regardless of row count.
+        // Eager-load the card's contacts and ONLY its primary address (+ geo
+        // relations), plus the logo, so mapRow reads every derived field
+        // entirely from memory — a fixed number of queries regardless of row
+        // count.
         return CompanySite::query()->with([
-            'addresses' => function ($query): void {
+            'personalData.contacts',
+            'personalData.addresses' => function ($query): void {
                 $query->where('is_primary', true)
                     ->with(['state:id,name', 'province:id,name', 'city:id,name']);
             },
@@ -113,24 +121,24 @@ class CompanySitesTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Map a CompanySite to the row payload (real fields + the primary
-     * address' derived geo/postal_code fields + the logo). `actions` is
-     * attached by the generic TableService via actionsFor().
+     * Map a CompanySite to the row payload (real fields + the card's primary
+     * contacts + the card's primary address' derived geo/postal_code fields +
+     * the logo). `actions` is attached by the generic TableService via
+     * actionsFor().
      *
      * @return array<string, mixed>
      */
     public function mapRow(User $actor, Model $row): array
     {
         /** @var CompanySite $row */
-        $address = $row->addresses->first();
+        $card = $row->personalData;
+        $address = $card?->addresses->first();
 
         return [
             'id' => $row->id,
             'is_default' => $row->is_default,
             'name' => $row->name,
-            'email' => $row->email,
-            'vat_number' => $row->vat_number,
-            'phone' => $row->phone,
+            'primary_contact' => $this->contactColumn->format($card?->contacts),
             'city' => $address?->city?->name,
             'province' => $address?->province?->name,
             'region' => $address?->state?->name,

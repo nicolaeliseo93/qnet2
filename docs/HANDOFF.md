@@ -2,7 +2,51 @@
 
 > Injected at session start. Update at every green state.
 
-## Feature — Company Sites module ("Società Sedi") — GREEN (2026-07-07)
+## Feature — Company Sites ANAGRAPHIC REWORK (flat cols → HasPersonalData) — GREEN (2026-07-08)
+
+User rejected the first cut: the `company_sites` migration flattened `email/fiscal_code/vat_number/
+phone/pec/fax` as columns instead of the conventional anagraphic stack. Reworked so CompanySite now
+uses `HasPersonalData` → a `personal_data` card (via `personable` morph) that owns its contacts + a
+SINGLE address — mirroring the Registry module exactly. Built by backend+frontend teammates in
+parallel (disjoint ownership) + independent verifier. On branch `feat/company-sites-module-complete`
+(NOT committed/pushed — awaiting user go).
+
+User-locked constraints: (1) anagraphic pattern = `HasPersonalData` like Registry (chosen via
+AskUserQuestion), NOT direct HasContacts. (2) card is ALWAYS `type=company` — the persona-fisica
+(individual) toggle is hidden/locked (FE new `lockType="company"` prop on the shared
+PersonalDataCardForm; BE accepts type via enum). (3) EXACTLY ONE address — server caps
+`personal_data.addresses` at `max:1`; FE new `maxItems={1}` on the shared AddressesManager. The ONE
+difference vs Registry: `company_sites.name` is the site's OWN required column, NOT derived from the
+card (so `CompanySiteProfileWriter` = RegistryProfileWriter MINUS the name-derivation forceFill).
+
+Wire contract (POST/PATCH /api/company-sites): `name` top-level (required) + `notes` + optional
+`personal_data:{type:"company", company_name/vat_number/tax_code/sdi_code, contacts[], addresses[≤1]}`
++ settings (responsible_*/default_bank_id/banks[]/progressives) + read-only Altro + logo (multipart
+or dedicated endpoint). Response `CompanySiteResource` = id/name/notes/is_default/logo_url/
+personal_data(PersonalDataResource|null)/banks/created_at + settings + read-only Altro; NO flat
+contact keys. Reused verbatim (zero engine changes): ValidatesUserProfile trait, PersonalDataService/
+ContactService/AddressService, FE `@/features/personal-data/` toolkit (drafts/PersonalDataCardForm/
+ContactsManager/AddressesManager). Grid: searchable=`['name']` only; `primary_contact` tags column
+(shared PrimaryContactColumn) replaces the dropped email/vat/phone columns; geo/postal columns join
+through `personal_data`→addresses.
+
+Also fixed the user-reported UNTRANSLATED GRID HEADERS: the 9 authoritative CompanySiteColumnCatalog
+label keys (`id,isDefault,name,primaryContact,city,province,region,postalCode,createdAt`) now all
+exist under `companySites.columns.*` in BOTH it-/en-company-sites.ts; stale email/vat_number/phone
+keys removed.
+
+Verifier evidence (both sides re-run together, no seam mismatch): BACKEND `--filter=CompanySite`
+71/71 (554 assert); neighbors `Registr|PersonalData|Referent` 325/325 (no regression); full suite
+1634/1636 pass (run with XDEBUG_MODE=off — default Xdebug segfaults, env quirk). DemoCompanySiteSeeder
+idempotent (45 sites/45 cards/exactly 1 default/0 orphan cards on re-run — HasPersonalData delete
+hook cascades). FRONTEND tsc clean, vitest 105/105 across company-sites+personal-data+registries,
+eslint clean. TWO PRE-EXISTING branch issues, NOT caused here (confirmed by stashing the rework):
+`AbstractMigrationSourcePreviewTest` (roles.description migration-preview diff) fails identically
+without our changes; `pint --test` fails on `tests/Feature/Authorization/FieldCatalogueEndpointTest.php`
+(unmodified here, inherited from main) — the Authorization owner must fix before a branch-level pint
+gate passes. All 37 changed company-sites files ARE pint-clean.
+
+## Feature — Company Sites module ("Società Sedi") — GREEN (2026-07-07) [SUPERSEDED by the rework above]
 
 Spec `docs/specs/0020-company-sites.xml` (contract-first, frozen before dispatch; user-approved
 decisions via AskUserQuestion). Built by an agent team (backend + frontend teammates in parallel,

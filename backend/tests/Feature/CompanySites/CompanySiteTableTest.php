@@ -3,7 +3,9 @@
 use App\Models\Address;
 use App\Models\City;
 use App\Models\CompanySite;
+use App\Models\Contact;
 use App\Models\Country;
+use App\Models\PersonalData;
 use App\Models\Province;
 use App\Models\State;
 use App\Models\User;
@@ -47,11 +49,30 @@ function companySiteTableGeoChain(string $cityName, string $provinceName, string
     return compact('country', 'state', 'province', 'city');
 }
 
+/**
+ * Create a site whose personal-data card owns a primary address in $city. The
+ * address lives on the card (morph `personable` → site), not the site morph.
+ *
+ * @param  array<string, mixed>  $siteAttrs
+ * @param  array<string, mixed>  $addressAttrs
+ */
+function companySiteWithAddress(?City $city, array $siteAttrs = [], array $addressAttrs = []): CompanySite
+{
+    $site = CompanySite::factory()->create($siteAttrs);
+    $card = PersonalData::factory()->company()->for($site, 'personable')->create();
+
+    $address = Address::factory()->primary()->for($card, 'addressable');
+    $address = $city !== null ? $address->forCity($city) : $address;
+    $address->create($addressAttrs);
+
+    return $site;
+}
+
 // ---------------------------------------------------------------------------
 // AC-003 — columns config
 // ---------------------------------------------------------------------------
 
-it('returns the 11 columns in order with the declared flags, 403 without viewAny', function () {
+it('returns the 9 columns in order with the declared flags, 403 without viewAny', function () {
     $actor = userWithCompanySiteAbilities([]);
     Sanctum::actingAs($actor);
     $this->getJson('/api/tables/company-sites/columns')->assertForbidden();
@@ -67,19 +88,19 @@ it('returns the 11 columns in order with the declared flags, 403 without viewAny
     expect($data['resource'])->toBe('company-sites')
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']])
         ->and($data['defaultPagination']['limit'])->toBe(25)
-        ->and($data['searchable'])->toBe(['name', 'email', 'vat_number']);
+        ->and($data['searchable'])->toBe(['name']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['id', 'is_default', 'name', 'email', 'vat_number', 'phone', 'city', 'province', 'region', 'postal_code', 'created_at']);
+    expect($ids)->toBe(['id', 'is_default', 'name', 'primary_contact', 'city', 'province', 'region', 'postal_code', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['is_default']['type'])->toBe('boolean')
         ->and($columns['is_default']['filterType'])->toBe('set')
         ->and($columns['is_default']['visible'])->toBeTrue()
         ->and($columns['name']['filterType'])->toBe('text')
-        ->and($columns['email']['filterType'])->toBe('text')
-        ->and($columns['vat_number']['filterType'])->toBe('text')
-        ->and($columns['phone']['filterType'])->toBe('text')
+        ->and($columns['primary_contact']['type'])->toBe('tags')
+        ->and($columns['primary_contact']['sortable'])->toBeFalse()
+        ->and($columns['primary_contact']['filterable'])->toBeFalse()
         ->and($columns['city']['filterType'])->toBe('set')
         ->and($columns['city']['visible'])->toBeTrue()
         ->and($columns['province']['filterType'])->toBe('set')
@@ -104,14 +125,14 @@ it('hides action keys the user has no permission for', function () {
 });
 
 // ---------------------------------------------------------------------------
-// AC-004 — rows shape (derived geo/postal_code), actions, no N+1
+// AC-004 — rows shape (derived contact/geo/postal_code), actions, no N+1
 // ---------------------------------------------------------------------------
 
-it('rows expose is_default, the derived geo/postal_code fields, logo_url and per-row actions', function () {
+it('rows expose is_default, the derived primary_contact/geo/postal_code fields, logo_url and per-row actions', function () {
     $actor = userWithCompanySiteAbilities(['viewAny', 'view', 'update', 'delete']);
     $geo = companySiteTableGeoChain('Milano', 'Milano', 'Lombardia', 'Italia');
-    $target = CompanySite::factory()->create(['name' => 'Finance Site', 'is_default' => true]);
-    Address::factory()->primary()->forCity($geo['city'])->for($target, 'addressable')->create(['postal_code' => '20100']);
+    $target = companySiteWithAddress($geo['city'], ['name' => 'Finance Site', 'is_default' => true], ['postal_code' => '20100']);
+    Contact::factory()->email()->primary()->for($target->personalData, 'contactable')->create(['value' => 'finance@acme.test']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/company-sites/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
@@ -125,10 +146,11 @@ it('rows expose is_default, the derived geo/postal_code fields, logo_url and per
         ->and($row['region'])->toBe('Lombardia')
         ->and($row['postal_code'])->toBe('20100')
         ->and($row)->toHaveKey('logo_url')
+        ->and(collect($row['primary_contact'])->pluck('value'))->toContain('finance@acme.test')
         ->and($row['actions'])->toEqualCanonicalizing(['view', 'edit', 'delete']);
 });
 
-it('a site with no address has null derived geo/postal_code fields', function () {
+it('a site with no card has empty primary_contact and null derived geo/postal_code fields', function () {
     $actor = userWithCompanySiteAbilities(['viewAny']);
     CompanySite::factory()->create(['name' => 'Lonely Site']);
     Sanctum::actingAs($actor);
@@ -137,7 +159,8 @@ it('a site with no address has null derived geo/postal_code fields', function ()
     $row = collect($response->json('items'))->firstWhere('name', 'Lonely Site');
 
     expect($row['city'])->toBeNull()
-        ->and($row['postal_code'])->toBeNull();
+        ->and($row['postal_code'])->toBeNull()
+        ->and($row['primary_contact'])->toBe([]);
 });
 
 it('rows resolve the derived address fields with a bounded query count (no N+1)', function () {
@@ -145,8 +168,7 @@ it('rows resolve the derived address fields with a bounded query count (no N+1)'
 
     foreach (range(1, 5) as $i) {
         $geo = companySiteTableGeoChain("City{$i}", "Province{$i}", "Region{$i}", "Country{$i}");
-        $companySite = CompanySite::factory()->create();
-        Address::factory()->primary()->forCity($geo['city'])->for($companySite, 'addressable')->create();
+        companySiteWithAddress($geo['city']);
     }
 
     Sanctum::actingAs($actor);
@@ -158,18 +180,18 @@ it('rows resolve the derived address fields with a bounded query count (no N+1)'
     $queryCount = count(DB::getQueryLog());
     DB::disableQueryLog();
 
-    // A fixed, small number of queries regardless of row count, never one per row.
-    expect($queryCount)->toBeLessThan(10);
+    // A fixed, small number of queries regardless of row count, never one per
+    // row. The card hop (site → personalData → contacts/addresses → geo) adds a
+    // couple of constant eager-load queries vs the old direct-morph address.
+    expect($queryCount)->toBeLessThan(14);
 });
 
 it('filters rows by the derived province set filter (whereHas by name)', function () {
     $actor = userWithCompanySiteAbilities(['viewAny']);
     $milano = companySiteTableGeoChain('Milano', 'Milano', 'Lombardia', 'Italia');
     $roma = companySiteTableGeoChain('Roma', 'Roma', 'Lazio', 'Italia');
-    $siteA = CompanySite::factory()->create(['name' => 'Team Milano']);
-    Address::factory()->primary()->forCity($milano['city'])->for($siteA, 'addressable')->create();
-    $siteB = CompanySite::factory()->create(['name' => 'Team Roma']);
-    Address::factory()->primary()->forCity($roma['city'])->for($siteB, 'addressable')->create();
+    companySiteWithAddress($milano['city'], ['name' => 'Team Milano']);
+    companySiteWithAddress($roma['city'], ['name' => 'Team Roma']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/company-sites/rows', [
@@ -184,10 +206,8 @@ it('filters rows by the derived province set filter (whereHas by name)', functio
 
 it('filters rows by the derived postal_code text filter', function () {
     $actor = userWithCompanySiteAbilities(['viewAny']);
-    $siteA = CompanySite::factory()->create(['name' => 'Has 20100']);
-    Address::factory()->primary()->for($siteA, 'addressable')->create(['postal_code' => '20100']);
-    $siteB = CompanySite::factory()->create(['name' => 'Has 00100']);
-    Address::factory()->primary()->for($siteB, 'addressable')->create(['postal_code' => '00100']);
+    companySiteWithAddress(null, ['name' => 'Has 20100'], ['postal_code' => '20100']);
+    companySiteWithAddress(null, ['name' => 'Has 00100'], ['postal_code' => '00100']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/company-sites/rows', [
@@ -204,10 +224,8 @@ it('sorts rows by the derived city name via a correlated subquery', function () 
     $actor = userWithCompanySiteAbilities(['viewAny']);
     $zed = companySiteTableGeoChain('Zeta City', 'Zeta Province', 'Zeta Region', 'Zeta Country');
     $amy = companySiteTableGeoChain('Amy City', 'Amy Province', 'Amy Region', 'Amy Country');
-    $siteZ = CompanySite::factory()->create(['name' => 'Z-site']);
-    Address::factory()->primary()->forCity($zed['city'])->for($siteZ, 'addressable')->create();
-    $siteA = CompanySite::factory()->create(['name' => 'A-site']);
-    Address::factory()->primary()->forCity($amy['city'])->for($siteA, 'addressable')->create();
+    companySiteWithAddress($zed['city'], ['name' => 'Z-site']);
+    companySiteWithAddress($amy['city'], ['name' => 'A-site']);
     Sanctum::actingAs($actor);
 
     $names = $this->postJson('/api/tables/company-sites/rows', [
@@ -226,9 +244,8 @@ it('sorts rows by the derived city name via a correlated subquery', function () 
 it('resolves distinct province names and is_default values via /values', function () {
     $actor = userWithCompanySiteAbilities(['viewAny']);
     $milano = companySiteTableGeoChain('Milano', 'Milano', 'Lombardia', 'Italia');
-    $companySite = CompanySite::factory()->create();
-    Address::factory()->primary()->forCity($milano['city'])->for($companySite, 'addressable')->create();
-    CompanySite::factory()->create(); // no address
+    companySiteWithAddress($milano['city']);
+    CompanySite::factory()->create(); // no card/address
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/company-sites/values', ['columnId' => 'province'])->assertOk();
@@ -239,10 +256,8 @@ it('/values search narrows the distinct province names', function () {
     $actor = userWithCompanySiteAbilities(['viewAny']);
     $milano = companySiteTableGeoChain('Milano', 'Milano', 'Lombardia', 'Italia');
     $roma = companySiteTableGeoChain('Roma', 'Roma', 'Lazio', 'Italia');
-    $siteA = CompanySite::factory()->create();
-    Address::factory()->primary()->forCity($milano['city'])->for($siteA, 'addressable')->create();
-    $siteB = CompanySite::factory()->create();
-    Address::factory()->primary()->forCity($roma['city'])->for($siteB, 'addressable')->create();
+    companySiteWithAddress($milano['city']);
+    companySiteWithAddress($roma['city']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/company-sites/values', ['columnId' => 'province', 'search' => 'mil'])->assertOk();

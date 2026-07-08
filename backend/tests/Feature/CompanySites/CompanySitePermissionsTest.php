@@ -33,8 +33,7 @@ it('shows the /company-sites navigation node with company-sites.view', function 
     Sanctum::actingAs($actor);
 
     $items = $this->getJson('/api/navigation')->assertOk()->json('data');
-    $settings = collect($items)->firstWhere('key', 'settings');
-    $group = collect($settings['children'] ?? [])->firstWhere('key', 'fa-companies-services');
+    $group = collect($items)->firstWhere('key', 'management');
 
     expect(collect($group['children'] ?? [])->pluck('key'))->toContain('company-sites');
 });

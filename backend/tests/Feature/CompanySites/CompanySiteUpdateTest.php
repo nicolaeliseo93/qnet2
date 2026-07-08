@@ -3,6 +3,7 @@
 use App\Models\Address;
 use App\Models\CompanySite;
 use App\Models\CompanySiteBank;
+use App\Models\PersonalData;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -30,43 +31,85 @@ if (! function_exists('userWithCompanySiteAbilities')) {
     }
 }
 
+if (! function_exists('companySiteCompanyProfile')) {
+    /**
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    function companySiteCompanyProfile(array $overrides = []): array
+    {
+        return array_merge([
+            'type' => 'company',
+            'company_name' => 'Acme SpA',
+        ], $overrides);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // update — PUT/PATCH /api/company-sites/{companySite} (AC-008)
 // ---------------------------------------------------------------------------
 
-it('update: PATCH partial (only name) leaves email/address untouched', function () {
+it('update: PATCH partial (only name) leaves the card + address untouched', function () {
     $actor = userWithCompanySiteAbilities(['update']);
-    $target = CompanySite::factory()->create(['name' => 'Old Name', 'email' => 'old@acme.test']);
-    $address = Address::factory()->primary()->for($target, 'addressable')->create(['line1' => 'Original Street']);
+    $target = CompanySite::factory()->create(['name' => 'Old Name']);
+    $card = PersonalData::factory()->company()->for($target, 'personable')->create(['company_name' => 'Old SpA']);
+    $address = Address::factory()->primary()->for($card, 'addressable')->create(['line1' => 'Original Street']);
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/company-sites/{$target->id}", ['name' => 'New Name'])
         ->assertOk()
         ->assertJsonPath('data.name', 'New Name')
-        ->assertJsonPath('data.email', 'old@acme.test')
-        ->assertJsonPath('data.address.line1', 'Original Street');
+        ->assertJsonPath('data.personal_data.company_name', 'Old SpA')
+        ->assertJsonPath('data.personal_data.addresses.0.line1', 'Original Street');
 
-    expect($target->addresses()->count())->toBe(1)
+    expect($card->addresses()->count())->toBe(1)
         ->and($address->fresh()->line1)->toBe('Original Street');
 });
 
-it('update: PATCH with address updates the EXISTING address, never duplicates it', function () {
+it('update: PATCH personal_data rewrites the card and its single address', function () {
     $actor = userWithCompanySiteAbilities(['update']);
     $target = CompanySite::factory()->create();
-    Address::factory()->primary()->for($target, 'addressable')->create(['line1' => 'Before']);
+    $card = PersonalData::factory()->company()->for($target, 'personable')->create();
+    Address::factory()->primary()->for($card, 'addressable')->create(['line1' => 'Before']);
     Sanctum::actingAs($actor);
 
-    $this->patchJson("/api/company-sites/{$target->id}", ['address' => ['line1' => 'After']])
-        ->assertOk()->assertJsonPath('data.address.line1', 'After');
+    $this->patchJson("/api/company-sites/{$target->id}", [
+        'personal_data' => companySiteCompanyProfile(['addresses' => [['line1' => 'After']]]),
+    ])->assertOk()->assertJsonPath('data.personal_data.addresses.0.line1', 'After');
 
-    expect($target->addresses()->count())->toBe(1);
+    expect($card->fresh()->addresses()->count())->toBe(1)
+        ->and($card->fresh()->addresses()->first()->line1)->toBe('After');
+});
+
+it('update: PATCH personal_data.contacts full-replaces the card contacts', function () {
+    $actor = userWithCompanySiteAbilities(['update']);
+    $target = CompanySite::factory()->create();
+    PersonalData::factory()->company()->for($target, 'personable')->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/company-sites/{$target->id}", [
+        'personal_data' => companySiteCompanyProfile([
+            'contacts' => [['type' => 'email', 'value' => 'new@acme.test', 'is_primary' => true]],
+        ]),
+    ])->assertOk()->assertJsonPath('data.personal_data.contacts.0.value', 'new@acme.test');
+});
+
+it('update: 422 when personal_data.addresses carries more than one address (max 1)', function () {
+    $actor = userWithCompanySiteAbilities(['update']);
+    $target = CompanySite::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/company-sites/{$target->id}", [
+        'personal_data' => companySiteCompanyProfile(['addresses' => [['line1' => 'A'], ['line1' => 'B']]]),
+    ])->assertStatus(422)->assertJsonValidationErrors('personal_data.addresses');
 });
 
 it('update: banks diff — add, update, remove in one authoritative PATCH', function () {
     $actor = userWithCompanySiteAbilities(['update']);
     $target = CompanySite::factory()->create();
     $keep = CompanySiteBank::factory()->for($target)->create(['name' => 'Keep Me']);
-    $remove = CompanySiteBank::factory()->for($target)->create(['name' => 'Remove Me']);
+    CompanySiteBank::factory()->for($target)->create(['name' => 'Remove Me']);
+    $remove = CompanySiteBank::where('name', 'Remove Me')->first();
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/company-sites/{$target->id}", [

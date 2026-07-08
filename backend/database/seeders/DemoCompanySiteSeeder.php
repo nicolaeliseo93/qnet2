@@ -7,6 +7,8 @@ use App\Models\City;
 use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\CompanySiteBank;
+use App\Models\Contact;
+use App\Models\PersonalData;
 use Faker\Factory as FakerFactory;
 use Faker\Generator;
 use Illuminate\Database\Seeder;
@@ -15,27 +17,39 @@ use Illuminate\Support\Collection;
 /**
  * Development seed for the company-sites module (spec 0020 — "Società Sedi").
  *
- * Each seeded company gets 1-2 sites (alternating by its own position, so the
- * pattern is stable across re-runs), each with a primary address (tied to a
- * real seeded City, mirroring DemoCompanySeeder) and 0-2 banks. Exactly ONE
- * site across the WHOLE table ends up `is_default` (the flag is globally
- * exclusive, not per-company — see CompanySiteService::setDefault): `$default
- * Assigned` is a monotonic flag, set once and never un-set, so it survives
- * every site regardless of that site's own outcome. Deterministic faker seed
- * + firstOrNew on `email` keep the seed idempotent.
+ * Each site reuses the users/referents anagraphic stack via HasPersonalData: a
+ * company personal-data card (morph `personable`) that owns its contacts and
+ * ONE address (tied to a real seeded City), mirroring DemoRegistrySeeder. Each
+ * seeded company gets 1-2 sites (alternating by its own position, so the
+ * pattern is stable across re-runs) plus 0-2 banks. Exactly ONE site across the
+ * WHOLE table ends up `is_default` (the flag is globally exclusive, not
+ * per-company — see CompanySiteService::setDefault): `$defaultAssigned` is a
+ * monotonic flag, set once and never un-set.
+ *
+ * Idempotent across repeated db:seed: existing sites are cleared per-model at
+ * the start (the HasPersonalData deleting hook cascades each card + its
+ * contacts/address; banks cascade via their own FK), mirroring
+ * DemoRegistrySeeder.
  */
 class DemoCompanySiteSeeder extends Seeder
 {
+    private const int CITY_SAMPLE = 200;
+
     public function run(): void
     {
         $faker = FakerFactory::create('it_IT');
         $faker->seed(20260707);
 
+        // Idempotent: per-model delete so HasPersonalData's deleting hook fires
+        // and cascades each site's card (and its contacts/address); banks
+        // cascade away via their own cascadeOnDelete FK.
+        CompanySite::query()->get()->each(fn (CompanySite $site) => $site->delete());
+
         $companies = Company::query()->get();
         $cities = City::query()
             ->with(['country', 'state', 'province'])
             ->inRandomOrder()
-            ->limit(200)
+            ->limit(self::CITY_SAMPLE)
             ->get();
 
         if ($companies->isEmpty() || $cities->isEmpty()) {
@@ -63,45 +77,69 @@ class DemoCompanySiteSeeder extends Seeder
      */
     private function seedSite(Generator $faker, Company $company, Collection $cities, int $sequence, bool $isDefault): void
     {
-        $companySite = CompanySite::firstOrNew(['email' => $faker->unique()->companyEmail()]);
-        $companySite->fill([
+        $companySite = CompanySite::create([
             'name' => $faker->company().' - '.$faker->city(),
             'company_id' => $company->id,
-            'fiscal_code' => $faker->optional()->numerify('FISC###########'),
-            'vat_number' => $faker->numerify('IT###########'),
-            'phone' => $faker->phoneNumber(),
             'is_default' => $isDefault,
         ]);
-        $companySite->save();
 
-        $this->seedPrimaryAddress($faker, $companySite, $cities, $sequence);
+        $card = $this->seedCard($faker, $companySite);
+        $this->seedContacts($faker, $card);
+        $this->seedAddress($faker, $card, $cities, $sequence);
         $this->seedBanks($faker, $companySite, $sequence);
     }
 
     /**
-     * Reconcile to a single primary address (idempotent): drop the owner's
-     * addresses, then create one via the real seeded city's full geo ancestry.
-     *
-     * @param  Collection<int, City>  $cities
+     * Attach the site's company personal-data card (morph `personable`).
      */
-    private function seedPrimaryAddress(Generator $faker, CompanySite $companySite, Collection $cities, int $sequence): void
+    private function seedCard(Generator $faker, CompanySite $companySite): PersonalData
     {
-        $companySite->addresses()->delete();
+        /** @var PersonalData $card */
+        $card = PersonalData::factory()->company()->for($companySite, 'personable')->create([
+            'company_name' => $companySite->name,
+            'vat_number' => (string) $faker->numerify('###########'),
+        ]);
 
-        $city = $cities[$sequence % $cities->count()];
+        return $card;
+    }
 
-        Address::factory()->forCity($city)->primary()->for($companySite, 'addressable')->create([
-            'postal_code' => $faker->numerify('#####'),
+    /**
+     * Seed a small set of contact channels on the card.
+     */
+    private function seedContacts(Generator $faker, PersonalData $card): void
+    {
+        Contact::factory()->email()->primary()->for($card, 'contactable')->create([
+            'label' => 'General email',
+        ]);
+        Contact::factory()->phone()->primary()->for($card, 'contactable')->create([
+            'label' => 'Switchboard',
+        ]);
+        Contact::factory()->pec()->for($card, 'contactable')->create([
+            'label' => 'Certified email',
         ]);
     }
 
     /**
-     * Reconcile to a small, deterministic bank list (idempotent).
+     * Seed the site's single (primary) address on the card, tied to a real
+     * seeded city with its full geo ancestry.
+     *
+     * @param  Collection<int, City>  $cities
+     */
+    private function seedAddress(Generator $faker, PersonalData $card, Collection $cities, int $sequence): void
+    {
+        $city = $cities[$sequence % $cities->count()];
+
+        Address::factory()->forCity($city)->primary()->for($card, 'addressable')->create([
+            'postal_code' => $faker->numerify('#####'),
+            'site_type' => 'legal_seat',
+        ]);
+    }
+
+    /**
+     * Reconcile to a small, deterministic bank list.
      */
     private function seedBanks(Generator $faker, CompanySite $companySite, int $sequence): void
     {
-        $companySite->banks()->delete();
-
         $bankCount = $sequence % 3; // 0, 1 or 2 banks.
 
         for ($bank = 0; $bank < $bankCount; $bank++) {

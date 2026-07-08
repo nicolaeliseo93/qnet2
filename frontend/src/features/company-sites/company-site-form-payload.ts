@@ -1,28 +1,29 @@
-import { isAddressPresent } from '@/features/company-sites/company-site-schema'
+import {
+  cardToDraft,
+  draftToPayload,
+  emptyPersonalDataDraft,
+  omitNonEditableFields,
+  type PersonalDataPayload,
+} from '@/features/personal-data/drafts'
+import type {
+  PersonalDataDraft,
+  PersonalDataFieldPermissionResolver,
+} from '@/features/personal-data/types'
 import type {
   BankDraft,
   CompanySiteDetailWithPermissions,
-  CreateCompanySiteAddressPayload,
   CreateCompanySiteBankPayload,
   CreateCompanySitePayload,
   UpdateCompanySitePayload,
 } from '@/features/company-sites/types'
 import type { CompanySiteFormValues } from '@/features/company-sites/use-company-site-form'
 
-/** Builds the nested address payload once the block is known to carry a value. */
-function toAddressPayload(
-  address: CompanySiteFormValues['address'],
-): CreateCompanySiteAddressPayload {
-  return {
-    line1: address.line1 ?? '',
-    line2: address.line2 || null,
-    postal_code: address.postal_code || null,
-    country_id: address.country_id ?? null,
-    state_id: address.state_id ?? null,
-    province_id: address.province_id ?? null,
-    city_id: address.city_id ?? null,
-  }
-}
+/**
+ * The card is always a `company` and carries at most one address (spec 0020):
+ * the UI already caps the list, but the payload defends the invariant too so a
+ * stale buffer can never send more than one address to the backend.
+ */
+const MAX_ADDRESSES = 1
 
 /** Maps the buffered banks draft to the nested `banks[]` wire payload. */
 function toBanksPayload(banks: BankDraft[]): CreateCompanySiteBankPayload[] {
@@ -35,25 +36,38 @@ function toBanksPayload(banks: BankDraft[]): CreateCompanySiteBankPayload[] {
 }
 
 /**
- * Builds the create payload. The address block is omitted entirely when the
- * user left every one of its fields blank (a site may have no address, same
- * rule as companies); `banks`/`default_bank_id` are omitted when the buffer
- * is empty (nothing to create, nothing to default to).
+ * Builds the gated, address-capped `personal_data` tree from the buffered
+ * draft: `omitNonEditableFields` drops any scalar field/section the resolver
+ * marks non-editable (spec 0008, defense in depth alongside the backend), then
+ * the address list is truncated to the single one the backend accepts.
+ */
+function toPersonalDataPayload(
+  profileDraft: PersonalDataDraft,
+  fieldPermission?: PersonalDataFieldPermissionResolver,
+): PersonalDataPayload {
+  const payload = omitNonEditableFields(draftToPayload(profileDraft), fieldPermission)
+  if (payload.addresses && payload.addresses.length > MAX_ADDRESSES) {
+    return { ...payload, addresses: payload.addresses.slice(0, MAX_ADDRESSES) }
+  }
+  return payload
+}
+
+/**
+ * Builds the create payload: the site's own scalars (`name` required, `notes`)
+ * plus the nested `personal_data` tree (REQUIRED, always `type: 'company'`) and
+ * the Impostazioni-tab fields. `banks`/`default_bank_id` are omitted when the
+ * buffer is empty (nothing to create, nothing to default to).
  */
 export function buildCreatePayload(
   values: CompanySiteFormValues,
   banks: BankDraft[],
+  profileDraft: PersonalDataDraft,
+  fieldPermission?: PersonalDataFieldPermissionResolver,
 ): CreateCompanySitePayload {
   return {
     name: values.name,
-    email: values.email,
-    fiscal_code: values.fiscal_code || null,
-    vat_number: values.vat_number || null,
-    phone: values.phone || null,
-    pec: values.pec || null,
-    fax: values.fax || null,
     notes: values.notes || null,
-    ...(isAddressPresent(values.address) ? { address: toAddressPayload(values.address) } : {}),
+    personal_data: toPersonalDataPayload(profileDraft, fieldPermission),
     ...(banks.length > 0 ? { banks: toBanksPayload(banks) } : {}),
     default_bank_id: values.default_bank_id,
     responsible_rda_id: values.responsible_rda_id,
@@ -67,39 +81,38 @@ export function buildCreatePayload(
 
 /**
  * Builds a partial PATCH payload carrying only fields that changed from the
- * original site. The address, when present and changed, is always sent in
- * full (it fully rewrites the site's single address server-side); `banks` is
- * sent — authoritatively, the whole buffer — only when it actually differs
- * from the original collection (AC-019). "Altro" fields and `is_default` are
- * never part of this payload (read-only / dedicated `set-default` action).
+ * original site. `banks` is sent — authoritatively, the whole buffer — only
+ * when it actually differs from the original collection (AC-019); the nested
+ * `personal_data` tree is included only when the buffered draft differs from
+ * the one seeded from `original.personal_data` (`draftToPayload` has a fixed
+ * key order, so a `JSON.stringify` compare is a reliable deep-equal here,
+ * mirroring the Registries module). "Altro" fields and `is_default` are never
+ * part of this payload (read-only / dedicated `set-default` action).
  */
 export function buildUpdatePayload(
   values: CompanySiteFormValues,
   original: CompanySiteDetailWithPermissions,
   banks: BankDraft[],
+  profileDraft: PersonalDataDraft,
+  fieldPermission?: PersonalDataFieldPermissionResolver,
 ): UpdateCompanySitePayload {
   const payload: UpdateCompanySitePayload = {}
 
   if (values.name !== original.name) {
     payload.name = values.name
   }
-  if (values.email !== original.email) {
-    payload.email = values.email
-  }
-
-  assignIfChanged(payload, 'fiscal_code', values.fiscal_code || null, original.fiscal_code)
-  assignIfChanged(payload, 'vat_number', values.vat_number || null, original.vat_number)
-  assignIfChanged(payload, 'phone', values.phone || null, original.phone)
-  assignIfChanged(payload, 'pec', values.pec || null, original.pec)
-  assignIfChanged(payload, 'fax', values.fax || null, original.fax)
   assignIfChanged(payload, 'notes', values.notes || null, original.notes)
-
-  if (isAddressPresent(values.address) && addressChanged(values.address, original.address)) {
-    payload.address = toAddressPayload(values.address)
-  }
 
   if (banksChanged(banks, original.banks)) {
     payload.banks = toBanksPayload(banks)
+  }
+
+  const originalDraft = original.personal_data
+    ? cardToDraft(original.personal_data)
+    : emptyPersonalDataDraft('company')
+  const nextPayload = draftToPayload(profileDraft)
+  if (JSON.stringify(nextPayload) !== JSON.stringify(draftToPayload(originalDraft))) {
+    payload.personal_data = toPersonalDataPayload(profileDraft, fieldPermission)
   }
 
   assignIfChanged(payload, 'default_bank_id', values.default_bank_id, original.default_bank_id)
@@ -153,30 +166,6 @@ function assignIfChanged<K extends keyof UpdateCompanySitePayload>(
   if (next !== original) {
     payload[key] = next
   }
-}
-
-/**
- * Whether the form's address block differs from the original — compares only
- * the ids the payload actually carries (the resolved names are read-only
- * detail-view labels, not part of the request).
- */
-function addressChanged(
-  address: CompanySiteFormValues['address'],
-  original: CompanySiteDetailWithPermissions['address'],
-): boolean {
-  if (!original) {
-    return true
-  }
-  const next = toAddressPayload(address)
-  return (
-    next.line1 !== original.line1 ||
-    next.line2 !== original.line2 ||
-    next.postal_code !== original.postal_code ||
-    next.country_id !== original.country_id ||
-    next.state_id !== original.state_id ||
-    next.province_id !== original.province_id ||
-    next.city_id !== original.city_id
-  )
 }
 
 /**

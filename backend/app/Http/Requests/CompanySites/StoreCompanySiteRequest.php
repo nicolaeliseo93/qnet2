@@ -4,6 +4,7 @@ namespace App\Http\Requests\CompanySites;
 
 use App\DataObjects\CompanySites\CreateCompanySiteData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Http\Requests\Concerns\ValidatesUserProfile;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
@@ -14,16 +15,19 @@ use Illuminate\Validation\Rule;
  * Validates the payload for POST /api/company-sites (spec 0020).
  *
  * Authorization is intentionally NOT handled here (it stays in the controller
- * via authorize('create', CompanySite::class)). The nested `address` rules
- * mirror StoreCompanyRequest's (a site owns at most one address); `banks` are
- * validated per-row (BankService::sync). "Altro" fields and `is_default` are
- * never accepted here — EnforcesFieldPermissions (spec 0004) additionally
- * rejects any submitted field the actor cannot edit (create-context, model =
- * null), which already covers "Altro" (ceiling visibleReadonly).
+ * via authorize('create', CompanySite::class)). Reuses ValidatesUserProfile
+ * verbatim for the nested `personal_data` card (contacts + address), exactly
+ * like StoreRegistryRequest; `name` stays the site's own required column.
+ * `banks` are validated per-row (BankService::sync). "Altro" fields and
+ * `is_default` are never accepted here — EnforcesFieldPermissions (spec 0004)
+ * additionally rejects any submitted field the actor cannot edit
+ * (create-context, model = null), which already covers "Altro" (ceiling
+ * visibleReadonly).
  */
 class StoreCompanySiteRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
+    use ValidatesUserProfile;
 
     public function authorize(): bool
     {
@@ -32,29 +36,24 @@ class StoreCompanySiteRequest extends FormRequest
     }
 
     /**
+     * `personal_data` is OPTIONAL on create (the frontend always sends it, but
+     * `name` is the site's own required column, not derived from the card —
+     * unlike Registry, where the profile is mandatory as the name source).
+     */
+    protected function profileRequired(): bool
+    {
+        return false;
+    }
+
+    /**
      * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
-        return [
+        return array_merge([
             'name' => ['required', 'string', 'max:191'],
-            'email' => ['required', 'email', 'max:191'],
-            'fiscal_code' => ['nullable', 'string', 'max:20'],
-            'vat_number' => ['nullable', 'string', 'max:20'],
-            'phone' => ['nullable', 'string', 'max:191'],
-            'pec' => ['nullable', 'string', 'max:191'],
-            'fax' => ['nullable', 'string', 'max:191'],
             'notes' => ['nullable', 'string'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,gif,webp', 'extensions:jpeg,png,gif,webp', 'max:'.(int) config('attachments.max_size')],
-
-            'address' => ['sometimes', 'nullable', 'array'],
-            'address.line1' => ['required_with:address', 'string', 'max:255'],
-            'address.line2' => ['nullable', 'string', 'max:255'],
-            'address.postal_code' => ['nullable', 'string', 'max:20'],
-            'address.city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')],
-            'address.province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
-            'address.state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
-            'address.country_id' => ['nullable', 'integer', Rule::exists('countries', 'id')],
 
             'banks' => ['sometimes', 'array'],
             'banks.*.id' => ['sometimes', 'integer', 'min:1'],
@@ -73,12 +72,30 @@ class StoreCompanySiteRequest extends FormRequest
             'responsible_validation_contracts_two_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'proforma_progressive' => ['nullable', 'integer'],
             'invoice_progressive' => ['nullable', 'integer'],
-        ];
+        ], $this->cappedProfileRules());
+    }
+
+    /**
+     * The shared nested-profile rules (ValidatesUserProfile), with the
+     * company-site cap of AT MOST ONE address applied on top: a site owns a
+     * single address, so `personal_data.addresses` is validated `max:1`. This
+     * clean array override (instead of an after-hook count check) keeps the
+     * cap a first-class validation rule reported at the field path.
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    private function cappedProfileRules(): array
+    {
+        $rules = $this->profileRules();
+        $rules['personal_data.addresses'] = ['sometimes', 'array', 'max:1'];
+
+        return $rules;
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $this->validateProfile($validator);
             $this->enforceFieldPermissions($validator);
             $this->validateDefaultBankId($validator);
         });

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { CompanySiteForm } from '@/features/company-sites/company-site-form'
 import type { ResourceMeta } from '@/features/authorization/types'
 
@@ -56,10 +57,19 @@ vi.mock('@/features/for-select/use-for-select', () => ({
   flattenForSelectPages: () => [],
 }))
 
+// The Profilo tab now embeds the shared personal-data card/contacts/address
+// components, which read enum options from the server config.
+vi.mock('@/features/config/use-config', () => ({
+  useConfig: () => ({ data: { enums: {} } }),
+  useEnumOptions: () => [],
+}))
+
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
+    </QueryClientProvider>
   )
 }
 
@@ -90,14 +100,13 @@ beforeEach(() => {
 })
 
 describe('CompanySiteForm — metadata-driven authorization (spec 0020)', () => {
-  it('always renders the Profilo tab and hides a hidden field', async () => {
+  it('always renders the Profilo tab with a company-locked card (no individual option)', async () => {
     fetchResourceMetaMock.mockResolvedValue({
       fields: [],
       permissions: {
         resource: FULL_PERMISSIONS,
         fields: {
           name: { visible: true, hidden: false, editable: true, readonly: false, required: true, disabled: false },
-          vat_number: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
         },
         actions: {},
       },
@@ -108,8 +117,15 @@ describe('CompanySiteForm — metadata-driven authorization (spec 0020)', () => 
       { wrapper: wrapper() },
     )
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument())
-    expect(screen.queryByLabelText(/^VAT number/)).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Profile/ })).toBeInTheDocument())
+    // The site's own scalar name is present.
+    expect(screen.getByLabelText(/^Name/)).toBeInTheDocument()
+    // The card is locked to a company: its company_name field shows, the
+    // individual-only first-name field never does, and the type toggle is
+    // absent (a natural person is never selectable).
+    expect(screen.getByLabelText(/^Company name/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^First name/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Individual' })).not.toBeInTheDocument()
   })
 
   it('hides the Impostazioni tab when every one of its fields is hidden', async () => {
@@ -135,8 +151,8 @@ describe('CompanySiteForm — metadata-driven authorization (spec 0020)', () => 
       { wrapper: wrapper() },
     )
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument())
-    expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Profile/ })).toBeInTheDocument())
+    expect(screen.queryByRole('tab', { name: /Settings/ })).not.toBeInTheDocument()
   })
 
   it('shows the Banche tab (visible "banks" field) with no network call for its rows', async () => {
@@ -147,7 +163,7 @@ describe('CompanySiteForm — metadata-driven authorization (spec 0020)', () => 
       { wrapper: wrapper() },
     )
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Banks' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Banks/ })).toBeInTheDocument())
   })
 
   it('falls back to visible+editable when a field is missing from metadata', async () => {
@@ -168,6 +184,6 @@ describe('CompanySiteForm — metadata-driven authorization (spec 0020)', () => 
     )
 
     await waitFor(() => expect(screen.getByLabelText(/^Name/)).toBeInTheDocument())
-    expect(screen.getByLabelText(/^Email/)).toBeEnabled()
+    expect(screen.getByLabelText(/^Name/)).toBeEnabled()
   })
 })
