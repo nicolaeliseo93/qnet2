@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ListChecks, Plus, Trash2 } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
 import { IconPicker } from '@/components/icon-picker'
+import { ColorTokenPicker } from '@/features/custom-fields/components/color-token-picker'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -89,9 +90,7 @@ export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOpt
                 render={({ field }) => (
                   <FormItem className="flex-1">
                     <FormLabel>{t('customFields.form.optionColor')}</FormLabel>
-                    <FormControl>
-                      <Input autoComplete="off" placeholder="blue" {...field} />
-                    </FormControl>
+                    <ColorTokenPicker value={field.value} onChange={field.onChange} />
                   </FormItem>
                 )}
               />

@@ -103,6 +103,27 @@ Verified GREEN: `tsc --noEmit` 0; eslint 0 on all touched/new files; new tests p
 810 pass / 3 pre-existing-unrelated FAIL (cell-renderers ContactsCell, per prior HANDOFF).
 NOT committed (awaiting go-ahead).
 
+Phase-1 follow-up fixes (same session, all GREEN, still uncommitted):
+- BUG (browser-only, jsdom-invisible): the type Select would not open/select. Cause = the
+  DefinitionTypePicker trigger had a custom `<span>` instead of `<SelectValue>`; Radix Select
+  (default `position=item-aligned`) needs SelectValue to position → restored `<SelectValue/>`
+  (it also renders the selected option's icon+name for free). Also de-stickied the preview
+  (was `sticky z-10 backdrop-blur` → intercepted clicks on top fields). Do NOT re-add either.
+- BUG: duplicate `sections:` key inside `form` (added base/presentation as a SECOND block) →
+  the 2nd overrode the 1st, wiping config/options/relation/validation/flags section titles
+  (raw keys shown). Merged into ONE `sections` object in it/en. `no-dupe-keys` did not fire.
+- Split `definition-identity-fields.tsx` → `definition-base-fields.tsx` +
+  `definition-presentation-fields.tsx`. Body reorder (user ask): type-dependent settings
+  (config/options/relation/validation) now render BETWEEN Base and Presentation.
+- Removed the `tab` field control from the form (user ask: no tabs UI in the generic renderer,
+  so it only affected ordering). `tab` stays in schema/payload (defaults ''); `form.tab*` i18n now unused.
+- Enum option `color` free-text input → NEW `ColorTokenPicker` (swatch panel). NOTE: option color
+  is a PALETTE TOKEN name (slate/red/blue/… 14), NOT a hex — the grid badge maps it by name via
+  `BADGE_COLOR_CLASSES` in `features/table/cell-renderers.tsx`. Token list mirrored (not imported,
+  to avoid touching the fragile cell-renderers) in NEW `features/custom-fields/badge-color-tokens.ts`
+  (`bg-*-500` swatch classes spelled out for Tailwind's scanner). i18n `customFields.colors.<token>`.
+  New test: color-token-picker (4). If cell-renderers' palette ever changes, update badge-color-tokens too.
+
 Known follow-ups (flagged, NOT done — out of this scope): `definition-type-config-fields.tsx`
 now 355 lines (>300 soft, <500 hard) → candidate split (extract text vs numeric config blocks);
 pre-existing eslint error in `features/users/duration-input.test.tsx` (untouched).

@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
+import { DefinitionBaseFields } from '@/features/custom-fields/components/definition-base-fields'
 import { DefinitionFieldPreview } from '@/features/custom-fields/components/definition-field-preview'
 import { DefinitionFlagsFields } from '@/features/custom-fields/components/definition-flags-fields'
-import { DefinitionIdentityFields } from '@/features/custom-fields/components/definition-identity-fields'
+import { DefinitionPresentationFields } from '@/features/custom-fields/components/definition-presentation-fields'
 import { DefinitionOptionsEditor } from '@/features/custom-fields/components/definition-options-editor'
 import { DefinitionRelationTargetEditor } from '@/features/custom-fields/components/definition-relation-target-editor'
 import { DefinitionTypeConfigFields } from '@/features/custom-fields/components/definition-type-config-fields'
@@ -46,12 +47,14 @@ export function CustomFieldDefinitionFormBody({
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 p-4" noValidate>
           <DefinitionFieldPreview control={form.control} />
 
-          <DefinitionIdentityFields
+          <DefinitionBaseFields
             control={form.control}
             entities={entities}
             lockIdentity={mode.type === 'edit'}
           />
 
+          {/* Type-dependent settings sit ABOVE Presentation: the admin decides
+              WHAT the field does before polishing how it LOOKS. */}
           <DefinitionTypeConfigFields control={form.control} type={type} />
 
           {type === 'enum' && (
@@ -63,6 +66,8 @@ export function CustomFieldDefinitionFormBody({
           )}
 
           <DefinitionValidationEditor control={form.control} type={type} />
+
+          <DefinitionPresentationFields control={form.control} />
 
           <DefinitionFlagsFields control={form.control} />
 
