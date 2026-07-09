@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -17,6 +18,7 @@ import { groupPermissions } from '@/features/roles/permission-groups'
 import { buildCreatePayload, buildUpdatePayload } from '@/features/roles/role-form-payload'
 import type { RoleDetail } from '@/features/roles/types'
 import type { RoleFormMode } from '@/features/roles/role-form'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = ['name', 'permissions', 'users', 'field_permissions'] as const
@@ -43,9 +45,21 @@ export function useRoleForm({ mode, permissionOptions, onSuccess }: UseRoleFormA
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'roles',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.role.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateRoleSchema(t) : buildCreateRoleSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateRoleSchema(t, customFields.schema)
+        : buildCreateRoleSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const groups = useMemo(
@@ -71,10 +85,17 @@ export function useRoleForm({ mode, permissionOptions, onSuccess }: UseRoleFormA
         // fall back to an empty selection if the field is absent.
         users: mode.role.users ?? [],
         field_permissions: mode.role.field_permissions,
+        custom_fields: customFields.defaultValues,
       }
     }
-    return { name: '', permissions: [], users: [], field_permissions: [] }
-  }, [mode])
+    return {
+      name: '',
+      permissions: [],
+      users: [],
+      field_permissions: [],
+      custom_fields: customFields.defaultValues,
+    }
+  }, [mode, customFields.defaultValues])
 
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(schema),
@@ -106,6 +127,10 @@ export function useRoleForm({ mode, permissionOptions, onSuccess }: UseRoleFormA
 
   const onSubmit = async (values: RoleFormValues) => {
     setServerError(null)
+    const errorFields: Path<RoleFormValues>[] = [
+      ...SERVER_ERROR_FIELDS,
+      ...(customFields.errorPaths as Path<RoleFormValues>[]),
+    ]
     try {
       const saved =
         mode.type === 'edit'
@@ -117,9 +142,7 @@ export function useRoleForm({ mode, permissionOptions, onSuccess }: UseRoleFormA
       )
       onSuccess(saved)
     } catch (error) {
-      if (
-        !applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])
-      ) {
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('roles.form.genericError'))
       }
     }

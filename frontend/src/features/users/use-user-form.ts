@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 import {
   areCreateContactsValid,
   isCreateAddressValid,
@@ -163,9 +165,21 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
     )
   }
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'users',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.user.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateUserSchema(t) : buildCreateUserSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateUserSchema(t, customFields.schema)
+        : buildCreateUserSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<UserFormValues>(() => {
@@ -194,6 +208,7 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
               break_daily_minutes: employment.break_daily_minutes,
             }
           : EMPTY_EMPLOYMENT,
+        custom_fields: customFields.defaultValues,
       }
     }
     return {
@@ -204,8 +219,9 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
       password: '',
       password_confirmation: '',
       employment: EMPTY_EMPLOYMENT,
+      custom_fields: customFields.defaultValues,
     }
-  }, [mode])
+  }, [mode, customFields.defaultValues])
 
   // EDIT: pre-known {id, name} for the selected roles, so the picker shows their
   // labels immediately (no hydration round-trip) — the names come from the user
@@ -328,9 +344,11 @@ export function useUserForm({ mode, onSuccess, onAvatarChange }: UseUserFormArgs
 
       onSuccess(created)
     } catch (error) {
-      if (
-        !applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])
-      ) {
+      const errorFields: Path<UserFormValues>[] = [
+        ...SERVER_ERROR_FIELDS,
+        ...(customFields.errorPaths as Path<UserFormValues>[]),
+      ]
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('users.form.genericError'))
       }
     }

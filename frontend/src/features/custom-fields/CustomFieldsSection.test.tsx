@@ -190,6 +190,19 @@ describe('CustomFieldsSection', () => {
     expect(await screen.findByRole('combobox', { name: 'Tier' })).toBeInTheDocument()
   })
 
+  it('groups ungrouped custom fields under the "Other fields" section heading', async () => {
+    const data = meta([BOOLEAN_FIELD, ENUM_FIELD], {
+      'custom.active': permission(),
+      'custom.tier': permission(),
+    })
+    fetchResourceMetaMock.mockResolvedValue(data)
+
+    renderHarness('companies', data.permissions)
+
+    expect(await screen.findByRole('heading', { name: 'Other fields' })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Active' })).toBeInTheDocument()
+  })
+
   it('renders nothing for a resource with no custom fields', async () => {
     const data = meta([], {})
     fetchResourceMetaMock.mockResolvedValue(data)

@@ -4,16 +4,19 @@ import type {
   UpdateBusinessFunctionPayload,
 } from '@/features/business-functions/types'
 import type { BusinessFunctionFormValues } from '@/features/business-functions/use-business-function-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 /** Builds the create payload: `{name, type, manager_id, users}` (spec 0010 AC-019). */
 export function buildCreatePayload(
   values: BusinessFunctionFormValues,
 ): CreateBusinessFunctionPayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     name: values.name,
     type: values.type,
     manager_id: values.manager_id,
     users: values.users,
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -41,6 +44,11 @@ export function buildUpdatePayload(
   }
   if (!sameIdSet(values.users, original.user_ids)) {
     payload.users = values.users
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

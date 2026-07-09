@@ -16,6 +16,7 @@ import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { useEnumOptions } from '@/features/config/use-config'
 import { useAttributeForm } from '@/features/attributes/use-attribute-form'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { AttributeDataType, AttributeDetail, AttributeFormMode } from '@/features/attributes/types'
 
 interface AttributeFormBodyProps {
@@ -187,6 +188,8 @@ export function AttributeFormBody({ mode, onSuccess, onCancel }: AttributeFormBo
               ) : null}
             </FormSection>
           )}
+
+          <CustomFieldsSection resource="attributes" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

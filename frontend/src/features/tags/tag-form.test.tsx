@@ -32,6 +32,13 @@ vi.mock('@/features/tags/use-tag-form-meta', () => ({
   useTagFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
+// `useTagForm` reads `/meta/tags` (spec 0021) to build the dynamic
+// custom-fields schema; this suite has no custom fields to exercise (covered
+// by `tag-form-custom-fields.test.tsx`), so it resolves to an empty catalogue.
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => Promise.resolve({ fields: [], permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return ({ children }: { children: ReactNode }) => (

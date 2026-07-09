@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -13,6 +14,7 @@ import {
   type CreateAttributeFormValues,
 } from '@/features/attributes/attribute-schema'
 import type { AttributeDetail, AttributeFormMode } from '@/features/attributes/types'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = ['code', 'name', 'data_type', 'options'] as const
@@ -37,9 +39,21 @@ export function useAttributeForm({ mode, onSuccess }: UseAttributeFormArgs) {
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'attributes',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.attribute.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateAttributeSchema(t) : buildCreateAttributeSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateAttributeSchema(t, customFields.schema)
+        : buildCreateAttributeSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<AttributeFormValues>(() => {
@@ -52,10 +66,11 @@ export function useAttributeForm({ mode, onSuccess }: UseAttributeFormArgs) {
         options: [...attribute.options]
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((option) => ({ value: option.value, label: option.label })),
+        custom_fields: customFields.defaultValues,
       }
     }
-    return { code: '', name: '', data_type: 'STRING', options: [] }
-  }, [mode])
+    return { code: '', name: '', data_type: 'STRING', options: [], custom_fields: customFields.defaultValues }
+  }, [mode, customFields.defaultValues])
 
   const form = useForm<AttributeFormValues>({
     resolver: zodResolver(schema),
@@ -64,6 +79,10 @@ export function useAttributeForm({ mode, onSuccess }: UseAttributeFormArgs) {
 
   const onSubmit = async (values: AttributeFormValues) => {
     setServerError(null)
+    const errorFields: Path<AttributeFormValues>[] = [
+      ...SERVER_ERROR_FIELDS,
+      ...(customFields.errorPaths as Path<AttributeFormValues>[]),
+    ]
     try {
       if (mode.type === 'edit') {
         const saved = await updateAttribute(
@@ -80,7 +99,7 @@ export function useAttributeForm({ mode, onSuccess }: UseAttributeFormArgs) {
       toast.success(t('attributes.form.created'))
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('attributes.form.genericError'))
       }
     }

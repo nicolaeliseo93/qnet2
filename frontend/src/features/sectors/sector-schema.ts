@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /**
  * Zod schema for the sector create/edit form, built as a factory so
@@ -22,12 +26,13 @@ function baseFields(t: TFunction) {
   }
 }
 
-export function buildCreateSectorSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+/** `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateSectorSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
-export function buildUpdateSectorSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+export function buildUpdateSectorSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 export type CreateSectorFormValues = z.infer<ReturnType<typeof buildCreateSectorSchema>>

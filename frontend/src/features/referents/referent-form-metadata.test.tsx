@@ -118,6 +118,14 @@ beforeEach(() => {
   createReferentMock.mockReset()
   updateReferentMock.mockReset()
   fetchResourceMetaMock.mockReset()
+  // `useCustomFieldsForm` (spec 0021) also reads this same endpoint (for the
+  // dynamic custom-fields schema); default to none defined so it never
+  // interferes with the metadata assertions below (edit-mode tests never
+  // override this).
+  fetchResourceMetaMock.mockResolvedValue({
+    fields: [],
+    permissions: { resource: { view: true, create: true, update: true, delete: true, export: true, import: true }, fields: {}, actions: {} },
+  })
 })
 
 describe('ReferentForm — metadata-driven authorization (spec 0004)', () => {

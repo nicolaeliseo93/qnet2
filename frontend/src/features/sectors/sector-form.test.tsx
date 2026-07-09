@@ -36,6 +36,13 @@ vi.mock('@/features/sectors/use-sector-form-meta', () => ({
   useSectorFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
+// `useSectorForm` reads `/meta/sectors` (spec 0021) to build the dynamic
+// custom-fields schema; this suite has no custom fields to exercise (covered
+// by `sector-form-custom-fields.test.tsx`), so it resolves to an empty catalogue.
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => Promise.resolve({ fields: [], permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
 /** Root A > Child A1 > Grandchild A1a, plus a second root sibling. */
 const TREE: SectorTreeNode[] = [
   {

@@ -8,6 +8,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /** A node of the sector tree, as returned by `GET /sectors/tree`. */
 export interface SectorTreeNode {
@@ -27,6 +28,8 @@ export interface SectorDetail {
   parent_id: number | null
   parent: { id: number; name: string } | null
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -42,6 +45,8 @@ export interface SectorDetailWithPermissions extends SectorDetail {
 export interface CreateSectorPayload {
   name: string
   parent_id?: number | null
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /** Payload for PATCH /sectors/{id} (partial update). */

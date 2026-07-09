@@ -113,9 +113,14 @@ final class CustomFieldIndexDdlBuilder
         return match ($definition->type) {
             'integer' => 'BIGINT',
             'decimal' => 'DECIMAL(20,6)',
-            'boolean' => 'TINYINT(1)',
             'relation' => 'BIGINT',
-            default => 'VARCHAR(191)', // text, textarea, enum (scalar)
+            // boolean MUST be a string type: the generated column expression is
+            // `json_unquote(json_extract(...))` (to match Laravel's WHERE so the
+            // index is usable), and json_unquote of a JSON boolean yields the
+            // string 'true'/'false' — which a TINYINT rejects on INSERT
+            // ("Incorrect integer value: 'true'"), breaking every write to the
+            // row. VARCHAR stores it and still serves boolean equality filters.
+            default => 'VARCHAR(191)', // text, textarea, enum (scalar), boolean
         };
     }
 

@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { UserForm } from '@/features/users/user-form'
 import type { UserDetailWithPermissions } from '@/features/users/types'
-import type { ResourcePermissions } from '@/features/authorization/types'
+import type { ResourceMeta, ResourcePermissions } from '@/features/authorization/types'
 import type { EnumOption } from '@/features/config/types'
 import type { PersonalDataCard } from '@/features/personal-data/types'
 
@@ -37,6 +37,14 @@ const FULL_ACCESS_PERMISSIONS: ResourcePermissions = {
 
 vi.mock('@/features/users/use-user-form-meta', () => ({
   useUserFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
+// `useCustomFieldsForm` (spec 0021) also reads the resource meta directly,
+// bypassing `useUserFormMeta` above: stub it with no custom fields defined, so
+// this suite (not about custom fields) renders exactly as it did before.
+const fetchResourceMetaMock = vi.fn<() => Promise<ResourceMeta>>()
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
 const enums: Record<string, EnumOption[]> = {
@@ -197,6 +205,8 @@ beforeEach(() => {
   personalDataData.mockReturnValue(undefined)
   createUserMock.mockResolvedValue(user())
   updateUserMock.mockResolvedValue(user())
+  fetchResourceMetaMock.mockReset()
+  fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_ACCESS_PERMISSIONS })
 })
 
 describe('UserForm — tabbed layout (spec 0015 AC-014)', () => {

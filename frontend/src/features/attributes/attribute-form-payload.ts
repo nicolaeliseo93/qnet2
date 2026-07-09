@@ -5,6 +5,7 @@ import type {
   UpdateAttributePayload,
 } from '@/features/attributes/types'
 import type { AttributeFormValues } from '@/features/attributes/use-attribute-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 /** Maps the form's option rows to the wire shape, assigning `sort_order` from array position. */
 function buildOptions(values: AttributeFormValues): AttributeOptionInput[] | undefined {
@@ -20,11 +21,13 @@ function buildOptions(values: AttributeFormValues): AttributeOptionInput[] | und
 
 /** Builds the create payload: generic fields + options (only when ENUM). */
 export function buildCreatePayload(values: AttributeFormValues): CreateAttributePayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     code: values.code,
     name: values.name,
     data_type: values.data_type,
     options: buildOptions(values),
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -61,6 +64,11 @@ export function buildUpdatePayload(
     JSON.stringify(nextOptions ?? []) !== JSON.stringify(originalOptions)
   ) {
     payload.options = nextOptions
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

@@ -72,7 +72,10 @@ it('maps scalar SQL types per field type', function (string $type, string $expec
 })->with([
     'integer' => ['integer', 'BIGINT'],
     'decimal' => ['decimal', 'DECIMAL(20,6)'],
-    'boolean' => ['boolean', 'TINYINT(1)'],
+    // boolean is VARCHAR, NOT TINYINT: the generated column is
+    // `json_unquote(json_extract(...))` which yields the string 'true'/'false'
+    // for a JSON boolean — a TINYINT rejects it on INSERT and breaks writes.
+    'boolean' => ['boolean', 'VARCHAR(191)'],
     'relation (single)' => ['relation', 'BIGINT'],
     'text' => ['text', 'VARCHAR(191)'],
     'enum (scalar)' => ['enum', 'VARCHAR(191)'],

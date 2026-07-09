@@ -5,7 +5,7 @@ import type { SourceFormValues } from '@/features/sources/use-source-form'
 
 /** Spec 0018 (mirrored on referent-types, spec 0016 AC-022): create shape, update diffs only changes. */
 
-const formValues: SourceFormValues = { name: 'Sponsor' }
+const formValues: SourceFormValues = { name: 'Sponsor', custom_fields: {} }
 
 function original(overrides: Partial<SourceDetailWithPermissions> = {}): SourceDetailWithPermissions {
   return {
@@ -33,6 +33,8 @@ describe('buildUpdatePayload', () => {
   })
 
   it('includes only the changed name', () => {
-    expect(buildUpdatePayload({ name: 'Partner' }, original())).toEqual({ name: 'Partner' })
+    expect(buildUpdatePayload({ name: 'Partner', custom_fields: {} }, original())).toEqual({
+      name: 'Partner',
+    })
   })
 })

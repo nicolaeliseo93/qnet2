@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -14,6 +15,7 @@ import {
 } from '@/features/sectors/sector-schema'
 import { sectorKeys } from '@/features/sectors/query-keys'
 import type { SectorDetail, SectorFormMode } from '@/features/sectors/types'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = ['name', 'parent_id'] as const
@@ -38,9 +40,21 @@ export function useSectorForm({ mode, onSuccess }: UseSectorFormArgs) {
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'sectors',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.sector.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateSectorSchema(t) : buildCreateSectorSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateSectorSchema(t, customFields.schema)
+        : buildCreateSectorSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<SectorFormValues>(() => {
@@ -48,10 +62,11 @@ export function useSectorForm({ mode, onSuccess }: UseSectorFormArgs) {
       return {
         name: mode.sector.name,
         parent_id: mode.sector.parent_id,
+        custom_fields: customFields.defaultValues,
       }
     }
-    return { name: '', parent_id: mode.parentId }
-  }, [mode])
+    return { name: '', parent_id: mode.parentId, custom_fields: customFields.defaultValues }
+  }, [mode, customFields.defaultValues])
 
   const form = useForm<SectorFormValues>({
     resolver: zodResolver(schema),
@@ -60,6 +75,10 @@ export function useSectorForm({ mode, onSuccess }: UseSectorFormArgs) {
 
   const onSubmit = async (values: SectorFormValues) => {
     setServerError(null)
+    const errorFields: Path<SectorFormValues>[] = [
+      ...SERVER_ERROR_FIELDS,
+      ...(customFields.errorPaths as Path<SectorFormValues>[]),
+    ]
     try {
       if (mode.type === 'edit') {
         const saved = await updateSector(mode.sector.id, buildUpdatePayload(values, mode.sector))
@@ -75,7 +94,7 @@ export function useSectorForm({ mode, onSuccess }: UseSectorFormArgs) {
       toast.success(t('sectors.form.created'))
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('sectors.form.genericError'))
       }
     }

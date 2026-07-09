@@ -8,7 +8,7 @@ import type { ReferentTypeFormValues } from '@/features/referent-types/use-refer
 
 /** Spec 0016 AC-022 (mirrored on referent-types): create shape, update diffs only changes. */
 
-const formValues: ReferentTypeFormValues = { name: 'Sponsor' }
+const formValues: ReferentTypeFormValues = { name: 'Sponsor', custom_fields: {} }
 
 function original(
   overrides: Partial<ReferentTypeDetailWithPermissions> = {},
@@ -38,6 +38,8 @@ describe('buildUpdatePayload', () => {
   })
 
   it('includes only the changed name', () => {
-    expect(buildUpdatePayload({ name: 'Partner' }, original())).toEqual({ name: 'Partner' })
+    expect(buildUpdatePayload({ name: 'Partner', custom_fields: {} }, original())).toEqual({
+      name: 'Partner',
+    })
   })
 })

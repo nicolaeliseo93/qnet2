@@ -33,6 +33,13 @@ vi.mock('@/features/roles/use-role-form-meta', () => ({
   useRoleFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
+// `useRoleForm` reads `/meta/roles` (spec 0021) to build the dynamic
+// custom-fields schema; this suite has no custom fields to exercise (covered
+// by `role-form-custom-fields.test.tsx`), so it resolves to an empty catalogue.
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => Promise.resolve({ fields: [], permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
 // This suite is not about the spec 0006 field-permission matrix (covered by
 // `role-form-field-permissions.test.tsx`): an empty catalogue keeps the new
 // section out of the way of the users-integration assertions below.

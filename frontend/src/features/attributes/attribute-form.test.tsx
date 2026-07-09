@@ -38,6 +38,13 @@ vi.mock('@/features/attributes/use-attribute-form-meta', () => ({
   useAttributeFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
+// `useAttributeForm` reads `/meta/attributes` (spec 0021) to build the dynamic
+// custom-fields schema; this suite has no custom fields to exercise, so it
+// resolves to an empty catalogue.
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => Promise.resolve({ fields: [], permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return ({ children }: { children: ReactNode }) => (

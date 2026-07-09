@@ -9,6 +9,7 @@
 import type { PersonalDataCard } from '@/features/personal-data/types'
 import type { PersonalDataPayload } from '@/features/personal-data/drafts'
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /** The contact ambit of a referent: internal to the organization, or external. */
 export const REFERENT_CONTACT_SCOPES = ['internal', 'external'] as const
@@ -38,6 +39,8 @@ export interface ReferentDetail {
    */
   personal_data: PersonalDataCard | null
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -60,6 +63,8 @@ export interface CreateReferentPayload {
   contact_scope: ReferentContactScope
   notes?: string | null
   personal_data: PersonalDataPayload
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -72,6 +77,8 @@ export interface UpdateReferentPayload {
   contact_scope?: ReferentContactScope
   notes?: string | null
   personal_data?: PersonalDataPayload
+  /** Only the custom fields that changed, keyed by raw key (spec 0021, sparse diff). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /** Discriminated form mode shared by the form hook/meta-resolver and `ReferentForm`. */

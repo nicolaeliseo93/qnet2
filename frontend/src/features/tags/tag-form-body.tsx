@@ -7,6 +7,7 @@ import { Form, FormControl } from '@/components/ui/form'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { useTagForm } from '@/features/tags/use-tag-form'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { TagDetail, TagFormMode } from '@/features/tags/types'
 
 interface TagFormBodyProps {
@@ -20,6 +21,8 @@ interface TagFormBodyProps {
  * `MetaField` (spec 0004): hidden means absent, non-editable means disabled,
  * `required` comes from the resolved `ResourcePermissions` — no hardcoded
  * permission logic lives here. All non-render logic lives in `useTagForm`.
+ * `<CustomFieldsSection>` (spec 0021) mounts the resource's admin-defined
+ * custom fields with zero tags-specific rendering/validation logic.
  */
 export function TagFormBody({ mode, onSuccess, onCancel }: TagFormBodyProps) {
   const { t } = useTranslation()
@@ -56,6 +59,8 @@ export function TagFormBody({ mode, onSuccess, onCancel }: TagFormBodyProps) {
               </MetaField>
             </FormSection>
           )}
+
+          <CustomFieldsSection resource="tags" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

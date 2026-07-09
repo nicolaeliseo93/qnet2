@@ -18,7 +18,7 @@ function original(overrides: Partial<SectorDetail> = {}): SectorDetail {
 
 describe('buildCreatePayload', () => {
   it('builds the create payload with a root parent_id (null)', () => {
-    const values: SectorFormValues = { name: 'Applications', parent_id: null }
+    const values: SectorFormValues = { name: 'Applications', parent_id: null, custom_fields: {} }
 
     expect(buildCreatePayload(values)).toEqual({
       name: 'Applications',
@@ -27,7 +27,7 @@ describe('buildCreatePayload', () => {
   })
 
   it('builds the create payload with a selected parent', () => {
-    const values: SectorFormValues = { name: 'Applications', parent_id: 1 }
+    const values: SectorFormValues = { name: 'Applications', parent_id: 1, custom_fields: {} }
 
     expect(buildCreatePayload(values)).toEqual({ name: 'Applications', parent_id: 1 })
   })
@@ -35,25 +35,33 @@ describe('buildCreatePayload', () => {
 
 describe('buildUpdatePayload', () => {
   it('omits every field when nothing changed', () => {
-    const values: SectorFormValues = { name: 'Applications', parent_id: 1 }
+    const values: SectorFormValues = { name: 'Applications', parent_id: 1, custom_fields: {} }
 
     expect(buildUpdatePayload(values, original())).toEqual({})
   })
 
   it('includes only the changed name', () => {
-    const values: SectorFormValues = { name: 'Business Applications', parent_id: 1 }
+    const values: SectorFormValues = {
+      name: 'Business Applications',
+      parent_id: 1,
+      custom_fields: {},
+    }
 
     expect(buildUpdatePayload(values, original())).toEqual({ name: 'Business Applications' })
   })
 
   it('includes only the changed parent_id, including a move to root (null)', () => {
-    const values: SectorFormValues = { name: 'Applications', parent_id: null }
+    const values: SectorFormValues = { name: 'Applications', parent_id: null, custom_fields: {} }
 
     expect(buildUpdatePayload(values, original())).toEqual({ parent_id: null })
   })
 
   it('includes both fields when both changed', () => {
-    const values: SectorFormValues = { name: 'Business Applications', parent_id: 2 }
+    const values: SectorFormValues = {
+      name: 'Business Applications',
+      parent_id: 2,
+      custom_fields: {},
+    }
 
     expect(buildUpdatePayload(values, original())).toEqual({
       name: 'Business Applications',

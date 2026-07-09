@@ -14,6 +14,7 @@ import type {
   UpdateRegistryPayload,
 } from '@/features/registries/types'
 import type { RegistryFormValues } from '@/features/registries/use-registry-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 /**
  * Builds the create payload: the registry-specific scalars/relations plus the
@@ -30,6 +31,7 @@ export function buildCreatePayload(
   profileDraft: PersonalDataDraft,
   fieldPermission?: PersonalDataFieldPermissionResolver,
 ): CreateRegistryPayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     source_id: values.source_id,
     sector_ids: values.sector_ids,
@@ -46,6 +48,7 @@ export function buildCreatePayload(
     size_class: values.size_class,
     employee_count: values.employee_count,
     personal_data: omitNonEditableFields(draftToPayload(profileDraft), fieldPermission),
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -120,6 +123,11 @@ export function buildUpdatePayload(
   const nextPayload = draftToPayload(profileDraft)
   if (JSON.stringify(nextPayload) !== JSON.stringify(draftToPayload(originalDraft))) {
     payload.personal_data = omitNonEditableFields(nextPayload, fieldPermission)
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

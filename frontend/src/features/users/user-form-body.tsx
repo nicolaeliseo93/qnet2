@@ -9,6 +9,7 @@ import {
   TabErrorDot,
 } from '@/components/form-tab-strip'
 import { useResourcePermissions } from '@/features/authorization/permissions'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import {
   AccessTabContent,
   AddressesTabContent,
@@ -50,6 +51,8 @@ interface UserFormTab {
  * non-render logic lives in `useUserForm`; each section's content lives in a
  * sibling module (`user-form-account-tabs.tsx`, `user-form-employment-tabs.tsx`,
  * `user-form-contract-data-tab.tsx`) so this file stays within the size limits.
+ * `<CustomFieldsSection>` (spec 0021) mounts the resource's admin-defined custom
+ * fields on the Account tab, with zero users-specific rendering/validation logic.
  */
 export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: UserFormBodyProps) {
   const { t } = useTranslation()
@@ -203,6 +206,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
               {accessVisible && (
                 <AccessTabContent control={form.control} selectedRoleItems={selectedRoleItems} />
               )}
+              <CustomFieldsSection resource="users" control={form.control} />
             </TabsContent>
 
             {employmentVisible && (

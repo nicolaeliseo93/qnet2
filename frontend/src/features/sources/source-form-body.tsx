@@ -7,6 +7,7 @@ import { Form, FormControl } from '@/components/ui/form'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { useSourceForm } from '@/features/sources/use-source-form'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { SourceDetail, SourceFormMode } from '@/features/sources/types'
 
 interface SourceFormBodyProps {
@@ -20,6 +21,8 @@ interface SourceFormBodyProps {
  * `MetaField` (spec 0004): hidden means absent, non-editable means disabled,
  * `required` comes from the resolved `ResourcePermissions` — no hardcoded
  * permission logic lives here. All non-render logic lives in `useSourceForm`.
+ * `<CustomFieldsSection>` (spec 0021) mounts the resource's admin-defined
+ * custom fields with zero sources-specific rendering/validation logic.
  */
 export function SourceFormBody({ mode, onSuccess, onCancel }: SourceFormBodyProps) {
   const { t } = useTranslation()
@@ -56,6 +59,8 @@ export function SourceFormBody({ mode, onSuccess, onCancel }: SourceFormBodyProp
               </MetaField>
             </FormSection>
           )}
+
+          <CustomFieldsSection resource="sources" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

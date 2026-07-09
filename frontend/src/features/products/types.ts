@@ -6,6 +6,7 @@
 
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { AttributeDataType } from '@/features/attributes/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /** A typed dynamic-attribute field value, resolved from the matching `value_*` column. */
 export type AttributeFieldValue = string | number | boolean | null
@@ -44,6 +45,8 @@ export interface ProductDetail {
   product_type: ProductType
   attributes: ProductAttributeValue[]
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -73,6 +76,8 @@ export interface CreateProductPayload {
   category_id: number
   product_type: ProductType
   attributes?: ProductAttributeValueInput[]
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**

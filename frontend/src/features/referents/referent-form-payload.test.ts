@@ -67,6 +67,7 @@ const formValues: ReferentFormValues = {
   referent_type_id: 1,
   contact_scope: 'internal',
   notes: 'Some notes',
+  custom_fields: {},
 }
 
 describe('buildCreatePayload', () => {
@@ -130,7 +131,7 @@ describe('buildUpdatePayload', () => {
 
   it('combines multiple changed fields in a single payload', () => {
     const payload = buildUpdatePayload(
-      { referent_type_id: 2, contact_scope: 'external', notes: '' },
+      { referent_type_id: 2, contact_scope: 'external', notes: '', custom_fields: {} },
       original(),
       individualDraft(),
     )

@@ -4,6 +4,7 @@ import type {
   UpdateOperationalSitePayload,
 } from '@/features/operational-sites/types'
 import type { OperationalSiteFormValues } from '@/features/operational-sites/use-operational-site-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 /**
  * Builds the create payload `{line1, postal_code, country_id, state_id,
@@ -15,6 +16,7 @@ import type { OperationalSiteFormValues } from '@/features/operational-sites/use
 export function buildCreatePayload(
   values: OperationalSiteFormValues,
 ): CreateOperationalSitePayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     alias: values.alias || null,
     line1: values.line1,
@@ -23,6 +25,7 @@ export function buildCreatePayload(
     state_id: values.state_id,
     province_id: values.province_id,
     city_id: values.city_id as number,
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -59,6 +62,11 @@ export function buildUpdatePayload(
   }
   if (values.city_id !== original.city_id) {
     payload.city_id = values.city_id as number
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

@@ -8,6 +8,7 @@ import { Form, FormControl } from '@/components/ui/form'
 import { GeoSelect, type GeoValue } from '@/features/geo/geo-select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import { useOperationalSiteForm } from '@/features/operational-sites/use-operational-site-form'
 import type {
   OperationalSiteDetail,
@@ -135,6 +136,8 @@ export function OperationalSiteFormBody({
               )}
             </MetaField>
           </FormSection>
+
+          <CustomFieldsSection resource="operational-sites" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

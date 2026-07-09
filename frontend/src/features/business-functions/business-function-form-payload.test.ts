@@ -10,6 +10,7 @@ const formValues: BusinessFunctionFormValues = {
   type: 'business_unit',
   manager_id: 1,
   users: [2, 3],
+  custom_fields: {},
 }
 
 function original(
@@ -96,7 +97,7 @@ describe('buildUpdatePayload', () => {
 
   it('combines multiple changed fields in a single payload', () => {
     const payload = buildUpdatePayload(
-      { name: 'Platform', type: 'business_service', manager_id: null, users: [9] },
+      { name: 'Platform', type: 'business_service', manager_id: null, users: [9], custom_fields: {} },
       original(),
     )
 

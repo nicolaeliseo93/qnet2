@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
 import { ATTRIBUTE_DATA_TYPES } from '@/features/attributes/types'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /**
  * Zod schema for the attribute create/edit form, built as a factory so
@@ -48,9 +52,11 @@ function baseFields(t: TFunction) {
   }
 }
 
-/** Create schema. Edit reuses the exact same shape (spec: full-replace PATCH). */
-export function buildCreateAttributeSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) }).superRefine((values, ctx) => {
+/** Create schema. Edit reuses the exact same shape (spec: full-replace PATCH). `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateAttributeSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z
+    .object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
+    .superRefine((values, ctx) => {
     if (values.data_type === 'ENUM' && values.options.length === 0) {
       ctx.addIssue({
         code: 'custom',
@@ -74,8 +80,8 @@ export function buildCreateAttributeSchema(t: TFunction) {
   })
 }
 
-export function buildUpdateAttributeSchema(t: TFunction) {
-  return buildCreateAttributeSchema(t)
+export function buildUpdateAttributeSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return buildCreateAttributeSchema(t, customFieldsSchema)
 }
 
 export type CreateAttributeFormValues = z.infer<ReturnType<typeof buildCreateAttributeSchema>>

@@ -33,6 +33,13 @@ vi.mock('@/features/business-functions/use-business-function-form-meta', () => (
   useBusinessFunctionFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
+// `useBusinessFunctionForm` reads `/meta/business-functions` (spec 0021) to build the
+// dynamic custom-fields schema; this suite has no custom fields to exercise, so it
+// resolves to an empty catalogue.
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => Promise.resolve({ fields: [], permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
 // Replace the async single-select responsabile with a lightweight controllable
 // stub so this suite focuses on the form's own logic, not the network-backed
 // select (covered by its own component test).

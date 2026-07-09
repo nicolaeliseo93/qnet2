@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /**
  * Zod schema for the product-category create/edit form, built as a factory so
@@ -31,12 +35,13 @@ function baseFields(t: TFunction) {
   }
 }
 
-export function buildCreateProductCategorySchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+/** `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateProductCategorySchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
-export function buildUpdateProductCategorySchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+export function buildUpdateProductCategorySchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 export type CreateProductCategoryFormValues = z.infer<

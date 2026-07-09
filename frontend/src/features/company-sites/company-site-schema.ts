@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /** Backend column limit (spec 0020 `data_contract`). */
 const NAME_MAX_LENGTH = 191
@@ -33,14 +37,14 @@ function baseFields(t: TFunction) {
   }
 }
 
-/** Create schema. */
-export function buildCreateCompanySiteSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+/** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateCompanySiteSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 /** Edit schema (same shape; partial PATCH is computed by the caller). */
-export function buildUpdateCompanySiteSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+export function buildUpdateCompanySiteSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 export type CreateCompanySiteFormValues = z.infer<

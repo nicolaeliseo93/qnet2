@@ -6,6 +6,7 @@ import type {
   UpdateProductPayload,
 } from '@/features/products/types'
 import type { ProductFormValues } from '@/features/products/use-product-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 /** Converts the form's `{attribute_id: value}` record into the wire array shape. */
 function attributesRecordToArray(
@@ -19,6 +20,7 @@ function attributesRecordToArray(
 
 /** Builds the create payload: generic fields + the currently-generated dynamic attributes. */
 export function buildCreatePayload(values: ProductFormValues): CreateProductPayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     name: values.name,
     description: values.description,
@@ -29,6 +31,7 @@ export function buildCreatePayload(values: ProductFormValues): CreateProductPayl
     category_id: values.category_id as number,
     product_type: values.product_type,
     attributes: attributesRecordToArray(values.attributes),
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -66,6 +69,11 @@ export function buildUpdatePayload(
   }
   if (attributesDirty) {
     payload.attributes = attributesRecordToArray(values.attributes)
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

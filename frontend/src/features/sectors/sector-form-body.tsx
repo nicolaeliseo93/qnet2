@@ -11,6 +11,7 @@ import { useResourcePermissions } from '@/features/authorization/permissions'
 import { useSectorTree } from '@/features/sectors/use-sector-tree'
 import { collectSubtreeIds, flattenSectorTree } from '@/features/sectors/flatten-tree'
 import { useSectorForm } from '@/features/sectors/use-sector-form'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { SectorDetail, SectorFormMode } from '@/features/sectors/types'
 
 interface SectorFormBodyProps {
@@ -25,6 +26,8 @@ const ROOT_PARENT_VALUE = 0
 /**
  * The sector create/edit form UI: `name` and `parent_id`, wrapped in
  * `MetaField` (spec 0004). All non-render logic lives in `useSectorForm`.
+ * `<CustomFieldsSection>` (spec 0021) mounts the resource's admin-defined
+ * custom fields with zero sectors-specific rendering/validation logic.
  */
 export function SectorFormBody({ mode, onSuccess, onCancel }: SectorFormBodyProps) {
   const { t } = useTranslation()
@@ -102,6 +105,8 @@ export function SectorFormBody({ mode, onSuccess, onCancel }: SectorFormBodyProp
               </MetaField>
             </FormSection>
           )}
+
+          <CustomFieldsSection resource="sectors" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

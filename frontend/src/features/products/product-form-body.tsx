@@ -21,6 +21,7 @@ import { useProductCategoryTree } from '@/features/product-categories/use-produc
 import { flattenCategoryTree } from '@/features/product-categories/flatten-tree'
 import { useProductForm } from '@/features/products/use-product-form'
 import { ProductDynamicAttributeFields } from '@/features/products/product-dynamic-attribute-fields'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { ProductDetail, ProductFormMode, ProductType } from '@/features/products/types'
 
 interface ProductFormBodyProps {
@@ -238,6 +239,8 @@ export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyPr
               />
             )}
           </FormSection>
+
+          <CustomFieldsSection resource="products" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

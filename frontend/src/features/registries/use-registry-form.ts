@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -7,6 +8,7 @@ import axios from 'axios'
 import { toast } from 'sonner'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 import {
   areCreateContactsValid,
   isCreateAddressValid,
@@ -116,9 +118,21 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'registries',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.registry.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateRegistrySchema(t) : buildCreateRegistrySchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateRegistrySchema(t, customFields.schema)
+        : buildCreateRegistrySchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<RegistryFormValues>(() => {
@@ -139,6 +153,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
         agreement_notes: registry.agreement_notes ?? '',
         size_class: registry.size_class,
         employee_count: registry.employee_count,
+        custom_fields: customFields.defaultValues,
       }
     }
     return {
@@ -156,8 +171,9 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
       agreement_notes: '',
       size_class: null,
       employee_count: null,
+      custom_fields: customFields.defaultValues,
     }
-  }, [mode])
+  }, [mode, customFields.defaultValues])
 
   // EDIT: pre-known {id, label} for every relation picker, so it shows its
   // current selection immediately (no hydration round-trip).
@@ -252,6 +268,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
     } catch (error) {
       const mappedScalar = applyServerValidationErrors(error, form.setError, [
         ...SERVER_ERROR_FIELDS,
+        ...(customFields.errorPaths as Path<RegistryFormValues>[]),
       ])
       const personalDataMessage = personalDataServerErrorMessage(error)
       if (personalDataMessage) {

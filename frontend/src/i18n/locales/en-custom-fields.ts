@@ -26,6 +26,10 @@ export const customFields = {
     clearLabel: 'Clear',
     removeLabel: 'Remove',
   },
+  /** Header of the section that groups every ungrouped custom field on a form. */
+  section: {
+    title: 'Other fields',
+  },
   columns: {
     entity_type: 'Module',
     key: 'Key',

@@ -1,3 +1,4 @@
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 import { draftToPayload, omitNonEditableFields } from '@/features/personal-data/drafts'
 import type {
   PersonalDataDraft,
@@ -46,6 +47,7 @@ export function buildCreatePayload(
   profileDraft: PersonalDataDraft,
   fieldPermission?: PersonalDataFieldPermissionResolver,
 ): CreateUserPayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     email: values.email,
     locale: values.locale,
@@ -55,6 +57,7 @@ export function buildCreatePayload(
     password_confirmation: values.password_confirmation,
     personal_data: omitNonEditableFields(draftToPayload(profileDraft), fieldPermission),
     employment: buildEmploymentPayload(values.employment),
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -91,6 +94,11 @@ export function buildUpdatePayload(
   }
   payload.personal_data = omitNonEditableFields(draftToPayload(profileDraft), fieldPermission)
   payload.employment = buildEmploymentPayload(values.employment)
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
+  }
 
   return payload
 }

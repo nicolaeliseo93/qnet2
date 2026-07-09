@@ -40,5 +40,8 @@ class DemoDataSeeder extends Seeder
         // users (internal managers, seeded above) — must run after all of them.
         $this->call(DemoRegistrySeeder::class);
         $this->call(DemoNotificationSeeder::class);
+        // Last: needs every entity's rows already seeded (it populates custom
+        // field values on them) and companies for the relation target.
+        $this->call(DemoCustomFieldSeeder::class);
     }
 }

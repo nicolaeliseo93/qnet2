@@ -15,6 +15,7 @@ import { useEffectiveAttributes } from '@/features/product-categories/use-effect
 import { collectSubtreeIds, flattenCategoryTree } from '@/features/product-categories/flatten-tree'
 import { useProductCategoryForm } from '@/features/product-categories/use-product-category-form'
 import { AttributeAssignmentEditor } from '@/features/product-categories/attribute-assignment-editor'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type {
   ProductCategoryDetail,
   ProductCategoryFormMode,
@@ -204,6 +205,8 @@ export function ProductCategoryFormBody({ mode, onSuccess, onCancel }: ProductCa
               </MetaField>
             </FormSection>
           )}
+
+          <CustomFieldsSection resource="product-categories" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

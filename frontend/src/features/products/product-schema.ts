@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /**
  * Zod schema for the product create/edit form's GENERIC fields, built as a
@@ -47,12 +51,16 @@ function withRequiredValueRules<T extends z.ZodTypeAny>(schema: T, t: TFunction)
   })
 }
 
-export function buildCreateProductSchema(t: TFunction) {
-  return withRequiredValueRules(z.object({ ...baseFields(t) }), t)
+/** `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateProductSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return withRequiredValueRules(
+    z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) }),
+    t,
+  )
 }
 
-export function buildUpdateProductSchema(t: TFunction) {
-  return buildCreateProductSchema(t)
+export function buildUpdateProductSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return buildCreateProductSchema(t, customFieldsSchema)
 }
 
 export type CreateProductFormValues = z.infer<ReturnType<typeof buildCreateProductSchema>>

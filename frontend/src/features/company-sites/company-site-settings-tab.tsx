@@ -10,6 +10,7 @@ import { MetaField } from '@/features/authorization/MetaField'
 import { COMPANIES_FOR_SELECT_RESOURCE } from '@/features/companies/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import type { ForSelectItem } from '@/features/for-select/types'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import { CompanySiteReadonlyField } from '@/features/company-sites/company-site-readonly-field'
 import type { CompanySiteDetail } from '@/features/company-sites/types'
 import type { CompanySiteFormValues } from '@/features/company-sites/use-company-site-form'
@@ -211,6 +212,8 @@ export function SettingsTabContent({
           />
         </div>
       </FormSection>
+
+      <CustomFieldsSection resource="company-sites" control={control} />
     </>
   )
 }

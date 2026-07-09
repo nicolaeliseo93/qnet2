@@ -98,6 +98,7 @@ const formValues: RegistryFormValues = {
   agreement_notes: 'Some notes',
   size_class: 'small',
   employee_count: 12,
+  custom_fields: {},
 }
 
 describe('buildCreatePayload', () => {

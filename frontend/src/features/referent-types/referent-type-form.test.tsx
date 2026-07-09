@@ -32,6 +32,14 @@ vi.mock('@/features/referent-types/use-referent-type-form-meta', () => ({
   useReferentTypeFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
+// `useReferentTypeForm` reads `/meta/referent-types` (spec 0021) to build the
+// dynamic custom-fields schema; this suite has no custom fields to exercise
+// (covered by `referent-type-form-custom-fields.test.tsx`), so it resolves to
+// an empty catalogue.
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => Promise.resolve({ fields: [], permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return ({ children }: { children: ReactNode }) => (

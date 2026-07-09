@@ -78,6 +78,7 @@ const formValues: UserFormValues = {
   password: TEST_PASSWORD,
   password_confirmation: TEST_PASSWORD,
   employment: emptyEmployment,
+  custom_fields: {},
 }
 
 function original(overrides: Partial<UserDetailWithPermissions> = {}): UserDetailWithPermissions {

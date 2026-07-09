@@ -2,6 +2,28 @@
 
 > Injected at session start. Update at every green state.
 
+## UI — Custom Fields "Altri campi" section (2026-07-09) — GREEN
+
+`CustomFieldsSection.tsx`: i custom field SENZA `group` (group=null) prima renderizzavano flat (nessun
+heading); ora sono raccolti in un unico `<FormSection>` con icona `SlidersHorizontal` e titolo i18n
+`customFields.section.title` ("Altri campi" / "Other fields"). I gruppi nominati (group != null) restano
+invariati (una FormSection per gruppo). Nuova chiave i18n `section.title` in en/it-custom-fields.ts.
+Test: nuovo caso in CustomFieldsSection.test.tsx (heading "Other fields") → 6/6 verdi; tsc -b = 36 (==
+baseline, 0 nuovi); eslint pulito. NB: il DemoCustomFieldSeeder crea def senza group → in form finiscono
+tutte in questa sezione.
+
+## Demo — Custom Fields fixtures per ogni modello (2026-07-09) — GREEN
+
+Nuovo `DemoCustomFieldSeeder` (registrato ULTIMO in `DemoDataSeeder`) per verifica visiva end-to-end
+del sistema custom fields su TUTTI i moduli. Per ogni entity_type custom-fieldable (15; escluso
+`custom-fields` = self/meta) crea 7 definizioni — una per ogni tipo handler MVP: text/textarea/integer/
+decimal/boolean/enum(+3 opzioni)/relation(→companies, cardinality one) — poi popola i valori su fino a 10
+righe esistenti tramite `CustomFieldWriter::write` (stessa normalizzazione della pipeline di produzione,
+non scritture JSON grezze). Idempotente (updateOrCreate su chiavi naturali). `is_indexed=false` di
+proposito → nessun job di index-promotion asincrono. Eseguito su `migrate:fresh` + `db:seed --class=
+DemoDataSeeder`: 105 def / 45 opzioni / 133 righe valori; provider ri-legge 7 def con options eager per
+`companies`; valori tipati corretti (relation = id company reale). Pint pulito.
+
 ## Feature — Universal Custom Fields (spec 0021) — GREEN / COMPLETE (2026-07-08)
 
 TUTTI i 26 AC verdi (verifier confermato AC-001..020; AC-021 job+dispatch; AC-022..026 FE-A/B/C/D).
@@ -26,6 +48,29 @@ i 16 moduli TABLE ok + META fields, TOTAL err=0; suite 328/328; pint pulito; cac
 LEZIONE: non cachare Eloquent Collection nello store database/file; i test cache-array mascherano il bug.
 NB: gli errori tsc -b su users/referents/operational-sites/company-sites/personal-data sono PREESISTENTI
 (lavoro company-sites LOGO + personal-data quick-create gia' su main), NON custom-fields.
+
+ROLLOUT FORM COMPLETO (2026-07-08): montato `<CustomFieldsSection>` in TUTTI i 15 form dei moduli
+custom-fieldable (companies + attributes, business-functions, company-sites, operational-sites,
+product-categories, products, referent-types, referents, registries, roles, sectors, sources, tags, users).
+Estratto hook riusabile `features/custom-fields/use-custom-fields-form.ts` + helper `asCustomFieldsField`
+(in build-custom-fields-schema.ts) → ogni form si aggancia con 5 righe (schema embed / defaults / errorPaths /
+mount / payload buildCustomFieldsCreate|Update). Companies rifattorizzato su questi helper. Provider bound `scoped`.
+
+DUE BUG REALI trovati in verifica e CORRETTI:
+1) `App\Models\User` estendeva `Authenticatable` (non BaseModel) → NON aveva `HasCustomFields` → write/read
+   custom_fields su users faceva no-op. FIX: aggiunto `use HasCustomFields;` a User. Round-trip verificato.
+2) T15 index promotion: `scalarSqlType('boolean')` era `TINYINT(1)`, ma la colonna generata usa
+   `json_unquote(json_extract(...))` che per un boolean JSON da' la STRINGA 'true'/'false' → INSERT fallisce
+   ("Incorrect integer value: 'true'") su OGNI write della riga. FIX: boolean → VARCHAR(191). Droppate le
+   colonne generate orfane (cfg_pippo, cfg_color) rimaste da toggle precedenti. Ora nessun tipo generato
+   rompe gli INSERT. GAP NOTO (non urgente, ora innocuo): il job NON droppa la colonna generata quando
+   is_indexed torna a 0 / la definizione e' eliminata → colonne inutilizzate persistono (VARCHAR = safe).
+
+VERIFICA FINALE: 15/15 form montano la section; FE tsc -b = 36 errori (== baseline preesistente, 0 nuovi);
+vitest 798 pass / 3 fail preesistenti (cell-renderers ContactsCell i18n leak, non correlato); backend 444
+CustomField|User test verdi; pint pulito; users round-trip {"pippo":true} OK.
+LEZIONE PROCESSO: gli agent NON devono usare `git stash`/`git reset` su un working tree condiviso (hanno
+causato race); usare solo `git diff`/`git log -p` per confronti.
 
 
 

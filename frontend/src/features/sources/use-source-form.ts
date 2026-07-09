@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -14,6 +15,7 @@ import {
   type UpdateSourceFormValues,
 } from '@/features/sources/source-schema'
 import type { SourceDetail, SourceFormMode } from '@/features/sources/types'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = ['name'] as const
@@ -38,17 +40,29 @@ export function useSourceForm({ mode, onSuccess }: UseSourceFormArgs) {
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'sources',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.source.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateSourceSchema(t) : buildCreateSourceSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateSourceSchema(t, customFields.schema)
+        : buildCreateSourceSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<SourceFormValues>(() => {
     if (mode.type === 'edit') {
-      return { name: mode.source.name }
+      return { name: mode.source.name, custom_fields: customFields.defaultValues }
     }
-    return { name: '' }
-  }, [mode])
+    return { name: '', custom_fields: customFields.defaultValues }
+  }, [mode, customFields.defaultValues])
 
   const form = useForm<SourceFormValues>({
     resolver: zodResolver(schema),
@@ -57,6 +71,10 @@ export function useSourceForm({ mode, onSuccess }: UseSourceFormArgs) {
 
   const onSubmit = async (values: SourceFormValues) => {
     setServerError(null)
+    const errorFields: Path<SourceFormValues>[] = [
+      ...SERVER_ERROR_FIELDS,
+      ...(customFields.errorPaths as Path<SourceFormValues>[]),
+    ]
     try {
       if (mode.type === 'edit') {
         const saved = await updateSource(mode.source.id, buildUpdatePayload(values, mode.source))
@@ -70,7 +88,7 @@ export function useSourceForm({ mode, onSuccess }: UseSourceFormArgs) {
       toast.success(t('sources.form.created'))
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('sources.form.genericError'))
       }
     }

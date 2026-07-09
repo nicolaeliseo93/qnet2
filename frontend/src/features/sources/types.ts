@@ -6,6 +6,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /**
  * Single source detail returned by GET/POST/PATCH /sources (envelope
@@ -15,6 +16,8 @@ export interface SourceDetail {
   id: number
   name: string
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -30,6 +33,8 @@ export interface SourceDetailWithPermissions extends SourceDetail {
 /** Payload for POST /sources (create). */
 export interface CreateSourcePayload {
   name: string
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**

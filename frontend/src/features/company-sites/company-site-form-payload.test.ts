@@ -59,6 +59,7 @@ const formValues: CompanySiteFormValues = {
   responsible_validation_contracts_two_id: null,
   proforma_progressive: 1,
   invoice_progressive: 1,
+  custom_fields: {},
 }
 
 const banks: BankDraft[] = [

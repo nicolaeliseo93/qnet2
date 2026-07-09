@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -7,6 +8,7 @@ import axios from 'axios'
 import { toast } from 'sonner'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 import {
   areCreateContactsValid,
   isCreateAddressValid,
@@ -99,6 +101,15 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'company-sites',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.companySite.custom_fields }
+      : { type: 'create' },
+  )
+
   // Adapts the resolved authorization metadata to the personal-data domain's
   // own gating shape (spec 0008 D3): the shared card/contacts/address
   // components stay decoupled from `@/features/authorization`.
@@ -132,8 +143,11 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
   )
 
   const schema = useMemo(
-    () => (isEdit ? buildUpdateCompanySiteSchema(t) : buildCreateCompanySiteSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateCompanySiteSchema(t, customFields.schema)
+        : buildCreateCompanySiteSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<CompanySiteFormValues>(() => {
@@ -149,6 +163,7 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
         responsible_validation_contracts_two_id: site.responsible_validation_contracts_two_id,
         proforma_progressive: site.proforma_progressive,
         invoice_progressive: site.invoice_progressive,
+        custom_fields: customFields.defaultValues,
       }
     }
     return {
@@ -161,8 +176,9 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
       responsible_validation_contracts_two_id: null,
       proforma_progressive: null,
       invoice_progressive: null,
+      custom_fields: customFields.defaultValues,
     }
-  }, [mode])
+  }, [mode, customFields.defaultValues])
 
   // EDIT: pre-known {id, label} for the responsible selects (AC-016/AC-017), so
   // each picker shows its label immediately without an extra hydration fetch.
@@ -278,6 +294,7 @@ export function useCompanySiteForm({ mode, onSuccess, onSiteChange }: UseCompany
     } catch (error) {
       const mappedScalar = applyServerValidationErrors(error, form.setError, [
         ...SERVER_ERROR_FIELDS,
+        ...(customFields.errorPaths as Path<CompanySiteFormValues>[]),
       ])
       const personalDataMessage = personalDataServerErrorMessage(error)
       if (personalDataMessage) {

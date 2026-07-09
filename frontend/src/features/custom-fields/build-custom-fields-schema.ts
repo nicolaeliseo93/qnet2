@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { TFunction } from 'i18next'
 import type { ResourcePermissions } from '@/features/authorization/types'
 import { isEmptyCustomFieldValue } from '@/features/custom-fields/custom-fields-values'
-import { rawKey, type CustomFieldDescriptor } from '@/features/custom-fields/types'
+import { rawKey, type CustomFieldDescriptor, type CustomFieldValue } from '@/features/custom-fields/types'
 
 /**
  * Dynamic Zod schema for a resource's custom fields (spec 0021 AC-023),
@@ -155,3 +155,27 @@ export function buildCustomFieldsSchema(
 }
 
 export type CustomFieldsFormValues = z.infer<ReturnType<typeof buildCustomFieldsSchema>>
+
+/** The dynamic schema instance built by {@link buildCustomFieldsSchema}. */
+export type CustomFieldsSchema = ReturnType<typeof buildCustomFieldsSchema>
+
+/**
+ * `buildCustomFieldsSchema` derives its shape from a runtime-keyed
+ * `Record<string, ZodTypeAny>`, so Zod can only infer its output as
+ * `Record<string, unknown>`. This is the SAME schema instance re-typed to its
+ * real value domain (`CustomFieldValue`) so it embeds cleanly under a form's
+ * `custom_fields` key without breaking `zodResolver` inference — no runtime
+ * change.
+ */
+export type TypedCustomFieldsSchema = z.ZodType<
+  Record<string, CustomFieldValue>,
+  Record<string, CustomFieldValue>
+>
+
+/**
+ * Embed the toolbox-built custom-fields schema under a form's `custom_fields`
+ * key. Every module form uses this so the cast lives in ONE place.
+ */
+export function asCustomFieldsField(schema: CustomFieldsSchema): TypedCustomFieldsSchema {
+  return schema as unknown as TypedCustomFieldsSchema
+}

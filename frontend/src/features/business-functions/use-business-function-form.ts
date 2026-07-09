@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -20,6 +21,7 @@ import type {
   BusinessFunctionDetail,
   BusinessFunctionFormMode,
 } from '@/features/business-functions/types'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = ['name', 'type', 'manager_id', 'users'] as const
@@ -45,9 +47,21 @@ export function useBusinessFunctionForm({ mode, onSuccess }: UseBusinessFunction
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'business-functions',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.businessFunction.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateBusinessFunctionSchema(t) : buildCreateBusinessFunctionSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateBusinessFunctionSchema(t, customFields.schema)
+        : buildCreateBusinessFunctionSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<BusinessFunctionFormValues>(() => {
@@ -57,10 +71,11 @@ export function useBusinessFunctionForm({ mode, onSuccess }: UseBusinessFunction
         type: mode.businessFunction.type,
         manager_id: mode.businessFunction.manager_id,
         users: mode.businessFunction.user_ids,
+        custom_fields: customFields.defaultValues,
       }
     }
-    return { name: '', type: null, manager_id: null, users: [] }
-  }, [mode])
+    return { name: '', type: null, manager_id: null, users: [], custom_fields: customFields.defaultValues }
+  }, [mode, customFields.defaultValues])
 
   // EDIT: pre-known {id, label} for the responsabile/associated-users pickers
   // so they show their current selection immediately (no hydration
@@ -87,6 +102,10 @@ export function useBusinessFunctionForm({ mode, onSuccess }: UseBusinessFunction
 
   const onSubmit = async (values: BusinessFunctionFormValues) => {
     setServerError(null)
+    const errorFields: Path<BusinessFunctionFormValues>[] = [
+      ...SERVER_ERROR_FIELDS,
+      ...(customFields.errorPaths as Path<BusinessFunctionFormValues>[]),
+    ]
     try {
       if (mode.type === 'edit') {
         const saved = await updateBusinessFunction(
@@ -103,7 +122,7 @@ export function useBusinessFunctionForm({ mode, onSuccess }: UseBusinessFunction
       toast.success(t('businessFunctions.form.created'))
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('businessFunctions.form.genericError'))
       }
     }

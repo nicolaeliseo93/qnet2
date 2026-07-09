@@ -33,6 +33,7 @@ describe('buildCreatePayload', () => {
       category_id: 3,
       product_type: 'SERVICE',
       attributes: { '9': 16 },
+      custom_fields: {},
     }
 
     expect(buildCreatePayload(values)).toEqual({
@@ -57,6 +58,7 @@ describe('buildUpdatePayload', () => {
       category_id: 3,
       product_type: 'SERVICE',
       attributes: { '9': 16 },
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original(), false)).toEqual({})
@@ -71,6 +73,7 @@ describe('buildUpdatePayload', () => {
       category_id: 3,
       product_type: 'SERVICE',
       attributes: { '9': 16 },
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original(), false)).toEqual({ name: 'ThinkPad X1 Gen 2' })
@@ -85,6 +88,7 @@ describe('buildUpdatePayload', () => {
       category_id: 3,
       product_type: 'SERVICE',
       attributes: { '9': 32 },
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original(), true)).toEqual({

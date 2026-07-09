@@ -16,6 +16,7 @@ const formValues: OperationalSiteFormValues = {
   state_id: 2,
   province_id: 3,
   city_id: 4,
+  custom_fields: {},
 }
 
 function original(
@@ -114,7 +115,16 @@ describe('buildUpdatePayload', () => {
 
   it('combines multiple changed fields in a single payload', () => {
     const payload = buildUpdatePayload(
-      { alias: 'HQ', line1: 'Via Torino 3', postal_code: '10100', country_id: 1, state_id: 5, province_id: 6, city_id: 9 },
+      {
+        alias: 'HQ',
+        line1: 'Via Torino 3',
+        postal_code: '10100',
+        country_id: 1,
+        state_id: 5,
+        province_id: 6,
+        city_id: 9,
+        custom_fields: {},
+      },
       original(),
     )
 

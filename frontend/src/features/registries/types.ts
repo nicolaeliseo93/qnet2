@@ -9,6 +9,7 @@
 import type { PersonalDataCard } from '@/features/personal-data/types'
 import type { PersonalDataPayload } from '@/features/personal-data/drafts'
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /** Convention status of a registry (AgreementStatusEnum). */
 export const AGREEMENT_STATUSES = ['negotiating', 'rejected', 'agreed'] as const
@@ -63,6 +64,8 @@ export interface RegistryDetail {
    */
   personal_data: PersonalDataCard | null
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -96,6 +99,8 @@ export interface CreateRegistryPayload {
   size_class?: SizeClass | null
   employee_count?: number | null
   personal_data: PersonalDataPayload
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -120,6 +125,8 @@ export interface UpdateRegistryPayload {
   size_class?: SizeClass | null
   employee_count?: number | null
   personal_data?: PersonalDataPayload
+  /** Only the custom fields that changed, keyed by raw key (spec 0021, sparse diff). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /** Discriminated form mode shared by the form hook/meta-resolver and `RegistryForm`. */

@@ -5,6 +5,7 @@ import type {
   UpdateProductCategoryPayload,
 } from '@/features/product-categories/types'
 import type { ProductCategoryFormValues } from '@/features/product-categories/use-product-category-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 function sameAssignments(a: AttributeAssignmentInput[], b: AttributeAssignmentInput[]): boolean {
   if (a.length !== b.length) {
@@ -20,12 +21,14 @@ function sameAssignments(a: AttributeAssignmentInput[], b: AttributeAssignmentIn
 export function buildCreatePayload(
   values: ProductCategoryFormValues,
 ): CreateProductCategoryPayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     name: values.name,
     parent_id: values.parent_id,
     inherits_attributes: values.inherits_attributes,
     description: values.description,
     attributes: values.attributes,
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -60,6 +63,11 @@ export function buildUpdatePayload(
   }))
   if (!sameAssignments(values.attributes, originalAssignments)) {
     payload.attributes = values.attributes
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

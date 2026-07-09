@@ -6,6 +6,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /**
  * Mutually exclusive domain type: the form exposes a single `type` selector
@@ -40,6 +41,8 @@ export interface BusinessFunctionDetail {
   /** Hydrates the multiselect associated-users control. */
   users: BusinessFunctionMember[]
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -58,6 +61,8 @@ export interface CreateBusinessFunctionPayload {
   type: BusinessFunctionType | null
   manager_id: number | null
   users: number[]
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**

@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
 import { BUSINESS_FUNCTION_TYPES } from '@/features/business-functions/types'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /**
  * Zod schemas for the business-function create/edit form, built as factories
@@ -31,14 +35,14 @@ function baseFields(t: TFunction) {
   }
 }
 
-/** Create schema. */
-export function buildCreateBusinessFunctionSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+/** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateBusinessFunctionSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 /** Edit schema (same shape; partial PATCH is computed by the caller). */
-export function buildUpdateBusinessFunctionSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+export function buildUpdateBusinessFunctionSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 export type CreateBusinessFunctionFormValues = z.infer<

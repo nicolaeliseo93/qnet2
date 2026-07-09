@@ -5,6 +5,7 @@ import {
   omitNonEditableFields,
   type PersonalDataPayload,
 } from '@/features/personal-data/drafts'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 import type {
   PersonalDataDraft,
   PersonalDataFieldPermissionResolver,
@@ -65,6 +66,7 @@ export function buildCreatePayload(
   profileDraft: PersonalDataDraft,
   fieldPermission?: PersonalDataFieldPermissionResolver,
 ): CreateCompanySitePayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     name: values.name,
     notes: values.notes || null,
@@ -77,6 +79,7 @@ export function buildCreatePayload(
     responsible_validation_contracts_two_id: values.responsible_validation_contracts_two_id,
     proforma_progressive: values.proforma_progressive,
     invoice_progressive: values.invoice_progressive,
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -153,6 +156,11 @@ export function buildUpdatePayload(
     values.invoice_progressive,
     original.invoice_progressive,
   )
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
+  }
 
   return payload
 }

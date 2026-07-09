@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { SlidersHorizontal } from 'lucide-react'
 import type { Control, FieldPath } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
@@ -64,6 +65,7 @@ export function CustomFieldsSection<TFieldValues extends CustomFieldsFormShape>(
   control,
   fields: providedFields,
 }: CustomFieldsSectionProps<TFieldValues>) {
+  const { t } = useTranslation()
   const { field: fieldPermission } = useResourcePermissions()
   const metaQuery = useResourceMeta(resource, providedFields === undefined)
 
@@ -86,11 +88,15 @@ export function CustomFieldsSection<TFieldValues extends CustomFieldsFormShape>(
     <>
       {[...groupByLabel(customFields).entries()].map(([group, descriptors]) =>
         group === null ? (
-          <div key="ungrouped" className="flex flex-col gap-4">
+          <FormSection
+            key="ungrouped"
+            icon={SlidersHorizontal}
+            title={t('customFields.section.title')}
+          >
             {descriptors.map((descriptor) => (
               <CustomFieldItem key={descriptor.key} control={control} descriptor={descriptor} />
             ))}
-          </div>
+          </FormSection>
         ) : (
           <FormSection key={group} icon={SlidersHorizontal} title={group}>
             {descriptors.map((descriptor) => (
