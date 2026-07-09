@@ -57,7 +57,7 @@ class ReferentsSource extends AbstractMigrationSource
     /**
      * @return array<int, array{id: string, label: string, type: string}>
      */
-    public function columns(): array
+    protected function nativeColumns(): array
     {
         return [
             ['id' => 'id', 'label' => 'ID', 'type' => 'number'],
@@ -98,11 +98,11 @@ class ReferentsSource extends AbstractMigrationSource
      * @param  array<string, mixed>  $record
      * @return array<string, string|int|bool|null>
      */
-    protected function mapRow(array $record): array
+    protected function mapNativeRow(array $record): array
     {
         $row = [];
 
-        foreach ($this->columns() as $column) {
+        foreach ($this->nativeColumns() as $column) {
             $row[$column['id']] = $record[$column['id']] ?? null;
         }
 
@@ -162,7 +162,7 @@ class ReferentsSource extends AbstractMigrationSource
         $referent->old_id = $externalId;
         $referent->save();
 
-        return MigrationRowOutcome::created($warnings);
+        return MigrationRowOutcome::created($warnings, $referent);
     }
 
     /**

@@ -2,6 +2,177 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — Custom fields auto-integrated into /migrations (2026-07-09) — GREEN (not committed)
+
+The data-migration feature (`backend/app/Migrations/`, spec 0013, super-admin `/migrations`)
+now automatically exposes AND imports each module's ACTIVE custom fields alongside its native
+fields — generic, zero per-source wiring beyond a mechanical rename. Driven by
+`CustomFieldProvider::definitionsFor($this->key())` (source `key()` == custom-field `entity_type`).
+Motivation: the company-sites refactor turned 27 native cols into custom fields; without this,
+migrating that module (or products) would silently LOSE those fields. User-approved scope:
+FULL (template + import), not display-only.
+
+Three symmetric generic seams (all in base `AbstractMigrationSource` + new trait
+`app/Migrations/Concerns/HasMigrationCustomFields.php`):
+1. columns() = nativeColumns() + customColumns(). Each source's `columns()` renamed to
+   protected `nativeColumns()`. customColumns() emits `{id: <raw key>, label, type}`.
+2. mapRow() = mapNativeRow() + mapCustomRow() (preview parity; cells keyed by RAW key).
+   Each source's `mapRow()` renamed to `mapNativeRow()`. NOTE: ReferentsSource/UsersSource
+   internal loops were fixed to iterate `nativeColumns()` not `columns()` (else double-count).
+
+IMPORTANT — the migration contract exposes the custom field's RAW key (e.g. `store_id`,
+`hhh`), NOT the internal `custom.` namespace. Reason: the external legacy source sends raw
+field names, and the importer reads/writes by raw `$def->key`; exposing `custom.<key>` in
+columns/sample would mislead integrators (contract said one key, code read another). The
+`custom.` prefix is AG-Grid-internal (collision-avoidance vs native cols) and does NOT belong
+in the external migration contract. columns id + mapCustomRow cell key + persistCustomFields
+read all agree on the raw key now.
+3. Import persistence: `persistCustomFields($model, $record)` runs INSIDE the existing
+   `importRow()` `DB::transaction`, only when the row outcome carries a model → writes via
+   `CustomFieldWriter::write($model, $this->key(), $values)`. Values read present-only from the
+   raw external `$record` by RAW `$def->key` (assumption: external field key == custom-field key).
+
+IMPORTANT deviation from the naive plan (deliberate, correct): `processRow()` returns
+`MigrationRowOutcome` (skipped/created + warnings + counters), NOT a Model. Do NOT change it to
+`?Model` — instead `MigrationRowOutcome` got an optional `?Model $model` (default null;
+`created(..., model: $x)`, `skipped()` never carries one). Preserves all run bookkeeping.
+
+Type map (`FieldTypeHandler::columnType()` → migration `type` union string|number|boolean|date):
+const `CUSTOM_COLUMN_TYPE_MAP` = text→string, number→number, boolean→boolean, enum→string
+(enum options never enter the migration contract; no `date` columnType exists → dates are string).
+
+Contract UNCHANGED: `GET /migrations/{source}/columns` still returns `{columns, request, sample}`,
+additive only (more entries when the entity_type has active defs; empty = pure passthrough).
+Frontend: ZERO changes needed (template panel renders columns generically); tsc 0, vitest
+migrations 13/13 green.
+
+Verified GREEN (independent verifier): `test --filter=Migration` 178/179 (+6 new), `--filter=CustomField`
+205/205, full suite 1851 pass / 1 skip / 1 FAIL. The 1 FAIL = `AbstractMigrationSourcePreviewTest`
+(RolesSource `description:null` cell) — confirmed PRE-EXISTING via `git stash` round-trip (fails
+identically on unmodified branch), NOT introduced here. Pint clean on all touched files. New tests:
+`tests/Unit/Migrations/AbstractMigrationSourceCustomFieldsTest.php`,
+`tests/Feature/Migration/CustomFieldsAutoPersistenceTest.php`. NOT committed (awaiting go-ahead).
+Non-blocking out-of-scope note: `pint --test` repo-wide flags `tests/Feature/CompanySites/CompanySiteUpdateTest.php`
+(committed in 82f936a, untouched here).
+
+## REFACTOR — Custom-field DEFINITION form UX (2026-07-09) — GREEN (Phase 1 of 2)
+
+User goal: make the custom-field definition form (admin sheet) beautiful, usable
+and self-explanatory for non-technical admins; then (Phase 2, NOT started) rework
+the runtime custom-field components (label/description/help-text/icon graphics).
+User-approved decisions: inline helper on primary fields + tooltip on advanced;
+searchable lucide icon-picker; live preview panel.
+
+Phase 1 done (definition form only). Scope = `frontend/` only, no backend, no new
+npm deps (icon-picker built on the existing `radix-ui` Popover, same pattern as
+`searchable-select`; NO new `ui/popover.tsx`). Icons = `lucide-react` (project
+mandate), NOT Phosphor.
+
+New shared infra:
+- `features/custom-fields/icon-catalog.ts` — curated ~140-glyph `Record<string,LucideIcon>`
+  (kebab-case keys = stored value). NOT the full lucide set (bundle). `ICON_NAMES`,
+  `isKnownIconName`. Used by picker AND (future) runtime render.
+- `features/custom-fields/dynamic-icon.tsx` — `<DynamicIcon name>` resolver (null on unknown).
+- `components/icon-picker.tsx` — searchable Popover grid + preview + clear; portals into
+  sheet like `searchable-select`. Reusable (also used for enum option icons).
+- `components/field-hint.tsx` — `<FieldHint>` info-glyph + tooltip (self-contained Provider).
+- `features/custom-fields/components/definition-hint-label.tsx` — `<HintLabel>` = FormLabel +
+  optional FieldHint sibling (never nests button in <label>).
+
+Form changes:
+- `definition-type-picker.tsx` (NEW) — replaces the plain type `<Select>`: per-type icon in
+  trigger/options + always-visible explainer callout (desc + example) for the selected type.
+  Options are icon+name ONLY (keeps `getByRole('option',{name})` + Radix typeahead intact).
+- `definition-field-preview.tsx` (NEW) — sticky top "Preview" card, renders the field live via
+  the runtime `CUSTOM_FIELD_COMPONENT_REGISTRY` on `useWatch`; keyed by type (resets throwaway
+  value); relation shows a static hint (no network). Sheet is `sm:max-w-2xl` (narrow) → preview
+  is a normal card STACKED at the top, not a side column. NOTE: was `sticky top-0 z-10 backdrop-blur`
+  first, but that stacking context overlapped/intercepted clicks on the top fields (Type) in the
+  real browser (jsdom couldn't catch it) → de-stickied. Do not re-add sticky without solving the overlap.
+- `definition-identity-fields.tsx` — split into 2 sections "Basics"(entity_type,type,key,label)
+  + "Presentation"(description,help_text,placeholder,icon,group,tab,sort_order); inline helper
+  under every field (via MetaField `description` prop); `icon` → IconPicker (bridged through
+  `useFormField()` for the a11y triad, like `CustomFieldControlBridge`).
+- type-config / validation / relation editors: advanced fields get `<HintLabel>` tooltips;
+  enum option `icon` → IconPicker.
+- i18n it/en: new `typeInfo.<type>.{desc,example}`, `form.*Help`, `form.*Hint`, icon-picker
+  labels, preview strings, `sections.base/presentation`. (Old `sections.identity` kept, now unused.)
+
+Verified GREEN: `tsc --noEmit` 0; eslint 0 on all touched/new files; new tests pass
+(icon-picker 5, definition-type-picker 2, definition-field-preview 4); full FE suite
+810 pass / 3 pre-existing-unrelated FAIL (cell-renderers ContactsCell, per prior HANDOFF).
+NOT committed (awaiting go-ahead).
+
+Known follow-ups (flagged, NOT done — out of this scope): `definition-type-config-fields.tsx`
+now 355 lines (>300 soft, <500 hard) → candidate split (extract text vs numeric config blocks);
+pre-existing eslint error in `features/users/duration-input.test.tsx` (untouched).
+
+NEXT — Phase 2: rework runtime components (`MetaField`/`CustomFieldsSection` render the field
+`icon` next to the label; graphically distinguish `description` [currently UNUSED at runtime —
+only `help_text` is shown] from `help_text`; refine control states; richer `custom-field-detail`).
+
+## REFACTOR — Decouple product attribute VALUES from Product; keep the category attribute catalogue (spec 0017) (2026-07-09) — GREEN (backend only)
+
+Products no longer store/accept/return category-driven attribute values. The
+attribute DEFINITION/CATALOGUE system (Attribute, AttributeOption,
+attribute_category pivot, ProductCategory::attributes()/inherits_attributes,
+CategoryHierarchy::effectiveAttributes, GET /product-categories/{id}/effective-
+attributes) is UNCHANGED — it stays a reusable template, decoupled from any
+per-product value storage. The `custom_fields` universal system (spec 0021)
+on products is UNCHANGED.
+
+Contract: `POST /products` / `PATCH /products/{id}` no longer accept or
+validate an `attributes[]` key (silently ignored, not persisted); ProductResource
+no longer emits `attributes`. `custom_fields` unaffected (already wired via
+`BaseModel`'s `HasCustomFields`).
+
+Removed: table+migration `product_attribute_values` (dropped, migration file
+deleted — greenfield branch, `migrate:fresh` precedent), `Models/ProductAttributeValue`,
+`Services/Products/ProductAttributeValueWriter` (+ now-empty `Services/Products/`
+dir), `database/factories/ProductAttributeValueFactory` (orphaned once the model
+was gone). `Product::attributeValues()` and `Attribute::values()` relations
+removed (dangling). `ProductService` no longer resolves effective attributes
+or calls the value writer on create/update — kept the deliberate unconditional
+`$product->fill($attributes)->save()` (fires `saved` so spec-0021 custom fields
+persist a fields-only edit); dropped the now-unused `ProductCategoryService`
+constructor dependency (category existence is already guaranteed by
+`exists:product_categories,id` in the FormRequest). `StoreProductRequest`/
+`UpdateProductRequest` drop the `attributes.*` rules; `CreateProductData`/
+`UpdateProductData` drop the `attributes` field (`UpdateProductData` also drops
+the now-dead `hasCategoryId()`/`hasAttributes()`). `ProductResource` drops the
+`attributes` block. `ProductController::show()` no longer eager-loads
+`attributeValues.*`.
+
+Consequential cleanup (the "attribute has recorded product values" guard is
+now impossible, since products never carry values): `AttributeService::delete()`
+no longer checks `values()->exists()` (only the category-assignment guard
+remains, 409); `guardDataTypeImmutable()` removed entirely (data_type is no
+longer ever immutable) — this is a **behavior change**: an attribute's
+data_type can now be edited freely regardless of history. `DemoProductCatalogSeeder`
++ `ProductCatalogTaxonomy` stripped of the per-product `values` maps (category-level
+`attributes` assignment/is_required untouched); demo products now seed generic
+fields only.
+
+Tests: `ProductCrudTest` rewritten (attributes-in-payload → ignored, not 422,
+not persisted, not in response; added a custom_fields-only-PATCH round-trip
+test mirroring RoleCustomFieldUpdateTest); `AttributeCrudTest` dropped the two
+now-impossible guard tests (data_type-change-with-values 422, delete-with-values
+409); `DemoProductCatalogSeederTest` dropped the per-product-value assertion
+test and the `ProductAttributeValue::count()` idempotency check; unit
+`ProductTest`/`AttributeTest` dropped the `product_attribute_values` schema/
+relation/cascade assertions and the stale `Schema::dropIfExists('product_attribute_values')`
+migration-teardown calls (table no longer exists).
+
+Verified: Pint clean (full backend, zero fixers). `php artisan migrate:fresh
+--seed` succeeds (product_attribute_values migration no longer runs).
+`XDEBUG_MODE=off php artisan test`: 1845 pass / 1 skip / 1 pre-existing
+unrelated FAIL (`AbstractMigrationSourcePreviewTest`, same one HANDOFF already
+tracks). NOT committed. Frontend NOT touched (separate teammate) — the FE
+still expects/sends `attributes` on the products form/detail and must be
+updated to drop it (a submitted `attributes` key is now silently ignored
+server-side rather than 422/persisted, so the FE won't break loudly — but it
+should stop sending/reading it to match the frozen contract).
+
 ## FEATURE — New custom-field types + products expiration date (2026-07-09) — GREEN
 
 Extended the spec 0021 custom-field type system (was 7 MVP types) with 6 new

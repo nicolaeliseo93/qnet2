@@ -20,10 +20,8 @@ use App\Enums\AttributeType;
  * node's `attributes` map is `code => is_required` (the category's OWN
  * assignment only — effective/inherited attributes are resolved at read time
  * by CategoryHierarchy, never duplicated here); `products` is a list of demo
- * services for that exact category, each carrying a value for every one of
- * its EFFECTIVE attributes (own + every ancestor's), keyed by attribute code
- * (ENUM values are the option's `value` string, resolved to its option_id by
- * ProductAttributeValueWriter — never an id here).
+ * services for that exact category (generic fields only — products carry no
+ * attribute values of their own).
  */
 final class ProductCatalogTaxonomy
 {
@@ -65,7 +63,6 @@ final class ProductCatalogTaxonomy
                                 'name' => 'IT Assessment Iniziale',
                                 'description' => 'Valutazione dello stato dei sistemi e roadmap tecnica.',
                                 'cost' => 400, 'price' => 800,
-                                'values' => ['provider' => 'Accenture', 'sla_hours' => 8.0, 'delivery_mode' => 'Ibrido', 'seniority_level' => 'Senior', 'duration_hours' => 40],
                             ],
                         ],
                         'children' => [
@@ -74,15 +71,12 @@ final class ProductCatalogTaxonomy
                                 'products' => [
                                     [
                                         'name' => 'Sviluppo Applicazione Web', 'cost' => 5000, 'price' => 9000,
-                                        'values' => ['provider' => 'Deloitte', 'sla_hours' => 4.0, 'delivery_mode' => 'Remoto', 'seniority_level' => 'Senior', 'duration_hours' => 320, 'technology' => 'Laravel/React', 'on_call' => false],
                                     ],
                                     [
                                         'name' => 'Manutenzione Software Evolutiva', 'cost' => 1500, 'price' => 2900,
-                                        'values' => ['provider' => 'Reply', 'sla_hours' => 8.0, 'delivery_mode' => 'Ibrido', 'seniority_level' => 'Junior', 'duration_hours' => 120, 'technology' => 'PHP', 'on_call' => true],
                                     ],
                                     [
                                         'name' => 'Migrazione Cloud', 'cost' => 3000, 'price' => 5500,
-                                        'values' => ['provider' => 'Accenture', 'sla_hours' => 2.0, 'delivery_mode' => 'Onsite', 'seniority_level' => 'Lead', 'duration_hours' => 200, 'technology' => 'AWS', 'on_call' => true],
                                     ],
                                 ],
                             ],
@@ -91,15 +85,12 @@ final class ProductCatalogTaxonomy
                                 'products' => [
                                     [
                                         'name' => 'Penetration Test', 'cost' => 2000, 'price' => 4000,
-                                        'values' => ['provider' => 'IBM', 'sla_hours' => 6.0, 'delivery_mode' => 'Remoto', 'seniority_level' => 'Lead', 'duration_hours' => 80, 'audit_type' => 'Black-box'],
                                     ],
                                     [
                                         'name' => 'Security Audit Applicativo', 'cost' => 1200, 'price' => 2400,
-                                        'values' => ['provider' => 'Deloitte', 'sla_hours' => 12.0, 'delivery_mode' => 'Ibrido', 'seniority_level' => 'Senior', 'duration_hours' => 60, 'audit_type' => 'White-box'],
                                     ],
                                     [
                                         'name' => 'Vulnerability Assessment', 'cost' => 800, 'price' => 1600,
-                                        'values' => ['provider' => 'Reply', 'sla_hours' => 24.0, 'delivery_mode' => 'Remoto', 'seniority_level' => 'Junior', 'duration_hours' => 40, 'audit_type' => 'Grey-box'],
                                     ],
                                 ],
                             ],
@@ -110,15 +101,12 @@ final class ProductCatalogTaxonomy
                         'products' => [
                             [
                                 'name' => 'Consulenza Strategica', 'cost' => 3000, 'price' => 6000,
-                                'values' => ['provider' => 'McKinsey', 'sla_hours' => 24.0, 'delivery_mode' => 'Onsite', 'seniority_level' => 'Lead', 'duration_hours' => 100, 'is_remote' => false],
                             ],
                             [
                                 'name' => 'Analisi di Processo', 'cost' => 1500, 'price' => 3000,
-                                'values' => ['provider' => 'BCG', 'sla_hours' => 48.0, 'delivery_mode' => 'Ibrido', 'seniority_level' => 'Senior', 'duration_hours' => 80, 'is_remote' => true],
                             ],
                             [
                                 'name' => 'Business Plan Review', 'cost' => 900, 'price' => 1800,
-                                'values' => ['provider' => 'Deloitte', 'sla_hours' => 48.0, 'delivery_mode' => 'Remoto', 'seniority_level' => 'Junior', 'duration_hours' => 40, 'is_remote' => true],
                             ],
                         ],
                     ],
@@ -133,15 +121,12 @@ final class ProductCatalogTaxonomy
                         'products' => [
                             [
                                 'name' => 'Corso Laravel Avanzato', 'cost' => 500, 'price' => 1200,
-                                'values' => ['delivery_mode' => 'Remoto', 'certificate_included' => true, 'duration_hours' => 32, 'max_participants' => 20],
                             ],
                             [
                                 'name' => 'Corso Cybersecurity Base', 'cost' => 400, 'price' => 900,
-                                'values' => ['delivery_mode' => 'Ibrido', 'certificate_included' => true, 'duration_hours' => 24, 'max_participants' => 15],
                             ],
                             [
                                 'name' => 'Corso Project Management', 'cost' => 350, 'price' => 800,
-                                'values' => ['delivery_mode' => 'Onsite', 'certificate_included' => false, 'duration_hours' => 16, 'max_participants' => 25],
                             ],
                         ],
                     ],
@@ -150,15 +135,12 @@ final class ProductCatalogTaxonomy
                         'products' => [
                             [
                                 'name' => 'Workshop Agile', 'cost' => 300, 'price' => 700,
-                                'values' => ['delivery_mode' => 'Onsite', 'certificate_included' => false, 'session_length_hours' => 8.0, 'max_participants' => 12],
                             ],
                             [
                                 'name' => 'Workshop DevOps', 'cost' => 400, 'price' => 950,
-                                'values' => ['delivery_mode' => 'Ibrido', 'certificate_included' => true, 'session_length_hours' => 6.5, 'max_participants' => 10],
                             ],
                             [
                                 'name' => 'Workshop UX Design', 'cost' => 350, 'price' => 850,
-                                'values' => ['delivery_mode' => 'Remoto', 'certificate_included' => false, 'session_length_hours' => 4.0, 'max_participants' => 15],
                             ],
                         ],
                     ],

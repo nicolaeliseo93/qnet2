@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
+import { DefinitionFieldPreview } from '@/features/custom-fields/components/definition-field-preview'
 import { DefinitionFlagsFields } from '@/features/custom-fields/components/definition-flags-fields'
 import { DefinitionIdentityFields } from '@/features/custom-fields/components/definition-identity-fields'
 import { DefinitionOptionsEditor } from '@/features/custom-fields/components/definition-options-editor'
@@ -43,6 +44,8 @@ export function CustomFieldDefinitionFormBody({
     <div className="flex flex-1 flex-col overflow-y-auto">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 p-4" noValidate>
+          <DefinitionFieldPreview control={form.control} />
+
           <DefinitionIdentityFields
             control={form.control}
             entities={entities}

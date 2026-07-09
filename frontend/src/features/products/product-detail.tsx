@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next'
-import type { TFunction } from 'i18next'
 import { Package } from 'lucide-react'
 import {
   DetailField,
@@ -20,25 +19,10 @@ interface ProductDetailViewProps {
   product: ProductDetail
 }
 
-/** Renders a dynamic attribute's typed value as display text, em dash when empty. */
-function formatAttributeValue(value: ProductDetail['attributes'][number], t: TFunction): string {
-  if (value.value === null || value.value === '') {
-    return '—'
-  }
-  if (value.data_type === 'BOOLEAN') {
-    return value.value ? t('common.yes') : t('common.no')
-  }
-  if (value.data_type === 'DECIMAL' && typeof value.value === 'number') {
-    return formatDecimal(value.value)
-  }
-  return String(value.value)
-}
-
 /**
  * Read-only detail of a single product. Purely presentational: the caller
  * (the table's "view" sheet) fetches the fresh detail and passes it down
- * (mirrors `ReferentTypeDetailView`). Includes an attributes section for the
- * category's dynamic values.
+ * (mirrors `ReferentTypeDetailView`).
  */
 export function ProductDetailView({ product }: ProductDetailViewProps) {
   const { t } = useTranslation()
@@ -70,21 +54,6 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           )}
         </DetailGrid>
       </DetailSection>
-
-      {product.attributes.length > 0 && (
-        <DetailSection title={t('products.detail.attributes')}>
-          <ul className="flex flex-col gap-1.5">
-            {product.attributes.map((attribute) => (
-              <li key={attribute.attribute_id} className="flex items-center gap-2 text-sm">
-                <Badge variant="outline" className="text-xs">
-                  {attribute.name}
-                </Badge>
-                <span className="text-foreground">{formatAttributeValue(attribute, t)}</span>
-              </li>
-            ))}
-          </ul>
-        </DetailSection>
-      )}
 
       {createdAt ? (
         <DetailMeta label={t('products.detail.created_at')}>{createdAt}</DetailMeta>

@@ -4,7 +4,6 @@ import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
-import axios from 'axios'
 import { toast } from 'sonner'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
 import { createProduct, updateProduct } from '@/features/products/api'
@@ -14,7 +13,7 @@ import {
   buildUpdateProductSchema,
   type CreateProductFormValues,
 } from '@/features/products/product-schema'
-import type { AttributeFieldValue, ProductDetail, ProductFormMode } from '@/features/products/types'
+import type { ProductDetail, ProductFormMode } from '@/features/products/types'
 import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side generic field names mapped onto the form for 422 handling. */
@@ -29,13 +28,6 @@ interface UseProductFormArgs {
   mode: ProductFormMode
   /** Called after a successful create/update so the caller can close + refresh. */
   onSuccess: (product: ProductDetail) => void
-}
-
-/** Builds the `{attribute_id: value}` record hydrating an existing product's dynamic fields. */
-function attributesRecordFromDetail(product: ProductDetail): Record<string, AttributeFieldValue> {
-  return Object.fromEntries(
-    product.attributes.map((attribute) => [String(attribute.attribute_id), attribute.value]),
-  )
 }
 
 /**
@@ -75,7 +67,6 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
         price: product.price,
         category_id: product.category_id,
         product_type: product.product_type,
-        attributes: attributesRecordFromDetail(product),
         custom_fields: customFields.defaultValues,
       }
     }
@@ -86,7 +77,6 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
       price: null,
       category_id: null,
       product_type: DEFAULT_PRODUCT_TYPE,
-      attributes: {},
       custom_fields: customFields.defaultValues,
     }
   }, [mode, customFields.defaultValues])
@@ -104,11 +94,7 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
     ]
     try {
       if (mode.type === 'edit') {
-        const attributesDirty = Boolean(form.formState.dirtyFields.attributes)
-        const saved = await updateProduct(
-          mode.product.id,
-          buildUpdatePayload(values, mode.product, attributesDirty),
-        )
+        const saved = await updateProduct(mode.product.id, buildUpdatePayload(values, mode.product))
         queryClient.setQueryData(['products', 'detail', mode.product.id], saved)
         toast.success(t('products.form.updated'))
         onSuccess(saved)
@@ -121,7 +107,7 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
     } catch (error) {
       const handled = applyServerValidationErrors(error, form.setError, errorFields)
       if (!handled) {
-        setServerError(attributeErrorMessage(error) ?? t('products.form.genericError'))
+        setServerError(t('products.form.genericError'))
       }
     }
   }
@@ -132,19 +118,4 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
     serverError,
     onSubmit,
   }
-}
-
-/**
- * Best-effort surface for a 422 on a dynamic attribute value: the backend
- * reports these as `attributes.{index}.value` (or similar), which cannot be
- * mapped onto a specific rendered field (no per-attribute RHF path), so it is
- * shown as the form's generic error banner instead of inline.
- */
-function attributeErrorMessage(error: unknown): string | null {
-  if (!axios.isAxiosError(error) || error.response?.status !== 422) {
-    return null
-  }
-  const errors = error.response.data?.errors as Record<string, string[]> | undefined
-  const attributeKey = Object.keys(errors ?? {}).find((key) => key.startsWith('attributes.'))
-  return attributeKey ? (errors?.[attributeKey]?.[0] ?? null) : null
 }

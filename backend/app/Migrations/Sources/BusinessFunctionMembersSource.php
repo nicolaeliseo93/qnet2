@@ -49,7 +49,7 @@ class BusinessFunctionMembersSource extends AbstractMigrationSource
     /**
      * @return array<int, array{id: string, label: string, type: string}>
      */
-    public function columns(): array
+    protected function nativeColumns(): array
     {
         return [
             ['id' => 'id', 'label' => 'ID', 'type' => 'number'],
@@ -86,7 +86,7 @@ class BusinessFunctionMembersSource extends AbstractMigrationSource
      * @param  array<string, mixed>  $record
      * @return array<string, string|int|bool|null>
      */
-    protected function mapRow(array $record): array
+    protected function mapNativeRow(array $record): array
     {
         return [
             'id' => $record['id'] ?? null,
@@ -120,7 +120,7 @@ class BusinessFunctionMembersSource extends AbstractMigrationSource
         $managerChanged = $this->assignManager($businessFunction, $record['manager_id'] ?? null, $warnings);
 
         return ($operatorsChanged || $managerChanged)
-            ? MigrationRowOutcome::created($warnings)
+            ? MigrationRowOutcome::created($warnings, $businessFunction)
             : MigrationRowOutcome::skipped($warnings);
     }
 

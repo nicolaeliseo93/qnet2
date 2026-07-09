@@ -172,7 +172,6 @@ export const products = {
     subtitle: 'Vista di sola lettura del prodotto selezionato.',
     loadError: 'Impossibile caricare il prodotto. Riprova.',
     details: 'Dettagli',
-    attributes: 'Attributi',
     created_at: 'Creato il',
   },
   form: {
@@ -199,10 +198,6 @@ export const products = {
     categoryNoMatch: 'Nessun risultato.',
     categoryError: 'Impossibile caricare le categorie.',
     categoryRequired: 'La categoria è obbligatoria.',
-    attributesNeedCategory: 'Seleziona una categoria per configurarne gli attributi.',
-    attributesLoadError: 'Impossibile caricare gli attributi della categoria. Riprova.',
-    attributeSelectPlaceholder: 'Seleziona…',
-    attributeInherited: 'Ereditato',
     save: 'Salva',
     saving: 'Salvataggio…',
     cancel: 'Annulla',
@@ -216,10 +211,6 @@ export const products = {
       identity: {
         title: 'Dettagli',
         description: 'Nome, descrizione, prezzi e categoria del prodotto.',
-      },
-      attributes: {
-        title: 'Attributi',
-        description: 'Campi dinamici generati dalla categoria selezionata.',
       },
     },
   },

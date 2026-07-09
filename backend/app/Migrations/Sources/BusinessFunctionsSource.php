@@ -43,7 +43,7 @@ class BusinessFunctionsSource extends AbstractMigrationSource
     /**
      * @return array<int, array{id: string, label: string, type: string}>
      */
-    public function columns(): array
+    protected function nativeColumns(): array
     {
         return [
             ['id' => 'id', 'label' => 'ID', 'type' => 'number'],
@@ -66,7 +66,7 @@ class BusinessFunctionsSource extends AbstractMigrationSource
      * @param  array<string, mixed>  $record
      * @return array<string, string|int|bool|null>
      */
-    protected function mapRow(array $record): array
+    protected function mapNativeRow(array $record): array
     {
         return [
             'id' => $record['id'] ?? null,
@@ -107,7 +107,7 @@ class BusinessFunctionsSource extends AbstractMigrationSource
         $businessFunction->old_id = $externalId;
         $businessFunction->save();
 
-        return MigrationRowOutcome::created($warnings);
+        return MigrationRowOutcome::created($warnings, $businessFunction);
     }
 
     /**

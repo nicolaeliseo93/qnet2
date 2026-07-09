@@ -2,6 +2,7 @@
 
 namespace App\Migrations;
 
+use App\Migrations\Concerns\HasMigrationCustomFields;
 use App\Migrations\Support\ExternalApiClient;
 use App\Models\MigrationRun;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +25,8 @@ use Throwable;
  */
 abstract class AbstractMigrationSource implements MigrationSource
 {
+    use HasMigrationCustomFields;
+
     public function __construct(protected readonly ExternalApiClient $client) {}
 
     /**
@@ -33,12 +36,35 @@ abstract class AbstractMigrationSource implements MigrationSource
     abstract public function endpoint(): string;
 
     /**
-     * Map one external record to a preview row (keys = column id).
+     * This source's OWN preview column catalogue (native fields only) —
+     * `columns()` below appends the entity_type's active custom fields
+     * generically (spec 0021 auto-persistence), so a concrete source never
+     * declares those itself.
+     *
+     * @return array<int, array{id: string, label: string, type: string}>
+     */
+    abstract protected function nativeColumns(): array;
+
+    /**
+     * Map one external record to its NATIVE preview cells (keys = column
+     * id) — `mapRow()` below appends the custom-field cells generically.
      *
      * @param  array<string, mixed>  $record
      * @return array<string, string|int|bool|null>
      */
-    abstract protected function mapRow(array $record): array;
+    abstract protected function mapNativeRow(array $record): array;
+
+    /**
+     * {@inheritDoc}
+     *
+     * Native columns, then this entity_type's active custom fields appended
+     * generically (spec 0021) — an empty custom catalogue is a pure
+     * passthrough (the common case for a source before its first field).
+     */
+    public function columns(): array
+    {
+        return [...$this->nativeColumns(), ...$this->customColumns()];
+    }
 
     /**
      * The external record's own id (the value `old_id` is set to), or null
@@ -75,6 +101,19 @@ abstract class AbstractMigrationSource implements MigrationSource
             total: $total,
             hasMore: $this->hasMorePages($total, $query->page, $query->perPage, count($records)),
         );
+    }
+
+    /**
+     * Native cells, then this entity_type's active custom-field cells
+     * appended generically (spec 0021) — keyed by the definition's raw key,
+     * matching the column `id` `columns()` declares for them.
+     *
+     * @param  array<string, mixed>  $record
+     * @return array<string, string|int|bool|null>
+     */
+    protected function mapRow(array $record): array
+    {
+        return [...$this->mapNativeRow($record), ...$this->mapCustomRow($record)];
     }
 
     public function import(MigrationImportContext $context): void
@@ -264,7 +303,15 @@ abstract class AbstractMigrationSource implements MigrationSource
         $externalId = $this->externalId($record);
 
         try {
-            $outcome = DB::transaction(fn (): MigrationRowOutcome => $this->processRow($context, $record));
+            $outcome = DB::transaction(function () use ($context, $record): MigrationRowOutcome {
+                $outcome = $this->processRow($context, $record);
+
+                if ($outcome->model !== null) {
+                    $this->persistCustomFields($outcome->model, $record);
+                }
+
+                return $outcome;
+            });
 
             if ($outcome->skipped) {
                 $run->increment('skipped_rows');

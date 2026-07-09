@@ -13,16 +13,10 @@ use App\Enums\ProductType;
  * `category_id` are all legitimately nullable-or-changeable VALUES, so a
  * plain null property cannot distinguish "not submitted" from "submitted as
  * null" — the `*Submitted` flags carry that distinction, mirroring
- * UpdateBusinessFunctionData/UpdateProductCategoryData. `attributes`, when
- * submitted, is a full-replace of the product's dynamic values (spec 0017);
- * when NOT submitted but `category_id` changes, ProductService prunes
- * values no longer relevant and enforces the new category's required set.
+ * UpdateBusinessFunctionData/UpdateProductCategoryData.
  */
 final readonly class UpdateProductData
 {
-    /**
-     * @param  array<int, array{attribute_id: int, value: mixed}>|null  $attributes
-     */
     public function __construct(
         public ?string $name = null,
         public ?string $description = null,
@@ -35,7 +29,6 @@ final readonly class UpdateProductData
         public bool $categoryIdSubmitted = false,
         public ?ProductType $productType = null,
         public bool $productTypeSubmitted = false,
-        public ?array $attributes = null,
     ) {}
 
     /**
@@ -57,24 +50,12 @@ final readonly class UpdateProductData
             categoryIdSubmitted: array_key_exists('category_id', $data),
             productType: array_key_exists('product_type', $data) && $data['product_type'] !== null ? ProductType::from((string) $data['product_type']) : null,
             productTypeSubmitted: array_key_exists('product_type', $data),
-            attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
         );
-    }
-
-    public function hasCategoryId(): bool
-    {
-        return $this->categoryIdSubmitted;
-    }
-
-    public function hasAttributes(): bool
-    {
-        return $this->attributes !== null;
     }
 
     /**
      * Only the plain scalar attributes the client actually submitted, ready
-     * for a partial mass-assignment update. `attributes` (the EAV values)
-     * are synced separately.
+     * for a partial mass-assignment update.
      *
      * @return array<string, mixed>
      */

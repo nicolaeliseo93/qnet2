@@ -13,14 +13,11 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for PUT/PATCH /api/products/{product} (spec 0017).
- * Generic fields are `sometimes`; `attributes`, when submitted, is a
- * full-replace of the dynamic values, validated against the (possibly new)
- * category's effective attributes by ProductService — see
- * StoreProductRequest's docblock for why that cross-field validation is not
- * duplicated here. Authorization is intentionally NOT handled here (it stays
- * in the controller via authorize('update', $product)). EnforcesFieldPermissions
- * (spec 0004) rejects any submitted GENERIC field the actor cannot edit on
- * this specific model.
+ * Generic fields are `sometimes` — a product carries no attribute values of
+ * its own (see StoreProductRequest's docblock). Authorization is
+ * intentionally NOT handled here (it stays in the controller via
+ * authorize('update', $product)). EnforcesFieldPermissions (spec 0004)
+ * rejects any submitted field the actor cannot edit on this specific model.
  */
 class UpdateProductRequest extends FormRequest
 {
@@ -44,9 +41,6 @@ class UpdateProductRequest extends FormRequest
             'price' => ['sometimes', 'required', 'numeric'],
             'category_id' => ['sometimes', 'required', 'integer', 'exists:product_categories,id'],
             'product_type' => ['sometimes', 'required', Rule::enum(ProductType::class)],
-            'attributes' => ['sometimes', 'array'],
-            'attributes.*.attribute_id' => ['required', 'integer', 'exists:attributes,id', 'distinct'],
-            'attributes.*.value' => ['nullable'],
         ];
     }
 

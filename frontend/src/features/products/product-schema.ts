@@ -7,12 +7,7 @@ import {
 
 /**
  * Zod schema for the product create/edit form's GENERIC fields, built as a
- * factory so validation messages are localized via the i18n `t` function. The
- * dynamic attribute values are intentionally typed loosely here
- * (`attributes`): their real validation (required/type/ENUM membership) is
- * server-side, driven by the selected category's effective attributes (spec
- * AC-015) — duplicating that logic client-side would drift from the backend
- * the moment a category's assignments change.
+ * factory so validation messages are localized via the i18n `t` function.
  */
 
 /** Backend `name` column limit (`max:191`). */
@@ -32,7 +27,6 @@ function baseFields(t: TFunction) {
     price: z.number().nonnegative(t('products.form.priceInvalid')).nullable(),
     category_id: z.number().nullable(),
     product_type: z.enum(['SERVICE']),
-    attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
   }
 }
 

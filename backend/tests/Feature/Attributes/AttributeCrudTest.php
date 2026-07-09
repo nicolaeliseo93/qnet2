@@ -1,10 +1,7 @@
 <?php
 
-use App\Enums\AttributeType;
 use App\Models\Attribute;
 use App\Models\AttributeOption;
-use App\Models\Product;
-use App\Models\ProductAttributeValue;
 use App\Models\ProductCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -159,18 +156,6 @@ it('update: options is a full-replace', function () {
     expect(AttributeOption::whereIn('id', $originalOptionIds)->count())->toBe(0);
 });
 
-it('update: changing data_type when the attribute already has product values → 422', function () {
-    $actor = attributeUserWith(['update']);
-    $attribute = Attribute::factory()->create(['data_type' => AttributeType::String]);
-    $product = Product::factory()->create();
-    ProductAttributeValue::factory()->for($product)->for($attribute, 'attribute')->create();
-    Sanctum::actingAs($actor);
-
-    $this->patchJson("/api/attributes/{$attribute->id}", ['data_type' => 'INTEGER'])->assertStatus(422);
-
-    expect($attribute->fresh()->data_type)->toBe(AttributeType::String);
-});
-
 it('update: 403 without attributes.update', function () {
     $actor = attributeUserWith([]);
     $target = Attribute::factory()->create();
@@ -201,16 +186,6 @@ it('delete: 409 when assigned to a category', function () {
 
     $this->deleteJson("/api/attributes/{$target->id}")->assertStatus(409);
     $this->assertDatabaseHas('attributes', ['id' => $target->id]);
-});
-
-it('delete: 409 when it has recorded product values', function () {
-    $actor = attributeUserWith(['delete']);
-    $target = Attribute::factory()->create();
-    $product = Product::factory()->create();
-    ProductAttributeValue::factory()->for($product)->for($target, 'attribute')->create();
-    Sanctum::actingAs($actor);
-
-    $this->deleteJson("/api/attributes/{$target->id}")->assertStatus(409);
 });
 
 it('delete: 403 without attributes.delete', function () {

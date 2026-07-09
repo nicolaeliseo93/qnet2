@@ -12,10 +12,9 @@ import type { CustomFieldDescriptor } from '@/features/custom-fields/types'
 /**
  * Spec 0021: products is one of the universal custom-fields rollout
  * modules — mounting `<CustomFieldsSection>` is the ONLY products-specific
- * integration, ADDITIONAL to (and independent from) the category-driven
- * dynamic attribute fields. This suite exercises the wiring (schema,
- * defaults, payload, 422) without touching the section's own per-type
- * rendering (covered by `CustomFieldsSection.test.tsx`).
+ * integration. This suite exercises the wiring (schema, defaults, payload,
+ * 422) without touching the section's own per-type rendering (covered by
+ * `CustomFieldsSection.test.tsx`).
  */
 
 const createProductMock = vi.fn()
@@ -47,12 +46,6 @@ vi.mock('@/components/ui/searchable-select', () => ({
       select-category-3
     </button>
   ),
-}))
-
-// The category-driven dynamic attribute fields query `/product-categories/{id}/effective-attributes`;
-// stub the resolved (empty) set so selecting a category in this suite does not touch the network.
-vi.mock('@/features/product-categories/use-effective-attributes', () => ({
-  useEffectiveAttributes: () => ({ data: [], isPending: false, isError: false }),
 }))
 
 const fetchResourceMetaMock = vi.fn<() => Promise<ResourceMeta>>()
@@ -112,7 +105,6 @@ function product(overrides: Partial<ProductDetailWithPermissions> = {}): Product
     category_id: 3,
     category: { id: 3, name: 'Laptops' },
     product_type: 'SERVICE',
-    attributes: [],
     created_at: '2026-01-01T00:00:00Z',
     permissions: permissionsWithNotes(),
     ...overrides,

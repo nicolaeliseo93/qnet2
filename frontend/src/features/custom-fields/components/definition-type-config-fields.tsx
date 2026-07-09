@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Settings2 } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
 import { Input } from '@/components/ui/input'
-import { FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form'
+import { FormControl, FormField, FormItem } from '@/components/ui/form'
+import { HintLabel } from '@/features/custom-fields/components/definition-hint-label'
 import {
   Select,
   SelectContent,
@@ -67,7 +68,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
           name="config.maxLength"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('customFields.form.configMaxLength')}</FormLabel>
+              <HintLabel
+                hint={t('customFields.form.configMaxLengthHint')}
+                hintLabel={t('customFields.form.configMaxLength')}
+              >
+                {t('customFields.form.configMaxLength')}
+              </HintLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -90,7 +96,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             name="config.minLength"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('customFields.form.configMinLength')}</FormLabel>
+                <HintLabel
+                  hint={t('customFields.form.configMinLengthHint')}
+                  hintLabel={t('customFields.form.configMinLength')}
+                >
+                  {t('customFields.form.configMinLength')}
+                </HintLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -109,7 +120,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             name="config.regex"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('customFields.form.configRegex')}</FormLabel>
+                <HintLabel
+                  hint={t('customFields.form.configRegexHint')}
+                  hintLabel={t('customFields.form.configRegex')}
+                >
+                  {t('customFields.form.configRegex')}
+                </HintLabel>
                 <FormControl>
                   <Input autoComplete="off" {...field} />
                 </FormControl>
@@ -121,7 +137,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             name="config.transform"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('customFields.form.configTransform')}</FormLabel>
+                <HintLabel
+                  hint={t('customFields.form.configTransformHint')}
+                  hintLabel={t('customFields.form.configTransform')}
+                >
+                  {t('customFields.form.configTransform')}
+                </HintLabel>
                 <Select value={field.value || 'none'} onValueChange={(next) => field.onChange(next === 'none' ? '' : next)}>
                   <FormControl>
                     <SelectTrigger className="w-full">
@@ -147,7 +168,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
           name="config.rows"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('customFields.form.configRows')}</FormLabel>
+              <HintLabel
+                hint={t('customFields.form.configRowsHint')}
+                hintLabel={t('customFields.form.configRows')}
+              >
+                {t('customFields.form.configRows')}
+              </HintLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -170,7 +196,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             name="config.min"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('customFields.form.configMin')}</FormLabel>
+                <HintLabel
+                  hint={t('customFields.form.configMinHint')}
+                  hintLabel={t('customFields.form.configMin')}
+                >
+                  {t('customFields.form.configMin')}
+                </HintLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -189,7 +220,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             name="config.max"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('customFields.form.configMax')}</FormLabel>
+                <HintLabel
+                  hint={t('customFields.form.configMaxHint')}
+                  hintLabel={t('customFields.form.configMax')}
+                >
+                  {t('customFields.form.configMax')}
+                </HintLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -208,7 +244,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             name="config.step"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('customFields.form.configStep')}</FormLabel>
+                <HintLabel
+                  hint={t('customFields.form.configStepHint')}
+                  hintLabel={t('customFields.form.configStep')}
+                >
+                  {t('customFields.form.configStep')}
+                </HintLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -229,7 +270,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
               name="config.decimals"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('customFields.form.configDecimals')}</FormLabel>
+                  <HintLabel
+                    hint={t('customFields.form.configDecimalsHint')}
+                    hintLabel={t('customFields.form.configDecimals')}
+                  >
+                    {t('customFields.form.configDecimals')}
+                  </HintLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -253,7 +299,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
           name="config.display"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('customFields.form.configDisplay')}</FormLabel>
+              <HintLabel
+                hint={t('customFields.form.configDisplayHint')}
+                hintLabel={t('customFields.form.configDisplay')}
+              >
+                {t('customFields.form.configDisplay')}
+              </HintLabel>
               <Select value={field.value || 'checkbox'} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="w-full">
@@ -276,7 +327,12 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
           name="config.display"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('customFields.form.configDisplay')}</FormLabel>
+              <HintLabel
+                hint={t('customFields.form.configDisplayHint')}
+                hintLabel={t('customFields.form.configDisplay')}
+              >
+                {t('customFields.form.configDisplay')}
+              </HintLabel>
               <Select value={field.value || 'select'} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="w-full">

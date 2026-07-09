@@ -1,24 +1,12 @@
 import type {
-  AttributeFieldValue,
   CreateProductPayload,
-  ProductAttributeValueInput,
   ProductDetail,
   UpdateProductPayload,
 } from '@/features/products/types'
 import type { ProductFormValues } from '@/features/products/use-product-form'
 import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
-/** Converts the form's `{attribute_id: value}` record into the wire array shape. */
-function attributesRecordToArray(
-  record: Record<string, AttributeFieldValue>,
-): ProductAttributeValueInput[] {
-  return Object.entries(record).map(([attributeId, value]) => ({
-    attribute_id: Number(attributeId),
-    value,
-  }))
-}
-
-/** Builds the create payload: generic fields + the currently-generated dynamic attributes. */
+/** Builds the create payload: generic fields + valued custom fields. */
 export function buildCreatePayload(values: ProductFormValues): CreateProductPayload {
   const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
@@ -30,22 +18,17 @@ export function buildCreatePayload(values: ProductFormValues): CreateProductPayl
     price: values.price as number,
     category_id: values.category_id as number,
     product_type: values.product_type,
-    attributes: attributesRecordToArray(values.attributes),
     ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
 /**
  * Builds a partial PATCH payload carrying only fields that changed from the
- * original product (spec 0017 AC-024). `attributes` is sent only when the
- * dynamic fields were actually touched (`attributesDirty`, read from RHF's
- * `formState.dirtyFields` by the caller) — never inferred from equality,
- * since an untouched category still carries its full effective-attributes set.
+ * original product (spec 0017 AC-024).
  */
 export function buildUpdatePayload(
   values: ProductFormValues,
   original: ProductDetail,
-  attributesDirty: boolean,
 ): UpdateProductPayload {
   const payload: UpdateProductPayload = {}
 
@@ -66,9 +49,6 @@ export function buildUpdatePayload(
   }
   if (values.product_type !== original.product_type) {
     payload.product_type = values.product_type
-  }
-  if (attributesDirty) {
-    payload.attributes = attributesRecordToArray(values.attributes)
   }
 
   const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})

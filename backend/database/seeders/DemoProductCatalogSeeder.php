@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\DataObjects\Products\CreateProductData;
-use App\Enums\AttributeType;
 use App\Enums\ProductType;
 use App\Models\Attribute;
 use App\Models\Product;
@@ -19,8 +18,8 @@ use Illuminate\Support\Collection;
  * types (ENUM ones with their options), a two-root category tree exercising
  * multi-level inheritance AND attribute reuse (`delivery_mode` assigned to
  * both roots, never duplicated), and demo services — for leaf categories and
- * one intermediate one — each carrying a typed value for every one of its
- * EFFECTIVE attributes (own + inherited).
+ * one intermediate one — carrying only their generic fields (a product holds
+ * no attribute values of its own; the catalogue is a reusable template).
  *
  * Idempotent: attributes/options/categories are looked up by their natural
  * key (code/value/name) before being created, category-attribute
@@ -72,7 +71,7 @@ class DemoProductCatalogSeeder extends Seeder
             $category = ProductCategory::firstOrCreate(['name' => $name], ['parent_id' => $parent?->id]);
 
             $this->assignAttributes($category, $node['attributes'] ?? [], $attributesByCode);
-            $this->seedProducts($category, $node['products'] ?? [], $attributesByCode);
+            $this->seedProducts($category, $node['products'] ?? []);
             $this->seedTree($node['children'] ?? [], $category, $attributesByCode);
         }
     }
@@ -96,9 +95,8 @@ class DemoProductCatalogSeeder extends Seeder
 
     /**
      * @param  array<int, array<string, mixed>>  $products
-     * @param  Collection<string, Attribute>  $attributesByCode
      */
-    private function seedProducts(ProductCategory $category, array $products, Collection $attributesByCode): void
+    private function seedProducts(ProductCategory $category, array $products): void
     {
         $service = app(ProductService::class);
 
@@ -108,14 +106,6 @@ class DemoProductCatalogSeeder extends Seeder
                 continue;
             }
 
-            $attributeValues = collect($definition['values'])
-                ->map(fn (mixed $value, string $code): array => [
-                    'attribute_id' => $attributesByCode[$code]->id,
-                    'value' => $this->normalizeValue($attributesByCode[$code], $value),
-                ])
-                ->values()
-                ->all();
-
             $service->create(new CreateProductData(
                 name: $definition['name'],
                 description: $definition['description'] ?? null,
@@ -123,19 +113,7 @@ class DemoProductCatalogSeeder extends Seeder
                 price: (float) $definition['price'],
                 categoryId: $category->id,
                 productType: ProductType::Service,
-                attributes: $attributeValues,
             ));
         }
-    }
-
-    /**
-     * ENUM values are already the option's `value` string (resolved to its
-     * option_id by ProductAttributeValueWriter); every other type passes
-     * through unchanged — the taxonomy already carries the right PHP type
-     * per data_type (int/float/bool/string).
-     */
-    private function normalizeValue(Attribute $attribute, mixed $value): mixed
-    {
-        return $attribute->data_type === AttributeType::Enum ? (string) $value : $value;
     }
 }

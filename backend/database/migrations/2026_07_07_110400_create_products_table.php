@@ -6,10 +6,11 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Product entity (spec 0017): generic fields only (name/description/cost/
- * price/category). Dynamic, category-driven attribute values live in
- * `product_attribute_values` (next migration). `category_id` restricts on
- * delete — a category with products cannot be removed (ProductCategoryService
- * also guards this at the service level before the FK is even reached).
+ * price/category) — no per-product attribute values; the category-driven
+ * `attributes` catalogue (Attribute/ProductCategory) stays a reusable
+ * template. `category_id` restricts on delete — a category with products
+ * cannot be removed (ProductCategoryService also guards this at the service
+ * level before the FK is even reached).
  */
 return new class extends Migration
 {

@@ -2,6 +2,7 @@ import { useFieldArray, type Control } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { ListChecks, Plus, Trash2 } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
+import { IconPicker } from '@/components/icon-picker'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -100,9 +101,16 @@ export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOpt
                 render={({ field }) => (
                   <FormItem className="flex-1">
                     <FormLabel>{t('customFields.form.optionIcon')}</FormLabel>
-                    <FormControl>
-                      <Input autoComplete="off" placeholder="tag" {...field} />
-                    </FormControl>
+                    <IconPicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      labels={{
+                        placeholder: t('customFields.form.iconPickerPlaceholder'),
+                        searchPlaceholder: t('customFields.form.iconSearchPlaceholder'),
+                        empty: t('customFields.form.iconEmpty'),
+                        clearLabel: t('customFields.form.iconClear'),
+                      }}
+                    />
                   </FormItem>
                 )}
               />

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Waypoints } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { HintLabel } from '@/features/custom-fields/components/definition-hint-label'
 import {
   Select,
   SelectContent,
@@ -68,7 +69,12 @@ export function DefinitionRelationTargetEditor({
         name="relation_target.cardinality"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>{t('customFields.form.relationCardinality')}</FormLabel>
+            <HintLabel
+              hint={t('customFields.form.relationCardinalityHint')}
+              hintLabel={t('customFields.form.relationCardinality')}
+            >
+              {t('customFields.form.relationCardinality')}
+            </HintLabel>
             <Select value={field.value} onValueChange={field.onChange}>
               <FormControl>
                 <SelectTrigger className="w-full">
@@ -90,7 +96,12 @@ export function DefinitionRelationTargetEditor({
         name="relation_target.for_select_resource"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>{t('customFields.form.relationForSelectResource')}</FormLabel>
+            <HintLabel
+              hint={t('customFields.form.relationForSelectResourceHint')}
+              hintLabel={t('customFields.form.relationForSelectResource')}
+            >
+              {t('customFields.form.relationForSelectResource')}
+            </HintLabel>
             <Select value={field.value} onValueChange={field.onChange}>
               <FormControl>
                 <SelectTrigger className="w-full">

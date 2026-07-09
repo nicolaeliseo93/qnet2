@@ -13,9 +13,6 @@ use App\Enums\ProductType;
  */
 final readonly class CreateProductData
 {
-    /**
-     * @param  array<int, array{attribute_id: int, value: mixed}>|null  $attributes
-     */
     public function __construct(
         public string $name,
         public ?string $description,
@@ -23,7 +20,6 @@ final readonly class CreateProductData
         public float $price,
         public int $categoryId,
         public ProductType $productType,
-        public ?array $attributes = null,
     ) {}
 
     /**
@@ -40,7 +36,6 @@ final readonly class CreateProductData
             price: (float) $data['price'],
             categoryId: (int) $data['category_id'],
             productType: ProductType::from((string) $data['product_type']),
-            attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
         );
     }
 }

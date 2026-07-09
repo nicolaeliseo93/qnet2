@@ -44,7 +44,7 @@ class ProductCategoriesSource extends AbstractMigrationSource
     /**
      * @return array<int, array{id: string, label: string, type: string}>
      */
-    public function columns(): array
+    protected function nativeColumns(): array
     {
         return [
             ['id' => 'id', 'label' => 'ID', 'type' => 'number'],
@@ -69,7 +69,7 @@ class ProductCategoriesSource extends AbstractMigrationSource
      * @param  array<string, mixed>  $record
      * @return array<string, string|int|bool|null>
      */
-    protected function mapRow(array $record): array
+    protected function mapNativeRow(array $record): array
     {
         return [
             'id' => $record['id'] ?? null,
@@ -113,7 +113,7 @@ class ProductCategoriesSource extends AbstractMigrationSource
         $category->old_id = $externalId;
         $category->save();
 
-        return MigrationRowOutcome::created($warnings);
+        return MigrationRowOutcome::created($warnings, $category);
     }
 
     /**
