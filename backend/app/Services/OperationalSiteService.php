@@ -55,9 +55,14 @@ class OperationalSiteService
     public function update(User $actor, OperationalSite $site, UpdateOperationalSiteData $data): OperationalSite
     {
         return DB::transaction(function () use ($site, $data): OperationalSite {
+            // Save unconditionally so the custom-field pipeline (HasCustomFields
+            // `saved` hook) fires even for a custom-fields-only edit; a clean save
+            // is a no-op for the native path (no dirty attrs => no query, no
+            // updated_at, no log).
             if ($data->aliasSubmitted) {
-                $site->update(['alias' => $data->alias]);
+                $site->alias = $data->alias;
             }
+            $site->save();
 
             if ($data->hasAddressChanges()) {
                 $this->writeAddress($site, $data);

@@ -2,6 +2,57 @@
 
 > Injected at session start. Update at every green state.
 
+## BUGFIX — Operational-sites custom fields "save but value doesn't come back" (missing unconditional save) (2026-07-09) — GREEN
+
+Follow-up to the roles fix below: user confirmed operational-sites still drops a
+custom-fields-only edit (value never persists). Root cause CONFIRMED (not the same
+class of bug as roles — model already has `HasCustomFields` via `BaseModel`, READ
+works): `OperationalSiteService::update()` only called `$site->update(['alias' => ...])`
+inside an `if ($data->aliasSubmitted)` guard and never saved otherwise — the ONE
+service missed from the "14 services" `fill()->save()` unconditional-save sweep (it
+predates that pattern / was never audited because its write path is flat, not
+`fill($attributes)`). A custom-fields-only PATCH touches neither `alias` nor the
+address, so `$site` was never saved → the `HasCustomFields` `saved` hook never fired
+→ value silently dropped. FIX: `app/Services/OperationalSiteService.php::update()`
+now assigns `alias` (when submitted) then calls `$site->save()` unconditionally,
+before the address branch — mirrors the `fill()->save()` pattern used everywhere
+else, adapted to this service's non-`fill()` write style. Reproduce-first: new test
+FAILED before the fix (`null` instead of the persisted value), PASSED after.
+Audited the other 12 custom-fieldable services (business-functions, companies,
+company-sites, referent-types, referents, registries, sectors, attributes,
+product-categories, products, sources, tags, users) — all already do the
+unconditional `fill($attributes)->save()` with the exact same guard comment; none
+have the OperationalSite guard pattern. No other module needs this fix.
+Test: `tests/Feature/OperationalSites/OperationalSiteCustomFieldUpdateTest.php`
+(PATCH only `custom_fields` → persists + round-trip GET). `php artisan test
+--filter=OperationalSite` 77/77 (one isolated flake seen once, non-reproducible
+across 4 subsequent clean runs, unrelated to this change — confirmed by reproducing
+identically on the pre-fix stash). Pint clean. NOT committed (awaiting go-ahead).
+Corrects the note below: operational-sites WAS actually broken (write path, not
+read) — the previous investigation only exercised READ with pre-seeded values.
+
+## BUGFIX — Roles custom fields non leggevano/salvavano (missing trait) (2026-07-09) — GREEN
+
+Segnalati 3 moduli che "non leggono i campi custom": sedi operative (operational-sites),
+categorie prodotto (product-categories), ruoli (roles). Indagine (tinker su MySQL seedato):
+- roles: ROTTO. `App\Models\Role extends SpatieRole` e NON usava `HasCustomFields` (a differenza
+  di User, l'altra eccezione framework-base che lo dichiara direttamente). Effetto doppio:
+  READ — `BaseApiController::withCustomFields()` skippa il model (guard `in_array(HasCustomFields...)`)
+  → `show`/`update` senza `custom_fields`; WRITE — `bootHasCustomFields()` non registra gli eventi
+  saving/saved/deleting → nessuna persistenza. FIX: aggiunto `use HasCustomFields` a Role.php (mirror
+  di User.php), unica modifica. Verificato: `entityTypeForModel($role)` → 'roles'; RolesTableDefinition
+  modelClass già `Role::class`; RoleService già `fill()->save()` incondizionato (no change). Test nuovo
+  tests/Feature/Roles/RoleCustomFieldUpdateTest.php (PATCH solo custom_fields → persiste + round-trip GET).
+  `php artisan test --filter=Role` 150/150; full suite 1 fail pre-esistente non correlato
+  (AbstractMigrationSourcePreviewTest, riproducibile su stash). Pint pulito. NON committato (attesa OK).
+- operational-sites & product-categories: NON riproducibili come rotti. Backend confermato corretto
+  (accessor `custom_fields` ritorna i 7 valori; meta espone i 7 descriptor `custom.*`; fieldPermissions
+  super-admin tutti visible). Frontend identico byte-per-byte al reference registries (loader edit fa
+  fetch fresco dello `show`, wiring `useCustomFieldsForm`/`<CustomFieldsSection>` uguale). 25 test FE
+  verdi incl. repro edit-hydration su tutti i 7 tipi. Probabile: erano test dell'utente pre-fix roles o
+  build FE stantio. AZIONE: far ritestare i due moduli dopo il fix roles; se ancora rotti servono
+  dettagli (quale campo, utente privileged o no).
+
 ## BUGFIX — Column visibility not persisting (selection-column 422) (2026-07-09) — GREEN
 
 Sintomo: mostra/nascondi (o resize/reorder) una colonna in AG Grid → al reload torna al default.
