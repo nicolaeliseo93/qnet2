@@ -103,8 +103,18 @@ function buildRelationSchema(descriptor: CustomFieldDescriptor) {
 
 function buildFieldSchema(descriptor: CustomFieldDescriptor, t: TFunction): z.ZodTypeAny {
   switch (descriptor.type) {
+    // text/textarea + the string-backed scalars (date/datetime/time/email/url/
+    // color) share the nullable-string schema: the native input constrains the
+    // shape client-side and the backend rule is authoritative (a bad value
+    // surfaces inline via the custom_fields.<key> 422 mapping).
     case 'text':
     case 'textarea':
+    case 'date':
+    case 'datetime':
+    case 'time':
+    case 'email':
+    case 'url':
+    case 'color':
       return buildTextSchema(descriptor, t)
     case 'integer':
     case 'decimal':

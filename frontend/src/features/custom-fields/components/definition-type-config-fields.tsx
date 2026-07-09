@@ -19,6 +19,21 @@ interface DefinitionTypeConfigFieldsProps {
   type: CustomFieldType
 }
 
+/**
+ * Types with no `config` options, so the config panel renders nothing:
+ * `relation` (its target lives in a dedicated editor) and the string-backed
+ * scalars (date/datetime/time/email/url/color), which are plain native inputs.
+ */
+const TYPES_WITHOUT_CONFIG: readonly CustomFieldType[] = [
+  'relation',
+  'date',
+  'datetime',
+  'time',
+  'email',
+  'url',
+  'color',
+]
+
 /** Formats a nullable numeric config value for a controlled `<input type="number">` (mirrors `ProductFormBody`'s pattern). */
 function numberInputValue(value: number | null): string {
   return value === null ? '' : String(value)
@@ -28,14 +43,15 @@ function numberInputValue(value: number | null): string {
  * Per-`type` config controls (spec AC-025): text→minLength/maxLength/regex/
  * transform; textarea→rows/maxLength; integer/decimal→min/max/step/decimals;
  * boolean→display(checkbox|switch); enum→display(select|multiselect|radio|
- * badge). Renders nothing for `relation` (it has no `config`, only
- * `relation_target`). Not metadata-gated: it is a per-type sub-form of the
- * `type` field itself, mirroring the ENUM options editor's status.
+ * badge). Renders nothing for the config-less types (relation + the
+ * string-backed scalars — see TYPES_WITHOUT_CONFIG). Not metadata-gated: it is
+ * a per-type sub-form of the `type` field itself, mirroring the ENUM options
+ * editor's status.
  */
 export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConfigFieldsProps) {
   const { t } = useTranslation()
 
-  if (type === 'relation') {
+  if (TYPES_WITHOUT_CONFIG.includes(type)) {
     return null
   }
 

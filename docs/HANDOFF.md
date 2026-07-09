@@ -2,6 +2,50 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — New custom-field types + products expiration date (2026-07-09) — GREEN
+
+Extended the spec 0021 custom-field type system (was 7 MVP types) with 6 new
+scalar-string types: date, datetime, time, email, url, color. User-approved set.
+Then added a `products` template field via the (now generalized) seeder:
+`expiration_date` (label "Data scadenza", type date).
+
+Type-system architecture (unchanged seams — "1 handler + 1 config line" OCP):
+- Backend: new trait `app/CustomFields/Types/Concerns/HandlesScalarStringField.php`
+  composes the 5 existing concerns (AppliesTextFilter/DerivesRequiredRule/OrdersByJsonPath/
+  ResolvesDistinctJsonValues/ResolvesJsonColumn) + storage=string, columnType=text,
+  filterType=text, string normalize/read, toMeta. 6 thin handlers (Date/DateTime/Time/
+  Email/Url/Color FieldType) each = key() + validationRules() only. Registered in
+  config/custom-fields.php. Admin allow-list is registry-driven (Rule::in(FieldTypeRegistry::all()))
+  → NO request change. Validation rules: date `date_format:Y-m-d`; datetime
+  `date_format:Y-m-d\TH:i,Y-m-d\TH:i:s`; time `date_format:H:i,H:i:s`; email `email`+max:191;
+  url `url`+max:2048; color `regex:/^#[0-9A-Fa-f]{6}$/`.
+- Frontend: extended `CustomFieldType` union + `CUSTOM_FIELD_TYPES` (drives z.enum admin
+  schema + type picker + grid/detail type badge via customFields.types.*). New
+  `components/native-input-field-control.tsx` = `createNativeInputFieldControl(htmlType)`
+  factory (stable identities, built once at registry module load); 6 registry entries
+  (date/datetime-local/time/email/url/color). build-custom-fields-schema routes all 6 to
+  the nullable-string schema (native input constrains shape; backend rule authoritative,
+  surfaces inline via custom_fields.<key> 422). i18n en/it type labels added. Guarded
+  `DefinitionTypeConfigFields` (TYPES_WITHOUT_CONFIG) so the config panel is hidden for
+  the config-less types (was rendering an empty section); validation editor already shows
+  required/unique for every type — no change.
+
+Seeder: `QualificaTemplateSeeder` generalized from a single hardcoded entity to a
+`TEMPLATES` map (entity_type => fields); `company-sites` (27 fields) + `products`
+(expiration_date/date). Still one clean seed in DatabaseSeeder, idempotent updateOrCreate.
+
+IMPORTANT — no `date`/`datetime` type existed before; a `type=>'date'` definition WOULD
+have thrown UnknownFieldTypeException. If asked to add any other custom-field type, mirror
+this pattern (BE handler + config line + FE union/registry/schema/i18n + FieldTypeRegistryTest).
+
+Verified: Pint clean; `php artisan test` 1854 pass / 1 skip / 1 FAIL (AbstractMigration
+SourcePreviewTest — pre-existing/unrelated). New BE tests: FieldTypeRegistryTest (dataset +
+scalar-string triple), CustomFieldWritePipelineTest (reject/accept dataset per new type).
+Seeder run → products.expiration_date=date confirmed; all 6 handlers' rules verified.
+Frontend: tsc 0, eslint 0, vitest custom-fields 46/46 (+ new CustomFieldsSection render test
+for date/email/color native inputs); full FE suite 799 pass / 3 pre-existing unrelated FAIL
+(cell-renderers ContactsCell). NOT committed (awaiting go-ahead).
+
 ## REFACTOR — Company-sites "Altro" section → universal custom fields (2026-07-09) — GREEN
 
 Since universal custom fields (spec 0021) now exist, the 27-field read-only "Altro"

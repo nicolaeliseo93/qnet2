@@ -5,6 +5,7 @@ import { NumberFieldControl } from '@/features/custom-fields/components/number-f
 import { RelationFieldControl } from '@/features/custom-fields/components/relation-field-control'
 import { TextFieldControl } from '@/features/custom-fields/components/text-field-control'
 import { TextareaFieldControl } from '@/features/custom-fields/components/textarea-field-control'
+import { createNativeInputFieldControl } from '@/features/custom-fields/components/native-input-field-control'
 import type { CustomFieldControlProps } from '@/features/custom-fields/components/custom-field-control-props'
 import type { CustomFieldType } from '@/features/custom-fields/types'
 
@@ -30,4 +31,10 @@ export const CUSTOM_FIELD_COMPONENT_REGISTRY: Record<
   boolean: BooleanFieldControl,
   enum: EnumFieldControl,
   relation: RelationFieldControl,
+  date: createNativeInputFieldControl('date'),
+  datetime: createNativeInputFieldControl('datetime-local'),
+  time: createNativeInputFieldControl('time'),
+  email: createNativeInputFieldControl('email'),
+  url: createNativeInputFieldControl('url'),
+  color: createNativeInputFieldControl('color'),
 }

@@ -204,6 +204,45 @@ it('valid values save without throwing', function () {
 });
 
 // ---------------------------------------------------------------------------
+// New scalar-string types: date / datetime / time / email / url / color.
+// One definition + company per dataset case (fresh DB each) so no bag state
+// leaks between the interleaved saves.
+// ---------------------------------------------------------------------------
+
+it('rejects a malformed value for each scalar-string type', function (string $type, string $badValue) {
+    CustomFieldDefinition::factory()->forEntity('companies')->ofType($type)->create(['key' => 'field']);
+    $company = Company::factory()->create();
+
+    customFieldsBag()->set(['field' => $badValue]);
+
+    expect(fn () => $company->save())->toThrow(ValidationException::class);
+})->with([
+    'date' => ['date', '09/07/2026'],
+    'datetime' => ['datetime', '2026-07-09 14:30'],
+    'time' => ['time', '25:00'],
+    'email' => ['email', 'not-an-email'],
+    'url' => ['url', 'not a url'],
+    'color' => ['color', 'red'],
+]);
+
+it('accepts a well-formed value for each scalar-string type', function (string $type, string $goodValue) {
+    CustomFieldDefinition::factory()->forEntity('companies')->ofType($type)->create(['key' => 'field']);
+    $company = Company::factory()->create();
+
+    customFieldsBag()->set(['field' => $goodValue]);
+
+    expect(fn () => $company->save())->not->toThrow(ValidationException::class);
+})->with([
+    'date' => ['date', '2026-07-09'],
+    'datetime (no seconds)' => ['datetime', '2026-07-09T14:30'],
+    'datetime (seconds)' => ['datetime', '2026-07-09T14:30:00'],
+    'time' => ['time', '09:00'],
+    'email' => ['email', 'ops@example.com'],
+    'url' => ['url', 'https://example.com'],
+    'color' => ['color', '#1A2B3C'],
+]);
+
+// ---------------------------------------------------------------------------
 // AC-012 — permission parity + PATCH partial merge
 // ---------------------------------------------------------------------------
 

@@ -74,6 +74,12 @@ export const customFields = {
     boolean: 'Sì/No',
     enum: 'Elenco di opzioni',
     relation: 'Relazione',
+    date: 'Data',
+    datetime: 'Data e ora',
+    time: 'Ora',
+    email: 'Email',
+    url: 'URL',
+    color: 'Colore',
   },
   form: {
     newDefinition: 'Nuovo campo personalizzato',

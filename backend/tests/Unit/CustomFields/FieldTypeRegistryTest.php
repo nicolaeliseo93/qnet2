@@ -5,13 +5,19 @@ declare(strict_types=1);
 use App\CustomFields\Exceptions\UnknownFieldTypeException;
 use App\CustomFields\FieldTypeRegistry;
 use App\CustomFields\Types\BooleanFieldType;
+use App\CustomFields\Types\ColorFieldType;
+use App\CustomFields\Types\DateFieldType;
+use App\CustomFields\Types\DateTimeFieldType;
 use App\CustomFields\Types\DecimalFieldType;
+use App\CustomFields\Types\EmailFieldType;
 use App\CustomFields\Types\EnumFieldType;
 use App\CustomFields\Types\FieldTypeHandler;
 use App\CustomFields\Types\IntegerFieldType;
 use App\CustomFields\Types\RelationFieldType;
 use App\CustomFields\Types\TextareaFieldType;
 use App\CustomFields\Types\TextFieldType;
+use App\CustomFields\Types\TimeFieldType;
+use App\CustomFields\Types\UrlFieldType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,8 +25,8 @@ use Tests\TestCase;
 // TableRegistry/AuthorizationRegistry definitions that touch the DB.
 uses(TestCase::class, RefreshDatabase::class);
 
-// AC-003: FieldTypeRegistry resolves each MVP type from config.
-it('resolves every MVP type from config/custom-fields.php', function (string $type, string $class): void {
+// AC-003: FieldTypeRegistry resolves each registered type from config.
+it('resolves every registered type from config/custom-fields.php', function (string $type, string $class): void {
     $handler = app(FieldTypeRegistry::class)->resolve($type);
 
     expect($handler)->toBeInstanceOf(FieldTypeHandler::class)
@@ -34,6 +40,12 @@ it('resolves every MVP type from config/custom-fields.php', function (string $ty
     'boolean' => ['boolean', BooleanFieldType::class],
     'enum' => ['enum', EnumFieldType::class],
     'relation' => ['relation', RelationFieldType::class],
+    'date' => ['date', DateFieldType::class],
+    'datetime' => ['datetime', DateTimeFieldType::class],
+    'time' => ['time', TimeFieldType::class],
+    'email' => ['email', EmailFieldType::class],
+    'url' => ['url', UrlFieldType::class],
+    'color' => ['color', ColorFieldType::class],
 ]);
 
 it('lists all registered types via has()/all()', function (): void {
@@ -41,7 +53,10 @@ it('lists all registered types via has()/all()', function (): void {
 
     expect($registry->has('text'))->toBeTrue()
         ->and($registry->has('unknown'))->toBeFalse()
-        ->and($registry->all())->toBe(['text', 'textarea', 'integer', 'decimal', 'boolean', 'enum', 'relation']);
+        ->and($registry->all())->toBe([
+            'text', 'textarea', 'integer', 'decimal', 'boolean', 'enum', 'relation',
+            'date', 'datetime', 'time', 'email', 'url', 'color',
+        ]);
 });
 
 // AC-003: unknown type → exception.
@@ -96,3 +111,13 @@ it('declares relation handler triple json/text/set', function (): void {
         ->and($handler->columnType())->toBe('text')
         ->and($handler->filterType())->toBe('set');
 });
+
+// The scalar-string family (date/datetime/time/email/url/color) all share the
+// string/text/text triple — they differ only in accepted input format.
+it('declares the scalar-string family triple string/text/text', function (string $type): void {
+    $handler = app(FieldTypeRegistry::class)->resolve($type);
+
+    expect($handler->storageType())->toBe('string')
+        ->and($handler->columnType())->toBe('text')
+        ->and($handler->filterType())->toBe('text');
+})->with(['date', 'datetime', 'time', 'email', 'url', 'color']);

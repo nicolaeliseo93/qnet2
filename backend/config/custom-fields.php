@@ -1,12 +1,18 @@
 <?php
 
 use App\CustomFields\Types\BooleanFieldType;
+use App\CustomFields\Types\ColorFieldType;
+use App\CustomFields\Types\DateFieldType;
+use App\CustomFields\Types\DateTimeFieldType;
 use App\CustomFields\Types\DecimalFieldType;
+use App\CustomFields\Types\EmailFieldType;
 use App\CustomFields\Types\EnumFieldType;
 use App\CustomFields\Types\IntegerFieldType;
 use App\CustomFields\Types\RelationFieldType;
 use App\CustomFields\Types\TextareaFieldType;
 use App\CustomFields\Types\TextFieldType;
+use App\CustomFields\Types\TimeFieldType;
+use App\CustomFields\Types\UrlFieldType;
 
 return [
 
@@ -33,6 +39,12 @@ return [
         'boolean' => BooleanFieldType::class,
         'enum' => EnumFieldType::class,
         'relation' => RelationFieldType::class,
+        'date' => DateFieldType::class,
+        'datetime' => DateTimeFieldType::class,
+        'time' => TimeFieldType::class,
+        'email' => EmailFieldType::class,
+        'url' => UrlFieldType::class,
+        'color' => ColorFieldType::class,
     ],
 
 ];

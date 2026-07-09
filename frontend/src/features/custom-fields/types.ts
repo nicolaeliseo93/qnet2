@@ -16,6 +16,12 @@ export type CustomFieldType =
   | 'boolean'
   | 'enum'
   | 'relation'
+  | 'date'
+  | 'datetime'
+  | 'time'
+  | 'email'
+  | 'url'
+  | 'color'
 
 /** Runtime list of {@link CustomFieldType}, driving the admin form's `type` picker. */
 export const CUSTOM_FIELD_TYPES: readonly CustomFieldType[] = [
@@ -26,6 +32,12 @@ export const CUSTOM_FIELD_TYPES: readonly CustomFieldType[] = [
   'boolean',
   'enum',
   'relation',
+  'date',
+  'datetime',
+  'time',
+  'email',
+  'url',
+  'color',
 ]
 
 /**
@@ -36,6 +48,7 @@ export const CUSTOM_FIELD_TYPES: readonly CustomFieldType[] = [
  * - integer/decimal: min/max/step/decimals
  * - boolean: display ('checkbox'|'switch')
  * - enum: display ('select'|'multiselect'|'radio'|'badge')
+ * - date/datetime/time/email/url/color: no extra config (native HTML input)
  */
 export interface CustomFieldConfig {
   minLength?: number

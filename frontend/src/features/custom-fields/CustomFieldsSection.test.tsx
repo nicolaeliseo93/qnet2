@@ -112,6 +112,33 @@ const RELATION_FIELD: CustomFieldDescriptor = {
   relation: { for_select_resource: 'users', cardinality: 'one' },
 }
 
+const DATE_FIELD: CustomFieldDescriptor = {
+  key: 'custom.expires_at',
+  type: 'date',
+  label: 'Expires at',
+  group: null,
+  mandatory: false,
+  source: 'custom',
+}
+
+const EMAIL_FIELD: CustomFieldDescriptor = {
+  key: 'custom.contact_email',
+  type: 'email',
+  label: 'Contact email',
+  group: null,
+  mandatory: false,
+  source: 'custom',
+}
+
+const COLOR_FIELD: CustomFieldDescriptor = {
+  key: 'custom.brand_color',
+  type: 'color',
+  label: 'Brand color',
+  group: null,
+  mandatory: false,
+  source: 'custom',
+}
+
 function Harness({ resource, permissions }: { resource: string; permissions: ResourcePermissions }) {
   const form = useForm<CustomFieldsFormShape>({ defaultValues: { custom_fields: {} } })
   return (
@@ -152,6 +179,23 @@ describe('CustomFieldsSection', () => {
     expect(screen.getByRole('checkbox', { name: 'Active' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Tier' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Owner' })).toBeInTheDocument()
+  })
+
+  it('renders native inputs for the string-backed scalar types (date/email/color)', async () => {
+    const data = meta([DATE_FIELD, EMAIL_FIELD, COLOR_FIELD], {
+      'custom.expires_at': permission(),
+      'custom.contact_email': permission(),
+      'custom.brand_color': permission(),
+    })
+    fetchResourceMetaMock.mockResolvedValue(data)
+
+    renderHarness('companies', data.permissions)
+
+    // date/color inputs expose no ARIA role, so they are found by label; email
+    // is a textbox. Each carries the matching native HTML input `type`.
+    expect(await screen.findByLabelText('Expires at')).toHaveAttribute('type', 'date')
+    expect(screen.getByRole('textbox', { name: 'Contact email' })).toHaveAttribute('type', 'email')
+    expect(screen.getByLabelText('Brand color')).toHaveAttribute('type', 'color')
   })
 
   it('does not render a field the role cannot see', async () => {
