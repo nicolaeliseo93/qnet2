@@ -25,6 +25,5 @@ class DatabaseSeeder extends Seeder
 
         $this->call(RolePermissionSeeder::class);
         $this->call(DemoUserSeeder::class);
-        $this->call(QualificaTemplateSeeder::class);
     }
 }
