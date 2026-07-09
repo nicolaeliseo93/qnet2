@@ -12,8 +12,8 @@ import type { CustomFieldDescriptor } from '@/features/custom-fields/types'
 
 /**
  * Spec 0021: the generic custom-fields renderer wired into the Company Sites
- * module — mounting `<CustomFieldsSection>` in the Impostazioni (settings) tab
- * is the ONLY company-sites-specific integration. Mirrors
+ * module — mounting `<CustomFieldsSection>` in the Profilo tab is the ONLY
+ * company-sites-specific integration. Mirrors
  * `company-form-custom-fields.test.tsx` (the pilot module); per-type control
  * rendering is covered by `CustomFieldsSection.test.tsx`.
  */
@@ -153,33 +153,6 @@ function companySite(
     quotation_header_id: null,
     quotation_footer_id: null,
     company: null,
-    accounting_manager_id: null,
-    store_id: null,
-    company_type: null,
-    commissions: null,
-    order_sites: null,
-    payment_status_assign_technician: null,
-    payment_status_deposit: null,
-    payment_status_balance: null,
-    default_payment_id: null,
-    default_vat_id: null,
-    other_category_id: null,
-    iso_category_id: null,
-    soa_category_id: null,
-    sic_category_id: null,
-    avv_category_id: null,
-    gdpr_category_id: null,
-    res_category_id: null,
-    pal_category_id: null,
-    quattro_category_id: null,
-    finage_category_id: null,
-    fondi_category_id: null,
-    gare_category_id: null,
-    partnership_category_id: null,
-    progetti_category_id: null,
-    status: null,
-    color: null,
-    surface_sqm: null,
     created_at: null,
     permissions: permissionsWithPriority(),
     ...overrides,
@@ -197,19 +170,13 @@ beforeEach(() => {
   fetchResourceMetaMock.mockResolvedValue({ fields: [PRIORITY_FIELD], permissions: permissionsWithPriority() })
 })
 
-/** Switches to the Impostazioni (Settings) tab, where the section is mounted. */
-async function goToSettingsTab() {
-  fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Settings' }))
-}
-
 describe('CompanySiteForm — custom fields (spec 0021)', () => {
-  it('renders the resource custom field control in the Settings tab', async () => {
+  it('renders the resource custom field control in the Profilo tab', async () => {
     render(
       <CompanySiteForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
       { wrapper: wrapper() },
     )
 
-    await goToSettingsTab()
     expect(await screen.findByRole('textbox', { name: 'Priority' })).toBeInTheDocument()
   })
 
@@ -226,8 +193,6 @@ describe('CompanySiteForm — custom fields (spec 0021)', () => {
     fireEvent.change(await screen.findByLabelText(/^Company name/), {
       target: { value: 'ACME S.p.A.' },
     })
-
-    await goToSettingsTab()
     fireEvent.change(await screen.findByRole('textbox', { name: 'Priority' }), {
       target: { value: 'High priority' },
     })
@@ -248,8 +213,6 @@ describe('CompanySiteForm — custom fields (spec 0021)', () => {
       />,
       { wrapper: wrapper() },
     )
-
-    await goToSettingsTab()
     expect(await screen.findByRole('textbox', { name: 'Priority' })).toHaveValue('Existing priority')
   })
 
@@ -261,8 +224,6 @@ describe('CompanySiteForm — custom fields (spec 0021)', () => {
       <CompanySiteForm mode={{ type: 'edit', companySite: original }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
       { wrapper: wrapper() },
     )
-
-    await goToSettingsTab()
     const notes = await screen.findByRole('textbox', { name: 'Priority' })
     fireEvent.change(notes, { target: { value: 'Updated priority' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -299,8 +260,6 @@ describe('CompanySiteForm — custom fields (spec 0021)', () => {
       />,
       { wrapper: wrapper() },
     )
-
-    await goToSettingsTab()
     await screen.findByRole('textbox', { name: 'Priority' })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 

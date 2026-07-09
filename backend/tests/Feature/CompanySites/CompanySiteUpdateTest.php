@@ -211,24 +211,3 @@ it('update: 404 for a non-existent site', function () {
     $this->patchJson('/api/company-sites/999999', ['name' => 'Ghost'])->assertNotFound();
 });
 
-// ---------------------------------------------------------------------------
-// field permissions — "Altro" is read-only, server-side (AC-009)
-// ---------------------------------------------------------------------------
-
-it('update: a changed "Altro" field is rejected with 422, even with company-sites.update', function () {
-    $actor = userWithCompanySiteAbilities(['update']);
-    $target = CompanySite::factory()->create(['company_type' => 1]);
-    Sanctum::actingAs($actor);
-
-    $this->patchJson("/api/company-sites/{$target->id}", ['company_type' => 2])
-        ->assertStatus(422)->assertJsonValidationErrors('company_type');
-});
-
-it('update: resubmitting the SAME "Altro" value is a no-op, not rejected', function () {
-    $actor = userWithCompanySiteAbilities(['update']);
-    $target = CompanySite::factory()->create(['company_type' => 1]);
-    Sanctum::actingAs($actor);
-
-    $this->patchJson("/api/company-sites/{$target->id}", ['company_type' => 1, 'name' => $target->name])
-        ->assertOk();
-});

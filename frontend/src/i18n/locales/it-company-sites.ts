@@ -1,7 +1,7 @@
 /**
  * Localized strings for the Company Sites module (spec 0020): grid columns,
  * the read-only detail sheet and the multi-tab create/edit form (Profilo /
- * Impostazioni / Banche / Altro).
+ * Impostazioni / Banche).
  *
  * Extracted from `it.ts` to keep that file within the engineering size limits
  * (see `.claude/rules/engineering.md` §6). Mirrors `en-company-sites.ts` 1:1.
@@ -77,7 +77,6 @@ export const companySites = {
       profile: 'Profilo',
       settings: 'Impostazioni',
       banks: 'Banche',
-      other: 'Altro',
       tabHasErrors: 'Questa scheda contiene errori di validazione',
     },
     sections: {
@@ -117,10 +116,6 @@ export const companySites = {
         title: 'Banche',
         description: 'Le banche associate a questa sede.',
       },
-      other: {
-        title: 'Altro',
-        description: 'Campi legacy, in sola lettura.',
-      },
     },
     banks: {
       name: 'Nome',
@@ -140,35 +135,6 @@ export const companySites = {
       empty: 'Nessuna banca inserita.',
       cancel: 'Annulla',
       save: 'Salva',
-    },
-    other: {
-      accountingManagerId: 'Responsabile amministrativo',
-      storeId: 'Negozio',
-      companyType: 'Tipo società',
-      commissions: 'Commissioni',
-      orderSites: 'Ordine sedi',
-      paymentStatusAssignTechnician: 'Stato pagamento (assegna tecnico)',
-      paymentStatusDeposit: 'Stato pagamento (acconto)',
-      paymentStatusBalance: 'Stato pagamento (saldo)',
-      defaultPaymentId: 'Pagamento predefinito',
-      defaultVatId: 'IVA predefinita',
-      otherCategoryId: 'Categoria altro',
-      isoCategoryId: 'Categoria ISO',
-      soaCategoryId: 'Categoria SOA',
-      sicCategoryId: 'Categoria SIC',
-      avvCategoryId: 'Categoria AVV',
-      gdprCategoryId: 'Categoria GDPR',
-      resCategoryId: 'Categoria RES',
-      palCategoryId: 'Categoria PAL',
-      quattroCategoryId: 'Categoria 4.0',
-      finageCategoryId: 'Categoria Finage',
-      fondiCategoryId: 'Categoria fondi',
-      gareCategoryId: 'Categoria gare',
-      partnershipCategoryId: 'Categoria partnership',
-      progettiCategoryId: 'Categoria progetti',
-      status: 'Stato',
-      color: 'Colore',
-      surfaceSqm: 'Superficie (mq)',
     },
   },
 }

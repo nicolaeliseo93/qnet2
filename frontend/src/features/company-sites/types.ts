@@ -60,34 +60,6 @@ export interface CompanySiteDetail {
   quotation_footer_id: number | null
   /** The company (società) this site belongs to, editable in the Impostazioni tab. */
   company: { id: number; label: string } | null
-  // "Altro" section (read-only in this spec): plain ids/scalars, no nested refs.
-  accounting_manager_id: number | null
-  store_id: number | null
-  company_type: number | null
-  commissions: number | null
-  order_sites: number | null
-  payment_status_assign_technician: number | null
-  payment_status_deposit: number | null
-  payment_status_balance: number | null
-  default_payment_id: number | null
-  default_vat_id: number | null
-  other_category_id: number | null
-  iso_category_id: number | null
-  soa_category_id: number | null
-  sic_category_id: number | null
-  avv_category_id: number | null
-  gdpr_category_id: number | null
-  res_category_id: number | null
-  pal_category_id: number | null
-  quattro_category_id: number | null
-  finage_category_id: number | null
-  fondi_category_id: number | null
-  gare_category_id: number | null
-  partnership_category_id: number | null
-  progetti_category_id: number | null
-  status: number | null
-  color: string | null
-  surface_sqm: number | null
   created_at: string | null
   /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
   custom_fields?: Record<string, CustomFieldValue>

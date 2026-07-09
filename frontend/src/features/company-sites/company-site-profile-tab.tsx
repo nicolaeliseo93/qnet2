@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { FormControl } from '@/components/ui/form'
 import { MetaField } from '@/features/authorization/MetaField'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { PersonalDataCardForm } from '@/features/personal-data/personal-data-card-form'
@@ -158,6 +159,8 @@ export function ProfileTabContent({
           />
         </FormSection>
       )}
+
+      <CustomFieldsSection resource="company-sites" control={control} />
     </>
   )
 }

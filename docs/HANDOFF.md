@@ -2,6 +2,50 @@
 
 > Injected at session start. Update at every green state.
 
+## REFACTOR — Company-sites "Altro" section → universal custom fields (2026-07-09) — GREEN
+
+Since universal custom fields (spec 0021) now exist, the 27-field read-only "Altro"
+section of company-sites (Società Sedi) was removed as native columns and re-provisioned
+as custom_field_definitions. Decisions (user-approved): edit the committed create
+migration directly (greenfield feature branch, migrate:fresh); smart type mapping;
+clean reference seed. Frontend: the "Altro" tab was deleted and the custom-fields
+section moved into the FIRST (Profilo) tab.
+
+Removed columns (all of the former `OTHER_FIELDS`, `company_id` KEPT): accounting_manager_id,
+store_id, company_type, commissions, order_sites, payment_status_{assign_technician,deposit,
+balance}, default_payment_id, default_vat_id, {other,iso,soa,sic,avv,gdpr,res,pal,quattro,
+finage,fondi,gare,partnership,progetti}_category_id, status, color, surface_sqm.
+
+New `Database\Seeders\QualificaTemplateSeeder` (kept the user's Italian name) — idempotent
+`updateOrCreate` on (entity_type='company-sites', key), definitions ONLY (no values), wired
+into `DatabaseSeeder` (clean seed). Type mapping: `accounting_manager_id` → relation
+(relation_target users/one/users — `users` is a registered custom-fieldable entity),
+`color` → text, every other field → integer. Labels are the Italian UI strings.
+
+Backend edits: migration (drop cols + docblocks), `Models/CompanySite` ($fillable/$casts
+trimmed, `accountingManager()` relation removed), `Http/Resources/CompanySiteResource`
+(otherFields() removed), `Authorization/CompanySitesAuthorization` (OTHER_FIELDS const +
+both foreach removed; READONLY_SETTINGS_FIELDS quotation_* kept), `Services/CompanySiteService`
+(dropped `accountingManager` from HYDRATED_RELATIONS — this was the 500 RelationNotFound in
+the first test run), Store/UpdateCompanySiteRequest docblocks. Tests updated (requirement
+changed, not tampered): removed the two "Altro read-only 422" update tests + the "403 over
+Altro 422" create test; repurposed the meta "other visibleReadonly" test to quotation_*;
+trimmed the unit schema-columns assertion (+ negative asserts) and the responsible-relations
+test (dropped accountingManager).
+
+Frontend edits: deleted `company-site-other-tab.tsx` + `company-site-other-fields.ts`
+(kept `company-site-readonly-field.tsx` — settings tab still uses it for quotation_*);
+moved `<CustomFieldsSection resource="company-sites">` from settings-tab → profile-tab;
+form-body drops the 'other' tab/Archive icon/OTHER_FIELD_KEYS; `types.ts` CompanySiteDetail
+trimmed; it/en-company-sites locales drop tabs.other / sections.other / form.other.*; tests'
+fixtures trimmed and custom-fields test no longer navigates to Settings (custom fields are on
+the default Profilo tab now).
+
+Verified: Pint clean; `php artisan test` 1829 pass / 1 skip / 1 FAIL (AbstractMigration
+SourcePreviewTest — pre-existing, unrelated, see entry below); seeder run against dev DB →
+27 defs created, relation+color types confirmed. Frontend: tsc --noEmit 0, eslint 0, vitest
+company-sites 39/39. NOT committed (awaiting go-ahead).
+
 ## BUGFIX — Operational-sites custom fields "save but value doesn't come back" (missing unconditional save) (2026-07-09) — GREEN
 
 Follow-up to the roles fix below: user confirmed operational-sites still drops a

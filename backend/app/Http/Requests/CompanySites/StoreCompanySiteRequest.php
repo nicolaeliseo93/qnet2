@@ -18,11 +18,9 @@ use Illuminate\Validation\Rule;
  * via authorize('create', CompanySite::class)). Reuses ValidatesUserProfile
  * verbatim for the nested `personal_data` card (contacts + address), exactly
  * like StoreRegistryRequest; `name` stays the site's own required column.
- * `banks` are validated per-row (BankService::sync). "Altro" fields and
- * `is_default` are never accepted here — EnforcesFieldPermissions (spec 0004)
- * additionally rejects any submitted field the actor cannot edit
- * (create-context, model = null), which already covers "Altro" (ceiling
- * visibleReadonly).
+ * `banks` are validated per-row (BankService::sync). `is_default` is never
+ * accepted here — EnforcesFieldPermissions (spec 0004) additionally rejects
+ * any submitted field the actor cannot edit (create-context, model = null).
  */
 class StoreCompanySiteRequest extends FormRequest
 {

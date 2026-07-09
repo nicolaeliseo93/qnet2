@@ -34,7 +34,7 @@ it('403 without company-sites.viewAny', function () {
     $this->getJson('/api/meta/company-sites')->assertForbidden();
 });
 
-it('200: field catalogue is grouped profile/personal_data/settings/banks/other, mandatory on name', function () {
+it('200: field catalogue is grouped profile/personal_data/settings/banks, mandatory on name', function () {
     $actor = userWithCompanySiteAbilities(['viewAny', 'create']);
     Sanctum::actingAs($actor);
 
@@ -56,25 +56,23 @@ it('200: field catalogue is grouped profile/personal_data/settings/banks/other, 
         ->and($fields['company_id']['group'])->toBe('settings')
         ->and($fields['responsible_rda_id']['group'])->toBe('settings')
         ->and($fields['banks']['group'])->toBe('banks')
-        ->and($fields['banks']['type'])->toBe('collection')
-        ->and($fields['company_type']['group'])->toBe('other')
-        ->and($fields['color']['group'])->toBe('other');
+        ->and($fields['banks']['type'])->toBe('collection');
 
     foreach ($response->json('permissions.fields') as $field) {
         expect($field)->toHaveKeys(['visible', 'hidden', 'editable', 'readonly', 'required', 'disabled']);
     }
 });
 
-it('200: "other" fields are always visibleReadonly, even when the actor may create', function () {
+it('200: quotation_* settings fields are always visibleReadonly, even when the actor may create', function () {
     $actor = userWithCompanySiteAbilities(['viewAny', 'create']);
     Sanctum::actingAs($actor);
 
     $this->getJson('/api/meta/company-sites')
         ->assertOk()
-        ->assertJsonPath('permissions.fields.company_type.editable', false)
-        ->assertJsonPath('permissions.fields.company_type.readonly', true)
-        ->assertJsonPath('permissions.fields.color.editable', false)
-        ->assertJsonPath('permissions.fields.quotation_layout_id.editable', false);
+        ->assertJsonPath('permissions.fields.quotation_layout_id.editable', false)
+        ->assertJsonPath('permissions.fields.quotation_layout_id.readonly', true)
+        ->assertJsonPath('permissions.fields.quotation_header_id.editable', false)
+        ->assertJsonPath('permissions.fields.quotation_footer_id.editable', false);
 });
 
 it('200: profile/settings fields are editable when the actor may create', function () {

@@ -36,7 +36,7 @@ class CompanySiteService
         'personalData.addresses.province', 'personalData.addresses.city',
         'banks',
         'responsibleRda', 'responsibleTickets', 'responsibleValidationContracts', 'responsibleValidationContractsTwo',
-        'accountingManager', 'company',
+        'company',
     ];
 
     public function __construct(

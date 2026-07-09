@@ -20,8 +20,7 @@ use Illuminate\Validation\Rule;
  *
  * Authorization is intentionally NOT handled here (it stays in the controller
  * via authorize('update', $companySite)). EnforcesFieldPermissions (spec 0004)
- * rejects any submitted field the actor cannot edit — including every "Altro"
- * key (ceiling visibleReadonly, spec 0020).
+ * rejects any submitted field the actor cannot edit.
  */
 class UpdateCompanySiteRequest extends FormRequest
 {

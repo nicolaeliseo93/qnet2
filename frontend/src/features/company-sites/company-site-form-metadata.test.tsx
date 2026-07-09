@@ -10,8 +10,7 @@ import type { ResourceMeta } from '@/features/authorization/types'
 /**
  * Spec 0020 (AC-014/AC-016): the metadata-driven behaviour of the multi-tab
  * form — a hidden field is absent, a whole tab hides when every one of its
- * fields is hidden, the Banche tab is always buffered (no network calls) and
- * the Altro tab renders its always-read-only fields.
+ * fields is hidden, and the Banche tab is always buffered (no network calls).
  */
 
 const createCompanySiteMock = vi.fn()

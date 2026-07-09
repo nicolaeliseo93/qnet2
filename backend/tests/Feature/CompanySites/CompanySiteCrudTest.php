@@ -277,14 +277,6 @@ it('create: 403 without company-sites.create', function () {
     $this->postJson('/api/company-sites', ['name' => 'Nope'])->assertForbidden();
 });
 
-it('create: 403 (base authorization) takes precedence over the "Altro" 422', function () {
-    $actor = userWithCompanySiteAbilities([]);
-    Sanctum::actingAs($actor);
-
-    $this->postJson('/api/company-sites', ['name' => 'X', 'company_type' => 2])
-        ->assertForbidden();
-});
-
 // ---------------------------------------------------------------------------
 // delete — DELETE /api/company-sites/{companySite} (AC-012)
 // ---------------------------------------------------------------------------

@@ -24,9 +24,10 @@ use Illuminate\Support\Facades\Storage;
  * Unlike Registry, `name` is the site's OWN required column (not derived from
  * the card).
  *
- * The "Altro" section attributes (company/accountingManager/store/...) are
- * read-only for now (CompanySitesAuthorization ceiling + EnforcesFieldPermissions
- * on the write path) — the schema itself carries no such restriction.
+ * The former "Altro" section attributes (store, categories, payment statuses,
+ * ...) are no longer columns/attributes here: they are universal custom fields
+ * (spec 0021), provisioned by QualificaTemplateSeeder. Only `company_id` (the
+ * owning società) remains a native attribute.
  */
 class CompanySite extends BaseModel
 {
@@ -44,13 +45,7 @@ class CompanySite extends BaseModel
         'responsible_rda_id', 'responsible_tickets_id', 'responsible_validation_contracts_id',
         'responsible_validation_contracts_two_id', 'proforma_progressive',
         'invoice_progressive', 'quotation_layout_id', 'quotation_header_id', 'quotation_footer_id',
-        'company_id', 'accounting_manager_id', 'store_id', 'company_type', 'commissions', 'order_sites',
-        'payment_status_assign_technician', 'payment_status_deposit', 'payment_status_balance',
-        'default_payment_id', 'default_vat_id',
-        'other_category_id', 'iso_category_id', 'soa_category_id', 'sic_category_id', 'avv_category_id',
-        'gdpr_category_id', 'res_category_id', 'pal_category_id', 'quattro_category_id', 'finage_category_id',
-        'fondi_category_id', 'gare_category_id', 'partnership_category_id', 'progetti_category_id',
-        'status', 'color', 'surface_sqm',
+        'company_id',
     ];
 
     protected $casts = [
@@ -60,30 +55,6 @@ class CompanySite extends BaseModel
         'quotation_layout_id' => 'integer',
         'quotation_header_id' => 'integer',
         'quotation_footer_id' => 'integer',
-        'company_type' => 'integer',
-        'commissions' => 'integer',
-        'order_sites' => 'integer',
-        'payment_status_assign_technician' => 'integer',
-        'payment_status_deposit' => 'integer',
-        'payment_status_balance' => 'integer',
-        'default_payment_id' => 'integer',
-        'default_vat_id' => 'integer',
-        'other_category_id' => 'integer',
-        'iso_category_id' => 'integer',
-        'soa_category_id' => 'integer',
-        'sic_category_id' => 'integer',
-        'avv_category_id' => 'integer',
-        'gdpr_category_id' => 'integer',
-        'res_category_id' => 'integer',
-        'pal_category_id' => 'integer',
-        'quattro_category_id' => 'integer',
-        'finage_category_id' => 'integer',
-        'fondi_category_id' => 'integer',
-        'gare_category_id' => 'integer',
-        'partnership_category_id' => 'integer',
-        'progetti_category_id' => 'integer',
-        'status' => 'integer',
-        'surface_sqm' => 'integer',
         // Spec 0013 — external data migration: guarded (not in $fillable), only
         // ever set by property assignment post-create.
         'old_id' => 'integer',
@@ -112,11 +83,6 @@ class CompanySite extends BaseModel
     public function responsibleValidationContractsTwo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'responsible_validation_contracts_two_id');
-    }
-
-    public function accountingManager(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'accounting_manager_id');
     }
 
     public function company(): BelongsTo

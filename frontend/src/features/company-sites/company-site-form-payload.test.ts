@@ -91,33 +91,6 @@ function original(
     quotation_header_id: null,
     quotation_footer_id: null,
     company: null,
-    accounting_manager_id: null,
-    store_id: null,
-    company_type: null,
-    commissions: null,
-    order_sites: null,
-    payment_status_assign_technician: null,
-    payment_status_deposit: null,
-    payment_status_balance: null,
-    default_payment_id: null,
-    default_vat_id: null,
-    other_category_id: null,
-    iso_category_id: null,
-    soa_category_id: null,
-    sic_category_id: null,
-    avv_category_id: null,
-    gdpr_category_id: null,
-    res_category_id: null,
-    pal_category_id: null,
-    quattro_category_id: null,
-    finage_category_id: null,
-    fondi_category_id: null,
-    gare_category_id: null,
-    partnership_category_id: null,
-    progetti_category_id: null,
-    status: null,
-    color: null,
-    surface_sqm: null,
     created_at: '2026-01-01T00:00:00Z',
     permissions: {
       resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
@@ -169,13 +142,12 @@ describe('buildCreatePayload', () => {
     expect(payload.personal_data.addresses?.[0].line1).toBe('First')
   })
 
-  it('never includes an "Altro" field or is_default', () => {
+  it('never includes is_default', () => {
     const payload = buildCreatePayload(formValues, banks, companyDraft())
-    expect('status' in payload).toBe(false)
     expect('is_default' in payload).toBe(false)
   })
 
-  it('carries the owning company id (settings field, not an "Altro" field)', () => {
+  it('carries the owning company id (settings field)', () => {
     const payload = buildCreatePayload({ ...formValues, company_id: 3 }, banks, companyDraft())
     expect(payload.company_id).toBe(3)
   })
@@ -239,13 +211,12 @@ describe('buildUpdatePayload', () => {
     expect(changed.banks).toEqual([])
   })
 
-  it('never sends an "Altro" field or is_default even when the original differs', () => {
-    const payload = buildUpdatePayload(formValues, original({ status: 3 }), banks, companyDraft())
-    expect('status' in payload).toBe(false)
+  it('never sends is_default even when the original differs', () => {
+    const payload = buildUpdatePayload(formValues, original({ is_default: true }), banks, companyDraft())
     expect('is_default' in payload).toBe(false)
   })
 
-  it('includes the owning company id only when it changed (settings field, not an "Altro" field)', () => {
+  it('includes the owning company id only when it changed (settings field)', () => {
     const unchanged = buildUpdatePayload(formValues, original(), banks, companyDraft())
     expect('company_id' in unchanged).toBe(false)
 
