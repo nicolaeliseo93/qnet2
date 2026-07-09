@@ -44,9 +44,10 @@ class SectorService
         return DB::transaction(function () use ($sector, $data): Sector {
             $attributes = $data->submittedAttributes();
 
-            if ($attributes !== []) {
-                $sector->update($attributes);
-            }
+            // Unconditional save: fire the model's saved event even when no native
+            // attribute changed, so the HasCustomFields write pipeline (spec 0021)
+            // persists a custom-fields-only edit. A clean save runs no UPDATE query.
+            $sector->fill($attributes)->save();
 
             return $sector->fresh(['parent']);
         });

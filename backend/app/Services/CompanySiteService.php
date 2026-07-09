@@ -73,9 +73,10 @@ class CompanySiteService
         return DB::transaction(function () use ($companySite, $data, $profile): CompanySite {
             $attributes = $data->submittedAttributes();
 
-            if ($attributes !== []) {
-                $companySite->update($attributes);
-            }
+            // Unconditional save: fire the model's saved event even when no native
+            // attribute changed, so the HasCustomFields write pipeline (spec 0021)
+            // persists a custom-fields-only edit. A clean save runs no UPDATE query.
+            $companySite->fill($attributes)->save();
 
             $this->profileWriter->write($companySite, $profile);
 

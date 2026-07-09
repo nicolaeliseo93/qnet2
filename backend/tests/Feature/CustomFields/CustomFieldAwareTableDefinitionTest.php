@@ -220,6 +220,71 @@ it('AC-016: filters custom.<key> by text/number/boolean/set via bound params', f
     expect($bySet)->toBe(['Other Co']);
 });
 
+it('regression: a column-visibility preference for a custom.<key> column persists (not rejected)', function (): void {
+    CustomFieldDefinition::factory()->forEntity('companies')->ofType('text')->create(['key' => 'notes']);
+
+    Sanctum::actingAs(companiesActor());
+
+    // Was 422 (custom.notes absent from the allow-list) → the whole save
+    // rejected → the column reverted to hidden on reload.
+    $this->postJson('/api/tables/companies/preferences', [
+        'columns' => [['id' => 'custom.notes', 'visible' => true, 'order' => 99]],
+    ])->assertOk();
+
+    $byId = collect($this->getJson('/api/tables/companies/columns')->json('data.columns'))->keyBy('id');
+    expect($byId)->toHaveKey('custom.notes')
+        ->and($byId['custom.notes']['visible'])->toBeTrue();
+});
+
+it('AC-016 regression: filters custom.<key> wrapped as agMultiColumnFilter multi/combined', function (): void {
+    CustomFieldDefinition::factory()->forEntity('companies')->ofType('text')->create(['key' => 'notes']);
+    CustomFieldDefinition::factory()->forEntity('companies')->ofType('integer')->create(['key' => 'score']);
+
+    $match = Company::factory()->create(['denomination' => 'Match Co']);
+    putCompanyCustomValues($match, ['notes' => 'alpha', 'score' => 42]);
+    $other = Company::factory()->create(['denomination' => 'Other Co']);
+    putCompanyCustomValues($other, ['notes' => 'beta', 'score' => 1]);
+
+    Sanctum::actingAs(companiesActor());
+
+    // text column: agMultiColumnFilter wraps the typed condition in `multi`.
+    $byMultiText = $this->postJson('/api/tables/companies/rows', [
+        'startRow' => 0, 'endRow' => 25,
+        'filterModel' => ['custom.notes' => [
+            'filterType' => 'multi',
+            'filterModels' => [null, ['filterType' => 'text', 'type' => 'contains', 'filter' => 'alph']],
+        ]],
+    ])->assertOk()->json('items.*.denomination');
+    expect($byMultiText)->toBe(['Match Co']);
+
+    // number column: the multi's Set sub-model narrows to a scalar value list.
+    $byMultiSet = $this->postJson('/api/tables/companies/rows', [
+        'startRow' => 0, 'endRow' => 25,
+        'filterModel' => ['custom.score' => [
+            'filterType' => 'multi',
+            'filterModels' => [['filterType' => 'set', 'values' => [42]], null],
+        ]],
+    ])->assertOk()->json('items.*.denomination');
+    expect($byMultiSet)->toBe(['Match Co']);
+
+    // combined OR conditions inside the typed sub-model.
+    $byCombined = $this->postJson('/api/tables/companies/rows', [
+        'startRow' => 0, 'endRow' => 25,
+        'filterModel' => ['custom.notes' => [
+            'filterType' => 'multi',
+            'filterModels' => [null, [
+                'filterType' => 'text',
+                'operator' => 'OR',
+                'conditions' => [
+                    ['filterType' => 'text', 'type' => 'equals', 'filter' => 'alpha'],
+                    ['filterType' => 'text', 'type' => 'equals', 'filter' => 'gamma'],
+                ],
+            ]],
+        ]],
+    ])->assertOk()->json('items.*.denomination');
+    expect($byCombined)->toBe(['Match Co']);
+});
+
 it('AC-016: sorts by custom.<key> correctly', function (): void {
     CustomFieldDefinition::factory()->forEntity('companies')->ofType('integer')->create(['key' => 'score']);
 

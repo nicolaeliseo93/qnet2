@@ -65,16 +65,6 @@ trait DelegatesUnaugmentedTableMethods
         return $this->inner->actionsFor($actor, $row);
     }
 
-    /**
-     * Presentation preferences (visible/width/order) for custom columns are
-     * out of scope for T6; the custom columns' own resolveConfig() entries
-     * already carry usable defaults (visible=false, order after natives).
-     */
-    public function defaultColumnLayout(): array
-    {
-        return $this->inner->defaultColumnLayout();
-    }
-
     public function deleteModel(Model $model): void
     {
         $this->inner->deleteModel($model);

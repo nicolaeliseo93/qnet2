@@ -2,6 +2,39 @@
 
 > Injected at session start. Update at every green state.
 
+## BUGFIX — Custom Fields: save / filter / column-visibility (2026-07-09) — GREEN
+
+Tre bug segnalati su anagrafiche (registries), tutti risolti; full suite 1830 pass / 1 fail preesistente
+(AbstractMigrationSourcePreviewTest) / 1 skip — 0 regressioni.
+
+1) WRITE non persisteva (systemic, 14 moduli). Root cause: i service custom-fieldable salvavano il model
+   SOLO se cambiava un attributo nativo — `if ($attributes !== []) { $x->update($attributes); }`. Il write
+   pipeline (HasCustomFields) è agganciato all'evento `saved`; un edit di soli custom fields non manda
+   attributi nativi → nessun save → nessun `saved` → valori persi in silenzio. FIX: `$x->fill($attributes)->
+   save();` incondizionato in TUTTI i 14 service (Registry/Company/CompanySite/Product/Sector/ProductCategory/
+   Referent/User/Source/Tag/ReferentType/Role/Attribute/BusinessFunction). Un save "pulito" non fa query,
+   non tocca updated_at, non logga (updated non parte) → no-op per il path nativo, fix per i custom.
+   Test: tests/Feature/Registries/RegistryCustomFieldUpdateTest.php (reproduce-first).
+
+2) FILTRI custom non filtravano. Root cause: `CustomFieldAwareTableDefinition::applyDerivedFilter` chiamava
+   l'handler per-tipo che legge SOLO la shape FLAT; le colonne text/number custom usano agMultiColumnFilter →
+   payload `multi` (filterModels[]) o combined `{operator,conditions[]}` → handler non trova `filter`/`values`
+   → nessun WHERE → tutte le righe. Stesso bug già risolto nativamente (FilterApplier::applyMulti/
+   applyCombinable, TableRowsMultiFilterTest) e reintrodotto dal decorator 0021. FIX: nel decorator, se il
+   filtro è `multi` o ha `conditions`, delega a FilterApplier (iniettato) puntato sulla JSON-path column
+   `custom_field_values.values-><key>`; il flat set/boolean resta sull'handler (preserva JSON containment
+   multi-valued enum/relation). Test: CustomFieldAwareTableDefinitionTest "multi/combined regression".
+
+3) VISIBILITÀ colonna custom spariva al reload. Root cause: il decorator delegava `defaultColumnLayout()` al
+   base (colonne native only), usato come allow-list da TablePreferencesRequest (`Rule::in`) → una preferenza
+   su `custom.<key>` faceva 422 sull'INTERO save (native incluse); il FE ingoia l'errore → reload a default.
+   FIX: override `defaultColumnLayout()` nel decorator (base + custom column layout), rimosso dal trait
+   DelegatesUnaugmentedTableMethods. Test: CustomFieldAwareTableDefinitionTest "preference persists".
+
+APERTI (minori, non fixati — scope): (a) il FE mutation delle preferenze non ha onError (ingoia i 422) —
+robustezza pre-esistente; (b) il set-filter di una colonna relation mostra gli id grezzi invece delle label
+(distinctValues ritorna id; la cella mostra la label). Da valutare separatamente.
+
 ## UI — Custom Fields "Altri campi" section (2026-07-09) — GREEN
 
 `CustomFieldsSection.tsx`: i custom field SENZA `group` (group=null) prima renderizzavano flat (nessun

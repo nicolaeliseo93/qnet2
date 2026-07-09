@@ -48,9 +48,10 @@ class CompanyService
         return DB::transaction(function () use ($company, $data): Company {
             $attributes = $data->submittedAttributes();
 
-            if ($attributes !== []) {
-                $company->update($attributes);
-            }
+            // Unconditional save: fire the model's saved event even when no native
+            // attribute changed, so the HasCustomFields write pipeline (spec 0021)
+            // persists a custom-fields-only edit. A clean save runs no UPDATE query.
+            $company->fill($attributes)->save();
 
             if ($data->hasAddress()) {
                 $this->writeAddress($company, $data);

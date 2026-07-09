@@ -156,9 +156,10 @@ class UserService
         $user = DB::transaction(function () use ($actor, $user, $data, $profile, $employment): User {
             $attributes = $data->submittedAttributes();
 
-            if ($attributes !== []) {
-                $user->update($attributes);
-            }
+            // Unconditional save: fire the model's saved event even when no native
+            // attribute changed, so the HasCustomFields write pipeline (spec 0021)
+            // persists a custom-fields-only edit. A clean save runs no UPDATE query.
+            $user->fill($attributes)->save();
 
             if ($data->hasRoles()) {
                 $roles = $this->guard->authorizedRoleNames($actor, $data->roles);

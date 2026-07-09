@@ -96,9 +96,14 @@ class RegistryService
         $registry = DB::transaction(function () use ($registry, $data, $profile): Registry {
             $attributes = $data->submittedAttributes();
 
-            if ($attributes !== []) {
-                $registry->update($attributes);
-            }
+            // fill+save unconditionally (never guarded behind a non-empty
+            // attribute set): a custom-fields-only edit submits no native
+            // attribute, yet the HasCustomFields write pipeline (spec 0021)
+            // hooks the model's `saved` event — skipping save() would silently
+            // drop those values. A clean save fires no UPDATE query, bumps no
+            // timestamp and logs no activity, so this is a no-op for the
+            // native path when nothing changed.
+            $registry->fill($attributes)->save();
 
             $this->profileWriter->write($registry, $profile);
             $this->syncPivots($registry, $data);

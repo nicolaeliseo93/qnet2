@@ -10,6 +10,7 @@ use App\CustomFields\FieldTypeRegistry;
 use App\Models\CustomFieldDefinition;
 use App\Models\CustomFieldValue;
 use App\Models\User;
+use App\Services\Table\FilterApplier;
 use App\Tables\CustomFields\CustomFieldColumnBuilder;
 use App\Tables\CustomFields\DelegatesUnaugmentedTableMethods;
 use Illuminate\Database\Eloquent\Builder;
@@ -61,6 +62,7 @@ class CustomFieldAwareTableDefinition implements TableDefinition
         private readonly FieldTypeRegistry $typeRegistry,
         private readonly CustomFieldColumnBuilder $columnBuilder,
         private readonly CustomFieldRelationLabelResolver $relationLabels,
+        private readonly FilterApplier $filterApplier,
     ) {}
 
     /**
@@ -167,6 +169,40 @@ class CustomFieldAwareTableDefinition implements TableDefinition
     }
 
     /**
+     * Column-layout allow-list (visible/width/order) augmented with the custom
+     * columns. WITHOUT this override the trait delegates to $inner, whose
+     * layout is built from native columns only — so a user's column-visibility
+     * preference for a `custom.<key>` column was rejected by the allow-list
+     * (TablePreferencesRequest's `Rule::in`) and the whole save 422'd, making
+     * the column reappear hidden on reload (spec 0021 / spec 0001).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function defaultColumnLayout(): array
+    {
+        $layout = $this->inner->defaultColumnLayout();
+        $definitions = $this->definitions();
+
+        if ($definitions->isEmpty()) {
+            return $layout;
+        }
+
+        $order = count($layout);
+
+        foreach ($definitions as $definition) {
+            $order++;
+            $column = $this->columnBuilder->resolved($definition, $order);
+            $layout[$column['id']] = [
+                'visible' => (bool) ($column['visible'] ?? false),
+                'width' => $column['width'] ?? null,
+                'order' => (int) ($column['order'] ?? $order),
+            ];
+        }
+
+        return $layout;
+    }
+
+    /**
      * @return array<string, array<string, mixed>>
      */
     public function filterableColumnMap(): array
@@ -191,6 +227,20 @@ class CustomFieldAwareTableDefinition implements TableDefinition
 
         if ($definition === null) {
             return $this->inner->applyDerivedFilter($query, $columnId, $columnConfig, $filter);
+        }
+
+        // AG Grid's agMultiColumnFilter (text/number custom columns) and its
+        // combined typed conditions arrive wrapped as `multi` (filterModels[])
+        // or `{operator, conditions[]}`. The per-type handlers only read the
+        // FLAT shape, so those envelopes were silently dropped (no WHERE, every
+        // row returned). Delegate them to the native FilterApplier — the SAME
+        // unwrapping used for native derived columns — pointed at the JSON-path
+        // column. Flat set/boolean stay on the handler, which additionally
+        // supports multi-valued enum/relation JSON containment (whereJsonContains).
+        if (($filter['filterType'] ?? null) === 'multi' || isset($filter['conditions'])) {
+            $this->filterApplier->apply($query, $this->valuesJsonColumn($definition->key), $columnConfig, $filter);
+
+            return true;
         }
 
         $this->columnBuilder->handlerFor($definition)->applyFilter($query, $definition->key, $filter);
@@ -251,9 +301,20 @@ class CustomFieldAwareTableDefinition implements TableDefinition
             return $this->inner->applyDerivedSearch($query, $columnId, $pattern);
         }
 
-        $query->orWhere(self::VALUES_JOIN_ALIAS.'.values->'.$definition->key, 'like', $pattern);
+        $query->orWhere($this->valuesJsonColumn($definition->key), 'like', $pattern);
 
         return true;
+    }
+
+    /**
+     * The bound JSON-path column expression for a custom field's stored value,
+     * against the `custom_field_values` subquery join (baseQuery()). `$key` is
+     * always an allow-listed definition key resolved from the request, never
+     * raw input (backend.md §8).
+     */
+    private function valuesJsonColumn(string $key): string
+    {
+        return self::VALUES_JOIN_ALIAS.'.values->'.$key;
     }
 
     /**

@@ -78,9 +78,10 @@ class ProductService
         return DB::transaction(function () use ($product, $data, $effective, $categoryChanged): Product {
             $attributes = $data->submittedAttributes();
 
-            if ($attributes !== []) {
-                $product->update($attributes);
-            }
+            // Unconditional save: fire the model's saved event even when no native
+            // attribute changed, so the HasCustomFields write pipeline (spec 0021)
+            // persists a custom-fields-only edit. A clean save runs no UPDATE query.
+            $product->fill($attributes)->save();
 
             if ($data->hasAttributes()) {
                 $this->valueWriter->replaceValues($product, $effective, $data->attributes);

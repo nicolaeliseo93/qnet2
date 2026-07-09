@@ -50,9 +50,10 @@ class AttributeService
                 $attributes['data_type'] = $finalDataType;
             }
 
-            if ($attributes !== []) {
-                $attribute->update($attributes);
-            }
+            // Unconditional save: fire the model's saved event even when no native
+            // attribute changed, so the HasCustomFields write pipeline (spec 0021)
+            // persists a custom-fields-only edit. A clean save runs no UPDATE query.
+            $attribute->fill($attributes)->save();
 
             if ($data->hasOptions()) {
                 $this->guardEnumHasOptions($finalDataType, count($data->options));

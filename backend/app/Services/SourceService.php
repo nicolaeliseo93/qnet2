@@ -25,9 +25,10 @@ class SourceService
     {
         $attributes = $data->submittedAttributes();
 
-        if ($attributes !== []) {
-            $source->update($attributes);
-        }
+        // Unconditional save: fire the model's saved event even when no native
+        // attribute changed, so the HasCustomFields write pipeline (spec 0021)
+        // persists a custom-fields-only edit. A clean save runs no UPDATE query.
+        $source->fill($attributes)->save();
 
         return $source->fresh();
     }
