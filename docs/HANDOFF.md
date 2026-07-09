@@ -2,6 +2,22 @@
 
 > Injected at session start. Update at every green state.
 
+## BUGFIX — Column visibility not persisting (selection-column 422) (2026-07-09) — GREEN
+
+Sintomo: mostra/nascondi (o resize/reorder) una colonna in AG Grid → al reload torna al default.
+Root cause: su tabelle con selezione/bulk-delete attiva (`ROW_SELECTION`, data-table.tsx) AG Grid v35
+inietta una colonna reale `ag-Grid-SelectionColumn` in `getColumnState()`. `toColumnPreferences`
+filtrava SOLO `__actions`, quindi il payload includeva quell'id → non è in `defaultColumnLayout()`
+→ `TablePreferencesRequest` `columns.*.id => Rule::in($columnIds)` fa 422 sull'INTERO save → nessuna
+colonna persiste. La mutation `useSaveTablePreferences` non aveva `onError` → 422 ingoiato in silenzio.
+FIX (frontend-only): `toColumnPreferences(state, knownColumnIds: ReadonlySet<string>)` filtra ora contro
+la allow-list reale (`config.columns` ids, mirror di `Rule::in`) → esclude in modo generico actions,
+selection e ogni futura colonna sintetica. Aggiunto `onError` (toast `table.layoutError`, key riusata)
+al hook così i 422 futuri non sono più muti. Call site table-view.tsx usa memo `knownColumnIds`.
+Test: use-table-preferences.test.ts (nuovo caso regression selection-column) 4/4; tsc -b 36 == baseline
+(0 nuovi); eslint pulito. NB pre-esistente NON correlato: cell-renderers.test.tsx 3 fail (provato con
+stash: fallisce anche senza le mie modifiche). NON committato (attesa OK utente).
+
 ## BUGFIX — Custom Fields: save / filter / column-visibility (2026-07-09) — GREEN
 
 Tre bug segnalati su anagrafiche (registries), tutti risolti; full suite 1830 pass / 1 fail preesistente
