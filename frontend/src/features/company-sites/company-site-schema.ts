@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /** Backend column limit (spec 0020 `data_contract`). */
 const NAME_MAX_LENGTH = 191
@@ -19,28 +23,28 @@ function baseFields(t: TFunction) {
       .max(NAME_MAX_LENGTH, t('companySites.form.nameMax')),
     notes: z.string().optional(),
     // Settings tab: the owning company, responsibles (users for-select ids),
-    // banking default and the two document progressives. The read-only
-    // "Altro"/quotation_* fields are display-only and intentionally NOT part
-    // of this schema (never submitted — see `company-site-form-payload.ts`).
+    // and the two document progressives. The read-only "Altro"/quotation_*
+    // fields are display-only and intentionally NOT part of this schema (never
+    // submitted — see `company-site-form-payload.ts`). The preferred bank is a
+    // per-row flag on the banks list, not a field here.
     company_id: z.number().nullable(),
     responsible_rda_id: z.number().nullable(),
     responsible_tickets_id: z.number().nullable(),
     responsible_validation_contracts_id: z.number().nullable(),
     responsible_validation_contracts_two_id: z.number().nullable(),
-    default_bank_id: z.number().nullable(),
     proforma_progressive: z.number().int().nullable(),
     invoice_progressive: z.number().int().nullable(),
   }
 }
 
-/** Create schema. */
-export function buildCreateCompanySiteSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+/** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateCompanySiteSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 /** Edit schema (same shape; partial PATCH is computed by the caller). */
-export function buildUpdateCompanySiteSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+export function buildUpdateCompanySiteSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 export type CreateCompanySiteFormValues = z.infer<

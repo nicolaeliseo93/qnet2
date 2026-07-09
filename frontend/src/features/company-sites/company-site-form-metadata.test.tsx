@@ -10,8 +10,7 @@ import type { ResourceMeta } from '@/features/authorization/types'
 /**
  * Spec 0020 (AC-014/AC-016): the metadata-driven behaviour of the multi-tab
  * form — a hidden field is absent, a whole tab hides when every one of its
- * fields is hidden, the Banche tab is always buffered (no network calls) and
- * the Altro tab renders its always-read-only fields.
+ * fields is hidden, and the Banche tab is always buffered (no network calls).
  */
 
 const createCompanySiteMock = vi.fn()
@@ -139,7 +138,6 @@ describe('CompanySiteForm — metadata-driven authorization (spec 0020)', () => 
           responsible_tickets_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
           responsible_validation_contracts_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
           responsible_validation_contracts_two_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
-          default_bank_id: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
           proforma_progressive: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
           invoice_progressive: { visible: false, hidden: true, editable: false, readonly: false, required: false, disabled: false },
         },

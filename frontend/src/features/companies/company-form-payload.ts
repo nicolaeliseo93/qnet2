@@ -6,6 +6,7 @@ import type {
   UpdateCompanyPayload,
 } from '@/features/companies/types'
 import type { CompanyFormValues } from '@/features/companies/use-company-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 /** Builds the nested address payload once the block is known to carry a value. */
 function toAddressPayload(
@@ -28,10 +29,12 @@ function toAddressPayload(
  * all (spec 0010 scope).
  */
 export function buildCreatePayload(values: CompanyFormValues): CreateCompanyPayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     denomination: values.denomination,
     vat_number: values.vat_number || null,
     ...(isAddressPresent(values.address) ? { address: toAddressPayload(values.address) } : {}),
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -59,6 +62,11 @@ export function buildUpdatePayload(
 
   if (isAddressPresent(values.address) && addressChanged(values.address, original.address)) {
     payload.address = toAddressPayload(values.address)
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

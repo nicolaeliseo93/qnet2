@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCustomFields;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\RoleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -25,7 +26,7 @@ use Spatie\Permission\Models\Role as SpatieRole;
 class Role extends SpatieRole
 {
     /** @use HasFactory<RoleFactory> */
-    use HasFactory, LogsModelActivity;
+    use HasCustomFields, HasFactory, LogsModelActivity;
 
     /**
      * This role's field-permission matrix rows (spec 0006) — per-resource,

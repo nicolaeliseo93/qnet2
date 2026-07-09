@@ -13,8 +13,9 @@ namespace App\DataObjects\CompanySites;
  * the controller via the request's toProfile() (ValidatesUserProfile) and
  * handed to CompanySiteService as a ProfileData, mirroring Registry. `banks`
  * present is the AUTHORITATIVE list (add/update/delete diff, BankService::sync);
- * `default_bank_id` is resolved AFTER the bank sync (CompanySiteService).
- * "Altro" and `is_default` are never accepted here (see CreateCompanySiteData).
+ * the "preferred bank" now lives on the bank rows themselves (`is_primary`),
+ * not on the site. "Altro" and `is_default` are never accepted here (see
+ * CreateCompanySiteData).
  */
 final readonly class UpdateCompanySiteData
 {
@@ -41,8 +42,6 @@ final readonly class UpdateCompanySiteData
         public bool $invoiceProgressiveSubmitted = false,
         public array $banks = [],
         public bool $banksSubmitted = false,
-        public ?int $defaultBankId = null,
-        public bool $defaultBankIdSubmitted = false,
     ) {}
 
     /**
@@ -72,15 +71,13 @@ final readonly class UpdateCompanySiteData
             invoiceProgressiveSubmitted: array_key_exists('invoice_progressive', $data),
             banks: array_key_exists('banks', $data) ? self::buildBanks((array) $data['banks']) : [],
             banksSubmitted: array_key_exists('banks', $data),
-            defaultBankId: self::nullableInt($data, 'default_bank_id'),
-            defaultBankIdSubmitted: array_key_exists('default_bank_id', $data),
         );
     }
 
     /**
      * Only the plain scalar attributes the client actually submitted, ready
-     * for a partial mass-assignment update. `banks`/`default_bank_id` and the
-     * nested profile are handled separately by CompanySiteService.
+     * for a partial mass-assignment update. `banks` and the nested profile are
+     * handled separately by CompanySiteService.
      *
      * @return array<string, mixed>
      */
@@ -128,6 +125,7 @@ final readonly class UpdateCompanySiteData
                     name: (string) ($row['name'] ?? ''),
                     iban: $row['iban'] ?? null,
                     notes: $row['notes'] ?? null,
+                    isPrimary: (bool) ($row['is_primary'] ?? false),
                 ),
             ),
             $banks,

@@ -1,4 +1,4 @@
-import { Archive, Building2, Landmark, Settings, type LucideIcon } from 'lucide-react'
+import { Building2, Landmark, Settings, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWatch } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
@@ -13,8 +13,6 @@ import { useResourcePermissions } from '@/features/authorization/permissions'
 import { ProfileTabContent } from '@/features/company-sites/company-site-profile-tab'
 import { SettingsTabContent } from '@/features/company-sites/company-site-settings-tab'
 import { BanksTabContent } from '@/features/company-sites/company-site-banks-tab'
-import { OtherTabContent } from '@/features/company-sites/company-site-other-tab'
-import { OTHER_FIELD_KEYS } from '@/features/company-sites/company-site-other-fields'
 import { useCompanySiteForm } from '@/features/company-sites/use-company-site-form'
 import type { CompanySiteFormMode } from '@/features/company-sites/company-site-form'
 import type { CompanySiteDetail } from '@/features/company-sites/types'
@@ -36,15 +34,15 @@ interface CompanySiteFormTab {
 }
 
 /**
- * The company-site create/edit form UI, organized into the four tabs of spec
- * 0020: Profilo (identity, logo, address), Impostazioni (responsibles,
- * default bank, progressives, read-only quotation ids), Banche (the inline
- * banks collection) and Altro (always read-only). Every editable field is
- * wrapped in `MetaField` (spec 0004): hidden fields are absent, non-editable
- * fields render disabled, `required` comes from the resolved
- * `ResourcePermissions`. All non-render logic lives in `useCompanySiteForm`;
- * each tab's content lives in a sibling module so this file stays within the
- * size limits (engineering.md §6).
+ * The company-site create/edit form UI, organized into three tabs: Profilo
+ * (identity, logo, address, plus the universal custom fields — spec 0021),
+ * Impostazioni (responsibles, progressives, read-only quotation ids) and
+ * Banche (the inline banks collection, where one bank can be flagged
+ * preferred). Every editable field is wrapped in `MetaField` (spec 0004):
+ * hidden fields are absent, non-editable fields render disabled, `required`
+ * comes from the resolved `ResourcePermissions`. All non-render logic lives in
+ * `useCompanySiteForm`; each tab's content lives in a sibling module so this
+ * file stays within the size limits (engineering.md §6).
  */
 export function CompanySiteFormBody({
   mode,
@@ -91,13 +89,11 @@ export function CompanySiteFormBody({
     fieldPermission('responsible_tickets_id').visible ||
     fieldPermission('responsible_validation_contracts_id').visible ||
     fieldPermission('responsible_validation_contracts_two_id').visible ||
-    fieldPermission('default_bank_id').visible ||
     fieldPermission('proforma_progressive').visible ||
     fieldPermission('invoice_progressive').visible
   const banksPermission = fieldPermission('banks')
   const banksVisible = banksPermission.visible
   const banksReadOnly = banksPermission.disabled || !banksPermission.editable
-  const otherVisible = OTHER_FIELD_KEYS.some((key) => fieldPermission(key).visible)
 
   const errors = form.formState.errors
   const tabHasErrorsLabel = t('companySites.form.tabs.tabHasErrors')
@@ -110,7 +106,6 @@ export function CompanySiteFormBody({
       errors.responsible_tickets_id ||
       errors.responsible_validation_contracts_id ||
       errors.responsible_validation_contracts_two_id ||
-      errors.default_bank_id ||
       errors.proforma_progressive ||
       errors.invoice_progressive,
   )
@@ -119,7 +114,6 @@ export function CompanySiteFormBody({
     { value: 'profile', label: t('companySites.form.tabs.profile'), Icon: Building2, visible: true, hasError: profileHasError },
     { value: 'settings', label: t('companySites.form.tabs.settings'), Icon: Settings, visible: settingsVisible, hasError: settingsHasError },
     { value: 'banks', label: t('companySites.form.tabs.banks'), Icon: Landmark, visible: banksVisible, hasError: false },
-    { value: 'other', label: t('companySites.form.tabs.other'), Icon: Archive, visible: otherVisible, hasError: false },
   ]
 
   return (
@@ -164,7 +158,6 @@ export function CompanySiteFormBody({
                 <SettingsTabContent
                   control={form.control}
                   companySite={companySite}
-                  banksDraft={banksDraft}
                   selectedCompanyItem={selectedCompanyItem}
                   selectedResponsibleRdaItem={selectedResponsibleRdaItem}
                   selectedResponsibleTicketsItem={selectedResponsibleTicketsItem}
@@ -185,12 +178,6 @@ export function CompanySiteFormBody({
                   setBanksDraft={setBanksDraft}
                   readOnly={banksReadOnly}
                 />
-              </TabsContent>
-            )}
-
-            {otherVisible && (
-              <TabsContent value="other" className="flex flex-col gap-4">
-                <OtherTabContent companySite={companySite} />
               </TabsContent>
             )}
           </Tabs>

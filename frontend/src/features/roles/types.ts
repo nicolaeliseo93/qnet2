@@ -6,6 +6,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /**
  * A single per-role field-permission override row (spec 0006): a DB-driven
@@ -38,6 +39,8 @@ export interface RoleDetail {
   users?: number[]
   /** This role's field-permission matrix overrides (spec 0006). */
   field_permissions: RoleFieldPermission[]
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -62,6 +65,8 @@ export interface CreateRolePayload {
   users?: number[]
   /** Initial field-permission matrix (spec 0006). Omit to leave it empty. */
   field_permissions?: RoleFieldPermission[]
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -75,4 +80,6 @@ export interface UpdateRolePayload {
   permissions?: string[]
   users?: number[]
   field_permissions?: RoleFieldPermission[]
+  /** Only the custom fields that changed, keyed by raw key (spec 0021, sparse diff). */
+  custom_fields?: Record<string, CustomFieldValue>
 }

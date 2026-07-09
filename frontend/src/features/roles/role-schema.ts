@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /**
  * Zod schemas for the role create/edit form, built as factories so validation
@@ -32,14 +36,14 @@ function baseFields(t: TFunction) {
   }
 }
 
-/** Create schema. */
-export function buildCreateRoleSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+/** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateRoleSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 /** Edit schema (same shape; partial PATCH is computed by the caller). */
-export function buildUpdateRoleSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+export function buildUpdateRoleSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 export type CreateRoleFormValues = z.infer<ReturnType<typeof buildCreateRoleSchema>>

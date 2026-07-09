@@ -27,6 +27,7 @@ const formValues: CompanyFormValues = {
     province_id: 50,
     city_id: 100,
   },
+  custom_fields: {},
 }
 
 function original(

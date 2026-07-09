@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Authorization;
 
+use App\CustomFields\CustomFieldEntityRegistry;
+use App\CustomFields\CustomFieldProvider;
+use App\CustomFields\FieldTypeRegistry;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
@@ -38,7 +41,35 @@ class AuthorizationRegistry
         /** @var ResourceAuthorization $authorization */
         $authorization = $this->container->make($class);
 
-        return $authorization;
+        return $this->decorateWithCustomFields($resource, $authorization);
+    }
+
+    /**
+     * Graft custom fields onto $authorization (spec 0021) when its resource
+     * is custom-fieldable — zero per-module code, see
+     * CustomFieldAwareAuthorization. The 'custom-fields' admin resource
+     * itself is excluded to avoid decorating the module that DEFINES custom
+     * fields with custom fields of its own.
+     */
+    private function decorateWithCustomFields(string $resource, ResourceAuthorization $authorization): ResourceAuthorization
+    {
+        if ($resource === 'custom-fields') {
+            return $authorization;
+        }
+
+        $entityRegistry = $this->container->make(CustomFieldEntityRegistry::class);
+
+        if (! $entityRegistry->isCustomFieldable($resource)) {
+            return $authorization;
+        }
+
+        return new CustomFieldAwareAuthorization(
+            $authorization,
+            $this->container->make(CustomFieldProvider::class),
+            $this->container->make(FieldTypeRegistry::class),
+            $this->container->make(FieldPermissionRepository::class),
+            $resource,
+        );
     }
 
     /**

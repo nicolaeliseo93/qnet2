@@ -4,7 +4,6 @@ use App\Enums\AttributeType;
 use App\Models\Attribute;
 use App\Models\AttributeOption;
 use App\Models\Product;
-use App\Models\ProductAttributeValue;
 use App\Models\ProductCategory;
 use App\Services\ProductCategoryService;
 use Database\Seeders\DemoProductCatalogSeeder;
@@ -59,31 +58,6 @@ it('a Sviluppo Software\'s effective attributes include both its own and every i
     expect($inheritedEntries->pluck('inherited')->unique()->all())->toBe([true]);
 });
 
-it('every seeded product carries a typed value for each of its effective attributes', function () {
-    $this->seed(DemoProductCatalogSeeder::class);
-
-    $categoryService = app(ProductCategoryService::class);
-
-    Product::with(['category', 'attributeValues.attribute', 'attributeValues.option'])->get()
-        ->each(function (Product $product) use ($categoryService): void {
-            $effective = $categoryService->effectiveAttributes($product->category);
-            $valuesByAttributeId = $product->attributeValues->keyBy('attribute_id');
-
-            foreach ($effective as $definition) {
-                $value = $valuesByAttributeId->get($definition['id']);
-                expect($value)->not->toBeNull("Product \"{$product->name}\" is missing a value for \"{$definition['code']}\"");
-
-                match ($definition['data_type']) {
-                    AttributeType::Integer => expect($value->value_integer)->not->toBeNull(),
-                    AttributeType::Decimal => expect($value->value_decimal)->not->toBeNull(),
-                    AttributeType::Boolean => expect($value->value_boolean)->not->toBeNull(),
-                    AttributeType::Enum => expect($value->option_id)->not->toBeNull(),
-                    AttributeType::String => expect($value->value_string)->not->toBeNull(),
-                };
-            }
-        });
-});
-
 it('seeds a demo service directly in an intermediate category (IT), not only leaves', function () {
     $this->seed(DemoProductCatalogSeeder::class);
 
@@ -99,7 +73,6 @@ it('is idempotent — re-running duplicates nothing', function () {
     $categoryCount = ProductCategory::count();
     $pivotCount = DB::table('attribute_category')->count();
     $productCount = Product::count();
-    $valueCount = ProductAttributeValue::count();
 
     $this->seed(DemoProductCatalogSeeder::class);
 
@@ -108,5 +81,4 @@ it('is idempotent — re-running duplicates nothing', function () {
     expect(ProductCategory::count())->toBe($categoryCount);
     expect(DB::table('attribute_category')->count())->toBe($pivotCount);
     expect(Product::count())->toBe($productCount);
-    expect(ProductAttributeValue::count())->toBe($valueCount);
 });

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -14,6 +15,7 @@ import {
   type UpdateTagFormValues,
 } from '@/features/tags/tag-schema'
 import type { TagDetail, TagFormMode } from '@/features/tags/types'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = ['name'] as const
@@ -38,17 +40,29 @@ export function useTagForm({ mode, onSuccess }: UseTagFormArgs) {
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'tags',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.tag.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateTagSchema(t) : buildCreateTagSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateTagSchema(t, customFields.schema)
+        : buildCreateTagSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<TagFormValues>(() => {
     if (mode.type === 'edit') {
-      return { name: mode.tag.name }
+      return { name: mode.tag.name, custom_fields: customFields.defaultValues }
     }
-    return { name: '' }
-  }, [mode])
+    return { name: '', custom_fields: customFields.defaultValues }
+  }, [mode, customFields.defaultValues])
 
   const form = useForm<TagFormValues>({
     resolver: zodResolver(schema),
@@ -57,6 +71,10 @@ export function useTagForm({ mode, onSuccess }: UseTagFormArgs) {
 
   const onSubmit = async (values: TagFormValues) => {
     setServerError(null)
+    const errorFields: Path<TagFormValues>[] = [
+      ...SERVER_ERROR_FIELDS,
+      ...(customFields.errorPaths as Path<TagFormValues>[]),
+    ]
     try {
       if (mode.type === 'edit') {
         const saved = await updateTag(mode.tag.id, buildUpdatePayload(values, mode.tag))
@@ -70,7 +88,7 @@ export function useTagForm({ mode, onSuccess }: UseTagFormArgs) {
       toast.success(t('tags.form.created'))
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('tags.form.genericError'))
       }
     }

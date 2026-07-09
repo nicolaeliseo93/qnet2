@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 import { createOperationalSite, updateOperationalSite } from '@/features/operational-sites/api'
 import {
   buildCreatePayload,
@@ -53,9 +55,21 @@ export function useOperationalSiteForm({ mode, onSuccess }: UseOperationalSiteFo
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'operational-sites',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.operationalSite.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateOperationalSiteSchema(t) : buildCreateOperationalSiteSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateOperationalSiteSchema(t, customFields.schema)
+        : buildCreateOperationalSiteSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<OperationalSiteFormValues>(() => {
@@ -68,6 +82,7 @@ export function useOperationalSiteForm({ mode, onSuccess }: UseOperationalSiteFo
         state_id: mode.operationalSite.state_id,
         province_id: mode.operationalSite.province_id,
         city_id: mode.operationalSite.city_id,
+        custom_fields: customFields.defaultValues,
       }
     }
     return {
@@ -78,8 +93,9 @@ export function useOperationalSiteForm({ mode, onSuccess }: UseOperationalSiteFo
       state_id: null,
       province_id: null,
       city_id: null,
+      custom_fields: customFields.defaultValues,
     }
-  }, [mode])
+  }, [mode, customFields.defaultValues])
 
   const form = useForm<OperationalSiteFormValues>({
     resolver: zodResolver(schema),
@@ -104,7 +120,11 @@ export function useOperationalSiteForm({ mode, onSuccess }: UseOperationalSiteFo
       toast.success(t('operationalSites.form.created'))
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      const errorFields: Path<OperationalSiteFormValues>[] = [
+        ...SERVER_ERROR_FIELDS,
+        ...(customFields.errorPaths as Path<OperationalSiteFormValues>[]),
+      ]
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('operationalSites.form.genericError'))
       }
     }

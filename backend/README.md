@@ -56,6 +56,9 @@ php artisan serve   # http://127.0.0.1:8000
 
 # Crea dati fake per prove
 php artisan db:seed --class=DemoDataSeeder
+
+# Crea campi personalizzate in base al modello di qualifica group
+php artisan db:seed --class=QualificaTemplateSeeder
  
 # Crea ambiente pulito solo con un utente superadmin
 php artisan db:seed 

@@ -5,6 +5,7 @@ import {
   omitNonEditableFields,
   type PersonalDataPayload,
 } from '@/features/personal-data/drafts'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 import type {
   PersonalDataDraft,
   PersonalDataFieldPermissionResolver,
@@ -32,6 +33,7 @@ function toBanksPayload(banks: BankDraft[]): CreateCompanySiteBankPayload[] {
     name: bank.name,
     iban: bank.iban,
     notes: bank.notes,
+    is_primary: bank.is_primary,
   }))
 }
 
@@ -55,8 +57,8 @@ function toPersonalDataPayload(
 /**
  * Builds the create payload: the site's own scalars (`name` required, `notes`)
  * plus the nested `personal_data` tree (REQUIRED, always `type: 'company'`) and
- * the Impostazioni-tab fields. `banks`/`default_bank_id` are omitted when the
- * buffer is empty (nothing to create, nothing to default to).
+ * the Impostazioni-tab fields. `banks` is omitted when the buffer is empty
+ * (nothing to create); the preferred bank rides along as a per-row flag.
  */
 export function buildCreatePayload(
   values: CompanySiteFormValues,
@@ -64,12 +66,12 @@ export function buildCreatePayload(
   profileDraft: PersonalDataDraft,
   fieldPermission?: PersonalDataFieldPermissionResolver,
 ): CreateCompanySitePayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     name: values.name,
     notes: values.notes || null,
     personal_data: toPersonalDataPayload(profileDraft, fieldPermission),
     ...(banks.length > 0 ? { banks: toBanksPayload(banks) } : {}),
-    default_bank_id: values.default_bank_id,
     company_id: values.company_id,
     responsible_rda_id: values.responsible_rda_id,
     responsible_tickets_id: values.responsible_tickets_id,
@@ -77,6 +79,7 @@ export function buildCreatePayload(
     responsible_validation_contracts_two_id: values.responsible_validation_contracts_two_id,
     proforma_progressive: values.proforma_progressive,
     invoice_progressive: values.invoice_progressive,
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -116,7 +119,6 @@ export function buildUpdatePayload(
     payload.personal_data = toPersonalDataPayload(profileDraft, fieldPermission)
   }
 
-  assignIfChanged(payload, 'default_bank_id', values.default_bank_id, original.default_bank_id)
   assignIfChanged(payload, 'company_id', values.company_id, original.company?.id ?? null)
   assignIfChanged(
     payload,
@@ -155,6 +157,11 @@ export function buildUpdatePayload(
     original.invoice_progressive,
   )
 
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
+  }
+
   return payload
 }
 
@@ -192,7 +199,8 @@ function banksChanged(
       !match ||
       bank.name !== match.name ||
       bank.iban !== match.iban ||
-      bank.notes !== match.notes
+      bank.notes !== match.notes ||
+      bank.is_primary !== match.is_primary
     )
   })
 }

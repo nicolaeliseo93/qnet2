@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -20,6 +21,7 @@ import type {
   ProductCategoryDetail,
   ProductCategoryFormMode,
 } from '@/features/product-categories/types'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = [
@@ -50,9 +52,21 @@ export function useProductCategoryForm({ mode, onSuccess }: UseProductCategoryFo
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'product-categories',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.category.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateProductCategorySchema(t) : buildCreateProductCategorySchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateProductCategorySchema(t, customFields.schema)
+        : buildCreateProductCategorySchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<ProductCategoryFormValues>(() => {
@@ -68,6 +82,7 @@ export function useProductCategoryForm({ mode, onSuccess }: UseProductCategoryFo
           is_required: assignment.is_required,
           sort_order: assignment.sort_order,
         })),
+        custom_fields: customFields.defaultValues,
       }
     }
     return {
@@ -76,8 +91,9 @@ export function useProductCategoryForm({ mode, onSuccess }: UseProductCategoryFo
       inherits_attributes: true,
       description: null,
       attributes: [],
+      custom_fields: customFields.defaultValues,
     }
-  }, [mode])
+  }, [mode, customFields.defaultValues])
 
   const form = useForm<ProductCategoryFormValues>({
     resolver: zodResolver(schema),
@@ -86,6 +102,10 @@ export function useProductCategoryForm({ mode, onSuccess }: UseProductCategoryFo
 
   const onSubmit = async (values: ProductCategoryFormValues) => {
     setServerError(null)
+    const errorFields: Path<ProductCategoryFormValues>[] = [
+      ...SERVER_ERROR_FIELDS,
+      ...(customFields.errorPaths as Path<ProductCategoryFormValues>[]),
+    ]
     try {
       if (mode.type === 'edit') {
         const saved = await updateProductCategory(
@@ -104,7 +124,7 @@ export function useProductCategoryForm({ mode, onSuccess }: UseProductCategoryFo
       toast.success(t('productCategories.form.created'))
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('productCategories.form.genericError'))
       }
     }

@@ -18,11 +18,9 @@ use Illuminate\Validation\Rule;
  * via authorize('create', CompanySite::class)). Reuses ValidatesUserProfile
  * verbatim for the nested `personal_data` card (contacts + address), exactly
  * like StoreRegistryRequest; `name` stays the site's own required column.
- * `banks` are validated per-row (BankService::sync). "Altro" fields and
- * `is_default` are never accepted here — EnforcesFieldPermissions (spec 0004)
- * additionally rejects any submitted field the actor cannot edit
- * (create-context, model = null), which already covers "Altro" (ceiling
- * visibleReadonly).
+ * `banks` are validated per-row (BankService::sync). `is_default` is never
+ * accepted here — EnforcesFieldPermissions (spec 0004) additionally rejects
+ * any submitted field the actor cannot edit (create-context, model = null).
  */
 class StoreCompanySiteRequest extends FormRequest
 {
@@ -75,7 +73,7 @@ class StoreCompanySiteRequest extends FormRequest
             // only to be at least as permissive as the client, never less.
             'banks.*.iban' => ['nullable', 'string', 'max:50', 'regex:/^[A-Za-z]{2}[0-9]{2}[A-Za-z0-9]{1,30}$/'],
             'banks.*.notes' => ['nullable', 'string', 'max:191'],
-            'default_bank_id' => ['nullable', 'integer'],
+            'banks.*.is_primary' => ['sometimes', 'boolean'],
 
             'company_id' => ['nullable', 'integer', Rule::exists('companies', 'id')],
             'responsible_rda_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
@@ -109,33 +107,7 @@ class StoreCompanySiteRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $this->validateProfile($validator);
             $this->enforceFieldPermissions($validator);
-            $this->validateDefaultBankId($validator);
         });
-    }
-
-    /**
-     * `default_bank_id`, if given, must match one of the submitted banks' ids
-     * (spec 0020 contract). On create no bank has a persisted id yet, so this
-     * structurally accepts only null — a brand new default is set via a
-     * follow-up update once the bank ids are known.
-     */
-    private function validateDefaultBankId(Validator $validator): void
-    {
-        $defaultBankId = $this->input('default_bank_id');
-
-        if ($defaultBankId === null) {
-            return;
-        }
-
-        $submittedIds = collect($this->input('banks', []))
-            ->pluck('id')
-            ->filter()
-            ->map(static fn (mixed $id): int => (int) $id)
-            ->all();
-
-        if (! in_array((int) $defaultBankId, $submittedIds, true)) {
-            $validator->errors()->add('default_bank_id', 'The selected bank is not among the submitted banks.');
-        }
     }
 
     protected function authorizationResource(): string

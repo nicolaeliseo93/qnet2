@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -14,6 +15,7 @@ import {
 } from '@/features/companies/company-schema'
 import type { CompanyDetail } from '@/features/companies/types'
 import type { CompanyFormMode } from '@/features/companies/company-form'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = [
@@ -49,9 +51,14 @@ interface UseCompanyFormArgs {
 
 /**
  * Owns every non-render concern of `CompanyForm`: RHF/Zod wiring, default
- * values (including the single embedded address block), server 422 mapping
- * and the create/update submit. The component stays UI-only; this hook is
- * the orchestration point (`onSubmit`).
+ * values (including the single embedded address block and any custom
+ * fields), server 422 mapping and the create/update submit. The component
+ * stays UI-only; this hook is the orchestration point (`onSubmit`).
+ *
+ * Custom fields (spec 0021, pilot rollout): reads `/meta/companies` via the
+ * SAME `useResourceMeta` query the mounted `<CustomFieldsSection>` reads from
+ * (deduped by TanStack Query, one request) purely to build the dynamic Zod
+ * schema and the server-error paths — the section itself owns rendering.
  */
 export function useCompanyForm({ mode, onSuccess }: UseCompanyFormArgs) {
   const { t } = useTranslation()
@@ -59,9 +66,21 @@ export function useCompanyForm({ mode, onSuccess }: UseCompanyFormArgs) {
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'companies',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.company.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateCompanySchema(t) : buildCreateCompanySchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateCompanySchema(t, customFields.schema)
+        : buildCreateCompanySchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<CompanyFormValues>(() => {
@@ -81,10 +100,16 @@ export function useCompanyForm({ mode, onSuccess }: UseCompanyFormArgs) {
               city_id: address.city_id,
             }
           : EMPTY_ADDRESS,
+        custom_fields: customFields.defaultValues,
       }
     }
-    return { denomination: '', vat_number: '', address: EMPTY_ADDRESS }
-  }, [mode])
+    return {
+      denomination: '',
+      vat_number: '',
+      address: EMPTY_ADDRESS,
+      custom_fields: customFields.defaultValues,
+    }
+  }, [mode, customFields.defaultValues])
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(schema),
@@ -93,6 +118,10 @@ export function useCompanyForm({ mode, onSuccess }: UseCompanyFormArgs) {
 
   const onSubmit = async (values: CompanyFormValues) => {
     setServerError(null)
+    const errorFields: Path<CompanyFormValues>[] = [
+      ...SERVER_ERROR_FIELDS,
+      ...(customFields.errorPaths as Path<CompanyFormValues>[]),
+    ]
     try {
       if (mode.type === 'edit') {
         const saved = await updateCompany(
@@ -108,7 +137,7 @@ export function useCompanyForm({ mode, onSuccess }: UseCompanyFormArgs) {
       toast.success(t('companies.form.created'))
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('companies.form.genericError'))
       }
     }

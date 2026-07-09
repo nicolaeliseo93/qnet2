@@ -5,8 +5,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Drops the polymorphic `taggables` pivot (spec 0019). The Tag/EaSector
- * association is retired: EaSector was its only producer and the tagging of
+ * Drops the polymorphic `taggables` pivot (spec 0019). The Tag/Sector
+ * association is retired: Sector was its only producer and the tagging of
  * sectors is being removed at every layer. Tag remains a standalone lookup
  * (its own table/CRUD/import are untouched). `down()` recreates the pivot in
  * its original shape so the migration is fully reversible.

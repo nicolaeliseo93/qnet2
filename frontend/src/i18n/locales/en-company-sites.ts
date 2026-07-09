@@ -1,7 +1,7 @@
 /**
  * Localized strings for the Company Sites module (spec 0020): grid columns,
  * the read-only detail sheet and the multi-tab create/edit form (Profilo /
- * Impostazioni / Banche / Altro).
+ * Impostazioni / Banche).
  *
  * Extracted from `en.ts` to keep that file within the engineering size limits
  * (see `.claude/rules/engineering.md` §6). Public API of `en.ts` is unchanged.
@@ -68,9 +68,6 @@ export const companySites = {
     responsibleSearch: 'Search users…',
     responsibleEmpty: 'No users found.',
     responsibleError: 'Unable to load users.',
-    defaultBank: 'Default bank',
-    defaultBankPlaceholder: 'Select a bank…',
-    defaultBankNone: 'None',
     proformaProgressive: 'Proforma progressive',
     invoiceProgressive: 'Invoice progressive',
     quotationLayout: 'Quotation layout',
@@ -80,7 +77,6 @@ export const companySites = {
       profile: 'Profile',
       settings: 'Settings',
       banks: 'Banks',
-      other: 'Other',
       tabHasErrors: 'This tab has validation errors',
     },
     sections: {
@@ -110,7 +106,7 @@ export const companySites = {
       },
       banking: {
         title: 'Banking',
-        description: 'Default bank and document progressives.',
+        description: 'Document progressives.',
       },
       quotation: {
         title: 'Quotation documents',
@@ -119,10 +115,6 @@ export const companySites = {
       banks: {
         title: 'Banks',
         description: 'The banks associated with this site.',
-      },
-      other: {
-        title: 'Other',
-        description: 'Legacy fields, read-only.',
       },
     },
     banks: {
@@ -134,6 +126,8 @@ export const companySites = {
       ibanMax: 'IBAN must be at most 50 characters.',
       ibanInvalid: 'Enter a valid IBAN.',
       notesMax: 'Notes must be at most 191 characters.',
+      preferred: 'Preferred bank',
+      preferredBadge: 'Preferred',
       add: 'Add bank',
       editAction: 'Edit bank',
       deleteAction: 'Delete bank',
@@ -141,35 +135,6 @@ export const companySites = {
       empty: 'No banks yet.',
       cancel: 'Cancel',
       save: 'Save',
-    },
-    other: {
-      accountingManagerId: 'Accounting manager',
-      storeId: 'Store',
-      companyType: 'Company type',
-      commissions: 'Commissions',
-      orderSites: 'Order sites',
-      paymentStatusAssignTechnician: 'Payment status (assign technician)',
-      paymentStatusDeposit: 'Payment status (deposit)',
-      paymentStatusBalance: 'Payment status (balance)',
-      defaultPaymentId: 'Default payment',
-      defaultVatId: 'Default VAT',
-      otherCategoryId: 'Other category',
-      isoCategoryId: 'ISO category',
-      soaCategoryId: 'SOA category',
-      sicCategoryId: 'SIC category',
-      avvCategoryId: 'AVV category',
-      gdprCategoryId: 'GDPR category',
-      resCategoryId: 'RES category',
-      palCategoryId: 'PAL category',
-      quattroCategoryId: '4.0 category',
-      finageCategoryId: 'Finage category',
-      fondiCategoryId: 'Funds category',
-      gareCategoryId: 'Tenders category',
-      partnershipCategoryId: 'Partnership category',
-      progettiCategoryId: 'Projects category',
-      status: 'Status',
-      color: 'Color',
-      surfaceSqm: 'Surface (sqm)',
     },
   },
 }

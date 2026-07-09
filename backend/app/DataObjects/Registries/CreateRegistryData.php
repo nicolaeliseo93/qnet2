@@ -11,21 +11,21 @@ namespace App\DataObjects\Registries;
  *
  * `name` is intentionally absent: it is derived server-side from the
  * required nested personal-data card (mirrors CreateReferentData).
- * `eaSectorIds`/`referentIds`/`managerIds` are to-many references, synced by
+ * `sectorIds`/`referentIds`/`managerIds` are to-many references, synced by
  * RegistryService post-create via `->sync()` — they are NOT mass-assignable
- * columns, so they stay out of attributes() (mirrors CreateEaSectorData's
+ * columns, so they stay out of attributes() (mirrors CreateSectorData's
  * tagIds).
  */
 final readonly class CreateRegistryData
 {
     /**
-     * @param  array<int, int>|null  $eaSectorIds
+     * @param  array<int, int>|null  $sectorIds
      * @param  array<int, int>|null  $referentIds
      * @param  array<int, int>|null  $managerIds
      */
     public function __construct(
         public ?int $sourceId,
-        public ?array $eaSectorIds,
+        public ?array $sectorIds,
         public ?array $referentIds,
         public ?array $managerIds,
         public ?int $supervisorId,
@@ -49,7 +49,7 @@ final readonly class CreateRegistryData
     {
         return new self(
             sourceId: isset($data['source_id']) ? (int) $data['source_id'] : null,
-            eaSectorIds: array_key_exists('ea_sector_ids', $data) ? array_map('intval', $data['ea_sector_ids']) : null,
+            sectorIds: array_key_exists('sector_ids', $data) ? array_map('intval', $data['sector_ids']) : null,
             referentIds: array_key_exists('referent_ids', $data) ? array_map('intval', $data['referent_ids']) : null,
             managerIds: array_key_exists('manager_ids', $data) ? array_map('intval', $data['manager_ids']) : null,
             supervisorId: isset($data['supervisor_id']) ? (int) $data['supervisor_id'] : null,
@@ -65,9 +65,9 @@ final readonly class CreateRegistryData
         );
     }
 
-    public function hasEaSectorIds(): bool
+    public function hasSectorIds(): bool
     {
-        return $this->eaSectorIds !== null;
+        return $this->sectorIds !== null;
     }
 
     public function hasReferentIds(): bool

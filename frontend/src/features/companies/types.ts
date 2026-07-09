@@ -6,6 +6,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /**
  * The company's single address (ADR 0010), as returned by `CompanyResource`.
@@ -39,6 +40,8 @@ export interface CompanyDetail {
   vat_number: string | null
   address: CompanyAddress | null
   created_at: string | null
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -67,6 +70,8 @@ export interface CreateCompanyPayload {
   denomination: string
   vat_number?: string | null
   address?: CreateCompanyAddressPayload
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -79,4 +84,6 @@ export interface UpdateCompanyPayload {
   denomination?: string
   vat_number?: string | null
   address?: CreateCompanyAddressPayload
+  /** Only the custom fields that changed, keyed by raw key (spec 0021, sparse diff). */
+  custom_fields?: Record<string, CustomFieldValue>
 }

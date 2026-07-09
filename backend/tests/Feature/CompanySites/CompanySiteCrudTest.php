@@ -138,7 +138,7 @@ it('show: 404 for a non-existent site', function () {
 // create — POST /api/company-sites (AC-007)
 // ---------------------------------------------------------------------------
 
-it('create: 201 + persists the site with card, address and banks, default_bank_id resolved', function () {
+it('create: 201 + persists the site with card, address and banks (preferred bank flagged)', function () {
     $actor = userWithCompanySiteAbilities(['create']);
     $city = City::factory()->create();
     Sanctum::actingAs($actor);
@@ -150,18 +150,19 @@ it('create: 201 + persists the site with card, address and banks, default_bank_i
             'addresses' => [['line1' => 'Via Napoli 5', 'city_id' => $city->id]],
             'contacts' => [['type' => 'email', 'value' => 'sud@acme.test', 'is_primary' => true]],
         ]),
-        'banks' => [['name' => 'Banca Uno', 'iban' => 'IT60X0542811101000000123456']],
+        'banks' => [['name' => 'Banca Uno', 'iban' => 'IT60X0542811101000000123456', 'is_primary' => true]],
     ])->assertCreated()
         ->assertJsonPath('data.name', 'Sede Sud')
         ->assertJsonPath('data.personal_data.company_name', 'Acme SpA')
         ->assertJsonPath('data.personal_data.vat_number', 'IT12345678901')
         ->assertJsonPath('data.personal_data.addresses.0.line1', 'Via Napoli 5')
         ->assertJsonPath('data.personal_data.contacts.0.value', 'sud@acme.test')
-        ->assertJsonPath('data.banks.0.name', 'Banca Uno');
+        ->assertJsonPath('data.banks.0.name', 'Banca Uno')
+        ->assertJsonPath('data.banks.0.is_primary', true);
 
     $site = CompanySite::first();
     $this->assertDatabaseHas('company_sites', ['name' => 'Sede Sud']);
-    $this->assertDatabaseHas('company_site_banks', ['name' => 'Banca Uno']);
+    $this->assertDatabaseHas('company_site_banks', ['name' => 'Banca Uno', 'is_primary' => true]);
     expect($site->personalData)->not->toBeNull()
         ->and($site->personalData->personable_type)->toBe('company_site');
 });
@@ -254,15 +255,19 @@ it('create: 422 on an invalid IBAN', function () {
     ])->assertStatus(422)->assertJsonValidationErrors('banks.0.iban');
 });
 
-it('create: 422 when default_bank_id is not among the submitted banks', function () {
+it('create: only one bank stays primary when several are flagged (single-primary invariant)', function () {
     $actor = userWithCompanySiteAbilities(['create']);
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/company-sites', [
         'name' => 'X',
-        'banks' => [['name' => 'Banca Uno']],
-        'default_bank_id' => 123456,
-    ])->assertStatus(422)->assertJsonValidationErrors('default_bank_id');
+        'banks' => [
+            ['name' => 'Banca Uno', 'is_primary' => true],
+            ['name' => 'Banca Due', 'is_primary' => true],
+        ],
+    ])->assertCreated();
+
+    expect(CompanySiteBank::where('is_primary', true)->count())->toBe(1);
 });
 
 it('create: 403 without company-sites.create', function () {
@@ -270,14 +275,6 @@ it('create: 403 without company-sites.create', function () {
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/company-sites', ['name' => 'Nope'])->assertForbidden();
-});
-
-it('create: 403 (base authorization) takes precedence over the "Altro" 422', function () {
-    $actor = userWithCompanySiteAbilities([]);
-    Sanctum::actingAs($actor);
-
-    $this->postJson('/api/company-sites', ['name' => 'X', 'company_type' => 2])
-        ->assertForbidden();
 });
 
 // ---------------------------------------------------------------------------

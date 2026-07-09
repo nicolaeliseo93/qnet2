@@ -17,6 +17,7 @@ import { permissionAbility, type PermissionGroup } from '@/features/roles/permis
 import { toggleFieldPermission } from '@/features/roles/field-permission-toggle'
 import { RoleFieldPermissions } from '@/features/roles/role-field-permissions'
 import { useRoleForm } from '@/features/roles/use-role-form'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { RoleFormMode } from '@/features/roles/role-form'
 import type { RoleDetail } from '@/features/roles/types'
 
@@ -43,6 +44,8 @@ const PRIMARY_ABILITIES: readonly string[] = ['viewAny', 'view', 'create', 'upda
  * the permission matrix (by domain, primary abilities inline / advanced
  * collapsed), and — when the actor may manage it — the field-permission
  * matrix (spec 0006/0008), rendered by `RoleFieldPermissions`.
+ * `<CustomFieldsSection>` (spec 0021) mounts the resource's admin-defined
+ * custom fields with zero roles-specific rendering/validation logic.
  */
 export function RoleFormBody({
   mode,
@@ -197,6 +200,8 @@ export function RoleFormBody({
             )}
           </MetaField>
         )}
+
+        <CustomFieldsSection resource="roles" control={form.control} />
 
         {serverError && (
           <p className="text-sm font-medium text-destructive" role="alert">

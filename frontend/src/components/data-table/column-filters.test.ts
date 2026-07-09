@@ -97,6 +97,51 @@ describe('resolveFilter', () => {
       resolveFilter(stubColumn({ id: 'x', type: 'enum', hasFilterValues: false })),
     ).toBe('agSetColumnFilter')
   })
+
+  // AC-024: universal custom fields (0021) carry a dynamic id (`custom.<key>`)
+  // but resolveFilter only ever looks at type/filterType, so it already routes
+  // them correctly with zero code changes — this locks that in.
+  describe('source: "custom" columns', () => {
+    it('routes a custom enum column (filterType "set") to agSetColumnFilter', () => {
+      expect(
+        resolveFilter(
+          stubColumn({ id: 'custom.color', type: 'enum', filterType: 'set', source: 'custom' }),
+        ),
+      ).toBe('agSetColumnFilter')
+    })
+
+    it('routes a custom relation column (type "text", filterType "set") to agSetColumnFilter', () => {
+      expect(
+        resolveFilter(
+          stubColumn({ id: 'custom.owner', type: 'text', filterType: 'set', source: 'custom' }),
+        ),
+      ).toBe('agSetColumnFilter')
+    })
+
+    it('routes a custom text column (filterType "text") to agMultiColumnFilter', () => {
+      expect(
+        resolveFilter(
+          stubColumn({ id: 'custom.notes', type: 'text', filterType: 'text', source: 'custom' }),
+        ),
+      ).toBe('agMultiColumnFilter')
+    })
+
+    it('routes a custom number column (filterType "number") to agMultiColumnFilter', () => {
+      expect(
+        resolveFilter(
+          stubColumn({ id: 'custom.score', type: 'number', filterType: 'number', source: 'custom' }),
+        ),
+      ).toBe('agMultiColumnFilter')
+    })
+
+    it('routes a custom boolean column (filterType "boolean") to agSetColumnFilter', () => {
+      expect(
+        resolveFilter(
+          stubColumn({ id: 'custom.active', type: 'boolean', filterType: 'boolean', source: 'custom' }),
+        ),
+      ).toBe('agSetColumnFilter')
+    })
+  })
 })
 
 // Passthrough translator: asserting on the raw key is enough to prove the

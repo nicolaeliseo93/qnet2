@@ -5,14 +5,17 @@ import type {
   UpdateRolePayload,
 } from '@/features/roles/types'
 import type { RoleFormValues } from '@/features/roles/use-role-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 /** Builds the create payload. */
 export function buildCreatePayload(values: RoleFormValues): CreateRolePayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     name: values.name,
     permissions: values.permissions,
     users: values.users,
     field_permissions: values.field_permissions,
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -41,6 +44,11 @@ export function buildUpdatePayload(
   // (spec 0006) — an untouched matrix round-trips as "leave untouched".
   if (!sameFieldPermissions(values.field_permissions, original.field_permissions)) {
     payload.field_permissions = values.field_permissions
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

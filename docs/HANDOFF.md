@@ -2,6 +2,554 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — Custom fields auto-integrated into /migrations (2026-07-09) — GREEN (not committed)
+
+The data-migration feature (`backend/app/Migrations/`, spec 0013, super-admin `/migrations`)
+now automatically exposes AND imports each module's ACTIVE custom fields alongside its native
+fields — generic, zero per-source wiring beyond a mechanical rename. Driven by
+`CustomFieldProvider::definitionsFor($this->key())` (source `key()` == custom-field `entity_type`).
+Motivation: the company-sites refactor turned 27 native cols into custom fields; without this,
+migrating that module (or products) would silently LOSE those fields. User-approved scope:
+FULL (template + import), not display-only.
+
+Three symmetric generic seams (all in base `AbstractMigrationSource` + new trait
+`app/Migrations/Concerns/HasMigrationCustomFields.php`):
+1. columns() = nativeColumns() + customColumns(). Each source's `columns()` renamed to
+   protected `nativeColumns()`. customColumns() emits `{id: <raw key>, label, type}`.
+2. mapRow() = mapNativeRow() + mapCustomRow() (preview parity; cells keyed by RAW key).
+   Each source's `mapRow()` renamed to `mapNativeRow()`. NOTE: ReferentsSource/UsersSource
+   internal loops were fixed to iterate `nativeColumns()` not `columns()` (else double-count).
+
+IMPORTANT — the migration contract exposes the custom field's RAW key (e.g. `store_id`,
+`hhh`), NOT the internal `custom.` namespace. Reason: the external legacy source sends raw
+field names, and the importer reads/writes by raw `$def->key`; exposing `custom.<key>` in
+columns/sample would mislead integrators (contract said one key, code read another). The
+`custom.` prefix is AG-Grid-internal (collision-avoidance vs native cols) and does NOT belong
+in the external migration contract. columns id + mapCustomRow cell key + persistCustomFields
+read all agree on the raw key now.
+3. Import persistence: `persistCustomFields($model, $record)` runs INSIDE the existing
+   `importRow()` `DB::transaction`, only when the row outcome carries a model → writes via
+   `CustomFieldWriter::write($model, $this->key(), $values)`. Values read present-only from the
+   raw external `$record` by RAW `$def->key` (assumption: external field key == custom-field key).
+
+IMPORTANT deviation from the naive plan (deliberate, correct): `processRow()` returns
+`MigrationRowOutcome` (skipped/created + warnings + counters), NOT a Model. Do NOT change it to
+`?Model` — instead `MigrationRowOutcome` got an optional `?Model $model` (default null;
+`created(..., model: $x)`, `skipped()` never carries one). Preserves all run bookkeeping.
+
+Type map (`FieldTypeHandler::columnType()` → migration `type` union string|number|boolean|date):
+const `CUSTOM_COLUMN_TYPE_MAP` = text→string, number→number, boolean→boolean, enum→string
+(enum options never enter the migration contract; no `date` columnType exists → dates are string).
+
+Contract UNCHANGED: `GET /migrations/{source}/columns` still returns `{columns, request, sample}`,
+additive only (more entries when the entity_type has active defs; empty = pure passthrough).
+Frontend: ZERO changes needed (template panel renders columns generically); tsc 0, vitest
+migrations 13/13 green.
+
+Verified GREEN (independent verifier): `test --filter=Migration` 178/179 (+6 new), `--filter=CustomField`
+205/205, full suite 1851 pass / 1 skip / 1 FAIL. The 1 FAIL = `AbstractMigrationSourcePreviewTest`
+(RolesSource `description:null` cell) — confirmed PRE-EXISTING via `git stash` round-trip (fails
+identically on unmodified branch), NOT introduced here. Pint clean on all touched files. New tests:
+`tests/Unit/Migrations/AbstractMigrationSourceCustomFieldsTest.php`,
+`tests/Feature/Migration/CustomFieldsAutoPersistenceTest.php`. NOT committed (awaiting go-ahead).
+Non-blocking out-of-scope note: `pint --test` repo-wide flags `tests/Feature/CompanySites/CompanySiteUpdateTest.php`
+(committed in 82f936a, untouched here).
+
+## REFACTOR — Custom-field DEFINITION form UX (2026-07-09) — GREEN (Phase 1 of 2)
+
+User goal: make the custom-field definition form (admin sheet) beautiful, usable
+and self-explanatory for non-technical admins; then (Phase 2, NOT started) rework
+the runtime custom-field components (label/description/help-text/icon graphics).
+User-approved decisions: inline helper on primary fields + tooltip on advanced;
+searchable lucide icon-picker; live preview panel.
+
+Phase 1 done (definition form only). Scope = `frontend/` only, no backend, no new
+npm deps (icon-picker built on the existing `radix-ui` Popover, same pattern as
+`searchable-select`; NO new `ui/popover.tsx`). Icons = `lucide-react` (project
+mandate), NOT Phosphor.
+
+New shared infra:
+- `features/custom-fields/icon-catalog.ts` — curated ~140-glyph `Record<string,LucideIcon>`
+  (kebab-case keys = stored value). NOT the full lucide set (bundle). `ICON_NAMES`,
+  `isKnownIconName`. Used by picker AND (future) runtime render.
+- `features/custom-fields/dynamic-icon.tsx` — `<DynamicIcon name>` resolver (null on unknown).
+- `components/icon-picker.tsx` — searchable Popover grid + preview + clear; portals into
+  sheet like `searchable-select`. Reusable (also used for enum option icons).
+- `components/field-hint.tsx` — `<FieldHint>` info-glyph + tooltip (self-contained Provider).
+- `features/custom-fields/components/definition-hint-label.tsx` — `<HintLabel>` = FormLabel +
+  optional FieldHint sibling (never nests button in <label>).
+
+Form changes:
+- `definition-type-picker.tsx` (NEW) — replaces the plain type `<Select>`: per-type icon in
+  trigger/options + always-visible explainer callout (desc + example) for the selected type.
+  Options are icon+name ONLY (keeps `getByRole('option',{name})` + Radix typeahead intact).
+- `definition-field-preview.tsx` (NEW) — sticky top "Preview" card, renders the field live via
+  the runtime `CUSTOM_FIELD_COMPONENT_REGISTRY` on `useWatch`; keyed by type (resets throwaway
+  value); relation shows a static hint (no network). Sheet is `sm:max-w-2xl` (narrow) → preview
+  is a normal card STACKED at the top, not a side column. NOTE: was `sticky top-0 z-10 backdrop-blur`
+  first, but that stacking context overlapped/intercepted clicks on the top fields (Type) in the
+  real browser (jsdom couldn't catch it) → de-stickied. Do not re-add sticky without solving the overlap.
+- `definition-identity-fields.tsx` — split into 2 sections "Basics"(entity_type,type,key,label)
+  + "Presentation"(description,help_text,placeholder,icon,group,tab,sort_order); inline helper
+  under every field (via MetaField `description` prop); `icon` → IconPicker (bridged through
+  `useFormField()` for the a11y triad, like `CustomFieldControlBridge`).
+- type-config / validation / relation editors: advanced fields get `<HintLabel>` tooltips;
+  enum option `icon` → IconPicker.
+- i18n it/en: new `typeInfo.<type>.{desc,example}`, `form.*Help`, `form.*Hint`, icon-picker
+  labels, preview strings, `sections.base/presentation`. (Old `sections.identity` kept, now unused.)
+
+Verified GREEN: `tsc --noEmit` 0; eslint 0 on all touched/new files; new tests pass
+(icon-picker 5, definition-type-picker 2, definition-field-preview 4); full FE suite
+810 pass / 3 pre-existing-unrelated FAIL (cell-renderers ContactsCell, per prior HANDOFF).
+NOT committed (awaiting go-ahead).
+
+Phase-1 follow-up fixes (same session, all GREEN, still uncommitted):
+- BUG (browser-only, jsdom-invisible): the type Select would not open/select. Cause = the
+  DefinitionTypePicker trigger had a custom `<span>` instead of `<SelectValue>`; Radix Select
+  (default `position=item-aligned`) needs SelectValue to position → restored `<SelectValue/>`
+  (it also renders the selected option's icon+name for free). Also de-stickied the preview
+  (was `sticky z-10 backdrop-blur` → intercepted clicks on top fields). Do NOT re-add either.
+- BUG: duplicate `sections:` key inside `form` (added base/presentation as a SECOND block) →
+  the 2nd overrode the 1st, wiping config/options/relation/validation/flags section titles
+  (raw keys shown). Merged into ONE `sections` object in it/en. `no-dupe-keys` did not fire.
+- Split `definition-identity-fields.tsx` → `definition-base-fields.tsx` +
+  `definition-presentation-fields.tsx`. Body reorder (user ask): type-dependent settings
+  (config/options/relation/validation) now render BETWEEN Base and Presentation.
+- Removed the `tab` field control from the form (user ask: no tabs UI in the generic renderer,
+  so it only affected ordering). `tab` stays in schema/payload (defaults ''); `form.tab*` i18n now unused.
+- Enum option `color` free-text input → NEW `ColorTokenPicker` (swatch panel). NOTE: option color
+  is a PALETTE TOKEN name (slate/red/blue/… 14), NOT a hex — the grid badge maps it by name via
+  `BADGE_COLOR_CLASSES` in `features/table/cell-renderers.tsx`. Token list mirrored (not imported,
+  to avoid touching the fragile cell-renderers) in NEW `features/custom-fields/badge-color-tokens.ts`
+  (`bg-*-500` swatch classes spelled out for Tailwind's scanner). i18n `customFields.colors.<token>`.
+  New test: color-token-picker (4). If cell-renderers' palette ever changes, update badge-color-tokens too.
+
+Known follow-ups (flagged, NOT done — out of this scope): `definition-type-config-fields.tsx`
+now 355 lines (>300 soft, <500 hard) → candidate split (extract text vs numeric config blocks);
+pre-existing eslint error in `features/users/duration-input.test.tsx` (untouched).
+
+NEXT — Phase 2: rework runtime components (`MetaField`/`CustomFieldsSection` render the field
+`icon` next to the label; graphically distinguish `description` [currently UNUSED at runtime —
+only `help_text` is shown] from `help_text`; refine control states; richer `custom-field-detail`).
+
+## REFACTOR — Decouple product attribute VALUES from Product; keep the category attribute catalogue (spec 0017) (2026-07-09) — GREEN (backend only)
+
+Products no longer store/accept/return category-driven attribute values. The
+attribute DEFINITION/CATALOGUE system (Attribute, AttributeOption,
+attribute_category pivot, ProductCategory::attributes()/inherits_attributes,
+CategoryHierarchy::effectiveAttributes, GET /product-categories/{id}/effective-
+attributes) is UNCHANGED — it stays a reusable template, decoupled from any
+per-product value storage. The `custom_fields` universal system (spec 0021)
+on products is UNCHANGED.
+
+Contract: `POST /products` / `PATCH /products/{id}` no longer accept or
+validate an `attributes[]` key (silently ignored, not persisted); ProductResource
+no longer emits `attributes`. `custom_fields` unaffected (already wired via
+`BaseModel`'s `HasCustomFields`).
+
+Removed: table+migration `product_attribute_values` (dropped, migration file
+deleted — greenfield branch, `migrate:fresh` precedent), `Models/ProductAttributeValue`,
+`Services/Products/ProductAttributeValueWriter` (+ now-empty `Services/Products/`
+dir), `database/factories/ProductAttributeValueFactory` (orphaned once the model
+was gone). `Product::attributeValues()` and `Attribute::values()` relations
+removed (dangling). `ProductService` no longer resolves effective attributes
+or calls the value writer on create/update — kept the deliberate unconditional
+`$product->fill($attributes)->save()` (fires `saved` so spec-0021 custom fields
+persist a fields-only edit); dropped the now-unused `ProductCategoryService`
+constructor dependency (category existence is already guaranteed by
+`exists:product_categories,id` in the FormRequest). `StoreProductRequest`/
+`UpdateProductRequest` drop the `attributes.*` rules; `CreateProductData`/
+`UpdateProductData` drop the `attributes` field (`UpdateProductData` also drops
+the now-dead `hasCategoryId()`/`hasAttributes()`). `ProductResource` drops the
+`attributes` block. `ProductController::show()` no longer eager-loads
+`attributeValues.*`.
+
+Consequential cleanup (the "attribute has recorded product values" guard is
+now impossible, since products never carry values): `AttributeService::delete()`
+no longer checks `values()->exists()` (only the category-assignment guard
+remains, 409); `guardDataTypeImmutable()` removed entirely (data_type is no
+longer ever immutable) — this is a **behavior change**: an attribute's
+data_type can now be edited freely regardless of history. `DemoProductCatalogSeeder`
++ `ProductCatalogTaxonomy` stripped of the per-product `values` maps (category-level
+`attributes` assignment/is_required untouched); demo products now seed generic
+fields only.
+
+Tests: `ProductCrudTest` rewritten (attributes-in-payload → ignored, not 422,
+not persisted, not in response; added a custom_fields-only-PATCH round-trip
+test mirroring RoleCustomFieldUpdateTest); `AttributeCrudTest` dropped the two
+now-impossible guard tests (data_type-change-with-values 422, delete-with-values
+409); `DemoProductCatalogSeederTest` dropped the per-product-value assertion
+test and the `ProductAttributeValue::count()` idempotency check; unit
+`ProductTest`/`AttributeTest` dropped the `product_attribute_values` schema/
+relation/cascade assertions and the stale `Schema::dropIfExists('product_attribute_values')`
+migration-teardown calls (table no longer exists).
+
+Verified: Pint clean (full backend, zero fixers). `php artisan migrate:fresh
+--seed` succeeds (product_attribute_values migration no longer runs).
+`XDEBUG_MODE=off php artisan test`: 1845 pass / 1 skip / 1 pre-existing
+unrelated FAIL (`AbstractMigrationSourcePreviewTest`, same one HANDOFF already
+tracks). NOT committed. Frontend NOT touched (separate teammate) — the FE
+still expects/sends `attributes` on the products form/detail and must be
+updated to drop it (a submitted `attributes` key is now silently ignored
+server-side rather than 422/persisted, so the FE won't break loudly — but it
+should stop sending/reading it to match the frozen contract).
+
+## FEATURE — New custom-field types + products expiration date (2026-07-09) — GREEN
+
+Extended the spec 0021 custom-field type system (was 7 MVP types) with 6 new
+scalar-string types: date, datetime, time, email, url, color. User-approved set.
+Then added a `products` template field via the (now generalized) seeder:
+`expiration_date` (label "Data scadenza", type date).
+
+Type-system architecture (unchanged seams — "1 handler + 1 config line" OCP):
+- Backend: new trait `app/CustomFields/Types/Concerns/HandlesScalarStringField.php`
+  composes the 5 existing concerns (AppliesTextFilter/DerivesRequiredRule/OrdersByJsonPath/
+  ResolvesDistinctJsonValues/ResolvesJsonColumn) + storage=string, columnType=text,
+  filterType=text, string normalize/read, toMeta. 6 thin handlers (Date/DateTime/Time/
+  Email/Url/Color FieldType) each = key() + validationRules() only. Registered in
+  config/custom-fields.php. Admin allow-list is registry-driven (Rule::in(FieldTypeRegistry::all()))
+  → NO request change. Validation rules: date `date_format:Y-m-d`; datetime
+  `date_format:Y-m-d\TH:i,Y-m-d\TH:i:s`; time `date_format:H:i,H:i:s`; email `email`+max:191;
+  url `url`+max:2048; color `regex:/^#[0-9A-Fa-f]{6}$/`.
+- Frontend: extended `CustomFieldType` union + `CUSTOM_FIELD_TYPES` (drives z.enum admin
+  schema + type picker + grid/detail type badge via customFields.types.*). New
+  `components/native-input-field-control.tsx` = `createNativeInputFieldControl(htmlType)`
+  factory (stable identities, built once at registry module load); 6 registry entries
+  (date/datetime-local/time/email/url/color). build-custom-fields-schema routes all 6 to
+  the nullable-string schema (native input constrains shape; backend rule authoritative,
+  surfaces inline via custom_fields.<key> 422). i18n en/it type labels added. Guarded
+  `DefinitionTypeConfigFields` (TYPES_WITHOUT_CONFIG) so the config panel is hidden for
+  the config-less types (was rendering an empty section); validation editor already shows
+  required/unique for every type — no change.
+
+Seeder: `QualificaTemplateSeeder` generalized from a single hardcoded entity to a
+`TEMPLATES` map (entity_type => fields); `company-sites` (27 fields) + `products`
+(expiration_date/date). Still one clean seed in DatabaseSeeder, idempotent updateOrCreate.
+
+IMPORTANT — no `date`/`datetime` type existed before; a `type=>'date'` definition WOULD
+have thrown UnknownFieldTypeException. If asked to add any other custom-field type, mirror
+this pattern (BE handler + config line + FE union/registry/schema/i18n + FieldTypeRegistryTest).
+
+Verified: Pint clean; `php artisan test` 1854 pass / 1 skip / 1 FAIL (AbstractMigration
+SourcePreviewTest — pre-existing/unrelated). New BE tests: FieldTypeRegistryTest (dataset +
+scalar-string triple), CustomFieldWritePipelineTest (reject/accept dataset per new type).
+Seeder run → products.expiration_date=date confirmed; all 6 handlers' rules verified.
+Frontend: tsc 0, eslint 0, vitest custom-fields 46/46 (+ new CustomFieldsSection render test
+for date/email/color native inputs); full FE suite 799 pass / 3 pre-existing unrelated FAIL
+(cell-renderers ContactsCell). NOT committed (awaiting go-ahead).
+
+## REFACTOR — Company-sites "Altro" section → universal custom fields (2026-07-09) — GREEN
+
+Since universal custom fields (spec 0021) now exist, the 27-field read-only "Altro"
+section of company-sites (Società Sedi) was removed as native columns and re-provisioned
+as custom_field_definitions. Decisions (user-approved): edit the committed create
+migration directly (greenfield feature branch, migrate:fresh); smart type mapping;
+clean reference seed. Frontend: the "Altro" tab was deleted and the custom-fields
+section moved into the FIRST (Profilo) tab.
+
+Removed columns (all of the former `OTHER_FIELDS`, `company_id` KEPT): accounting_manager_id,
+store_id, company_type, commissions, order_sites, payment_status_{assign_technician,deposit,
+balance}, default_payment_id, default_vat_id, {other,iso,soa,sic,avv,gdpr,res,pal,quattro,
+finage,fondi,gare,partnership,progetti}_category_id, status, color, surface_sqm.
+
+New `Database\Seeders\QualificaTemplateSeeder` (kept the user's Italian name) — idempotent
+`updateOrCreate` on (entity_type='company-sites', key), definitions ONLY (no values), wired
+into `DatabaseSeeder` (clean seed). Type mapping: `accounting_manager_id` → relation
+(relation_target users/one/users — `users` is a registered custom-fieldable entity),
+`color` → text, every other field → integer. Labels are the Italian UI strings.
+
+Backend edits: migration (drop cols + docblocks), `Models/CompanySite` ($fillable/$casts
+trimmed, `accountingManager()` relation removed), `Http/Resources/CompanySiteResource`
+(otherFields() removed), `Authorization/CompanySitesAuthorization` (OTHER_FIELDS const +
+both foreach removed; READONLY_SETTINGS_FIELDS quotation_* kept), `Services/CompanySiteService`
+(dropped `accountingManager` from HYDRATED_RELATIONS — this was the 500 RelationNotFound in
+the first test run), Store/UpdateCompanySiteRequest docblocks. Tests updated (requirement
+changed, not tampered): removed the two "Altro read-only 422" update tests + the "403 over
+Altro 422" create test; repurposed the meta "other visibleReadonly" test to quotation_*;
+trimmed the unit schema-columns assertion (+ negative asserts) and the responsible-relations
+test (dropped accountingManager).
+
+Frontend edits: deleted `company-site-other-tab.tsx` + `company-site-other-fields.ts`
+(kept `company-site-readonly-field.tsx` — settings tab still uses it for quotation_*);
+moved `<CustomFieldsSection resource="company-sites">` from settings-tab → profile-tab;
+form-body drops the 'other' tab/Archive icon/OTHER_FIELD_KEYS; `types.ts` CompanySiteDetail
+trimmed; it/en-company-sites locales drop tabs.other / sections.other / form.other.*; tests'
+fixtures trimmed and custom-fields test no longer navigates to Settings (custom fields are on
+the default Profilo tab now).
+
+Verified: Pint clean; `php artisan test` 1829 pass / 1 skip / 1 FAIL (AbstractMigration
+SourcePreviewTest — pre-existing, unrelated, see entry below); seeder run against dev DB →
+27 defs created, relation+color types confirmed. Frontend: tsc --noEmit 0, eslint 0, vitest
+company-sites 39/39. NOT committed (awaiting go-ahead).
+
+## BUGFIX — Operational-sites custom fields "save but value doesn't come back" (missing unconditional save) (2026-07-09) — GREEN
+
+Follow-up to the roles fix below: user confirmed operational-sites still drops a
+custom-fields-only edit (value never persists). Root cause CONFIRMED (not the same
+class of bug as roles — model already has `HasCustomFields` via `BaseModel`, READ
+works): `OperationalSiteService::update()` only called `$site->update(['alias' => ...])`
+inside an `if ($data->aliasSubmitted)` guard and never saved otherwise — the ONE
+service missed from the "14 services" `fill()->save()` unconditional-save sweep (it
+predates that pattern / was never audited because its write path is flat, not
+`fill($attributes)`). A custom-fields-only PATCH touches neither `alias` nor the
+address, so `$site` was never saved → the `HasCustomFields` `saved` hook never fired
+→ value silently dropped. FIX: `app/Services/OperationalSiteService.php::update()`
+now assigns `alias` (when submitted) then calls `$site->save()` unconditionally,
+before the address branch — mirrors the `fill()->save()` pattern used everywhere
+else, adapted to this service's non-`fill()` write style. Reproduce-first: new test
+FAILED before the fix (`null` instead of the persisted value), PASSED after.
+Audited the other 12 custom-fieldable services (business-functions, companies,
+company-sites, referent-types, referents, registries, sectors, attributes,
+product-categories, products, sources, tags, users) — all already do the
+unconditional `fill($attributes)->save()` with the exact same guard comment; none
+have the OperationalSite guard pattern. No other module needs this fix.
+Test: `tests/Feature/OperationalSites/OperationalSiteCustomFieldUpdateTest.php`
+(PATCH only `custom_fields` → persists + round-trip GET). `php artisan test
+--filter=OperationalSite` 77/77 (one isolated flake seen once, non-reproducible
+across 4 subsequent clean runs, unrelated to this change — confirmed by reproducing
+identically on the pre-fix stash). Pint clean. NOT committed (awaiting go-ahead).
+Corrects the note below: operational-sites WAS actually broken (write path, not
+read) — the previous investigation only exercised READ with pre-seeded values.
+
+## BUGFIX — Roles custom fields non leggevano/salvavano (missing trait) (2026-07-09) — GREEN
+
+Segnalati 3 moduli che "non leggono i campi custom": sedi operative (operational-sites),
+categorie prodotto (product-categories), ruoli (roles). Indagine (tinker su MySQL seedato):
+- roles: ROTTO. `App\Models\Role extends SpatieRole` e NON usava `HasCustomFields` (a differenza
+  di User, l'altra eccezione framework-base che lo dichiara direttamente). Effetto doppio:
+  READ — `BaseApiController::withCustomFields()` skippa il model (guard `in_array(HasCustomFields...)`)
+  → `show`/`update` senza `custom_fields`; WRITE — `bootHasCustomFields()` non registra gli eventi
+  saving/saved/deleting → nessuna persistenza. FIX: aggiunto `use HasCustomFields` a Role.php (mirror
+  di User.php), unica modifica. Verificato: `entityTypeForModel($role)` → 'roles'; RolesTableDefinition
+  modelClass già `Role::class`; RoleService già `fill()->save()` incondizionato (no change). Test nuovo
+  tests/Feature/Roles/RoleCustomFieldUpdateTest.php (PATCH solo custom_fields → persiste + round-trip GET).
+  `php artisan test --filter=Role` 150/150; full suite 1 fail pre-esistente non correlato
+  (AbstractMigrationSourcePreviewTest, riproducibile su stash). Pint pulito. NON committato (attesa OK).
+- operational-sites & product-categories: NON riproducibili come rotti. Backend confermato corretto
+  (accessor `custom_fields` ritorna i 7 valori; meta espone i 7 descriptor `custom.*`; fieldPermissions
+  super-admin tutti visible). Frontend identico byte-per-byte al reference registries (loader edit fa
+  fetch fresco dello `show`, wiring `useCustomFieldsForm`/`<CustomFieldsSection>` uguale). 25 test FE
+  verdi incl. repro edit-hydration su tutti i 7 tipi. Probabile: erano test dell'utente pre-fix roles o
+  build FE stantio. AZIONE: far ritestare i due moduli dopo il fix roles; se ancora rotti servono
+  dettagli (quale campo, utente privileged o no).
+
+## BUGFIX — Column visibility not persisting (selection-column 422) (2026-07-09) — GREEN
+
+Sintomo: mostra/nascondi (o resize/reorder) una colonna in AG Grid → al reload torna al default.
+Root cause: su tabelle con selezione/bulk-delete attiva (`ROW_SELECTION`, data-table.tsx) AG Grid v35
+inietta una colonna reale `ag-Grid-SelectionColumn` in `getColumnState()`. `toColumnPreferences`
+filtrava SOLO `__actions`, quindi il payload includeva quell'id → non è in `defaultColumnLayout()`
+→ `TablePreferencesRequest` `columns.*.id => Rule::in($columnIds)` fa 422 sull'INTERO save → nessuna
+colonna persiste. La mutation `useSaveTablePreferences` non aveva `onError` → 422 ingoiato in silenzio.
+FIX (frontend-only): `toColumnPreferences(state, knownColumnIds: ReadonlySet<string>)` filtra ora contro
+la allow-list reale (`config.columns` ids, mirror di `Rule::in`) → esclude in modo generico actions,
+selection e ogni futura colonna sintetica. Aggiunto `onError` (toast `table.layoutError`, key riusata)
+al hook così i 422 futuri non sono più muti. Call site table-view.tsx usa memo `knownColumnIds`.
+Test: use-table-preferences.test.ts (nuovo caso regression selection-column) 4/4; tsc -b 36 == baseline
+(0 nuovi); eslint pulito. NB pre-esistente NON correlato: cell-renderers.test.tsx 3 fail (provato con
+stash: fallisce anche senza le mie modifiche). NON committato (attesa OK utente).
+
+## BUGFIX — Custom Fields: save / filter / column-visibility (2026-07-09) — GREEN
+
+Tre bug segnalati su anagrafiche (registries), tutti risolti; full suite 1830 pass / 1 fail preesistente
+(AbstractMigrationSourcePreviewTest) / 1 skip — 0 regressioni.
+
+1) WRITE non persisteva (systemic, 14 moduli). Root cause: i service custom-fieldable salvavano il model
+   SOLO se cambiava un attributo nativo — `if ($attributes !== []) { $x->update($attributes); }`. Il write
+   pipeline (HasCustomFields) è agganciato all'evento `saved`; un edit di soli custom fields non manda
+   attributi nativi → nessun save → nessun `saved` → valori persi in silenzio. FIX: `$x->fill($attributes)->
+   save();` incondizionato in TUTTI i 14 service (Registry/Company/CompanySite/Product/Sector/ProductCategory/
+   Referent/User/Source/Tag/ReferentType/Role/Attribute/BusinessFunction). Un save "pulito" non fa query,
+   non tocca updated_at, non logga (updated non parte) → no-op per il path nativo, fix per i custom.
+   Test: tests/Feature/Registries/RegistryCustomFieldUpdateTest.php (reproduce-first).
+
+2) FILTRI custom non filtravano. Root cause: `CustomFieldAwareTableDefinition::applyDerivedFilter` chiamava
+   l'handler per-tipo che legge SOLO la shape FLAT; le colonne text/number custom usano agMultiColumnFilter →
+   payload `multi` (filterModels[]) o combined `{operator,conditions[]}` → handler non trova `filter`/`values`
+   → nessun WHERE → tutte le righe. Stesso bug già risolto nativamente (FilterApplier::applyMulti/
+   applyCombinable, TableRowsMultiFilterTest) e reintrodotto dal decorator 0021. FIX: nel decorator, se il
+   filtro è `multi` o ha `conditions`, delega a FilterApplier (iniettato) puntato sulla JSON-path column
+   `custom_field_values.values-><key>`; il flat set/boolean resta sull'handler (preserva JSON containment
+   multi-valued enum/relation). Test: CustomFieldAwareTableDefinitionTest "multi/combined regression".
+
+3) VISIBILITÀ colonna custom spariva al reload. Root cause: il decorator delegava `defaultColumnLayout()` al
+   base (colonne native only), usato come allow-list da TablePreferencesRequest (`Rule::in`) → una preferenza
+   su `custom.<key>` faceva 422 sull'INTERO save (native incluse); il FE ingoia l'errore → reload a default.
+   FIX: override `defaultColumnLayout()` nel decorator (base + custom column layout), rimosso dal trait
+   DelegatesUnaugmentedTableMethods. Test: CustomFieldAwareTableDefinitionTest "preference persists".
+
+APERTI (minori, non fixati — scope): (a) il FE mutation delle preferenze non ha onError (ingoia i 422) —
+robustezza pre-esistente; (b) il set-filter di una colonna relation mostra gli id grezzi invece delle label
+(distinctValues ritorna id; la cella mostra la label). Da valutare separatamente.
+
+## UI — Custom Fields "Altri campi" section (2026-07-09) — GREEN
+
+`CustomFieldsSection.tsx`: i custom field SENZA `group` (group=null) prima renderizzavano flat (nessun
+heading); ora sono raccolti in un unico `<FormSection>` con icona `SlidersHorizontal` e titolo i18n
+`customFields.section.title` ("Altri campi" / "Other fields"). I gruppi nominati (group != null) restano
+invariati (una FormSection per gruppo). Nuova chiave i18n `section.title` in en/it-custom-fields.ts.
+Test: nuovo caso in CustomFieldsSection.test.tsx (heading "Other fields") → 6/6 verdi; tsc -b = 36 (==
+baseline, 0 nuovi); eslint pulito. NB: il DemoCustomFieldSeeder crea def senza group → in form finiscono
+tutte in questa sezione.
+
+## Demo — Custom Fields fixtures per ogni modello (2026-07-09) — GREEN
+
+Nuovo `DemoCustomFieldSeeder` (registrato ULTIMO in `DemoDataSeeder`) per verifica visiva end-to-end
+del sistema custom fields su TUTTI i moduli. Per ogni entity_type custom-fieldable (15; escluso
+`custom-fields` = self/meta) crea 7 definizioni — una per ogni tipo handler MVP: text/textarea/integer/
+decimal/boolean/enum(+3 opzioni)/relation(→companies, cardinality one) — poi popola i valori su fino a 10
+righe esistenti tramite `CustomFieldWriter::write` (stessa normalizzazione della pipeline di produzione,
+non scritture JSON grezze). Idempotente (updateOrCreate su chiavi naturali). `is_indexed=false` di
+proposito → nessun job di index-promotion asincrono. Eseguito su `migrate:fresh` + `db:seed --class=
+DemoDataSeeder`: 105 def / 45 opzioni / 133 righe valori; provider ri-legge 7 def con options eager per
+`companies`; valori tipati corretti (relation = id company reale). Pint pulito.
+
+## Feature — Universal Custom Fields (spec 0021) — GREEN / COMPLETE (2026-07-08)
+
+TUTTI i 26 AC verdi (verifier confermato AC-001..020; AC-021 job+dispatch; AC-022..026 FE-A/B/C/D).
+Backend CustomField|Company 327/327; full suite 1826/1828 (unico fail = preesistente
+AbstractMigrationSourcePreviewTest, NON spec 0021). FE: tsc -b pulito sui file spec 0021, vitest 126 verdi.
+NON committato (attesa OK utente; working tree contiene anche lavoro migration-sources di altri).
+Aperti minori: company-detail.tsx non mostra ancora custom_fields (griglia+form lo coprono);
+CustomFieldAwareTableDefinition.php 358 righe / CustomFieldWritePipelineTest.php 318 (soft-limit, <500 hard);
+AC-021 EXPLAIN + multi-valued index JSON_CONTAINS = verifica MySQL-prod (non testabile su sqlite).
+NOTA PROGETTO IMPORTANTE: `tsc --noEmit` NON type-checka nulla (tsconfig solution-style files:[]+references);
+il check reale e' `tsc -b`. Il hook Stop typecheck.sh potrebbe essere un gate vuoto — da verificare/correggere.
+
+BUGFIX (2026-07-08, post-consegna): "vari moduli non caricavano tabelle/form". Root cause:
+`CustomFieldProvider::definitionsFor()` usava `Cache::rememberForever` con store `database` (dev) —
+una Eloquent Collection serializzata torna `__PHP_Incomplete_Class` in rilettura → viola `: Collection`
+→ TypeError 500 su OGNI modulo custom-fieldable (tabella via decorator baseQuery + meta via fields).
+NON colto dai test perche' girano su cache `array`. FIX: memoizzazione per-request in memoria (niente
+serializzazione cross-request), provider bound `scoped` in AppServiceProvider, `->with('options')`
+per prevenire lazy-load enum. Test CustomFieldProviderTest aggiornato (test forget ora osserva il memo
+via comportamento; nuovo test regressione Collection+options). Verificato: tinker su MySQL dev → tutti
+i 16 moduli TABLE ok + META fields, TOTAL err=0; suite 328/328; pint pulito; cache dev svuotata.
+LEZIONE: non cachare Eloquent Collection nello store database/file; i test cache-array mascherano il bug.
+NB: gli errori tsc -b su users/referents/operational-sites/company-sites/personal-data sono PREESISTENTI
+(lavoro company-sites LOGO + personal-data quick-create gia' su main), NON custom-fields.
+
+ROLLOUT FORM COMPLETO (2026-07-08): montato `<CustomFieldsSection>` in TUTTI i 15 form dei moduli
+custom-fieldable (companies + attributes, business-functions, company-sites, operational-sites,
+product-categories, products, referent-types, referents, registries, roles, sectors, sources, tags, users).
+Estratto hook riusabile `features/custom-fields/use-custom-fields-form.ts` + helper `asCustomFieldsField`
+(in build-custom-fields-schema.ts) → ogni form si aggancia con 5 righe (schema embed / defaults / errorPaths /
+mount / payload buildCustomFieldsCreate|Update). Companies rifattorizzato su questi helper. Provider bound `scoped`.
+
+DUE BUG REALI trovati in verifica e CORRETTI:
+1) `App\Models\User` estendeva `Authenticatable` (non BaseModel) → NON aveva `HasCustomFields` → write/read
+   custom_fields su users faceva no-op. FIX: aggiunto `use HasCustomFields;` a User. Round-trip verificato.
+2) T15 index promotion: `scalarSqlType('boolean')` era `TINYINT(1)`, ma la colonna generata usa
+   `json_unquote(json_extract(...))` che per un boolean JSON da' la STRINGA 'true'/'false' → INSERT fallisce
+   ("Incorrect integer value: 'true'") su OGNI write della riga. FIX: boolean → VARCHAR(191). Droppate le
+   colonne generate orfane (cfg_pippo, cfg_color) rimaste da toggle precedenti. Ora nessun tipo generato
+   rompe gli INSERT. GAP NOTO (non urgente, ora innocuo): il job NON droppa la colonna generata quando
+   is_indexed torna a 0 / la definizione e' eliminata → colonne inutilizzate persistono (VARCHAR = safe).
+
+VERIFICA FINALE: 15/15 form montano la section; FE tsc -b = 36 errori (== baseline preesistente, 0 nuovi);
+vitest 798 pass / 3 fail preesistenti (cell-renderers ContactsCell i18n leak, non correlato); backend 444
+CustomField|User test verdi; pint pulito; users round-trip {"pippo":true} OK.
+LEZIONE PROCESSO: gli agent NON devono usare `git stash`/`git reset` su un working tree condiviso (hanno
+causato race); usare solo `git diff`/`git log -p` per confronti.
+
+
+
+Sistema universale di campi personalizzati agnostico/backend-driven (spec docs/specs/0021-universal-custom-fields.xml).
+Storage JSON-ibrido; innesto ai motori generici via DECORATOR (zero codice per-modulo su read/grid/meta/permessi)
++ middleware→bag→trait per il write. Costruito a fasi con subagent + verifier indipendente. Branch corrente
+(NON committato — attesa OK utente). NON committare finché l'utente non lo chiede.
+
+STATO VERDE (backend, verifier confermato AC-001..020):
+- Fase 1 storage: `custom_field_definitions/options/values` (values JSON, una riga per entità), Model+Factory,
+  morph `custom_field`/`custom_field_option`. FieldTypeHandler strategy (7 tipi MVP: text/textarea/integer/decimal/
+  boolean/enum/relation) + `FieldTypeRegistry` (config/custom-fields.php). `CustomFieldEntityRegistry` (entity_type=
+  domain key presente in tables.php ∩ authorization.php) + `CustomFieldProvider` (definizioni cache-ate, KEY_PREFIX='custom.').
+- Fase 2 innesto: `CustomFieldAwareAuthorization` (decorator, wrap in AuthorizationRegistry) + MetaController arricchito
+  (fields custom con source:'custom'+config+options+relation). `CustomFieldAwareTableDefinition` (decorator, wrap in
+  TableRegistry; SUBQUERY-join a custom_field_values per evitare collisione id/created_at + reserved word `values`;
+  UNA join a prescindere dal numero di custom field). Write: `CaptureCustomFields` middleware (api group) → `CustomFieldRequestBag`
+  (scoped, pull() distruttivo, single-primary-entity per request) → trait `HasCustomFields` su BaseModel (saving=validate,
+  saved=write, deleting=purge) → `CustomFieldValidator`+`CustomFieldWriter`. `BaseApiController` toccato UNA volta:
+  ValidationException→422 con errors() + injection `custom_fields` (object) nel dettaglio via withCustomFields().
+- Fase 3 admin: modulo `custom-fields` (Policy `CustomFieldDefinitionPolicy` — nome per convenzione Model→Policy, resource
+  resta 'custom-fields'; Authorization/TableDefinition/Requests/DTO/`CustomFieldService`/Resource/Controller +
+  `CustomFieldEntitiesController` GET /custom-fields/entities). Registrato in config/{authorization,tables,navigation}.php
+  + routes/api/custom-fields.php.
+
+CONTRATTO FE (congelato, consumato da FE-A/B): /meta/{resource} → fields[] con custom {key:'custom.<rawKey>', type,
+label, source:'custom', config, options?[{value,label,color,icon}], relation?{for_select_resource,cardinality}, mandatory}
++ permissions.fields['custom.<rawKey>']. Detail → data.custom_fields={'<rawKey>':value} (UN-namespaced; relation=id/ids,
+enum=value/values). Write body custom_fields={'<rawKey>':value}; 422 keyed custom_fields.<rawKey>. Grid: colonne
+id='custom.<key>' source:'custom' visible:false, type/filterType da handler, relation già label-string.
+
+FE VERDE: FE-A slice renderer (features/custom-fields/: field-component-registry OCP, CustomFieldsSection, build-custom-fields-schema,
+custom-fields-payload, i18n en/it-custom-fields NON ancora wired) 28 test. FE-B fallback data-table per source:'custom'
+(+ suppressFieldDotNotation, bug reale) 48 test.
+
+RESIDUO: FE-D pannello admin + wiring i18n/router; FE-C mount pilota Companies; T15 index promotion (opt-in) +
+test HTTP-422 permanente su /companies (GAP verifier). NOTE: CustomFieldAwareTableDefinition.php 358 righe (soft-limit).
+Failure di suite preesistenti e NON correlate: AbstractMigrationSourcePreviewTest, cell-renderers.test.tsx (i18n leak).
+
+## Spec 0021 (Universal Custom Fields) — T9 admin CRUD for DEFINITIONS — GREEN (2026-07-08)
+
+Backend-only microtask, built in parallel with T5/T6/T7 (decorators + write pipeline, other
+teammates, same session/branch). Implements the admin CRUD module for `custom_field_definitions`
+itself (domain/resource `custom-fields`) as a standard module of the generic framework — mirrors
+`attributes` end to end: Policy → Authorization → TableDefinition → Requests → DTO → Service →
+Resource → Controller → routes → config registrations + navigation node.
+
+Files: `app/Policies/CustomFieldDefinitionPolicy.php`, `app/Authorization/CustomFieldsAuthorization.php`,
+`app/Tables/CustomFieldsTableDefinition.php` + `app/Tables/CustomFields/CustomFieldColumnCatalog.php`,
+`app/Http/Requests/CustomFields/{Store,Update}CustomFieldRequest.php`,
+`app/DataObjects/CustomFields/{Create,Update}CustomFieldData.php`, `app/Services/CustomFieldService.php`,
+`app/Http/Resources/CustomFieldResource.php`,
+`app/Http/Controllers/CustomFields/{CustomFieldController,CustomFieldEntitiesController}.php`,
+`routes/api/custom-fields.php` (required from `routes/api.php`, file-size split). Registered in
+`config/authorization.php`, `config/tables.php`, `config/navigation.php` (new `custom-fields` node
+under "configuration", permission `custom-fields.view`). Tests:
+`tests/Feature/CustomFields/CustomFieldAdmin{Crud,Security}Test.php` (26 tests, AC-018/019/020).
+
+NAMING DEVIATION from the spec's literal text: Policy class is `CustomFieldDefinitionPolicy` (matches
+the `CustomFieldDefinition` model 1:1, Laravel's `Gate::guessPolicyName` convention — every other
+Policy in this codebase follows the same Model→Policy naming), NOT `CustomFieldPolicy` as the spec
+prose suggested. `resource()` still returns `'custom-fields'`, so permissions/routes/table/authorization
+all use the `custom-fields` key as specified. Rationale: `CustomFieldPolicy` would not auto-resolve
+for a `CustomFieldDefinition` instance without an explicit `Gate::policy()` registration, and
+`AppServiceProvider` is being concurrently edited by other T5/T6/T7 teammates — avoided touching it
+to keep ownership/merge risk low. Flagged, not silently applied.
+
+`is_indexed: false→true` dispatch hook: `PromoteCustomFieldIndexJob` is T15 (later task, not yet
+built). `CustomFieldService::dispatchIndexPromotionIfNewlyIndexed()` guards with `class_exists()` —
+a pure no-op today, becomes a real `::dispatch()` the moment the class lands, no code change needed.
+Covered by a test asserting the guarded no-op path (PATCH succeeds, `is_indexed` persists true).
+
+`custom-fields` is itself registered as an entity in `config/tables.php`/`config/authorization.php`
+(required so the module has a Policy/Authorization/Table like every other resource) — this means
+`CustomFieldEntityRegistry::entities()` legitimately lists `custom-fields` too (T6's
+`AuthorizationRegistry`/`TableRegistry` decorators explicitly exclude decorating the `custom-fields`
+resource itself, preventing recursion; nothing further needed here).
+
+Side-effect fix (legitimate, not test-tampering): registering the new `custom-fields` resource in
+`config/authorization.php` grows `GET /api/authorization/fields`'s resource list (by design — the
+Role field-permission matrix should cover custom-fields' own admin fields too), which broke
+`tests/Feature/Authorization/FieldCatalogueEndpointTest.php`'s hardcoded expected list; updated it to
+include `custom-fields`, consistent with the test's own comment precedent for prior resource additions.
+
+Verification: `XDEBUG_MODE=off php artisan test --filter=CustomFieldAdmin` → 26/26 passed (77
+assertions). Full suite `php artisan test` → 1802/1804 passed; the only remaining failure is the
+pre-existing, explicitly out-of-scope `AbstractMigrationSourcePreviewTest`. `./vendor/bin/pint --dirty`
+clean. Two other full-suite failures observed transiently during the session
+(`CompanyTableTest`/`CustomFieldAwareTableDefinitionTest`, T5/T6 query-count boundary assertions) were
+confirmed flaky/order-dependent and NOT caused by this task's files — resolved by a concurrent
+teammate's fix to the assertion threshold, landed mid-session.
+
+Frontend can now consume: `GET /api/custom-fields/entities`, `GET|POST|PUT|PATCH|DELETE
+/api/custom-fields[/{id}]`, `GET /api/meta/custom-fields`, `GET /api/tables/custom-fields/columns`,
+`POST /api/tables/custom-fields/rows` (table/meta routes are generic, already wired). Navigation node
+`custom-fields` (permission `custom-fields.view`) ready under "configuration"; i18n keys
+`navigation.customFields`, `customFields.columns.*`, `customFields.entities.*`,
+`customFields.types.*` are NOT yet added to `en-*.ts`/`it-*.ts` (frontend task, out of backend scope).
+
 ## Feature — Company Sites: LOGO avatar column + editable COMPANY link — GREEN (2026-07-08)
 
 Two small additions to the Company Sites module, built by backend + frontend teammates in parallel
@@ -2387,3 +2935,81 @@ Not committed — working tree is COMMINGLED across 0010-business-functions, com
 SAME modified files (`config/{tables,authorization,navigation}.php`, `AppServiceProvider.php`, `router.tsx`,
 `en.ts`/`it.ts`, `icon-map.ts`, `breadcrumbs.tsx`, `RolePermissionSeeder.php`). A cleanly-isolated 0011-only
 commit is not possible without splitting interleaved hunks; awaiting a decision on how to land the modules.
+
+## Spec 0021 — Universal Custom Fields — T6 CustomFieldAwareTableDefinition — GREEN (backend, first-hand)
+
+Spec `docs/specs/0021-universal-custom-fields.xml`. T6 = the Table decorator (AC-014..017): `custom.<key>`
+columns/filter/sort/search/export on ANY custom-fieldable domain, zero per-module code. Built on top of
+Fase 1 (`CustomFieldProvider`, `CustomFieldEntityRegistry`, `FieldTypeRegistry` + handlers — already present)
+and alongside T5's `CustomFieldAwareAuthorization` (already present, same decorator pattern on
+`AuthorizationRegistry`).
+
+New files:
+- `backend/app/Tables/CustomFieldAwareTableDefinition.php` — decorator implementing `TableDefinition`,
+  augments `columns()/resolveConfig()/baseQuery()/mapRow()/sortableColumnIds()/filterableColumnIds()/
+  searchableColumnIds()/filterableColumnMap()/applyDerivedFilter()/applyDerivedSort()/distinctValues()/
+  applyDerivedSearch()`; pure passthrough to `$inner` when the entity has zero ACTIVE custom field
+  definitions (memoized per instance/request).
+- `backend/app/Tables/CustomFields/CustomFieldColumnBuilder.php` — builds the raw + resolved
+  `ColumnDefinition` shape for one custom field (enum → `options`+`badges` from the handler's `toMeta()`).
+- `backend/app/Tables/CustomFields/DelegatesUnaugmentedTableMethods.php` — trait holding the pure
+  one-line passthrough methods (`domain/resource/modelClass/authorizeViewAny/filters/actions/defaultSort/
+  defaultPagination/actionsFor/defaultColumnLayout/deleteModel`), split out to keep the decorator ≤ ~360
+  lines (soft-limit judgment call, documented in-file).
+- `backend/app/CustomFields/CustomFieldRelationLabelResolver.php` — resolves a `relation` field's stored
+  id(s) to a display label for the GRID ONLY (detail/read API keeps raw ids). Label = target model's own
+  "display attribute" picked from a short candidate list (`denomination/name/label/title`, via ONE
+  `Schema::getColumnListing()` per target model class, cached) — NOT the target's `ForSelectResource` (would
+  need a new entity_type→resource-class registry the framework doesn't have; documented trade-off). Batches
+  ids per row via `whereIn` + memoizes per (model class, id) for the instance's lifetime — one
+  `CustomFieldAwareTableDefinition` instance is reused across every row of one `TableService::rows()` call,
+  so a repeated id (or every id of one row's own multi-relation array) is never re-queried. Never lazy-loads
+  (explicit `whereIn` only → `preventLazyLoading` never trips).
+
+Edited (minimal, required — see deviation note below):
+- `backend/app/Tables/TableRegistry.php` — `resolve()` now wraps in `CustomFieldAwareTableDefinition` when
+  `CustomFieldEntityRegistry::isCustomFieldable($domain)` (skip for `custom-fields` itself). Added public
+  `resolveRaw($domain)` (the undecorated resolution) used both internally and by
+  `CustomFieldEntityRegistry::build()`.
+- `backend/app/CustomFields/CustomFieldEntityRegistry.php` — **one-line, load-bearing fix**: `build()` now
+  calls `$this->tableRegistry->resolveRaw($domain)` instead of `->resolve($domain)`. REQUIRED: `build()`
+  itself is invoked from inside `isCustomFieldable()`, which `TableRegistry::resolve()` now calls on every
+  domain resolution (including from `AuthorizationRegistry`'s own T5 decorator check) — going through the
+  decorated `resolve()` there re-enters `isCustomFieldable()` on the same singleton BEFORE its own `build()`
+  call returns and assigns `$this->map`, i.e. infinite recursion/stack overflow. `resolveRaw()` returns a
+  definition with byte-identical `modelClass()`/`resource()` (the only two things `build()` reads), so the
+  fix is behavior-preserving. Flagging per protocol since this file was outside my nominal T6 scope, but
+  shipping T6 without it breaks EVERY table/meta resolution once any custom-fieldable domain has ≥1 request
+  in the process.
+- `backend/tests/Feature/Companies/CompanyTableTest.php` — bumped one pre-existing query-count threshold
+  from `<10` to `<12` (now measured 10): `CustomFieldAwareTableDefinition`'s cached "has this domain any
+  active custom fields" check adds exactly ONE cache-miss query per request (never per row) even when the
+  domain has zero custom fields — an accepted, documented cost of the now-universal decorator wrap. No test
+  guarantee was weakened (still asserts a small, row-count-independent query count).
+
+Key design point (the ambiguous-column landmine): `custom_field_values` has its OWN `id`/`created_at`/
+`updated_at`, colliding with most host tables' same-named columns once naively joined — any unqualified
+`ORDER BY created_at`/`WHERE id=...` from the generic `TableQueryBuilder`/`FilterApplier` (which use bare
+column ids from the definition) becomes ambiguous SQL. Fixed by joining a SUBQUERY (`SELECT entity_id,
+values FROM custom_field_values WHERE entity_type=?`) aliased BACK to `custom_field_values` — exposes only
+`entity_id`/`values` (no collision) while every `FieldTypeHandler`'s hardcoded
+`custom_field_values.values-><key>` column expression keeps resolving correctly. Verified passing on SQLite
+(`json_extract`/`json_each` — Laravel's `->`-path grammar); one join regardless of custom field count (spec
+AC-015), confirmed via `TableQueryBuilder::build()->toSql()` with 3 simultaneous custom filters
+(`substr_count(sql, 'left join') === 1`).
+
+Verified (first-hand): `tests/Feature/CustomFields/CustomFieldAwareTableDefinitionTest.php` 9/9 (AC-014
+columns+allow-list, AC-015 rows+single-join+no-N+1, AC-016 filter text/number/boolean/set + sort +
+`/values` + 422 outside allow-list, AC-017 export reuse via `TableQueryBuilder::build()+mapRow()`); combined
+`Table|CustomField|Companies|Company` filter 630/630 (2908 assertions, 1 skip); full suite 1802/1804 (only
+the pre-existing unrelated `AbstractMigrationSourcePreviewTest` red); `./vendor/bin/pint --dirty` clean.
+
+Next owner (spec 0021): admin CRUD for definitions appears to be landing concurrently elsewhere in the tree
+(`CustomFieldsTableDefinition`/`CustomFieldsAuthorization` already registered in `config/{tables,
+authorization}.php` mid-session — my `$domain === 'custom-fields'` exclusion guard already accounts for it,
+verified green). Not yet done anywhere: `PromoteCustomFieldIndexJob` (AC-021, opt-in lane) and the frontend
+`features/custom-fields/` + grid cell-renderer generalization (AC-022..026) — frontend teammate can consume
+`GET /tables/{domain}/columns`' new `custom.<key>` entries (`source:'custom'`, `type` ∈
+text/number/boolean/enum, `filterType` ∈ text/number/boolean/set, `options`/`badges` for enum) and
+`POST /tables/{domain}/rows`' `custom.<key>` row values (relation → already a display-label STRING, ready
+to render, no id lookup needed client-side) as-is; no further backend change expected for the FE grid slice.

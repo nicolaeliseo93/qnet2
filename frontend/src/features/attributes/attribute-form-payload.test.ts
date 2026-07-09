@@ -30,6 +30,7 @@ describe('buildCreatePayload', () => {
       name: 'Weight',
       data_type: 'DECIMAL',
       options: [],
+      custom_fields: {},
     }
 
     expect(buildCreatePayload(values)).toEqual({
@@ -49,6 +50,7 @@ describe('buildCreatePayload', () => {
         { value: 'red', label: 'Red' },
         { value: 'blue', label: 'Blue' },
       ],
+      custom_fields: {},
     }
 
     expect(buildCreatePayload(values)).toEqual({
@@ -73,6 +75,7 @@ describe('buildUpdatePayload', () => {
         { value: 'red', label: 'Red' },
         { value: 'blue', label: 'Blue' },
       ],
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original())).toEqual({})
@@ -87,6 +90,7 @@ describe('buildUpdatePayload', () => {
         { value: 'red', label: 'Red' },
         { value: 'blue', label: 'Blue' },
       ],
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original())).toEqual({ name: 'Colour' })
@@ -98,6 +102,7 @@ describe('buildUpdatePayload', () => {
       name: 'Color',
       data_type: 'ENUM',
       options: [{ value: 'red', label: 'Red' }],
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original())).toEqual({

@@ -7,6 +7,7 @@ import { Form, FormControl } from '@/components/ui/form'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { useReferentTypeForm } from '@/features/referent-types/use-referent-type-form'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type {
   ReferentTypeDetail,
   ReferentTypeFormMode,
@@ -23,7 +24,9 @@ interface ReferentTypeFormBodyProps {
  * in `MetaField` (spec 0004): hidden means absent, non-editable means
  * disabled, `required` comes from the resolved `ResourcePermissions` — no
  * hardcoded permission logic lives here. All non-render logic lives in
- * `useReferentTypeForm`.
+ * `useReferentTypeForm`. `<CustomFieldsSection>` (spec 0021) mounts the
+ * resource's admin-defined custom fields with zero referent-types-specific
+ * rendering/validation logic.
  */
 export function ReferentTypeFormBody({ mode, onSuccess, onCancel }: ReferentTypeFormBodyProps) {
   const { t } = useTranslation()
@@ -60,6 +63,8 @@ export function ReferentTypeFormBody({ mode, onSuccess, onCancel }: ReferentType
               </MetaField>
             </FormSection>
           )}
+
+          <CustomFieldsSection resource="referent-types" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

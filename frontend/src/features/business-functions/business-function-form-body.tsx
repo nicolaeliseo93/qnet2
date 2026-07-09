@@ -17,6 +17,7 @@ import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import { useBusinessFunctionForm } from '@/features/business-functions/use-business-function-form'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import { BUSINESS_FUNCTION_TYPES } from '@/features/business-functions/types'
 import type {
   BusinessFunctionDetail,
@@ -46,6 +47,8 @@ const TYPE_LABEL_KEYS: Record<BusinessFunctionType, string> = {
  * — no hardcoded permission logic lives here. All non-render logic lives in
  * `useBusinessFunctionForm`. Fields are grouped into two `FormSection` cards:
  * identity (name, type) and assignment (responsabile, associated users).
+ * `<CustomFieldsSection>` (spec 0021) mounts the resource's admin-defined
+ * custom fields with zero business-functions-specific rendering/validation logic.
  */
 export function BusinessFunctionFormBody({ mode, onSuccess, onCancel }: BusinessFunctionFormBodyProps) {
   const { t } = useTranslation()
@@ -188,6 +191,8 @@ export function BusinessFunctionFormBody({ mode, onSuccess, onCancel }: Business
               </MetaField>
             </FormSection>
           )}
+
+          <CustomFieldsSection resource="business-functions" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

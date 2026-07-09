@@ -1,14 +1,13 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /**
  * Zod schema for the product create/edit form's GENERIC fields, built as a
- * factory so validation messages are localized via the i18n `t` function. The
- * dynamic attribute values are intentionally typed loosely here
- * (`attributes`): their real validation (required/type/ENUM membership) is
- * server-side, driven by the selected category's effective attributes (spec
- * AC-015) — duplicating that logic client-side would drift from the backend
- * the moment a category's assignments change.
+ * factory so validation messages are localized via the i18n `t` function.
  */
 
 /** Backend `name` column limit (`max:191`). */
@@ -28,7 +27,6 @@ function baseFields(t: TFunction) {
     price: z.number().nonnegative(t('products.form.priceInvalid')).nullable(),
     category_id: z.number().nullable(),
     product_type: z.enum(['SERVICE']),
-    attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
   }
 }
 
@@ -47,12 +45,16 @@ function withRequiredValueRules<T extends z.ZodTypeAny>(schema: T, t: TFunction)
   })
 }
 
-export function buildCreateProductSchema(t: TFunction) {
-  return withRequiredValueRules(z.object({ ...baseFields(t) }), t)
+/** `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateProductSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return withRequiredValueRules(
+    z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) }),
+    t,
+  )
 }
 
-export function buildUpdateProductSchema(t: TFunction) {
-  return buildCreateProductSchema(t)
+export function buildUpdateProductSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return buildCreateProductSchema(t, customFieldsSchema)
 }
 
 export type CreateProductFormValues = z.infer<ReturnType<typeof buildCreateProductSchema>>

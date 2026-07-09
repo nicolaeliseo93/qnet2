@@ -10,52 +10,17 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * ResourceAuthorization for the `company-sites` resource (spec 0020).
  *
- * The "Altro" section (OTHER_FIELDS) is read-only for EVERY actor, regardless
- * of write ability — unlike every other field here, whose ceiling is the
- * usual visible+editable-when-may-write / visible+readonly-otherwise
- * (mirrors CompaniesAuthorization). `quotation_layout_id`/`quotation_header_id`/
- * `quotation_footer_id` are `settings`-group fields but ALSO always read-only
- * (no target table yet, spec 0020) — the one exception inside an otherwise
- * writable group.
+ * The former "Altro" section is gone: those attributes are now universal
+ * custom fields (spec 0021, QualificaTemplateSeeder), authorized generically
+ * by the custom-fields layer — not listed here. Every native field's ceiling
+ * is the usual visible+editable-when-may-write / visible+readonly-otherwise
+ * (mirrors CompaniesAuthorization), except `quotation_layout_id`/
+ * `quotation_header_id`/`quotation_footer_id`: `settings`-group fields that are
+ * ALSO always read-only (no target table yet, spec 0020) — the one exception
+ * inside an otherwise writable group.
  */
 class CompanySitesAuthorization extends AbstractResourceAuthorization
 {
-    /**
-     * The read-only "Altro" section: field key -> form `type` hint. Shared by
-     * fields() (catalogue) and fieldPermissionCeiling() (always readonly).
-     *
-     * @var array<string, string>
-     */
-    private const array OTHER_FIELDS = [
-        'accounting_manager_id' => 'select',
-        'store_id' => 'number',
-        'company_type' => 'number',
-        'commissions' => 'number',
-        'order_sites' => 'number',
-        'payment_status_assign_technician' => 'number',
-        'payment_status_deposit' => 'number',
-        'payment_status_balance' => 'number',
-        'default_payment_id' => 'number',
-        'default_vat_id' => 'number',
-        'other_category_id' => 'number',
-        'iso_category_id' => 'number',
-        'soa_category_id' => 'number',
-        'sic_category_id' => 'number',
-        'avv_category_id' => 'number',
-        'gdpr_category_id' => 'number',
-        'res_category_id' => 'number',
-        'pal_category_id' => 'number',
-        'quattro_category_id' => 'number',
-        'finage_category_id' => 'number',
-        'fondi_category_id' => 'number',
-        'gare_category_id' => 'number',
-        'partnership_category_id' => 'number',
-        'progetti_category_id' => 'number',
-        'status' => 'number',
-        'color' => 'text',
-        'surface_sqm' => 'number',
-    ];
-
     /**
      * `settings`-group fields with NO target table yet (spec 0020): always
      * read-only, unlike the rest of `settings`.
@@ -100,7 +65,6 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('responsible_tickets_id', 'select', 'settings'),
             new FieldDefinition('responsible_validation_contracts_id', 'select', 'settings'),
             new FieldDefinition('responsible_validation_contracts_two_id', 'select', 'settings'),
-            new FieldDefinition('default_bank_id', 'select', 'settings'),
             new FieldDefinition('proforma_progressive', 'number', 'settings'),
             new FieldDefinition('invoice_progressive', 'number', 'settings'),
             new FieldDefinition('quotation_layout_id', 'number', 'settings'),
@@ -108,10 +72,6 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('quotation_footer_id', 'number', 'settings'),
             new FieldDefinition('banks', 'collection', 'banks'),
         ];
-
-        foreach (self::OTHER_FIELDS as $key => $type) {
-            $fields[] = new FieldDefinition($key, $type, 'other');
-        }
 
         return $fields;
     }
@@ -145,20 +105,12 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
             'responsible_tickets_id' => $this->writableOrReadonly($actor, $model),
             'responsible_validation_contracts_id' => $this->writableOrReadonly($actor, $model),
             'responsible_validation_contracts_two_id' => $this->writableOrReadonly($actor, $model),
-            'default_bank_id' => $this->writableOrReadonly($actor, $model),
             'proforma_progressive' => $this->writableOrReadonly($actor, $model),
             'invoice_progressive' => $this->writableOrReadonly($actor, $model),
             'banks' => $this->writableOrReadonly($actor, $model),
         ];
 
         foreach (self::READONLY_SETTINGS_FIELDS as $key) {
-            $ceiling[$key] = FieldPermission::visibleReadonly();
-        }
-
-        foreach (array_keys(self::OTHER_FIELDS) as $key) {
-            // "Altro": read-only ceiling always — the write path
-            // (StoreCompanySiteRequest/UpdateCompanySiteRequest) never accepts
-            // these keys either.
             $ceiling[$key] = FieldPermission::visibleReadonly();
         }
 

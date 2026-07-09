@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -20,6 +21,7 @@ import type {
   ReferentTypeDetail,
   ReferentTypeFormMode,
 } from '@/features/referent-types/types'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = ['name'] as const
@@ -44,17 +46,29 @@ export function useReferentTypeForm({ mode, onSuccess }: UseReferentTypeFormArgs
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'referent-types',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.referentType.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateReferentTypeSchema(t) : buildCreateReferentTypeSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateReferentTypeSchema(t, customFields.schema)
+        : buildCreateReferentTypeSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<ReferentTypeFormValues>(() => {
     if (mode.type === 'edit') {
-      return { name: mode.referentType.name }
+      return { name: mode.referentType.name, custom_fields: customFields.defaultValues }
     }
-    return { name: '' }
-  }, [mode])
+    return { name: '', custom_fields: customFields.defaultValues }
+  }, [mode, customFields.defaultValues])
 
   const form = useForm<ReferentTypeFormValues>({
     resolver: zodResolver(schema),
@@ -63,6 +77,10 @@ export function useReferentTypeForm({ mode, onSuccess }: UseReferentTypeFormArgs
 
   const onSubmit = async (values: ReferentTypeFormValues) => {
     setServerError(null)
+    const errorFields: Path<ReferentTypeFormValues>[] = [
+      ...SERVER_ERROR_FIELDS,
+      ...(customFields.errorPaths as Path<ReferentTypeFormValues>[]),
+    ]
     try {
       if (mode.type === 'edit') {
         const saved = await updateReferentType(
@@ -79,7 +97,7 @@ export function useReferentTypeForm({ mode, onSuccess }: UseReferentTypeFormArgs
       toast.success(t('referentTypes.form.created'))
       onSuccess(created)
     } catch (error) {
-      if (!applyServerValidationErrors(error, form.setError, [...SERVER_ERROR_FIELDS])) {
+      if (!applyServerValidationErrors(error, form.setError, errorFields)) {
         setServerError(t('referentTypes.form.genericError'))
       }
     }

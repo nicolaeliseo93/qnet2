@@ -1,3 +1,4 @@
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 import {
   cardToDraft,
   draftToPayload,
@@ -26,11 +27,13 @@ export function buildCreatePayload(
   profileDraft: PersonalDataDraft,
   fieldPermission?: PersonalDataFieldPermissionResolver,
 ): CreateReferentPayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     referent_type_id: values.referent_type_id,
     contact_scope: values.contact_scope,
     notes: values.notes || null,
     personal_data: omitNonEditableFields(draftToPayload(profileDraft), fieldPermission),
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -67,6 +70,11 @@ export function buildUpdatePayload(
   const nextPayload = draftToPayload(profileDraft)
   if (JSON.stringify(nextPayload) !== JSON.stringify(draftToPayload(originalDraft))) {
     payload.personal_data = omitNonEditableFields(nextPayload, fieldPermission)
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

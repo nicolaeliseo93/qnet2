@@ -29,6 +29,10 @@ class Attribute extends BaseModel
     {
         return [
             'data_type' => AttributeType::class,
+            // Spec 0013 — external data migration: the source system's id for a
+            // migrated attribute, guarded (not in #[Fillable]) so it is only ever
+            // set by property assignment post-create.
+            'old_id' => 'integer',
         ];
     }
 
@@ -49,15 +53,5 @@ class Attribute extends BaseModel
         return $this->belongsToMany(ProductCategory::class, 'attribute_category', 'attribute_id', 'category_id')
             ->withPivot(['is_required', 'sort_order'])
             ->withTimestamps();
-    }
-
-    /**
-     * Every product value ever recorded for this attribute — used by the
-     * delete guard (an attribute with recorded values cannot be removed) and
-     * the data_type-immutability guard on update.
-     */
-    public function values(): HasMany
-    {
-        return $this->hasMany(ProductAttributeValue::class);
     }
 }

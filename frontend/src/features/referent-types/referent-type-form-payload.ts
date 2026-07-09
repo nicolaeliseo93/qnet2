@@ -4,10 +4,15 @@ import type {
   UpdateReferentTypePayload,
 } from '@/features/referent-types/types'
 import type { ReferentTypeFormValues } from '@/features/referent-types/use-referent-type-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 /** Builds the create payload: the single `name` field. */
 export function buildCreatePayload(values: ReferentTypeFormValues): CreateReferentTypePayload {
-  return { name: values.name }
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
+  return {
+    name: values.name,
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
+  }
 }
 
 /**
@@ -22,6 +27,11 @@ export function buildUpdatePayload(
 
   if (values.name !== original.name) {
     payload.name = values.name
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

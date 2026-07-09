@@ -31,6 +31,7 @@ describe('buildCreatePayload', () => {
       inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      custom_fields: {},
     }
 
     expect(buildCreatePayload(values)).toEqual({
@@ -51,6 +52,7 @@ describe('buildUpdatePayload', () => {
       inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original())).toEqual({})
@@ -63,6 +65,7 @@ describe('buildUpdatePayload', () => {
       inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original())).toEqual({ parent_id: 2 })
@@ -75,6 +78,7 @@ describe('buildUpdatePayload', () => {
       inherits_attributes: false,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original())).toEqual({ inherits_attributes: false })
@@ -87,6 +91,7 @@ describe('buildUpdatePayload', () => {
       inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: false, sort_order: 0 }],
+      custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original())).toEqual({

@@ -52,7 +52,6 @@ it('down() reverses the attributes migration, up() recreates it', function () {
 
     Schema::dropIfExists('attribute_category');
     Schema::dropIfExists('attribute_options');
-    Schema::dropIfExists('product_attribute_values');
     $migration->down();
 
     expect(Schema::hasTable('attributes'))->toBeFalse();

@@ -9,6 +9,7 @@
 import type { PersonalDataCard } from '@/features/personal-data/types'
 import type { PersonalDataPayload } from '@/features/personal-data/drafts'
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /** Convention status of a registry (AgreementStatusEnum). */
 export const AGREEMENT_STATUSES = ['negotiating', 'rejected', 'agreed'] as const
@@ -34,9 +35,9 @@ export interface RegistryDetail {
   source_id: number | null
   /** Hydrates the "Source" single-select control. */
   source: ReferenceRef | null
-  ea_sector_ids: number[]
-  /** Hydrates the "EA sectors" multiselect control. */
-  ea_sectors: ReferenceRef[]
+  sector_ids: number[]
+  /** Hydrates the "Sectors" multiselect control. */
+  sectors: ReferenceRef[]
   referent_ids: number[]
   /** Hydrates the "Referents" multiselect control. */
   referents: ReferenceRef[]
@@ -63,6 +64,8 @@ export interface RegistryDetail {
    */
   personal_data: PersonalDataCard | null
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -82,7 +85,7 @@ export interface RegistryDetailWithPermissions extends RegistryDetail {
  */
 export interface CreateRegistryPayload {
   source_id?: number | null
-  ea_sector_ids?: number[]
+  sector_ids?: number[]
   referent_ids?: number[]
   manager_ids?: number[]
   supervisor_id?: number | null
@@ -96,6 +99,8 @@ export interface CreateRegistryPayload {
   size_class?: SizeClass | null
   employee_count?: number | null
   personal_data: PersonalDataPayload
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -106,7 +111,7 @@ export interface CreateRegistryPayload {
  */
 export interface UpdateRegistryPayload {
   source_id?: number | null
-  ea_sector_ids?: number[]
+  sector_ids?: number[]
   referent_ids?: number[]
   manager_ids?: number[]
   supervisor_id?: number | null
@@ -120,6 +125,8 @@ export interface UpdateRegistryPayload {
   size_class?: SizeClass | null
   employee_count?: number | null
   personal_data?: PersonalDataPayload
+  /** Only the custom fields that changed, keyed by raw key (spec 0021, sparse diff). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /** Discriminated form mode shared by the form hook/meta-resolver and `RegistryForm`. */

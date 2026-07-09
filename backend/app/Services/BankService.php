@@ -10,21 +10,39 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Business logic for a company site's bank list (spec 0020) — a real 1→N
- * child (FK `company_site_id`), unlike the polymorphic contacts/addresses,
- * so there is no "single primary" invariant here: mirrors ContactService's
- * diff-by-id sync alone.
+ * child (FK `company_site_id`), unlike the polymorphic contacts/addresses.
+ *
+ * Owns the invariant "at most one primary (preferred) bank per site": there is
+ * no `type` dimension (unlike a contact's per-type primary), and no auto-first
+ * default (unlike an address) — the preferred bank is optional. Setting a bank
+ * primary demotes every sibling, inside the transaction, so the site is never
+ * left with two. The FK relation has no DB-level constraint for this, so it
+ * lives here.
  */
 class BankService
 {
     public function create(CompanySite $companySite, CreateBank $data): CompanySiteBank
     {
-        return DB::transaction(fn (): CompanySiteBank => $companySite->banks()->create($data->toAttributes()));
+        return DB::transaction(function () use ($companySite, $data): CompanySiteBank {
+            /** @var CompanySiteBank $bank */
+            $bank = $companySite->banks()->create($data->toAttributes());
+
+            if ($bank->is_primary) {
+                $this->demoteSiblings($bank);
+            }
+
+            return $bank;
+        });
     }
 
     public function update(CompanySiteBank $bank, CreateBank $data): CompanySiteBank
     {
         return DB::transaction(function () use ($bank, $data): CompanySiteBank {
             $bank->update($data->toAttributes());
+
+            if ($bank->is_primary) {
+                $this->demoteSiblings($bank);
+            }
 
             return $bank;
         });
@@ -77,5 +95,18 @@ class BankService
                 }
             }
         });
+    }
+
+    /**
+     * Demote every other bank of the same site, leaving the given bank as the
+     * only primary (preferred) one.
+     */
+    private function demoteSiblings(CompanySiteBank $bank): void
+    {
+        CompanySiteBank::query()
+            ->where('company_site_id', $bank->company_site_id)
+            ->where('is_primary', true)
+            ->whereKeyNot($bank->getKey())
+            ->update(['is_primary' => false]);
     }
 }

@@ -10,9 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Business logic for the `attributes` resource (spec 0017): create/update
- * (including the ENUM-options full-replace and the data_type-immutability
- * guard) and a restrictive delete. The controller stays thin; this Service
- * is the single authority.
+ * (including the ENUM-options full-replace) and a restrictive delete. The
+ * controller stays thin; this Service is the single authority.
  */
 class AttributeService
 {
@@ -39,8 +38,6 @@ class AttributeService
 
     public function update(Attribute $attribute, UpdateAttributeData $data): Attribute
     {
-        $this->guardDataTypeImmutable($attribute, $data);
-
         return DB::transaction(function () use ($attribute, $data): Attribute {
             $finalDataType = $data->hasDataType() ? AttributeType::from($data->dataType) : $attribute->data_type;
 
@@ -50,9 +47,10 @@ class AttributeService
                 $attributes['data_type'] = $finalDataType;
             }
 
-            if ($attributes !== []) {
-                $attribute->update($attributes);
-            }
+            // Unconditional save: fire the model's saved event even when no native
+            // attribute changed, so the HasCustomFields write pipeline (spec 0021)
+            // persists a custom-fields-only edit. A clean save runs no UPDATE query.
+            $attribute->fill($attributes)->save();
 
             if ($data->hasOptions()) {
                 $this->guardEnumHasOptions($finalDataType, count($data->options));
@@ -70,14 +68,13 @@ class AttributeService
     }
 
     /**
-     * Restrictive delete: an attribute assigned to a category, or already
-     * carrying recorded product values, cannot be removed (it would silently
-     * orphan the category's form / a product's data).
+     * Restrictive delete: an attribute assigned to a category cannot be
+     * removed (it would silently orphan the category's form).
      */
     public function delete(Attribute $attribute): void
     {
-        if ($attribute->categories()->exists() || $attribute->values()->exists()) {
-            abort(409, 'This attribute is assigned to a category or has recorded product values and cannot be deleted.');
+        if ($attribute->categories()->exists()) {
+            abort(409, 'This attribute is assigned to a category and cannot be deleted.');
         }
 
         $attribute->delete();
@@ -94,25 +91,8 @@ class AttributeService
     }
 
     /**
-     * data_type is immutable once the attribute has recorded product values
-     * (changing it would leave those typed value_* columns meaningless).
-     */
-    private function guardDataTypeImmutable(Attribute $attribute, UpdateAttributeData $data): void
-    {
-        if (! $data->hasDataType() || $data->dataType === $attribute->data_type->value) {
-            return;
-        }
-
-        if ($attribute->values()->exists()) {
-            abort(422, 'The data type cannot be changed once the attribute has recorded product values.');
-        }
-    }
-
-    /**
      * Full-replace of the attribute's option list: delete then recreate
      * inside the caller's transaction, so a failure never half-applies.
-     * Options removed from the submission are gone; any product value that
-     * referenced them falls back via `option_id` nullOnDelete (migration).
      *
      * @param  array<int, array{value: string, label: string, sort_order?: int}>  $options
      */

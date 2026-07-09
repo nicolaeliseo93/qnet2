@@ -9,6 +9,7 @@ import { GeoSelect, type GeoValue } from '@/features/geo/geo-select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { useCompanyForm } from '@/features/companies/use-company-form'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { CompanyDetail } from '@/features/companies/types'
 import type { CompanyFormMode } from '@/features/companies/company-form'
 
@@ -27,6 +28,8 @@ interface CompanyFormBodyProps {
  * embedded block (ADR 0010: one address per company, no add/remove
  * affordance), gated as a whole on the `address` field permission; its
  * `<GeoSelect>` bridge lives inline (single call site — no reusable wrapper).
+ * `<CustomFieldsSection>` (spec 0021 pilot) mounts the resource's admin-defined
+ * custom fields with zero companies-specific rendering/validation logic.
  */
 export function CompanyFormBody({ mode, onSuccess, onCancel }: CompanyFormBodyProps) {
   const { t } = useTranslation()
@@ -164,6 +167,8 @@ export function CompanyFormBody({ mode, onSuccess, onCancel }: CompanyFormBodyPr
               />
             </FormSection>
           )}
+
+          <CustomFieldsSection resource="companies" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

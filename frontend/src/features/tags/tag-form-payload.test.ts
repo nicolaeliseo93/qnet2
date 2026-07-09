@@ -5,7 +5,7 @@ import type { TagFormValues } from '@/features/tags/use-tag-form'
 
 /** Spec 0019 (mirrored on referent-types AC-022): create shape, update diffs only changes. */
 
-const formValues: TagFormValues = { name: 'VIP' }
+const formValues: TagFormValues = { name: 'VIP', custom_fields: {} }
 
 function original(overrides: Partial<TagDetailWithPermissions> = {}): TagDetailWithPermissions {
   return {
@@ -33,6 +33,8 @@ describe('buildUpdatePayload', () => {
   })
 
   it('includes only the changed name', () => {
-    expect(buildUpdatePayload({ name: 'Priority' }, original())).toEqual({ name: 'Priority' })
+    expect(buildUpdatePayload({ name: 'Priority', custom_fields: {} }, original())).toEqual({
+      name: 'Priority',
+    })
   })
 })

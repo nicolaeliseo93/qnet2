@@ -21,6 +21,7 @@ class CompanySiteBankResource extends JsonResource
             'name' => $this->name,
             'iban' => $this->iban,
             'notes' => $this->notes,
+            'is_primary' => $this->is_primary,
         ];
     }
 }

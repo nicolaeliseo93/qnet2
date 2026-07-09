@@ -6,7 +6,7 @@ import i18n from '@/i18n'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { ReferentForm } from '@/features/referents/referent-form'
 import type { ReferentDetailWithPermissions } from '@/features/referents/types'
-import type { ResourcePermissions } from '@/features/authorization/types'
+import type { ResourceMeta, ResourcePermissions } from '@/features/authorization/types'
 import type { EnumOption } from '@/features/config/types'
 import type { PersonalDataCard } from '@/features/personal-data/types'
 
@@ -35,6 +35,14 @@ const FULL_ACCESS_PERMISSIONS: ResourcePermissions = {
 
 vi.mock('@/features/referents/use-referent-form-meta', () => ({
   useReferentFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
+}))
+
+// `useCustomFieldsForm` (spec 0021) reads the resource meta directly, bypassing
+// `useReferentFormMeta` above: stub it with no custom fields defined, so this
+// suite (not about custom fields) renders exactly as it did before.
+const fetchResourceMetaMock = vi.fn<() => Promise<ResourceMeta>>()
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
 // Enum options consumed by the personal-data card form and the contact-scope
@@ -152,6 +160,8 @@ beforeAll(async () => {
 beforeEach(() => {
   createReferentMock.mockReset()
   updateReferentMock.mockReset()
+  fetchResourceMetaMock.mockReset()
+  fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_ACCESS_PERMISSIONS })
 })
 
 describe('ReferentForm — create/edit (AC-020, AC-021, AC-022)', () => {

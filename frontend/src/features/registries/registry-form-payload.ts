@@ -14,6 +14,7 @@ import type {
   UpdateRegistryPayload,
 } from '@/features/registries/types'
 import type { RegistryFormValues } from '@/features/registries/use-registry-form'
+import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
 /**
  * Builds the create payload: the registry-specific scalars/relations plus the
@@ -30,9 +31,10 @@ export function buildCreatePayload(
   profileDraft: PersonalDataDraft,
   fieldPermission?: PersonalDataFieldPermissionResolver,
 ): CreateRegistryPayload {
+  const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     source_id: values.source_id,
-    ea_sector_ids: values.ea_sector_ids,
+    sector_ids: values.sector_ids,
     referent_ids: values.referent_ids,
     manager_ids: values.manager_ids,
     supervisor_id: values.supervisor_id,
@@ -46,6 +48,7 @@ export function buildCreatePayload(
     size_class: values.size_class,
     employee_count: values.employee_count,
     personal_data: omitNonEditableFields(draftToPayload(profileDraft), fieldPermission),
+    ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
@@ -104,8 +107,8 @@ export function buildUpdatePayload(
     payload.employee_count = values.employee_count
   }
 
-  if (!sameIdSet(values.ea_sector_ids, original.ea_sector_ids)) {
-    payload.ea_sector_ids = values.ea_sector_ids
+  if (!sameIdSet(values.sector_ids, original.sector_ids)) {
+    payload.sector_ids = values.sector_ids
   }
   if (!sameIdSet(values.referent_ids, original.referent_ids)) {
     payload.referent_ids = values.referent_ids
@@ -120,6 +123,11 @@ export function buildUpdatePayload(
   const nextPayload = draftToPayload(profileDraft)
   if (JSON.stringify(nextPayload) !== JSON.stringify(draftToPayload(originalDraft))) {
     payload.personal_data = omitNonEditableFields(nextPayload, fieldPermission)
+  }
+
+  const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})
+  if (Object.keys(customFields).length > 0) {
+    payload.custom_fields = customFields
   }
 
   return payload

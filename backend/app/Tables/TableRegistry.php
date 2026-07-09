@@ -2,6 +2,7 @@
 
 namespace App\Tables;
 
+use App\CustomFields\CustomFieldEntityRegistry;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
@@ -22,11 +23,30 @@ class TableRegistry
     public function __construct(private readonly Container $container) {}
 
     /**
-     * Resolve the definition for the given domain.
+     * Resolve the definition for the given domain, wrapped in
+     * `CustomFieldAwareTableDefinition` (spec 0021) when the domain is
+     * custom-fieldable — one line here, zero per-module code.
      *
      * @throws ModelNotFoundException when the domain is not registered.
      */
     public function resolve(string $domain): TableDefinition
+    {
+        return $this->wrapIfCustomFieldable($domain, $this->resolveRaw($domain));
+    }
+
+    /**
+     * The undecorated definition for `$domain`, straight from
+     * config/tables.php. Used internally by `resolve()` AND by
+     * `CustomFieldEntityRegistry::build()` (spec 0021), which only needs the
+     * raw `modelClass()`/`resource()` identity (byte-identical whether the
+     * definition is wrapped or not — the decorator passes both through
+     * unchanged) — going through the decorated `resolve()` there would
+     * re-enter `isCustomFieldable()` before it finishes building its own map,
+     * an infinite recursion.
+     *
+     * @throws ModelNotFoundException when the domain is not registered.
+     */
+    public function resolveRaw(string $domain): TableDefinition
     {
         /** @var array<string, class-string<TableDefinition>> $definitions */
         $definitions = config('tables.definitions', []);
@@ -41,5 +61,33 @@ class TableRegistry
         $definition = $this->container->make($class);
 
         return $definition;
+    }
+
+    /**
+     * Wrap in `CustomFieldAwareTableDefinition` (spec 0021) when `$domain` is
+     * custom-fieldable. `custom-fields` itself (the admin CRUD for
+     * definitions) is never wrapped: a custom field cannot itself carry
+     * custom fields.
+     */
+    private function wrapIfCustomFieldable(string $domain, TableDefinition $definition): TableDefinition
+    {
+        if ($domain === 'custom-fields') {
+            return $definition;
+        }
+
+        /** @var CustomFieldEntityRegistry $entityRegistry */
+        $entityRegistry = $this->container->make(CustomFieldEntityRegistry::class);
+
+        if (! $entityRegistry->isCustomFieldable($domain)) {
+            return $definition;
+        }
+
+        /** @var CustomFieldAwareTableDefinition $wrapped */
+        $wrapped = $this->container->make(CustomFieldAwareTableDefinition::class, [
+            'inner' => $definition,
+            'entityType' => $domain,
+        ]);
+
+        return $wrapped;
     }
 }

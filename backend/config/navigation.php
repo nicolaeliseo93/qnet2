@@ -131,11 +131,11 @@ return [
                     'permission' => 'referent-types.view',
                 ],
                 [
-                    'key' => 'ea-sectors',
-                    'label' => 'navigation.eaSectors',
+                    'key' => 'sectors',
+                    'label' => 'navigation.sectors',
                     'icon' => 'list-tree',
-                    'route' => '/ea-sectors',
-                    'permission' => 'ea-sectors.view',
+                    'route' => '/sectors',
+                    'permission' => 'sectors.view',
                 ],
                 [
                     'key' => 'tags',
@@ -164,6 +164,16 @@ return [
                     'icon' => 'sliders-horizontal',
                     'route' => '/attributes',
                     'permission' => 'attributes.view',
+                ],
+                [
+                    // Universal custom fields (spec 0021): the admin catalogue
+                    // of dynamic fields grafted onto every custom-fieldable
+                    // module.
+                    'key' => 'custom-fields',
+                    'label' => 'navigation.customFields',
+                    'icon' => 'puzzle',
+                    'route' => '/custom-fields',
+                    'permission' => 'custom-fields.view',
                 ],
             ],
         ],

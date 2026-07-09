@@ -69,7 +69,7 @@ class UsersSource extends AbstractMigrationSource
     /**
      * @return array<int, array{id: string, label: string, type: string}>
      */
-    public function columns(): array
+    protected function nativeColumns(): array
     {
         return [
             ['id' => 'id', 'label' => 'ID', 'type' => 'number'],
@@ -135,11 +135,11 @@ class UsersSource extends AbstractMigrationSource
      * @param  array<string, mixed>  $record
      * @return array<string, string|int|bool|null>
      */
-    protected function mapRow(array $record): array
+    protected function mapNativeRow(array $record): array
     {
         $row = [];
 
-        foreach ($this->columns() as $column) {
+        foreach ($this->nativeColumns() as $column) {
             $row[$column['id']] = $record[$column['id']] ?? null;
         }
 
@@ -211,7 +211,7 @@ class UsersSource extends AbstractMigrationSource
         $user->old_id = $externalId;
         $user->save();
 
-        return MigrationRowOutcome::created($warnings);
+        return MigrationRowOutcome::created($warnings, $user);
     }
 
     /**

@@ -123,8 +123,8 @@ function registry(
     name: 'Ada Lovelace',
     source_id: null,
     source: null,
-    ea_sector_ids: [],
-    ea_sectors: [],
+    sector_ids: [],
+    sectors: [],
     referent_ids: [],
     referents: [],
     manager_ids: [],
@@ -156,7 +156,7 @@ function registry(
 /** Full field-permission map (visible/editable) for every registry-specific field. */
 const ALL_VISIBLE_EDITABLE = Object.fromEntries(
   [
-    'source_id', 'ea_sector_ids', 'referent_ids', 'manager_ids',
+    'source_id', 'sector_ids', 'referent_ids', 'manager_ids',
     'supervisor_id', 'commercial_id', 'reporter_id', 'vat_group',
     'is_supplier', 'is_qualified_supplier', 'agreement_status',
     'agreement_notes', 'size_class', 'employee_count',

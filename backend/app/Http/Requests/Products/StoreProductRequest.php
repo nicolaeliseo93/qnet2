@@ -12,18 +12,15 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for POST /api/products (spec 0017). Only the
- * generic fields (name/description/cost/price/category_id) are structurally
- * validated here; the dynamic `attributes` cross-field validation (must
- * belong to the category's effective attributes, value coherent with the
- * attribute's data_type, required attributes present) is enforced by
- * ProductService — it needs the category's effective attribute catalogue,
- * which this FormRequest has no business resolving.
+ * generic fields (name/description/cost/price/category_id) exist on a
+ * product — the category-driven `attributes` catalogue stays a reusable
+ * template (Attribute/ProductCategory), never coupled to a product's own
+ * values.
  *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Product::class)). EnforcesFieldPermissions
- * (spec 0004) rejects any submitted GENERIC field the actor cannot edit
- * (create context, model = null) — dynamic attributes are authorized at the
- * resource level (products.update), never per-field (spec 0017 decision).
+ * (spec 0004) rejects any submitted field the actor cannot edit (create
+ * context, model = null).
  */
 class StoreProductRequest extends FormRequest
 {
@@ -47,9 +44,6 @@ class StoreProductRequest extends FormRequest
             'price' => ['required', 'numeric'],
             'category_id' => ['required', 'integer', 'exists:product_categories,id'],
             'product_type' => ['required', Rule::enum(ProductType::class)],
-            'attributes' => ['sometimes', 'array'],
-            'attributes.*.attribute_id' => ['required', 'integer', 'exists:attributes,id', 'distinct'],
-            'attributes.*.value' => ['nullable'],
         ];
     }
 

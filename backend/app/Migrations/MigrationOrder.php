@@ -29,10 +29,11 @@ final class MigrationOrder
      */
     public const PHASES = [
         // Phase 1 — independent anchor entities that later phases link to.
-        // `sources` and `tags` are plain lookups with no cross-source
-        // reference; `ea-sectors` references only itself (parent_id remapped
-        // via old_id, relinked within its own run), so it belongs here too.
-        ['business-functions', 'companies', 'operational-sites', 'referent-types', 'sources', 'tags', 'ea-sectors'],
+        // `sources`, `tags` and `attributes` are plain lookups with no
+        // cross-source reference; `sectors` and `product-categories` reference
+        // only themselves (parent_id remapped via old_id, relinked within their
+        // own run), so they belong here too.
+        ['business-functions', 'companies', 'operational-sites', 'referent-types', 'sources', 'tags', 'sectors', 'attributes', 'product-categories'],
 
         // Phase 2 — entities that reference the phase 1 anchors via old_id:
         // users (companies/sites/functions) and referents (referent-types).

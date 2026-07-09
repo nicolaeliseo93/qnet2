@@ -8,6 +8,7 @@
 
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { AttributeDataType } from '@/features/attributes/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /** A node of the category tree, as returned by `GET /product-categories/tree`. */
 export interface ProductCategoryTreeNode {
@@ -53,6 +54,8 @@ export interface ProductCategoryDetail {
   attributes: ProductCategoryAttributeAssignment[]
   inherited_attributes: ProductCategoryInheritedAttribute[]
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -94,6 +97,8 @@ export interface CreateProductCategoryPayload {
   inherits_attributes?: boolean
   description?: string | null
   attributes?: AttributeAssignmentInput[]
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /** Payload for PATCH /product-categories/{id} (partial update). */

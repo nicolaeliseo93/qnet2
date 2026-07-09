@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 import { QUALIFICATION_TYPES, RELATIONSHIP_TYPES } from '@/features/users/types'
 
 /**
@@ -74,13 +78,15 @@ function baseFields(t: TFunction) {
 
 /**
  * Create schema: password is required and must match its confirmation.
+ * `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021).
  */
-export function buildCreateUserSchema(t: TFunction) {
+export function buildCreateUserSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
   return z
     .object({
       ...baseFields(t),
       password: z.string().min(PASSWORD_MIN_LENGTH, t('users.form.passwordMinLength')),
       password_confirmation: z.string().min(1, t('users.form.confirmPasswordRequired')),
+      custom_fields: asCustomFieldsField(customFieldsSchema),
     })
     .refine((values) => values.password === values.password_confirmation, {
       path: ['password_confirmation'],
@@ -93,7 +99,7 @@ export function buildCreateUserSchema(t: TFunction) {
  * length rule and match its confirmation; when left blank both fields are empty
  * and ignored by the caller before sending the PATCH.
  */
-export function buildUpdateUserSchema(t: TFunction) {
+export function buildUpdateUserSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
   return z
     .object({
       ...baseFields(t),
@@ -103,6 +109,7 @@ export function buildUpdateUserSchema(t: TFunction) {
           message: t('users.form.passwordMinLength'),
         }),
       password_confirmation: z.string(),
+      custom_fields: asCustomFieldsField(customFieldsSchema),
     })
     .refine((values) => values.password === values.password_confirmation, {
       path: ['password_confirmation'],

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Package, SlidersHorizontal } from 'lucide-react'
+import { Package } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,7 @@ import { useEnumOptions } from '@/features/config/use-config'
 import { useProductCategoryTree } from '@/features/product-categories/use-product-category-tree'
 import { flattenCategoryTree } from '@/features/product-categories/flatten-tree'
 import { useProductForm } from '@/features/products/use-product-form'
-import { ProductDynamicAttributeFields } from '@/features/products/product-dynamic-attribute-fields'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { ProductDetail, ProductFormMode, ProductType } from '@/features/products/types'
 
 interface ProductFormBodyProps {
@@ -37,9 +37,8 @@ function numberInputValue(value: number | null): string {
 /**
  * The product create/edit form UI: generic fields (name, description, cost,
  * price, category) wrapped in `MetaField` (spec 0004), followed by the
- * category-driven dynamic attribute fields (spec AC-023) — NOT
- * metadata-gated, per the spec's field-permission scope. All non-render
- * logic lives in `useProductForm`.
+ * universal custom fields section (spec 0021). All non-render logic lives in
+ * `useProductForm`.
  */
 export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyProps) {
   const { t } = useTranslation()
@@ -52,7 +51,6 @@ export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyPr
     () => flattenCategoryTree(treeQuery.data ?? []),
     [treeQuery.data],
   )
-  const categoryId = form.watch('category_id')
 
   const identityVisible =
     fieldPermission('name').visible ||
@@ -219,25 +217,7 @@ export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyPr
             </FormSection>
           )}
 
-          <FormSection
-            icon={SlidersHorizontal}
-            title={t('products.form.sections.attributes.title')}
-            description={t('products.form.sections.attributes.description')}
-          >
-            {categoryId === null ? (
-              <p className="text-sm text-muted-foreground">
-                {t('products.form.attributesNeedCategory')}
-              </p>
-            ) : (
-              <ProductDynamicAttributeFields
-                categoryId={categoryId}
-                value={form.watch('attributes')}
-                onChange={(next) =>
-                  form.setValue('attributes', next, { shouldDirty: true, shouldValidate: false })
-                }
-              />
-            )}
-          </FormSection>
+          <CustomFieldsSection resource="products" control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

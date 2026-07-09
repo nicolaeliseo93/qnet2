@@ -334,7 +334,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('referent-types/{referentType}', [ReferentTypeController::class, 'destroy']);
     });
 
-    // Sources / Tags / EA sectors: standalone lookup-table CRUD, extracted
+    // Sources / Tags / Sectors: standalone lookup-table CRUD, extracted
     // into routes/api/lookups.php (file-size split, engineering.md §6) so
     // this file stays within the 500-line hard limit. Required INSIDE this
     // auth:sanctum group so every route there inherits the same context.
@@ -375,6 +375,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::match(['put', 'patch'], 'attributes/{attribute}', [AttributeController::class, 'update']);
         Route::delete('attributes/{attribute}', [AttributeController::class, 'destroy']);
     });
+
+    // Custom field definitions CRUD (spec 0021): routes/api/custom-fields.php
+    // (file-size split, engineering.md §6), required for the same context.
+    require __DIR__.'/api/custom-fields.php';
 
     // Product categories: CRUD + the dedicated tree view + the product form's
     // effective-attributes lookup (spec 0017). `tree` and

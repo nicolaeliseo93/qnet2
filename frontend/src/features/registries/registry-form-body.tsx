@@ -15,6 +15,7 @@ import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { PersonalDataCardForm } from '@/features/personal-data/personal-data-card-form'
 import { cardOwnerRef } from '@/features/personal-data/drafts'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import { DetailsTabContent } from '@/features/registries/registry-form-details-tab'
 import { useRegistryForm } from '@/features/registries/use-registry-form'
 import type { RegistryDetail, RegistryFormMode } from '@/features/registries/types'
@@ -64,7 +65,7 @@ export function RegistryFormBody({ mode, onSuccess, onCancel }: RegistryFormBody
   // always shown).
   const detailsVisible =
     fieldPermission('source_id').visible ||
-    fieldPermission('ea_sector_ids').visible ||
+    fieldPermission('sector_ids').visible ||
     fieldPermission('referent_ids').visible ||
     fieldPermission('manager_ids').visible ||
     fieldPermission('supervisor_id').visible ||
@@ -141,6 +142,8 @@ export function RegistryFormBody({ mode, onSuccess, onCancel }: RegistryFormBody
                   isSupplier={isSupplier}
                 />
               )}
+
+              <CustomFieldsSection resource="registries" control={form.control} />
             </TabsContent>
 
             {contactInfoVisible && (

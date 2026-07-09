@@ -11,6 +11,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /** A geo reference `{id, name}` as hydrated on the site detail (country/region/province/city). */
 export interface GeoReference {
@@ -37,6 +38,8 @@ export interface OperationalSiteDetail {
   city_id: number | null
   city: GeoReference | null
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -58,6 +61,8 @@ export interface CreateOperationalSitePayload {
   state_id: number | null
   province_id: number | null
   city_id: number
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**

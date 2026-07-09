@@ -5,10 +5,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
-import type { AttributeDataType } from '@/features/attributes/types'
-
-/** A typed dynamic-attribute field value, resolved from the matching `value_*` column. */
-export type AttributeFieldValue = string | number | boolean | null
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /** Product classification (spec 0017). SERVICE-only for now; mirrors the `ProductType` enum. */
 export type ProductType = 'SERVICE'
@@ -17,16 +14,6 @@ export type ProductType = 'SERVICE'
 export interface ProductCategorySummary {
   id: number
   name: string
-}
-
-/** A single dynamic attribute value hydrated on the product (GET show). */
-export interface ProductAttributeValue {
-  attribute_id: number
-  code: string
-  name: string
-  data_type: AttributeDataType
-  value: AttributeFieldValue
-  option_id?: number | null
 }
 
 /**
@@ -42,8 +29,9 @@ export interface ProductDetail {
   category_id: number
   category: ProductCategorySummary | null
   product_type: ProductType
-  attributes: ProductAttributeValue[]
   created_at: string
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -55,16 +43,7 @@ export interface ProductDetailWithPermissions extends ProductDetail {
   permissions: ResourcePermissions
 }
 
-/** A single dynamic attribute value sent to the backend. */
-export interface ProductAttributeValueInput {
-  attribute_id: number
-  value: AttributeFieldValue
-}
-
-/**
- * Payload for POST /products (create). `attributes` carries only the
- * currently-generated dynamic fields (spec AC-024).
- */
+/** Payload for POST /products (create). */
 export interface CreateProductPayload {
   name: string
   description?: string | null
@@ -72,14 +51,11 @@ export interface CreateProductPayload {
   price: number
   category_id: number
   product_type: ProductType
-  attributes?: ProductAttributeValueInput[]
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
-/**
- * Payload for PATCH /products/{id} (partial update). Generic fields are
- * sparse (only what changed); `attributes`, when present, is a full-replace
- * of the dynamic values.
- */
+/** Payload for PATCH /products/{id} (partial update). Generic fields are sparse (only what changed). */
 export type UpdateProductPayload = Partial<CreateProductPayload>
 
 /**

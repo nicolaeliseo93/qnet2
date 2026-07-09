@@ -1,9 +1,9 @@
 <?php
 
 use App\Models\City;
-use App\Models\EaSector;
 use App\Models\Referent;
 use App\Models\Registry;
+use App\Models\Sector;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -56,7 +56,7 @@ if (! function_exists('minimalRegistryProfilePayload')) {
 it('create: 201 persists the card, syncs the 3 pivots and sets the 4 belongsTo FKs', function () {
     $actor = registryUserWith(['create']);
     $source = Source::factory()->create();
-    $eaSector = EaSector::factory()->create();
+    $sector = Sector::factory()->create();
     $referent = Referent::factory()->create();
     $manager = User::factory()->create();
     $supervisor = Referent::factory()->create();
@@ -64,7 +64,7 @@ it('create: 201 persists the card, syncs the 3 pivots and sets the 4 belongsTo F
 
     $response = $this->postJson('/api/registries', [
         'source_id' => $source->id,
-        'ea_sector_ids' => [$eaSector->id],
+        'sector_ids' => [$sector->id],
         'referent_ids' => [$referent->id],
         'manager_ids' => [$manager->id],
         'supervisor_id' => $supervisor->id,
@@ -73,7 +73,7 @@ it('create: 201 persists the card, syncs the 3 pivots and sets the 4 belongsTo F
     ])->assertCreated();
 
     $response->assertJsonPath('data.source.id', $source->id)
-        ->assertJsonPath('data.ea_sector_ids', [$eaSector->id])
+        ->assertJsonPath('data.sector_ids', [$sector->id])
         ->assertJsonPath('data.referent_ids', [$referent->id])
         ->assertJsonPath('data.manager_ids', [$manager->id])
         ->assertJsonPath('data.supervisor.id', $supervisor->id)
@@ -82,7 +82,7 @@ it('create: 201 persists the card, syncs the 3 pivots and sets the 4 belongsTo F
     $registry = Registry::first();
     expect($registry->personalData)->not->toBeNull()
         ->and($registry->personalData->personable_type)->toBe('registry')
-        ->and($registry->eaSectors->pluck('id')->all())->toBe([$eaSector->id])
+        ->and($registry->sectors->pluck('id')->all())->toBe([$sector->id])
         ->and($registry->referents->pluck('id')->all())->toBe([$referent->id])
         ->and($registry->managers->pluck('id')->all())->toBe([$manager->id]);
 });
@@ -194,7 +194,7 @@ it('show: 200 with the full data shape and permissions block', function () {
         ->assertOk()
         ->assertJsonPath('data.id', $registry->id)
         ->assertJsonStructure([
-            'data' => ['id', 'name', 'source', 'ea_sectors', 'referents', 'managers', 'supervisor', 'commercial', 'reporter', 'personal_data'],
+            'data' => ['id', 'name', 'source', 'sectors', 'referents', 'managers', 'supervisor', 'commercial', 'reporter', 'personal_data'],
             'permissions' => ['resource', 'fields', 'actions'],
         ]);
 });
@@ -218,18 +218,18 @@ it('show: 404 for a non-existent registry', function () {
 // update — PUT/PATCH /api/registries/{registry} (AC-012, AC-013)
 // ---------------------------------------------------------------------------
 
-it('update: PATCH with only ea_sector_ids=[] detaches all sectors, leaves the rest untouched', function () {
+it('update: PATCH with only sector_ids=[] detaches all sectors, leaves the rest untouched', function () {
     $actor = registryUserWith(['update']);
     $registry = Registry::factory()->create(['vat_group' => 'VG-1']);
-    $eaSector = EaSector::factory()->create();
-    $registry->eaSectors()->sync([$eaSector->id]);
+    $sector = Sector::factory()->create();
+    $registry->sectors()->sync([$sector->id]);
     Sanctum::actingAs($actor);
 
-    $this->patchJson("/api/registries/{$registry->id}", ['ea_sector_ids' => []])
+    $this->patchJson("/api/registries/{$registry->id}", ['sector_ids' => []])
         ->assertOk()
-        ->assertJsonPath('data.ea_sector_ids', []);
+        ->assertJsonPath('data.sector_ids', []);
 
-    expect($registry->fresh()->eaSectors)->toHaveCount(0)
+    expect($registry->fresh()->sectors)->toHaveCount(0)
         ->and($registry->fresh()->vat_group)->toBe('VG-1');
 });
 
@@ -248,16 +248,16 @@ it('update: PATCH manager_ids attaches new managers (authoritative sync, not add
     expect($registry->fresh()->managers->pluck('id')->all())->toBe([$newManager->id]);
 });
 
-it('update: PATCH omitting ea_sector_ids leaves existing sectors untouched', function () {
+it('update: PATCH omitting sector_ids leaves existing sectors untouched', function () {
     $actor = registryUserWith(['update']);
     $registry = Registry::factory()->create();
-    $eaSector = EaSector::factory()->create();
-    $registry->eaSectors()->sync([$eaSector->id]);
+    $sector = Sector::factory()->create();
+    $registry->sectors()->sync([$sector->id]);
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/registries/{$registry->id}", ['vat_group' => 'Untouched-pivot'])->assertOk();
 
-    expect($registry->fresh()->eaSectors->pluck('id')->all())->toBe([$eaSector->id]);
+    expect($registry->fresh()->sectors->pluck('id')->all())->toBe([$sector->id]);
 });
 
 it('update: PATCH supervisor_id=null removes the supervisor', function () {
@@ -357,15 +357,15 @@ it('delete: 204 cascades the personal-data card and the pivot rows', function ()
     $actor = registryUserWith(['delete']);
     $registry = Registry::factory()->withPersonalData()->create();
     $card = $registry->personalData;
-    $eaSector = EaSector::factory()->create();
-    $registry->eaSectors()->sync([$eaSector->id]);
+    $sector = Sector::factory()->create();
+    $registry->sectors()->sync([$sector->id]);
     Sanctum::actingAs($actor);
 
     $this->deleteJson("/api/registries/{$registry->id}")->assertNoContent();
 
     $this->assertDatabaseMissing('registries', ['id' => $registry->id]);
     $this->assertDatabaseMissing('personal_data', ['id' => $card->id]);
-    $this->assertDatabaseMissing('ea_sector_registry', ['registry_id' => $registry->id]);
+    $this->assertDatabaseMissing('sector_registry', ['registry_id' => $registry->id]);
 });
 
 it('delete: 403 without registries.delete', function () {

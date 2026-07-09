@@ -11,6 +11,7 @@ import {
 } from '@/components/form-tab-strip'
 import { FormSection } from '@/components/form-section'
 import { useResourcePermissions } from '@/features/authorization/permissions'
+import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { PersonalDataCardForm } from '@/features/personal-data/personal-data-card-form'
@@ -42,7 +43,9 @@ interface ReferentFormTab {
  * dot when any of them is invalid. Contacts/addresses open in the shared dialog
  * and persist immediately when the card already exists (`cardOwnerRef`). Every
  * field is wrapped in `MetaField` (spec 0004); all non-render logic lives in
- * `useReferentForm`.
+ * `useReferentForm`. `<CustomFieldsSection>` (spec 0021) mounts the resource's
+ * admin-defined custom fields on the Account tab, with zero referents-specific
+ * rendering/validation logic.
  */
 export function ReferentFormBody({ mode, onSuccess, onCancel }: ReferentFormBodyProps) {
   const { t } = useTranslation()
@@ -126,6 +129,8 @@ export function ReferentFormBody({ mode, onSuccess, onCancel }: ReferentFormBody
                   selectedReferentTypeItem={selectedReferentTypeItem}
                 />
               )}
+
+              <CustomFieldsSection resource="referents" control={form.control} />
             </TabsContent>
 
             {contactInfoVisible && (

@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { SELECTION_COLUMN_ID, type ColumnState } from 'ag-grid-community'
+import type { ColumnState } from 'ag-grid-community'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import {
   resetTablePreferences,
   saveTablePreferences,
@@ -11,11 +13,11 @@ import type { ColumnPreferenceInput } from '@/features/table/types'
  * Translate AG Grid's column state into the preferences payload (0003).
  *
  * Pure and side-effect free so it is unit-testable without a live grid:
- *  - the synthetic row-actions column is excluded (it is not a real column);
- *  - AG Grid's synthetic selection column (`SELECTION_COLUMN_ID`, present in the
- *    column state whenever checkbox selection is enabled) is excluded too: it is
- *    not a catalogue column, so sending it makes the backend reject the whole
- *    payload with `columns.0.id is invalid`;
+ *  - only columns in `knownColumnIds` (the domain's declared columns) are
+ *    emitted; synthetic grid columns — the row-actions column and, on tables
+ *    with selection enabled, AG Grid's own 'ag-Grid-SelectionColumn' — are
+ *    dropped. They are not in the server's `Rule::in` allow-list, so including
+ *    even one would 422 the whole save and silently lose every change;
  *  - `order` is the column's current display position;
  *  - `visible` is the inverse of AG Grid's `hide`;
  *  - `width` is sent only when it is a real number (omitted, never null, so it
@@ -26,14 +28,10 @@ import type { ColumnPreferenceInput } from '@/features/table/types'
  */
 export function toColumnPreferences(
   state: ColumnState[],
-  actionsColumnId: string,
+  knownColumnIds: ReadonlySet<string>,
 ): ColumnPreferenceInput[] {
   return state
-    .filter(
-      (column) =>
-        column.colId !== actionsColumnId &&
-        column.colId !== SELECTION_COLUMN_ID,
-    )
+    .filter((column) => knownColumnIds.has(column.colId))
     .map((column, index) => {
       const preference: ColumnPreferenceInput = {
         id: column.colId,
@@ -56,12 +54,18 @@ export function toColumnPreferences(
  */
 export function useSaveTablePreferences(domain: string) {
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
 
   return useMutation({
     mutationFn: (columns: ColumnPreferenceInput[]) =>
       saveTablePreferences(domain, columns),
     onSuccess: (config) => {
       queryClient.setQueryData(tableKeys.config(domain), config)
+    },
+    // Surface a rejected persist (e.g. a validation 422) instead of swallowing
+    // it: without this the layout silently reverts to the default on reload.
+    onError: () => {
+      toast.error(t('table.layoutError'))
     },
   })
 }

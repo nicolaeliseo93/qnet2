@@ -23,7 +23,7 @@ class DemoDataSeeder extends Seeder
         $this->call(DemoReferentTypeSeeder::class);
         $this->call(DemoReferentSeeder::class);
         $this->call(DemoSourceSeeder::class);
-        $this->call(DemoEaSectorSeeder::class);
+        $this->call(DemoSectorSeeder::class);
         $this->call(DemoTagSeeder::class);
         $this->call(DemoRolesSeeder::class);
         $this->call(DemoUsersSeeder::class);
@@ -36,9 +36,12 @@ class DemoDataSeeder extends Seeder
         $this->call(DemoBusinessFunctionSeeder::class);
         $this->call(DemoEmploymentProfileSeeder::class);
         $this->call(DemoProductCatalogSeeder::class);
-        // Depends on sources/EA sectors/referents (lookups, seeded above) and
+        // Depends on sources/sectors/referents (lookups, seeded above) and
         // users (internal managers, seeded above) — must run after all of them.
         $this->call(DemoRegistrySeeder::class);
         $this->call(DemoNotificationSeeder::class);
+        // Last: needs every entity's rows already seeded (it populates custom
+        // field values on them) and companies for the relation target.
+        $this->call(DemoCustomFieldSeeder::class);
     }
 }

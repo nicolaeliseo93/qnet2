@@ -30,12 +30,18 @@ it('creates the company_sites table with the expected columns (no flat contact c
     expect(Schema::hasColumns('company_sites', [
         'id', 'old_id', 'name', 'notes', 'is_default',
         'responsible_rda_id', 'responsible_tickets_id', 'responsible_validation_contracts_id',
-        'responsible_validation_contracts_two_id', 'default_bank_id', 'proforma_progressive', 'invoice_progressive',
+        'responsible_validation_contracts_two_id', 'proforma_progressive', 'invoice_progressive',
         'quotation_layout_id', 'quotation_header_id', 'quotation_footer_id',
-        'company_id', 'accounting_manager_id', 'store_id', 'company_type', 'commissions', 'order_sites',
-        'payment_status_assign_technician', 'payment_status_deposit', 'payment_status_balance',
-        'default_payment_id', 'default_vat_id', 'status', 'color', 'surface_sqm', 'created_at', 'updated_at',
+        'company_id', 'created_at', 'updated_at',
     ]))->toBeTrue();
+
+    // The former "Altro" columns are gone: those attributes are now universal
+    // custom fields (spec 0021, QualificaTemplateSeeder), not flat columns.
+    expect(Schema::hasColumn('company_sites', 'accounting_manager_id'))->toBeFalse();
+    expect(Schema::hasColumn('company_sites', 'company_type'))->toBeFalse();
+    expect(Schema::hasColumn('company_sites', 'surface_sqm'))->toBeFalse();
+    expect(Schema::hasColumn('company_sites', 'other_category_id'))->toBeFalse();
+    expect(Schema::hasColumn('company_sites', 'color'))->toBeFalse();
 
     // The flattened contact columns were removed: contacts/address now live on
     // the personal-data card (HasPersonalData).
@@ -45,11 +51,14 @@ it('creates the company_sites table with the expected columns (no flat contact c
     expect(Schema::hasColumn('company_sites', 'phone'))->toBeFalse();
     expect(Schema::hasColumn('company_sites', 'pec'))->toBeFalse();
     expect(Schema::hasColumn('company_sites', 'fax'))->toBeFalse();
+
+    // The site-level "preferred bank" FK moved onto the bank rows (is_primary).
+    expect(Schema::hasColumn('company_sites', 'default_bank_id'))->toBeFalse();
 });
 
 it('creates the company_site_banks table with the expected columns and cascade FK', function () {
     expect(Schema::hasTable('company_site_banks'))->toBeTrue();
-    expect(Schema::hasColumns('company_site_banks', ['id', 'old_id', 'company_site_id', 'name', 'iban', 'notes', 'created_at', 'updated_at']))->toBeTrue();
+    expect(Schema::hasColumns('company_site_banks', ['id', 'old_id', 'company_site_id', 'name', 'iban', 'notes', 'is_primary', 'created_at', 'updated_at']))->toBeTrue();
 });
 
 it('name is required at the database level', function () {
@@ -106,20 +115,18 @@ it('banks() is a real hasMany to CompanySiteBank', function () {
         ->and($companySite->banks->first()->is($bank))->toBeTrue();
 });
 
-it('defaultBank() resolves the chosen bank', function () {
+it('a bank can be flagged primary (is_primary cast to bool)', function () {
     $companySite = CompanySite::factory()->create();
-    $bank = CompanySiteBank::factory()->for($companySite)->create();
-    $companySite->update(['default_bank_id' => $bank->id]);
+    $bank = CompanySiteBank::factory()->for($companySite)->create(['is_primary' => true]);
 
-    expect($companySite->fresh()->defaultBank->is($bank))->toBeTrue();
+    expect($bank->fresh()->is_primary)->toBeTrue();
 });
 
-it('the 4 responsible relations and company()/accountingManager() are BelongsTo(User)/(Company)', function () {
+it('the 4 responsible relations and company() are BelongsTo(User)/(Company)', function () {
     $rda = User::factory()->create();
     $tickets = User::factory()->create();
     $validation = User::factory()->create();
     $validationTwo = User::factory()->create();
-    $accountingManager = User::factory()->create();
     $company = Company::factory()->create();
 
     $companySite = CompanySite::factory()->create([
@@ -127,7 +134,6 @@ it('the 4 responsible relations and company()/accountingManager() are BelongsTo(
         'responsible_tickets_id' => $tickets->id,
         'responsible_validation_contracts_id' => $validation->id,
         'responsible_validation_contracts_two_id' => $validationTwo->id,
-        'accounting_manager_id' => $accountingManager->id,
         'company_id' => $company->id,
     ]);
 
@@ -135,7 +141,6 @@ it('the 4 responsible relations and company()/accountingManager() are BelongsTo(
         ->and($companySite->responsibleTickets->is($tickets))->toBeTrue()
         ->and($companySite->responsibleValidationContracts->is($validation))->toBeTrue()
         ->and($companySite->responsibleValidationContractsTwo->is($validationTwo))->toBeTrue()
-        ->and($companySite->accountingManager->is($accountingManager))->toBeTrue()
         ->and($companySite->company->is($company))->toBeTrue();
 });
 

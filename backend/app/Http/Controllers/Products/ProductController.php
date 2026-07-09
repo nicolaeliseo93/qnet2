@@ -48,7 +48,7 @@ class ProductController extends BaseApiController
             $this->authorize('view', $product);
 
             return $this->okWithPermissions(
-                new ProductResource($product->loadMissing(['category', 'attributeValues.attribute', 'attributeValues.option'])),
+                new ProductResource($product->loadMissing('category')),
                 $this->buildPermissions($request->user(), $product),
             );
         } catch (Throwable $exception) {

@@ -172,7 +172,6 @@ export const products = {
     subtitle: 'Read-only view of the selected product.',
     loadError: 'Unable to load the product. Please try again.',
     details: 'Details',
-    attributes: 'Attributes',
     created_at: 'Created at',
   },
   form: {
@@ -199,10 +198,6 @@ export const products = {
     categoryNoMatch: 'No matches found.',
     categoryError: 'Unable to load categories.',
     categoryRequired: 'Category is required.',
-    attributesNeedCategory: 'Select a category to configure its attributes.',
-    attributesLoadError: 'Unable to load the category attributes. Please try again.',
-    attributeSelectPlaceholder: 'Select…',
-    attributeInherited: 'Inherited',
     save: 'Save',
     saving: 'Saving…',
     cancel: 'Cancel',
@@ -216,10 +211,6 @@ export const products = {
       identity: {
         title: 'Details',
         description: 'Name, description, pricing and category of the product.',
-      },
-      attributes: {
-        title: 'Attributes',
-        description: 'Dynamic fields generated from the selected category.',
       },
     },
   },

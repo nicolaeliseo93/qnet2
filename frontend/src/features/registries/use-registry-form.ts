@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -7,6 +8,7 @@ import axios from 'axios'
 import { toast } from 'sonner'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 import {
   areCreateContactsValid,
   isCreateAddressValid,
@@ -35,7 +37,7 @@ import type { RegistryDetail, RegistryFormMode } from '@/features/registries/typ
  */
 const SERVER_ERROR_FIELDS = [
   'source_id',
-  'ea_sector_ids',
+  'sector_ids',
   'referent_ids',
   'manager_ids',
   'supervisor_id',
@@ -116,9 +118,21 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'registries',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.registry.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateRegistrySchema(t) : buildCreateRegistrySchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateRegistrySchema(t, customFields.schema)
+        : buildCreateRegistrySchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<RegistryFormValues>(() => {
@@ -126,7 +140,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
       const registry = mode.registry
       return {
         source_id: registry.source_id,
-        ea_sector_ids: registry.ea_sector_ids,
+        sector_ids: registry.sector_ids,
         referent_ids: registry.referent_ids,
         manager_ids: registry.manager_ids,
         supervisor_id: registry.supervisor_id,
@@ -139,11 +153,12 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
         agreement_notes: registry.agreement_notes ?? '',
         size_class: registry.size_class,
         employee_count: registry.employee_count,
+        custom_fields: customFields.defaultValues,
       }
     }
     return {
       source_id: null,
-      ea_sector_ids: [],
+      sector_ids: [],
       referent_ids: [],
       manager_ids: [],
       supervisor_id: null,
@@ -156,8 +171,9 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
       agreement_notes: '',
       size_class: null,
       employee_count: null,
+      custom_fields: customFields.defaultValues,
     }
-  }, [mode])
+  }, [mode, customFields.defaultValues])
 
   // EDIT: pre-known {id, label} for every relation picker, so it shows its
   // current selection immediately (no hydration round-trip).
@@ -165,7 +181,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
     if (mode.type !== 'edit') {
       return {
         source: null,
-        eaSectors: [],
+        sectors: [],
         referents: [],
         managers: [],
         supervisor: null,
@@ -180,7 +196,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
       refs.map((ref) => ({ id: ref.id, label: ref.name }))
     return {
       source: toItem(registry.source),
-      eaSectors: toItems(registry.ea_sectors),
+      sectors: toItems(registry.sectors),
       referents: toItems(registry.referents),
       managers: toItems(registry.managers),
       supervisor: toItem(registry.supervisor),
@@ -252,6 +268,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
     } catch (error) {
       const mappedScalar = applyServerValidationErrors(error, form.setError, [
         ...SERVER_ERROR_FIELDS,
+        ...(customFields.errorPaths as Path<RegistryFormValues>[]),
       ])
       const personalDataMessage = personalDataServerErrorMessage(error)
       if (personalDataMessage) {

@@ -34,7 +34,6 @@ final readonly class CreateCompanySiteData
         public ?int $proformaProgressive = null,
         public ?int $invoiceProgressive = null,
         public array $banks = [],
-        public ?int $defaultBankId = null,
         public ?UploadedFile $logo = null,
     ) {}
 
@@ -56,7 +55,6 @@ final readonly class CreateCompanySiteData
             proformaProgressive: isset($data['proforma_progressive']) ? (int) $data['proforma_progressive'] : null,
             invoiceProgressive: isset($data['invoice_progressive']) ? (int) $data['invoice_progressive'] : null,
             banks: self::buildBanks($data['banks'] ?? []),
-            defaultBankId: isset($data['default_bank_id']) ? (int) $data['default_bank_id'] : null,
             logo: $logo,
         );
     }
@@ -99,6 +97,7 @@ final readonly class CreateCompanySiteData
                     name: (string) ($row['name'] ?? ''),
                     iban: $row['iban'] ?? null,
                     notes: $row['notes'] ?? null,
+                    isPrimary: (bool) ($row['is_primary'] ?? false),
                 ),
             ),
             $banks,

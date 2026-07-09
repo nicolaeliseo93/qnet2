@@ -21,7 +21,7 @@ export const migrations = {
     referents: 'Referenti',
     sources: 'Fonti',
     tags: 'Tag',
-    'ea-sectors': 'Settori EA',
+    sectors: 'Settori',
   },
   page: {
     sourceLabel: 'Sorgente',

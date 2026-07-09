@@ -194,6 +194,14 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
 
     useImperativeHandle(ref, () => ({ refresh: refreshGrid }), [refreshGrid])
 
+    // The domain's real column ids: mirrors the server's Rule::in allow-list, so
+    // synthetic grid columns (row-actions, selection) are dropped from the saved
+    // layout and a persist can never 422 on an unknown column id.
+    const knownColumnIds = useMemo(
+      () => new Set((config?.columns ?? []).map((column) => column.id)),
+      [config?.columns],
+    )
+
     // Persist the user's column layout, debounced so a drag/resize burst yields a
     // single save. The full current state is read from the grid and sent to the
     // backend, which computes the sparse delta (the frontend never diffs).
@@ -211,11 +219,11 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       debounceRef.current = setTimeout(() => {
         const preferences = toColumnPreferences(
           gridApi.getColumnState(),
-          ACTIONS_COLUMN_ID,
+          knownColumnIds,
         )
         savePreferences.mutate(preferences)
       }, PERSIST_DEBOUNCE_MS)
-    }, [gridApi, savePreferences])
+    }, [gridApi, knownColumnIds, savePreferences])
 
     // Debounce filter persistence, and hold the last-persisted model (serialized)
     // so the grid's own echo of the saved filters on mount is not re-saved.

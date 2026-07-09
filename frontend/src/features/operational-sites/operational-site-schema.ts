@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
 
 /**
  * Zod schemas for the operational-site create/edit form, built as factories
@@ -37,14 +41,14 @@ function baseFields(t: TFunction) {
   }
 }
 
-/** Create schema. */
-export function buildCreateOperationalSiteSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+/** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateOperationalSiteSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 /** Edit schema (same shape; partial PATCH is computed by the caller). */
-export function buildUpdateOperationalSiteSchema(t: TFunction) {
-  return z.object({ ...baseFields(t) })
+export function buildUpdateOperationalSiteSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
 }
 
 export type CreateOperationalSiteFormValues = z.infer<

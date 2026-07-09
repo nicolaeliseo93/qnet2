@@ -8,10 +8,10 @@ use App\Enums\SizeClassEnum;
 use App\Models\Address;
 use App\Models\City;
 use App\Models\Contact;
-use App\Models\EaSector;
 use App\Models\PersonalData;
 use App\Models\Referent;
 use App\Models\Registry;
+use App\Models\Sector;
 use App\Models\Source;
 use App\Models\User;
 use Faker\Factory as FakerFactory;
@@ -25,13 +25,13 @@ use Illuminate\Support\Collection;
  *
  * Each registry reuses the users/referents anagraphic stack unchanged via
  * HasPersonalData (own card + contacts + addresses, mirrors
- * DemoReferentSeeder), plus the business-specific relations: source, EA
+ * DemoReferentSeeder), plus the business-specific relations: source,
  * sectors (multi), referents (multi), internal managers (multi, max 4),
  * supervisor/commercial/reporter (referents) and the supplier/agreement/size
  * scalars. Roughly a third are suppliers (some qualified), so the derived
  * grid columns and the form have realistic values to exercise.
  *
- * Depends on DemoSourceSeeder/DemoEaSectorSeeder/DemoReferentSeeder (lookups)
+ * Depends on DemoSourceSeeder/DemoSectorSeeder/DemoReferentSeeder (lookups)
  * and DemoUsersSeeder (internal managers) — degrades gracefully when any of
  * them produced nothing. Deterministic faker seed for reproducibility;
  * existing registries are cleared per-model at the start of the run
@@ -56,7 +56,7 @@ class DemoRegistrySeeder extends Seeder
         Registry::query()->get()->each(fn (Registry $registry) => $registry->delete());
 
         $sources = Source::query()->orderBy('name')->get();
-        $eaSectors = EaSector::query()->orderBy('name')->get();
+        $sectors = Sector::query()->orderBy('name')->get();
         $referents = Referent::query()->orderBy('name')->get();
         $managers = User::query()->orderBy('id')->get();
         $cities = City::query()
@@ -66,13 +66,13 @@ class DemoRegistrySeeder extends Seeder
             ->get();
 
         for ($index = 0; $index < self::REGISTRIES; $index++) {
-            $this->seedRegistry($faker, $sources, $eaSectors, $referents, $managers, $cities, $index);
+            $this->seedRegistry($faker, $sources, $sectors, $referents, $managers, $cities, $index);
         }
     }
 
     /**
      * @param  Collection<int, Source>  $sources
-     * @param  Collection<int, EaSector>  $eaSectors
+     * @param  Collection<int, Sector>  $sectors
      * @param  Collection<int, Referent>  $referents
      * @param  Collection<int, User>  $managers
      * @param  Collection<int, City>  $cities
@@ -80,7 +80,7 @@ class DemoRegistrySeeder extends Seeder
     private function seedRegistry(
         Generator $faker,
         Collection $sources,
-        Collection $eaSectors,
+        Collection $sectors,
         Collection $referents,
         Collection $managers,
         Collection $cities,
@@ -106,7 +106,7 @@ class DemoRegistrySeeder extends Seeder
             'employee_count' => $faker->boolean(70) ? $faker->numberBetween(1, 500) : null,
         ]);
 
-        $this->syncPivots($registry, $eaSectors, $referents, $managers, $index);
+        $this->syncPivots($registry, $sectors, $referents, $managers, $index);
 
         $card = $this->seedCard($registry, $isCompany);
         $this->seedContacts($faker, $card);
@@ -116,18 +116,18 @@ class DemoRegistrySeeder extends Seeder
     }
 
     /**
-     * Attach 1-3 EA sectors, 1-2 referents and up to 4 internal managers
+     * Attach 1-3 sectors, 1-2 referents and up to 4 internal managers
      * (spec 0020 MAX 4 rule), all round-robin so every seeded lookup row gets
      * exercised across the batch.
      *
-     * @param  Collection<int, EaSector>  $eaSectors
+     * @param  Collection<int, Sector>  $sectors
      * @param  Collection<int, Referent>  $referents
      * @param  Collection<int, User>  $managers
      */
-    private function syncPivots(Registry $registry, Collection $eaSectors, Collection $referents, Collection $managers, int $index): void
+    private function syncPivots(Registry $registry, Collection $sectors, Collection $referents, Collection $managers, int $index): void
     {
-        if ($eaSectors->isNotEmpty()) {
-            $registry->eaSectors()->sync($this->roundRobinIds($eaSectors, $index, 2));
+        if ($sectors->isNotEmpty()) {
+            $registry->sectors()->sync($this->roundRobinIds($sectors, $index, 2));
         }
 
         if ($referents->isNotEmpty()) {

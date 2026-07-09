@@ -82,12 +82,12 @@ class Registry extends BaseModel
     }
 
     /**
-     * The EA sectors / competences this registry is classified under
+     * The sectors / competences this registry is classified under
      * ("Settore EA / Competenze", multi).
      */
-    public function eaSectors(): BelongsToMany
+    public function sectors(): BelongsToMany
     {
-        return $this->belongsToMany(EaSector::class, 'ea_sector_registry');
+        return $this->belongsToMany(Sector::class, 'sector_registry');
     }
 
     /**

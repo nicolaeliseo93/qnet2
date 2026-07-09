@@ -18,9 +18,10 @@ use Illuminate\Support\Facades\Schema;
  * one — the two tables reference each other). The constraint is added by
  * `create_company_site_banks_table`, once both tables exist.
  *
- * The "Altro" section columns (company_id .. surface_sqm) are read-only in
- * this slice (enforced by CompanySitesAuthorization/EnforcesFieldPermissions,
- * not the schema): plain data columns, FK only where the target table exists.
+ * The former "Altro" section attributes (store, categories, payment statuses,
+ * ...) are no longer flat columns: they live as universal custom fields
+ * (spec 0021), provisioned by QualificaTemplateSeeder. Only `company_id` (the
+ * owning società) remains a real column here.
  */
 return new class extends Migration
 {
@@ -54,33 +55,10 @@ return new class extends Migration
             $table->bigInteger('quotation_header_id')->nullable();
             $table->bigInteger('quotation_footer_id')->nullable();
 
-            // Altro (read-only for now — see class docblock).
+            // The owning company (società). The remaining former "Altro"
+            // attributes are now universal custom fields (spec 0021,
+            // QualificaTemplateSeeder), not flat columns.
             $table->foreignId('company_id')->nullable()->constrained('companies')->nullOnDelete();
-            $table->foreignId('accounting_manager_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->bigInteger('store_id')->nullable();
-            $table->smallInteger('company_type')->nullable();
-            $table->tinyInteger('commissions')->nullable();
-            $table->integer('order_sites')->nullable();
-            $table->smallInteger('payment_status_assign_technician')->nullable();
-            $table->smallInteger('payment_status_deposit')->nullable();
-            $table->smallInteger('payment_status_balance')->nullable();
-            $table->bigInteger('default_payment_id')->nullable();
-            $table->bigInteger('default_vat_id')->nullable();
-
-            // Category-like references (no target table yet): nullable bigint,
-            // no FK, mirrors quotation_*/default_payment_id/default_vat_id above.
-            foreach ([
-                'other_category_id', 'iso_category_id', 'soa_category_id', 'sic_category_id',
-                'avv_category_id', 'gdpr_category_id', 'res_category_id', 'pal_category_id',
-                'quattro_category_id', 'finage_category_id', 'fondi_category_id', 'gare_category_id',
-                'partnership_category_id', 'progetti_category_id',
-            ] as $categoryColumn) {
-                $table->bigInteger($categoryColumn)->nullable();
-            }
-
-            $table->smallInteger('status')->nullable();
-            $table->string('color', 20)->nullable();
-            $table->integer('surface_sqm')->nullable();
 
             $table->timestamps();
 

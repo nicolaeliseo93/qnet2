@@ -8,6 +8,7 @@
 import type { PersonalDataCard } from '@/features/personal-data/types'
 import type { PersonalDataPayload } from '@/features/personal-data/drafts'
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /**
  * Allowed UI/user locales. Kept as a defensive guard only — the selectable
@@ -94,6 +95,8 @@ export interface UserDetail {
   /** The user's employment profile (spec 0015), null when the user has none. */
   employment?: EmploymentDetail | null
   created_at: string | null
+  /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -143,6 +146,8 @@ export interface CreateUserPayload {
   personal_data: PersonalDataPayload
   /** The nested employment profile written atomically with the user (spec 0015). */
   employment: EmploymentPayload
+  /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
+  custom_fields?: Record<string, CustomFieldValue>
 }
 
 /**
@@ -165,4 +170,6 @@ export interface UpdateUserPayload {
   personal_data?: PersonalDataPayload
   /** The nested employment profile written atomically with the user (spec 0015). */
   employment?: EmploymentPayload
+  /** Only the custom fields that changed, keyed by raw key (spec 0021, sparse diff). */
+  custom_fields?: Record<string, CustomFieldValue>
 }

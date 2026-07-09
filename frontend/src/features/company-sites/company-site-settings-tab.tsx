@@ -5,30 +5,19 @@ import type { Control } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { Input } from '@/components/ui/input'
 import { FormControl } from '@/components/ui/form'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { COMPANIES_FOR_SELECT_RESOURCE } from '@/features/companies/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import type { ForSelectItem } from '@/features/for-select/types'
 import { CompanySiteReadonlyField } from '@/features/company-sites/company-site-readonly-field'
-import type { BankDraft, CompanySiteDetail } from '@/features/company-sites/types'
+import type { CompanySiteDetail } from '@/features/company-sites/types'
 import type { CompanySiteFormValues } from '@/features/company-sites/use-company-site-form'
-
-/** Radix `Select` cannot hold `null`: "no bank selected" uses this sentinel. */
-const NONE_VALUE = '__none__'
 
 interface SettingsTabContentProps {
   control: Control<CompanySiteFormValues>
   /** Read-only display of the site's `quotation_*` ids (edit mode only). */
   companySite: CompanySiteDetail | null
-  banksDraft: BankDraft[]
   selectedCompanyItem: ForSelectItem | null
   selectedResponsibleRdaItem: ForSelectItem | null
   selectedResponsibleTicketsItem: ForSelectItem | null
@@ -50,15 +39,14 @@ function numberFieldProps(
 
 /**
  * Impostazioni tab: the owning company, the four users-backed responsibles,
- * the client-side `default_bank_id` select (populated exclusively from the
- * Banche tab's buffer — spec 0020), the two document progressives, and the
- * always read-only `quotation_*` ids (backend ceiling forces them readonly
- * regardless of role, so they use `CompanySiteReadonlyField`, not `MetaField`).
+ * the two document progressives, and the always read-only `quotation_*` ids
+ * (backend ceiling forces them readonly regardless of role, so they use
+ * `CompanySiteReadonlyField`, not `MetaField`). The preferred bank is a per-row
+ * flag in the Banche tab, not a field here (spec 0020 update).
  */
 export function SettingsTabContent({
   control,
   companySite,
-  banksDraft,
   selectedCompanyItem,
   selectedResponsibleRdaItem,
   selectedResponsibleTicketsItem,
@@ -171,37 +159,6 @@ export function SettingsTabContent({
         title={t('companySites.form.sections.banking.title')}
         description={t('companySites.form.sections.banking.description')}
       >
-        <MetaField
-          control={control}
-          name="default_bank_id"
-          metaKey="default_bank_id"
-          label={t('companySites.form.defaultBank')}
-        >
-          {({ field, disabled }) => (
-            <Select
-              value={field.value === null ? NONE_VALUE : String(field.value)}
-              onValueChange={(next) => field.onChange(next === NONE_VALUE ? null : Number(next))}
-              disabled={disabled || banksDraft.length === 0}
-            >
-              <FormControl>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('companySites.form.defaultBankPlaceholder')} />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                <SelectItem value={NONE_VALUE}>{t('companySites.form.defaultBankNone')}</SelectItem>
-                {banksDraft
-                  .filter((bank): bank is BankDraft & { id: number } => bank.id !== undefined)
-                  .map((bank) => (
-                    <SelectItem key={bank.id} value={String(bank.id)}>
-                      {bank.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          )}
-        </MetaField>
-
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <MetaField
             control={control}

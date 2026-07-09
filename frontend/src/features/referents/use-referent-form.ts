@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -7,6 +8,7 @@ import axios from 'axios'
 import { toast } from 'sonner'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 import {
   areCreateContactsValid,
   isCreateAddressValid,
@@ -105,9 +107,21 @@ export function useReferentForm({ mode, onSuccess }: UseReferentFormArgs) {
 
   const isEdit = mode.type === 'edit'
 
+  // Custom fields (spec 0021): the single reusable integration — builds the
+  // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  const customFields = useCustomFieldsForm(
+    'referents',
+    mode.type === 'edit'
+      ? { type: 'edit', customFields: mode.referent.custom_fields }
+      : { type: 'create' },
+  )
+
   const schema = useMemo(
-    () => (isEdit ? buildUpdateReferentSchema(t) : buildCreateReferentSchema(t)),
-    [isEdit, t],
+    () =>
+      isEdit
+        ? buildUpdateReferentSchema(t, customFields.schema)
+        : buildCreateReferentSchema(t, customFields.schema),
+    [isEdit, t, customFields.schema],
   )
 
   const defaultValues = useMemo<ReferentFormValues>(() => {
@@ -116,14 +130,16 @@ export function useReferentForm({ mode, onSuccess }: UseReferentFormArgs) {
         referent_type_id: mode.referent.referent_type_id,
         contact_scope: mode.referent.contact_scope,
         notes: mode.referent.notes ?? '',
+        custom_fields: customFields.defaultValues,
       }
     }
     return {
       referent_type_id: null,
       contact_scope: DEFAULT_CONTACT_SCOPE,
       notes: '',
+      custom_fields: customFields.defaultValues,
     }
-  }, [mode])
+  }, [mode, customFields.defaultValues])
 
   // EDIT: pre-known {id, label} for the "Referent type" picker, so it shows
   // its current selection immediately (no hydration round-trip).
@@ -196,9 +212,11 @@ export function useReferentForm({ mode, onSuccess }: UseReferentFormArgs) {
       toast.success(t('referents.form.created'))
       onSuccess(created)
     } catch (error) {
-      const mappedScalar = applyServerValidationErrors(error, form.setError, [
+      const errorFields: Path<ReferentFormValues>[] = [
         ...SERVER_ERROR_FIELDS,
-      ])
+        ...(customFields.errorPaths as Path<ReferentFormValues>[]),
+      ]
+      const mappedScalar = applyServerValidationErrors(error, form.setError, errorFields)
       const personalDataMessage = personalDataServerErrorMessage(error)
       if (personalDataMessage) {
         setServerError(personalDataMessage)

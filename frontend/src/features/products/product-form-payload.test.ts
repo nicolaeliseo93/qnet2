@@ -3,7 +3,7 @@ import { buildCreatePayload, buildUpdatePayload } from '@/features/products/prod
 import type { ProductDetail } from '@/features/products/types'
 import type { ProductFormValues } from '@/features/products/use-product-form'
 
-/** Spec 0017 AC-024: create payload shape, sparse PATCH of changed generic fields + attributes when touched. */
+/** Spec 0017 AC-024: create payload shape, sparse PATCH of changed generic fields. */
 
 function original(overrides: Partial<ProductDetail> = {}): ProductDetail {
   return {
@@ -15,80 +15,45 @@ function original(overrides: Partial<ProductDetail> = {}): ProductDetail {
     category_id: 3,
     category: { id: 3, name: 'Laptops' },
     product_type: 'SERVICE',
-    attributes: [
-      { attribute_id: 9, code: 'ram', name: 'RAM', data_type: 'INTEGER', value: 16 },
-    ],
     created_at: '2026-01-01T00:00:00Z',
     ...overrides,
   }
 }
 
-describe('buildCreatePayload', () => {
-  it('builds the create payload with generic fields + attributes array', () => {
-    const values: ProductFormValues = {
-      name: 'ThinkPad X1',
-      description: null,
-      cost: 800,
-      price: 1200,
-      category_id: 3,
-      product_type: 'SERVICE',
-      attributes: { '9': 16 },
-    }
+function values(overrides: Partial<ProductFormValues> = {}): ProductFormValues {
+  return {
+    name: 'ThinkPad X1',
+    description: null,
+    cost: 800,
+    price: 1200,
+    category_id: 3,
+    product_type: 'SERVICE',
+    custom_fields: {},
+    ...overrides,
+  }
+}
 
-    expect(buildCreatePayload(values)).toEqual({
+describe('buildCreatePayload', () => {
+  it('builds the create payload with the generic fields', () => {
+    expect(buildCreatePayload(values())).toEqual({
       name: 'ThinkPad X1',
       description: null,
       cost: 800,
       price: 1200,
       category_id: 3,
       product_type: 'SERVICE',
-      attributes: [{ attribute_id: 9, value: 16 }],
     })
   })
 })
 
 describe('buildUpdatePayload', () => {
-  it('omits everything when nothing changed and attributes were not touched', () => {
-    const values: ProductFormValues = {
-      name: 'ThinkPad X1',
-      description: null,
-      cost: 800,
-      price: 1200,
-      category_id: 3,
-      product_type: 'SERVICE',
-      attributes: { '9': 16 },
-    }
-
-    expect(buildUpdatePayload(values, original(), false)).toEqual({})
+  it('omits everything when nothing changed', () => {
+    expect(buildUpdatePayload(values(), original())).toEqual({})
   })
 
   it('includes only the changed generic field', () => {
-    const values: ProductFormValues = {
+    expect(buildUpdatePayload(values({ name: 'ThinkPad X1 Gen 2' }), original())).toEqual({
       name: 'ThinkPad X1 Gen 2',
-      description: null,
-      cost: 800,
-      price: 1200,
-      category_id: 3,
-      product_type: 'SERVICE',
-      attributes: { '9': 16 },
-    }
-
-    expect(buildUpdatePayload(values, original(), false)).toEqual({ name: 'ThinkPad X1 Gen 2' })
-  })
-
-  it('includes attributes only when they were touched, even if unchanged in value', () => {
-    const values: ProductFormValues = {
-      name: 'ThinkPad X1',
-      description: null,
-      cost: 800,
-      price: 1200,
-      category_id: 3,
-      product_type: 'SERVICE',
-      attributes: { '9': 32 },
-    }
-
-    expect(buildUpdatePayload(values, original(), true)).toEqual({
-      attributes: [{ attribute_id: 9, value: 32 }],
     })
   })
 })
