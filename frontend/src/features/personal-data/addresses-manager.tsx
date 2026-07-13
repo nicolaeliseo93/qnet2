@@ -12,6 +12,7 @@ import {
 import { useConfirm } from '@/components/confirm-dialog-context'
 import { AddressCreateField } from '@/features/personal-data/address-create-field'
 import { AddressForm } from '@/features/personal-data/address-form'
+import { SITE_TYPE_LABEL_KEYS } from '@/features/personal-data/address-site-type'
 import { createAddress, deleteAddress, updateAddress } from '@/features/personal-data/api'
 import { addressToDraft, nextDraftKey } from '@/features/personal-data/drafts'
 import { useImmediatePersist } from '@/features/personal-data/use-immediate-persist'
@@ -71,6 +72,24 @@ interface AddressesManagerProps {
 
 /** `new` = the add form is open; a string = that address `_key` is being edited. */
 type EditingState = 'new' | string | null
+
+/**
+ * The human-readable location line of an address: postal code plus the hydrated
+ * city/province/state/country names, in that order. Empty string when none is
+ * present (a draft that only carries geo ids, or a caller that did not
+ * eager-load the names), so the row can drop the line entirely.
+ */
+function locationSummary(address: AddressDraft): string {
+  return [
+    address.postal_code,
+    address.city?.name,
+    address.province?.name,
+    address.state?.name,
+    address.country?.name,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
 
 /**
  * Reusable CRUD list for an owner's addresses; the create/edit form opens in a
@@ -246,7 +265,9 @@ export function AddressesManager({
       )}
 
       <ul className="flex flex-col gap-2">
-        {value.map((address) => (
+        {value.map((address) => {
+          const location = locationSummary(address)
+          return (
           <li
             key={address._key}
             className="flex flex-wrap items-center gap-2 rounded-lg border p-3"
@@ -256,10 +277,16 @@ export function AddressesManager({
             </span>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-sm font-medium">{address.line1}</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {[address.line2, address.postal_code].filter(Boolean).join(' · ')}
-              </span>
+              {address.line2 && (
+                <span className="truncate text-xs text-muted-foreground">{address.line2}</span>
+              )}
+              {location && (
+                <span className="truncate text-xs text-muted-foreground">{location}</span>
+              )}
             </div>
+            {showSiteType && (
+              <Badge variant="outline">{t(SITE_TYPE_LABEL_KEYS[address.site_type ?? 'billing'])}</Badge>
+            )}
             {address.is_primary && (
               <Badge variant="secondary">
                 {t('personalData.addresses.primaryBadge')}
@@ -288,7 +315,8 @@ export function AddressesManager({
               </div>
             )}
           </li>
-        ))}
+          )
+        })}
       </ul>
 
       {!showHeader && canAdd && (

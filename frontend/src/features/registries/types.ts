@@ -10,6 +10,7 @@ import type { PersonalDataCard } from '@/features/personal-data/types'
 import type { PersonalDataPayload } from '@/features/personal-data/drafts'
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
+import type { PrimaryContact } from '@/features/table/types'
 
 /** Convention status of a registry (AgreementStatusEnum). */
 export const AGREEMENT_STATUSES = ['negotiating', 'rejected', 'agreed'] as const
@@ -23,6 +24,12 @@ export type SizeClass = (typeof SIZE_CLASSES)[number]
 export interface ReferenceRef {
   id: number
   name: string
+  /**
+   * The person's PRIMARY contacts (one per type), present only on the
+   * responsible-people refs (supervisor/commercial/reporter). Empty when the
+   * person has no primary contact; absent on plain refs (source/sectors/...).
+   */
+  primary_contacts?: PrimaryContact[]
 }
 
 /**

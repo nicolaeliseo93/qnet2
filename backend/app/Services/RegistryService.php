@@ -39,6 +39,17 @@ class RegistryService
         'managers',
         'personalData.contacts',
         'personalData.addresses',
+        // Geo names for the full address display (AddressResource emits them
+        // via whenLoaded); the raw *_id columns already ship without these.
+        'personalData.addresses.city',
+        'personalData.addresses.province',
+        'personalData.addresses.state',
+        'personalData.addresses.country',
+        // Cards of the three responsible people so the detail can render their
+        // PRIMARY contacts beside the name (RegistryResource filters is_primary).
+        'supervisor.personalData.contacts',
+        'commercial.personalData.contacts',
+        'reporter.personalData.contacts',
     ];
 
     public function __construct(private readonly RegistryProfileWriter $profileWriter) {}

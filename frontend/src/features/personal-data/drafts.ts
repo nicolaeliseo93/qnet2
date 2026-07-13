@@ -92,6 +92,12 @@ export function addressToDraft(address: Address): AddressDraft {
     province_id: address.province_id,
     state_id: address.state_id,
     country_id: address.country_id,
+    // Carry the hydrated geo names through so summary rows show the full
+    // location; absent on the wire when the caller did not eager-load them.
+    city: address.city,
+    province: address.province,
+    state: address.state,
+    country: address.country,
     is_primary: address.is_primary,
     site_type: address.site_type,
   }

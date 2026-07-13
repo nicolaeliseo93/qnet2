@@ -125,10 +125,48 @@ describe('AddressesManager (controlled)', () => {
       <AddressesManager value={[address({ line2: 'Flat 2' })]} onChange={() => {}} />,
     )
     expect(screen.getByText('10 Downing Street')).toBeInTheDocument()
-    expect(screen.getByText('Flat 2 · SW1A 2AA')).toBeInTheDocument()
+    expect(screen.getByText('Flat 2')).toBeInTheDocument()
+    expect(screen.getByText('SW1A 2AA')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Delete address' }),
     ).toBeInTheDocument()
+  })
+
+  it('renders the full hydrated location (postal, city, province, state, country)', () => {
+    renderWithConfirm(
+      <AddressesManager
+        value={[
+          address({
+            postal_code: '80121',
+            city: { id: 1, name: 'Napoli' },
+            province: { id: 2, name: 'Napoli' },
+            state: { id: 3, name: 'Campania' },
+            country: { id: 4, name: 'Italia' },
+          }),
+        ]}
+        onChange={() => {}}
+      />,
+    )
+    expect(
+      screen.getByText('80121 · Napoli · Napoli · Campania · Italia'),
+    ).toBeInTheDocument()
+  })
+
+  it('hides the site-type badge unless the container opts into site types', () => {
+    const { unmount } = renderWithConfirm(
+      <AddressesManager value={[address({ site_type: 'legal_seat' })]} onChange={() => {}} />,
+    )
+    expect(screen.queryByText('Registered office')).not.toBeInTheDocument()
+    unmount()
+
+    renderWithConfirm(
+      <AddressesManager
+        value={[address({ site_type: 'legal_seat' })]}
+        onChange={() => {}}
+        showSiteType
+      />,
+    )
+    expect(screen.getByText('Registered office')).toBeInTheDocument()
   })
 
   it('removes an address from the buffer without any network call', async () => {
