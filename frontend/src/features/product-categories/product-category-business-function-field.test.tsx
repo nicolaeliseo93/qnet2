@@ -111,18 +111,9 @@ function category(
   }
 }
 
-/**
- * The parent category picker (`SearchableSelect`), located by DOM position
- * rather than accessible name: its trigger button does not currently receive
- * `FormControl`'s `id`/`aria-describedby` (a pre-existing gap in
- * `components/ui/searchable-select.tsx`, out of this feature's ownership),
- * so its computed accessible name falls back to its own text content (the
- * selected option) instead of the "Parent category" label. It is the only
- * combobox in the identity section, rendered before the attributes
- * section's own picker, so the first combobox in the form is always it.
- */
+/** The parent category picker (`SearchableSelect`), located by its accessible name. */
 async function findParentTrigger() {
-  return (await screen.findAllByRole('combobox'))[0]
+  return screen.findByRole('combobox', { name: 'Parent category' })
 }
 
 function queryState(items: ForSelectItem[] = []) {
@@ -177,7 +168,7 @@ describe('ProductCategoryForm — business function field (spec 0023 AC-015/AC-0
       { wrapper: wrapper() },
     )
 
-    const trigger = await screen.findByRole('button', { name: 'Business function' })
+    const trigger = await screen.findByRole('combobox', { name: 'Business function' })
     await waitFor(() => expect(trigger).toBeDisabled())
     expect(screen.getByText('Sales')).toBeInTheDocument()
     expect(
@@ -194,7 +185,7 @@ describe('ProductCategoryForm — business function field (spec 0023 AC-015/AC-0
       { wrapper: wrapper() },
     )
 
-    const trigger = await screen.findByRole('button', { name: 'Business function' })
+    const trigger = await screen.findByRole('combobox', { name: 'Business function' })
     expect(trigger).not.toBeDisabled()
 
     fireEvent.click(trigger)
@@ -246,13 +237,13 @@ describe('ProductCategoryForm — business function field reacts to the SELECTED
     )
 
     const parentTrigger = await findParentTrigger()
-    expect(await screen.findByRole('button', { name: 'Business function' })).not.toBeDisabled()
+    expect(await screen.findByRole('combobox', { name: 'Business function' })).not.toBeDisabled()
 
     fireEvent.click(parentTrigger)
     fireEvent.click(await screen.findByRole('option', { name: 'Sales Branch' }))
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Business function' })).toBeDisabled(),
+      expect(screen.getByRole('combobox', { name: 'Business function' })).toBeDisabled(),
     )
     expect(
       screen.getByText('Inherited from "Sales Branch". To change it, edit that category instead.'),
@@ -275,13 +266,13 @@ describe('ProductCategoryForm — business function field reacts to the SELECTED
     )
 
     const parentTrigger = await findParentTrigger()
-    expect(await screen.findByRole('button', { name: 'Business function' })).not.toBeDisabled()
+    expect(await screen.findByRole('combobox', { name: 'Business function' })).not.toBeDisabled()
 
     fireEvent.click(parentTrigger)
     fireEvent.click(await screen.findByRole('option', { name: 'Sales Branch' }))
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Business function' })).toBeDisabled(),
+      expect(screen.getByRole('combobox', { name: 'Business function' })).toBeDisabled(),
     )
     expect(
       screen.getByText('Inherited from "Sales Branch". To change it, edit that category instead.'),
@@ -305,14 +296,14 @@ describe('ProductCategoryForm — business function field reacts to the SELECTED
 
     const parentTrigger = await findParentTrigger()
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Business function' })).toBeDisabled(),
+      expect(screen.getByRole('combobox', { name: 'Business function' })).toBeDisabled(),
     )
 
     fireEvent.click(parentTrigger)
     fireEvent.click(await screen.findByRole('option', { name: 'No Function Branch' }))
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Business function' })).not.toBeDisabled(),
+      expect(screen.getByRole('combobox', { name: 'Business function' })).not.toBeDisabled(),
     )
     expect(
       screen.queryByText('Inherited from "Sales Branch". To change it, edit that category instead.'),

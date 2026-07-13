@@ -178,7 +178,7 @@ describe('CustomFieldsSection', () => {
     expect(screen.getByRole('spinbutton', { name: 'Headcount' })).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: 'Active' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Tier' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Owner' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Owner' })).toBeInTheDocument()
   })
 
   it('renders native inputs for the string-backed scalar types (date/email/color)', async () => {
