@@ -36,7 +36,7 @@ export function buildCreatePayload(
     source_id: values.source_id,
     sector_ids: values.sector_ids,
     referent_ids: values.referent_ids,
-    manager_ids: values.manager_ids,
+    manager_slots: values.manager_slots,
     supervisor_id: values.supervisor_id,
     commercial_id: values.commercial_id,
     reporter_id: values.reporter_id,
@@ -113,8 +113,10 @@ export function buildUpdatePayload(
   if (!sameIdSet(values.referent_ids, original.referent_ids)) {
     payload.referent_ids = values.referent_ids
   }
-  if (!sameIdSet(values.manager_ids, original.manager_ids)) {
-    payload.manager_ids = values.manager_ids
+  // Manager slots are ORDER- and GAP-sensitive (a slot's G.A. position is
+  // meaningful), so compare positionally, not as an unordered set.
+  if (!sameSlots(values.manager_slots, original.manager_slots)) {
+    payload.manager_slots = values.manager_slots
   }
 
   const originalDraft = original.personal_data
@@ -140,4 +142,9 @@ function sameIdSet(a: number[], b: number[]): boolean {
   }
   const set = new Set(b)
   return a.every((id) => set.has(id))
+}
+
+/** Positional (order- and gap-sensitive) comparison of two G.A. slot arrays. */
+function sameSlots(a: (number | null)[], b: (number | null)[]): boolean {
+  return a.length === b.length && a.every((slot, index) => slot === b[index])
 }

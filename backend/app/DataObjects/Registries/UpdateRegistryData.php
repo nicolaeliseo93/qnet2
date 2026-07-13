@@ -21,14 +21,14 @@ final readonly class UpdateRegistryData
     /**
      * @param  array<int, int>|null  $sectorIds
      * @param  array<int, int>|null  $referentIds
-     * @param  array<int, int>|null  $managerIds
+     * @param  array<int, int|null>|null  $managerSlots
      */
     public function __construct(
         public ?int $sourceId = null,
         public bool $sourceIdSubmitted = false,
         public ?array $sectorIds = null,
         public ?array $referentIds = null,
-        public ?array $managerIds = null,
+        public ?array $managerSlots = null,
         public ?int $supervisorId = null,
         public bool $supervisorIdSubmitted = false,
         public ?int $commercialId = null,
@@ -63,7 +63,9 @@ final readonly class UpdateRegistryData
             sourceIdSubmitted: array_key_exists('source_id', $data),
             sectorIds: array_key_exists('sector_ids', $data) ? array_map('intval', $data['sector_ids']) : null,
             referentIds: array_key_exists('referent_ids', $data) ? array_map('intval', $data['referent_ids']) : null,
-            managerIds: array_key_exists('manager_ids', $data) ? array_map('intval', $data['manager_ids']) : null,
+            managerSlots: array_key_exists('manager_slots', $data)
+                ? array_map(static fn ($id): ?int => $id === null ? null : (int) $id, $data['manager_slots'])
+                : null,
             supervisorId: array_key_exists('supervisor_id', $data) && $data['supervisor_id'] !== null ? (int) $data['supervisor_id'] : null,
             supervisorIdSubmitted: array_key_exists('supervisor_id', $data),
             commercialId: array_key_exists('commercial_id', $data) && $data['commercial_id'] !== null ? (int) $data['commercial_id'] : null,
@@ -97,9 +99,9 @@ final readonly class UpdateRegistryData
         return $this->referentIds !== null;
     }
 
-    public function hasManagerIds(): bool
+    public function hasManagerSlots(): bool
     {
-        return $this->managerIds !== null;
+        return $this->managerSlots !== null;
     }
 
     /**

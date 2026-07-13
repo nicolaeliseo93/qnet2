@@ -22,6 +22,7 @@ import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { SECTORS_FOR_SELECT_RESOURCE } from '@/features/sectors/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
+import { ManagerSlotsField } from '@/features/registries/manager-slots-field'
 import type { RegistryFormValues } from '@/features/registries/use-registry-form'
 
 /** Every relation picker's edit-mode hydration, resolved once by the form hook. */
@@ -136,27 +137,14 @@ export function DetailsTabContent({ control, selectedItems, isSupplier }: Detail
           )}
         </MetaField>
 
-        <MetaField control={control} name="manager_ids" metaKey="manager_ids" label={t('registries.form.managers')}>
+        <MetaField control={control} name="manager_slots" metaKey="manager_slots" label={t('registries.form.managers')}>
           {({ field, disabled }) => (
-            <FormControl>
-              <AsyncPaginatedMultiSelect
-                resource={USERS_FOR_SELECT_RESOURCE}
-                value={field.value}
-                onChange={field.onChange}
-                selectedItems={selectedItems.managers}
-                showAvatar
-                disabled={disabled}
-                labels={{
-                  placeholder: t('registries.form.managersPlaceholder'),
-                  searchPlaceholder: t('registries.form.managersSearch'),
-                  empty: t('registries.form.managersEmpty'),
-                  error: t('registries.form.managersError'),
-                  removeLabel: t('registries.form.managersRemove'),
-                  triggerLabel: t('registries.form.managers'),
-                  retry: t('common.retry'),
-                }}
-              />
-            </FormControl>
+            <ManagerSlotsField
+              value={field.value}
+              onChange={field.onChange}
+              selectedItems={selectedItems.managers}
+              disabled={disabled}
+            />
           )}
         </MetaField>
 

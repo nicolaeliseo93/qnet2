@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { IdCard, Info, MapPin, Phone } from 'lucide-react'
+import { IdCard, Info, MapPin, Phone, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -11,13 +11,15 @@ import {
   DetailPanel,
   DetailSection,
 } from '@/components/detail/detail-panel'
+import { cn } from '@/lib/utils'
 import { enumLabelOf } from '@/features/config/enum-label'
 import { formatDateTime } from '@/features/table/cell-renderers'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { cardToDraft } from '@/features/personal-data/drafts'
 import type { PersonalDataFieldPermissionResolver } from '@/features/personal-data/types'
-import type { ReferenceRef, RegistryDetail } from '@/features/registries/types'
+import type { PrimaryContact } from '@/features/table/types'
+import type { ManagerRef, ReferenceRef, RegistryDetail } from '@/features/registries/types'
 
 /**
  * Renders the (owner-agnostic, reused unchanged) contacts/addresses managers
@@ -38,6 +40,46 @@ function noopChange(): void {}
 /** Comma-joined names of a relation list, or the empty-value placeholder. */
 function refList(refs: ReferenceRef[]) {
   return refs.length > 0 ? refs.map((ref) => ref.name).join(', ') : <DetailEmpty />
+}
+
+/**
+ * Compact person card: an optional badge (a manager's "G.A. n" slot), the name
+ * and each of the person's PRIMARY contacts as a muted `type: value` line. An
+ * empty G.A. slot renders `muted` with a placeholder name and no contacts.
+ */
+function PersonCard({
+  name,
+  contacts,
+  badge,
+  muted = false,
+}: {
+  name: string
+  contacts?: PrimaryContact[]
+  badge?: string
+  muted?: boolean
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border p-2.5">
+      {badge && (
+        <Badge variant={muted ? 'outline' : 'secondary'} className="shrink-0">
+          {badge}
+        </Badge>
+      )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className={cn('truncate text-sm', muted ? 'text-muted-foreground' : 'font-medium')}>
+          {name}
+        </span>
+        {contacts?.map((contact) => (
+          <span
+            key={`${contact.type}-${contact.value}`}
+            className="truncate text-xs text-muted-foreground"
+          >
+            {enumLabelOf('contact_type', contact.type)}: {contact.value}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -90,6 +132,13 @@ export function RegistryDetailView({ registry }: RegistryDetailViewProps) {
   const { t } = useTranslation()
   const createdAt = formatDateTime(registry.created_at)
   const draft = registry.personal_data ? cardToDraft(registry.personal_data) : null
+
+  // Rebuild the ordered "G.A. n" slots (with persistent empty gaps) from the
+  // gap-aware `manager_slots` array + the hydrated manager cards.
+  const managersById = new Map<number, ManagerRef>(registry.managers.map((m) => [m.id, m]))
+  const managerSlots = registry.manager_slots.map((id) =>
+    id === null ? null : (managersById.get(id) ?? null),
+  )
 
   return (
     <DetailPanel>
@@ -181,16 +230,63 @@ export function RegistryDetailView({ registry }: RegistryDetailViewProps) {
           <DetailField label={t('registries.form.sectors')} full>
             {refList(registry.sectors)}
           </DetailField>
-          <DetailField label={t('registries.form.referents')} full>
-            {refList(registry.referents)}
-          </DetailField>
-          <DetailField label={t('registries.form.managers')} full>
-            {refList(registry.managers)}
-          </DetailField>
           <DetailField label={t('registries.form.agreementNotes')} full>
             {registry.agreement_notes || <DetailEmpty />}
           </DetailField>
         </DetailGrid>
+      </DetailSection>
+
+      <DetailSection title={t('registries.detail.people')} icon={<Users />}>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t('registries.form.referents')}
+            </span>
+            {registry.referents.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {registry.referents.map((referent) => (
+                  <PersonCard
+                    key={referent.id}
+                    name={referent.name}
+                    contacts={referent.primary_contacts}
+                  />
+                ))}
+              </div>
+            ) : (
+              <DetailEmpty />
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t('registries.form.managers')}
+            </span>
+            {managerSlots.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {managerSlots.map((manager, index) => {
+                  const badge = t('registries.form.managerSlotLabel', { n: index + 1 })
+                  return manager ? (
+                    <PersonCard
+                      key={index}
+                      badge={badge}
+                      name={manager.name}
+                      contacts={manager.primary_contacts}
+                    />
+                  ) : (
+                    <PersonCard
+                      key={index}
+                      badge={badge}
+                      name={t('registries.form.managerSlotEmpty')}
+                      muted
+                    />
+                  )
+                })}
+              </div>
+            ) : (
+              <DetailEmpty />
+            )}
+          </div>
+        </div>
       </DetailSection>
 
       <DetailSection title={t('registries.form.sections.contacts.title')} icon={<Phone />}>

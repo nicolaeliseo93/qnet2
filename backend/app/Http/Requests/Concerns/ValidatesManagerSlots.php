@@ -1,0 +1,61 @@
+<?php
+
+namespace App\Http\Requests\Concerns;
+
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+/**
+ * Shared validation for the ordered, gap-aware `manager_slots` payload of the
+ * registry write endpoints (spec 0020, "Gestori"): a list whose index+1 is the
+ * static "G.A. n" position and whose null entries are intentionally empty slots.
+ *
+ * The base array/element rules live in managerSlotsRules(); the cross-element
+ * invariants (at most MAX_MANAGERS filled, no manager in two slots) run in
+ * validateManagerSlots(), called from each request's own withValidator().
+ *
+ * @phpstan-require-extends FormRequest
+ */
+trait ValidatesManagerSlots
+{
+    /** Business cap on filled manager slots (spec 0020, validation-layer only). */
+    private const int MAX_MANAGERS = 4;
+
+    /** Sanity cap on the slot array length (filled + empty), bounding the payload. */
+    private const int MAX_MANAGER_SLOTS = 12;
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    protected function managerSlotsRules(): array
+    {
+        return [
+            'manager_slots' => ['sometimes', 'array', 'max:'.self::MAX_MANAGER_SLOTS],
+            'manager_slots.*' => ['nullable', 'integer', Rule::exists('users', 'id')],
+        ];
+    }
+
+    /**
+     * Cross-element rules: the number of FILLED slots is capped and a single
+     * manager may occupy only one slot. Empty (null) slots are unconstrained.
+     */
+    protected function validateManagerSlots(Validator $validator): void
+    {
+        $slots = $this->input('manager_slots');
+
+        if (! is_array($slots)) {
+            return;
+        }
+
+        $filled = array_values(array_filter($slots, static fn ($id): bool => $id !== null));
+
+        if (count($filled) > self::MAX_MANAGERS) {
+            $validator->errors()->add('manager_slots', 'A registry has at most '.self::MAX_MANAGERS.' managers.');
+        }
+
+        if (count($filled) !== count(array_unique($filled))) {
+            $validator->errors()->add('manager_slots', 'A manager can occupy only one G.A. slot.');
+        }
+    }
+}

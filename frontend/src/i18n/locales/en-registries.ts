@@ -22,6 +22,7 @@ export const registries = {
     subtitle: 'Read-only view of the selected registry.',
     loadError: 'Unable to load the registry. Please try again.',
     details: 'Details',
+    people: 'Referents & managers',
   },
   form: {
     tabs: {
@@ -58,6 +59,13 @@ export const registries = {
     managersError: 'Unable to load managers.',
     managersRemove: 'Remove manager',
     managersMax: 'You can select at most 4 managers.',
+    managersHint: 'Managers are ranked G.A. 1..n by importance; the order is inherited by other modules. Clear a slot to leave it empty, or reorder with the arrows.',
+    managersAddSlot: 'Add G.A. slot',
+    managerSlotLabel: 'G.A. {{n}}',
+    managerSlotEmpty: 'Empty slot',
+    managerMoveUp: 'Move up',
+    managerMoveDown: 'Move down',
+    managerRemoveSlot: 'Remove slot',
     supervisor: 'Supervisor',
     supervisorPlaceholder: 'Select a supervisor…',
     commercial: 'Commercial',

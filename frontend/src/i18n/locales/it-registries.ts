@@ -22,6 +22,7 @@ export const registries = {
     subtitle: "Visualizzazione in sola lettura dell'anagrafica selezionata.",
     loadError: "Impossibile caricare l'anagrafica. Riprova.",
     details: 'Dettagli',
+    people: 'Referenti e gestori',
   },
   form: {
     tabs: {
@@ -58,6 +59,13 @@ export const registries = {
     managersError: 'Impossibile caricare i gestori.',
     managersRemove: 'Rimuovi gestore',
     managersMax: 'Puoi selezionare al massimo 4 gestori.',
+    managersHint: 'I gestori sono ordinati G.A. 1..n per importanza; l’ordine viene ereditato dagli altri moduli. Svuota uno slot per lasciarlo vuoto, o riordina con le frecce.',
+    managersAddSlot: 'Aggiungi slot G.A.',
+    managerSlotLabel: 'G.A. {{n}}',
+    managerSlotEmpty: 'Slot vuoto',
+    managerMoveUp: 'Sposta su',
+    managerMoveDown: 'Sposta giù',
+    managerRemoveSlot: 'Rimuovi slot',
     supervisor: 'Supervisore',
     supervisorPlaceholder: 'Seleziona un supervisore…',
     commercial: 'Commerciale',
