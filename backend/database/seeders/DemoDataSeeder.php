@@ -39,9 +39,18 @@ class DemoDataSeeder extends Seeder
         // Depends on sources/sectors/referents (lookups, seeded above) and
         // users (internal managers, seeded above) — must run after all of them.
         $this->call(DemoRegistrySeeder::class);
+        $this->call(DemoProjectStatusSeeder::class);
+        // Depends on project-statuses/registries/sources/business-functions/
+        // product-categories/referents (lookups, all seeded above) and
+        // `locations:add` (states, run by DatabaseSeeder) — must run after
+        // all of them.
+        $this->call(DemoProjectSeeder::class);
+        // Depends on DemoProjectSeeder for the linked shape, plus the same
+        // classification lookups for the standalone shape.
+        $this->call(DemoCampaignSeeder::class);
         $this->call(DemoNotificationSeeder::class);
         // Last: needs every entity's rows already seeded (it populates custom
         // field values on them) and companies for the relation target.
-        $this->call(DemoCustomFieldSeeder::class);
+        // $this->call(DemoCustomFieldSeeder::class);
     }
 }

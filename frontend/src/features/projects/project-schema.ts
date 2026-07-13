@@ -1,0 +1,85 @@
+import { z } from 'zod'
+import type { TFunction } from 'i18next'
+import {
+  asCustomFieldsField,
+  type CustomFieldsSchema,
+} from '@/features/custom-fields/build-custom-fields-schema'
+
+/**
+ * Zod schema for the project create/edit form, built as a factory so
+ * validation messages are localized via the i18n `t` function. The shape
+ * mirrors the frozen backend contract (spec 0023) 1:1. `code` is intentionally
+ * absent (BR-1, AC-046): it is never part of the form values or the payload.
+ */
+
+/** Backend `name` column limit (`max:191`). */
+const NAME_MAX_LENGTH = 191
+
+function baseFields(t: TFunction) {
+  return {
+    name: z
+      .string()
+      .min(1, t('projects.form.nameRequired'))
+      .max(NAME_MAX_LENGTH, t('projects.form.nameMax')),
+    description: z.string().nullable(),
+    // Single-select relations (for-select standard): `null` = unset.
+    registry_id: z.number().nullable(),
+    // Held nullable so the controlled select can represent "unset"; the
+    // required-value superRefine below rejects a null at submit, mirroring
+    // the backend's `required` rule (spec D-5).
+    project_status_id: z.number().nullable(),
+    source_id: z.number().nullable(),
+    business_function_id: z.number().nullable(),
+    state_id: z.number().nullable(),
+    product_category_id: z.number().nullable(),
+    partner_id: z.number().nullable(),
+    // Date inputs hold `''` for "empty" (never `null`), converted to `null` at
+    // the payload boundary (mirrors the `users` employment dates convention).
+    start_date: z.string(),
+    end_date: z.string(),
+    total_budget: z.number().nonnegative(t('projects.form.totalBudgetInvalid')).nullable(),
+    target_lead: z.number().int().nonnegative(t('projects.form.targetLeadInvalid')).nullable(),
+  }
+}
+
+/** BR-6: `end_date`, when set alongside `start_date`, must not be earlier. */
+function withDateOrderRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
+  return schema.superRefine((values, ctx) => {
+    const record = values as { start_date: string; end_date: string }
+    if (record.start_date && record.end_date && record.end_date < record.start_date) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['end_date'],
+        message: t('projects.form.endDateBeforeStartDate'),
+      })
+    }
+  })
+}
+
+/** D-5: `project_status_id` is required (the only relation that is). */
+function withRequiredStatusRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
+  return schema.superRefine((values, ctx) => {
+    const record = values as { project_status_id: number | null }
+    if (record.project_status_id === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['project_status_id'],
+        message: t('projects.form.statusRequired'),
+      })
+    }
+  })
+}
+
+/** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
+export function buildCreateProjectSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  const object = z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
+  return withRequiredStatusRule(withDateOrderRule(object, t), t)
+}
+
+/** Edit schema (same shape; partial PATCH is computed by the caller). */
+export function buildUpdateProjectSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
+  return buildCreateProjectSchema(t, customFieldsSchema)
+}
+
+export type CreateProjectFormValues = z.infer<ReturnType<typeof buildCreateProjectSchema>>
+export type UpdateProjectFormValues = CreateProjectFormValues

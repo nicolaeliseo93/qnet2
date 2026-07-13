@@ -364,7 +364,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // file stays within the 500-line hard limit. Required INSIDE this
     // auth:sanctum group so every route there inherits the same context.
     require __DIR__.'/api/registries.php';
-
+    require __DIR__.'/api/projects.php'; // Project statuses / Projects / Campaigns CRUD (spec 0023)
     // Attributes CRUD (spec 0017): the global, reusable dynamic-attribute
     // catalogue assignable to product categories. Authorization
     // (attributes.view/create/update/delete) is enforced server-side in

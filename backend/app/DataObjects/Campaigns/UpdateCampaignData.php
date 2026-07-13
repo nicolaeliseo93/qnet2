@@ -1,0 +1,173 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\DataObjects\Campaigns;
+
+/**
+ * Validated payload for a partial (PATCH) campaign update
+ * (PUT/PATCH /api/campaigns/{campaign}, spec 0023).
+ *
+ * Declared DTO (no "magic flying array") so the UpdateCampaignRequest ->
+ * CampaignService contract is explicit, mirroring UpdateProjectData: `name`
+ * is mandatory and cannot legitimately be nulled out, so a plain non-null
+ * property is enough; every other field is a legitimately nullable VALUE
+ * (clearing a classification), so the `*Submitted` flags carry the "was this
+ * key actually present" distinction a plain null property cannot express.
+ * `code` is never accepted (BR-1): no property for it at all.
+ *
+ * The BR-2 derivation (forcing the 4 classification fields null/required
+ * depending on the EFFECTIVE `project_id` — submitted or, when absent,
+ * the campaign's current one) needs the target Campaign and is therefore
+ * resolved by CampaignService, not here (this DTO only carries what the
+ * client actually submitted).
+ */
+final readonly class UpdateCampaignData
+{
+    public function __construct(
+        public ?int $projectId = null,
+        public bool $projectIdSubmitted = false,
+        public ?string $name = null,
+        public ?string $description = null,
+        public bool $descriptionSubmitted = false,
+        public ?int $registryId = null,
+        public bool $registryIdSubmitted = false,
+        public ?int $sourceId = null,
+        public bool $sourceIdSubmitted = false,
+        public ?int $partnerId = null,
+        public bool $partnerIdSubmitted = false,
+        public ?int $projectStatusId = null,
+        public bool $projectStatusIdSubmitted = false,
+        public ?int $businessFunctionId = null,
+        public bool $businessFunctionIdSubmitted = false,
+        public ?int $stateId = null,
+        public bool $stateIdSubmitted = false,
+        public ?int $productCategoryId = null,
+        public bool $productCategoryIdSubmitted = false,
+        public ?string $startDate = null,
+        public bool $startDateSubmitted = false,
+        public ?string $endDate = null,
+        public bool $endDateSubmitted = false,
+        public ?float $totalBudget = null,
+        public bool $totalBudgetSubmitted = false,
+        public ?int $targetLead = null,
+        public bool $targetLeadSubmitted = false,
+    ) {}
+
+    /**
+     * Build from the validated UpdateCampaignRequest payload.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromValidated(array $data): self
+    {
+        return new self(
+            projectId: self::nullableInt($data, 'project_id'),
+            projectIdSubmitted: array_key_exists('project_id', $data),
+            name: array_key_exists('name', $data) ? (string) $data['name'] : null,
+            description: array_key_exists('description', $data) ? $data['description'] : null,
+            descriptionSubmitted: array_key_exists('description', $data),
+            registryId: self::nullableInt($data, 'registry_id'),
+            registryIdSubmitted: array_key_exists('registry_id', $data),
+            sourceId: self::nullableInt($data, 'source_id'),
+            sourceIdSubmitted: array_key_exists('source_id', $data),
+            partnerId: self::nullableInt($data, 'partner_id'),
+            partnerIdSubmitted: array_key_exists('partner_id', $data),
+            projectStatusId: self::nullableInt($data, 'project_status_id'),
+            projectStatusIdSubmitted: array_key_exists('project_status_id', $data),
+            businessFunctionId: self::nullableInt($data, 'business_function_id'),
+            businessFunctionIdSubmitted: array_key_exists('business_function_id', $data),
+            stateId: self::nullableInt($data, 'state_id'),
+            stateIdSubmitted: array_key_exists('state_id', $data),
+            productCategoryId: self::nullableInt($data, 'product_category_id'),
+            productCategoryIdSubmitted: array_key_exists('product_category_id', $data),
+            startDate: array_key_exists('start_date', $data) ? $data['start_date'] : null,
+            startDateSubmitted: array_key_exists('start_date', $data),
+            endDate: array_key_exists('end_date', $data) ? $data['end_date'] : null,
+            endDateSubmitted: array_key_exists('end_date', $data),
+            totalBudget: array_key_exists('total_budget', $data) && $data['total_budget'] !== null ? (float) $data['total_budget'] : null,
+            totalBudgetSubmitted: array_key_exists('total_budget', $data),
+            targetLead: array_key_exists('target_lead', $data) && $data['target_lead'] !== null ? (int) $data['target_lead'] : null,
+            targetLeadSubmitted: array_key_exists('target_lead', $data),
+        );
+    }
+
+    /**
+     * Only the attributes the client actually submitted, ready for a partial
+     * mass-assignment update (framework array boundary). `code` never
+     * appears (BR-1). BR-2 derivation is NOT applied here — see
+     * CampaignService::resolveUpdateAttributes().
+     *
+     * @return array<string, mixed>
+     */
+    public function submittedAttributes(): array
+    {
+        $attributes = [];
+
+        if ($this->projectIdSubmitted) {
+            $attributes['project_id'] = $this->projectId;
+        }
+
+        if ($this->name !== null) {
+            $attributes['name'] = $this->name;
+        }
+
+        if ($this->descriptionSubmitted) {
+            $attributes['description'] = $this->description;
+        }
+
+        if ($this->registryIdSubmitted) {
+            $attributes['registry_id'] = $this->registryId;
+        }
+
+        if ($this->sourceIdSubmitted) {
+            $attributes['source_id'] = $this->sourceId;
+        }
+
+        if ($this->partnerIdSubmitted) {
+            $attributes['partner_id'] = $this->partnerId;
+        }
+
+        if ($this->projectStatusIdSubmitted) {
+            $attributes['project_status_id'] = $this->projectStatusId;
+        }
+
+        if ($this->businessFunctionIdSubmitted) {
+            $attributes['business_function_id'] = $this->businessFunctionId;
+        }
+
+        if ($this->stateIdSubmitted) {
+            $attributes['state_id'] = $this->stateId;
+        }
+
+        if ($this->productCategoryIdSubmitted) {
+            $attributes['product_category_id'] = $this->productCategoryId;
+        }
+
+        if ($this->startDateSubmitted) {
+            $attributes['start_date'] = $this->startDate;
+        }
+
+        if ($this->endDateSubmitted) {
+            $attributes['end_date'] = $this->endDate;
+        }
+
+        if ($this->totalBudgetSubmitted) {
+            $attributes['total_budget'] = $this->totalBudget;
+        }
+
+        if ($this->targetLeadSubmitted) {
+            $attributes['target_lead'] = $this->targetLead;
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private static function nullableInt(array $data, string $key): ?int
+    {
+        return array_key_exists($key, $data) && $data[$key] !== null ? (int) $data[$key] : null;
+    }
+}

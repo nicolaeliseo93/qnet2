@@ -14,6 +14,9 @@ import { customFields } from './it-custom-fields'
 import { sectors } from './it-sectors'
 import { sources } from './it-sources'
 import { tags } from './it-tags'
+import { projectStatuses } from './it-project-statuses'
+import { projects } from './it-projects'
+import { campaigns } from './it-campaigns'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -66,6 +69,9 @@ export const it: TranslationResources = {
     products: 'Prodotti',
     sources: 'Fonti',
     tags: 'Tag',
+    projects: 'Progetti',
+    campaigns: 'Campagne',
+    projectStatuses: 'Stati progetto',
     management: 'Gestione',
     configuration: 'Configurazione',
     administration: 'Amministrazione',
@@ -462,4 +468,7 @@ export const it: TranslationResources = {
   products,
   sources,
   tags,
+  projects,
+  projectStatuses,
+  campaigns,
 }

@@ -4,9 +4,12 @@ namespace App\Services;
 
 use App\DataObjects\Registries\CreateRegistryData;
 use App\DataObjects\Registries\UpdateRegistryData;
+use App\DataObjects\Shared\ForSelectQuery;
+use App\DataObjects\Shared\ForSelectResult;
 use App\DataObjects\Users\ProfileData;
 use App\Models\Registry;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -123,6 +126,69 @@ class RegistryService
     public function delete(Registry $registry): void
     {
         $registry->delete();
+    }
+
+    /**
+     * Minimal, searchable, paginated registry list for the for-select
+     * standard (spec 0023, ADR 0011), mirroring SourceService::forSelect.
+     */
+    public function forSelect(ForSelectQuery $query): ForSelectResult
+    {
+        $base = Registry::query()->select(['id', 'name']);
+
+        if ($query->hasSearch()) {
+            $base->where('name', 'like', '%'.$query->search.'%');
+        }
+
+        $total = (clone $base)->count();
+
+        /** @var Collection<int, Registry> $page */
+        $page = $base->orderBy('name')
+            ->orderBy('id')
+            ->offset($query->offset)
+            ->limit($query->limit)
+            ->get();
+
+        $items = $this->appendHydratedForSelectIds($page, $query);
+
+        return new ForSelectResult(
+            items: $items,
+            total: $total,
+            offset: $query->offset,
+            limit: $query->limit,
+        );
+    }
+
+    /**
+     * Append the explicitly-requested `ids[]` (edit-mode hydration) that are
+     * not already on the page, deduplicated. They bypass search and the same
+     * id/name projection applies. Total is unaffected.
+     *
+     * @param  Collection<int, Registry>  $page
+     * @return Collection<int, Registry>
+     */
+    private function appendHydratedForSelectIds(Collection $page, ForSelectQuery $query): Collection
+    {
+        if (! $query->hasIds()) {
+            return $page;
+        }
+
+        $presentIds = $page->pluck('id')->all();
+        $missingIds = array_values(array_diff($query->ids, $presentIds));
+
+        if ($missingIds === []) {
+            return $page;
+        }
+
+        /** @var Collection<int, Registry> $hydrated */
+        $hydrated = Registry::query()
+            ->select(['id', 'name'])
+            ->whereIn('id', $missingIds)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+
+        return $page->concat($hydrated);
     }
 
     /**

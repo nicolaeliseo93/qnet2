@@ -1,0 +1,64 @@
+<?php
+
+namespace App\Http\Resources;
+
+use App\Http\Resources\Abstracts\ForSelectResource;
+use App\Models\Project;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
+
+/**
+ * For-select projection of a Project (GET /api/projects/for-select, spec
+ * 0023). Label is "{code} — {name}"; `meta` carries the campaign-form
+ * defaults (registry/source/partner/project_status/business_function/state/
+ * product_category, each {id, label} or null) plus the BR-7 budget figures,
+ * so selecting a project in the Campaign form precompiles it with no extra
+ * request (ADR 0011).
+ *
+ * @mixin Project
+ */
+class ProjectForSelectResource extends ForSelectResource
+{
+    /**
+     * @return array<string, mixed>
+     */
+    protected function forSelectItem(Request $request): array
+    {
+        $totalBudget = $this->total_budget;
+        $allocatedBudget = (float) ($this->allocated_budget_sum ?? 0);
+
+        return [
+            'id' => $this->id,
+            'label' => sprintf('%s — %s', $this->code, $this->name),
+            'meta' => [
+                'registry' => $this->summarize($this->registry),
+                'source' => $this->summarize($this->source),
+                'partner' => $this->summarize($this->partner),
+                'project_status' => $this->summarize($this->projectStatus),
+                'business_function' => $this->summarize($this->businessFunction),
+                'state' => $this->summarize($this->state),
+                'product_category' => $this->summarize($this->productCategory),
+                'total_budget' => $totalBudget === null ? null : $this->formatMoney((float) $totalBudget),
+                'allocated_budget' => $this->formatMoney($allocatedBudget),
+                'remaining_budget' => $totalBudget === null ? null : $this->formatMoney((float) $totalBudget - $allocatedBudget),
+            ],
+        ];
+    }
+
+    /**
+     * @return array{id: int, label: string}|null
+     */
+    private function summarize(?Model $related): ?array
+    {
+        if ($related === null) {
+            return null;
+        }
+
+        return ['id' => $related->id, 'label' => $related->name];
+    }
+
+    private function formatMoney(float $value): string
+    {
+        return number_format($value, 2, '.', '');
+    }
+}
