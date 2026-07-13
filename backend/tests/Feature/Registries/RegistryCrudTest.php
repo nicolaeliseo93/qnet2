@@ -1,10 +1,15 @@
 <?php
 
 use App\Models\City;
+use App\Models\Contact;
+use App\Models\Country;
+use App\Models\PersonalData;
+use App\Models\Province;
 use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\Sector;
 use App\Models\Source;
+use App\Models\State;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -59,7 +64,8 @@ it('create: 201 persists the card, syncs the 3 pivots and sets the 4 belongsTo F
     $sector = Sector::factory()->create();
     $referent = Referent::factory()->create();
     $manager = User::factory()->create();
-    $supervisor = Referent::factory()->create();
+    // Supervisor is an INTERNAL user (not a referent) since the FK re-point.
+    $supervisor = User::factory()->create();
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/registries', [
@@ -155,6 +161,73 @@ it('create: 201 with a nested address carrying line1 + city_id', function () {
         ]),
     ])->assertCreated()
         ->assertJsonPath('data.personal_data.addresses.0.city_id', $city->id);
+});
+
+it('show: the address tree exposes the hydrated city/province/state/country names', function () {
+    $actor = registryUserWith(['create', 'view']);
+    $country = Country::factory()->create(['name' => 'Italia']);
+    $state = State::factory()->for($country, 'country')->create(['name' => 'Campania']);
+    $province = Province::factory()->for($country, 'country')->for($state, 'state')->create(['name' => 'Napoli']);
+    $city = City::factory()->forProvince($province)->create(['name' => 'Napoli']);
+    Sanctum::actingAs($actor);
+
+    $created = $this->postJson('/api/registries', [
+        'is_supplier' => false,
+        'personal_data' => minimalRegistryProfilePayload([
+            'addresses' => [[
+                'line1' => 'Via del pozzo 23',
+                'country_id' => $country->id,
+                'state_id' => $state->id,
+                'province_id' => $province->id,
+                'city_id' => $city->id,
+            ]],
+        ]),
+    ])->assertCreated()->json('data.id');
+
+    $this->getJson("/api/registries/{$created}")
+        ->assertOk()
+        ->assertJsonPath('data.personal_data.addresses.0.city.name', 'Napoli')
+        ->assertJsonPath('data.personal_data.addresses.0.province.name', 'Napoli')
+        ->assertJsonPath('data.personal_data.addresses.0.state.name', 'Campania')
+        ->assertJsonPath('data.personal_data.addresses.0.country.name', 'Italia');
+});
+
+it('show: supervisor (user) and commercial (referent) expose their PRIMARY contacts', function () {
+    $actor = registryUserWith(['view']);
+
+    // Supervisor = internal user with a primary email.
+    $supervisor = User::factory()->create();
+    $supervisorCard = PersonalData::factory()->for($supervisor, 'personable')->create();
+    Contact::factory()->email()->for($supervisorCard, 'contactable')->create([
+        'value' => 'sup@example.com',
+        'is_primary' => true,
+    ]);
+    Contact::factory()->email()->for($supervisorCard, 'contactable')->create([
+        'value' => 'secondary@example.com',
+        'is_primary' => false,
+    ]);
+
+    // Commercial = external referent with a primary phone.
+    $commercial = Referent::factory()->create();
+    $commercialCard = PersonalData::factory()->for($commercial, 'personable')->create();
+    Contact::factory()->for($commercialCard, 'contactable')->create([
+        'type' => 'phone',
+        'value' => '+390812345678',
+        'is_primary' => true,
+    ]);
+
+    $registry = Registry::factory()->create([
+        'supervisor_id' => $supervisor->id,
+        'commercial_id' => $commercial->id,
+    ]);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/registries/{$registry->id}")
+        ->assertOk()
+        ->assertJsonPath('data.supervisor.primary_contacts.0.value', 'sup@example.com')
+        ->assertJsonCount(1, 'data.supervisor.primary_contacts')
+        ->assertJsonPath('data.commercial.primary_contacts.0.value', '+390812345678')
+        ->assertJsonPath('data.reporter', null);
 });
 
 it('create: 422 when a nested address is missing city_id (product decision: geo-located on create)', function () {
@@ -262,7 +335,7 @@ it('update: PATCH omitting sector_ids leaves existing sectors untouched', functi
 
 it('update: PATCH supervisor_id=null removes the supervisor', function () {
     $actor = registryUserWith(['update']);
-    $supervisor = Referent::factory()->create();
+    $supervisor = User::factory()->create();
     $registry = Registry::factory()->create(['supervisor_id' => $supervisor->id]);
     Sanctum::actingAs($actor);
 

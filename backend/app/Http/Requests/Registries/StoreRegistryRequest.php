@@ -69,7 +69,9 @@ class StoreRegistryRequest extends FormRequest
             // scope note), never a DB constraint.
             'manager_ids' => ['sometimes', 'array', 'max:4'],
             'manager_ids.*' => ['integer', Rule::exists('users', 'id')],
-            'supervisor_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
+            // Supervisor is an INTERNAL user (like managers); commercial/reporter
+            // stay external referents.
+            'supervisor_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'commercial_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'reporter_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'vat_group' => ['nullable', 'string', 'max:191'],

@@ -20,7 +20,7 @@ import type {
   PersonalDataFieldPermission,
 } from '@/features/personal-data/types'
 import type { ForSelectItem } from '@/features/for-select/types'
-import { createRegistry, updateRegistry } from '@/features/registries/api'
+import { createRegistry, registryDetailQueryKey, updateRegistry } from '@/features/registries/api'
 import { buildCreatePayload, buildUpdatePayload } from '@/features/registries/registry-form-payload'
 import {
   buildCreateRegistrySchema,
@@ -28,7 +28,11 @@ import {
   type CreateRegistryFormValues,
   type UpdateRegistryFormValues,
 } from '@/features/registries/registry-schema'
-import type { RegistryDetail, RegistryFormMode } from '@/features/registries/types'
+import type {
+  RegistryDetail,
+  RegistryDetailWithPermissions,
+  RegistryFormMode,
+} from '@/features/registries/types'
 
 /**
  * Server-side field names mapped onto the form for 422 handling. The nested
@@ -254,7 +258,16 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
           mode.registry.id,
           buildUpdatePayload(values, mode.registry, profileDraft, personalDataFieldPermission),
         )
-        queryClient.setQueryData(['registries', 'detail', mode.registry.id], saved)
+        // Seed the detail cache with the FULL `RegistryDetailWithPermissions`
+        // shape: `updateRegistry` returns a bare `RegistryDetail` (no
+        // `permissions` envelope), so writing it verbatim would leave the
+        // detail page reading `registry.permissions.resource` off `undefined`
+        // and crash. Carry the permissions from the edited instance; the
+        // page's own invalidate-on-success refetches the authoritative set.
+        queryClient.setQueryData<RegistryDetailWithPermissions>(
+          registryDetailQueryKey(mode.registry.id),
+          { ...saved, permissions: mode.registry.permissions },
+        )
         toast.success(t('registries.form.updated'))
         onSuccess(saved)
         return

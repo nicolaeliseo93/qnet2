@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Info, MapPin, Phone } from 'lucide-react'
+import { IdCard, Info, MapPin, Phone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -40,6 +40,41 @@ function refList(refs: ReferenceRef[]) {
   return refs.length > 0 ? refs.map((ref) => ref.name).join(', ') : <DetailEmpty />
 }
 
+/**
+ * A responsible person (supervisor/commercial/reporter): the name plus each of
+ * their PRIMARY contacts (one per type) as a compact muted line, or the
+ * empty-value placeholder when unset.
+ */
+function personField(ref: ReferenceRef | null) {
+  if (!ref) {
+    return <DetailEmpty />
+  }
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span>{ref.name}</span>
+      {ref.primary_contacts?.map((contact) => (
+        <span
+          key={`${contact.type}-${contact.value}`}
+          className="truncate text-xs text-muted-foreground"
+        >
+          {enumLabelOf('contact_type', contact.type)}: {contact.value}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/** Formats an ISO date to a date-only, locale-aware string; blank when missing. */
+function formatDate(value: string | null): string {
+  if (!value) {
+    return ''
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? ''
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
+}
+
 interface RegistryDetailViewProps {
   registry: RegistryDetail
 }
@@ -75,6 +110,51 @@ export function RegistryDetailView({ registry }: RegistryDetailViewProps) {
         }
       />
 
+      {registry.personal_data && (
+        <DetailSection title={t('registries.form.sections.identity.title')} icon={<IdCard />}>
+          <DetailGrid>
+            {registry.personal_data.type === 'company' ? (
+              <DetailField label={t('personalData.form.companyName')} full>
+                {registry.personal_data.company_name || <DetailEmpty />}
+              </DetailField>
+            ) : (
+              <>
+                <DetailField label={t('personalData.form.firstName')}>
+                  {registry.personal_data.first_name || <DetailEmpty />}
+                </DetailField>
+                <DetailField label={t('personalData.form.lastName')}>
+                  {registry.personal_data.last_name || <DetailEmpty />}
+                </DetailField>
+              </>
+            )}
+            <DetailField label={t('personalData.form.taxCode')}>
+              {registry.personal_data.tax_code || <DetailEmpty />}
+            </DetailField>
+            <DetailField label={t('personalData.form.vatNumber')}>
+              {registry.personal_data.vat_number || <DetailEmpty />}
+            </DetailField>
+            {registry.personal_data.type === 'company' ? (
+              <DetailField label={t('personalData.form.sdiCode')}>
+                {registry.personal_data.sdi_code || <DetailEmpty />}
+              </DetailField>
+            ) : (
+              <>
+                <DetailField label={t('personalData.form.birthDate')}>
+                  {formatDate(registry.personal_data.birth_date) || <DetailEmpty />}
+                </DetailField>
+                <DetailField label={t('personalData.form.gender')}>
+                  {registry.personal_data.gender ? (
+                    enumLabelOf('gender', registry.personal_data.gender)
+                  ) : (
+                    <DetailEmpty />
+                  )}
+                </DetailField>
+              </>
+            )}
+          </DetailGrid>
+        </DetailSection>
+      )}
+
       <DetailSection title={t('registries.detail.details')} icon={<Info />}>
         <DetailGrid>
           <DetailField label={t('registries.form.source')}>
@@ -90,13 +170,13 @@ export function RegistryDetailView({ registry }: RegistryDetailViewProps) {
             {registry.employee_count ?? <DetailEmpty />}
           </DetailField>
           <DetailField label={t('registries.form.supervisor')}>
-            {registry.supervisor?.name ?? <DetailEmpty />}
+            {personField(registry.supervisor)}
           </DetailField>
           <DetailField label={t('registries.form.commercial')}>
-            {registry.commercial?.name ?? <DetailEmpty />}
+            {personField(registry.commercial)}
           </DetailField>
           <DetailField label={t('registries.form.reporter')}>
-            {registry.reporter?.name ?? <DetailEmpty />}
+            {personField(registry.reporter)}
           </DetailField>
           <DetailField label={t('registries.form.sectors')} full>
             {refList(registry.sectors)}
