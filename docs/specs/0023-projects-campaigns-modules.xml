@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0023 — Moduli Progetti, Campagne e Stati progetto.
+  Contract-first: la shape qui congelata è la stessa che backend implementa e frontend consuma.
+  Naming: identificatori in INGLESE (engineering.md §1.2); dominio/label in italiano via i18n.
+-->
+<spec id="0023-projects-campaigns-modules" status="draft" owner="utente" date="2026-07-13">
+
+  <goal>
+    Introdurre tre nuovi moduli CRUD nel gestionale — Stati progetto (project-statuses),
+    Progetti (projects) e Campagne (campaigns) — replicando senza deviazioni lo standard
+    già in uso (Referenti, Anagrafiche, Fonti, Funzioni aziendali): migration, model, Policy,
+    Authorization, FormRequest, DTO, Service, Resource, Controller, TableDefinition
+    backend-driven (colonne, filtri, ordinamenti, export), permessi CRUD e permessi sui campi,
+    for-select, form create/edit/view. Una Campagna può appartenere a un Progetto (che ne
+    vincola il budget) oppure vivere autonoma.
+  </goal>
+
+  <context>
+    <!-- FATTI VERIFICATI NEL REPO (non ipotizzati). -->
+    <fact>Standard CRUD di riferimento: Sources / Referent-types / Referents.
+      Per modulo servono: migration + factory, Model (extends BaseModel, HasCustomFields),
+      Policy (extends BasePolicy, solo resource()), XxxAuthorization (extends
+      AbstractResourceAuthorization) registrata in config/authorization.php,
+      XxxTableDefinition (extends AbstractTableDefinition) + XxxColumnCatalog registrata in
+      config/tables.php, DTO Create/Update, Store/UpdateRequest (use EnforcesFieldPermissions),
+      Service (write in DB::transaction), Resource + ForSelectResource, Controller thin
+      (extends BaseApiController), route, voce in config/navigation.php.</fact>
+    <fact>I permessi Spatie NON si scrivono a mano: SyncPermissions fa glob su app/Policies/*.php
+      e genera "{resource}.{viewAny|view|create|update|delete|export|import}".</fact>
+    <fact>Envelope: BaseApiController → ok/created/okWithPermissions/noContent/fail/paginatedResponse.
+      okWithPermissions espone il blocco permissions.fields (6 flag) sibling di data.</fact>
+    <fact>Export (spec 0014) è GRATIS per ogni TableDefinition registrata: nessuna classe per-modulo.
+      Import CSV (0012) e Migration Source (0013) sono opt-in → fuori scope qui.</fact>
+    <fact>Custom fields (0021): un dominio è custom-fieldable se ha TableDefinition + Authorization
+      registrate; lato frontend va montato esplicitamente &lt;CustomFieldsSection resource="..."/&gt;.</fact>
+    <fact>"Regione" nel gestionale è la tabella geo `states` (i18n it: state → "Regione"),
+      model App\Models\State, FK country_id. NON ha for-select: va creato.</fact>
+    <fact>Collisione naming: `State`/`states` sono OCCUPATI dal geo. Il nuovo modulo stati si chiama
+      ProjectStatus / project_statuses.</fact>
+    <fact>"Contatti" non è un modulo: `contacts` è la tabella polimorfica dei canali (tel/email)
+      dentro personal_data. DECISIONE UTENTE: "Partner" punta a Referenti (referents).</fact>
+    <fact>for-select ESISTENTI: sources, business-functions, referents, referent-types, users, roles,
+      companies, operational-sites, tags, sectors.
+      MANCANTI e da creare in questa spec: registries, product-categories, states, project-statuses, projects.</fact>
+    <fact>Pattern "non eliminabile se in uso": ProductCategoryService::delete → abort(409, "...").</fact>
+    <fact>Decimali: decimal(15,2) + cast 'decimal:2' (Product::cost/price). Interi: unsignedInteger + cast 'int'.</fact>
+    <fact>Pattern form: moduli ricchi (registries, referents, products) usano PAGINE DEDICATE
+      (/x/new, /x/:id, /x/:id/edit — spec 0022); i lookup usano il Sheet (sources).
+      DECISIONE UTENTE: pagine dedicate per Projects e Campaigns, Sheet per ProjectStatuses.</fact>
+
+    <!-- DECISIONI PRODOTTO (fornite dall'utente, non deducibili dal codice). -->
+    <decision id="D-1">Partner = Referent (referents).</decision>
+    <decision id="D-2">Campagna con project_id valorizzato: le 4 colonne derivate
+      (project_status_id, business_function_id, state_id, product_category_id) restano NULL sulla
+      campagna e i valori si leggono dal Progetto (read-through). Campagna senza project_id:
+      le 4 colonne sono proprie, editabili e TUTTE OBBLIGATORIE.</decision>
+    <decision id="D-3">Codice autogenerato progressivo, read-only: PRJ-0001 / CMP-0001.</decision>
+    <decision id="D-4">Abbassare il budget di un Progetto sotto il totale già allocato alle sue
+      campagne è CONSENTITO (nessun blocco). L'avviso non bloccante NON introduce un nuovo canale
+      nell'envelope: ProjectResource espone allocated_budget e remaining_budget calcolati, e il
+      frontend mostra un banner di avviso quando remaining_budget &lt; 0.</decision>
+    <decision id="D-5">Obbligatori su Progetto: name (Denominazione) e project_status_id (Stato).
+      Tutto il resto è nullable, incluso total_budget.</decision>
+
+    <!-- ASSUNZIONI da confermare in approvazione. -->
+    <assumption id="A-1">Se project.total_budget è NULL, non esiste un residuo da verificare:
+      il vincolo di budget sulle campagne NON si applica.</assumption>
+    <assumption id="A-2">Eliminare un Progetto che ha Campagne → 409 (le campagne non possono essere
+      "sganciate" automaticamente: da standalone i 4 campi derivati diventerebbero obbligatori e
+      sarebbero vuoti).</assumption>
+    <assumption id="A-3">Navigazione: projects e campaigns nella sezione "management";
+      project-statuses nella sezione "configuration".</assumption>
+  </context>
+
+  <scope>
+    <in>
+      <item>Modulo project-statuses: CRUD completo + tabella backend-driven + for-select + delete-guard 409.</item>
+      <item>Modulo projects: CRUD completo + tabella backend-driven + for-select (con meta di default per le campagne) + pagine dedicate.</item>
+      <item>Modulo campaigns: CRUD completo + tabella backend-driven + pagine dedicate + validazione budget residuo.</item>
+      <item>Generazione codice progressivo (PRJ-/CMP-) concorrente-safe nel Service.</item>
+      <item>for-select mancanti richiesti dai form: registries, product-categories, states.</item>
+      <item>Permessi CRUD (auto via Policy) e permessi sui campi (XxxAuthorization + EnforcesFieldPermissions).</item>
+      <item>i18n it/en, voci di navigazione, rotte, breadcrumbs.</item>
+      <item>Test Pest (feature: crud, table, security, meta; unit: model/service) e Vitest (schema, form, table adapter).</item>
+    </in>
+    <out>
+      <item>Import CSV (spec 0012) per i tre moduli.</item>
+      <item>Migration Source / colonna old_id (spec 0013) per i tre moduli.</item>
+      <item>Modulo "Contatti" autonomo.</item>
+      <item>Modifiche all'envelope di risposta o introduzione di un canale "warnings".</item>
+      <item>Rendere for-select-abili moduli diversi da registries/product-categories/states.</item>
+      <item>Modifiche al modulo geo (GeoController/GeoSelect) oltre all'aggiunta di states/for-select.</item>
+      <item>Nuove dipendenze npm/composer.</item>
+      <item>Refactor dei moduli esistenti.</item>
+    </out>
+  </scope>
+
+  <data_model>
+    <table name="project_statuses">
+      <column name="id" type="bigIncrements"/>
+      <column name="name" type="string(191)" null="false"/>
+      <column name="color" type="string(32)" null="true"/>
+      <column name="sort_order" type="integer" default="0"/>
+      <column name="timestamps"/>
+    </table>
+
+    <table name="projects">
+      <column name="id" type="bigIncrements"/>
+      <column name="code" type="string(32)" null="false" unique="true"/>
+      <column name="name" type="string(191)" null="false"/>
+      <column name="description" type="text" null="true"/>
+      <column name="registry_id" type="foreignId->registries" null="true" onDelete="nullOnDelete"/>
+      <column name="project_status_id" type="foreignId->project_statuses" null="false" onDelete="restrictOnDelete"/>
+      <column name="source_id" type="foreignId->sources" null="true" onDelete="nullOnDelete"/>
+      <column name="business_function_id" type="foreignId->business_functions" null="true" onDelete="nullOnDelete"/>
+      <column name="state_id" type="foreignId->states" null="true" onDelete="nullOnDelete"/>
+      <column name="product_category_id" type="foreignId->product_categories" null="true" onDelete="nullOnDelete"/>
+      <column name="partner_id" type="foreignId->referents" null="true" onDelete="nullOnDelete"/>
+      <column name="start_date" type="date" null="true"/>
+      <column name="end_date" type="date" null="true"/>
+      <column name="total_budget" type="decimal(15,2)" null="true"/>
+      <column name="target_lead" type="unsignedInteger" null="true"/>
+      <column name="timestamps"/>
+      <index columns="project_status_id"/>
+      <index columns="registry_id"/>
+    </table>
+
+    <table name="campaigns">
+      <column name="id" type="bigIncrements"/>
+      <column name="code" type="string(32)" null="false" unique="true"/>
+      <column name="project_id" type="foreignId->projects" null="true" onDelete="restrictOnDelete"/>
+      <column name="name" type="string(191)" null="false"/>
+      <column name="description" type="text" null="true"/>
+      <!-- Sempre proprie della campagna: precompilate dal progetto ma modificabili -->
+      <column name="registry_id" type="foreignId->registries" null="true" onDelete="nullOnDelete"/>
+      <column name="source_id" type="foreignId->sources" null="true" onDelete="nullOnDelete"/>
+      <column name="partner_id" type="foreignId->referents" null="true" onDelete="nullOnDelete"/>
+      <!-- Derivate: NULL sse project_id è valorizzato; obbligatorie sse project_id è NULL (D-2) -->
+      <column name="project_status_id" type="foreignId->project_statuses" null="true" onDelete="restrictOnDelete"/>
+      <column name="business_function_id" type="foreignId->business_functions" null="true" onDelete="nullOnDelete"/>
+      <column name="state_id" type="foreignId->states" null="true" onDelete="nullOnDelete"/>
+      <column name="product_category_id" type="foreignId->product_categories" null="true" onDelete="nullOnDelete"/>
+      <column name="start_date" type="date" null="true"/>
+      <column name="end_date" type="date" null="true"/>
+      <column name="total_budget" type="decimal(15,2)" null="true"/>
+      <column name="target_lead" type="unsignedInteger" null="true"/>
+      <column name="timestamps"/>
+      <index columns="project_id"/>
+    </table>
+  </data_model>
+
+  <business_rules>
+    <rule id="BR-1" name="code-generation">
+      Il codice è generato dal Service dentro la transazione di create, con lock pessimistico
+      sull'ultima riga (SELECT ... FOR UPDATE su max(id)/max(code)): PRJ-{seq:4} e CMP-{seq:4},
+      zero-padded a 4, senza riuso dei buchi. Il campo è read-only: submetterlo su store/update
+      viene ignorato (non è in $fillable dei DTO di input).
+    </rule>
+    <rule id="BR-2" name="campaign-derivation">
+      Se project_id != null → project_status_id, business_function_id, state_id,
+      product_category_id devono essere NULL sulla campagna (il backend li forza a null e rifiuta
+      con 422 se valorizzati esplicitamente). Se project_id == null → i quattro campi sono
+      obbligatori (422 se mancanti). CampaignResource espone SEMPRE i valori efficaci
+      (letti dal progetto quando linkata) + il flag derived_from_project.
+    </rule>
+    <rule id="BR-3" name="campaign-budget">
+      Su store/update di una Campagna con project_id valorizzato e project.total_budget != null:
+      SUM(total_budget delle altre campagne dello stesso progetto) + total_budget richiesto
+      deve essere &lt;= project.total_budget, altrimenti 422 con messaggio esplicativo che riporta
+      budget del progetto, già allocato e residuo. Se project.total_budget è NULL → nessun vincolo (A-1).
+      Il controllo gira dentro la transazione con lock sul progetto (evita la doppia allocazione concorrente).
+    </rule>
+    <rule id="BR-4" name="status-delete-guard">
+      DELETE /project-statuses/{id} → 409 se esiste almeno un Project o una Campaign che lo referenzia.
+      Difesa in profondità: FK restrictOnDelete a livello schema.
+    </rule>
+    <rule id="BR-5" name="project-delete-guard">
+      DELETE /projects/{id} → 409 se il progetto ha almeno una Campagna (A-2).
+    </rule>
+    <rule id="BR-6" name="dates">
+      end_date, se valorizzata, deve essere &gt;= start_date (422 altrimenti). Vale su Projects e Campaigns.
+    </rule>
+    <rule id="BR-7" name="budget-overallocation-visibility">
+      ProjectResource espone allocated_budget (somma dei budget delle campagne) e remaining_budget
+      (total_budget - allocated_budget, null se total_budget è null). L'update del Progetto NON è
+      mai bloccato dal budget (D-4); il frontend mostra un avviso quando remaining_budget &lt; 0.
+    </rule>
+  </business_rules>
+
+  <data_contract>
+    <!-- ================= PROJECT STATUSES ================= -->
+    <endpoint method="GET" path="/api/project-statuses/for-select">
+      <request>search?: string; offset?: int=0; limit?: int=25 (max 100); ids[]?: int[]</request>
+      <response status="200">{ items: [{ id, label }], export_link: null, pagination: { total, offset, limit, total_pages } }</response>
+      <errors>403 senza project-statuses.viewAny</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/project-statuses/{projectStatus}">
+      <response status="200">{ success, message, data: { id, name, color, sort_order, created_at }, permissions }</response>
+      <errors>403 senza project-statuses.view; 404 inesistente</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/project-statuses">
+      <request>{ name: string(1..191) required, color?: string|null, sort_order?: int, custom_fields?: object }</request>
+      <response status="201">{ success, message, data: ProjectStatus, permissions }</response>
+      <errors>403 senza project-statuses.create; 422 validazione / campo non editabile</errors>
+    </endpoint>
+    <endpoint method="PATCH" path="/api/project-statuses/{projectStatus}">
+      <request>{ name?, color?, sort_order?, custom_fields? }</request>
+      <response status="200">{ success, message, data: ProjectStatus, permissions }</response>
+      <errors>403; 404; 422</errors>
+    </endpoint>
+    <endpoint method="DELETE" path="/api/project-statuses/{projectStatus}">
+      <response status="204">no content</response>
+      <errors>403; 404; 409 se usato da un Project o una Campaign (BR-4)</errors>
+    </endpoint>
+
+    <!-- ================= PROJECTS ================= -->
+    <endpoint method="GET" path="/api/projects/for-select">
+      <request>search?: string; offset?; limit?; ids[]?</request>
+      <!-- meta trasporta i default per il form Campagna: nessun endpoint extra (riusa ForSelectResource.meta) -->
+      <response status="200">{
+        items: [{ id, label: "PRJ-0001 — Denominazione", meta: {
+          registry: { id, label } | null,
+          source: { id, label } | null,
+          partner: { id, label } | null,
+          project_status: { id, label },
+          business_function: { id, label } | null,
+          state: { id, label } | null,
+          product_category: { id, label } | null,
+          total_budget: string|null, allocated_budget: string, remaining_budget: string|null
+        }}],
+        export_link: null, pagination: { total, offset, limit, total_pages } }</response>
+      <errors>403 senza projects.viewAny</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/projects/{project}">
+      <response status="200">{ success, message, data: {
+        id, code, name, description,
+        registry_id, registry: { id, name } | null,
+        project_status_id, project_status: { id, name, color } ,
+        source_id, source: { id, name } | null,
+        business_function_id, business_function: { id, name } | null,
+        state_id, state: { id, name } | null,
+        product_category_id, product_category: { id, name } | null,
+        partner_id, partner: { id, name } | null,
+        start_date, end_date, total_budget, target_lead,
+        allocated_budget, remaining_budget, campaigns_count,
+        created_at
+      }, permissions }</response>
+      <errors>403 senza projects.view; 404</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/projects">
+      <request>{ name: required string(1..191), project_status_id: required int exists,
+        description?, registry_id?, source_id?, business_function_id?, state_id?,
+        product_category_id?, partner_id?, start_date?: date, end_date?: date&gt;=start_date,
+        total_budget?: decimal&gt;=0, target_lead?: int&gt;=0, custom_fields?: object }
+        NB: `code` NON è accettato in input (BR-1).</request>
+      <response status="201">{ success, message, data: Project (code generato), permissions }</response>
+      <errors>403 senza projects.create; 422 validazione / campo non editabile (field permissions)</errors>
+    </endpoint>
+    <endpoint method="PATCH" path="/api/projects/{project}">
+      <request>gli stessi campi di POST, tutti `sometimes`. `code` ignorato/rifiutato.</request>
+      <response status="200">{ success, message, data: Project, permissions }</response>
+      <errors>403; 404; 422</errors>
+    </endpoint>
+    <endpoint method="DELETE" path="/api/projects/{project}">
+      <response status="204">no content</response>
+      <errors>403; 404; 409 se ha campagne (BR-5)</errors>
+    </endpoint>
+
+    <!-- ================= CAMPAIGNS ================= -->
+    <endpoint method="GET" path="/api/campaigns/{campaign}">
+      <response status="200">{ success, message, data: {
+        id, code, project_id, project: { id, code, name } | null,
+        name, description,
+        registry_id, registry: { id, name } | null,
+        source_id, source: { id, name } | null,
+        partner_id, partner: { id, name } | null,
+        derived_from_project: bool,
+        project_status_id, project_status: { id, name, color } | null,
+        business_function_id, business_function: { id, name } | null,
+        state_id, state: { id, name } | null,
+        product_category_id, product_category: { id, name } | null,
+        start_date, end_date, total_budget, target_lead, created_at
+      }, permissions }
+      NB: quando derived_from_project = true, i quattro blocchi derivati riportano i valori DEL PROGETTO
+      (gli *_id sono NULL in DB ma la Resource espone gli id efficaci del progetto).</response>
+      <errors>403 senza campaigns.view; 404</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/campaigns">
+      <request>{ name: required, project_id?: int|null exists,
+        description?, registry_id?, source_id?, partner_id?,
+        project_status_id, business_function_id, state_id, product_category_id
+          → required_if project_id == null; devono essere assenti/null se project_id != null (BR-2),
+        start_date?, end_date?, total_budget?: decimal&gt;=0, target_lead?: int&gt;=0, custom_fields? }</request>
+      <response status="201">{ success, message, data: Campaign, permissions }</response>
+      <errors>403 senza campaigns.create; 422 validazione, 422 budget insufficiente (BR-3) con
+        message: "Budget insufficiente sul progetto {code}: budget {total}, già allocato {allocated}, residuo {remaining}, richiesto {requested}."</errors>
+    </endpoint>
+    <endpoint method="PATCH" path="/api/campaigns/{campaign}">
+      <request>stessi campi, tutti `sometimes`. Cambiare project_id da null→valorizzato azzera le 4 colonne derivate; da valorizzato→null le rende obbligatorie.</request>
+      <response status="200">{ success, message, data: Campaign, permissions }</response>
+      <errors>403; 404; 422 (validazione / budget)</errors>
+    </endpoint>
+    <endpoint method="DELETE" path="/api/campaigns/{campaign}">
+      <response status="204">no content</response>
+      <errors>403; 404</errors>
+    </endpoint>
+
+    <!-- ================= LOOKUP MANCANTI (nuovi) ================= -->
+    <endpoint method="GET" path="/api/registries/for-select">
+      <request>search?; offset?; limit?; ids[]?</request>
+      <response status="200">{ items: [{ id, label: name }], export_link: null, pagination: {...} }</response>
+      <errors>403 senza registries.viewAny</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/product-categories/for-select">
+      <request>search?; offset?; limit?; ids[]?</request>
+      <response status="200">{ items: [{ id, label: name }], export_link: null, pagination: {...} }</response>
+      <errors>403 senza product-categories.viewAny</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/states/for-select">
+      <request>search?; offset?; limit?; ids[]?  (nessun country_id richiesto: ricerca libera)</request>
+      <response status="200">{ items: [{ id, label: name, subtitle: country.name }], export_link: null, pagination: {...} }</response>
+      <errors>401 non autenticato. NB: `states` è geo di riferimento, non ha Policy dedicata
+        (come GeoController): gate = auth:sanctum, coerente con /api/states esistente.</errors>
+    </endpoint>
+
+    <!-- ================= TABELLE BACKEND-DRIVEN (generiche, già esistenti) ================= -->
+    <endpoint method="GET" path="/api/tables/{domain}/columns">
+      <request>domain ∈ { project-statuses, projects, campaigns }</request>
+      <response status="200">shape esistente TableConfig (columns, filters, actions, defaultSort, defaultPagination, searchable)</response>
+    </endpoint>
+    <endpoint method="POST" path="/api/tables/{domain}/rows">
+      <request>SSRM: startRow, endRow, sortModel, filterModel, search</request>
+      <response status="200">paginatedResponse esistente</response>
+    </endpoint>
+    <endpoint method="POST" path="/api/exports/{domain}">
+      <request>gratis via TableDefinition (spec 0014), nessun codice nuovo</request>
+      <response status="200">export run esistente</response>
+    </endpoint>
+  </data_contract>
+
+  <table_definitions>
+    <table domain="project-statuses" searchable="name">
+      <column id="name" type="text" sortable filterable/>
+      <column id="color" type="text" sortable="false" filterable="false"/>
+      <column id="sort_order" type="number" sortable filterable/>
+      <column id="created_at" type="datetime" sortable filterable/>
+      <actions>view (project-statuses.view), edit (project-statuses.update), delete (project-statuses.delete, confirm)</actions>
+      <default_sort>sort_order asc</default_sort>
+    </table>
+    <table domain="projects" searchable="code,name">
+      <column id="code" type="text" sortable filterable/>
+      <column id="name" type="text" sortable filterable/>
+      <column id="registry" type="text|set" derived sortable filterable/>
+      <column id="project_status" type="text|set" derived sortable filterable/>
+      <column id="source" type="text|set" derived filterable/>
+      <column id="business_function" type="text|set" derived filterable/>
+      <column id="state" type="text|set" derived filterable/>
+      <column id="product_category" type="text|set" derived filterable/>
+      <column id="partner" type="text|set" derived filterable/>
+      <column id="start_date" type="date" sortable filterable/>
+      <column id="end_date" type="date" sortable filterable/>
+      <column id="total_budget" type="number" sortable filterable/>
+      <column id="target_lead" type="number" sortable filterable/>
+      <column id="created_at" type="datetime" sortable filterable/>
+      <actions>view/edit/delete come da permessi projects.*</actions>
+      <default_sort>created_at desc</default_sort>
+      <note>Le colonne derivate ordinano/filtrano via applyDerivedSort/applyDerivedFilter con JOIN e
+        allow-list di colonne (mai orderByRaw su input grezzo — backend.md §8).</note>
+    </table>
+    <table domain="campaigns" searchable="code,name">
+      <column id="code" type="text" sortable filterable/>
+      <column id="project" type="text|set" derived sortable filterable/>
+      <column id="name" type="text" sortable filterable/>
+      <column id="registry" type="text|set" derived filterable/>
+      <column id="project_status" type="text|set" derived filterable/>
+      <column id="source" type="text|set" derived filterable/>
+      <column id="start_date" type="date" sortable filterable/>
+      <column id="end_date" type="date" sortable filterable/>
+      <column id="total_budget" type="number" sortable filterable/>
+      <column id="target_lead" type="number" sortable filterable/>
+      <column id="created_at" type="datetime" sortable filterable/>
+      <default_sort>created_at desc</default_sort>
+      <note>project_status della campagna è EFFICACE: COALESCE(campaigns.project_status_id,
+        projects.project_status_id) via LEFT JOIN — sia in mapRow sia nel filtro/sort derivato.</note>
+    </table>
+  </table_definitions>
+
+  <acceptance_criteria>
+    <!-- PROJECT STATUSES -->
+    <criterion id="AC-001">Dato un utente con project-statuses.create, quando POST /api/project-statuses {name:"Bozza"}, allora 201 e il record esiste con name="Bozza".</criterion>
+    <criterion id="AC-002">Dato un utente SENZA il permesso, quando chiama ciascuno di GET/POST/PATCH/DELETE su project-statuses, allora 403 e nessuna scrittura.</criterion>
+    <criterion id="AC-003">Dato uno stato referenziato da un Progetto, quando DELETE /api/project-statuses/{id}, allora 409 e lo stato esiste ancora.</criterion>
+    <criterion id="AC-004">Dato uno stato referenziato SOLO da una Campagna standalone (project_id null), quando DELETE, allora 409.</criterion>
+    <criterion id="AC-005">Dato uno stato non referenziato, quando DELETE, allora 204 e il record è cancellato.</criterion>
+    <criterion id="AC-006">GET /api/project-statuses/for-select con search="boz" restituisce solo gli item il cui name contiene "boz", nella shape { id, label }.</criterion>
+
+    <!-- PROJECTS -->
+    <criterion id="AC-010">POST /api/projects senza `code` in input restituisce 201 con data.code = "PRJ-0001"; il secondo progetto creato ha "PRJ-0002".</criterion>
+    <criterion id="AC-011">POST /api/projects con `code` esplicito in body: il valore è ignorato e il codice resta quello generato.</criterion>
+    <criterion id="AC-012">POST /api/projects senza name o senza project_status_id → 422 con errori sui rispettivi campi.</criterion>
+    <criterion id="AC-013">POST /api/projects con end_date &lt; start_date → 422 su end_date.</criterion>
+    <criterion id="AC-014">GET /api/projects/{id} espone allocated_budget = somma dei total_budget delle campagne del progetto e remaining_budget = total_budget - allocated_budget.</criterion>
+    <criterion id="AC-015">Dato un progetto con total_budget 1000 e campagne per 800, quando PATCH /api/projects/{id} {total_budget: 500}, allora 200 (nessun blocco) e remaining_budget = -300.</criterion>
+    <criterion id="AC-016">DELETE /api/projects/{id} con almeno una campagna → 409; senza campagne → 204.</criterion>
+    <criterion id="AC-017">GET /api/projects/for-select restituisce per ogni item meta.project_status, meta.registry, meta.source, meta.partner, meta.remaining_budget.</criterion>
+
+    <!-- CAMPAIGNS -->
+    <criterion id="AC-020">POST /api/campaigns con project_id valorizzato e senza i 4 campi derivati → 201; in DB le colonne project_status_id/business_function_id/state_id/product_category_id della campagna sono NULL.</criterion>
+    <criterion id="AC-021">GET /api/campaigns/{id} di una campagna linkata restituisce derived_from_project=true e project_status/business_function/state/product_category valorizzati con quelli DEL PROGETTO.</criterion>
+    <criterion id="AC-022">POST /api/campaigns con project_id valorizzato E project_status_id esplicito → 422 (BR-2).</criterion>
+    <criterion id="AC-023">POST /api/campaigns con project_id null e senza uno dei 4 campi derivati → 422 su quel campo; con tutti e 4 → 201 e derived_from_project=false.</criterion>
+    <criterion id="AC-024">Dato un progetto con total_budget 1000 e una campagna esistente da 600, quando POST /api/campaigns {project_id, total_budget: 500} → 422 con message che riporta budget 1000, allocato 600, residuo 400, richiesto 500; nessuna campagna creata.</criterion>
+    <criterion id="AC-025">Stesso scenario con total_budget 400 → 201.</criterion>
+    <criterion id="AC-026">Dato lo stesso progetto e la campagna da 600, PATCH di quella campagna a total_budget 1000 → 201/200 (il proprio budget non conta due volte nell'allocato); PATCH a 1001 → 422.</criterion>
+    <criterion id="AC-027">Dato un progetto con total_budget NULL, POST di una campagna con qualunque total_budget → 201 (A-1).</criterion>
+    <criterion id="AC-028">PATCH di una campagna standalone impostando project_id → le 4 colonne derivate vengono azzerate in DB e la response ha derived_from_project=true.</criterion>
+    <criterion id="AC-029">POST /api/campaigns con code in input → il codice è generato (CMP-0001) e l'input ignorato.</criterion>
+
+    <!-- TABELLE / EXPORT / PERMESSI CAMPI -->
+    <criterion id="AC-030">GET /api/tables/{domain}/columns per project-statuses, projects, campaigns restituisce 200 con le colonne dichiarate in &lt;table_definitions&gt;; 403 senza {domain}.viewAny.</criterion>
+    <criterion id="AC-031">POST /api/tables/projects/rows con sortModel su una colonna derivata (project_status) ordina per il nome dello stato; con un colId non in allow-list → l'ordinamento è ignorato/422, mai SQL grezzo.</criterion>
+    <criterion id="AC-032">POST /api/tables/campaigns/rows: la colonna project_status di una campagna linkata mostra lo stato del progetto (COALESCE), e il filtro set su project_status trova quella campagna.</criterion>
+    <criterion id="AC-033">POST /api/exports/projects con permesso projects.export → export run creato; senza permesso → 403.</criterion>
+    <criterion id="AC-034">GET /api/meta/projects restituisce permissions.fields con i 6 flag per ogni campo dichiarato in ProjectsAuthorization::fields().</criterion>
+    <criterion id="AC-035">Dato un ruolo con total_budget non-editable in role_field_permissions, quando PATCH /api/projects/{id} {total_budget: 999} → 422 e il valore non cambia.</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-040">La pagina /projects mostra la tabella backend-driven (TableView domain="projects") con filtri, ordinamenti, ricerca ed export funzionanti; senza projects.viewAny mostra il fallback di Can.</criterion>
+    <criterion id="AC-041">/projects/new salva un progetto e naviga al dettaglio; /projects/:id/edit precarica i valori e salva; /projects/:id mostra il dettaglio read-only. Stessa terna per /campaigns.</criterion>
+    <criterion id="AC-042">Nel form Campagna, selezionando un Progetto: Cliente/Fonte/Partner si popolano con i valori del progetto e restano editabili; Stato/Funzione aziendale/Regione/Categoria prodotto mostrano i valori del progetto in sola lettura (disabled) e non vengono inviati nel payload.</criterion>
+    <criterion id="AC-043">Nel form Campagna, deselezionando il Progetto: i 4 campi derivati tornano editabili e obbligatori (errore di validazione client se vuoti).</criterion>
+    <criterion id="AC-044">Il dettaglio Progetto mostra un avviso visibile quando remaining_budget &lt; 0, riportando l'importo in eccesso.</criterion>
+    <criterion id="AC-045">Le tre voci di menu compaiono nella sidebar solo per chi ha il permesso .view corrispondente (filtro server-side su config/navigation.php).</criterion>
+    <criterion id="AC-046">Il campo Codice è mostrato read-only nei form (create: vuoto/placeholder "assegnato al salvataggio"; edit: valore, disabilitato).</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza composer/npm.</item>
+    <item>Solo i pattern esistenti: BaseApiController, BasePolicy, AbstractResourceAuthorization, AbstractTableDefinition, ForSelectResource, AsyncPaginatedSelect, MetaField, TableView, CustomFieldsSection. Nessuna nuova astrazione trasversale.</item>
+    <item>Authz server-side su OGNI endpoint (Policy). L'UI nasconde, il backend autorizza.</item>
+    <item>Nessun orderByRaw/whereRaw su input grezzo: allow-list di colonne nelle TableDefinition (backend.md §8).</item>
+    <item>Ogni write dentro DB::transaction; generazione codice e verifica budget con lock pessimistico (no race).</item>
+    <item>Mai restituire model Eloquent raw: sempre via Resource.</item>
+    <item>Identificatori in inglese (tabelle, colonne, rotte, classi). Label in italiano solo via i18n.</item>
+    <item>File entro 300 righe (soft) / 500 (hard): TableDefinition split in ColumnCatalog come da standard.</item>
+    <item>Definition of Done: Pest + Vitest ESEGUITI verdi, Pint pulito, tsc --noEmit pulito.</item>
+  </constraints>
+
+</spec>
