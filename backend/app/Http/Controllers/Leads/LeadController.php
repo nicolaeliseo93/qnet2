@@ -1,0 +1,124 @@
+<?php
+
+namespace App\Http\Controllers\Leads;
+
+use App\Authorization\AuthorizationRegistry;
+use App\Authorization\ResourcePermissionsBuilder;
+use App\Enums\HttpStatusEnum;
+use App\Http\Controllers\Abstract\BaseApiController;
+use App\Http\Requests\Leads\StoreLeadRequest;
+use App\Http\Requests\Leads\UpdateLeadRequest;
+use App\Http\Resources\LeadResource;
+use App\Models\Lead;
+use App\Models\User;
+use App\Services\LeadService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Throwable;
+
+/**
+ * CRUD endpoints for the `leads` resource (spec 0024), backing the
+ * backend-driven table row-actions (view/edit/delete) plus create.
+ *
+ * Thin controller: validation (FormRequest), server-side authorization
+ * (LeadPolicy), Service call, response. No business logic, no queries.
+ *
+ * show/store/update also attach the `permissions` metadata block (spec 0004)
+ * via ResourcePermissionsBuilder, contextual to the returned lead.
+ *
+ * @see LeadService
+ */
+class LeadController extends BaseApiController
+{
+    use AuthorizesRequests;
+
+    public function __construct(
+        private readonly LeadService $service,
+        private readonly AuthorizationRegistry $authorization,
+        private readonly ResourcePermissionsBuilder $permissionsBuilder,
+    ) {}
+
+    /**
+     * GET /api/leads/{lead} — single lead (view row-action).
+     */
+    public function show(Request $request, Lead $lead): JsonResponse
+    {
+        try {
+            $this->authorize('view', $lead);
+
+            return $this->okWithPermissions(
+                new LeadResource($this->service->loadDetail($lead)),
+                $this->buildPermissions($request->user(), $lead),
+            );
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__, ['lead' => $lead->id]);
+        }
+    }
+
+    /**
+     * POST /api/leads — create a new lead.
+     */
+    public function store(StoreLeadRequest $request): JsonResponse
+    {
+        try {
+            $this->authorize('create', Lead::class);
+
+            $lead = $this->service->create($request->toData());
+
+            return $this->okWithPermissions(
+                new LeadResource($lead),
+                $this->buildPermissions($request->user(), $lead),
+                'Created',
+                HttpStatusEnum::CREATED,
+            );
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * PUT/PATCH /api/leads/{lead} — update an existing lead.
+     */
+    public function update(UpdateLeadRequest $request, Lead $lead): JsonResponse
+    {
+        try {
+            $this->authorize('update', $lead);
+
+            $lead = $this->service->update($lead, $request->toData());
+
+            return $this->okWithPermissions(
+                new LeadResource($lead),
+                $this->buildPermissions($request->user(), $lead),
+            );
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__, ['lead' => $lead->id]);
+        }
+    }
+
+    /**
+     * DELETE /api/leads/{lead} — delete a lead.
+     */
+    public function destroy(Lead $lead): JsonResponse
+    {
+        try {
+            $this->authorize('delete', $lead);
+
+            $this->service->delete($lead);
+
+            return $this->noContent();
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__, ['lead' => $lead->id]);
+        }
+    }
+
+    /**
+     * The `permissions` block for $model, contextual to $actor (spec 0004).
+     *
+     * @return array<string, mixed>
+     */
+    private function buildPermissions(User $actor, ?Lead $model): array
+    {
+        return $this->permissionsBuilder->build($this->authorization->resolve('leads'), $actor, $model);
+    }
+}

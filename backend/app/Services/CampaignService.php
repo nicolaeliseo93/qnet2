@@ -6,9 +6,12 @@ namespace App\Services;
 
 use App\DataObjects\Campaigns\CreateCampaignData;
 use App\DataObjects\Campaigns\UpdateCampaignData;
+use App\DataObjects\Shared\ForSelectQuery;
+use App\DataObjects\Shared\ForSelectResult;
 use App\Models\Campaign;
 use App\Models\Project;
 use App\Services\Concerns\GeneratesSequentialCode;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -118,12 +121,84 @@ class CampaignService
     }
 
     /**
-     * Plain delete: no BR restricts removing a campaign (unlike Projects,
-     * which cannot be deleted while they still have campaigns — BR-5).
+     * Restrictive delete (spec 0024 BR-2/D-4): a campaign referenced by at
+     * least one lead cannot be removed, mirroring ProjectService::delete.
      */
     public function delete(Campaign $campaign): void
     {
+        if ($campaign->leads()->exists()) {
+            abort(409, 'This campaign has leads and cannot be deleted.');
+        }
+
         $campaign->delete();
+    }
+
+    /**
+     * Minimal, searchable, paginated campaign list for the for-select
+     * standard (ADR 0011, spec 0024), mirroring SourceService::forSelect.
+     * Not consumed inside this module itself (Campaigns have no for-select
+     * field of their own): it feeds the Lead form's campaign field.
+     */
+    public function forSelect(ForSelectQuery $query): ForSelectResult
+    {
+        $base = Campaign::query()->select(['id', 'code', 'name']);
+
+        if ($query->hasSearch()) {
+            $base->where(function ($relatedQuery) use ($query): void {
+                $relatedQuery->where('name', 'like', '%'.$query->search.'%')
+                    ->orWhere('code', 'like', '%'.$query->search.'%');
+            });
+        }
+
+        $total = (clone $base)->count();
+
+        /** @var Collection<int, Campaign> $page */
+        $page = $base->orderBy('name')
+            ->orderBy('id')
+            ->offset($query->offset)
+            ->limit($query->limit)
+            ->get();
+
+        $items = $this->appendHydratedIds($page, $query);
+
+        return new ForSelectResult(
+            items: $items,
+            total: $total,
+            offset: $query->offset,
+            limit: $query->limit,
+        );
+    }
+
+    /**
+     * Append the explicitly-requested `ids[]` (edit-mode hydration) that are
+     * not already on the page, deduplicated. They bypass search and the same
+     * id/code/name projection applies. Total is unaffected.
+     *
+     * @param  Collection<int, Campaign>  $page
+     * @return Collection<int, Campaign>
+     */
+    private function appendHydratedIds(Collection $page, ForSelectQuery $query): Collection
+    {
+        if (! $query->hasIds()) {
+            return $page;
+        }
+
+        $presentIds = $page->pluck('id')->all();
+        $missingIds = array_values(array_diff($query->ids, $presentIds));
+
+        if ($missingIds === []) {
+            return $page;
+        }
+
+        /** @var Collection<int, Campaign> $hydrated */
+        $hydrated = Campaign::query()
+            ->select(['id', 'code', 'name'])
+            ->whereIn('id', $missingIds)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+
+        return $page->concat($hydrated);
     }
 
     /**

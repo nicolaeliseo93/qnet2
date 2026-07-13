@@ -13,7 +13,6 @@ use App\Http\Controllers\CompanySites\CompanySiteController;
 use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\Contacts\ContactController;
 use App\Http\Controllers\Export\ExportController;
-use App\Http\Controllers\Geo\GeoController;
 use App\Http\Controllers\Import\ImportController;
 use App\Http\Controllers\Meta\MetaController;
 use App\Http\Controllers\Migration\MigrationController;
@@ -365,6 +364,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // auth:sanctum group so every route there inherits the same context.
     require __DIR__.'/api/registries.php';
     require __DIR__.'/api/projects.php'; // Project statuses / Projects / Campaigns CRUD (spec 0023)
+    require __DIR__.'/api/leads.php'; // Leads CRUD (spec 0024)
     // Attributes CRUD (spec 0017): the global, reusable dynamic-attribute
     // catalogue assignable to product categories. Authorization
     // (attributes.view/create/update/delete) is enforced server-side in
@@ -482,18 +482,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('addresses/{address}', [AddressController::class, 'destroy']);
     });
 
-    // Geo reference lookups powering the address country → state → province →
-    // city cascade selects (ADR 0010). Read-only reference data (Country / State
-    // / Province / City): no Policy, no per-resource permission — the only gate
-    // is auth:sanctum, plus a throttle (matching the rest of the module) to bound
-    // the lookups. states/provinces/cities require their parent filter
-    // (country_id / state_id / province_id|state_id) → 422 if absent. Each
-    // endpoint is a direct, bounded Eloquent read (documented exception: no
-    // Service, no business logic — see GeoController).
-    Route::middleware('throttle:60,1')->group(function () {
-        Route::get('countries', [GeoController::class, 'countries']);
-        Route::get('states', [GeoController::class, 'states']);
-        Route::get('provinces', [GeoController::class, 'provinces']);
-        Route::get('cities', [GeoController::class, 'cities']);
-    });
+    // Geo reference lookups (ADR 0010): routes/api/geo.php (file-size split,
+    // engineering.md §6), required for the same context.
+    require __DIR__.'/api/geo.php';
 });

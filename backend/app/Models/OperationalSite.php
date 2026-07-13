@@ -8,6 +8,7 @@ use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\OperationalSiteFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Operational site entity (spec 0011 — "Sedi operative"): a physical
@@ -96,5 +97,16 @@ class OperationalSite extends BaseModel
     public function cityId(): Attribute
     {
         return Attribute::get(fn (): ?int => $this->primaryAddress?->city_id);
+    }
+
+    /**
+     * The leads scoped to this site (spec 0024, BR-2/D-4: restrict-on-delete
+     * — OperationalSiteService::delete() guards on this before deleting).
+     *
+     * @return HasMany<Lead, $this>
+     */
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class);
     }
 }

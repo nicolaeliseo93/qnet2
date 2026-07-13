@@ -190,11 +190,17 @@ class UserService
     }
 
     /**
-     * Delete the given user, guarding against removing the last super-admin.
+     * Delete the given user, guarding against removing the last super-admin
+     * first, then against removing an operator still referenced by a lead
+     * (spec 0024 BR-2/D-4).
      */
     public function delete(User $user): void
     {
         $this->guard->guardLastSuperAdminDeletion($user);
+
+        if ($user->leads()->exists()) {
+            abort(409, 'This user is the operator on leads and cannot be deleted.');
+        }
 
         $user->delete();
     }

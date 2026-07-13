@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Tag,
   Tags,
+  UserPlus,
   Users,
   Waypoints,
   type LucideIcon,
@@ -43,6 +44,7 @@ const iconMap: Record<string, LucideIcon> = {
   'list-tree': ListTree,
   package: Package,
   puzzle: Puzzle,
+  'user-plus': UserPlus,
 }
 
 export function resolveIcon(name: string | null): LucideIcon {

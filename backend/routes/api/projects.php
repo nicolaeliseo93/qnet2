@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Campaigns\CampaignController;
+use App\Http\Controllers\Campaigns\CampaignForSelectController;
 use App\Http\Controllers\Geo\StateForSelectController;
 use App\Http\Controllers\ProductCategories\ProductCategoryForSelectController;
 use App\Http\Controllers\Projects\ProjectController;
@@ -63,11 +64,17 @@ Route::middleware('throttle:60,1')->group(function () {
 });
 
 // Campaigns CRUD (BR-1 code generation, BR-2 classification derivation, BR-3
-// budget guard all live in CampaignService). No for-select (not consumed by
-// any other module in this spec). Authorization (campaigns.view/create/
-// update/delete) is enforced server-side in CampaignController via
+// budget guard all live in CampaignService). Authorization (campaigns.view/
+// create/update/delete) is enforced server-side in CampaignController via
 // CampaignPolicy.
 Route::middleware('throttle:60,1')->group(function () {
+    // Minimal searchable/paginated list for entity-backed selects (ADR 0011,
+    // spec 0024 — feeds the Lead form's campaign field). Declared ABOVE
+    // campaigns/{campaign} so the literal `for-select` segment wins over the
+    // bound wildcard. Gated by campaigns.viewAny server-side in
+    // CampaignForSelectController.
+    Route::get('campaigns/for-select', CampaignForSelectController::class);
+
     Route::get('campaigns/{campaign}', [CampaignController::class, 'show']);
     Route::post('campaigns', [CampaignController::class, 'store']);
     Route::match(['put', 'patch'], 'campaigns/{campaign}', [CampaignController::class, 'update']);

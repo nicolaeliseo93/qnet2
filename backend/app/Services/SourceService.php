@@ -34,11 +34,15 @@ class SourceService
     }
 
     /**
-     * Plain delete: the target foreign key (restrict-on-delete guard) is
-     * deferred until that entity is defined (spec 0018).
+     * Restrictive delete (spec 0024 BR-2/D-4): a source referenced by at
+     * least one lead cannot be removed.
      */
     public function delete(Source $source): void
     {
+        if ($source->leads()->exists()) {
+            abort(409, 'This source has leads and cannot be deleted.');
+        }
+
         $source->delete();
     }
 

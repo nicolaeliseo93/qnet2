@@ -101,11 +101,16 @@ class ReferentService
     }
 
     /**
-     * Delete the referent. Its personal-data card (and the card's own
-     * contacts/addresses) cascade away via HasPersonalData.
+     * Restrictive delete (spec 0024 BR-2/D-4): a referent referenced by at
+     * least one lead cannot be removed. Otherwise its personal-data card (and
+     * the card's own contacts/addresses) cascade away via HasPersonalData.
      */
     public function delete(Referent $referent): void
     {
+        if ($referent->leads()->exists()) {
+            abort(409, 'This referent has leads and cannot be deleted.');
+        }
+
         $referent->delete();
     }
 

@@ -1,0 +1,47 @@
+import { apiClient } from '@/api/client'
+import type { ApiResponse, ApiResponseWithPermissions } from '@/api/types'
+import type { ResourcePermissions } from '@/features/authorization/types'
+import type {
+  CreateLeadPayload,
+  LeadDetail,
+  LeadDetailWithPermissions,
+  UpdateLeadPayload,
+} from '@/features/leads/types'
+
+/**
+ * Query key of a single lead's detail (fresh-on-open pattern). Shared by
+ * the detail/edit pages and by the post-mutation invalidation, so they can
+ * never drift apart. `null` (an unparsable route param) is a key that is never
+ * fetched.
+ */
+export function leadDetailQueryKey(id: number | null) {
+  return ['leads', 'detail', id] as const
+}
+
+/**
+ * Fetches a single lead detail together with the actor's authorization
+ * metadata for it (`permissions`, a top-level envelope sibling of `data`).
+ */
+export async function fetchLead(id: number): Promise<LeadDetailWithPermissions> {
+  const { data } = await apiClient.get<ApiResponseWithPermissions<LeadDetail, ResourcePermissions>>(
+    `/leads/${id}`,
+  )
+  return { ...data.data, permissions: data.permissions }
+}
+
+/** Creates a lead. Returns the created resource. */
+export async function createLead(payload: CreateLeadPayload): Promise<LeadDetail> {
+  const { data } = await apiClient.post<ApiResponse<LeadDetail>>('/leads', payload)
+  return data.data
+}
+
+/** Partially updates a lead (PATCH). Returns the updated resource. */
+export async function updateLead(id: number, payload: UpdateLeadPayload): Promise<LeadDetail> {
+  const { data } = await apiClient.patch<ApiResponse<LeadDetail>>(`/leads/${id}`, payload)
+  return data.data
+}
+
+/** Deletes a lead. Backend responds 204 with no body. */
+export async function deleteLead(id: number): Promise<void> {
+  await apiClient.delete(`/leads/${id}`)
+}

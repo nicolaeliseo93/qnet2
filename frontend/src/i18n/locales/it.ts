@@ -17,6 +17,7 @@ import { tags } from './it-tags'
 import { projectStatuses } from './it-project-statuses'
 import { projects } from './it-projects'
 import { campaigns } from './it-campaigns'
+import { leads } from './it-leads'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -71,6 +72,7 @@ export const it: TranslationResources = {
     tags: 'Tag',
     projects: 'Progetti',
     campaigns: 'Campagne',
+    leads: 'Lead',
     projectStatuses: 'Stati progetto',
     management: 'Gestione',
     configuration: 'Configurazione',
@@ -471,4 +473,5 @@ export const it: TranslationResources = {
   projects,
   projectStatuses,
   campaigns,
+  leads,
 }

@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0024-leads-module" status="approved" owner="nicola" date="2026-07-13">
+
+  <goal>
+    Introdurre il modulo Lead: l'anagrafica dei contatti generati da una campagna.
+    Un Lead lega un Referente (il contatto) a una Campagna, e opzionalmente a una Sede
+    operativa, a una Fonte, a un Operatore (utente del gestionale) e a delle note.
+    Il modulo espone il CRUD REST, la tabella backend-driven (paginazione, filtri,
+    ordinamenti, export) e le pagine dedicate lista/dettaglio/form, riusando integralmente
+    il flusso, i componenti e i pattern del modulo Campagne (spec 0023). Nessun pattern nuovo.
+  </goal>
+
+  <context>
+    Tutti i nomi qui sotto sono stati VERIFICATI sul codice reale, non ipotizzati.
+
+    MAPPATURA DEI CONCETTI DI DOMINIO (decisa dall'utente, 2026-07-13):
+    - "Contatto"  -> Model `Referent` / tabella `referents` (spec 0016). Ha `name` denormalizzato,
+      endpoint `GET /api/referents/for-select` e `ReferentsTableDefinition`. NON esiste un modulo
+      "Contatti": la tabella `contacts` e' solo il canale polimorfico (email/telefono) annidato
+      in `personal_data`, senza for-select ne' tabella; non e' referenziabile.
+    - "Campagna"  -> Model `Campaign` / tabella `campaigns` (spec 0023). Ha `name`.
+      NON ha un endpoint for-select: va creato (`GET /api/campaigns/for-select`, ADR 0011).
+    - "Sede"      -> Model `OperationalSite` / tabella `operational_sites` (spec 0011).
+      Endpoint `GET /api/operational-sites/for-select` gia' esistente. ATTENZIONE: non ha
+      colonna `name` — l'identita' e' il suo indirizzo; l'etichetta e' composta
+      ("{address.line1} - {city}", vedi OperationalSiteForSelectResource).
+    - "Fonte"     -> Model `Source` / tabella `sources` (spec 0018). `GET /api/sources/for-select`.
+    - "Operatore" -> Model `User` / tabella `users`. `GET /api/users/for-select`, label = `name`.
+
+    INFRASTRUTTURA GIA' ESISTENTE CHE IL MODULO RIUSA (zero codice nuovo di framework):
+    - Permessi CRUD: `LeadPolicy extends BasePolicy` -> i 7 permessi `leads.{viewAny,view,create,
+      update,delete,export,import}` sono creati AUTOMATICAMENTE da `php artisan permissions:sync`
+      (SyncPermissions scansiona `app/Policies/*.php`). Nessuna riga da aggiungere ai seeder.
+    - Permessi per campo: `LeadsAuthorization extends AbstractResourceAuthorization` + entry in
+      `config/authorization.php`. Da li' arrivano gratis: `GET /api/meta/leads`, il blocco
+      `permissions` nell'envelope CRUD (ResourcePermissionsBuilder), l'enforcement in scrittura
+      (trait `EnforcesFieldPermissions`, CHANGE-based, spec 0008) e la comparsa dei campi nella
+      matrice permessi del form Ruolo (`GET /api/authorization/fields`).
+    - Tabella/filtri/ordinamenti/export: `LeadsTableDefinition extends AbstractTableDefinition` +
+      entry in `config/tables.php`. Da li' arrivano gratis `GET /api/tables/leads/columns`,
+      `POST /api/tables/leads/rows`, `POST /api/tables/leads/values` e l'export
+      `POST /api/exports/leads` (spec 0014: nessun controller/service di export per-modulo;
+      `TableQueryBuilder` e' condiviso tra righe ed export, quindi l'export rispetta per
+      costruzione filtri + ordinamento + colonne visibili + `leads.export` + `authorizeViewAny`).
+    - Envelope: `{ success, message, data }`, `{ ..., permissions }` per il CRUD
+      (BaseApiController::okWithPermissions), envelope paginato distinto per il for-select (ADR 0011).
+    - Frontend: `TableView` (domain-driven), `MetaField` + `ResourcePermissionsProvider`
+      (permessi per campo), `AsyncPaginatedSelect` + `useForSelect` (select relazionali),
+      `DetailPanel/DetailSection/DetailField` (vista read-only), `useEntityDetail` (fresh-on-open).
+
+    DECISIONI PRESE DALL'UTENTE:
+    - D-1: "Contatto" = `Referent` (non `Registry`).
+    - D-2: "Sede" = `OperationalSite` (non `CompanySite`).
+    - D-3: NESSUN codice sequenziale. Il Lead non ha `code` (a differenza di Campaign/Project):
+      niente `GeneratesSequentialCode`. I campi sono esattamente i 6 richiesti.
+    - D-4: cancellazione BLOCCANTE su TUTTE le relazioni. Vedi BR-2: costa 5 modifiche
+      chirurgiche fuori dal modulo Lead (i `delete()` dei moduli referenziati).
+
+    REGOLE DI BUSINESS:
+    - BR-1: `referent_id` e `campaign_id` sono obbligatori (NOT NULL a DB, `required` in validazione).
+      `operational_site_id`, `source_id`, `operator_id`, `notes` sono facoltativi (nullable).
+    - BR-2 (D-4): nessuna entita' referenziata da un Lead e' cancellabile finche' quel Lead esiste.
+      A DB: `restrictOnDelete` su tutte e 5 le FK. Nel dominio: guardia `abort(409, ...)` nel
+      `delete()` del modulo referenziato, ESATTAMENTE come `ProjectService::delete` (BR-5 spec 0023)
+      e `ProjectStatusService::delete` (BR-4). Servono 5 guardie, una per servizio:
+      CampaignService, ReferentService, OperationalSiteService, SourceService, UserService.
+      Senza la guardia la FK `restrict` produrrebbe una QueryException -> 500, non un 409.
+    - BR-3: la tabella espone la Sede come colonna DERIVATA a etichetta composta
+      ("{line1} - {city}"), perche' `operational_sites` non ha una colonna nome. Ordinamento,
+      filtro e valori distinti su quella colonna passano dall'indirizzo primario del sito
+      (`addresses.line1`, `is_primary = true`), col medesimo pattern di colonna derivata gia'
+      usato da `OperationalSitesTableDefinition` e `CampaignsTableDefinition`. Le altre quattro
+      colonne relazionali (referent/campaign/source/operator) sono colonne derivate STANDARD su
+      `name`, senza logica speciale.
+    - BR-4: il form ha tre modalita' con la stessa struttura di Campagne: create e edit condividono
+      il form (pagina `/leads/new` e `/leads/:id/edit`); la "visualizzazione" e' la pagina dedicata
+      read-only `/leads/:id` costruita con `DetailPanel` (identico a `campaign-detail.tsx`).
+      La read-only per-campo dentro al form NON e' una modalita' a se': deriva dai permessi di campo
+      restituiti dal backend, che `MetaField` traduce in `disabled`/`readOnly`/`hidden`/`required`.
+  </context>
+
+  <scope>
+    <in>
+      <item>Backend: migration `leads`, model `Lead`, DTO Create/Update, `LeadService`, `StoreLeadRequest`/`UpdateLeadRequest`, `LeadPolicy`, `LeadResource`, `LeadController`, rotte REST.</item>
+      <item>Backend: `LeadsAuthorization` (permessi per campo) + entry in `config/authorization.php`.</item>
+      <item>Backend: `LeadsTableDefinition` + `LeadColumnCatalog` + entry in `config/tables.php` (tabella, filtri, ordinamenti, valori distinti; export ereditato dal framework).</item>
+      <item>Backend: nuovo endpoint `GET /api/campaigns/for-select` (+ request, resource, `CampaignService::forSelect`), oggi mancante e necessario al form Lead.</item>
+      <item>Backend: 5 guardie `abort(409)` nei `delete()` dei moduli referenziati (BR-2, D-4) e i relativi test.</item>
+      <item>Backend: voce di navigazione `leads` in `config/navigation.php`; `LeadFactory`; `DemoLeadSeeder` agganciato a `DemoDataSeeder`.</item>
+      <item>Frontend: feature `features/leads/` (types, api, schema Zod, hook form, form body, campi relazionali, tabella, renderer di colonna, vista dettaglio).</item>
+      <item>Frontend: pagine dedicate `leads-page`, `lead-detail-page`, `lead-form-page`; rotte in `router.tsx`; breadcrumb; i18n `it-leads.ts` / `en-leads.ts` + `navigation.leads`.</item>
+      <item>Frontend: estrazione di un campo relazionale CONDIVISO (oggi `campaign-relation-field.tsx` e' l'unico esemplare) riusato sia da Campagne sia da Lead, per non duplicarlo.</item>
+      <item>Test: Pest (model, CRUD+authz, tabella, meta/security, for-select campagne, guardie 409) e Vitest (schema, payload, form, permessi di campo).</item>
+    </in>
+    <out>
+      <item>Import massivo dei Lead (il permesso `leads.import` esiste per uniformita' di `BasePolicy`, ma nessun importer viene registrato — spec 0012 fuori scope).</item>
+      <item>Stati/pipeline del Lead (nuovo/qualificato/perso), conversione del Lead in un'altra entita', assegnazione automatica dell'operatore, notifiche.</item>
+      <item>Endpoint `leads/for-select` (nessun modulo consuma i Lead come select: identica scelta fatta per Campaign).</item>
+      <item>Custom fields sul Lead (spec 0021) e allegati.</item>
+      <item>Modifiche a `Registry` o `CompanySite` (scartati esplicitamente in D-1/D-2).</item>
+      <item>Qualsiasi refactor dei moduli esistenti che non sia la guardia 409 (BR-2) e l'estrazione del campo relazionale condiviso.</item>
+      <item>Il rebrand pendente in `index.css`/`sidebar.tsx`/`nav-main.tsx` (debito pre-esistente segnalato in HANDOFF): non va toccato ne' incluso nel commit di questa feature.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <!-- ============ CRUD ============ -->
+
+    <endpoint method="GET" path="/api/leads/{lead}">
+      <request>Nessun body. Route model binding implicito su `{lead}`.</request>
+      <response status="200">
+        {
+          success: true, message: "OK",
+          data: {
+            id: number,
+            referent_id: number,
+            referent: { id: number, name: string } | null,
+            campaign_id: number,
+            campaign: { id: number, code: string, name: string } | null,
+            operational_site_id: number | null,
+            operational_site: { id: number, label: string } | null,   // label composta "{line1} - {city}"
+            source_id: number | null,
+            source: { id: number, name: string } | null,
+            operator_id: number | null,
+            operator: { id: number, name: string } | null,
+            notes: string | null,
+            created_at: string (ISO 8601),
+            updated_at: string (ISO 8601)
+          },
+          permissions: { resource: {...}, fields: { [key]: {visible,hidden,editable,readonly,required,disabled} }, actions: {...} }
+        }
+      </response>
+      <errors>403 senza `leads.view`; 404 lead inesistente.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/leads">
+      <request>
+        {
+          referent_id: number (required, exists:referents,id),
+          campaign_id: number (required, exists:campaigns,id),
+          operational_site_id: number | null (nullable, exists:operational_sites,id),
+          source_id: number | null (nullable, exists:sources,id),
+          operator_id: number | null (nullable, exists:users,id),
+          notes: string | null (nullable, max 5000)
+        }
+      </request>
+      <response status="201">Identica alla GET (data + permissions), message "Created".</response>
+      <errors>403 senza `leads.create`; 422 validazione; 422 field-permission (campo inviato non editabile, `EnforcesFieldPermissions`).</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/leads/{lead}">
+      <request>Stessa shape della POST, tutti i campi opzionali (PATCH parziale: DTO con flag "submitted" gemello, come `UpdateCampaignData`). I campi obbligatori, SE inviati, non possono essere null.</request>
+      <response status="200">Identica alla GET (data + permissions), message "Updated".</response>
+      <errors>403 senza `leads.update`; 404; 422 validazione; 422 field-permission.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/leads/{lead}">
+      <request>Nessun body.</request>
+      <response status="204">Nessun contenuto.</response>
+      <errors>403 senza `leads.delete`; 404.</errors>
+    </endpoint>
+
+    <!-- ============ FOR-SELECT (nuovo, necessario al form Lead) ============ -->
+
+    <endpoint method="GET" path="/api/campaigns/for-select">
+      <request>?search=string&amp;offset=number&amp;limit=number&amp;ids[]=number (standard ADR 0011: `ids[]` idrata la selezione corrente in edit mode)</request>
+      <response status="200">
+        { items: [ { id: number, label: string /* campaign.name */, subtitle: string /* campaign.code */ } ],
+          export_link: null,
+          pagination: { total, offset, limit, total_pages } }
+      </response>
+      <errors>403 senza `campaigns.viewAny`.</errors>
+    </endpoint>
+
+    <!-- ============ EREDITATI DAL FRAMEWORK (nessun endpoint nuovo da scrivere) ============ -->
+
+    <endpoint method="GET" path="/api/meta/leads">
+      <request>Nessuno.</request>
+      <response status="200">{ success, message, data: { fields: [ {key,type,group,mandatory} ] }, permissions: {...} } — generato da `LeadsAuthorization`.</response>
+      <errors>403 senza `leads.viewAny`.</errors>
+    </endpoint>
+
+    <endpoint method="GET|POST" path="/api/tables/leads/{columns|rows|values}">
+      <request>Contratto SSRM generico gia' in uso (sortModel / filterModel / search / offset / limit).</request>
+      <response status="200">
+        columns: catalogo colonne [contact, campaign, operational_site, source, operator, created_at] + azioni permesse.
+        rows: { items: [ { id, referent, campaign, operational_site, source, operator, notes, created_at, actions[] } ], pagination: {...} }
+      </response>
+      <errors>403 se `authorizeViewAny` (= `leads.viewAny`) fallisce.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/exports/leads">
+      <request>Contratto export generico (spec 0014): stato tabella corrente + colonne visibili + formato csv|xlsx.</request>
+      <response status="200">ExportRun (async, poi polling + download). Applica filtri, ordinamento, colonne visibili e permessi sull'INTERO dataset, non sulla pagina.</response>
+      <errors>403 senza `leads.export`.</errors>
+    </endpoint>
+
+  </data_contract>
+
+  <acceptance_criteria>
+
+    <!-- Schema e model -->
+    <criterion id="AC-001">Dato lo schema migrato, la tabella `leads` esiste con le colonne id, referent_id, campaign_id, operational_site_id, source_id, operator_id, notes, created_at, updated_at; referent_id e campaign_id sono NOT NULL, le altre 4 sono nullable. [Pest: Unit/Models/LeadTest]</criterion>
+    <criterion id="AC-002">Dato un Lead salvato, `lead->referent`, `->campaign`, `->operationalSite`, `->source`, `->operator` risolvono le rispettive BelongsTo. [Pest]</criterion>
+    <criterion id="AC-003">Data la migration, `down()` seguita da `up()` la lascia reversibile e ricreabile senza errori. [Pest]</criterion>
+
+    <!-- CRUD + authz -->
+    <criterion id="AC-010">Dato un utente con `leads.create`, quando invia referent_id e campaign_id validi, allora 201 e il Lead e' persistito con gli altri 4 campi a null. [Pest: Feature/Leads/LeadCrudTest]</criterion>
+    <criterion id="AC-011">Dato un utente con `leads.create`, quando omette referent_id o campaign_id, allora 422 con l'errore sul campo mancante e nessuna riga creata. [Pest]</criterion>
+    <criterion id="AC-012">Dato un utente SENZA `leads.create`, quando invia un payload valido, allora 403 e nessuna riga creata. [Pest]</criterion>
+    <criterion id="AC-013">Dato un utente con `leads.update`, quando invia un PATCH col solo `notes`, allora 200 e SOLO `notes` cambia (le 5 FK restano invariate). [Pest]</criterion>
+    <criterion id="AC-014">Dato un utente SENZA `leads.view` (o `leads.delete`), quando chiama GET (o DELETE) `/api/leads/{id}`, allora 403. [Pest]</criterion>
+    <criterion id="AC-015">Dato un utente con `leads.delete`, quando cancella un Lead, allora 204 e la riga sparisce. [Pest]</criterion>
+    <criterion id="AC-016">Dato un payload con un `campaign_id` inesistente, allora 422 (`exists`), non 500. [Pest]</criterion>
+
+    <!-- BR-2 / D-4: cancellazione bloccante su tutte le relazioni -->
+    <criterion id="AC-020">Dato un Lead che referenzia una Campagna, quando si cancella quella Campagna, allora 409 con messaggio esplicito e la Campagna NON viene cancellata. [Pest: Feature/Leads/LeadRelationDeleteGuardTest]</criterion>
+    <criterion id="AC-021">Idem AC-020 per il Referente (contatto). [Pest]</criterion>
+    <criterion id="AC-022">Idem AC-020 per la Sede operativa. [Pest]</criterion>
+    <criterion id="AC-023">Idem AC-020 per la Fonte. [Pest]</criterion>
+    <criterion id="AC-024">Idem AC-020 per l'Utente-operatore. [Pest]</criterion>
+    <criterion id="AC-025">Dato che nessun Lead referenzia una Fonte (o Referente/Sede/Campagna/Utente), quando la si cancella, allora 204: la guardia non introduce falsi positivi ne' regressioni sui test di delete esistenti di quei 5 moduli. [Pest: le suite esistenti restano verdi]</criterion>
+
+    <!-- Permessi CRUD e per campo -->
+    <criterion id="AC-030">Dopo `php artisan permissions:sync`, esistono i 7 permessi `leads.{viewAny,view,create,update,delete,export,import}` senza che alcun seeder li elenchi a mano. [Pest: Feature/Leads/LeadSecurityTest]</criterion>
+    <criterion id="AC-031">Dato `GET /api/meta/leads`, la risposta elenca i 6 campi permissionabili (referent_id, campaign_id, operational_site_id, source_id, operator_id, notes) con `permissions.fields` calcolato per l'attore. [Pest: Feature/Leads/LeadMetaTest]</criterion>
+    <criterion id="AC-032">Dato un ruolo la cui matrice `role_field_permissions` marca `notes` non editabile, quando un utente di quel ruolo invia un `notes` DIVERSO da quello persistito, allora 422; se invia lo stesso valore (no-op), allora 200. [Pest — enforcement CHANGE-based, spec 0008]</criterion>
+    <criterion id="AC-033">Dato un utente senza `leads.update`, il 403 precede il 422 di field-permission (l'authz di risorsa ha la precedenza). [Pest]</criterion>
+    <criterion id="AC-034">La matrice permessi del form Ruolo (`GET /api/authorization/fields`) include la risorsa `leads` coi suoi 6 campi, senza modifiche al controller della matrice. [Pest]</criterion>
+
+    <!-- Tabella, filtri, ordinamento, export -->
+    <criterion id="AC-040">Dato `GET /api/tables/leads/columns` con `leads.viewAny`, allora 200 e il catalogo contiene almeno le colonne contatto, campagna, sede, fonte, operatore, data di creazione; senza `leads.viewAny` allora 403. [Pest: Feature/Leads/LeadTableTest]</criterion>
+    <criterion id="AC-041">Dato `POST /api/tables/leads/rows` con un filtro sulla Campagna, allora vengono restituiti solo i Lead di quella campagna, applicando il filtro sull'INTERO dataset (non sulla pagina). [Pest]</criterion>
+    <criterion id="AC-042">Dato un ordinamento sulla colonna Sede (derivata, etichetta composta), le righe risultano ordinate per `addresses.line1` del sito, e la query non usa whereRaw/orderByRaw su input utente (allow-list di colonne). [Pest]</criterion>
+    <criterion id="AC-043">Data la colonna Sede, `mapRow` restituisce l'etichetta composta "{line1} - {city}" (o solo line1 se la citta' manca, o null se il sito manca). [Pest]</criterion>
+    <criterion id="AC-044">Dato un export `POST /api/exports/leads` con filtri e ordinamento attivi, il file prodotto contiene esattamente le righe filtrate/ordinate dell'intero dataset e SOLO le colonne visibili richieste; senza `leads.export` allora 403. [Pest]</criterion>
+
+    <!-- For-select Campagne -->
+    <criterion id="AC-050">Dato `GET /api/campaigns/for-select?search=x` con `campaigns.viewAny`, allora 200 con envelope paginato `{items, export_link, pagination}` e items `{id, label, subtitle}`; senza il permesso, 403. [Pest: Feature/Campaigns/CampaignForSelectTest]</criterion>
+    <criterion id="AC-051">Dato `?ids[]=N`, la campagna N e' presente negli items anche se non matcha la ricerca (idratazione edit-mode, ADR 0011). [Pest]</criterion>
+
+    <!-- Frontend -->
+    <criterion id="AC-060">Dato lo schema Zod del form Lead, contatto e campagna mancanti producono un errore di validazione localizzato; gli altri 4 campi vuoti passano. [Vitest: lead-schema.test.ts]</criterion>
+    <criterion id="AC-061">Dato il form in create, i 6 campi sono renderizzati; i 5 relazionali usano `AsyncPaginatedSelect` contro il rispettivo for-select e la nota usa una textarea. [Vitest: lead-form-body.test.tsx]</criterion>
+    <criterion id="AC-062">Dato un permesso di campo `visible:false` su `operator_id`, il campo NON e' nel DOM; dato `editable:false`, il campo e' presente ma disabilitato. [Vitest]</criterion>
+    <criterion id="AC-063">Dato un PATCH da form in edit, il payload contiene SOLO i campi effettivamente modificati (sparse diff), come in Campagne. [Vitest: lead-form-payload.test.ts]</criterion>
+    <criterion id="AC-064">Dato un 422 dal server, gli errori sono mappati sui campi del form (`applyServerValidationErrors`) e mostrati con la triade a11y (`aria-invalid`, `aria-describedby`, `role="alert"`). [Vitest]</criterion>
+    <criterion id="AC-065">La pagina `/leads/:id` mostra i 6 campi in sola lettura via `DetailPanel`, senza alcun controllo editabile. [Vitest: lead-detail.test.tsx]</criterion>
+    <criterion id="AC-066">Il campo relazionale condiviso estratto e' usato sia da Lead sia da Campagne, e la suite Vitest di Campagne resta verde (nessuna regressione dall'estrazione). [Vitest: suite campaigns invariata]</criterion>
+    <criterion id="AC-067">La voce "Lead" compare nella navigazione solo per chi ha `leads.view` (nav backend-driven da `config/navigation.php`). [Pest + Vitest]</criterion>
+
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm). Solo librerie gia' presenti.</item>
+    <item>Identificatori in INGLESE: tabella `leads`, colonne `referent_id`/`campaign_id`/`operational_site_id`/`source_id`/`operator_id`/`notes`, rotte `/api/leads`. L'italiano vive solo nelle stringhe i18n.</item>
+    <item>Authz server-side su OGNI endpoint (Policy). L'UI nasconde, il backend autorizza.</item>
+    <item>Zero `whereRaw`/`orderByRaw`/`groupByRaw` su input utente: filtri e ordinamenti solo da allow-list di colonne (`sortableColumnIds`/`filterableColumnIds`).</item>
+    <item>Mai restituire un model Eloquent raw: sempre via `LeadResource`. Mai `$request->only()` senza validazione: `$request->safe()`/DTO.</item>
+    <item>Nessun endpoint ad-hoc per lista/filtri/export: si passa dal framework tabellare (`TableDefinition` + `config/tables.php`).</item>
+    <item>Nessuna duplicazione: il campo relazionale del form va estratto in un componente condiviso, non ricopiato da `campaign-relation-field.tsx`.</item>
+    <item>Il seeder demo si chiama `DemoLeadSeeder`, e' idempotente e va agganciato SOLO a `DemoDataSeeder`, mai a `DatabaseSeeder`.</item>
+    <item>File entro 300 righe (soft) / 500 (hard): il catalogo colonne va nel file separato `LeadColumnCatalog`, come per Campaign.</item>
+    <item>Definition of Done: Pest + Vitest ESEGUITI e verdi, `tsc --noEmit` pulito, Pint pulito sul diff.</item>
+  </constraints>
+
+</spec>

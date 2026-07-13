@@ -10,6 +10,7 @@ use Database\Factories\ReferentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A contact person/entity (spec 0016) that reuses the `users` anagraphic
@@ -48,5 +49,17 @@ class Referent extends BaseModel
     public function referentType(): BelongsTo
     {
         return $this->belongsTo(ReferentType::class);
+    }
+
+    /**
+     * The leads that name this referent as their contact (spec 0024,
+     * BR-2/D-4: restrict-on-delete — ReferentService::delete() guards on this
+     * before deleting).
+     *
+     * @return HasMany<Lead, $this>
+     */
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class);
     }
 }

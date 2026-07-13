@@ -1,0 +1,31 @@
+<?php
+
+use App\Http\Controllers\Geo\GeoController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Geo reference lookups (ADR 0010)
+|--------------------------------------------------------------------------
+|
+| Extracted out of routes/api.php (file-size split, engineering.md §6 — the
+| host file is already at the 500-line hard limit). Required from
+| routes/api.php INSIDE the existing `auth:sanctum` group, so every route
+| below inherits that same middleware/prefix context.
+|
+| Powers the address country → state → province → city cascade selects.
+| Read-only reference data (Country / State / Province / City): no Policy, no
+| per-resource permission — the only gate is auth:sanctum, plus a throttle
+| (matching the rest of the module) to bound the lookups. states/provinces/
+| cities require their parent filter (country_id / state_id /
+| province_id|state_id) → 422 if absent. Each endpoint is a direct, bounded
+| Eloquent read (documented exception: no Service, no business logic — see
+| GeoController).
+*/
+
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('countries', [GeoController::class, 'countries']);
+    Route::get('states', [GeoController::class, 'states']);
+    Route::get('provinces', [GeoController::class, 'provinces']);
+    Route::get('cities', [GeoController::class, 'cities']);
+});

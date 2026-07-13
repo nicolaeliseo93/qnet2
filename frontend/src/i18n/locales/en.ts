@@ -24,6 +24,7 @@ import { tags } from './en-tags'
 import { projectStatuses } from './en-project-statuses'
 import { projects } from './en-projects'
 import { campaigns } from './en-campaigns'
+import { leads } from './en-leads'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -78,6 +79,7 @@ export const en = {
     tags: 'Tags',
     projects: 'Projects',
     campaigns: 'Campaigns',
+    leads: 'Leads',
     projectStatuses: 'Project Statuses',
     management: 'Management',
     configuration: 'Configuration',
@@ -486,6 +488,7 @@ export const en = {
   projects,
   projectStatuses,
   campaigns,
+  leads,
 }
 
 export type TranslationResources = typeof en

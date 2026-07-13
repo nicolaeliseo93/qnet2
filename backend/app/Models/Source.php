@@ -7,11 +7,12 @@ use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\SourceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Source lookup entity (spec 0018): a full-CRUD classification (name only)
- * used to classify the provenance of registry records ("Anagrafiche"). The
- * target foreign key is deferred until that entity exists (see spec 0018).
+ * used to classify the provenance of registry records ("Anagrafiche"). Also
+ * referenced by Lead (spec 0024, BR-2/D-4: restrict-on-delete).
  */
 #[Fillable(['name'])]
 class Source extends BaseModel
@@ -30,5 +31,16 @@ class Source extends BaseModel
             // set by property assignment post-create.
             'old_id' => 'integer',
         ];
+    }
+
+    /**
+     * The leads that name this source (spec 0024, BR-2/D-4: restrict-on-
+     * delete — SourceService::delete() guards on this before deleting).
+     *
+     * @return HasMany<Lead, $this>
+     */
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class);
     }
 }

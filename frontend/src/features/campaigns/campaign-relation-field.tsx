@@ -1,9 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { Control } from 'react-hook-form'
-import { FormControl } from '@/components/ui/form'
-import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
-import { MetaField } from '@/features/authorization/MetaField'
-import type { ForSelectItem } from '@/features/for-select/types'
+import { RelationSelectField } from '@/components/form/relation-select-field'
 import type { CampaignFormValues } from '@/features/campaigns/use-campaign-form'
 import type { CampaignRelationRef } from '@/features/campaigns/types'
 
@@ -35,17 +32,11 @@ interface CampaignRelationFieldProps {
   forceDisabled?: boolean
 }
 
-/** Renders a `{id, name}` relation ref as the `ForSelectItem` shape `AsyncPaginatedSelect` hydrates from. */
-function toForSelectItem(ref: CampaignRelationRef | null): ForSelectItem | null {
-  return ref ? { id: ref.id, label: ref.name } : null
-}
-
 /**
- * One of the campaign's single-relation pickers: an `AsyncPaginatedSelect`
- * inside `MetaField`, hydrated from the loaded detail's `{id, name}`
- * projection. Extracted so `CampaignFormBody` stays within the engineering
- * size limits — mirrors `ProjectRelationField` (spec 0023), duplicated rather
- * than shared cross-feature because it is typed to `CampaignFormValues`.
+ * Campaign-specific i18n binding of the shared `RelationSelectField` (spec
+ * 0024 M7). Kept as a thin wrapper (rather than inlining the shared component
+ * at every call site in `CampaignFormBody`) so the campaign relation fields'
+ * call sites stay unchanged.
  */
 export function CampaignRelationField({
   control,
@@ -60,27 +51,20 @@ export function CampaignRelationField({
   const { t } = useTranslation()
 
   return (
-    <MetaField control={control} name={name} metaKey={metaKey} label={label}>
-      {({ field, disabled }) => (
-        <FormControl>
-          <AsyncPaginatedSelect
-            resource={resource}
-            value={field.value}
-            onChange={field.onChange}
-            selectedItem={toForSelectItem(selected)}
-            disabled={disabled || forceDisabled}
-            labels={{
-              placeholder: t('campaigns.form.selectPlaceholder'),
-              searchPlaceholder,
-              empty: t('campaigns.form.selectEmpty'),
-              error: t('campaigns.form.selectError'),
-              clearLabel: t('common.clear'),
-              triggerLabel: label,
-              retry: t('common.retry'),
-            }}
-          />
-        </FormControl>
-      )}
-    </MetaField>
+    <RelationSelectField
+      control={control}
+      name={name}
+      metaKey={metaKey}
+      label={label}
+      resource={resource}
+      searchPlaceholder={searchPlaceholder}
+      selected={selected}
+      forceDisabled={forceDisabled}
+      placeholder={t('campaigns.form.selectPlaceholder')}
+      emptyLabel={t('campaigns.form.selectEmpty')}
+      errorLabel={t('campaigns.form.selectError')}
+      clearLabel={t('common.clear')}
+      retryLabel={t('common.retry')}
+    />
   )
 }

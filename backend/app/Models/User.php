@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -83,6 +84,18 @@ class User extends Authenticatable implements HasLocalePreference
         }
 
         return 'data:'.$avatar->mime_type.';base64,'.base64_encode($disk->get($avatar->path));
+    }
+
+    /**
+     * The leads this user operates as their assigned operator (spec 0024,
+     * BR-2/D-4: restrict-on-delete — UserService::delete() guards on this
+     * before deleting).
+     *
+     * @return HasMany<Lead, $this>
+     */
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class, 'operator_id');
     }
 
     /**

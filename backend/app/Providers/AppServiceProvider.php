@@ -17,6 +17,7 @@ use App\Models\Contact;
 use App\Models\CustomFieldDefinition;
 use App\Models\CustomFieldOption;
 use App\Models\EmploymentProfile;
+use App\Models\Lead;
 use App\Models\OperationalSite;
 use App\Models\PersonalData;
 use App\Models\Product;
@@ -113,6 +114,7 @@ class AppServiceProvider extends ServiceProvider
             'project_status' => ProjectStatus::class,
             'project' => Project::class,
             'campaign' => Campaign::class,
+            'lead' => Lead::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

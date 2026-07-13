@@ -48,6 +48,10 @@ class DemoDataSeeder extends Seeder
         // Depends on DemoProjectSeeder for the linked shape, plus the same
         // classification lookups for the standalone shape.
         $this->call(DemoCampaignSeeder::class);
+        // Depends on DemoReferentSeeder/DemoCampaignSeeder (mandatory, BR-1)
+        // plus DemoOperationalSiteSeeder/DemoSourceSeeder/DemoUsersSeeder
+        // (optional) — must run after all of them.
+        $this->call(DemoLeadSeeder::class);
         $this->call(DemoNotificationSeeder::class);
         // Last: needs every entity's rows already seeded (it populates custom
         // field values on them) and companies for the relation target.

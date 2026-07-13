@@ -6,6 +6,7 @@ use App\Tables\CampaignsTableDefinition;
 use App\Tables\CompaniesTableDefinition;
 use App\Tables\CompanySitesTableDefinition;
 use App\Tables\CustomFieldsTableDefinition;
+use App\Tables\LeadsTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
 use App\Tables\ProductCategoriesTableDefinition;
 use App\Tables\ProductsTableDefinition;
@@ -62,6 +63,7 @@ return [
         'project-statuses' => ProjectStatusesTableDefinition::class,
         'projects' => ProjectsTableDefinition::class,
         'campaigns' => CampaignsTableDefinition::class,
+        'leads' => LeadsTableDefinition::class,
     ],
 
 ];

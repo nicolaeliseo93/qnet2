@@ -1,0 +1,97 @@
+import type { Control, FieldPath, FieldPathValue, FieldValues } from 'react-hook-form'
+import { FormControl } from '@/components/ui/form'
+import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
+import { MetaField } from '@/features/authorization/MetaField'
+import type { ForSelectItem } from '@/features/for-select/types'
+
+/** A hydrated `{id, name}` relation projection — the shape every module's single-relation ref shares. */
+export interface RelationFieldRef {
+  id: number
+  name: string
+}
+
+/** Field paths of `TFieldValues` whose value is a nullable relation id — the only shape this field supports. */
+type RelationFieldPath<TFieldValues extends FieldValues> = {
+  [K in FieldPath<TFieldValues>]: FieldPathValue<TFieldValues, K> extends number | null ? K : never
+}[FieldPath<TFieldValues>]
+
+interface RelationSelectFieldProps<
+  TFieldValues extends FieldValues,
+  TName extends RelationFieldPath<TFieldValues>,
+> {
+  control: Control<TFieldValues>
+  name: TName
+  /** Authorization metadata key for this field (may differ from the RHF path). */
+  metaKey: string
+  label: string
+  /** Resource segment of the for-select endpoint, e.g. `campaigns` -> `/campaigns/for-select`. */
+  resource: string
+  searchPlaceholder: string
+  /** The loaded detail's hydrated `{id, name}` projection for this relation (edit mode), or a just-picked ref (create-mode prefill). */
+  selected: RelationFieldRef | null
+  /** Forces the field read-only regardless of field permissions (e.g. a derived/linked value). */
+  forceDisabled?: boolean
+  placeholder: string
+  emptyLabel: string
+  errorLabel: string
+  clearLabel: string
+  retryLabel: string
+}
+
+/** Renders a `{id, name}` relation ref as the `ForSelectItem` shape `AsyncPaginatedSelect` hydrates from. */
+function toForSelectItem(ref: RelationFieldRef | null): ForSelectItem | null {
+  return ref ? { id: ref.id, label: ref.name } : null
+}
+
+/**
+ * Domain-agnostic single-relation picker: an `AsyncPaginatedSelect` inside
+ * `MetaField`, hydrated from the caller's `{id, name}` projection. Shared by
+ * every module with a "pick one related record" field (spec 0024 M7 —
+ * extracted out of `campaign-relation-field.tsx`, the first module to need
+ * it) so the picker shape is defined exactly once. Callers own their own
+ * i18n strings: this component takes labels as props rather than reading a
+ * fixed translation namespace.
+ */
+export function RelationSelectField<
+  TFieldValues extends FieldValues,
+  TName extends RelationFieldPath<TFieldValues>,
+>({
+  control,
+  name,
+  metaKey,
+  label,
+  resource,
+  searchPlaceholder,
+  selected,
+  forceDisabled = false,
+  placeholder,
+  emptyLabel,
+  errorLabel,
+  clearLabel,
+  retryLabel,
+}: RelationSelectFieldProps<TFieldValues, TName>) {
+  return (
+    <MetaField control={control} name={name} metaKey={metaKey} label={label}>
+      {({ field, disabled }) => (
+        <FormControl>
+          <AsyncPaginatedSelect
+            resource={resource}
+            value={field.value}
+            onChange={(next) => field.onChange(next as FieldPathValue<TFieldValues, TName>)}
+            selectedItem={toForSelectItem(selected)}
+            disabled={disabled || forceDisabled}
+            labels={{
+              placeholder,
+              searchPlaceholder,
+              empty: emptyLabel,
+              error: errorLabel,
+              clearLabel,
+              triggerLabel: label,
+              retry: retryLabel,
+            }}
+          />
+        </FormControl>
+      )}
+    </MetaField>
+  )
+}
