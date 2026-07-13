@@ -26,6 +26,15 @@ class AddressController extends BaseApiController
 {
     use AuthorizesRequests;
 
+    /**
+     * Geo relations eager-loaded on every returned address so AddressResource
+     * emits the city/province/state/country NAMES (whenLoaded): an
+     * immediately-persisted add/edit row is then as complete as the detail tree.
+     *
+     * @var array<int, string>
+     */
+    private const array GEO_RELATIONS = ['city', 'province', 'state', 'country'];
+
     public function __construct(private readonly AddressService $service) {}
 
     /**
@@ -36,7 +45,7 @@ class AddressController extends BaseApiController
         try {
             $this->authorize('view', $address);
 
-            return $this->ok(new AddressResource($address));
+            return $this->ok(new AddressResource($address->load(self::GEO_RELATIONS)));
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['address' => $address->id]);
         }
@@ -52,7 +61,7 @@ class AddressController extends BaseApiController
 
             $address = $this->service->createFor($request->owner(), $request->toData());
 
-            return $this->created(new AddressResource($address));
+            return $this->created(new AddressResource($address->load(self::GEO_RELATIONS)));
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__);
         }
@@ -68,7 +77,7 @@ class AddressController extends BaseApiController
 
             $address = $this->service->update($address, $request->toData());
 
-            return $this->ok(new AddressResource($address));
+            return $this->ok(new AddressResource($address->load(self::GEO_RELATIONS)));
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['address' => $address->id]);
         }

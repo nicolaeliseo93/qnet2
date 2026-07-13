@@ -2,6 +2,70 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — Registry supervisor→user, responsible-people primary contacts, geo to Referents (2026-07-13) — GREEN (not committed)
+
+Follow-up to the bugfix below (same commit group). Three user-approved changes.
+
+1. Supervisore → Utenti. `registries.supervisor_id` re-pointed from `referents` to `users`
+   (supervisor is an INTERNAL user, like the `managers` pivot; commercial/reporter STAY referents).
+   New reversible migration `2026_07_13_120000_point_registry_supervisor_to_users` (drop FK, NULL
+   existing values — they referenced referents — re-add FK to users; down() reverses). Touched:
+   `Registry::supervisor()` belongsTo User; Store/UpdateRegistryRequest `exists:users`; frontend
+   `DetailsTabContent` supervisor select → `USERS_FOR_SELECT_RESOURCE` + showAvatar; `DemoRegistrySeeder`
+   supervisor from the managers pool; RegistryCrudTest supervisor via `User::factory`.
+
+2. Primary contacts beside supervisor/commercial/reporter in the registry DETAIL. `RegistryService`
+   eager-loads `<rel>.personalData.contacts`; `RegistryResource::toPersonRef()` returns
+   `{id, name, primary_contacts}` (reuses `PrimaryContactColumn::format`, filtered is_primary).
+   Frontend `ReferenceRef` gained optional `primary_contacts: PrimaryContact[]`; `registry-detail`
+   `personField()` renders each primary contact as a compact `type: value` line under the name.
+
+3. Full-address display extended to Referents + Company Sites (user picked these two). Company Sites
+   ALREADY eager-loaded the geo relations (`CompanySiteService`), so the shared `AddressResource`
+   whenLoaded change alone lit it up. `ReferentService::WRITE_RESULT_RELATIONS` gained the 4 geo
+   relations. Both reuse the same `AddressesManager` rendering.
+
+VERIFIED GREEN: backend `--filter Registry` 25 new-incl / all pass, `--filter Referent` 137,
+`--filter CompanySite` 79; Pint clean on the diff; migration up+down round-trip clean on the dev DB.
+Frontend registries/referents/company-sites/personal-data 185 + new `registry-detail.test.tsx` 2;
+`tsc --noEmit` clean. New tests: supervisor-as-user CRUD, primary-contacts on show (RegistryCrudTest),
+identity+person rendering (registry-detail.test.tsx).
+
+## BUGFIX — Registry detail crash + full anagraphic/address display (2026-07-13) — GREEN (not committed)
+
+Two user-reported registry (Anagrafiche) issues, both fixed. Independent of the refactors below;
+commit separately.
+
+1. CRASH editing a registry — `RegistryDetailPage` threw `Cannot read properties of undefined
+   (reading 'resource')`. Root cause: `use-registry-form.ts` seeded the detail query cache after a
+   successful PATCH with the bare `RegistryDetail` returned by `updateRegistry` (NO `permissions`
+   envelope), so the detail page's `registry.permissions.resource.update` read crashed on the next
+   render. Fix: seed the full `RegistryDetailWithPermissions` shape
+   (`{ ...saved, permissions: mode.registry.permissions }`) via `registryDetailQueryKey`; the page's
+   own invalidate-on-success still refetches authoritative permissions. Regression test in
+   `registry-form-metadata.test.tsx` (asserts the seeded cache carries `permissions`).
+
+2. "Non escono tutte le informazioni" — the read-only detail showed only line1 + line2·CAP for
+   addresses and had NO identity/anagraphic section at all (tax_code/vat_number/company_name never
+   rendered — this, not a persistence bug, is what "codice fiscale non registrato / partita IVA
+   troncata" actually was: a backend test proved tax_code + full vat_number persist and round-trip
+   intact). Fixes:
+   - Address geo NAMES: `AddressResource` now emits `city/province/state/country` as `{id,name}`
+     via `whenLoaded` (raw *_id still always present → no N+1 for callers that don't load them).
+     `RegistryService::WRITE_RESULT_RELATIONS` eager-loads `personalData.addresses.{city,province,
+     state,country}`; `AddressController` show/store/update `->load(GEO_RELATIONS)` so an
+     immediately-persisted add/edit row is as complete as the detail tree (shared → benefits Users/
+     Referents/CompanySites too, but only registries' service eager-loads today).
+   - Frontend: `Address`/`AddressDraft` gained optional `city/province/state/country: GeoRef`;
+     `addressToDraft` carries them; `AddressesManager` row renders line2, a `postal · city · province ·
+     state · country` summary, and a site-type badge gated on the existing `showSiteType` opt-in.
+   - `RegistryDetailView` gained an Identity `DetailSection` (company_name OR first/last name,
+     tax_code, vat_number, sdi_code/birth_date+gender by type).
+
+VERIFIED GREEN (real output): backend `--filter Registry` 95/95, `--filter Address` 115/115, Pint
+clean on the 3 changed backend files; frontend personal-data+registries 106/106, addresses-manager
+14/14, detail-page suites 44/44; `tsc --noEmit` clean. New tests: registry detail geo-name contract
+(`RegistryCrudTest.php`), addresses full-location + site-type badge, cache-permissions regression.
 ## FEATURE — Projects, Campaigns, Project Statuses (spec 0023, 2026-07-13) — GREEN, NOT committed (user owns commits)
 
 Branch `feat/projects-campaigns-modules`. Only M0 is committed (130c372: migrations/models/factories +

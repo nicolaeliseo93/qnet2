@@ -32,6 +32,12 @@ class ReferentService
         'referentType',
         'personalData.contacts',
         'personalData.addresses',
+        // Geo names for the full address display (AddressResource emits them
+        // via whenLoaded); the raw *_id columns already ship without these.
+        'personalData.addresses.city',
+        'personalData.addresses.province',
+        'personalData.addresses.state',
+        'personalData.addresses.country',
     ];
 
     public function __construct(private readonly ReferentProfileWriter $profileWriter) {}

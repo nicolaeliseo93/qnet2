@@ -25,6 +25,7 @@ const updateRegistryMock = vi.fn()
 vi.mock('@/features/registries/api', () => ({
   createRegistry: (...args: unknown[]) => createRegistryMock(...args),
   updateRegistry: (...args: unknown[]) => updateRegistryMock(...args),
+  registryDetailQueryKey: (id: number | null) => ['registries', 'detail', id] as const,
 }))
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -254,6 +255,43 @@ describe('RegistryForm — metadata-driven authorization (spec 0004)', () => {
     expect(updateRegistryMock).toHaveBeenCalledTimes(1)
 
     vi.restoreAllMocks()
+  })
+
+  it('seeds the detail cache with the permissions envelope after a successful edit', async () => {
+    // `updateRegistry` resolves with a bare RegistryDetail (no `permissions`),
+    // exactly like the real API client. The cache the detail page reads must
+    // still carry `permissions`, or its `registry.permissions.resource` access
+    // crashes on the next render.
+    const { permissions: _omit, ...bareSaved } = registry({ name: 'Renamed S.p.A.' })
+    updateRegistryMock.mockResolvedValue(bareSaved)
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <RegistryForm
+          mode={{
+            type: 'edit',
+            registry: registry({
+              permissions: {
+                resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+                fields: ALL_VISIBLE_EDITABLE,
+                actions: {},
+              },
+            }),
+          }}
+          onSuccess={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(updateRegistryMock).toHaveBeenCalledTimes(1))
+
+    const cached = client.getQueryData<RegistryDetailWithPermissions>(['registries', 'detail', 7])
+    expect(cached?.permissions.resource.update).toBe(true)
+    expect(cached?.name).toBe('Renamed S.p.A.')
   })
 })
 

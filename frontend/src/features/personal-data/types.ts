@@ -41,6 +41,12 @@ export interface Contact {
   created_at: string | null
 }
 
+/** A geo entity (city/province/state/country) projected to {id, name}. */
+export interface GeoRef {
+  id: number
+  name: string
+}
+
 /** A single address (AddressResource). */
 export interface Address {
   id: number
@@ -51,6 +57,15 @@ export interface Address {
   province_id: number | null
   state_id: number | null
   country_id: number | null
+  /**
+   * Hydrated geo names, present only when the endpoint eager-loaded the
+   * relation (AddressResource `whenLoaded`). `null` = the foreign key is unset;
+   * `undefined` = the caller did not load it. Drives the human-readable location.
+   */
+  city?: GeoRef | null
+  province?: GeoRef | null
+  state?: GeoRef | null
+  country?: GeoRef | null
   latitude: string | null
   longitude: string | null
   is_primary: boolean
@@ -191,6 +206,15 @@ export interface AddressDraft {
   province_id: number | null
   state_id: number | null
   country_id: number | null
+  /**
+   * Hydrated geo names carried through from the server row (via `addressToDraft`)
+   * so a read-only/summary row can render the full location. Absent on a
+   * brand-new draft that only carries the selected ids.
+   */
+  city?: GeoRef | null
+  province?: GeoRef | null
+  state?: GeoRef | null
+  country?: GeoRef | null
   is_primary: boolean
   /** `null` = not chosen yet; the form defaults new drafts to `billing`. */
   site_type: SiteType | null

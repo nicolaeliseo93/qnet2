@@ -66,9 +66,13 @@ class Registry extends BaseModel
         return $this->belongsTo(Source::class);
     }
 
+    /**
+     * The internal user supervising the relationship ("Supervisore"): an
+     * employee, not an external referent — unlike commercial/reporter.
+     */
     public function supervisor(): BelongsTo
     {
-        return $this->belongsTo(Referent::class, 'supervisor_id');
+        return $this->belongsTo(User::class, 'supervisor_id');
     }
 
     public function commercial(): BelongsTo

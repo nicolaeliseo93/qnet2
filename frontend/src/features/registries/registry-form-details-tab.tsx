@@ -164,16 +164,17 @@ export function DetailsTabContent({ control, selectedItems, isSupplier }: Detail
           {({ field, disabled }) => (
             <FormControl>
               <AsyncPaginatedSelect
-                resource={REFERENTS_FOR_SELECT_RESOURCE}
+                resource={USERS_FOR_SELECT_RESOURCE}
                 value={field.value}
                 onChange={field.onChange}
                 selectedItem={selectedItems.supervisor}
+                showAvatar
                 disabled={disabled}
                 labels={{
                   placeholder: t('registries.form.supervisorPlaceholder'),
-                  searchPlaceholder: t('registries.form.referentsSearch'),
-                  empty: t('registries.form.referentsEmpty'),
-                  error: t('registries.form.referentsError'),
+                  searchPlaceholder: t('registries.form.managersSearch'),
+                  empty: t('registries.form.managersEmpty'),
+                  error: t('registries.form.managersError'),
                   clearLabel: t('common.clear'),
                   triggerLabel: t('registries.form.supervisor'),
                   retry: t('common.retry'),

@@ -27,7 +27,7 @@ use Illuminate\Support\Collection;
  * HasPersonalData (own card + contacts + addresses, mirrors
  * DemoReferentSeeder), plus the business-specific relations: source,
  * sectors (multi), referents (multi), internal managers (multi, max 4),
- * supervisor/commercial/reporter (referents) and the supplier/agreement/size
+ * supervisor (internal user), commercial/reporter (referents) and the supplier/agreement/size
  * scalars. Roughly a third are suppliers (some qualified), so the derived
  * grid columns and the form have realistic values to exercise.
  *
@@ -100,7 +100,9 @@ class DemoRegistrySeeder extends Seeder
             'agreement_status' => $agreementStatuses[$index % count($agreementStatuses)]->value,
             'agreement_notes' => $faker->boolean(50) ? $faker->sentence() : null,
             'size_class' => $sizeClasses[$index % count($sizeClasses)]->value,
-            'supervisor_id' => $referents->isNotEmpty() ? $referents[$index % $referents->count()]->id : null,
+            // Supervisor is an INTERNAL user (managers pool); commercial/reporter
+            // stay external referents.
+            'supervisor_id' => $managers->isNotEmpty() ? $managers[$index % $managers->count()]->id : null,
             'commercial_id' => $referents->isNotEmpty() ? $referents[($index + 1) % $referents->count()]->id : null,
             'reporter_id' => $referents->isNotEmpty() ? $referents[($index + 2) % $referents->count()]->id : null,
             'employee_count' => $faker->boolean(70) ? $faker->numberBetween(1, 500) : null,
