@@ -23,6 +23,12 @@ class AttributeOptionFactory extends Factory
             'value' => fake()->unique()->slug(2, false),
             'label' => fake()->unique()->word(),
             'sort_order' => 0,
+            'is_default' => false,
         ];
+    }
+
+    public function default(): static
+    {
+        return $this->state(fn (): array => ['is_default' => true]);
     }
 }

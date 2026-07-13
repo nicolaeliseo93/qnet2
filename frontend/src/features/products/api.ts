@@ -9,6 +9,16 @@ import type {
 } from '@/features/products/types'
 
 /**
+ * Query key of a single product's detail (fresh-on-open pattern). Shared by
+ * the detail/edit pages and by the post-mutation invalidation, so they can
+ * never drift apart. `null` (an unparsable route param) is a key that is never
+ * fetched.
+ */
+export function productDetailQueryKey(id: number | null) {
+  return ['products', 'detail', id] as const
+}
+
+/**
  * Fetches a single product detail together with the actor's authorization
  * metadata for it (`permissions`, a top-level envelope sibling of `data`).
  */

@@ -43,6 +43,9 @@ export const en = {
     confirmTitle: 'Are you sure?',
     yes: 'Yes',
     no: 'No',
+    back: 'Back',
+    edit: 'Edit',
+    new: 'New',
   },
   config: {
     error: {

@@ -16,7 +16,7 @@ function original(overrides: Partial<ProductCategoryDetail> = {}): ProductCatego
     parent: { id: 1, name: 'Electronics' },
     inherits_attributes: true,
     description: null,
-    attributes: [{ attribute_id: 9, code: 'ram', name: 'RAM', data_type: 'INTEGER', is_required: true, sort_order: 0 }],
+    attributes: [{ attribute_id: 9, code: 'ram', name: 'RAM', type: 'integer', is_required: true, sort_order: 0 }],
     inherited_attributes: [],
     created_at: '2026-01-01T00:00:00Z',
     ...overrides,

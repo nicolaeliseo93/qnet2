@@ -156,7 +156,11 @@ export const customFields = {
       },
       presentation: {
         title: 'Presentation',
-        description: 'How it looks to the user: description, help, icon and placement.',
+        description: 'How it looks to the user: description, help text, placeholder and icon.',
+      },
+      organization: {
+        title: 'Organization',
+        description: 'Grouping and ordering among custom fields.',
       },
       config: {
         title: 'Field settings',

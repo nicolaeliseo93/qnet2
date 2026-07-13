@@ -4,14 +4,16 @@ namespace App\Tables\Attributes;
 
 /**
  * Declarative column/filter/action catalogue for the `attributes` domain
- * (spec 0017). Extracted out of AttributesTableDefinition (file-size split,
- * engineering.md §6): pure data (no logic), mirroring ReferentTypeColumnCatalog.
+ * (spec 0017, aligned to the custom fields' presentation shape — spec 0021).
+ * Extracted out of AttributesTableDefinition (file-size split,
+ * engineering.md §6): pure data (no logic), mirroring CustomFieldColumnCatalog.
  *
  * Every column is a real DB column except `options_count` (a withCount()
  * aggregate attached in AttributesTableDefinition::baseQuery), which is not
  * part of the frozen column contract and only rides along in mapRow().
- * `data_type` is rendered as a badge, driven by AttributeType (config/config.php
- * → form_enums `attribute_type`).
+ * `type` is rendered as a badge, driven by FieldTypeRegistry
+ * (config/custom-fields.php), not a PHP enum (the type catalogue is
+ * deliberately config-driven for OCP).
  */
 final class AttributeColumnCatalog
 {
@@ -42,8 +44,8 @@ final class AttributeColumnCatalog
                 'searchable' => true,
             ],
             [
-                'id' => 'data_type',
-                'label' => 'attributes.columns.data_type',
+                'id' => 'type',
+                'label' => 'attributes.columns.type',
                 'type' => 'badge',
                 'visible' => true,
                 'sortable' => true,
@@ -70,7 +72,7 @@ final class AttributeColumnCatalog
         return [
             ['columnId' => 'code', 'type' => 'text'],
             ['columnId' => 'name', 'type' => 'text'],
-            ['columnId' => 'data_type', 'type' => 'set'],
+            ['columnId' => 'type', 'type' => 'set'],
             ['columnId' => 'created_at', 'type' => 'date'],
         ];
     }

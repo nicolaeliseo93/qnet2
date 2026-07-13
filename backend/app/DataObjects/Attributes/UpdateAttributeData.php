@@ -4,23 +4,42 @@ namespace App\DataObjects\Attributes;
 
 /**
  * Validated payload for a partial (PATCH) attribute update
- * (PUT/PATCH /api/attributes/{attribute}, spec 0017).
+ * (PUT/PATCH /api/attributes/{attribute}, spec 0017, aligned to
+ * UpdateCustomFieldData's presentation shape — spec 0021).
  *
  * Declared DTO (no "magic flying array") so the UpdateAttributeRequest →
  * AttributeService contract is explicit — see standards/architecture.md →
- * Data Transfer Objects. `options`, when submitted, is a FULL-REPLACE of the
- * attribute's option list (spec 0017); `hasDataType()`/`hasOptions()` expose
- * "submitted at all" so the Service can distinguish it from "not touched".
+ * Data Transfer Objects. `description`, `help_text`, `placeholder`, `icon`,
+ * `config` and `relation_target` are all legitimately nullable VALUES
+ * (clearing them is a valid PATCH), so a plain null property cannot
+ * distinguish "not submitted" from "submitted as null" — the `*Submitted`
+ * flags carry that distinction explicitly, mirroring UpdateCustomFieldData.
+ * `options`, when submitted, is a FULL-REPLACE of the attribute's option
+ * list (spec 0017).
  */
 final readonly class UpdateAttributeData
 {
     /**
-     * @param  array<int, array{value: string, label: string, sort_order?: int}>|null  $options
+     * @param  array<string, mixed>|null  $config
+     * @param  array<string, mixed>|null  $relationTarget
+     * @param  array<int, array{value: string, label: string, color?: string|null, icon?: string|null, sort_order?: int, is_default?: bool}>|null  $options
      */
     public function __construct(
         public ?string $code = null,
         public ?string $name = null,
-        public ?string $dataType = null,
+        public ?string $type = null,
+        public ?string $description = null,
+        public bool $descriptionSubmitted = false,
+        public ?string $helpText = null,
+        public bool $helpTextSubmitted = false,
+        public ?string $placeholder = null,
+        public bool $placeholderSubmitted = false,
+        public ?string $icon = null,
+        public bool $iconSubmitted = false,
+        public ?array $config = null,
+        public bool $configSubmitted = false,
+        public ?array $relationTarget = null,
+        public bool $relationTargetSubmitted = false,
         public ?array $options = null,
     ) {}
 
@@ -34,14 +53,26 @@ final readonly class UpdateAttributeData
         return new self(
             code: array_key_exists('code', $data) ? (string) $data['code'] : null,
             name: array_key_exists('name', $data) ? (string) $data['name'] : null,
-            dataType: array_key_exists('data_type', $data) ? (string) $data['data_type'] : null,
+            type: array_key_exists('type', $data) ? (string) $data['type'] : null,
+            description: $data['description'] ?? null,
+            descriptionSubmitted: array_key_exists('description', $data),
+            helpText: $data['help_text'] ?? null,
+            helpTextSubmitted: array_key_exists('help_text', $data),
+            placeholder: $data['placeholder'] ?? null,
+            placeholderSubmitted: array_key_exists('placeholder', $data),
+            icon: $data['icon'] ?? null,
+            iconSubmitted: array_key_exists('icon', $data),
+            config: $data['config'] ?? null,
+            configSubmitted: array_key_exists('config', $data),
+            relationTarget: $data['relation_target'] ?? null,
+            relationTargetSubmitted: array_key_exists('relation_target', $data),
             options: array_key_exists('options', $data) ? (array) $data['options'] : null,
         );
     }
 
-    public function hasDataType(): bool
+    public function hasType(): bool
     {
-        return $this->dataType !== null;
+        return $this->type !== null;
     }
 
     public function hasOptions(): bool
@@ -51,17 +82,48 @@ final readonly class UpdateAttributeData
 
     /**
      * Only the plain scalar attributes the client actually submitted, ready
-     * for a partial mass-assignment update. `data_type` is handled separately
-     * by the Service (immutability guard + enum cast); `options` is
-     * full-replace synced separately.
+     * for a partial mass-assignment update. `type` is applied by the Service
+     * separately (it needs the final value for the ENUM-options guard);
+     * `options` is full-replace synced separately.
      *
-     * @return array<string, string>
+     * @return array<string, mixed>
      */
     public function submittedAttributes(): array
     {
-        return array_filter(
-            ['code' => $this->code, 'name' => $this->name],
-            static fn (?string $value): bool => $value !== null,
-        );
+        $attributes = [];
+
+        if ($this->code !== null) {
+            $attributes['code'] = $this->code;
+        }
+
+        if ($this->name !== null) {
+            $attributes['name'] = $this->name;
+        }
+
+        if ($this->descriptionSubmitted) {
+            $attributes['description'] = $this->description;
+        }
+
+        if ($this->helpTextSubmitted) {
+            $attributes['help_text'] = $this->helpText;
+        }
+
+        if ($this->placeholderSubmitted) {
+            $attributes['placeholder'] = $this->placeholder;
+        }
+
+        if ($this->iconSubmitted) {
+            $attributes['icon'] = $this->icon;
+        }
+
+        if ($this->configSubmitted) {
+            $attributes['config'] = $this->config;
+        }
+
+        if ($this->relationTargetSubmitted) {
+            $attributes['relation_target'] = $this->relationTarget;
+        }
+
+        return $attributes;
     }
 }

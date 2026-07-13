@@ -2,8 +2,6 @@
 
 namespace Database\Seeders\DemoProductCatalog;
 
-use App\Enums\AttributeType;
-
 /**
  * Pure data for DemoProductCatalogSeeder (spec 0017): the global attribute
  * catalogue and the category tree, extracted out of the seeder itself
@@ -13,8 +11,10 @@ use App\Enums\AttributeType;
  * The catalogue models SERVICES (consulting and training), not physical
  * goods: every product is a ProductType::Service.
  *
- * `attributes()` covers all 5 data types, ENUM ones carrying their option
- * list. `tree()` is a nested category structure exercising multi-level
+ * `attributes()` covers text/integer/decimal/boolean/enum (the field types
+ * App\CustomFields\FieldTypeRegistry exposes for attributes), enum ones
+ * carrying their option list. `tree()` is a nested category structure
+ * exercising multi-level
  * inheritance and attribute REUSE (`delivery_mode` is assigned to both
  * `Consulenza` and `Formazione`, never duplicated as an attribute): each
  * node's `attributes` map is `code => is_required` (the category's OWN
@@ -26,23 +26,23 @@ use App\Enums\AttributeType;
 final class ProductCatalogTaxonomy
 {
     /**
-     * @return array<string, array{name: string, type: AttributeType, options?: array<int, string>}>
+     * @return array<string, array{name: string, type: string, options?: array<int, string>}>
      */
     public static function attributes(): array
     {
         return [
-            'provider' => ['name' => 'Provider', 'type' => AttributeType::String],
-            'sla_hours' => ['name' => 'SLA response (hours)', 'type' => AttributeType::Decimal],
-            'delivery_mode' => ['name' => 'Delivery mode', 'type' => AttributeType::Enum, 'options' => ['Onsite', 'Remoto', 'Ibrido']],
-            'seniority_level' => ['name' => 'Seniority level', 'type' => AttributeType::Enum, 'options' => ['Junior', 'Senior', 'Lead']],
-            'duration_hours' => ['name' => 'Duration (hours)', 'type' => AttributeType::Integer],
-            'technology' => ['name' => 'Technology stack', 'type' => AttributeType::String],
-            'on_call' => ['name' => 'On-call support', 'type' => AttributeType::Boolean],
-            'audit_type' => ['name' => 'Audit type', 'type' => AttributeType::Enum, 'options' => ['Black-box', 'White-box', 'Grey-box']],
-            'is_remote' => ['name' => 'Remote', 'type' => AttributeType::Boolean],
-            'certificate_included' => ['name' => 'Certificate included', 'type' => AttributeType::Boolean],
-            'max_participants' => ['name' => 'Max participants', 'type' => AttributeType::Integer],
-            'session_length_hours' => ['name' => 'Session length (hours)', 'type' => AttributeType::Decimal],
+            'provider' => ['name' => 'Provider', 'type' => 'text'],
+            'sla_hours' => ['name' => 'SLA response (hours)', 'type' => 'decimal'],
+            'delivery_mode' => ['name' => 'Delivery mode', 'type' => 'enum', 'options' => ['Onsite', 'Remoto', 'Ibrido']],
+            'seniority_level' => ['name' => 'Seniority level', 'type' => 'enum', 'options' => ['Junior', 'Senior', 'Lead']],
+            'duration_hours' => ['name' => 'Duration (hours)', 'type' => 'integer'],
+            'technology' => ['name' => 'Technology stack', 'type' => 'text'],
+            'on_call' => ['name' => 'On-call support', 'type' => 'boolean'],
+            'audit_type' => ['name' => 'Audit type', 'type' => 'enum', 'options' => ['Black-box', 'White-box', 'Grey-box']],
+            'is_remote' => ['name' => 'Remote', 'type' => 'boolean'],
+            'certificate_included' => ['name' => 'Certificate included', 'type' => 'boolean'],
+            'max_participants' => ['name' => 'Max participants', 'type' => 'integer'],
+            'session_length_hours' => ['name' => 'Session length (hours)', 'type' => 'decimal'],
         ];
     }
 

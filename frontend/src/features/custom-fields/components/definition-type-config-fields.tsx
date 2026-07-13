@@ -12,11 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { CustomFieldDefinitionFormValues } from '@/features/custom-fields/custom-field-definition-schema'
+import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 import type { CustomFieldType } from '@/features/custom-fields/types'
 
 interface DefinitionTypeConfigFieldsProps {
-  control: Control<CustomFieldDefinitionFormValues>
+  control: Control<FieldDefinitionFormValues>
   type: CustomFieldType
 }
 

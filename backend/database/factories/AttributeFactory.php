@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Enums\AttributeType;
 use App\Models\Attribute;
 use App\Models\AttributeOption;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -22,23 +21,28 @@ class AttributeFactory extends Factory
         return [
             'code' => fake()->unique()->slug(2, false),
             'name' => fake()->unique()->words(2, true),
-            'data_type' => AttributeType::String,
+            'type' => 'text',
         ];
+    }
+
+    public function ofType(string $type): static
+    {
+        return $this->state(fn (): array => ['type' => $type]);
     }
 
     public function integer(): static
     {
-        return $this->state(fn (): array => ['data_type' => AttributeType::Integer]);
+        return $this->state(fn (): array => ['type' => 'integer']);
     }
 
     public function decimal(): static
     {
-        return $this->state(fn (): array => ['data_type' => AttributeType::Decimal]);
+        return $this->state(fn (): array => ['type' => 'decimal']);
     }
 
     public function boolean(): static
     {
-        return $this->state(fn (): array => ['data_type' => AttributeType::Boolean]);
+        return $this->state(fn (): array => ['type' => 'boolean']);
     }
 
     /**
@@ -46,7 +50,7 @@ class AttributeFactory extends Factory
      */
     public function enum(int $count = 3): static
     {
-        return $this->state(fn (): array => ['data_type' => AttributeType::Enum])
+        return $this->state(fn (): array => ['type' => 'enum'])
             ->afterCreating(function (Attribute $attribute) use ($count): void {
                 AttributeOption::factory()
                     ->count($count)

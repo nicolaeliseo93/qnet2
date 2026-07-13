@@ -2,30 +2,31 @@
 
 namespace App\Tables;
 
-use App\Enums\AttributeType;
+use App\CustomFields\FieldTypeRegistry;
 use App\Models\Attribute;
 use App\Models\User;
 use App\Tables\Attributes\AttributeColumnCatalog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Table definition for the `attributes` domain (spec 0017).
+ * Table definition for the `attributes` domain (spec 0017, aligned to the
+ * custom fields' presentation shape — spec 0021).
  *
- * `code`/`name`/`created_at` are real DB columns handled entirely by the
- * generic engine, mirroring ReferentTypesTableDefinition. `data_type` is
- * ALSO a real column but rendered as a badge (AttributeType) — badgesFor/
- * enumKeyFor are overridden (mirroring UsersTableDefinition's `user_type`
- * column) and so is distinctValues(): the generic engine's fallback resolves
- * distinct values through the Eloquent builder, which hydrates the backed
- * enum cast and then fails to stringify it — bypassed here via a plain
- * DB::table query on the raw column, mirroring the derived-column pattern
- * used elsewhere for a different reason (no cast involved there).
+ * `code`/`name`/`type`/`created_at` are real DB columns handled entirely by
+ * the generic engine, mirroring CustomFieldsTableDefinition: `type` is
+ * rendered as a badge whose value list comes from FieldTypeRegistry — the
+ * same source of truth the write pipeline validates against — not a PHP enum
+ * (OCP: a new type is one handler class + one config line, never a new case
+ * here). Being a plain string column (no backed-enum cast), the generic
+ * engine's default distinctValues()/enumKeyFor() already work correctly, so
+ * neither is overridden here.
  */
 class AttributesTableDefinition extends AbstractTableDefinition
 {
+    public function __construct(private readonly FieldTypeRegistry $fieldTypeRegistry) {}
+
     public function domain(): string
     {
         return 'attributes';
@@ -96,27 +97,22 @@ class AttributesTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Badge metadata for the `data_type` column, driven by AttributeType.
+     * Badge metadata for the `type` column, driven by FieldTypeRegistry.
      *
      * @return array<int, array<string, mixed>>|null
      */
     protected function badgesFor(string $columnId, User $actor): ?array
     {
-        if ($columnId !== 'data_type') {
+        if ($columnId !== 'type') {
             return null;
         }
 
-        return array_map(static fn ($meta): array => $meta->toArray(), AttributeType::options());
-    }
-
-    /**
-     * The `data_type` badge is driven by AttributeType, exposed to the
-     * frontend config under the `attribute_type` enum key (config/config.php
-     * → form_enums), so the frontend can localize the badge label.
-     */
-    protected function enumKeyFor(string $columnId, User $actor): ?string
-    {
-        return $columnId === 'data_type' ? 'attribute_type' : null;
+        return array_map(static fn (string $type): array => [
+            'value' => $type,
+            'label' => "attributes.types.{$type}",
+            'color' => null,
+            'icon' => null,
+        ], $this->fieldTypeRegistry->all());
     }
 
     /**
@@ -132,7 +128,7 @@ class AttributesTableDefinition extends AbstractTableDefinition
             'id' => $row->id,
             'code' => $row->code,
             'name' => $row->name,
-            'data_type' => $row->data_type,
+            'type' => $row->type,
             'options_count' => (int) $row->options_count,
             'created_at' => $row->created_at,
         ];
@@ -160,43 +156,5 @@ class AttributesTableDefinition extends AbstractTableDefinition
         }
 
         return $allowed;
-    }
-
-    /**
-     * Excel-like distinct values (spec 0004/0005) for `data_type`: a plain
-     * DB::table query on the raw column (never through Eloquent, which would
-     * hydrate the AttributeType cast and fail to stringify it).
-     *
-     * @param  Builder<Attribute>  $query
-     * @param  array<string, mixed>  $columnConfig
-     * @return array<int, string>|null
-     */
-    public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
-    {
-        if ($columnId !== 'data_type') {
-            return null;
-        }
-
-        $attributeIds = (clone $query)->select('attributes.id');
-
-        return DB::table('attributes')
-            ->whereIn('id', $attributeIds)
-            ->when($search !== null && $search !== '', function ($builder) use ($search): void {
-                $builder->where('data_type', 'like', '%'.$this->escapeLike($search).'%');
-            })
-            ->distinct()
-            ->orderBy('data_type')
-            ->limit($limit)
-            ->pluck('data_type')
-            ->map(static fn (mixed $value): string => (string) $value)
-            ->all();
-    }
-
-    /**
-     * Escape LIKE wildcards in user input so they are treated literally.
-     */
-    private function escapeLike(string $value): string
-    {
-        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
     }
 }

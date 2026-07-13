@@ -74,9 +74,7 @@ final class ProductColumnCatalog
             ],
             [
                 // Real DB column rendered as a badge (ProductType), driven by
-                // config/config.php form_enums `product_type`. Set-filtered/
-                // sorted/distinct-resolved like AttributesTableDefinition's
-                // `data_type`.
+                // config/config.php form_enums `product_type`.
                 'id' => 'product_type',
                 'label' => 'products.columns.product_type',
                 'type' => 'badge',

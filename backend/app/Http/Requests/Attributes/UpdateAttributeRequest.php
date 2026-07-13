@@ -2,9 +2,10 @@
 
 namespace App\Http\Requests\Attributes;
 
+use App\CustomFields\FieldTypeRegistry;
 use App\DataObjects\Attributes\UpdateAttributeData;
-use App\Enums\AttributeType;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Http\Requests\Concerns\ValidatesFieldTypeDefinition;
 use App\Models\Attribute;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
@@ -13,18 +14,20 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for PUT/PATCH /api/attributes/{attribute} (spec
- * 0017). Every field is `sometimes` to support partial PATCH updates:
- * `options`, when submitted, is a full-replace of the option list; the
- * data_type-immutability guard (attribute already has product values) is
- * enforced by AttributeService, not here (it needs the model's current
- * values). Authorization is intentionally NOT handled here (it stays in the
- * controller via authorize('update', $attribute)). EnforcesFieldPermissions
- * (spec 0004) additionally rejects any submitted field the actor cannot edit
- * on this specific model.
+ * 0017, aligned to the custom fields' presentation shape — spec 0021).
+ * Every field is `sometimes` to support partial PATCH updates: `options`,
+ * when submitted, is a full-replace of the option list. The ENUM/RELATION
+ * cross-field checks are the shared ValidatesFieldTypeDefinition concern
+ * (also used by the `custom-fields` requests), overridden below to fall back
+ * to the persisted `type` and to only fire when the relevant key was
+ * actually submitted. Authorization is intentionally NOT handled here (it
+ * stays in the controller via authorize('update', $attribute)).
+ * EnforcesFieldPermissions (spec 0004) additionally rejects any submitted
+ * field the actor cannot edit on this specific model.
  */
 class UpdateAttributeRequest extends FormRequest
 {
-    use EnforcesFieldPermissions;
+    use EnforcesFieldPermissions, ValidatesFieldTypeDefinition;
 
     public function authorize(): bool
     {
@@ -43,11 +46,20 @@ class UpdateAttributeRequest extends FormRequest
         return [
             'code' => ['sometimes', 'required', 'string', 'max:64', 'regex:/^[a-z0-9_]+$/', Rule::unique('attributes', 'code')->ignore($attribute->id)],
             'name' => ['sometimes', 'required', 'string', 'max:191'],
-            'data_type' => ['sometimes', Rule::enum(AttributeType::class)],
+            'type' => ['sometimes', 'required', 'string', Rule::in(app(FieldTypeRegistry::class)->all())],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'help_text' => ['sometimes', 'nullable', 'string'],
+            'placeholder' => ['sometimes', 'nullable', 'string', 'max:191'],
+            'icon' => ['sometimes', 'nullable', 'string', 'max:191'],
+            'config' => ['sometimes', 'nullable', 'array'],
+            'relation_target' => ['sometimes', 'nullable', 'array'],
             'options' => ['sometimes', 'array'],
             'options.*.value' => ['required', 'string', 'max:191'],
             'options.*.label' => ['required', 'string', 'max:191'],
+            'options.*.color' => ['nullable', 'string', 'max:32'],
+            'options.*.icon' => ['nullable', 'string', 'max:191'],
             'options.*.sort_order' => ['sometimes', 'integer'],
+            'options.*.is_default' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -55,29 +67,45 @@ class UpdateAttributeRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->enforceFieldPermissions($validator);
-            $this->validateOptionValuesUnique($validator);
+            $this->validateEnumOptions($validator);
+            $this->validateRelationTarget($validator);
         });
     }
 
     /**
-     * A submitted `options` full-replace must never carry duplicate values
-     * (the ENUM-requires-at-least-one-option guard, including when data_type
-     * is CHANGING to ENUM, is enforced by AttributeService — it needs the
-     * model's current option count when `options` is not submitted).
+     * The type this attribute will have once this request is applied: the
+     * submitted `type`, or the currently persisted one when not submitted.
      */
-    private function validateOptionValuesUnique(Validator $validator): void
+    protected function fieldTypeDefinitionType(): ?string
     {
-        $options = $this->input('options');
+        /** @var Attribute $attribute */
+        $attribute = $this->route('attribute');
 
-        if (! is_array($options) || $options === []) {
-            return;
-        }
+        return $this->input('type', $attribute->type);
+    }
 
-        $values = array_column($options, 'value');
+    /**
+     * A submitted `options` full-replace on an ENUM attribute must never be
+     * empty/carry duplicate values. When `options` is NOT submitted, the
+     * persisted-count guard (relevant when `type` is changing TO enum
+     * without a fresh options payload) is enforced by AttributeService,
+     * which needs the model's current option count.
+     */
+    protected function shouldValidateOptions(): bool
+    {
+        return $this->has('options');
+    }
 
-        if (count($values) !== count(array_unique($values))) {
-            $validator->errors()->add('options', 'Option values must be unique.');
-        }
+    /**
+     * A submitted `relation_target` on a RELATION attribute must be valid.
+     * When NOT submitted, the persisted relation_target is assumed valid (it
+     * was already validated when the attribute became a relation);
+     * AttributeService still guards the case where `type` is changing TO
+     * relation without a fresh relation_target.
+     */
+    protected function shouldValidateRelationTarget(): bool
+    {
+        return $this->has('relation_target');
     }
 
     protected function authorizationResource(): string

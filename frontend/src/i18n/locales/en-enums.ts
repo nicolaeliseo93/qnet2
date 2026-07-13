@@ -54,14 +54,6 @@ export const enums = {
     internal: 'Internal',
     external: 'External',
   },
-  // Dynamic attribute data type (spec 0017).
-  attribute_type: {
-    STRING: 'Text',
-    INTEGER: 'Integer number',
-    DECIMAL: 'Decimal number',
-    BOOLEAN: 'Yes/No',
-    ENUM: 'List of options',
-  },
   // Product classification (spec 0017).
   product_type: {
     SERVICE: 'Service',

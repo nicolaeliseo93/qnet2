@@ -1,62 +1,31 @@
 import type {
   CreateCustomFieldDefinitionPayload,
-  CustomFieldConfig,
   CustomFieldDefinitionDetail,
-  CustomFieldOptionInput,
-  CustomFieldRelationTarget,
   CustomFieldValidation,
   UpdateCustomFieldDefinitionPayload,
 } from '@/features/custom-fields/types'
 import type { CustomFieldDefinitionFormValues } from '@/features/custom-fields/custom-field-definition-schema'
+import {
+  buildFieldDefinitionConfig,
+  buildFieldDefinitionOptions,
+  buildFieldDefinitionRelationTarget,
+} from '@/features/custom-fields/field-definition-payload'
 
 /**
  * Builds the `custom-fields` admin write payloads (spec 0021 AC-025). The
- * form keeps ALL per-type config/validation fields in one flat bag (simpler
- * RHF wiring); this module is the single seam that projects the relevant
- * subset per `type` onto the wire shape the backend expects (per-type
- * `config`: text{minLength,maxLength,regex,transform};
- * textarea{rows,maxLength}; integer/decimal{min,max,step,decimals};
- * boolean/enum{display}), mirroring the backend's `FieldTypeHandler::toMeta()`
- * counterpart.
+ * per-type `config`/`relation_target`/`options` projection is the shared
+ * `field-definition-payload.ts` (mirrored 1:1 by `attribute-form-payload.ts`);
+ * this module additionally owns `validation`, the one sub-form a custom field
+ * definition carries that an attribute does not (spec 0017: the attribute's
+ * `required` lives on the category pivot instead).
  */
 
-/** Drops `undefined`/`null`/`''` entries; returns `undefined` when nothing is left (never send an empty config/validation object). */
+/** Drops `undefined`/`null`/`''` entries; returns `undefined` when nothing is left (never send an empty validation object). */
 function omitEmpty<T extends Record<string, unknown>>(input: T): Partial<T> | undefined {
   const entries = Object.entries(input).filter(
     ([, value]) => value !== undefined && value !== null && value !== '',
   )
   return entries.length > 0 ? (Object.fromEntries(entries) as Partial<T>) : undefined
-}
-
-function buildConfig(values: CustomFieldDefinitionFormValues): CustomFieldConfig | undefined {
-  const config = values.config
-  switch (values.type) {
-    case 'text':
-      return omitEmpty({
-        minLength: config.minLength ?? undefined,
-        maxLength: config.maxLength ?? undefined,
-        regex: config.regex,
-        transform: config.transform || undefined,
-      })
-    case 'textarea':
-      return omitEmpty({ rows: config.rows ?? undefined, maxLength: config.maxLength ?? undefined })
-    case 'integer':
-    case 'decimal':
-      return omitEmpty({
-        min: config.min ?? undefined,
-        max: config.max ?? undefined,
-        step: config.step ?? undefined,
-        decimals: config.decimals ?? undefined,
-      })
-    case 'boolean':
-    case 'enum':
-      // The form types `display` loosely as string; narrow to the config union.
-      return omitEmpty({ display: config.display as CustomFieldConfig['display'] })
-    case 'relation':
-      return undefined
-    default:
-      return undefined
-  }
 }
 
 function buildValidation(values: CustomFieldDefinitionFormValues): CustomFieldValidation | undefined {
@@ -72,34 +41,6 @@ function buildValidation(values: CustomFieldDefinitionFormValues): CustomFieldVa
     exists: validation.exists || undefined,
     distinct: validation.distinct || undefined,
   })
-}
-
-function buildRelationTarget(
-  values: CustomFieldDefinitionFormValues,
-): CustomFieldRelationTarget | undefined {
-  if (values.type !== 'relation') {
-    return undefined
-  }
-  return {
-    entity_type: values.relation_target.entity_type,
-    cardinality: values.relation_target.cardinality,
-    for_select_resource: values.relation_target.for_select_resource,
-  }
-}
-
-/** Maps the form's option rows to the wire shape, assigning `sort_order` from array position. */
-function buildOptions(values: CustomFieldDefinitionFormValues): CustomFieldOptionInput[] | undefined {
-  if (values.type !== 'enum') {
-    return undefined
-  }
-  return values.options.map((option, index) => ({
-    value: option.value,
-    label: option.label,
-    color: option.color || undefined,
-    icon: option.icon || undefined,
-    sort_order: index,
-    is_default: option.is_default,
-  }))
 }
 
 /** Builds the create payload: identity fields + the per-type config/validation/relation_target/options projection. */
@@ -118,12 +59,12 @@ export function buildCreatePayload(
     group: values.group || undefined,
     tab: values.tab || undefined,
     sort_order: values.sort_order,
-    config: buildConfig(values),
+    config: buildFieldDefinitionConfig(values),
     validation: buildValidation(values),
-    relation_target: buildRelationTarget(values),
+    relation_target: buildFieldDefinitionRelationTarget(values),
     is_indexed: values.is_indexed,
     is_active: values.is_active,
-    options: buildOptions(values),
+    options: buildFieldDefinitionOptions(values),
   }
 }
 
@@ -166,7 +107,7 @@ export function buildUpdatePayload(
   if (values.is_indexed !== original.is_indexed) payload.is_indexed = values.is_indexed
   if (values.is_active !== original.is_active) payload.is_active = values.is_active
 
-  const nextConfig = buildConfig(values)
+  const nextConfig = buildFieldDefinitionConfig(values)
   if (JSON.stringify(nextConfig ?? null) !== JSON.stringify(original.config ?? null)) {
     payload.config = nextConfig ?? null
   }
@@ -176,13 +117,13 @@ export function buildUpdatePayload(
     payload.validation = nextValidation ?? null
   }
 
-  const nextRelationTarget = buildRelationTarget(values)
+  const nextRelationTarget = buildFieldDefinitionRelationTarget(values)
   if (JSON.stringify(nextRelationTarget ?? null) !== JSON.stringify(original.relation_target ?? null)) {
     payload.relation_target = nextRelationTarget ?? null
   }
 
   if (values.type === 'enum') {
-    const nextOptions = buildOptions(values) ?? []
+    const nextOptions = buildFieldDefinitionOptions(values) ?? []
     const normalize = (list: { value: string; label: string; color?: string | null; icon?: string | null; is_default?: boolean }[]) =>
       list.map((option) => ({
         value: option.value,

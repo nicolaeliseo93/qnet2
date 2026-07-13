@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AttributeType;
 use App\Enums\MigrationStatus;
 use App\Jobs\RunMigrationJob;
 use App\Migrations\MigrationRegistry;
@@ -65,8 +64,8 @@ it('creates attributes with their old_id', function () {
     Http::fake([
         fakeMigrationsBaseUrl().'/attributes*' => Http::response([
             'items' => [
-                ['id' => 5, 'code' => 'weight', 'name' => 'Weight', 'data_type' => 'DECIMAL'],
-                ['id' => 6, 'code' => 'active', 'name' => 'Active', 'data_type' => 'BOOLEAN'],
+                ['id' => 5, 'code' => 'weight', 'name' => 'Weight', 'type' => 'decimal'],
+                ['id' => 6, 'code' => 'active', 'name' => 'Active', 'type' => 'boolean'],
             ],
             'pagination' => ['total' => 2],
         ]),
@@ -80,7 +79,7 @@ it('creates attributes with their old_id', function () {
     $weight = Attribute::query()->where('old_id', 5)->first();
     expect($weight->code)->toBe('weight')
         ->and($weight->name)->toBe('Weight')
-        ->and($weight->data_type)->toBe(AttributeType::Decimal)
+        ->and($weight->type)->toBe('decimal')
         ->and(Attribute::query()->where('old_id', 6)->value('code'))->toBe('active');
 
     $fresh = $run->fresh();
@@ -98,7 +97,7 @@ it('imports an ENUM attribute with its options', function () {
                     'id' => 20,
                     'code' => 'size',
                     'name' => 'Size',
-                    'data_type' => 'ENUM',
+                    'type' => 'enum',
                     'options' => [
                         ['value' => 'S', 'label' => 'Small', 'sort_order' => 0],
                         ['value' => 'L', 'label' => 'Large', 'sort_order' => 1],
@@ -115,7 +114,7 @@ it('imports an ENUM attribute with its options', function () {
     runMigrationJobFor($run);
 
     $size = Attribute::query()->where('old_id', 20)->first();
-    expect($size->data_type)->toBe(AttributeType::Enum)
+    expect($size->type)->toBe('enum')
         ->and($size->options()->pluck('value')->all())->toBe(['S', 'L']);
 
     expect($run->fresh()->created_rows)->toBe(1);
@@ -125,7 +124,7 @@ it('re-importing the same attributes is idempotent (skip, no duplicate)', functi
     seedMigrationsConfig();
     Http::fake([
         fakeMigrationsBaseUrl().'/attributes*' => Http::response([
-            'items' => [['id' => 9, 'code' => 'color', 'name' => 'Color', 'data_type' => 'STRING']],
+            'items' => [['id' => 9, 'code' => 'color', 'name' => 'Color', 'type' => 'text']],
             'pagination' => ['total' => 1],
         ]),
     ]);
@@ -146,8 +145,8 @@ it('isolates a failed attribute row (missing code) without blocking the valid on
     Http::fake([
         fakeMigrationsBaseUrl().'/attributes*' => Http::response([
             'items' => [
-                ['id' => 10, 'code' => '', 'name' => 'Broken', 'data_type' => 'STRING'],
-                ['id' => 11, 'code' => 'material', 'name' => 'Material', 'data_type' => 'STRING'],
+                ['id' => 10, 'code' => '', 'name' => 'Broken', 'type' => 'text'],
+                ['id' => 11, 'code' => 'material', 'name' => 'Material', 'type' => 'text'],
             ],
             'pagination' => ['total' => 2],
         ]),
@@ -164,4 +163,29 @@ it('isolates a failed attribute row (missing code) without blocking the valid on
     expect($fresh->created_rows)->toBe(1)
         ->and($fresh->failed_rows)->toBe(1)
         ->and(collect($fresh->report)->firstWhere('level', 'error'))->not->toBeNull();
+});
+
+it('isolates a failed attribute row (unregistered type) without blocking the valid one', function () {
+    seedMigrationsConfig();
+    Http::fake([
+        fakeMigrationsBaseUrl().'/attributes*' => Http::response([
+            'items' => [
+                ['id' => 12, 'code' => 'legacy_flag', 'name' => 'Legacy flag', 'type' => 'NOT_A_TYPE'],
+                ['id' => 13, 'code' => 'weight', 'name' => 'Weight', 'type' => 'decimal'],
+            ],
+            'pagination' => ['total' => 2],
+        ]),
+    ]);
+
+    $actor = migrationsSuperAdminActor();
+    $run = MigrationRun::factory()->create(['user_id' => $actor->id, 'source' => 'attributes']);
+
+    runMigrationJobFor($run);
+
+    expect(Attribute::query()->where('code', 'weight')->exists())->toBeTrue()
+        ->and(Attribute::query()->where('code', 'legacy_flag')->exists())->toBeFalse();
+
+    $fresh = $run->fresh();
+    expect($fresh->created_rows)->toBe(1)
+        ->and($fresh->failed_rows)->toBe(1);
 });

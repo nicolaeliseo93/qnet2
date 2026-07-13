@@ -176,7 +176,7 @@ export function UsersTable() {
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>
-        <SheetContent className="gap-0 sm:max-w-2xl">
+        <SheetContent className="gap-0" storageKey={`sheet-width:${USERS_DOMAIN}`}>
           {sheet.kind === 'view' && (
             <>
               <SheetHeader className="sr-only">

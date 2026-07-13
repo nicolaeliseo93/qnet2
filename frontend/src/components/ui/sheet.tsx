@@ -2,6 +2,7 @@ import * as React from "react"
 import { XIcon } from "lucide-react"
 import { Dialog as SheetPrimitive } from "radix-ui"
 
+import { useResizableWidth } from "@/hooks/use-resizable-width"
 import { cn } from "@/lib/utils"
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
@@ -43,16 +44,6 @@ function SheetOverlay({
 }
 
 const SHEET_DEFAULT_WIDTH = 640
-const SHEET_MIN_WIDTH = 380
-
-function getSheetMaxWidth() {
-  if (typeof window === "undefined") return SHEET_DEFAULT_WIDTH
-  return Math.round(window.innerWidth * 0.95)
-}
-
-function clampSheetWidth(width: number) {
-  return Math.min(Math.max(width, SHEET_MIN_WIDTH), getSheetMaxWidth())
-}
 
 function SheetContent({
   className,
@@ -71,60 +62,18 @@ function SheetContent({
   resizable?: boolean
   /** Default width in px, restored on double-click of the resize handle. */
   defaultWidth?: number
-  /** localStorage key used to remember the chosen width. */
+  /** localStorage key used to remember the chosen width, per sheet (`sheet-width:<domain>`). */
   storageKey?: string
 }) {
   const isHorizontal = side === "left" || side === "right"
   const canResize = resizable && isHorizontal
-  const resolvedKey = storageKey ?? `sheet-width-${side}`
 
-  const [width, setWidth] = React.useState<number>(() => {
-    if (!canResize || typeof window === "undefined") return defaultWidth
-    const stored = window.localStorage.getItem(resolvedKey)
-    const parsed = stored ? Number.parseInt(stored, 10) : NaN
-    return Number.isFinite(parsed) ? clampSheetWidth(parsed) : defaultWidth
+  const { width, handleProps } = useResizableWidth({
+    enabled: canResize,
+    side: isHorizontal ? side : "right",
+    defaultWidth,
+    storageKey: storageKey ?? `sheet-width-${side}`,
   })
-
-  React.useEffect(() => {
-    if (!canResize) return
-    window.localStorage.setItem(resolvedKey, String(width))
-  }, [canResize, resolvedKey, width])
-
-  React.useEffect(() => {
-    if (!canResize) return
-    const onResize = () => setWidth((w) => clampSheetWidth(w))
-    window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
-  }, [canResize])
-
-  const handleMouseDown = React.useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault()
-      document.body.style.userSelect = "none"
-      document.body.style.cursor = "col-resize"
-
-      const onMove = (e: MouseEvent) => {
-        const next =
-          side === "right"
-            ? window.innerWidth - e.clientX
-            : e.clientX
-        setWidth(clampSheetWidth(next))
-      }
-      const onUp = () => {
-        document.body.style.userSelect = ""
-        document.body.style.cursor = ""
-        window.removeEventListener("mousemove", onMove)
-        window.removeEventListener("mouseup", onUp)
-      }
-      window.addEventListener("mousemove", onMove)
-      window.addEventListener("mouseup", onUp)
-    },
-    [side]
-  )
-
-  const handleDoubleClick = React.useCallback(() => {
-    setWidth(clampSheetWidth(defaultWidth))
-  }, [defaultWidth])
 
   return (
     <SheetPortal>
@@ -149,18 +98,15 @@ function SheetContent({
       >
         {canResize && (
           <div
-            role="separator"
-            aria-orientation="vertical"
+            {...handleProps}
             aria-label="Resize panel"
-            title="Drag to resize • double-click to reset"
-            onMouseDown={handleMouseDown}
-            onDoubleClick={handleDoubleClick}
+            title="Drag to resize, double-click to reset"
             className={cn(
-              "group/resize absolute inset-y-0 z-50 flex w-2 cursor-col-resize items-stretch justify-center select-none touch-none",
+              "group/resize absolute inset-y-0 z-50 flex w-2 cursor-col-resize items-stretch justify-center select-none touch-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-0",
               side === "right" ? "left-0" : "right-0"
             )}
           >
-            <div className="h-full w-px bg-border transition-colors group-hover/resize:bg-primary" />
+            <div className="h-full w-px bg-border transition-colors group-hover/resize:bg-primary group-focus-visible/resize:bg-primary" />
           </div>
         )}
         {children}

@@ -5,7 +5,7 @@ import { type Control, useWatch } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { DynamicIcon } from '@/features/custom-fields/dynamic-icon'
 import { CUSTOM_FIELD_COMPONENT_REGISTRY } from '@/features/custom-fields/field-component-registry'
-import type { CustomFieldDefinitionFormValues } from '@/features/custom-fields/custom-field-definition-schema'
+import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 import {
   type CustomFieldConfig,
   type CustomFieldDescriptor,
@@ -14,11 +14,15 @@ import {
 } from '@/features/custom-fields/types'
 
 interface DefinitionFieldPreviewProps {
-  control: Control<CustomFieldDefinitionFormValues>
+  control: Control<FieldDefinitionFormValues>
+  /** The field's display label — watched by the caller under its own identity field (`label` for custom fields, `name` for attributes). */
+  label: string
+  /** Whether the field is required. Custom field definitions carry their own `validation.required`; attributes have no such concept (required lives on the category pivot) and simply omit it. */
+  required?: boolean
 }
 
 /** Builds the runtime `config` subset from the form's loose config bag (nulls/empties dropped). */
-function buildConfig(values: Partial<CustomFieldDefinitionFormValues>): CustomFieldConfig {
+function buildConfig(values: Partial<FieldDefinitionFormValues>): CustomFieldConfig {
   const bag = values.config
   const config: CustomFieldConfig = {}
   if (!bag) {
@@ -38,7 +42,7 @@ function buildConfig(values: Partial<CustomFieldDefinitionFormValues>): CustomFi
 }
 
 /** Maps the form's enum option rows to runtime options, dropping incomplete rows. */
-function buildOptions(values: Partial<CustomFieldDefinitionFormValues>): CustomFieldOption[] {
+function buildOptions(values: Partial<FieldDefinitionFormValues>): CustomFieldOption[] {
   return (values.options ?? [])
     .filter((option): option is NonNullable<typeof option> => Boolean(option?.value && option?.label))
     .map((option) => ({
@@ -56,9 +60,9 @@ function buildOptions(values: Partial<CustomFieldDefinitionFormValues>): CustomF
  * they edit. Read-only mirror: it maintains its own throwaway value state and
  * feeds nothing back to the form. Sits sticky at the top of the (narrow) sheet.
  */
-export function DefinitionFieldPreview({ control }: DefinitionFieldPreviewProps) {
+export function DefinitionFieldPreview({ control, label, required }: DefinitionFieldPreviewProps) {
   const { t } = useTranslation()
-  const values = useWatch({ control }) as Partial<CustomFieldDefinitionFormValues>
+  const values = useWatch({ control }) as Partial<FieldDefinitionFormValues>
   const type = values.type ?? 'text'
 
   const descriptor: CustomFieldDescriptor = {
@@ -67,7 +71,7 @@ export function DefinitionFieldPreview({ control }: DefinitionFieldPreviewProps)
     group: null,
     mandatory: false,
     source: 'custom',
-    label: values.label?.trim() || t('customFields.form.previewFallbackLabel'),
+    label: label.trim() || t('customFields.form.previewFallbackLabel'),
     help_text: values.help_text?.trim() || null,
     placeholder: values.placeholder?.trim() || null,
     icon: values.icon || null,
@@ -88,11 +92,7 @@ export function DefinitionFieldPreview({ control }: DefinitionFieldPreviewProps)
       title={t('customFields.form.previewTitle')}
       description={t('customFields.form.previewDescription')}
     >
-      <PreviewField
-        key={type}
-        descriptor={descriptor}
-        required={Boolean(values.validation?.required)}
-      />
+      <PreviewField key={type} descriptor={descriptor} required={Boolean(required)} />
     </FormSection>
   )
 }

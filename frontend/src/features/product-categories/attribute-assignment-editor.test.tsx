@@ -17,8 +17,8 @@ vi.mock('@/features/attributes/use-attribute-catalog', () => ({
 }))
 
 const CATALOG: AttributeCatalogEntry[] = [
-  { id: 1, code: 'color', name: 'Color', data_type: 'ENUM' },
-  { id: 2, code: 'ram_gb', name: 'RAM (GB)', data_type: 'INTEGER' },
+  { id: 1, code: 'color', name: 'Color', type: 'enum' },
+  { id: 2, code: 'ram_gb', name: 'RAM (GB)', type: 'integer' },
 ]
 
 function queryResult(data: AttributeCatalogEntry[] = CATALOG) {
@@ -96,7 +96,7 @@ describe('AttributeAssignmentEditor — self-explanatory row (task #19)', () => 
     })
   })
 
-  it('describes the ENUM data type in a tooltip on the badge', async () => {
+  it('describes the enum type in a tooltip on the badge', async () => {
     render(
       <AttributeAssignmentEditor
         value={[{ attribute_id: 1, is_required: false, sort_order: 0 }]}
@@ -108,7 +108,7 @@ describe('AttributeAssignmentEditor — self-explanatory row (task #19)', () => 
     fireEvent.focus(screen.getByText('List of options'))
     await waitFor(() => {
       expect(screen.getByRole('tooltip')).toHaveTextContent(
-        'A choice from a fixed list of options.',
+        'A choice from a predefined list of options.',
       )
     })
   })

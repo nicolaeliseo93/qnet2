@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AttributeType;
 use App\Models\Attribute;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,20 +48,19 @@ it('returns the 4 columns in order with the declared flags, 403 without viewAny'
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['code', 'name', 'data_type', 'created_at']);
+    expect($ids)->toBe(['code', 'name', 'type', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
-    expect($columns['data_type']['type'])->toBe('badge')
-        ->and($columns['data_type']['filterType'])->toBe('set')
-        ->and($columns['data_type']['enumKey'])->toBe('attribute_type')
-        ->and($columns['data_type']['badges'])->toHaveCount(5);
+    expect($columns['type']['type'])->toBe('badge')
+        ->and($columns['type']['filterType'])->toBe('set')
+        ->and($columns['type']['badges'])->toHaveCount(13);
 });
 
 // ---------------------------------------------------------------------------
 // AC-006 — rows shape
 // ---------------------------------------------------------------------------
 
-it('rows expose id/code/name/data_type/options_count/created_at + per-row actions', function () {
+it('rows expose id/code/name/type/options_count/created_at + per-row actions', function () {
     $actor = attributeUserWith(['viewAny', 'view', 'update', 'delete']);
     Attribute::factory()->enum(3)->create(['code' => 'color']);
     Sanctum::actingAs($actor);
@@ -71,18 +69,18 @@ it('rows expose id/code/name/data_type/options_count/created_at + per-row action
     $row = collect($response->json('items'))->firstWhere('code', 'color');
 
     expect($row)->not->toBeNull()
-        ->and($row['data_type'])->toBe('ENUM')
+        ->and($row['type'])->toBe('enum')
         ->and($row['options_count'])->toBe(3)
         ->and($row['actions'])->toEqualCanonicalizing(['view', 'edit', 'delete']);
 });
 
-it('resolves distinct data_type values via /values', function () {
+it('resolves distinct type values via /values', function () {
     $actor = attributeUserWith(['viewAny']);
-    Attribute::factory()->create(['data_type' => AttributeType::String]);
-    Attribute::factory()->create(['data_type' => AttributeType::Integer]);
+    Attribute::factory()->create(['type' => 'text']);
+    Attribute::factory()->create(['type' => 'integer']);
     Sanctum::actingAs($actor);
 
-    $response = $this->postJson('/api/tables/attributes/values', ['columnId' => 'data_type'])->assertOk();
+    $response = $this->postJson('/api/tables/attributes/values', ['columnId' => 'type'])->assertOk();
 
-    expect($response->json('data.values'))->toEqualCanonicalizing(['STRING', 'INTEGER']);
+    expect($response->json('data.values'))->toEqualCanonicalizing(['text', 'integer']);
 });

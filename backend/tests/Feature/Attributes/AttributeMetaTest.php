@@ -41,13 +41,13 @@ it('200: field catalogue matches the frozen contract, in order', function () {
     $response = $this->getJson('/api/meta/attributes')->assertOk();
 
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
-    expect($keys)->toBe(['code', 'name', 'data_type', 'options']);
+    expect($keys)->toBe(['code', 'name', 'type', 'description', 'help_text', 'placeholder', 'icon', 'config', 'relation_target', 'options']);
 
     $fields = collect($response->json('data.fields'))->keyBy('key');
     expect($fields['code']['mandatory'])->toBeTrue()
         ->and($fields['name']['mandatory'])->toBeTrue()
-        ->and($fields['data_type']['type'])->toBe('select')
-        ->and($fields['data_type']['mandatory'])->toBeTrue();
+        ->and($fields['type']['type'])->toBe('select')
+        ->and($fields['type']['mandatory'])->toBeTrue();
 });
 
 it('permissions.actions maps delete/export/import to the resource permissions', function () {

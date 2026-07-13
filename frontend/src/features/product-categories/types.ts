@@ -7,8 +7,12 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
-import type { AttributeDataType } from '@/features/attributes/types'
-import type { CustomFieldValue } from '@/features/custom-fields/types'
+import type {
+  CustomFieldConfig,
+  CustomFieldRelationTarget,
+  CustomFieldType,
+  CustomFieldValue,
+} from '@/features/custom-fields/types'
 
 /** A node of the category tree, as returned by `GET /product-categories/tree`. */
 export interface ProductCategoryTreeNode {
@@ -25,7 +29,7 @@ export interface ProductCategoryAttributeAssignment {
   attribute_id: number
   code: string
   name: string
-  data_type: AttributeDataType
+  type: CustomFieldType
   is_required: boolean
   sort_order: number
 }
@@ -35,7 +39,7 @@ export interface ProductCategoryInheritedAttribute {
   attribute_id: number
   code: string
   name: string
-  data_type: AttributeDataType
+  type: CustomFieldType
   is_required: boolean
 }
 
@@ -77,10 +81,24 @@ export interface EffectiveAttribute {
   id: number
   code: string
   name: string
-  data_type: AttributeDataType
+  type: CustomFieldType
+  description: string | null
+  help_text: string | null
+  placeholder: string | null
+  icon: string | null
+  config: CustomFieldConfig | null
+  relation_target: CustomFieldRelationTarget | null
   is_required: boolean
+  sort_order: number
   inherited: boolean
-  options: { value: string; label: string }[]
+  options: {
+    value: string
+    label: string
+    color: string | null
+    icon: string | null
+    sort_order: number
+    is_default: boolean
+  }[]
 }
 
 /** A single attribute-to-category assignment sent to the backend (full-replace sync). */

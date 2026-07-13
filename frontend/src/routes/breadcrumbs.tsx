@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/breadcrumb'
 import { useNavigation } from '@/features/navigation/use-navigation'
 import { resolveIcon } from '@/features/navigation/icon-map'
+import { useBreadcrumbTitles } from '@/routes/breadcrumb-title'
 import type { NavigationItem } from '@/features/navigation/types'
 
 /**
@@ -25,8 +26,11 @@ const SEGMENT_LABELS: Record<string, string> = {
   companies: 'navigation.companies',
   'company-sites': 'navigation.companySites',
   'business-functions': 'navigation.businessFunctions',
+  referents: 'navigation.referents',
   registries: 'navigation.registries',
   attributes: 'navigation.attributes',
+  new: 'common.new',
+  edit: 'common.edit',
   'custom-fields': 'navigation.customFields',
   'product-categories': 'navigation.productCategories',
   sectors: 'navigation.sectors',
@@ -64,12 +68,29 @@ function findNavItemByRoute(
   return null
 }
 
-/** Resolves the i18n label for a single URL segment, with a safe fallback. */
-function useSegmentLabel(segment: string | undefined): string {
+interface Crumb {
+  label: string
+  href: string
+}
+
+/**
+ * Crumbs of the current URL. A label registered through `useBreadcrumbTitle`
+ * (an entity name, for `/registries/12`) wins over the segment itself, which
+ * would otherwise show the raw id.
+ */
+function useCrumbs(): Crumb[] {
   const { t, i18n } = useTranslation()
-  if (!segment) return ''
-  const key = SEGMENT_LABELS[segment]
-  return key && i18n.exists(key) ? t(key) : humanize(segment)
+  const { pathname } = useLocation()
+  const titles = useBreadcrumbTitles()
+
+  const segments = pathname.split('/').filter(Boolean)
+
+  return segments.map((segment, index) => {
+    const href = '/' + segments.slice(0, index + 1).join('/')
+    const key = SEGMENT_LABELS[segment]
+    const label = key && i18n.exists(key) ? t(key) : humanize(segment)
+    return { label: titles[href] ?? label, href }
+  })
 }
 
 /**
@@ -77,9 +98,8 @@ function useSegmentLabel(segment: string | undefined): string {
  * the top app bar. This is a heading, NOT a breadcrumb.
  */
 export function AppPageTitle({ className }: { className?: string }) {
-  const { pathname } = useLocation()
-  const segments = pathname.split('/').filter(Boolean)
-  const label = useSegmentLabel(segments[segments.length - 1])
+  const crumbs = useCrumbs()
+  const label = crumbs[crumbs.length - 1]?.label
 
   if (!label) {
     return null
@@ -88,33 +108,18 @@ export function AppPageTitle({ className }: { className?: string }) {
   return <h1 className={className ?? 'text-base font-semibold'}>{label}</h1>
 }
 
-interface Crumb {
-  label: string
-  href: string
-}
-
 /**
  * Breadcrumb derived directly from the current URL (no router `handle` /
  * `useMatches` dependency). For `/users` it renders a single "Utenti" crumb;
  * for nested paths it renders the full hierarchy.
  */
 export function AppBreadcrumbs() {
-  const { t, i18n } = useTranslation()
-  const { pathname } = useLocation()
   const navigation = useNavigation()
+  const crumbs = useCrumbs()
 
-  const segments = pathname.split('/').filter(Boolean)
-
-  if (segments.length === 0) {
+  if (crumbs.length === 0) {
     return null
   }
-
-  const crumbs: Crumb[] = segments.map((segment, index) => {
-    const href = '/' + segments.slice(0, index + 1).join('/')
-    const key = SEGMENT_LABELS[segment]
-    const label = key && i18n.exists(key) ? t(key) : humanize(segment)
-    return { label, href }
-  })
 
   // The module icon is the one the sidebar uses for the top-level crumb: match
   // its route against the backend-driven navigation tree.

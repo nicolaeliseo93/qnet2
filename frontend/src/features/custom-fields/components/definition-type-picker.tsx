@@ -1,9 +1,5 @@
 import type { Control } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import {
-  AlignLeft, Calendar, CalendarClock, Clock, Hash, Link, List, Mail, Palette,
-  Sigma, ToggleRight, Type, Waypoints, type LucideIcon,
-} from 'lucide-react'
 import { FormControl } from '@/components/ui/form'
 import {
   Select,
@@ -13,34 +9,19 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { MetaField } from '@/features/authorization/MetaField'
-import type { CustomFieldDefinitionFormValues } from '@/features/custom-fields/custom-field-definition-schema'
+import { FIELD_TYPE_ICONS } from '@/features/custom-fields/field-type-icons'
+import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 import { CUSTOM_FIELD_TYPES, type CustomFieldType } from '@/features/custom-fields/types'
 
 interface DefinitionTypePickerProps {
-  control: Control<CustomFieldDefinitionFormValues>
+  control: Control<FieldDefinitionFormValues>
   /** `type` is immutable once the field has values; the edit form locks it. */
   lockIdentity: boolean
 }
 
-/** Glyph shown per type in the trigger, the options and the explainer callout. */
-const TYPE_ICONS: Record<CustomFieldType, LucideIcon> = {
-  text: Type,
-  textarea: AlignLeft,
-  integer: Hash,
-  decimal: Sigma,
-  boolean: ToggleRight,
-  enum: List,
-  relation: Waypoints,
-  date: Calendar,
-  datetime: CalendarClock,
-  time: Clock,
-  email: Mail,
-  url: Link,
-  color: Palette,
-}
-
 /**
- * The `type` selector, promoted out of the flat identity list because it
+ * The `type` selector, shared by the custom field definition form AND the
+ * attribute form (spec 0017/0021: same 13-type `FieldTypeRegistry`) — it
  * governs every other section of the form. Each option carries its icon + a
  * one-line description, and an always-visible callout under the select explains
  * the currently-selected type with a concrete example (spec AC-025 UX refactor).
@@ -52,7 +33,7 @@ export function DefinitionTypePicker({ control, lockIdentity }: DefinitionTypePi
     <MetaField control={control} name="type" metaKey="type" label={t('customFields.form.type')}>
       {({ field, disabled }) => {
         const selected = field.value
-        const SelectedIcon = TYPE_ICONS[selected]
+        const SelectedIcon = FIELD_TYPE_ICONS[selected]
         return (
           <>
             <Select
@@ -67,7 +48,7 @@ export function DefinitionTypePicker({ control, lockIdentity }: DefinitionTypePi
               </FormControl>
               <SelectContent>
                 {CUSTOM_FIELD_TYPES.map((type) => {
-                  const Icon = TYPE_ICONS[type]
+                  const Icon = FIELD_TYPE_ICONS[type]
                   return (
                     <SelectItem key={type} value={type}>
                       <span className="flex items-center gap-2">

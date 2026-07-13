@@ -25,6 +25,9 @@ const FORMAT_ICON: Record<ExportFormat, typeof FileText> = {
   xlsx: FileSpreadsheet,
 }
 
+/** Narrow form: the sheet opens at this width until the user resizes it. */
+const EXPORT_SHEET_DEFAULT_WIDTH = 448
+
 export interface ExportDialogProps {
   /** Resource key that selects the backend `TableDefinition` (`/exports/{domain}`). */
   domain: string
@@ -88,7 +91,11 @@ export function ExportDialog({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent className="gap-0 sm:max-w-md">
+      <SheetContent
+        className="gap-0"
+        defaultWidth={EXPORT_SHEET_DEFAULT_WIDTH}
+        storageKey="sheet-width:exports"
+      >
         <SheetHeader>
           <SheetTitle>{t('exports.title')}</SheetTitle>
           <SheetDescription>{t('exports.subtitle')}</SheetDescription>

@@ -4,6 +4,7 @@ import { Form } from '@/components/ui/form'
 import { DefinitionBaseFields } from '@/features/custom-fields/components/definition-base-fields'
 import { DefinitionFieldPreview } from '@/features/custom-fields/components/definition-field-preview'
 import { DefinitionFlagsFields } from '@/features/custom-fields/components/definition-flags-fields'
+import { DefinitionOrganizationFields } from '@/features/custom-fields/components/definition-organization-fields'
 import { DefinitionPresentationFields } from '@/features/custom-fields/components/definition-presentation-fields'
 import { DefinitionOptionsEditor } from '@/features/custom-fields/components/definition-options-editor'
 import { DefinitionRelationTargetEditor } from '@/features/custom-fields/components/definition-relation-target-editor'
@@ -45,7 +46,11 @@ export function CustomFieldDefinitionFormBody({
     <div className="flex flex-1 flex-col overflow-y-auto">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 p-4" noValidate>
-          <DefinitionFieldPreview control={form.control} />
+          <DefinitionFieldPreview
+            control={form.control}
+            label={form.watch('label')}
+            required={form.watch('validation.required')}
+          />
 
           <DefinitionBaseFields
             control={form.control}
@@ -68,6 +73,8 @@ export function CustomFieldDefinitionFormBody({
           <DefinitionValidationEditor control={form.control} type={type} />
 
           <DefinitionPresentationFields control={form.control} />
+
+          <DefinitionOrganizationFields control={form.control} />
 
           <DefinitionFlagsFields control={form.control} />
 

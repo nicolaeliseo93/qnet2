@@ -99,8 +99,7 @@ class ProductsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Badge metadata for the `product_type` column, driven by ProductType
-     * (mirrors AttributesTableDefinition's `data_type`).
+     * Badge metadata for the `product_type` column, driven by ProductType.
      *
      * @return array<int, array<string, mixed>>|null
      */
@@ -280,8 +279,7 @@ class ProductsTableDefinition extends AbstractTableDefinition
     /**
      * Distinct `product_type` values among the products matching `$query`, via
      * a plain DB::table query on the raw column (never through Eloquent, which
-     * would hydrate the ProductType cast and fail to stringify it — mirrors
-     * AttributesTableDefinition's `data_type`).
+     * would hydrate the ProductType cast and fail to stringify it).
      *
      * @param  Builder<Product>  $query
      * @return array<int, string>

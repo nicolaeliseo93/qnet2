@@ -69,7 +69,7 @@ export function ImportDialog({ domain, open, onOpenChange }: ImportDialogProps) 
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent className="gap-0 sm:max-w-2xl">
+      <SheetContent className="gap-0" storageKey="sheet-width:imports">
         <SheetHeader>
           <SheetTitle>{t('imports.title')}</SheetTitle>
           <SheetDescription>{t('imports.subtitle')}</SheetDescription>

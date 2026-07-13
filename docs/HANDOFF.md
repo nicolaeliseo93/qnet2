@@ -2,6 +2,58 @@
 
 > Injected at session start. Update at every green state.
 
+## REFACTOR — Attribute definitions aligned to custom fields (2026-07-13) — GREEN (not committed)
+
+User goal: "allineare le tipologie degli attributi della categoria di prodotto ai tipi di input,
+regole e altro dei campi personalizzati, per una gestione pulita e coerente". User-approved scope
+(AskUserQuestion): REUSE the custom-fields infrastructure (NOT a full merge of the two systems,
+NOT types-only); DEFINITION only — product attribute VALUES stay non-existent; spec 0017 updated.
+
+TWO FACTS THAT SHAPED THE DESIGN (verified, not assumed):
+1. Attributes are a CATALOG/TEMPLATE with NO values. `product_attribute_values` (EAV) was removed
+   in commit e5c31dc; a submitted `attributes` key on POST/PATCH /products is IGNORED. Pivot
+   `attribute_category.is_required` is declarative metadata, NOT enforced on product save.
+   Per-instance values are covered by custom fields (spec 0021).
+2. So the `required` of an attribute belongs on the PIVOT (per-category), not on the definition —
+   which is why attributes deliberately did NOT get a `validation` column.
+
+WHAT CHANGED
+- Schema (2 new migrations, reversible round-trip tested WITH data):
+  `attributes.data_type` -> `attributes.type` (backfill STRING->text, INTEGER->integer,
+  DECIMAL->decimal, BOOLEAN->boolean, ENUM->enum) + description/help_text/placeholder/icon/
+  config/relation_target. `attribute_options` + color/icon/is_default (1:1 with custom_field_options).
+  NB: in `down()` the collapse-to-STRING of non-representable types MUST run BEFORE the inverse
+  remap loop — both operate on the same column, so the wrong order re-maps already-mapped rows.
+- `App\Enums\AttributeType` DELETED (+ its `form_enums.attribute_type` registration). Single source
+  of truth for types is now `App\CustomFields\FieldTypeRegistry` (13 types). Adding a type = 1
+  handler + 1 line in config/custom-fields.php, and it lands in BOTH custom fields and attributes.
+- Shared PHP concern `App\Http\Requests\Concerns\ValidatesFieldTypeDefinition` (enum-needs-options,
+  relation-needs-valid-target) consumed by Store/Update{CustomField,Attribute}Request. Custom-fields
+  tests stayed green WITHOUT being touched (206/206) — proof the extraction didn't regress them.
+- `AttributeService` also guards type validity server-side because `AttributesSource` (data migration)
+  bypasses the FormRequest.
+- Frontend: attribute definition form REUSES the custom-fields sub-editors (type picker, per-type
+  config, options editor with color/icon/default, relation-target editor, preview). Generalization
+  idiom: concrete shared type `FieldDefinitionFormValues` (features/custom-fields/) + shared
+  `field-definition-{schema,defaults,payload}.ts`; sub-editors take `Control<FieldDefinitionFormValues>`
+  and `Control<Wider>` is assignable by contravariance — ZERO casts, zero `any`. group/sort_order
+  moved to a custom-fields-only `DefinitionOrganizationFields` (attributes have no such concept).
+- Saved column preferences (spec 0001) / filter views (spec 0007) referencing the old `data_type`
+  column id degrade silently — the allow-list mechanism is generic (existing test covers it).
+
+VERIFIED GREEN by the independent verifier (real command output, not claims):
+Pest 1859: 1857 pass / 1 skip / 1 FAIL; Vitest 860: 856 pass / 4 FAIL; tsc clean; Pint clean on the diff.
+The 5 failures are PRE-EXISTING — proven by a `git stash` round-trip: they fail IDENTICALLY on clean
+main. They are: `AbstractMigrationSourcePreviewTest` (RolesSource `description:null`) and 4 in
+`features/table/` (`cell-renderers.test.tsx` i18n leak between test files; `use-table-preferences.ts:34`
+`knownColumnIds.has is not a function`). Also pre-existing: Pint flags `CompanySiteUpdateTest.php`.
+These are unowned repo debt — worth a separate task, NOT caused here.
+
+CAUTION FOR THE NEXT SESSION: the working tree ALSO contains an unrelated in-progress feature
+(spec 0022 dedicated-module-pages + resizable sheet: sheet.tsx/sidebar.tsx, use-resizable-width.ts,
+*-detail-page.tsx, router/breadcrumbs, slimmed *-table.tsx). NOT verified, NOT part of this work.
+Commit the two separately — a single commit would mix two independent features.
+
 ## FEATURE — Custom fields auto-integrated into /migrations (2026-07-09) — GREEN (not committed)
 
 The data-migration feature (`backend/app/Migrations/`, spec 0013, super-admin `/migrations`)

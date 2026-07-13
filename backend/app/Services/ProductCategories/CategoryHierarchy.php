@@ -2,7 +2,6 @@
 
 namespace App\Services\ProductCategories;
 
-use App\Enums\AttributeType;
 use App\Models\Attribute;
 use App\Models\ProductCategory;
 use Illuminate\Support\Collection;
@@ -134,7 +133,13 @@ final class CategoryHierarchy
                     'id' => $attribute->id,
                     'code' => $attribute->code,
                     'name' => $attribute->name,
-                    'data_type' => $attribute->data_type,
+                    'type' => $attribute->type,
+                    'description' => $attribute->description,
+                    'help_text' => $attribute->help_text,
+                    'placeholder' => $attribute->placeholder,
+                    'icon' => $attribute->icon,
+                    'config' => $attribute->config,
+                    'relation_target' => $attribute->relation_target,
                     'is_required' => (bool) $attribute->pivot->is_required,
                     'sort_order' => (int) $attribute->pivot->sort_order,
                     'inherited' => ! $isOwn,
@@ -172,7 +177,7 @@ final class CategoryHierarchy
                     'attribute_id' => $attribute->id,
                     'code' => $attribute->code,
                     'name' => $attribute->name,
-                    'data_type' => $attribute->data_type,
+                    'type' => $attribute->type,
                     'is_required' => (bool) $attribute->pivot->is_required,
                 ];
 
@@ -242,17 +247,21 @@ final class CategoryHierarchy
     }
 
     /**
-     * @return array<int, array{value: string, label: string}>
+     * @return array<int, array{value: string, label: string, color: ?string, icon: ?string, sort_order: int, is_default: bool}>
      */
     private function optionsFor(Attribute $attribute): array
     {
-        if ($attribute->data_type !== AttributeType::Enum) {
+        if ($attribute->type !== 'enum') {
             return [];
         }
 
         return $attribute->options->map(static fn ($option): array => [
             'value' => $option->value,
             'label' => $option->label,
+            'color' => $option->color,
+            'icon' => $option->icon,
+            'sort_order' => $option->sort_order,
+            'is_default' => $option->is_default,
         ])->all();
     }
 }

@@ -55,7 +55,7 @@ export function ProductCategoryFormBody({ mode, onSuccess, onCancel }: ProductCa
             attribute_id: attribute.id,
             code: attribute.code,
             name: attribute.name,
-            data_type: attribute.data_type,
+            type: attribute.type,
             is_required: attribute.is_required,
           }))
         : [],

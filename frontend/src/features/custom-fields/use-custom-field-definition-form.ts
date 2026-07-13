@@ -18,6 +18,10 @@ import {
   buildUpdateCustomFieldDefinitionSchema,
   type CustomFieldDefinitionFormValues,
 } from '@/features/custom-fields/custom-field-definition-schema'
+import {
+  emptyFieldDefinitionValues,
+  hydrateFieldDefinitionValues,
+} from '@/features/custom-fields/field-definition-defaults'
 import type {
   CustomFieldDefinitionDetail,
   CustomFieldDefinitionFormMode,
@@ -56,26 +60,6 @@ interface UseCustomFieldDefinitionFormArgs {
   onSuccess: (definition: CustomFieldDefinitionDetail) => void
 }
 
-/** A single blank ENUM option row appended by the "Add option" affordance. */
-export function blankCustomFieldOption() {
-  return { value: '', label: '', color: '', icon: '', is_default: false }
-}
-
-function emptyConfig() {
-  return {
-    minLength: null,
-    maxLength: null,
-    regex: '',
-    transform: '' as const,
-    rows: null,
-    min: null,
-    max: null,
-    step: null,
-    decimals: null,
-    display: '',
-  }
-}
-
 function emptyValidation() {
   return {
     required: false,
@@ -92,37 +76,18 @@ function emptyValidation() {
 
 /** Hydrates the flat config/validation bag from a persisted definition, defaulting every field the type does not use. */
 function hydrateValues(definition: CustomFieldDefinitionDetail): CustomFieldDefinitionFormValues {
-  const config = definition.config as Record<string, unknown> | null
   const validation = definition.validation as (CustomFieldValidation & Record<string, unknown>) | null
-  const relationTarget = definition.relation_target
 
   return {
+    ...hydrateFieldDefinitionValues(definition),
     entity_type: definition.entity_type,
     key: definition.key,
-    type: definition.type,
     label: definition.label,
-    description: definition.description ?? '',
-    help_text: definition.help_text ?? '',
-    placeholder: definition.placeholder ?? '',
-    icon: definition.icon ?? '',
     group: definition.group ?? '',
     tab: definition.tab ?? '',
     sort_order: definition.sort_order,
     is_indexed: definition.is_indexed,
     is_active: definition.is_active,
-    config: {
-      ...emptyConfig(),
-      minLength: (config?.minLength as number | undefined) ?? null,
-      maxLength: (config?.maxLength as number | undefined) ?? null,
-      regex: (config?.regex as string | undefined) ?? '',
-      transform: (config?.transform as '' | 'upper' | 'lower' | 'capitalize' | undefined) ?? '',
-      rows: (config?.rows as number | undefined) ?? null,
-      min: (config?.min as number | undefined) ?? null,
-      max: (config?.max as number | undefined) ?? null,
-      step: (config?.step as number | undefined) ?? null,
-      decimals: (config?.decimals as number | undefined) ?? null,
-      display: (config?.display as string | undefined) ?? '',
-    },
     validation: {
       ...emptyValidation(),
       required: Boolean(validation?.required),
@@ -135,23 +100,6 @@ function hydrateValues(definition: CustomFieldDefinitionDetail): CustomFieldDefi
       exists: Boolean(validation?.exists),
       distinct: Boolean(validation?.distinct),
     },
-    relation_target: {
-      entity_type: relationTarget?.entity_type ?? '',
-      cardinality: relationTarget?.cardinality ?? 'one',
-      for_select_resource: relationTarget?.for_select_resource ?? '',
-    },
-    options:
-      definition.options.length > 0
-        ? [...definition.options]
-            .sort((a, b) => a.sort_order - b.sort_order)
-            .map((option) => ({
-              value: option.value,
-              label: option.label,
-              color: option.color ?? '',
-              icon: option.icon ?? '',
-              is_default: option.is_default,
-            }))
-        : [],
   }
 }
 
@@ -160,23 +108,16 @@ function defaultValuesFor(mode: CustomFieldDefinitionFormMode): CustomFieldDefin
     return hydrateValues(mode.definition)
   }
   return {
+    ...emptyFieldDefinitionValues(),
     entity_type: '',
     key: '',
-    type: 'text',
     label: '',
-    description: '',
-    help_text: '',
-    placeholder: '',
-    icon: '',
     group: '',
     tab: '',
     sort_order: 0,
     is_indexed: false,
     is_active: true,
-    config: emptyConfig(),
     validation: emptyValidation(),
-    relation_target: { entity_type: '', cardinality: 'one', for_select_resource: '' },
-    options: [],
   }
 }
 

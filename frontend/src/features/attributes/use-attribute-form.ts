@@ -14,10 +14,28 @@ import {
   type CreateAttributeFormValues,
 } from '@/features/attributes/attribute-schema'
 import type { AttributeDetail, AttributeFormMode } from '@/features/attributes/types'
+import {
+  emptyFieldDefinitionValues,
+  hydrateFieldDefinitionValues,
+} from '@/features/custom-fields/field-definition-defaults'
 import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
-const SERVER_ERROR_FIELDS = ['code', 'name', 'data_type', 'options'] as const
+const SERVER_ERROR_FIELDS = [
+  'code',
+  'name',
+  'type',
+  'description',
+  'help_text',
+  'placeholder',
+  'icon',
+  'config',
+  'relation_target',
+  'relation_target.entity_type',
+  'relation_target.cardinality',
+  'relation_target.for_select_resource',
+  'options',
+] as const
 
 export type AttributeFormValues = CreateAttributeFormValues
 
@@ -62,14 +80,16 @@ export function useAttributeForm({ mode, onSuccess }: UseAttributeFormArgs) {
       return {
         code: attribute.code,
         name: attribute.name,
-        data_type: attribute.data_type,
-        options: [...attribute.options]
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map((option) => ({ value: option.value, label: option.label })),
+        ...hydrateFieldDefinitionValues(attribute),
         custom_fields: customFields.defaultValues,
       }
     }
-    return { code: '', name: '', data_type: 'STRING', options: [], custom_fields: customFields.defaultValues }
+    return {
+      code: '',
+      name: '',
+      ...emptyFieldDefinitionValues(),
+      custom_fields: customFields.defaultValues,
+    }
   }, [mode, customFields.defaultValues])
 
   const form = useForm<AttributeFormValues>({

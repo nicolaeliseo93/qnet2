@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Gate;
  * FieldTypeRegistry — the same source of truth the write pipeline validates
  * against — not a PHP enum (OCP: a new type is one handler class + one
  * config line, never a new case here), mirroring
- * AttributesTableDefinition's `data_type` badge.
+ * AttributesTableDefinition's own `type` badge.
  */
 class CustomFieldsTableDefinition extends AbstractTableDefinition
 {

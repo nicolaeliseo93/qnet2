@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchTableRows } from '@/features/table/api'
-import type { AttributeDataType } from '@/features/attributes/types'
+import type { CustomFieldType } from '@/features/custom-fields/types'
 
 /** A minimal attribute projection for pickers (assignment editors, dynamic forms). */
 export interface AttributeCatalogEntry {
   id: number
   code: string
   name: string
-  data_type: AttributeDataType
+  type: CustomFieldType
 }
 
 /**
@@ -39,7 +39,7 @@ export function useAttributeCatalog() {
         id: item.id,
         code: String(item.code),
         name: String(item.name),
-        data_type: item.data_type as AttributeDataType,
+        type: item.type as CustomFieldType,
       }))
     },
   })

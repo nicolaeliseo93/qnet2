@@ -11,7 +11,7 @@ export const attributes = {
   columns: {
     code: 'Codice',
     name: 'Nome',
-    data_type: 'Tipo dato',
+    type: 'Tipo',
     created_at: 'Creato il',
   },
   detail: {
@@ -30,7 +30,6 @@ export const attributes = {
     editSubtitle: "Aggiorna l'attributo selezionato.",
     code: 'Codice',
     name: 'Nome',
-    dataType: 'Tipo dato',
     save: 'Salva',
     saving: 'Salvataggio…',
     cancel: 'Annulla',
@@ -49,24 +48,17 @@ export const attributes = {
     sections: {
       identity: {
         title: 'Dettagli',
-        description: "Codice, nome e tipo dato dell'attributo.",
-      },
-      options: {
-        title: 'Opzioni',
-        description: 'Valori selezionabili per un attributo ENUM.',
+        description: "Codice, nome e tipo dell'attributo.",
       },
     },
-    addOption: 'Aggiungi opzione',
-    optionsEmpty: 'Nessuna opzione ancora.',
-    optionValue: 'Valore',
-    optionLabel: 'Etichetta',
-    removeOption: 'Rimuovi opzione',
     optionValueRequired: 'Il valore è obbligatorio.',
     optionValueMax: 'Il valore deve avere al massimo 191 caratteri.',
     optionLabelRequired: "L'etichetta è obbligatoria.",
     optionLabelMax: "L'etichetta deve avere al massimo 191 caratteri.",
-    optionsRequiredForEnum: 'Aggiungi almeno una opzione per un attributo ENUM.',
+    optionsRequiredForEnum: 'Aggiungi almeno una opzione per un attributo a elenco.',
     optionValuesDuplicate: 'I valori delle opzioni devono essere unici.',
+    relationEntityTypeRequired: 'Il modulo di destinazione della relazione è obbligatorio.',
+    relationForSelectResourceRequired: 'La risorsa del selettore è obbligatoria.',
   },
 }
 
@@ -122,13 +114,6 @@ export const productCategories = {
     isRequiredHelp: 'Se attivo, il prodotto DEVE valorizzare questo attributo.',
     sortOrder: 'Ordine',
     sortOrderHelp: 'La posizione in cui questo campo compare nel form del prodotto.',
-    dataTypeDescription: {
-      STRING: 'Testo libero.',
-      INTEGER: 'Numero intero.',
-      DECIMAL: 'Numero decimale.',
-      BOOLEAN: 'Valore sì/no.',
-      ENUM: 'Una scelta da un elenco fisso di opzioni.',
-    },
     removeAttribute: 'Rimuovi attributo',
     inheritedAttributes: 'Ereditati dalle categorie antenate',
     save: 'Salva',

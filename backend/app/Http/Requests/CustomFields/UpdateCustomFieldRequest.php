@@ -6,6 +6,7 @@ use App\CustomFields\CustomFieldEntityRegistry;
 use App\CustomFields\FieldTypeRegistry;
 use App\DataObjects\CustomFields\UpdateCustomFieldData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Http\Requests\Concerns\ValidatesFieldTypeDefinition;
 use App\Models\CustomFieldDefinition;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
@@ -18,15 +19,18 @@ use Illuminate\Validation\Rule;
  * support partial PATCH updates: `options`, when submitted, is a full-replace
  * of the option list; the entity_type/type/key-immutability guard (the
  * definition already has recorded values) is enforced by CustomFieldService,
- * not here (it needs a DB lookup on `custom_field_values`). Authorization is
- * intentionally NOT handled here (it stays in the controller via
- * authorize('update', $customField)). EnforcesFieldPermissions (spec 0004)
- * additionally rejects any submitted field the actor cannot edit on this
- * specific model.
+ * not here (it needs a DB lookup on `custom_field_values`). The ENUM/RELATION
+ * cross-field checks are the shared ValidatesFieldTypeDefinition concern
+ * (also used by the `attributes` requests, spec 0017 alignment), overridden
+ * below to fall back to the persisted `type` and to only fire when the
+ * relevant key was actually submitted. Authorization is intentionally NOT
+ * handled here (it stays in the controller via authorize('update',
+ * $customField)). EnforcesFieldPermissions (spec 0004) additionally rejects
+ * any submitted field the actor cannot edit on this specific model.
  */
 class UpdateCustomFieldRequest extends FormRequest
 {
-    use EnforcesFieldPermissions;
+    use EnforcesFieldPermissions, ValidatesFieldTypeDefinition;
 
     public function authorize(): bool
     {
@@ -87,7 +91,7 @@ class UpdateCustomFieldRequest extends FormRequest
      * The type this definition will have once this request is applied: the
      * submitted `type`, or the currently persisted one when not submitted.
      */
-    private function effectiveType(): string
+    protected function fieldTypeDefinitionType(): ?string
     {
         /** @var CustomFieldDefinition $customField */
         $customField = $this->route('customField');
@@ -102,25 +106,9 @@ class UpdateCustomFieldRequest extends FormRequest
      * a fresh options payload) is enforced by CustomFieldService, which needs
      * the model's current option count.
      */
-    private function validateEnumOptions(Validator $validator): void
+    protected function shouldValidateOptions(): bool
     {
-        if ($this->effectiveType() !== 'enum' || ! $this->has('options')) {
-            return;
-        }
-
-        $options = $this->input('options', []);
-
-        if (! is_array($options) || $options === []) {
-            $validator->errors()->add('options', 'At least one option is required for an ENUM field.');
-
-            return;
-        }
-
-        $values = array_column($options, 'value');
-
-        if (count($values) !== count(array_unique($values))) {
-            $validator->errors()->add('options', 'Option values must be unique.');
-        }
+        return $this->has('options');
     }
 
     /**
@@ -130,35 +118,9 @@ class UpdateCustomFieldRequest extends FormRequest
      * still guards the case where `type` is changing TO relation without a
      * fresh relation_target.
      */
-    private function validateRelationTarget(Validator $validator): void
+    protected function shouldValidateRelationTarget(): bool
     {
-        if ($this->effectiveType() !== 'relation' || ! $this->has('relation_target')) {
-            return;
-        }
-
-        $target = $this->input('relation_target');
-
-        if (! is_array($target)) {
-            $validator->errors()->add('relation_target', 'A relation field requires a relation_target.');
-
-            return;
-        }
-
-        $entityType = $target['entity_type'] ?? null;
-        $cardinality = $target['cardinality'] ?? null;
-        $forSelectResource = $target['for_select_resource'] ?? null;
-
-        if (! is_string($entityType) || ! app(CustomFieldEntityRegistry::class)->isCustomFieldable($entityType)) {
-            $validator->errors()->add('relation_target.entity_type', 'The relation target must be a custom-fieldable entity.');
-        }
-
-        if (! in_array($cardinality, ['one', 'many'], true)) {
-            $validator->errors()->add('relation_target.cardinality', 'The relation cardinality must be one or many.');
-        }
-
-        if (! is_string($forSelectResource) || $forSelectResource === '') {
-            $validator->errors()->add('relation_target.for_select_resource', 'The relation target requires a for_select_resource.');
-        }
+        return $this->has('relation_target');
     }
 
     /**

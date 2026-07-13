@@ -27,10 +27,8 @@ vi.mock('@/features/attributes/api', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 
-vi.mock('@/features/config/use-config', () => ({
-  useEnumOptions: () => [
-    { value: 'STRING', label: 'Text', color: null, icon: null, is_default: true, hidden_on_form: false },
-  ],
+vi.mock('@/features/custom-fields/use-custom-field-entities', () => ({
+  useCustomFieldEntities: () => ({ data: [], isLoading: false, isError: false }),
 }))
 
 const fetchResourceMetaMock = vi.fn<() => Promise<ResourceMeta>>()
@@ -87,7 +85,13 @@ function attribute(
     id: 3,
     code: 'weight',
     name: 'Weight',
-    data_type: 'STRING',
+    type: 'text',
+    description: null,
+    help_text: null,
+    placeholder: null,
+    icon: null,
+    config: null,
+    relation_target: null,
     options: [],
     created_at: '2026-01-01T00:00:00Z',
     permissions: permissionsWithNotes(),

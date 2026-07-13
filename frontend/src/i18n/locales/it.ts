@@ -36,6 +36,9 @@ export const it: TranslationResources = {
     confirmTitle: 'Sei sicuro?',
     yes: 'Sì',
     no: 'No',
+    back: 'Indietro',
+    edit: 'Modifica',
+    new: 'Nuovo',
   },
   config: {
     error: {

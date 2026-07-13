@@ -42,7 +42,7 @@ it('show: 200 with the full data shape', function () {
     $response = $this->getJson("/api/attributes/{$target->id}")
         ->assertOk()
         ->assertJsonPath('data.code', 'color')
-        ->assertJsonPath('data.data_type', 'ENUM');
+        ->assertJsonPath('data.type', 'enum');
 
     expect($response->json('data.options'))->toHaveCount(2);
     expect($response->json('permissions'))->toHaveKeys(['resource', 'fields', 'actions']);
@@ -67,50 +67,65 @@ it('show: 404 for a non-existent attribute', function () {
 // create — POST /api/attributes (AC-003)
 // ---------------------------------------------------------------------------
 
-it('create: 201 + persists a STRING attribute, ignoring any submitted options', function () {
+it('create: 201 + persists a text attribute, ignoring any submitted options', function () {
     $actor = attributeUserWith(['create']);
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/attributes', [
-        'code' => 'material', 'name' => 'Material', 'data_type' => 'STRING',
+        'code' => 'material', 'name' => 'Material', 'type' => 'text',
         'options' => [['value' => 'ignored', 'label' => 'Ignored']],
     ])->assertCreated()->assertJsonPath('data.code', 'material');
 
-    $this->assertDatabaseHas('attributes', ['code' => 'material', 'data_type' => 'STRING']);
+    $this->assertDatabaseHas('attributes', ['code' => 'material', 'type' => 'text']);
     expect(Attribute::where('code', 'material')->first()->options)->toBeEmpty();
 });
 
-it('create: ENUM without options → 422', function () {
-    $actor = attributeUserWith(['create']);
-    Sanctum::actingAs($actor);
-
-    $this->postJson('/api/attributes', ['code' => 'color', 'name' => 'Color', 'data_type' => 'ENUM'])
-        ->assertStatus(422)->assertJsonValidationErrors('options');
-});
-
-it('create: ENUM with valid options → 201, options persisted with unique values', function () {
+it('create: config is persisted and returned', function () {
     $actor = attributeUserWith(['create']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/attributes', [
-        'code' => 'color', 'name' => 'Color', 'data_type' => 'ENUM',
+        'code' => 'sla_hours', 'name' => 'SLA hours', 'type' => 'decimal',
+        'config' => ['min' => 0, 'decimals' => 2],
+    ])->assertCreated();
+
+    expect($response->json('data.config'))->toBe(['min' => 0, 'decimals' => 2]);
+    expect(Attribute::where('code', 'sla_hours')->first()->config)->toBe(['min' => 0, 'decimals' => 2]);
+});
+
+it('create: enum without options → 422', function () {
+    $actor = attributeUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/attributes', ['code' => 'color', 'name' => 'Color', 'type' => 'enum'])
+        ->assertStatus(422)->assertJsonValidationErrors('options');
+});
+
+it('create: enum with valid options → 201, options persisted with color/icon/is_default', function () {
+    $actor = attributeUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/attributes', [
+        'code' => 'color', 'name' => 'Color', 'type' => 'enum',
         'options' => [
-            ['value' => 'red', 'label' => 'Red'],
+            ['value' => 'red', 'label' => 'Red', 'color' => 'red', 'icon' => 'circle', 'is_default' => true],
             ['value' => 'blue', 'label' => 'Blue'],
         ],
     ])->assertCreated();
 
     expect($response->json('data.options'))->toHaveCount(2);
-    $this->assertDatabaseHas('attribute_options', ['value' => 'red']);
-    $this->assertDatabaseHas('attribute_options', ['value' => 'blue']);
+    $this->assertDatabaseHas('attribute_options', [
+        'value' => 'red', 'color' => 'red', 'icon' => 'circle', 'is_default' => true,
+    ]);
+    $this->assertDatabaseHas('attribute_options', ['value' => 'blue', 'is_default' => false]);
 });
 
-it('create: ENUM with duplicate option values → 422', function () {
+it('create: enum with duplicate option values → 422', function () {
     $actor = attributeUserWith(['create']);
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/attributes', [
-        'code' => 'color', 'name' => 'Color', 'data_type' => 'ENUM',
+        'code' => 'color', 'name' => 'Color', 'type' => 'enum',
         'options' => [
             ['value' => 'red', 'label' => 'Red'],
             ['value' => 'red', 'label' => 'Red again'],
@@ -118,23 +133,46 @@ it('create: ENUM with duplicate option values → 422', function () {
     ])->assertStatus(422)->assertJsonValidationErrors('options');
 });
 
+it('create: relation without a valid relation_target → 422', function () {
+    $actor = attributeUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/attributes', ['code' => 'referent', 'name' => 'Referent', 'type' => 'relation'])
+        ->assertStatus(422)->assertJsonValidationErrors('relation_target');
+
+    $this->postJson('/api/attributes', [
+        'code' => 'referent', 'name' => 'Referent', 'type' => 'relation',
+        'relation_target' => ['entity_type' => 'not-a-domain', 'cardinality' => 'one', 'for_select_resource' => 'referents'],
+    ])->assertStatus(422)->assertJsonValidationErrors('relation_target.entity_type');
+});
+
+it('create: relation with a valid relation_target → 201', function () {
+    $actor = attributeUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/attributes', [
+        'code' => 'referent', 'name' => 'Referent', 'type' => 'relation',
+        'relation_target' => ['entity_type' => 'referents', 'cardinality' => 'one', 'for_select_resource' => 'referents'],
+    ])->assertCreated()->assertJsonPath('data.relation_target.entity_type', 'referents');
+});
+
 it('create: 403 without attributes.create', function () {
     $actor = attributeUserWith([]);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/attributes', ['code' => 'x', 'name' => 'X', 'data_type' => 'STRING'])->assertForbidden();
+    $this->postJson('/api/attributes', ['code' => 'x', 'name' => 'X', 'type' => 'text'])->assertForbidden();
 });
 
-it('create: 422 on duplicate code / invalid data_type', function () {
+it('create: 422 on duplicate code / invalid type', function () {
     $actor = attributeUserWith(['create']);
     Attribute::factory()->create(['code' => 'existing']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/attributes', ['code' => 'existing', 'name' => 'Dup', 'data_type' => 'STRING'])
+    $this->postJson('/api/attributes', ['code' => 'existing', 'name' => 'Dup', 'type' => 'text'])
         ->assertStatus(422)->assertJsonValidationErrors('code');
 
-    $this->postJson('/api/attributes', ['code' => 'new_code', 'name' => 'X', 'data_type' => 'NOT_A_TYPE'])
-        ->assertStatus(422)->assertJsonValidationErrors('data_type');
+    $this->postJson('/api/attributes', ['code' => 'new_code', 'name' => 'X', 'type' => 'not_a_type'])
+        ->assertStatus(422)->assertJsonValidationErrors('type');
 });
 
 // ---------------------------------------------------------------------------
@@ -162,6 +200,15 @@ it('update: 403 without attributes.update', function () {
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/attributes/{$target->id}", ['name' => 'Nope'])->assertForbidden();
+});
+
+it('update: type not a registered FieldTypeRegistry key → 422', function () {
+    $actor = attributeUserWith(['update']);
+    $target = Attribute::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/attributes/{$target->id}", ['type' => 'not_a_type'])
+        ->assertStatus(422)->assertJsonValidationErrors('type');
 });
 
 // ---------------------------------------------------------------------------

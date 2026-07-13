@@ -12,32 +12,35 @@ import {
   SidebarProvider,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { BreadcrumbTitleProvider } from '@/routes/breadcrumb-title'
 import { cn } from '@/lib/utils'
 
 export function AppLayout() {
   const { user } = useAuth()
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="relative flex h-12 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
-          <SidebarSeamToggle />
-          <div className="ml-auto flex items-center gap-0.5">
-            <NotificationBell />
-            <ThemeToggle />
-            <Separator
-              orientation="vertical"
-              className="mx-1 bg-sidebar-border data-[orientation=vertical]:h-5"
-            />
-            {user && <NavUserHeader user={user} />}
-          </div>
-        </header>
-        <main className="flex flex-1 flex-col gap-4 p-4">
-          <Outlet />
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <BreadcrumbTitleProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <header className="relative flex h-12 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground">
+            <SidebarSeamToggle />
+            <div className="ml-auto flex items-center gap-0.5">
+              <NotificationBell />
+              <ThemeToggle />
+              <Separator
+                orientation="vertical"
+                className="mx-1 bg-sidebar-border data-[orientation=vertical]:h-5"
+              />
+              {user && <NavUserHeader user={user} />}
+            </div>
+          </header>
+          <main className="flex flex-1 flex-col gap-4 p-4">
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </BreadcrumbTitleProvider>
   )
 }
 

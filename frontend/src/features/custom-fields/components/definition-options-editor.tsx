@@ -8,21 +8,21 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { blankCustomFieldOption } from '@/features/custom-fields/use-custom-field-definition-form'
-import type { CustomFieldDefinitionFormValues } from '@/features/custom-fields/custom-field-definition-schema'
+import { blankFieldDefinitionOption } from '@/features/custom-fields/field-definition-defaults'
+import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 
 interface DefinitionOptionsEditorProps {
-  control: Control<CustomFieldDefinitionFormValues>
+  control: Control<FieldDefinitionFormValues>
   /** The `options` array's own cross-field error (enum-requires-options / unique values), attached by `superRefine`. */
   optionsError?: string
 }
 
 /**
- * ENUM-only options editor (spec AC-025): add/remove rows of
+ * ENUM-only options editor (spec 0017/0021 AC-025), shared by the custom
+ * field definition form AND the attribute form: add/remove rows of
  * value/label/color/icon/is_default. Shown/hidden purely by the selected
- * `type` (see `CustomFieldDefinitionFormBody`), not metadata-gated — it is
- * part of the `type`/`options` field pair, mirroring `AttributeFormBody`'s
- * ENUM options editor.
+ * `type` (see the host form body), not metadata-gated — it is part of the
+ * `type`/`options` field pair.
  */
 export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOptionsEditorProps) {
   const { t } = useTranslation()
@@ -34,7 +34,7 @@ export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOpt
       title={t('customFields.form.sections.options.title')}
       description={t('customFields.form.sections.options.description')}
       aside={
-        <Button type="button" variant="outline" size="sm" onClick={() => append(blankCustomFieldOption())}>
+        <Button type="button" variant="outline" size="sm" onClick={() => append(blankFieldDefinitionOption())}>
           <Plus aria-hidden="true" />
           {t('customFields.form.addOption')}
         </Button>

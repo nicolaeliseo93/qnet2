@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\AttributeType;
 use App\Models\Attribute;
 use App\Models\AttributeOption;
 use App\Models\Product;
@@ -11,14 +10,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-it('seeds attributes of all 5 data types, ENUM ones carrying options', function () {
+it('seeds attributes of all 5 field types, ENUM ones carrying options', function () {
     $this->seed(DemoProductCatalogSeeder::class);
 
-    $types = Attribute::pluck('data_type')->unique()->values()->all();
-    expect($types)->toEqualCanonicalizing(AttributeType::cases());
+    $types = Attribute::pluck('type')->unique()->values()->all();
+    expect($types)->toEqualCanonicalizing(['text', 'integer', 'decimal', 'boolean', 'enum']);
 
     $deliveryMode = Attribute::where('code', 'delivery_mode')->firstOrFail();
-    expect($deliveryMode->data_type)->toBe(AttributeType::Enum);
+    expect($deliveryMode->type)->toBe('enum');
     expect($deliveryMode->options)->toHaveCount(3);
 });
 

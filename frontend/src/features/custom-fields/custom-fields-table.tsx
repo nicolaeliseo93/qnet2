@@ -144,7 +144,7 @@ export function CustomFieldsTable() {
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>
-        <SheetContent className="gap-0 sm:max-w-2xl">
+        <SheetContent className="gap-0" storageKey={`sheet-width:${CUSTOM_FIELDS_DOMAIN}`}>
           {sheet.kind === 'view' && (
             <>
               <SheetHeader className="sr-only">

@@ -2,27 +2,29 @@
 
 namespace App\Http\Requests\Attributes;
 
+use App\CustomFields\FieldTypeRegistry;
 use App\DataObjects\Attributes\CreateAttributeData;
-use App\Enums\AttributeType;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Http\Requests\Concerns\ValidatesFieldTypeDefinition;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Validates the payload for POST /api/attributes (spec 0017).
- *
- * Authorization is intentionally NOT handled here (it stays in the controller
- * via authorize('create', Attribute::class)). `options` is required and
- * non-empty ONLY when data_type is ENUM (AC-003); it is silently ignored by
- * the Service for every other data type. EnforcesFieldPermissions (spec 0004)
- * additionally rejects any submitted field the actor cannot edit (create
- * context, model = null).
+ * Validates the payload for POST /api/attributes (spec 0017, aligned to the
+ * custom fields' presentation shape — spec 0021, AC-003). Authorization is
+ * intentionally NOT handled here (it stays in the controller via
+ * authorize('create', Attribute::class)). `options` is required and
+ * non-empty ONLY when type=enum; `relation_target` is required/valid ONLY
+ * when type=relation — enforced by the shared ValidatesFieldTypeDefinition
+ * concern (also used by the `custom-fields` requests). EnforcesFieldPermissions
+ * (spec 0004) additionally rejects any submitted field the actor cannot edit
+ * (create context, model = null).
  */
 class StoreAttributeRequest extends FormRequest
 {
-    use EnforcesFieldPermissions;
+    use EnforcesFieldPermissions, ValidatesFieldTypeDefinition;
 
     public function authorize(): bool
     {
@@ -38,11 +40,20 @@ class StoreAttributeRequest extends FormRequest
         return [
             'code' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9_]+$/', Rule::unique('attributes', 'code')],
             'name' => ['required', 'string', 'max:191'],
-            'data_type' => ['required', Rule::enum(AttributeType::class)],
+            'type' => ['required', 'string', Rule::in(app(FieldTypeRegistry::class)->all())],
+            'description' => ['nullable', 'string'],
+            'help_text' => ['nullable', 'string'],
+            'placeholder' => ['nullable', 'string', 'max:191'],
+            'icon' => ['nullable', 'string', 'max:191'],
+            'config' => ['nullable', 'array'],
+            'relation_target' => ['nullable', 'array'],
             'options' => ['sometimes', 'array'],
             'options.*.value' => ['required', 'string', 'max:191'],
             'options.*.label' => ['required', 'string', 'max:191'],
+            'options.*.color' => ['nullable', 'string', 'max:32'],
+            'options.*.icon' => ['nullable', 'string', 'max:191'],
             'options.*.sort_order' => ['sometimes', 'integer'],
+            'options.*.is_default' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -51,32 +62,8 @@ class StoreAttributeRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $this->enforceFieldPermissions($validator);
             $this->validateEnumOptions($validator);
+            $this->validateRelationTarget($validator);
         });
-    }
-
-    /**
-     * ENUM requires at least one option, each with a unique `value`; every
-     * other data type ignores a submitted `options` key entirely (AC-003).
-     */
-    private function validateEnumOptions(Validator $validator): void
-    {
-        if ($this->input('data_type') !== AttributeType::Enum->value) {
-            return;
-        }
-
-        $options = $this->input('options', []);
-
-        if (! is_array($options) || $options === []) {
-            $validator->errors()->add('options', 'At least one option is required for an ENUM attribute.');
-
-            return;
-        }
-
-        $values = array_column($options, 'value');
-
-        if (count($values) !== count(array_unique($values))) {
-            $validator->errors()->add('options', 'Option values must be unique.');
-        }
     }
 
     protected function authorizationResource(): string

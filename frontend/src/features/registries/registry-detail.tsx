@@ -47,7 +47,7 @@ interface RegistryDetailViewProps {
 /**
  * Read-only detail of a single registry, fetched fresh from the
  * (re-authorized) detail endpoint. Composed from the shared detail kit;
- * rendered inside a Sheet. Contacts/addresses reuse the same managers as the
+ * rendered by the dedicated detail page. Contacts/addresses reuse the same managers as the
  * form (in read-only mode) so the card content never diverges from what the
  * edit form would show (spec 0020).
  */

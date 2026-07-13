@@ -32,7 +32,7 @@ class ProductCategoryResource extends JsonResource
                 'attribute_id' => $attribute->id,
                 'code' => $attribute->code,
                 'name' => $attribute->name,
-                'data_type' => $attribute->data_type,
+                'type' => $attribute->type,
                 'is_required' => (bool) $attribute->pivot->is_required,
                 'sort_order' => (int) $attribute->pivot->sort_order,
             ])->all(),

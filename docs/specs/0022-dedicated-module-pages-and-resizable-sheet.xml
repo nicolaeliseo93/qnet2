@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0022 — (A) Pagine dedicate per registries / referents / products
+              (B) Sheet ridimensionabile in larghezza con persistenza per-modale.
+
+  Decisioni utente approvate (AskUserQuestion, 2026-07-13):
+  - A: create/detail/edit dei tre moduli vanno TUTTI su pagina. Lo Sheet sparisce da questi
+    tre moduli (nessun ibrido pagina+modale).
+  - B: persistenza della larghezza in localStorage, con chiave PER-MODALE (non condivisa).
+  - B: solo LARGHEZZA, solo il componente Sheet. Dialog e AlertDialog restano invariati.
+
+  Grounding verificato sul repo (nomi reali, non ipotizzati):
+  - Nessuna route con parametro `:id` esiste oggi in `frontend/src/routes/router.tsx`:
+    la convenzione detail-page va creata ex-novo qui.
+  - `*-detail.tsx` dei tre moduli sono gia' componenti presentational PURI (prop = detail,
+    nessun fetch interno) -> riusabili tali e quali in pagina.
+  - `api.ts::fetchRegistry|fetchReferent|fetchProduct(id)` ritorna gia' `{...data, permissions}`.
+  - `components/ui/sheet.tsx` HA GIA' il resize + persistenza, ma e' neutralizzato:
+    (1) i consumer passano `sm:max-w-2xl`, un max-width CSS che vince sulla width inline;
+    (2) nessuno passa `storageKey` -> tutti i sheet condividono `sheet-width-right`.
+  - BACKEND: nessuna modifica. Il contratto `show` (envelope {success,message,data,permissions}
+    + `custom_fields` iniettati da BaseApiController::withCustomFields) e' gia' sufficiente.
+-->
+<spec id="0022-dedicated-module-pages-and-resizable-sheet" status="approved" owner="frontend" date="2026-07-13">
+
+  <goal>
+    A) I moduli registries (anagrafica), referents (referente) e products (prodotti) espongono
+       pagine dedicate per creazione, dettaglio e modifica, al posto dello Sheet.
+    B) Lo Sheet (usato dai moduli restanti) e' ridimensionabile in larghezza tramite drag, e la
+       larghezza scelta viene ricordata separatamente per ciascuna modale.
+  </goal>
+
+  <!-- =========================== PARTE A =========================== -->
+  <part id="A" title="Pagine dedicate">
+
+    <routes>
+      <!-- In `frontend/src/routes/router.tsx`, dentro ProtectedRoute > AppLayout, tutte lazy.
+           React Router classifica i segmenti statici prima dei dinamici: `new` non collide con `:id`. -->
+      <route path="registries" element="RegistriesPage" note="esistente, invariato" />
+      <route path="registries/new" element="RegistryFormPage" />
+      <route path="registries/:id" element="RegistryDetailPage" />
+      <route path="registries/:id/edit" element="RegistryFormPage" />
+      <!-- idem per: referents/* e products/* -->
+    </routes>
+
+    <files>
+      <new path="frontend/src/pages/registry-detail-page.tsx" />
+      <new path="frontend/src/pages/registry-form-page.tsx" note="serve sia /new sia /:id/edit; il mode deriva da useParams().id" />
+      <new path="frontend/src/pages/referent-detail-page.tsx" />
+      <new path="frontend/src/pages/referent-form-page.tsx" />
+      <new path="frontend/src/pages/product-detail-page.tsx" />
+      <new path="frontend/src/pages/product-form-page.tsx" />
+      <new path="frontend/src/routes/breadcrumb-title.tsx" note="override del titolo dell'ultimo crumb" />
+      <edit path="frontend/src/routes/router.tsx" />
+      <edit path="frontend/src/routes/breadcrumbs.tsx" />
+      <edit path="frontend/src/layouts/app-layout.tsx" note="monta BreadcrumbTitleProvider" />
+      <edit path="frontend/src/features/registries/registries-table.tsx" note="rimuove Sheet + loader, naviga" />
+      <edit path="frontend/src/features/referents/referents-table.tsx" />
+      <edit path="frontend/src/features/products/products-table.tsx" />
+      <edit path="frontend/src/i18n/locales/{it,en}-{registries,referents,products}.ts" />
+    </files>
+
+    <behavior>
+      <item id="AC-A1">Dalla griglia: row-action `view` -> `navigate('/registries/{id}')`; `edit` ->
+        `navigate('/registries/{id}/edit')`; bottone "Nuovo" nel PageHeader -> `navigate('/registries/new')`.
+        La delete resta dov'e' (esecuzione diretta + toast + refresh griglia): NON cambia.</item>
+      <item id="AC-A2">Detail page: legge `id` da `useParams`, id non numerico -> `<NotFoundPage/>` o
+        redirect alla lista. Fetch con `useEntityDetail(['registries','detail',id], () => fetchRegistry(id))`
+        (stesso query key di oggi, fresh-on-open preservato). Stati: `DetailLoading` / `DetailError`
+        (kit `components/detail/detail-panel.tsx`). Contenuto = `<RegistryDetailView registry={...}/>`
+        invariato. PageHeader con azioni: "Modifica" (gated dal blocco `permissions` della risposta,
+        non da una permission statica) e ritorno alla lista.</item>
+      <item id="AC-A3">Form page: senza `id` -> `mode={{type:'create'}}`; con `id` -> fetch detail fresco e
+        `mode={{type:'edit', registry}}`. `onSuccess(entity)` -> invalidate del detail query key +
+        `navigate('/registries/{entity.id}')`. `onCancel` -> torna al dettaglio (edit) o alla lista (create).
+        `<RegistryForm>` / `use-registry-form` / payload builder / custom fields: INVARIATI, riusati as-is.</item>
+      <item id="AC-A4">Gating: la pagina create resta dietro `<Can permission="registries.create">`,
+        la edit dietro il permesso di update; una risposta 403/404 dal detail mostra il messaggio di
+        errore, mai una pagina bianca. L'UI nasconde, il backend autorizza (nessuna modifica backend).</item>
+      <item id="AC-A5">Breadcrumb: `/registries/12` mostra "Anagrafiche / &lt;nome entita'&gt;", non l'id grezzo.
+        Meccanismo minimo: `BreadcrumbTitleProvider` (montato in AppLayout) + hook
+        `useBreadcrumbTitle(label)` chiamato dalle pagine detail/edit/create; `AppBreadcrumbs` e
+        `AppPageTitle` usano l'override sull'ULTIMO crumb quando presente. Aggiungere inoltre
+        `referents: 'navigation.referents'` a `SEGMENT_LABELS` (oggi manca) e le voci per `new`/`edit`.</item>
+      <item id="AC-A6">Zero dead code: `SheetState`, `ViewXLoader`, `EditXLoader` e gli import di Sheet
+        spariscono dai tre `*-table.tsx`. Nessun altro modulo viene toccato.</item>
+    </behavior>
+  </part>
+
+  <!-- =========================== PARTE B =========================== -->
+  <part id="B" title="Sheet ridimensionabile con larghezza persistita">
+    <files>
+      <edit path="frontend/src/components/ui/sheet.tsx" />
+      <edit path="frontend/src/components/ui/sidebar.tsx" note="lo Sheet mobile deve passare resizable={false}" />
+      <edit path="frontend/src/features/**/*-table.tsx" note="i 13 consumer RESTANTI (esclusi registries/referents/products, di proprieta' della Parte A)" />
+      <edit path="frontend/src/features/{imports,migrations,exports}/*-dialog.tsx" />
+      <new path="frontend/src/components/ui/sheet.test.tsx" />
+    </files>
+
+    <behavior>
+      <item id="AC-B1">Il drag dell'handle ridimensiona davvero lo Sheet fino a 95vw: il cap
+        `sm:max-w-2xl` va RIMOSSO da ogni consumer (oggi vince sulla width inline e blocca il drag a 672px).
+        La larghezza di partenza attuale si preserva via `defaultWidth`, non via classe CSS.</item>
+      <item id="AC-B2">Ogni modale ricorda la PROPRIA larghezza: ogni consumer passa uno `storageKey`
+        distinto e stabile (convenzione: `sheet-width:&lt;domain&gt;`, es. `sheet-width:users`).
+        Ridimensionare lo Sheet di Users non deve piu' alterare quello di Products.</item>
+      <item id="AC-B3">La larghezza persiste in `localStorage`, viene riletta e ri-clampata all'apertura
+        successiva e al resize della finestra. La scrittura avviene al COMMIT del drag (pointerup /
+        doppio click di reset), non a ogni frame di mousemove.</item>
+      <item id="AC-B4">Handle accessibile: `role="separator"` con `tabIndex`, `aria-valuenow/min/max`,
+        frecce sinistra/destra per regolare la larghezza da tastiera; supporto pointer events (non solo mouse).</item>
+      <item id="AC-B5">Lo Sheet mobile della sidebar (`components/ui/sidebar.tsx`) passa `resizable={false}`:
+        oggi eredita il default `true` e sporca la chiave condivisa.</item>
+      <item id="AC-B6">Il DOM interno di `SheetContent` mantiene `data-slot="sheet-content"`: i portal di
+        `searchable-select.tsx` e `icon-picker.tsx` fanno lookup su quel selettore.</item>
+    </behavior>
+  </part>
+
+  <non-goals>
+    <item>Nessuna modifica backend (rotte, controller, resource, policy, migration).</item>
+    <item>Dialog e AlertDialog restano a larghezza fissa. Nessun resize verticale.</item>
+    <item>Nessuna nuova dipendenza npm. Nessuna persistenza server-side della larghezza.</item>
+    <item>Il contenuto dei `*-detail.tsx` e dei form non cambia (ProductResource continua a non idratare
+      i valori EAV: parita' con il comportamento odierno, gap noto e fuori scope).</item>
+  </non-goals>
+
+  <definition-of-done>
+    Vitest verde (test aggiornati per i tre moduli + nuovo `sheet.test.tsx`), `tsc --noEmit` pulito,
+    ESLint pulito, zero dead code, verificato a 375/768/1024px.
+  </definition-of-done>
+</spec>

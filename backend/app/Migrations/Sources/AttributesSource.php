@@ -12,14 +12,16 @@ use App\Services\AttributeService;
 use RuntimeException;
 
 /**
- * `attributes` migration source (spec 0013 / 0017): the global attribute
- * catalogue (id, code, name, data_type) created through AttributeService. A
- * phase-1 anchor: the attribute owns its ENUM option list (attribute_options),
- * imported in the same row via the CreateAttributeData `options` payload — an
- * ENUM attribute without options is rejected by the Service and isolated as a
- * failed row. The category/attribute pivot (attribute_category) is NOT
- * carried here (mirrors TagsSource: the import creates only the entity itself).
- * Re-import is idempotent (skip by old_id); `code` is unique.
+ * `attributes` migration source (spec 0013 / 0017, aligned to the custom
+ * fields' presentation shape — spec 0021): the global attribute catalogue
+ * (id, code, name, type) created through AttributeService. A phase-1 anchor:
+ * the attribute owns its ENUM option list (attribute_options), imported in
+ * the same row via the CreateAttributeData `options` payload — an ENUM
+ * attribute without options, or an unrecognized `type`, is rejected by the
+ * Service and isolated as a failed row. The category/attribute pivot
+ * (attribute_category) is NOT carried here (mirrors TagsSource: the import
+ * creates only the entity itself). Re-import is idempotent (skip by old_id);
+ * `code` is unique.
  */
 class AttributesSource extends AbstractMigrationSource
 {
@@ -49,7 +51,7 @@ class AttributesSource extends AbstractMigrationSource
             ['id' => 'id', 'label' => 'ID', 'type' => 'number'],
             ['id' => 'code', 'label' => 'Code', 'type' => 'string'],
             ['id' => 'name', 'label' => 'Name', 'type' => 'string'],
-            ['id' => 'data_type', 'label' => 'Data type', 'type' => 'string'],
+            ['id' => 'type', 'label' => 'Type', 'type' => 'string'],
         ];
     }
 
@@ -73,7 +75,7 @@ class AttributesSource extends AbstractMigrationSource
             'id' => $record['id'] ?? null,
             'code' => $record['code'] ?? null,
             'name' => $record['name'] ?? null,
-            'data_type' => $record['data_type'] ?? null,
+            'type' => $record['type'] ?? null,
         ];
     }
 
@@ -101,16 +103,16 @@ class AttributesSource extends AbstractMigrationSource
             throw new RuntimeException('name is required.');
         }
 
-        $dataType = trim((string) ($record['data_type'] ?? ''));
+        $type = trim((string) ($record['type'] ?? ''));
 
-        if ($dataType === '') {
-            throw new RuntimeException('data_type is required.');
+        if ($type === '') {
+            throw new RuntimeException('type is required.');
         }
 
         $attribute = $this->service->create(new CreateAttributeData(
             code: $code,
             name: $name,
-            dataType: $dataType,
+            type: $type,
             options: $this->mapOptions($record),
         ));
 

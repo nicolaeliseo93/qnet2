@@ -13,6 +13,9 @@ import { useMigrationImport } from '@/features/migrations/use-migration-import'
 import { MigrationImportStart } from '@/features/migrations/migration-import-start'
 import { MigrationImportProgress } from '@/features/migrations/migration-import-progress'
 
+/** Narrow wizard: the sheet opens at this width until the user resizes it. */
+const IMPORT_SHEET_DEFAULT_WIDTH = 512
+
 export interface ImportDialogProps {
   /** Source key that selects the backend `MigrationSource` (`/migrations/{source}`). */
   source: string
@@ -41,7 +44,11 @@ export function ImportDialog({ source, sourceLabel, open, onOpenChange }: Import
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent className="gap-0 sm:max-w-lg">
+      <SheetContent
+        className="gap-0"
+        defaultWidth={IMPORT_SHEET_DEFAULT_WIDTH}
+        storageKey="sheet-width:migrations"
+      >
         <SheetHeader>
           <SheetTitle>{t('import.title', { source: sourceLabel })}</SheetTitle>
           <SheetDescription>{t('import.subtitle')}</SheetDescription>

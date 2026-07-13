@@ -14,12 +14,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useAttributeCatalog } from '@/features/attributes/use-attribute-catalog'
-import { enumLabelOf } from '@/features/config/enum-label'
+import { FIELD_TYPE_ICONS } from '@/features/custom-fields/field-type-icons'
+import type { CustomFieldType } from '@/features/custom-fields/types'
 import type {
   AttributeAssignmentInput,
   ProductCategoryInheritedAttribute,
 } from '@/features/product-categories/types'
-import type { AttributeDataType } from '@/features/attributes/types'
 
 interface AttributeAssignmentEditorProps {
   value: AttributeAssignmentInput[]
@@ -59,17 +59,20 @@ function InfoTooltip({ label }: InfoTooltipProps) {
 }
 
 interface DataTypeBadgeProps {
-  dataType: AttributeDataType
+  type: CustomFieldType
+  label: string
   description: string
 }
 
-/** The attribute's data-type badge, with a tooltip describing what that type means for the product form. */
-function DataTypeBadge({ dataType, description }: DataTypeBadgeProps) {
+/** The attribute's type badge (glyph + label, shared with the custom fields catalogue), with a tooltip describing what that type means for the product form. */
+function DataTypeBadge({ type, label, description }: DataTypeBadgeProps) {
+  const Icon = FIELD_TYPE_ICONS[type]
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge variant="secondary" className="cursor-default text-xs" tabIndex={0}>
-          {enumLabelOf('attribute_type', dataType)}
+        <Badge variant="secondary" className="cursor-default gap-1 text-xs" tabIndex={0}>
+          <Icon className="size-3.5" aria-hidden="true" />
+          {label}
         </Badge>
       </TooltipTrigger>
       <TooltipContent side="top" variant="light" className="max-w-56">
@@ -166,8 +169,9 @@ export function AttributeAssignmentEditor({
                   </span>
                   {attribute ? (
                     <DataTypeBadge
-                      dataType={attribute.data_type}
-                      description={t(`productCategories.form.dataTypeDescription.${attribute.data_type}`)}
+                      type={attribute.type}
+                      label={t(`customFields.types.${attribute.type}`)}
+                      description={t(`customFields.typeInfo.${attribute.type}.desc`)}
                     />
                   ) : (
                     <Badge variant="secondary" className="text-xs">
@@ -224,22 +228,26 @@ export function AttributeAssignmentEditor({
               {t('productCategories.form.inheritedAttributes')}
             </p>
             <ul className="flex flex-col gap-1.5">
-              {inherited.map((attribute) => (
-                <li
-                  key={attribute.attribute_id}
-                  className="flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5 text-sm text-muted-foreground"
-                >
-                  <span className="min-w-0 flex-1 truncate">{attribute.name}</span>
-                  <Badge variant="outline" className="text-xs">
-                    {enumLabelOf('attribute_type', attribute.data_type)}
-                  </Badge>
-                  {attribute.is_required && (
-                    <Badge variant="outline" className="text-xs">
-                      {t('productCategories.form.isRequired')}
+              {inherited.map((attribute) => {
+                const InheritedIcon = FIELD_TYPE_ICONS[attribute.type]
+                return (
+                  <li
+                    key={attribute.attribute_id}
+                    className="flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5 text-sm text-muted-foreground"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{attribute.name}</span>
+                    <Badge variant="outline" className="gap-1 text-xs">
+                      <InheritedIcon className="size-3.5" aria-hidden="true" />
+                      {t(`customFields.types.${attribute.type}`)}
                     </Badge>
-                  )}
-                </li>
-              ))}
+                    {attribute.is_required && (
+                      <Badge variant="outline" className="text-xs">
+                        {t('productCategories.form.isRequired')}
+                      </Badge>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )}

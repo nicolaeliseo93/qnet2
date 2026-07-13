@@ -14,8 +14,8 @@ use Illuminate\Support\Collection;
 
 /**
  * Seed a rich, illustrative SERVICE catalogue (spec 0017) from the
- * declarative taxonomy in ProductCatalogTaxonomy: attributes of all 5 data
- * types (ENUM ones with their options), a two-root category tree exercising
+ * declarative taxonomy in ProductCatalogTaxonomy: attributes of 5 field
+ * types (enum ones with their options), a two-root category tree exercising
  * multi-level inheritance AND attribute reuse (`delivery_mode` assigned to
  * both roots, never duplicated), and demo services — for leaf categories and
  * one intermediate one — carrying only their generic fields (a product holds
@@ -45,7 +45,7 @@ class DemoProductCatalogSeeder extends Seeder
             /** @var Attribute $attribute */
             $attribute = Attribute::firstOrCreate(
                 ['code' => $code],
-                ['name' => $definition['name'], 'data_type' => $definition['type']],
+                ['name' => $definition['name'], 'type' => $definition['type']],
             );
 
             foreach ($definition['options'] ?? [] as $index => $value) {

@@ -6,6 +6,7 @@ use App\CustomFields\CustomFieldEntityRegistry;
 use App\CustomFields\FieldTypeRegistry;
 use App\DataObjects\CustomFields\CreateCustomFieldData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Http\Requests\Concerns\ValidatesFieldTypeDefinition;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
@@ -16,13 +17,15 @@ use Illuminate\Validation\Rule;
  * DEFINIZIONI, AC-018). Authorization is intentionally NOT handled here (it
  * stays in the controller via authorize('create', CustomFieldDefinition::class)).
  * `options` is required/non-empty ONLY when type=enum; `relation_target` is
- * required/valid ONLY when type=relation. EnforcesFieldPermissions (spec
- * 0004) additionally rejects any submitted field the actor cannot edit
- * (create context, model = null).
+ * required/valid ONLY when type=relation — enforced by the shared
+ * ValidatesFieldTypeDefinition concern (also used by the `attributes`
+ * requests, spec 0017 alignment). EnforcesFieldPermissions (spec 0004)
+ * additionally rejects any submitted field the actor cannot edit (create
+ * context, model = null).
  */
 class StoreCustomFieldRequest extends FormRequest
 {
-    use EnforcesFieldPermissions;
+    use EnforcesFieldPermissions, ValidatesFieldTypeDefinition;
 
     public function authorize(): bool
     {
@@ -73,65 +76,6 @@ class StoreCustomFieldRequest extends FormRequest
             $this->validateEnumOptions($validator);
             $this->validateRelationTarget($validator);
         });
-    }
-
-    /**
-     * ENUM requires at least one option, each with a unique `value` (AC-018).
-     */
-    private function validateEnumOptions(Validator $validator): void
-    {
-        if ($this->input('type') !== 'enum') {
-            return;
-        }
-
-        $options = $this->input('options', []);
-
-        if (! is_array($options) || $options === []) {
-            $validator->errors()->add('options', 'At least one option is required for an ENUM field.');
-
-            return;
-        }
-
-        $values = array_column($options, 'value');
-
-        if (count($values) !== count(array_unique($values))) {
-            $validator->errors()->add('options', 'Option values must be unique.');
-        }
-    }
-
-    /**
-     * RELATION requires a valid relation_target: a custom-fieldable
-     * entity_type, a one|many cardinality and a for_select_resource (AC-018).
-     */
-    private function validateRelationTarget(Validator $validator): void
-    {
-        if ($this->input('type') !== 'relation') {
-            return;
-        }
-
-        $target = $this->input('relation_target');
-
-        if (! is_array($target)) {
-            $validator->errors()->add('relation_target', 'A relation field requires a relation_target.');
-
-            return;
-        }
-
-        $entityType = $target['entity_type'] ?? null;
-        $cardinality = $target['cardinality'] ?? null;
-        $forSelectResource = $target['for_select_resource'] ?? null;
-
-        if (! is_string($entityType) || ! app(CustomFieldEntityRegistry::class)->isCustomFieldable($entityType)) {
-            $validator->errors()->add('relation_target.entity_type', 'The relation target must be a custom-fieldable entity.');
-        }
-
-        if (! in_array($cardinality, ['one', 'many'], true)) {
-            $validator->errors()->add('relation_target.cardinality', 'The relation cardinality must be one or many.');
-        }
-
-        if (! is_string($forSelectResource) || $forSelectResource === '') {
-            $validator->errors()->add('relation_target.for_select_resource', 'The relation target requires a for_select_resource.');
-        }
     }
 
     /**

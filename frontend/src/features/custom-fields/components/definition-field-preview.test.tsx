@@ -54,7 +54,13 @@ function baseValues(
 
 function Harness({ values }: { values: CustomFieldDefinitionFormValues }) {
   const form = useForm<CustomFieldDefinitionFormValues>({ defaultValues: values })
-  return <DefinitionFieldPreview control={form.control} />
+  return (
+    <DefinitionFieldPreview
+      control={form.control}
+      label={values.label}
+      required={values.validation.required}
+    />
+  )
 }
 
 beforeAll(async () => {

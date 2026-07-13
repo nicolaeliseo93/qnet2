@@ -11,11 +11,27 @@ import {
 } from '@/components/detail/detail-panel'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import { enumLabelOf } from '@/features/config/enum-label'
-import type { ProductCategoryDetail } from '@/features/product-categories/types'
+import { FIELD_TYPE_ICONS } from '@/features/custom-fields/field-type-icons'
+import type { ProductCategoryAttributeAssignment, ProductCategoryDetail, ProductCategoryInheritedAttribute } from '@/features/product-categories/types'
 
 interface ProductCategoryDetailViewProps {
   category: ProductCategoryDetail
+}
+
+interface AttributeTypeBadgeProps {
+  attribute: ProductCategoryAttributeAssignment | ProductCategoryInheritedAttribute
+}
+
+/** The assigned attribute's type glyph + label (shared with the custom fields catalogue). */
+function AttributeTypeBadge({ attribute }: AttributeTypeBadgeProps) {
+  const { t } = useTranslation()
+  const Icon = FIELD_TYPE_ICONS[attribute.type]
+  return (
+    <Badge variant="outline" className="gap-1 text-xs">
+      <Icon className="size-3.5" aria-hidden="true" />
+      {t(`customFields.types.${attribute.type}`)}
+    </Badge>
+  )
 }
 
 /**
@@ -51,9 +67,7 @@ export function ProductCategoryDetailView({ category }: ProductCategoryDetailVie
           <ul className="flex flex-col gap-1.5">
             {category.attributes.map((attribute) => (
               <li key={attribute.attribute_id} className="flex items-center gap-2 text-sm">
-                <Badge variant="outline" className="text-xs">
-                  {enumLabelOf('attribute_type', attribute.data_type)}
-                </Badge>
+                <AttributeTypeBadge attribute={attribute} />
                 <span className="text-foreground">{attribute.name}</span>
                 {attribute.is_required && (
                   <Badge variant="outline" className="text-xs">
@@ -74,9 +88,7 @@ export function ProductCategoryDetailView({ category }: ProductCategoryDetailVie
                 key={attribute.attribute_id}
                 className="flex items-center gap-2 text-sm text-muted-foreground"
               >
-                <Badge variant="outline" className="text-xs">
-                  {enumLabelOf('attribute_type', attribute.data_type)}
-                </Badge>
+                <AttributeTypeBadge attribute={attribute} />
                 <span>{attribute.name}</span>
               </li>
             ))}

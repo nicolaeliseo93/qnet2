@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\AttributeType;
 use App\Models\Abstracts\BaseModel;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\AttributeFactory;
@@ -12,11 +11,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Global, reusable dynamic-attribute catalogue entry (spec 0017): a typed
- * field (STRING/INTEGER/DECIMAL/BOOLEAN/ENUM) assignable to any number of
- * product categories via the `attribute_category` pivot.
+ * Global, reusable dynamic-attribute catalogue entry (spec 0017, aligned to
+ * the custom fields' presentation shape — spec 0021): a typed field (`type`
+ * is one of App\CustomFields\FieldTypeRegistry's keys) assignable to any
+ * number of product categories via the `attribute_category` pivot.
  */
-#[Fillable(['code', 'name', 'data_type'])]
+#[Fillable([
+    'code', 'name', 'type', 'description', 'help_text', 'placeholder', 'icon',
+    'config', 'relation_target',
+])]
 class Attribute extends BaseModel
 {
     /** @use HasFactory<AttributeFactory> */
@@ -28,7 +31,8 @@ class Attribute extends BaseModel
     protected function casts(): array
     {
         return [
-            'data_type' => AttributeType::class,
+            'config' => 'array',
+            'relation_target' => 'array',
             // Spec 0013 — external data migration: the source system's id for a
             // migrated attribute, guarded (not in #[Fillable]) so it is only ever
             // set by property assignment post-create.

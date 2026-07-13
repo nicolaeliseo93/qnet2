@@ -11,7 +11,8 @@ import {
 } from '@/components/detail/detail-panel'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import { enumLabelOf } from '@/features/config/enum-label'
+import { DynamicIcon } from '@/features/custom-fields/dynamic-icon'
+import { FIELD_TYPE_ICONS } from '@/features/custom-fields/field-type-icons'
 import type { AttributeDetail } from '@/features/attributes/types'
 
 interface AttributeDetailViewProps {
@@ -22,12 +23,13 @@ interface AttributeDetailViewProps {
  * Read-only detail of a single attribute. Purely presentational: the caller
  * (the table's "view" sheet) fetches the fresh detail and passes it down
  * (mirrors `ReferentTypeDetailView`). ENUM attributes additionally list their
- * options, ordered by `sort_order`.
+ * options (with color/icon), ordered by `sort_order`.
  */
 export function AttributeDetailView({ attribute }: AttributeDetailViewProps) {
   const { t } = useTranslation()
   const createdAt = formatDateTime(attribute.created_at)
   const sortedOptions = [...attribute.options].sort((a, b) => a.sort_order - b.sort_order)
+  const TypeIcon = FIELD_TYPE_ICONS[attribute.type]
 
   return (
     <DetailPanel>
@@ -39,13 +41,16 @@ export function AttributeDetailView({ attribute }: AttributeDetailViewProps) {
 
       <DetailSection title={t('attributes.detail.details')}>
         <DetailGrid>
-          <DetailField label={t('attributes.columns.data_type')}>
-            <Badge variant="secondary">{enumLabelOf('attribute_type', attribute.data_type)}</Badge>
+          <DetailField label={t('attributes.columns.type')}>
+            <Badge variant="secondary" className="gap-1">
+              <TypeIcon className="size-3.5" aria-hidden="true" />
+              {t(`customFields.types.${attribute.type}`)}
+            </Badge>
           </DetailField>
         </DetailGrid>
       </DetailSection>
 
-      {attribute.data_type === 'ENUM' && (
+      {attribute.type === 'enum' && (
         <DetailSection title={t('attributes.detail.options')}>
           {sortedOptions.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('attributes.form.optionsEmpty')}</p>
@@ -53,6 +58,7 @@ export function AttributeDetailView({ attribute }: AttributeDetailViewProps) {
             <ul className="flex flex-col gap-1.5">
               {sortedOptions.map((option) => (
                 <li key={option.id} className="flex items-center gap-2 text-sm">
+                  <DynamicIcon name={option.icon} className="size-3.5 text-muted-foreground" />
                   <Badge variant="outline" className="font-mono text-xs">
                     {option.value}
                   </Badge>

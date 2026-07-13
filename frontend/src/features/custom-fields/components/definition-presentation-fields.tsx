@@ -7,18 +7,19 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { FormControl, FormDescription, useFormField } from '@/components/ui/form'
 import { MetaField } from '@/features/authorization/MetaField'
-import type { CustomFieldDefinitionFormValues } from '@/features/custom-fields/custom-field-definition-schema'
+import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 
 interface DefinitionPresentationFieldsProps {
-  control: Control<CustomFieldDefinitionFormValues>
+  control: Control<FieldDefinitionFormValues>
 }
 
 /**
- * "Presentation" group of a custom field DEFINITION: how the field LOOKS to the
- * end user — description, help text, placeholder, icon, group and sort order.
- * Rendered AFTER the type-dependent settings so the visual polish comes last.
- * (`tab` is intentionally not surfaced: the generic renderer has no tabs UI, so
- * it only ever affected ordering — dropped to avoid a control that does nothing.)
+ * "Presentation" group of a field DEFINITION — custom field (spec 0021) OR
+ * attribute (spec 0017), shared: how the field LOOKS to the end user —
+ * description, help text, placeholder and icon. Rendered AFTER the
+ * type-dependent settings so the visual polish comes last. Grouping/ordering
+ * among sibling fields (`group`/`sort_order`) is custom-fields-only —
+ * see `DefinitionOrganizationFields`.
  */
 export function DefinitionPresentationFields({ control }: DefinitionPresentationFieldsProps) {
   const { t } = useTranslation()
@@ -85,43 +86,6 @@ export function DefinitionPresentationFields({ control }: DefinitionPresentation
             disabled={disabled}
             readOnly={readOnly}
           />
-        )}
-      </MetaField>
-
-      <MetaField
-        control={control}
-        name="group"
-        metaKey="group"
-        label={t('customFields.form.group')}
-        description={<FormDescription>{t('customFields.form.groupHelp')}</FormDescription>}
-      >
-        {({ field, disabled, readOnly }) => (
-          <FormControl>
-            <Input autoComplete="off" disabled={disabled} readOnly={readOnly} {...field} />
-          </FormControl>
-        )}
-      </MetaField>
-
-      <MetaField
-        control={control}
-        name="sort_order"
-        metaKey="sort_order"
-        label={t('customFields.form.sortOrder')}
-        description={<FormDescription>{t('customFields.form.sortOrderHelp')}</FormDescription>}
-      >
-        {({ field, disabled, readOnly }) => (
-          <FormControl>
-            <Input
-              type="number"
-              disabled={disabled}
-              readOnly={readOnly}
-              value={field.value}
-              onChange={(event) => field.onChange(event.target.value === '' ? 0 : Number(event.target.value))}
-              onBlur={field.onBlur}
-              name={field.name}
-              ref={field.ref}
-            />
-          </FormControl>
         )}
       </MetaField>
     </FormSection>

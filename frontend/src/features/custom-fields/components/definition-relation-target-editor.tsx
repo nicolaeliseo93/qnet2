@@ -12,16 +12,17 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { CustomFieldEntity } from '@/features/custom-fields/api'
-import type { CustomFieldDefinitionFormValues } from '@/features/custom-fields/custom-field-definition-schema'
+import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 
 interface DefinitionRelationTargetEditorProps {
-  control: Control<CustomFieldDefinitionFormValues>
+  control: Control<FieldDefinitionFormValues>
   entities: CustomFieldEntity[]
 }
 
 /**
- * RELATION-only `relation_target` editor (spec AC-025): target entity_type,
- * cardinality (one|many) and the for-select resource driving
+ * RELATION-only `relation_target` editor (spec 0017/0021 AC-025), shared by
+ * the custom field definition form AND the attribute form: target
+ * entity_type, cardinality (one|many) and the for-select resource driving
  * `AsyncPaginatedSelect` on the host module's form. `for_select_resource`
  * reuses the same custom-fieldable entity catalogue as `entity_type` — in
  * this codebase a for-select resource always coincides with a registered

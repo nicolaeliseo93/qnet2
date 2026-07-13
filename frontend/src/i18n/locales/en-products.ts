@@ -11,7 +11,7 @@ export const attributes = {
   columns: {
     code: 'Code',
     name: 'Name',
-    data_type: 'Data type',
+    type: 'Type',
     created_at: 'Created at',
   },
   detail: {
@@ -30,7 +30,6 @@ export const attributes = {
     editSubtitle: 'Update the selected attribute.',
     code: 'Code',
     name: 'Name',
-    dataType: 'Data type',
     save: 'Save',
     saving: 'Saving…',
     cancel: 'Cancel',
@@ -49,24 +48,17 @@ export const attributes = {
     sections: {
       identity: {
         title: 'Details',
-        description: 'Code, name and data type of the attribute.',
-      },
-      options: {
-        title: 'Options',
-        description: 'Selectable values for an ENUM attribute.',
+        description: 'Code, name and type of the attribute.',
       },
     },
-    addOption: 'Add option',
-    optionsEmpty: 'No options yet.',
-    optionValue: 'Value',
-    optionLabel: 'Label',
-    removeOption: 'Remove option',
     optionValueRequired: 'Value is required.',
     optionValueMax: 'Value must be at most 191 characters.',
     optionLabelRequired: 'Label is required.',
     optionLabelMax: 'Label must be at most 191 characters.',
-    optionsRequiredForEnum: 'Add at least one option for an ENUM attribute.',
+    optionsRequiredForEnum: 'Add at least one option for a list attribute.',
     optionValuesDuplicate: 'Option values must be unique.',
+    relationEntityTypeRequired: 'The relation target module is required.',
+    relationForSelectResourceRequired: 'The picker resource is required.',
   },
 }
 
@@ -122,13 +114,6 @@ export const productCategories = {
     isRequiredHelp: 'When on, the product MUST fill in this attribute.',
     sortOrder: 'Order',
     sortOrderHelp: 'The position this field appears at in the product form.',
-    dataTypeDescription: {
-      STRING: 'Free text.',
-      INTEGER: 'Whole number.',
-      DECIMAL: 'Decimal number.',
-      BOOLEAN: 'Yes/No value.',
-      ENUM: 'A choice from a fixed list of options.',
-    },
     removeAttribute: 'Remove attribute',
     inheritedAttributes: 'Inherited from ancestor categories',
     save: 'Save',

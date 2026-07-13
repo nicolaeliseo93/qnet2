@@ -9,6 +9,16 @@ import type {
 } from '@/features/referents/types'
 
 /**
+ * Query key of a single referent's detail (fresh-on-open pattern). Shared by
+ * the detail/edit pages and by the post-mutation invalidation, so they can
+ * never drift apart. `null` (an unparsable route param) is a key that is never
+ * fetched.
+ */
+export function referentDetailQueryKey(id: number | null) {
+  return ['referents', 'detail', id] as const
+}
+
+/**
  * Fetches a single referent detail together with the actor's authorization
  * metadata for it (`permissions`, a top-level envelope sibling of `data`).
  */

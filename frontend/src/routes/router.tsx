@@ -15,7 +15,11 @@ const CompaniesPage = lazy(() => import('@/pages/companies-page'))
 const CompanySitesPage = lazy(() => import('@/pages/company-sites-page'))
 const BusinessFunctionsPage = lazy(() => import('@/pages/business-functions-page'))
 const ReferentsPage = lazy(() => import('@/pages/referents-page'))
+const ReferentDetailPage = lazy(() => import('@/pages/referent-detail-page'))
+const ReferentFormPage = lazy(() => import('@/pages/referent-form-page'))
 const RegistriesPage = lazy(() => import('@/pages/registries-page'))
+const RegistryDetailPage = lazy(() => import('@/pages/registry-detail-page'))
+const RegistryFormPage = lazy(() => import('@/pages/registry-form-page'))
 const ReferentTypesPage = lazy(() => import('@/pages/referent-types-page'))
 const OperationalSitesPage = lazy(() => import('@/pages/operational-sites-page'))
 const AttributesPage = lazy(() => import('@/pages/attributes-page'))
@@ -23,6 +27,8 @@ const CustomFieldsPage = lazy(() => import('@/pages/custom-fields-page'))
 const ProductCategoriesPage = lazy(() => import('@/pages/product-categories-page'))
 const SectorsPage = lazy(() => import('@/pages/sectors-page'))
 const ProductsPage = lazy(() => import('@/pages/products-page'))
+const ProductDetailPage = lazy(() => import('@/pages/product-detail-page'))
+const ProductFormPage = lazy(() => import('@/pages/product-form-page'))
 const SourcesPage = lazy(() => import('@/pages/sources-page'))
 const TagsPage = lazy(() => import('@/pages/tags-page'))
 const MigrationsPage = lazy(() => import('@/features/migrations/migrations-page'))
@@ -78,8 +84,32 @@ export const router = createBrowserRouter([
             element: <ReferentsPage />,
           },
           {
+            path: 'referents/new',
+            element: <ReferentFormPage />,
+          },
+          {
+            path: 'referents/:id',
+            element: <ReferentDetailPage />,
+          },
+          {
+            path: 'referents/:id/edit',
+            element: <ReferentFormPage />,
+          },
+          {
             path: 'registries',
             element: <RegistriesPage />,
+          },
+          {
+            path: 'registries/new',
+            element: <RegistryFormPage />,
+          },
+          {
+            path: 'registries/:id',
+            element: <RegistryDetailPage />,
+          },
+          {
+            path: 'registries/:id/edit',
+            element: <RegistryFormPage />,
           },
           {
             path: 'referent-types',
@@ -108,6 +138,18 @@ export const router = createBrowserRouter([
           {
             path: 'products',
             element: <ProductsPage />,
+          },
+          {
+            path: 'products/new',
+            element: <ProductFormPage />,
+          },
+          {
+            path: 'products/:id',
+            element: <ProductDetailPage />,
+          },
+          {
+            path: 'products/:id/edit',
+            element: <ProductFormPage />,
           },
           {
             path: 'sources',
