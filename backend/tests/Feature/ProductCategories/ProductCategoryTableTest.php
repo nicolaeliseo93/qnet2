@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Attribute;
+use App\Models\BusinessFunction;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\User;
@@ -49,11 +50,13 @@ it('returns the 6 columns in order with the declared flags, 403 without viewAny'
         ->and($data['searchable'])->toBe(['name']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['name', 'parent', 'description', 'attributes_count', 'products_count', 'created_at']);
+    expect($ids)->toBe(['name', 'parent', 'description', 'business_function', 'attributes_count', 'products_count', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['parent']['filterType'])->toBe('set')
         ->and($columns['description']['sortable'])->toBeFalse()
+        ->and($columns['business_function']['filterType'])->toBe('set')
+        ->and($columns['business_function']['sortable'])->toBeFalse()
         ->and($columns['attributes_count']['filterType'])->toBe('number')
         ->and($columns['products_count']['filterType'])->toBe('number');
 });
@@ -164,6 +167,71 @@ it('values: parent → distinct parent names, columnId outside the allow-list �
 
     $this->postJson('/api/tables/product-categories/values', ['columnId' => 'not_a_column'])
         ->assertStatus(422)->assertJsonValidationErrors('columnId');
+});
+
+// ---------------------------------------------------------------------------
+// derived `business_function` column (spec 0023, AC-014)
+// ---------------------------------------------------------------------------
+
+it('rows: business_function shows the EFFECTIVE (own or inherited) function name', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $function = BusinessFunction::factory()->create(['name' => 'Sales']);
+    $root = ProductCategory::factory()->create(['name' => 'Root', 'business_function_id' => $function->id]);
+    $child = ProductCategory::factory()->childOf($root)->create(['name' => 'Child']);
+    $unrelated = ProductCategory::factory()->create(['name' => 'Unrelated']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/product-categories/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $rows = collect($response->json('items'))->keyBy('name');
+
+    expect($rows['Root']['business_function'])->toBe('Sales')
+        ->and($rows['Child']['business_function'])->toBe('Sales')
+        ->and($rows['Unrelated']['business_function'])->toBeNull();
+});
+
+it('filter: business_function set filter narrows the rows to those with the EFFECTIVE name, incl. inheriting ones', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $function = BusinessFunction::factory()->create(['name' => 'Sales']);
+    $root = ProductCategory::factory()->create(['name' => 'Root', 'business_function_id' => $function->id]);
+    ProductCategory::factory()->childOf($root)->create(['name' => 'Child']);
+    ProductCategory::factory()->create(['name' => 'Unrelated']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/product-categories/rows', [
+        'startRow' => 0, 'endRow' => 25,
+        'filterModel' => ['business_function' => ['filterType' => 'set', 'values' => ['Sales']]],
+    ])->assertOk();
+
+    $names = collect($response->json('items'))->pluck('name')->all();
+    expect($names)->toEqualCanonicalizing(['Root', 'Child']);
+});
+
+it('values: business_function → distinct EFFECTIVE names', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $function = BusinessFunction::factory()->create(['name' => 'Sales']);
+    $root = ProductCategory::factory()->create(['business_function_id' => $function->id]);
+    ProductCategory::factory()->childOf($root)->create();
+    ProductCategory::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/product-categories/values', ['columnId' => 'business_function'])->assertOk();
+    expect($response->json('data.values'))->toBe(['Sales']);
+});
+
+it('business_function is declared non-sortable, rejected by the sortModel allow-list (422)', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $columns = collect($this->getJson('/api/tables/product-categories/columns')->json('data.columns'))->keyBy('id');
+    expect($columns['business_function']['sortable'])->toBeFalse();
+
+    // A sortModel colId outside the sortable allow-list is rejected upfront
+    // by the FormRequest (Rule::in(sortableColumnIds())) — it never reaches
+    // a raw ORDER BY on the derived value.
+    $this->postJson('/api/tables/product-categories/rows', [
+        'startRow' => 0, 'endRow' => 25,
+        'sortModel' => [['colId' => 'business_function', 'sort' => 'asc']],
+    ])->assertStatus(422)->assertJsonValidationErrors('sortModel.0.colId');
 });
 
 // ---------------------------------------------------------------------------

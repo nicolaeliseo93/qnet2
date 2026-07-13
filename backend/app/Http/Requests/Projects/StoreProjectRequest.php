@@ -1,0 +1,82 @@
+<?php
+
+namespace App\Http\Requests\Projects;
+
+use App\DataObjects\Projects\CreateProjectData;
+use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+/**
+ * Validates the payload for POST /api/projects (spec 0023). `code` is
+ * intentionally NOT a rule: it is server-generated (BR-1), so any submitted
+ * value is silently dropped by validated() and never reaches the DTO.
+ *
+ * Authorization is intentionally NOT handled here (it stays in the
+ * controller via authorize('create', Project::class)). EnforcesFieldPermissions
+ * (spec 0004) additionally rejects any submitted field the actor cannot edit
+ * (create-context, model = null).
+ */
+class StoreProjectRequest extends FormRequest
+{
+    use EnforcesFieldPermissions;
+
+    public function authorize(): bool
+    {
+        // Authorization handled in the controller via ProjectPolicy.
+        return true;
+    }
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    public function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:191'],
+            'project_status_id' => ['required', 'integer', Rule::exists('project_statuses', 'id')],
+            'description' => ['nullable', 'string'],
+            'registry_id' => ['nullable', 'integer', Rule::exists('registries', 'id')],
+            'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
+            'business_function_id' => ['nullable', 'integer', Rule::exists('business_functions', 'id')],
+            'state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
+            'product_category_id' => ['nullable', 'integer', Rule::exists('product_categories', 'id')],
+            'partner_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'total_budget' => ['nullable', 'numeric', 'min:0'],
+            'target_lead' => ['nullable', 'integer', 'min:0'],
+        ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $this->enforceFieldPermissions($validator);
+        });
+    }
+
+    protected function authorizationResource(): string
+    {
+        return 'projects';
+    }
+
+    protected function authorizationModel(): ?Model
+    {
+        return null;
+    }
+
+    /**
+     * The validated payload as a typed DTO (no magic array crosses into the
+     * Service — see standards/architecture.md → Data Transfer Objects).
+     */
+    public function toData(): CreateProjectData
+    {
+        /** @var array<string, mixed> $validated */
+        $validated = $this->validated();
+
+        return CreateProjectData::fromValidated($validated);
+    }
+}

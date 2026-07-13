@@ -28,6 +28,7 @@ export function buildCreatePayload(
     inherits_attributes: values.inherits_attributes,
     description: values.description,
     attributes: values.attributes,
+    business_function_id: values.business_function_id,
     ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
@@ -54,6 +55,12 @@ export function buildUpdatePayload(
   }
   if (values.description !== original.description) {
     payload.description = values.description
+  }
+  // Never diverges from `original.business_function_id` while the field is
+  // inherited (disabled — no user interaction possible), so this diff alone
+  // satisfies "never send business_function_id when inherited" (spec AC-015).
+  if (values.business_function_id !== original.business_function_id) {
+    payload.business_function_id = values.business_function_id
   }
 
   const originalAssignments: AttributeAssignmentInput[] = original.attributes.map((a) => ({

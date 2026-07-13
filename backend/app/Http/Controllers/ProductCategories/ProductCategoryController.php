@@ -174,9 +174,14 @@ class ProductCategoryController extends BaseApiController
      */
     private function resourceWithInherited(ProductCategory $productCategory): array
     {
+        $productCategory->loadMissing('businessFunction');
+
         return array_merge(
             (new ProductCategoryResource($productCategory))->resolve(),
-            ['inherited_attributes' => $this->service->inheritedAttributes($productCategory)->values()],
+            [
+                'inherited_attributes' => $this->service->inheritedAttributes($productCategory)->values(),
+                'effective_business_function' => $this->service->effectiveBusinessFunction($productCategory),
+            ],
         );
     }
 

@@ -62,6 +62,26 @@ export function ProductCategoryDetailView({ category }: ProductCategoryDetailVie
         </DetailSection>
       )}
 
+      {category.effective_business_function && (
+        <DetailSection title={t('productCategories.form.businessFunction')}>
+          <DetailGrid>
+            <DetailField label={t('productCategories.form.businessFunction')}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span>{category.effective_business_function.name}</span>
+                {category.effective_business_function.inherited &&
+                  category.effective_business_function.source_category && (
+                    <Badge variant="outline" className="text-xs">
+                      {t('productCategories.detail.businessFunctionInherited', {
+                        category: category.effective_business_function.source_category.name,
+                      })}
+                    </Badge>
+                  )}
+              </div>
+            </DetailField>
+          </DetailGrid>
+        </DetailSection>
+      )}
+
       {category.attributes.length > 0 && (
         <DetailSection title={t('productCategories.form.attributes')}>
           <ul className="flex flex-col gap-1.5">

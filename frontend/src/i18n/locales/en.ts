@@ -21,6 +21,9 @@ import { customFields } from './en-custom-fields'
 import { sectors } from './en-sectors'
 import { sources } from './en-sources'
 import { tags } from './en-tags'
+import { projectStatuses } from './en-project-statuses'
+import { projects } from './en-projects'
+import { campaigns } from './en-campaigns'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -73,6 +76,9 @@ export const en = {
     products: 'Products',
     sources: 'Sources',
     tags: 'Tags',
+    projects: 'Projects',
+    campaigns: 'Campaigns',
+    projectStatuses: 'Project Statuses',
     management: 'Management',
     configuration: 'Configuration',
     administration: 'Administration',
@@ -477,6 +483,9 @@ export const en = {
   products,
   sources,
   tags,
+  projects,
+  projectStatuses,
+  campaigns,
 }
 
 export type TranslationResources = typeof en

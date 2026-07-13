@@ -100,6 +100,25 @@ return [
                     'route' => '/products',
                     'permission' => 'products.view',
                 ],
+                [
+                    // Projects (spec 0023): operational record grouping a
+                    // classification (status/business function/state/product
+                    // category) and, optionally, its budget-constrained campaigns.
+                    'key' => 'projects',
+                    'label' => 'navigation.projects',
+                    'icon' => 'layers',
+                    'route' => '/projects',
+                    'permission' => 'projects.view',
+                ],
+                [
+                    // Campaigns (spec 0023): standalone or project-linked
+                    // (read-through classification/budget, BR-2/BR-3).
+                    'key' => 'campaigns',
+                    'label' => 'navigation.campaigns',
+                    'icon' => 'waypoints',
+                    'route' => '/campaigns',
+                    'permission' => 'campaigns.view',
+                ],
             ],
         ],
 
@@ -164,6 +183,15 @@ return [
                     'icon' => 'sliders-horizontal',
                     'route' => '/attributes',
                     'permission' => 'attributes.view',
+                ],
+                [
+                    // Project statuses (spec 0023): the Project/Campaign
+                    // classification pick-list, delete-guarded (BR-4).
+                    'key' => 'project-statuses',
+                    'label' => 'navigation.projectStatuses',
+                    'icon' => 'tag',
+                    'route' => '/project-statuses',
+                    'permission' => 'project-statuses.view',
                 ],
                 [
                     // Universal custom fields (spec 0021): the admin catalogue

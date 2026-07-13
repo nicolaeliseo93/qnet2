@@ -1,0 +1,66 @@
+import { beforeAll, describe, expect, it } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import type { ICellRendererParams } from 'ag-grid-community'
+import i18n from '@/i18n'
+import { projectColumnRenderers } from '@/features/projects/column-renderers'
+
+function renderCell(columnId: string, value: unknown) {
+  const renderer = projectColumnRenderers[columnId]
+  if (!renderer) {
+    throw new Error(`Missing renderer for column "${columnId}"`)
+  }
+  const params = { value, data: {} } as unknown as ICellRendererParams
+  return render(<>{renderer(params)}</>)
+}
+
+beforeAll(async () => {
+  await i18n.changeLanguage('en')
+})
+
+describe('projectColumnRenderers.registry (relation cell)', () => {
+  it('renders the relation name', () => {
+    renderCell('registry', { id: 1, name: 'Acme Corp' })
+    expect(screen.getByText('Acme Corp')).toBeInTheDocument()
+  })
+
+  it('renders an em dash when unset', () => {
+    renderCell('registry', null)
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('projectColumnRenderers.project_status', () => {
+  it('renders the status name as a badge', () => {
+    renderCell('project_status', { id: 1, name: 'Active', color: 'green' })
+    expect(screen.getByText('Active')).toBeInTheDocument()
+  })
+
+  it('renders an em dash when unset', () => {
+    renderCell('project_status', null)
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('projectColumnRenderers.total_budget', () => {
+  it('formats a decimal string amount', () => {
+    renderCell('total_budget', '1234.50')
+    expect(screen.getByText('1,234.50')).toBeInTheDocument()
+  })
+
+  it('renders an em dash when null', () => {
+    renderCell('total_budget', null)
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('projectColumnRenderers date columns', () => {
+  it('formats start_date without a time part', () => {
+    renderCell('start_date', '2026-03-15')
+    expect(screen.getByText('Mar 15, 2026')).toBeInTheDocument()
+  })
+
+  it('renders an em dash for an empty end_date', () => {
+    renderCell('end_date', null)
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
+})

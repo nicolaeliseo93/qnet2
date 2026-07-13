@@ -15,6 +15,7 @@ import { useEffectiveAttributes } from '@/features/product-categories/use-effect
 import { collectSubtreeIds, flattenCategoryTree } from '@/features/product-categories/flatten-tree'
 import { useProductCategoryForm } from '@/features/product-categories/use-product-category-form'
 import { AttributeAssignmentEditor } from '@/features/product-categories/attribute-assignment-editor'
+import { ProductCategoryBusinessFunctionField } from '@/features/product-categories/product-category-business-function-field'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type {
   ProductCategoryDetail,
@@ -74,7 +75,8 @@ export function ProductCategoryFormBody({ mode, onSuccess, onCancel }: ProductCa
   const identityVisible =
     fieldPermission('name').visible ||
     fieldPermission('parent_id').visible ||
-    fieldPermission('description').visible
+    fieldPermission('description').visible ||
+    fieldPermission('business_function_id').visible
   const attributesVisible = fieldPermission('attributes').visible
 
   return (
@@ -155,6 +157,8 @@ export function ProductCategoryFormBody({ mode, onSuccess, onCancel }: ProductCa
                   </FormControl>
                 )}
               </MetaField>
+
+              <ProductCategoryBusinessFunctionField control={form.control} mode={mode} parentId={parentId} />
             </FormSection>
           )}
 

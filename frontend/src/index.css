@@ -11,7 +11,8 @@
   --card-foreground: hsl(216 28% 31%);
   --popover: hsl(0 0% 100%);
   --popover-foreground: hsl(216 28% 31%);
-  --primary: hsl(224 40% 27%);
+  /* Brand primary: #1F3654 */
+  --primary: hsl(214 46% 22.5%);
   --primary-foreground: hsl(0 0% 100%);
   --secondary: hsl(0 0% 100%);
   --secondary-foreground: hsl(218 31% 27%);
@@ -27,20 +28,22 @@
      shadow, not a different fill, so fields never blend into the page. */
   --field: hsl(0 0% 100%);
   --field-border: hsl(214 16% 76%);
-  --ring: hsl(222 63% 58%);
+  --ring: hsl(214 55% 50%);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: hsl(226 36% 23%);
+  /* The sidebar surface is the brand colour itself; the tokens above it are
+     lifts of the same hue, so the whole rail reads as one family. */
+  --sidebar: hsl(214 46% 22.5%);
   --sidebar-foreground: hsl(214 22% 90%);
-  --sidebar-primary: hsl(222 52% 54%);
+  --sidebar-primary: hsl(214 55% 58%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(224 18% 40%);
+  --sidebar-accent: hsl(214 25% 36%);
   --sidebar-accent-foreground: hsl(0 0% 98%);
-  --sidebar-border: hsl(225 22% 34%);
-  --sidebar-ring: hsl(220 72% 66%);
+  --sidebar-border: hsl(214 30% 32%);
+  --sidebar-ring: hsl(214 60% 66%);
 }
 
 .dark {
@@ -50,10 +53,11 @@
   --card-foreground: hsl(214 20% 92%);
   --popover: hsl(224 24% 13%);
   --popover-foreground: hsl(214 20% 92%);
-  --primary: hsl(221 68% 64%);
-  --primary-foreground: hsl(226 35% 16%);
+  /* Brand primary lightened for dark surfaces: same hue/saturation as #1F3654 */
+  --primary: hsl(214 46% 64%);
+  --primary-foreground: hsl(214 35% 14%);
   --secondary: hsl(0 0% 100%);
-  --secondary-foreground: hsl(226 35% 16%);
+  --secondary-foreground: hsl(214 35% 14%);
   --muted: hsl(223 18% 20%);
   --muted-foreground: hsl(214 12% 70%);
   --accent: hsl(220 14% 44%);
@@ -64,20 +68,20 @@
   /* In dark mode a "white field" reads as a surface lighter than the card. */
   --field: hsl(224 20% 18%);
   --field-border: hsl(223 16% 33%);
-  --ring: hsl(221 75% 70%);
+  --ring: hsl(214 60% 70%);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: hsl(226 36% 18%);
+  --sidebar: hsl(214 46% 16%);
   --sidebar-foreground: hsl(214 20% 90%);
-  --sidebar-primary: hsl(221 70% 65%);
-  --sidebar-primary-foreground: hsl(226 35% 16%);
-  --sidebar-accent: hsl(223 15% 36%);
+  --sidebar-primary: hsl(214 46% 64%);
+  --sidebar-primary-foreground: hsl(214 35% 14%);
+  --sidebar-accent: hsl(214 22% 32%);
   --sidebar-accent-foreground: hsl(0 0% 98%);
-  --sidebar-border: hsl(225 20% 30%);
-  --sidebar-ring: hsl(221 75% 70%);
+  --sidebar-border: hsl(214 28% 26%);
+  --sidebar-ring: hsl(214 60% 70%);
 }
 
 @theme inline {

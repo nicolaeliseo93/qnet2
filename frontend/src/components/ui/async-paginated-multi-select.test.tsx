@@ -330,4 +330,34 @@ describe('AsyncPaginatedMultiSelect', () => {
     })
     expect(onChange).toHaveBeenCalledWith([5])
   })
+
+  it('forwards id/aria-describedby/aria-invalid to the trigger, mirroring FormControl (Radix Slot)', () => {
+    renderSelect({
+      id: 'members-field',
+      'aria-describedby': 'members-error',
+      'aria-invalid': true,
+    })
+    const trigger = screen.getByRole('button', { name: 'Members' })
+    expect(trigger).toHaveAttribute('id', 'members-field')
+    expect(trigger).toHaveAttribute('aria-describedby', 'members-error')
+    expect(trigger).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('activates the trigger when its associated <label> is clicked (native id/for wiring)', () => {
+    const onChange = vi.fn()
+    render(
+      <>
+        <label htmlFor="members-field">Members</label>
+        <AsyncPaginatedMultiSelect
+          id="members-field"
+          resource="users"
+          value={[]}
+          onChange={onChange}
+          labels={labels}
+        />
+      </>,
+    )
+    fireEvent.click(screen.getByText('Members'))
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+  })
 })

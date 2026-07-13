@@ -22,6 +22,8 @@ export interface ProductCategoryTreeNode {
   children: ProductCategoryTreeNode[]
   attributes_count: number
   products_count: number
+  /** The node's OWN business function, null if it has none (spec 0023 AC-018). NOT the effective/inherited one. */
+  business_function_id: number | null
 }
 
 /** A category's own attribute assignment (pivot `attribute_category`). */
@@ -43,6 +45,24 @@ export interface ProductCategoryInheritedAttribute {
   is_required: boolean
 }
 
+/** A category's own business function relation, hydrated (spec 0023). */
+export interface ProductCategoryBusinessFunction {
+  id: number
+  name: string
+}
+
+/**
+ * The business function effectively governing a category: its own, or the
+ * nearest ancestor's when inherited (spec 0023). `source_category` is
+ * populated only when `inherited` is true.
+ */
+export interface EffectiveBusinessFunction {
+  id: number
+  name: string
+  inherited: boolean
+  source_category: { id: number; name: string } | null
+}
+
 /**
  * Single category detail returned by GET/POST/PATCH /product-categories
  * (envelope `data`). Matches `ProductCategoryResource`.
@@ -58,6 +78,12 @@ export interface ProductCategoryDetail {
   attributes: ProductCategoryAttributeAssignment[]
   inherited_attributes: ProductCategoryInheritedAttribute[]
   created_at: string
+  /** The category's OWN business function (null when absent or inherited — spec 0023). */
+  business_function_id: number | null
+  /** Hydrated projection of `business_function_id`. */
+  business_function: ProductCategoryBusinessFunction | null
+  /** Own or inherited business function; invariant: `inherited === true` implies `business_function_id === null`. */
+  effective_business_function: EffectiveBusinessFunction | null
   /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
   custom_fields?: Record<string, CustomFieldValue>
 }
@@ -115,6 +141,8 @@ export interface CreateProductCategoryPayload {
   inherits_attributes?: boolean
   description?: string | null
   attributes?: AttributeAssignmentInput[]
+  /** Own business function; omit or null when the category has none of its own (spec 0023). */
+  business_function_id?: number | null
   /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
   custom_fields?: Record<string, CustomFieldValue>
 }

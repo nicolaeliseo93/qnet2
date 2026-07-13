@@ -37,6 +37,7 @@ class ProductCategoriesAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('parent_id', 'select'),
             new FieldDefinition('inherits_attributes', 'boolean'),
             new FieldDefinition('description', 'textarea'),
+            new FieldDefinition('business_function_id', 'select'),
             new FieldDefinition('attributes', 'custom'),
         ];
     }
@@ -61,6 +62,7 @@ class ProductCategoriesAuthorization extends AbstractResourceAuthorization
             'parent_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'inherits_attributes' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'description' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'business_function_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'attributes' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];
     }

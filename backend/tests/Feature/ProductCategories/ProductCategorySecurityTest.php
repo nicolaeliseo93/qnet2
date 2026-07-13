@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\BusinessFunction;
+use App\Models\ProductCategory;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -36,4 +39,51 @@ it('navigation: the product-categories node only shows with product-categories.v
     Sanctum::actingAs($withView);
     expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'configuration'))
         ->toContain('product-categories');
+});
+
+// ---------------------------------------------------------------------------
+// AC-012 — authz on business_function_id (spec 0023)
+// ---------------------------------------------------------------------------
+
+it('update: 403 without product-categories.update takes precedence over the business_function_id write', function () {
+    foreach (['viewAny', 'view', 'update'] as $ability) {
+        Permission::findOrCreate("product-categories.{$ability}");
+    }
+
+    $actor = User::factory()->create();
+    $target = ProductCategory::factory()->create();
+    $function = BusinessFunction::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/product-categories/{$target->id}", ['business_function_id' => $function->id])
+        ->assertForbidden();
+});
+
+it('update: business_function_id editable:false for the actor\'s role -> 422 "field not editable", no write', function () {
+    foreach (['viewAny', 'view', 'update'] as $ability) {
+        Permission::findOrCreate("product-categories.{$ability}");
+    }
+
+    $role = Role::create(['name' => 'category-function-locked']);
+    $role->givePermissionTo(['product-categories.view', 'product-categories.update']);
+    $role->fieldPermissions()->create([
+        'resource' => 'product-categories',
+        'field' => 'business_function_id',
+        'visible' => true,
+        'editable' => false,
+        'required' => false,
+    ]);
+
+    $actor = User::factory()->create();
+    $actor->assignRole($role);
+
+    $function = BusinessFunction::factory()->create();
+    $target = ProductCategory::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/product-categories/{$target->id}", ['business_function_id' => $function->id])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('business_function_id');
+
+    expect($target->fresh()->business_function_id)->toBeNull();
 });

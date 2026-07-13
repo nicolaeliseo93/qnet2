@@ -30,8 +30,8 @@ const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
-// Resizable width bounds (in pixels). Default matches SIDEBAR_WIDTH (16rem).
-const SIDEBAR_WIDTH_DEFAULT_PX = 256
+// Resizable width bounds (in pixels).
+const SIDEBAR_WIDTH_DEFAULT_PX = 224
 const SIDEBAR_WIDTH_MIN_PX = 180
 const SIDEBAR_WIDTH_MAX_PX = 480
 

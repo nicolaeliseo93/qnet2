@@ -69,7 +69,7 @@ function renderSelect(props: Partial<Parameters<typeof AsyncPaginatedSelect>[0]>
 }
 
 function open() {
-  fireEvent.click(screen.getByRole('button', { name: 'Manager' }))
+  fireEvent.click(screen.getByRole('combobox', { name: 'Manager' }))
 }
 
 beforeAll(async () => {
@@ -277,5 +277,35 @@ describe('AsyncPaginatedSelect', () => {
       key: 'Enter',
     })
     expect(onChange).toHaveBeenCalledWith(5)
+  })
+
+  it('forwards id/aria-describedby/aria-invalid to the trigger, mirroring FormControl (Radix Slot)', () => {
+    renderSelect({
+      id: 'manager-field',
+      'aria-describedby': 'manager-error',
+      'aria-invalid': true,
+    })
+    const trigger = screen.getByRole('combobox', { name: 'Manager' })
+    expect(trigger).toHaveAttribute('id', 'manager-field')
+    expect(trigger).toHaveAttribute('aria-describedby', 'manager-error')
+    expect(trigger).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('activates the trigger when its associated <label> is clicked (native id/for wiring)', () => {
+    const onChange = vi.fn()
+    render(
+      <>
+        <label htmlFor="manager-field">Manager</label>
+        <AsyncPaginatedSelect
+          id="manager-field"
+          resource="users"
+          value={null}
+          onChange={onChange}
+          labels={labels}
+        />
+      </>,
+    )
+    fireEvent.click(screen.getByText('Manager'))
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
   })
 })

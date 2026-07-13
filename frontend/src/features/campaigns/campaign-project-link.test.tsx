@@ -1,0 +1,285 @@
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
+import axios, { AxiosError } from 'axios'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import i18n from '@/i18n'
+import { campaigns as campaignsEn } from '@/i18n/locales/en-campaigns'
+import { CampaignForm } from '@/features/campaigns/campaign-form'
+import type { CampaignDetailWithPermissions } from '@/features/campaigns/types'
+import type { ResourceMeta } from '@/features/authorization/types'
+import type { ProjectForSelectItem } from '@/features/projects/for-select-api'
+
+/**
+ * Spec 0023 FRONTEND acceptance criteria:
+ * - AC-042: picking a Project prefills Client/Source/Partner (editable) and
+ *   forces the 4 classification fields read-only from the project's values,
+ *   which are excluded from the payload regardless of what they display.
+ * - AC-043: clearing the Project makes the 4 classification fields editable
+ *   and required again (client validation error when left empty).
+ * - BR-3: the backend's 422 budget message is shown verbatim, not a generic one.
+ * AC-046 (the `code` field) lives in `campaign-form-body.test.tsx`.
+ */
+
+const TEST_PROJECT_ID = 42
+
+const createCampaignMock = vi.fn()
+const updateCampaignMock = vi.fn()
+
+vi.mock('@/features/campaigns/api', async () => {
+  const actual = await vi.importActual<typeof import('@/features/campaigns/api')>(
+    '@/features/campaigns/api',
+  )
+  return {
+    ...actual,
+    createCampaign: (...args: unknown[]) => createCampaignMock(...args),
+    updateCampaign: (...args: unknown[]) => updateCampaignMock(...args),
+  }
+})
+
+const fetchProjectsForSelectMock = vi.fn()
+vi.mock('@/features/projects/for-select-api', async () => {
+  const actual = await vi.importActual<typeof import('@/features/projects/for-select-api')>(
+    '@/features/projects/for-select-api',
+  )
+  return {
+    ...actual,
+    fetchProjectsForSelect: (...args: unknown[]) => fetchProjectsForSelectMock(...args),
+  }
+})
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+const FULL_PERMISSIONS = {
+  resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+  fields: {},
+  actions: {},
+}
+
+const fetchResourceMetaMock = vi.fn<() => Promise<ResourceMeta>>()
+vi.mock('@/features/authorization/api', () => ({
+  fetchResourceMeta: () => fetchResourceMetaMock(),
+}))
+
+/**
+ * Stubs every single-select field, keyed by its accessible trigger label
+ * (mirrors `project-form-body.test.tsx`), but ALSO exposes a "select"/"clear"
+ * affordance per field so the Project picker's onChange (AC-042/AC-043) is
+ * exercisable end to end.
+ */
+vi.mock('@/components/ui/async-paginated-select', () => ({
+  AsyncPaginatedSelect: ({
+    value,
+    onChange,
+    disabled,
+    labels,
+  }: {
+    value: number | null
+    onChange: (value: number | null) => void
+    disabled?: boolean
+    labels: { triggerLabel: string }
+  }) => (
+    <div>
+      <span data-testid={`value-${labels.triggerLabel}`}>{value ?? ''}</span>
+      <span data-testid={`disabled-${labels.triggerLabel}`}>{String(Boolean(disabled))}</span>
+      <button type="button" onClick={() => onChange(TEST_PROJECT_ID)}>
+        {`select ${labels.triggerLabel}`}
+      </button>
+      <button type="button" onClick={() => onChange(null)}>
+        {`clear ${labels.triggerLabel}`}
+      </button>
+    </div>
+  ),
+}))
+
+function wrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+}
+
+function projectForSelectItem(overrides: Partial<ProjectForSelectItem['meta']> = {}): ProjectForSelectItem {
+  return {
+    id: TEST_PROJECT_ID,
+    label: 'PRJ-0042 — Acme rollout',
+    meta: {
+      registry: { id: 11, label: 'Acme Srl' },
+      source: { id: 21, label: 'Referral' },
+      partner: { id: 31, label: 'Jane Partner' },
+      project_status: { id: 41, label: 'Active' },
+      business_function: { id: 51, label: 'Marketing' },
+      state: { id: 61, label: 'Lombardy' },
+      product_category: { id: 71, label: 'Hardware' },
+      total_budget: '1000.00',
+      allocated_budget: '600.00',
+      remaining_budget: '400.00',
+      ...overrides,
+    },
+  }
+}
+
+function campaign(
+  overrides: Partial<CampaignDetailWithPermissions> = {},
+): CampaignDetailWithPermissions {
+  return {
+    id: 9,
+    code: 'CMP-0009',
+    project_id: null,
+    project: null,
+    name: 'Spring push',
+    description: null,
+    registry_id: null,
+    registry: null,
+    source_id: null,
+    source: null,
+    partner_id: null,
+    partner: null,
+    derived_from_project: false,
+    project_status_id: 1,
+    project_status: { id: 1, name: 'Active', color: 'blue' },
+    business_function_id: 2,
+    business_function: { id: 2, name: 'Sales' },
+    state_id: 3,
+    state: { id: 3, name: 'Lombardy' },
+    product_category_id: 4,
+    product_category: { id: 4, name: 'Hardware' },
+    start_date: null,
+    end_date: null,
+    total_budget: null,
+    target_lead: null,
+    created_at: '2026-01-01T00:00:00Z',
+    permissions: FULL_PERMISSIONS,
+    ...overrides,
+  }
+}
+
+beforeAll(async () => {
+  await i18n.changeLanguage('en')
+  i18n.addResourceBundle('en', 'translation', { campaigns: campaignsEn }, true, true)
+})
+
+beforeEach(() => {
+  createCampaignMock.mockReset()
+  updateCampaignMock.mockReset()
+  fetchResourceMetaMock.mockReset()
+  fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
+  fetchProjectsForSelectMock.mockReset()
+  fetchProjectsForSelectMock.mockResolvedValue({
+    items: [projectForSelectItem()],
+    export_link: null,
+    pagination: { total: 1, offset: 0, limit: 25, total_pages: 1 },
+  })
+})
+
+describe('CampaignForm — selecting a Project (AC-042)', () => {
+  it('prefills Client/Source/Partner and forces the 4 classification fields read-only from the project, excluded from the payload', async () => {
+    createCampaignMock.mockResolvedValue(campaign({ project_id: TEST_PROJECT_ID }))
+
+    render(<CampaignForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Linked campaign' } })
+    fireEvent.click(screen.getByRole('button', { name: 'select Project' }))
+
+    await waitFor(() => expect(screen.getByTestId('value-Client')).toHaveTextContent('11'))
+    expect(screen.getByTestId('value-Source')).toHaveTextContent('21')
+    expect(screen.getByTestId('value-Partner')).toHaveTextContent('31')
+    expect(screen.getByTestId('value-Status')).toHaveTextContent('41')
+    expect(screen.getByTestId('value-Business function')).toHaveTextContent('51')
+    expect(screen.getByTestId('value-Region')).toHaveTextContent('61')
+    expect(screen.getByTestId('value-Product category')).toHaveTextContent('71')
+
+    // The 4 derived fields are forced read-only while linked; Client/Source/Partner stay editable.
+    expect(screen.getByTestId('disabled-Status')).toHaveTextContent('true')
+    expect(screen.getByTestId('disabled-Business function')).toHaveTextContent('true')
+    expect(screen.getByTestId('disabled-Region')).toHaveTextContent('true')
+    expect(screen.getByTestId('disabled-Product category')).toHaveTextContent('true')
+    expect(screen.getByTestId('disabled-Client')).toHaveTextContent('false')
+    expect(screen.getByTestId('disabled-Source')).toHaveTextContent('false')
+    expect(screen.getByTestId('disabled-Partner')).toHaveTextContent('false')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(createCampaignMock).toHaveBeenCalledTimes(1))
+    const payload = createCampaignMock.mock.calls[0][0] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('project_status_id')
+    expect(payload).not.toHaveProperty('business_function_id')
+    expect(payload).not.toHaveProperty('state_id')
+    expect(payload).not.toHaveProperty('product_category_id')
+    expect(payload.project_id).toBe(TEST_PROJECT_ID)
+    expect(payload.registry_id).toBe(11)
+    expect(payload.source_id).toBe(21)
+    expect(payload.partner_id).toBe(31)
+  })
+})
+
+describe('CampaignForm — deselecting the Project (AC-043)', () => {
+  it('clears the 4 classification fields, makes them editable again and requires them at submit', async () => {
+    const linkedCampaign = campaign({
+      project_id: TEST_PROJECT_ID,
+      project: { id: TEST_PROJECT_ID, code: 'PRJ-0042', name: 'Acme rollout' },
+      derived_from_project: true,
+    })
+
+    render(
+      <CampaignForm mode={{ type: 'edit', campaign: linkedCampaign }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    expect(screen.getByTestId('disabled-Status')).toHaveTextContent('true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'clear Project' }))
+
+    await waitFor(() => expect(screen.getByTestId('disabled-Status')).toHaveTextContent('false'))
+    expect(screen.getByTestId('value-Status')).toHaveTextContent('')
+    expect(screen.getByTestId('value-Business function')).toHaveTextContent('')
+    expect(screen.getByTestId('value-Region')).toHaveTextContent('')
+    expect(screen.getByTestId('value-Product category')).toHaveTextContent('')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Status is required when the campaign is not linked to a project.'),
+      ).toBeInTheDocument(),
+    )
+    expect(updateCampaignMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('CampaignForm — BR-3 budget 422', () => {
+  it('shows the backend insufficient-budget message verbatim, not a generic error', async () => {
+    const backendMessage =
+      'Budget insufficiente sul progetto PRJ-0042: budget 1000.00, già allocato 600.00, residuo 400.00, richiesto 1000.00.'
+
+    updateCampaignMock.mockRejectedValue(
+      new AxiosError(
+        'Unprocessable',
+        '422',
+        undefined,
+        undefined,
+        {
+          status: 422,
+          data: { success: false, message: 'Validation failed.', errors: { total_budget: [backendMessage] } },
+        } as never,
+      ),
+    )
+    vi.spyOn(axios, 'isAxiosError').mockReturnValue(true)
+
+    render(
+      <CampaignForm mode={{ type: 'edit', campaign: campaign() }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    fireEvent.change(screen.getByLabelText('Total budget'), { target: { value: '1000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(screen.getByText(backendMessage)).toBeInTheDocument())
+    expect(screen.queryByText('Something went wrong. Please try again.')).not.toBeInTheDocument()
+
+    vi.restoreAllMocks()
+  })
+})

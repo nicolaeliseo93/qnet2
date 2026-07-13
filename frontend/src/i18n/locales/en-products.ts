@@ -72,6 +72,7 @@ export const productCategories = {
     description: 'Description',
     attributes_count: 'Attributes',
     products_count: 'Products',
+    business_function: 'Business function',
     created_at: 'Created at',
     tooltipEmpty: 'Nothing to show.',
     productsMore: '+{{count}} more',
@@ -80,6 +81,7 @@ export const productCategories = {
     title: 'Category details',
     subtitle: 'Read-only view of the selected category.',
     loadError: 'Unable to load the category. Please try again.',
+    businessFunctionInherited: 'Inherited from {{category}}',
   },
   form: {
     newRootCategory: 'New category',
@@ -116,6 +118,13 @@ export const productCategories = {
     sortOrderHelp: 'The position this field appears at in the product form.',
     removeAttribute: 'Remove attribute',
     inheritedAttributes: 'Inherited from ancestor categories',
+    businessFunction: 'Business function',
+    businessFunctionPlaceholder: 'Select a business function…',
+    businessFunctionSearch: 'Search business functions…',
+    businessFunctionEmpty: 'No business functions found.',
+    businessFunctionError: 'Unable to load business functions.',
+    businessFunctionInheritedHint:
+      'Inherited from "{{category}}". To change it, edit that category instead.',
     save: 'Save',
     saving: 'Saving…',
     cancel: 'Cancel',
@@ -150,6 +159,7 @@ export const products = {
     price: 'Price',
     category: 'Category',
     product_type: 'Type',
+    business_function: 'Business function',
     created_at: 'Created at',
   },
   detail: {

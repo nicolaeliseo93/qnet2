@@ -16,6 +16,12 @@ export interface ProductCategorySummary {
   name: string
 }
 
+/** The product's effective business function, derived read-only from its category (spec 0023). */
+export interface ProductBusinessFunctionSummary {
+  id: number
+  name: string
+}
+
 /**
  * Single product detail returned by GET/POST/PATCH /products (envelope
  * `data`). Matches `ProductResource`.
@@ -30,6 +36,14 @@ export interface ProductDetail {
   category: ProductCategorySummary | null
   product_type: ProductType
   created_at: string
+  /**
+   * Effective business function of the product's category, read-only
+   * (spec 0023): null when the category has none, own or inherited.
+   * Optional like `custom_fields` — the same lenient-projection convention
+   * used elsewhere on this resource, to avoid touching every existing
+   * fixture that predates this field.
+   */
+  business_function?: ProductBusinessFunctionSummary | null
   /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
   custom_fields?: Record<string, CustomFieldValue>
 }

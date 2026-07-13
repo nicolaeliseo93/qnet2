@@ -30,6 +30,7 @@ const SERVER_ERROR_FIELDS = [
   'inherits_attributes',
   'description',
   'attributes',
+  'business_function_id',
 ] as const
 
 export type ProductCategoryFormValues = CreateProductCategoryFormValues
@@ -82,6 +83,7 @@ export function useProductCategoryForm({ mode, onSuccess }: UseProductCategoryFo
           is_required: assignment.is_required,
           sort_order: assignment.sort_order,
         })),
+        business_function_id: category.business_function_id,
         custom_fields: customFields.defaultValues,
       }
     }
@@ -91,6 +93,7 @@ export function useProductCategoryForm({ mode, onSuccess }: UseProductCategoryFo
       inherits_attributes: true,
       description: null,
       attributes: [],
+      business_function_id: null,
       custom_fields: customFields.defaultValues,
     }
   }, [mode, customFields.defaultValues])

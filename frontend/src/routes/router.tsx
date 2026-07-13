@@ -31,6 +31,13 @@ const ProductDetailPage = lazy(() => import('@/pages/product-detail-page'))
 const ProductFormPage = lazy(() => import('@/pages/product-form-page'))
 const SourcesPage = lazy(() => import('@/pages/sources-page'))
 const TagsPage = lazy(() => import('@/pages/tags-page'))
+const ProjectStatusesPage = lazy(() => import('@/pages/project-statuses-page'))
+const ProjectsPage = lazy(() => import('@/pages/projects-page'))
+const ProjectDetailPage = lazy(() => import('@/pages/project-detail-page'))
+const ProjectFormPage = lazy(() => import('@/pages/project-form-page'))
+const CampaignsPage = lazy(() => import('@/pages/campaigns-page'))
+const CampaignDetailPage = lazy(() => import('@/pages/campaign-detail-page'))
+const CampaignFormPage = lazy(() => import('@/pages/campaign-form-page'))
 const MigrationsPage = lazy(() => import('@/features/migrations/migrations-page'))
 const SettingsPage = lazy(() => import('@/pages/settings-page'))
 const NotFoundPage = lazy(() => import('@/pages/not-found-page'))
@@ -158,6 +165,42 @@ export const router = createBrowserRouter([
           {
             path: 'tags',
             element: <TagsPage />,
+          },
+          {
+            path: 'project-statuses',
+            element: <ProjectStatusesPage />,
+          },
+          {
+            path: 'projects',
+            element: <ProjectsPage />,
+          },
+          {
+            path: 'projects/new',
+            element: <ProjectFormPage />,
+          },
+          {
+            path: 'projects/:id',
+            element: <ProjectDetailPage />,
+          },
+          {
+            path: 'projects/:id/edit',
+            element: <ProjectFormPage />,
+          },
+          {
+            path: 'campaigns',
+            element: <CampaignsPage />,
+          },
+          {
+            path: 'campaigns/new',
+            element: <CampaignFormPage />,
+          },
+          {
+            path: 'campaigns/:id',
+            element: <CampaignDetailPage />,
+          },
+          {
+            path: 'campaigns/:id/edit',
+            element: <CampaignFormPage />,
           },
           {
             element: <MigrationRouteGuard />,

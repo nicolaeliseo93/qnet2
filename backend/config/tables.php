@@ -2,12 +2,15 @@
 
 use App\Tables\AttributesTableDefinition;
 use App\Tables\BusinessFunctionsTableDefinition;
+use App\Tables\CampaignsTableDefinition;
 use App\Tables\CompaniesTableDefinition;
 use App\Tables\CompanySitesTableDefinition;
 use App\Tables\CustomFieldsTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
 use App\Tables\ProductCategoriesTableDefinition;
 use App\Tables\ProductsTableDefinition;
+use App\Tables\ProjectsTableDefinition;
+use App\Tables\ProjectStatusesTableDefinition;
 use App\Tables\ReferentsTableDefinition;
 use App\Tables\ReferentTypesTableDefinition;
 use App\Tables\RegistriesTableDefinition;
@@ -56,6 +59,9 @@ return [
         'products' => ProductsTableDefinition::class,
         'sources' => SourcesTableDefinition::class,
         'tags' => TagsTableDefinition::class,
+        'project-statuses' => ProjectStatusesTableDefinition::class,
+        'projects' => ProjectsTableDefinition::class,
+        'campaigns' => CampaignsTableDefinition::class,
     ],
 
 ];

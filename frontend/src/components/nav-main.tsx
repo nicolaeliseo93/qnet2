@@ -25,6 +25,15 @@ import { cn } from '@/lib/utils'
 // overriding the design-system default of size-4.
 export const NAV_ITEM_CLASS = '[&>svg]:size-3.5'
 
+// Sections and parent items (the ones holding children) read as headings, not
+// as destinations: uppercase + weight separates them from the leaves you can
+// click. Letter-spacing compensates the loss of word shape that uppercase causes.
+const NAV_HEADING_CLASS = 'font-medium uppercase tracking-wide'
+
+// Leaves stay at regular weight, active included: the active state is already
+// carried by background and colour, so weight is reserved for the hierarchy.
+const NAV_LEAF_CLASS = 'font-normal data-[active=true]:font-normal'
+
 export function NavMain({ items }: { items: NavigationItem[] }) {
   const topLevel = items.filter((item) => item.type !== 'section')
   const sections = items.filter((item) => item.type === 'section')
@@ -56,7 +65,7 @@ function NavSection({ section }: { section: NavigationItem }) {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>{t(section.label)}</SidebarGroupLabel>
+      <SidebarGroupLabel className={NAV_HEADING_CLASS}>{t(section.label)}</SidebarGroupLabel>
       <SidebarMenu>
         {section.children.map((child) => (
           <NavNode key={child.key} item={child} />
@@ -79,7 +88,7 @@ function NavNode({ item }: { item: NavigationItem }) {
       <Collapsible asChild defaultOpen={hasActiveChild} className="group/collapsible">
         <SidebarMenuItem>
           <CollapsibleTrigger asChild>
-            <SidebarMenuButton tooltip={label} size="sm" className={NAV_ITEM_CLASS}>
+            <SidebarMenuButton tooltip={label} size="sm" className={cn(NAV_ITEM_CLASS, NAV_HEADING_CLASS)}>
               {icon}
               <span>{label}</span>
               <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -89,7 +98,7 @@ function NavNode({ item }: { item: NavigationItem }) {
             <SidebarMenuSub>
               {item.children.map((child) => (
                 <SidebarMenuSubItem key={child.key}>
-                  <SidebarMenuSubButton asChild size="sm" isActive={isActive(child, location.pathname)} className={NAV_ITEM_CLASS}>
+                  <SidebarMenuSubButton asChild size="sm" isActive={isActive(child, location.pathname)} className={cn(NAV_ITEM_CLASS, NAV_LEAF_CLASS)}>
                     <NavLink to={child.route ?? '#'}>
                       <span>{t(child.label)}</span>
                     </NavLink>
@@ -108,7 +117,7 @@ function NavNode({ item }: { item: NavigationItem }) {
   if (!item.route) {
     return (
       <SidebarMenuItem>
-        <SidebarMenuButton tooltip={label} size="sm" className={cn('pointer-events-none opacity-70', NAV_ITEM_CLASS)}>
+        <SidebarMenuButton tooltip={label} size="sm" className={cn('pointer-events-none opacity-70', NAV_ITEM_CLASS, NAV_LEAF_CLASS)}>
           {icon}
           <span>{label}</span>
         </SidebarMenuButton>
@@ -118,7 +127,7 @@ function NavNode({ item }: { item: NavigationItem }) {
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip={label} size="sm" isActive={isActive(item, location.pathname)} className={NAV_ITEM_CLASS}>
+      <SidebarMenuButton asChild tooltip={label} size="sm" isActive={isActive(item, location.pathname)} className={cn(NAV_ITEM_CLASS, NAV_LEAF_CLASS)}>
         <NavLink to={item.route}>
           {icon}
           <span>{label}</span>

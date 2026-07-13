@@ -90,6 +90,9 @@ function category(
     attributes: [],
     inherited_attributes: [],
     created_at: '2026-01-01T00:00:00Z',
+    business_function_id: null,
+    business_function: null,
+    effective_business_function: null,
     permissions: permissionsWithNotes(),
     ...overrides,
   }

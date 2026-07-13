@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\BusinessFunction;
 use App\Models\Concerns\LogsModelActivity;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -80,4 +81,25 @@ it('logs model activity', function () {
 
 it('registers the "product_category" morph alias', function () {
     expect(array_search(ProductCategory::class, Relation::morphMap(), true))->toBe('product_category');
+});
+
+// ---------------------------------------------------------------------------
+// spec 0023 — business_function_id
+// ---------------------------------------------------------------------------
+
+it('businessFunction() is a BelongsTo relation to BusinessFunction', function () {
+    $relation = (new ProductCategory)->businessFunction();
+
+    expect($relation)->toBeInstanceOf(BelongsTo::class)
+        ->and($relation->getRelated())->toBeInstanceOf(BusinessFunction::class);
+});
+
+it('business_function_id is mass-assignable and nullOnDelete when its BusinessFunction is removed', function () {
+    $function = BusinessFunction::factory()->create();
+
+    $category = ProductCategory::create(['name' => 'Assigned', 'business_function_id' => $function->id]);
+    expect($category->business_function_id)->toBe($function->id);
+
+    $function->delete();
+    expect($category->fresh()->business_function_id)->toBeNull();
 });

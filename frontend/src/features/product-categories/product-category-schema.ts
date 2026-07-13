@@ -25,6 +25,7 @@ function baseFields(t: TFunction) {
     parent_id: z.number().nullable(),
     inherits_attributes: z.boolean(),
     description: z.string().nullable(),
+    business_function_id: z.number().nullable(),
     attributes: z.array(
       z.object({
         attribute_id: z.number(),
