@@ -2,7 +2,37 @@
 
 > Injected at session start. Update at every green state.
 
-## FEATURE — Product category -> business function, with inheritance (2026-07-13) — GREEN
+## FIX — a11y: FormControl props forwarded to select triggers (2026-07-13) — GREEN, committed 1376f18
+
+Branch `feat/product-category-business-function`, secondo commit (separato dalla feature: revertibile da solo).
+
+IL DIFETTO (pre-esistente, scoperto lavorando sulla 0023): `SearchableSelect`, `AsyncPaginatedSelect`
+e `AsyncPaginatedMultiSelect` non inoltravano al proprio `<button>` interno le prop `id` /
+`aria-describedby` / `aria-invalid` che lo Slot di `FormControl` inietta. A differenza di un `<input>`
+nativo, un componente funzione non le "auto-spreada". Effetto reale: ogni `<FormLabel htmlFor>`
+puntava a un id inesistente nel DOM e la triade errore accessibile (rules/frontend.md §10) non era
+MAI cablata — in ~10 form (users, roles, referents, registries, company-sites, custom-fields,
+business-functions, product-categories, products, sectors).
+
+DECISIONE ARIA DA NON RI-DISCUTERE: `role="combobox"` AGGIUNTO su `AsyncPaginatedSelect` (mancava),
+NON aggiunto su `AsyncPaginatedMultiSelect`. Motivo: il pattern combobox presuppone UN valore corrente
+singolo, mentre quel trigger contiene 0..N badge rimovibili; il ruolo nativo `button` +
+`aria-haspopup="listbox"` + `aria-expanded` gia' descrive correttamente la disclosure, e il listbox ha
+gia' `aria-multiselectable`. Forzare la simmetria avrebbe reso il ruolo semanticamente falso.
+
+CONSEGUENZA SUI TEST (non e' tampering, verificato riga per riga): i test che localizzavano questi
+trigger come `button` ora li localizzano come `combobox`; in `product-category-business-function-field.test.tsx`
+la query per POSIZIONE nel DOM e' diventata una query per NOME ACCESSIBILE — asserzione piu' FORTE,
+possibile solo ora che l'associazione label funziona. Zero asserzioni rimosse o indebolite.
+
+`components/ui/geo/geo-select.tsx` resta FUORI: la sua label e' uno `<span>` senza `htmlFor`, e' un gap
+DIVERSO e ancora aperto. -> candidato prossimo giro.
+
+VERIFICATO DA ME direttamente (non su parola dei teammate): Vitest 872 pass / 4 fail = baseline
+pre-esistente esatta (3 ContactsCell + 1 use-table-preferences, entrambi in features/table/, rossi anche
+su main); tsc pulito.
+
+## FEATURE — Product category -> business function, with inheritance (2026-07-13) — GREEN, committed b4c3de0
 
 Spec: `docs/specs/0023-product-category-business-function.xml` (contract frozen BEFORE dispatch,
 then extended once — REV additiva sul tree, vedi sotto). Implementata da due teammate a ownership
@@ -45,11 +75,6 @@ Pint pulito sul diff. I 5 rossi sono PRE-ESISTENTI e gia' noti (AbstractMigratio
 hanno un test reale che esiste ed e' passato.
 
 DEBITO NOTO LASCIATO APERTO (deliberatamente, non regressioni):
-- `components/ui/searchable-select.tsx` NON inoltra `id`/`aria-describedby`/`aria-invalid` al proprio
-  `<button>` interno: in ogni form che lo usa dentro `FormControl` la `<label>` punta a nulla e il
-  nome accessibile ripiega sul testo dell'opzione selezionata. Difetto WCAG PRE-ESISTENTE, ownership
-  `ui-design`, cross-modulo (parent picker categorie, category picker prodotti, attribute picker).
-  L'utente ha approvato di affrontarlo come TASK SEPARATO dopo questo commit. -> PROSSIMO PASSO.
 - `CategoryHierarchy.php` (425 righe) e `ProductCategoriesTableDefinition.php` (351) sono sopra il
   soft-limit di 300, sotto l'hard-limit di 500. Split NON fatto di proposito: responsabilita' coesa,
   splittare a fine feature aggiungeva blast radius senza ridurre complessita'.
