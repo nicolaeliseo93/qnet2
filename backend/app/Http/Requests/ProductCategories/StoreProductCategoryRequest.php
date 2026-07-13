@@ -39,6 +39,7 @@ class StoreProductCategoryRequest extends FormRequest
             'parent_id' => ['nullable', 'integer', 'exists:product_categories,id'],
             'inherits_attributes' => ['sometimes', 'boolean'],
             'description' => ['nullable', 'string'],
+            'business_function_id' => ['nullable', 'integer', 'exists:business_functions,id'],
             'attributes' => ['sometimes', 'array'],
             'attributes.*.attribute_id' => ['required', 'integer', 'exists:attributes,id', 'distinct'],
             'attributes.*.is_required' => ['sometimes', 'boolean'],

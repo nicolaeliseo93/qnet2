@@ -2,6 +2,60 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — Product category -> business function, with inheritance (2026-07-13) — GREEN
+
+Spec: `docs/specs/0023-product-category-business-function.xml` (contract frozen BEFORE dispatch,
+then extended once — REV additiva sul tree, vedi sotto). Implementata da due teammate a ownership
+disgiunta (backend/ vs frontend/src/), chiusa dal verifier indipendente: VERDE.
+
+REGOLE DI DOMINIO (decise dall'utente via AskUserQuestion, non derivabili dal codice):
+- `product_categories.business_function_id` nullable, FK -> `business_functions`, `nullOnDelete`
+  (stesso pattern di `employment_profiles.business_function_id`, l'unica altra FK esterna).
+- Ereditarieta' TRANSITIVA: si risale `parent_id` fino alla radice, vince la prima funzione trovata.
+  `inherits_attributes` NON e' una barriera qui: riguarda solo gli attributi (spec 0017).
+- NESSUN OVERRIDE: se una categoria eredita una funzione, non puo' averne una propria -> 422.
+- CASCADE-TO-NULL in transazione: quando una categoria acquisisce una funzione effettiva (propria
+  o ereditata dopo un reparent), le funzioni PROPRIE di TUTTI i discendenti ricorsivi vengono azzerate.
+
+INVARIANTE CENTRALE (regge tutta la feature): in ogni catena radice->foglia esiste AL PIU' UNA
+categoria con `business_function_id` non nullo. Da qui discendono sia il 422 sia il cascade. Il
+verifier ha cercato attivamente un buco (factory, seeder, import, scritture dirette): nessuno trovato.
+
+DUE FATTI DA NON RI-DERIVARE:
+1. La risalita degli antenati vive in `CategoryHierarchy` come walk iterativo in PHP con MAX_DEPTH,
+   MAI una CTE `WITH RECURSIVE` (portabilita' SQLite/MySQL, vincolo di progetto). `descendantIds()`
+   e' una BFS sulla mappa id/parent_id: copre tutti i discendenti, non solo i figli diretti.
+2. Per questo la colonna tabella `business_function` e' dichiarata **`sortable: false`** su ENTRAMBE
+   le griglie (categorie e prodotti): il valore effettivo richiede una risalita transitiva non
+   limitata, non esprimibile in una subquery portabile senza CTE. Filtro (`set`) e visualizzazione
+   funzionano; il sort viene rifiutato a monte dall'allow-list con 422. Se un giorno servira'
+   ordinare, la strada e' una colonna denormalizzata mantenuta dal cascade — scelta consapevole,
+   non un ripensamento di questa.
+
+REV ADDITIVA (durante l'implementazione): `GET /product-categories/tree` ora espone
+`business_function_id` per nodo (la funzione PROPRIA, non l'effettiva). Motivo: nel form lo stato
+"eredita / non eredita" dipende dal parent SELEZIONATO, non da quello salvato; il tree e' gia' in
+cache lato FE e gia' porta `parent_id`, quindi con questo solo campo il frontend risolve
+l'ereditarieta' client-side (`features/product-categories/business-function-inheritance.ts`) senza
+nuovi endpoint e senza round-trip. Il 422 server-side resta l'unica autorita' reale.
+
+VERIFICATO (output reale, non dichiarazioni): Pest 1884/1886 pass; Vitest 864/868 pass; tsc pulito;
+Pint pulito sul diff. I 5 rossi sono PRE-ESISTENTI e gia' noti (AbstractMigrationSourcePreviewTest;
+4 in features/table/). Pint rosso su `CompanySiteUpdateTest.php`: pre-esistente. Tutti gli AC-001..019
+hanno un test reale che esiste ed e' passato.
+
+DEBITO NOTO LASCIATO APERTO (deliberatamente, non regressioni):
+- `components/ui/searchable-select.tsx` NON inoltra `id`/`aria-describedby`/`aria-invalid` al proprio
+  `<button>` interno: in ogni form che lo usa dentro `FormControl` la `<label>` punta a nulla e il
+  nome accessibile ripiega sul testo dell'opzione selezionata. Difetto WCAG PRE-ESISTENTE, ownership
+  `ui-design`, cross-modulo (parent picker categorie, category picker prodotti, attribute picker).
+  L'utente ha approvato di affrontarlo come TASK SEPARATO dopo questo commit. -> PROSSIMO PASSO.
+- `CategoryHierarchy.php` (425 righe) e `ProductCategoriesTableDefinition.php` (351) sono sopra il
+  soft-limit di 300, sotto l'hard-limit di 500. Split NON fatto di proposito: responsabilita' coesa,
+  splittare a fine feature aggiungeva blast radius senza ridurre complessita'.
+- TOCTOU teorica: il guard no-override gira PRIMA della transazione (stesso pattern del preesistente
+  `assertNoCycle()`). Non una regressione; rilevante solo sotto scrittura concorrente sullo stesso ramo.
+
 ## REFACTOR — Attribute definitions aligned to custom fields (2026-07-13) — GREEN (not committed)
 
 User goal: "allineare le tipologie degli attributi della categoria di prodotto ai tipi di input,

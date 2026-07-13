@@ -19,6 +19,9 @@ function original(overrides: Partial<ProductCategoryDetail> = {}): ProductCatego
     attributes: [{ attribute_id: 9, code: 'ram', name: 'RAM', type: 'integer', is_required: true, sort_order: 0 }],
     inherited_attributes: [],
     created_at: '2026-01-01T00:00:00Z',
+    business_function_id: null,
+    business_function: null,
+    effective_business_function: null,
     ...overrides,
   }
 }
@@ -31,6 +34,7 @@ describe('buildCreatePayload', () => {
       inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      business_function_id: null,
       custom_fields: {},
     }
 
@@ -40,6 +44,7 @@ describe('buildCreatePayload', () => {
       inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      business_function_id: null,
     })
   })
 })
@@ -52,6 +57,7 @@ describe('buildUpdatePayload', () => {
       inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      business_function_id: null,
       custom_fields: {},
     }
 
@@ -65,6 +71,7 @@ describe('buildUpdatePayload', () => {
       inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      business_function_id: null,
       custom_fields: {},
     }
 
@@ -78,6 +85,7 @@ describe('buildUpdatePayload', () => {
       inherits_attributes: false,
       description: null,
       attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      business_function_id: null,
       custom_fields: {},
     }
 
@@ -91,11 +99,43 @@ describe('buildUpdatePayload', () => {
       inherits_attributes: true,
       description: null,
       attributes: [{ attribute_id: 9, is_required: false, sort_order: 0 }],
+      business_function_id: null,
       custom_fields: {},
     }
 
     expect(buildUpdatePayload(values, original())).toEqual({
       attributes: [{ attribute_id: 9, is_required: false, sort_order: 0 }],
     })
+  })
+
+  it('includes the changed business_function_id when the category does not inherit one', () => {
+    const values: ProductCategoryFormValues = {
+      name: 'Laptops',
+      parent_id: 1,
+      inherits_attributes: true,
+      description: null,
+      attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      business_function_id: 5,
+      custom_fields: {},
+    }
+
+    expect(buildUpdatePayload(values, original())).toEqual({ business_function_id: 5 })
+  })
+
+  it('omits business_function_id when it stays null while the category inherits one (spec 0023 AC-015)', () => {
+    const values: ProductCategoryFormValues = {
+      name: 'Laptops',
+      parent_id: 1,
+      inherits_attributes: true,
+      description: null,
+      attributes: [{ attribute_id: 9, is_required: true, sort_order: 0 }],
+      business_function_id: null,
+      custom_fields: {},
+    }
+    const inheriting = original({
+      effective_business_function: { id: 1, name: 'Sales', inherited: true, source_category: { id: 1, name: 'Electronics' } },
+    })
+
+    expect(buildUpdatePayload(values, inheriting)).toEqual({})
   })
 })

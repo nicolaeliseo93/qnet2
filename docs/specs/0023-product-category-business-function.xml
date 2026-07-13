@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0023-product-category-business-function" status="approved" owner="utente" date="2026-07-13">
+
+  <goal>
+    Associare a ogni categoria prodotto una funzione aziendale (business function).
+    La funzione si eredita lungo la catena degli antenati: se un antenato la possiede,
+    la categoria figlio la eredita e NON puo' impostarne una propria; solo una categoria
+    senza funzione ereditata puo' sceglierne una. Il prodotto espone in sola lettura la
+    funzione aziendale effettiva della propria categoria.
+  </goal>
+
+  <context>
+    Decisioni di prodotto congelate con l'utente (AskUserQuestion, 2026-07-13):
+      1. NESSUN override: se esiste una funzione ereditata, il campo della categoria e' bloccato.
+      2. Ereditarieta' TRANSITIVA: si risale `parent_id` fino alla radice e vince la prima
+         funzione trovata (il flag `inherits_attributes` NON e' una barriera qui: riguarda
+         solo gli attributi, spec 0017).
+      3. CASCADE-TO-NULL: quando una categoria acquisisce una funzione effettiva, le funzioni
+         PROPRIE di tutti i suoi discendenti vengono azzerate (invariante: in ogni catena
+         radice->foglia esiste al massimo UNA categoria con `business_function_id` non nullo).
+      4. Il prodotto espone la funzione effettiva in sola lettura.
+
+    Codebase esistente da rispettare (nomi verificati, non ipotizzati):
+      - `product_categories`: adjacency list, `parent_id` self-FK nullable `restrictOnDelete`,
+        colonna `inherits_attributes`, colonna `old_id`. Model `App\Models\ProductCategory`
+        (`#[Fillable(['name','parent_id','inherits_attributes','description'])]`).
+      - `business_functions`: Model `App\Models\BusinessFunction`. Unica FK esterna gia'
+        esistente: `employment_profiles.business_function_id` (nullable, `nullOnDelete`) —
+        stesso pattern da replicare.
+      - Risalita antenati: `App\Services\ProductCategories\CategoryHierarchy` — walk iterativo
+        di `parent_id` in PHP con `MAX_DEPTH = 100`, NON una CTE `WITH RECURSIVE` (portabilita'
+        SQLite/MySQL, zero SQL grezzo). `effectiveAttributes()` e' il precedente diretto.
+      - `App\Services\ProductCategoryService`: `create()`, `update()` (con `assertNoCycle()`),
+        `delete()`, `syncAttributes()`.
+      - `GET /api/business-functions/for-select` esiste gia'
+        (`BusinessFunctionForSelectController` -> `{id, label}`), consumato lato FE da
+        `AsyncPaginatedSelect` + `BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE`
+        (`features/business-functions/for-select-api.ts`). Precedente d'uso canonico:
+        `features/users/user-form-employment-tabs.tsx` (campo `employment.business_function_id`).
+      - `App\Authorization\ProductCategoriesAuthorization` (campi `name`, `parent_id`,
+        `inherits_attributes`, `description`, `attributes`) e `ProductsAuthorization`.
+      - Tabelle SSRM: `ProductCategoriesTableDefinition` + `ProductCategories\ProductCategoryColumnCatalog`;
+        `ProductsTableDefinition` + `Products\ProductColumnCatalog`.
+      - Il form categoria (`features/product-categories/product-category-form-body.tsx`) usa il
+        tree gia' in cache (`useProductCategoryTree` + `flattenCategoryTree`) per il parent picker:
+        NON esiste un `for-select` per le categorie ed e' fuori scope crearlo.
+  </context>
+
+  <scope>
+    <in>
+      <item>Migrazione: `product_categories.business_function_id` nullable, FK -> `business_functions`, `nullOnDelete`, indicizzata.</item>
+      <item>Model `ProductCategory`: `business_function_id` in `#[Fillable]` + relazione `businessFunction(): BelongsTo`.</item>
+      <item>`CategoryHierarchy`: risoluzione della funzione EFFETTIVA (propria o ereditata, con la categoria sorgente).</item>
+      <item>`ProductCategoryService`: enforcement no-override (422) + cascade-to-null sui discendenti, in transazione.</item>
+      <item>Store/Update FormRequest + DTO + `ProductCategoryResource` + controller.</item>
+      <item>`ProductCategoriesAuthorization`: nuovo `FieldDefinition('business_function_id', 'select')`.</item>
+      <item>Colonna tabella SSRM `business_function` su product-categories e su products (valore = funzione EFFETTIVA).</item>
+      <item>`ProductResource`: campo `business_function` in sola lettura, derivato dalla categoria.</item>
+      <item>Frontend: campo nel form categoria (bloccato + hint quando ereditata), dettaglio categoria, dettaglio/tabella prodotto, i18n it/en.</item>
+      <item>Test Pest (backend) e Vitest (frontend) mappati 1:1 sugli acceptance criteria.</item>
+    </in>
+    <out>
+      <item>NESSUN endpoint `product-categories/for-select` (resta fuori scope, spec 0017).</item>
+      <item>NESSUNA scrittura di `business_function_id` sul prodotto: sul prodotto e' SOLO derivato/read-only.</item>
+      <item>NESSUN override della funzione ereditata (decisione 1): non aggiungere flag tipo `inherits_business_function`.</item>
+      <item>NESSUNA modifica al comportamento degli attributi/`inherits_attributes` (spec 0017).</item>
+      <item>NESSUNA nuova dipendenza composer/npm.</item>
+      <item>NESSUNA migrazione dati esterna (`ProductCategoriesSource`) per questo campo: fuori scope.</item>
+      <item>Import/export CSV del nuovo campo: fuori scope.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <!-- La shape di riferimento condivisa: "funzione aziendale effettiva" -->
+    <type name="EffectiveBusinessFunction">
+      {
+        "id": number,                                  // business_functions.id
+        "name": string,                                // business_functions.name
+        "inherited": boolean,                          // true se proviene da un antenato
+        "source_category": { "id": number, "name": string } | null   // valorizzato SOLO se inherited=true
+      }
+    </type>
+
+    <endpoint method="GET" path="/api/product-categories/{productCategory}">
+      <response status="200">
+        // ProductCategoryResource, campi ESISTENTI invariati + i due nuovi:
+        {
+          "id": number, "name": string, "parent_id": number|null, "parent": {...}|null,
+          "inherits_attributes": boolean, "description": string|null,
+          "attributes": [...], "created_at": string,
+
+          "business_function_id": number|null,                       // funzione PROPRIA (null se ereditata o assente)
+          "business_function": { "id": number, "name": string } | null,   // funzione PROPRIA idratata
+          "effective_business_function": EffectiveBusinessFunction | null // propria oppure ereditata
+        }
+        // NB: per invariante, se effective_business_function.inherited === true allora
+        //     business_function_id === null (e viceversa).
+      </response>
+      <errors>403 senza `product-categories.view`; 404 inesistente.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/product-categories">
+      <request>
+        // campi esistenti (name, parent_id, inherits_attributes, description, attributes[]) +
+        "business_function_id": number|null   // opzionale
+      </request>
+      <response status="201">Stessa shape di GET show.</response>
+      <errors>
+        422 `business_function_id` non esistente in `business_functions`.
+        422 `business_function_id` valorizzato mentre la categoria eredita gia' una funzione
+            dal ramo del `parent_id` indicato. Messaggio (chiave i18n lato FE):
+            "This category inherits a business function from an ancestor and cannot define its own."
+        403 senza `product-categories.create`.
+      </errors>
+    </endpoint>
+
+    <endpoint method="PATCH|PUT" path="/api/product-categories/{productCategory}">
+      <request>
+        // patch parziale, campi esistenti + "business_function_id": number|null
+      </request>
+      <response status="200">Stessa shape di GET show (dopo il cascade).</response>
+      <errors>
+        422 stesse regole di POST (valutate contro il parent EFFETTIVO dopo l'update).
+        422 ciclo gerarchico (comportamento esistente, invariato).
+        403 senza `product-categories.update`.
+      </errors>
+      <side_effects>
+        CASCADE-TO-NULL, in una singola transazione DB, quando dopo l'update la categoria
+        possiede una funzione EFFETTIVA (propria o ereditata): tutti i DISCENDENTI (ricorsivi)
+        con `business_function_id` non nullo vengono azzerati. Si attiva in entrambi i casi:
+          (a) la categoria acquisisce/cambia una funzione propria;
+          (b) la categoria viene spostata sotto un ramo che porta una funzione ereditata
+              (in questo caso viene azzerata anche la propria `business_function_id`).
+      </side_effects>
+    </endpoint>
+
+    <!-- REV 2026-07-13 (additiva, dopo il primo giro di implementazione).
+         Motivo: nel form categoria lo stato "eredita / non eredita" dipende dal parent
+         SELEZIONATO, non da quello salvato. Senza questo dato il frontend non puo' decidere
+         se bloccare il campo quando l'utente cambia `parent_id` (o in creazione), e resta
+         appeso al 422 del backend. Il tree e' gia' in cache lato FE e gia' contiene
+         `parent_id` per ogni nodo: esporre anche la funzione PROPRIA di ciascun nodo rende
+         la risalita risolvibile client-side, senza nuovi endpoint e senza round-trip. -->
+    <endpoint method="GET" path="/api/product-categories/tree">
+      <response status="200">
+        // Ogni nodo dell'albero: campi ESISTENTI invariati (id, name, parent_id, children[],
+        // attributes_count, products_count) + UNO nuovo:
+        {
+          "business_function_id": number|null   // funzione PROPRIA del nodo (NON quella effettiva/ereditata)
+        }
+        // Il FE ricostruisce l'ereditarieta' risalendo `parent_id` sull'albero gia' in cache.
+        // Il backend resta l'unica autorita': il 422 di no-override e' comunque enforced.
+      </response>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/products/{product}">
+      <response status="200">
+        // ProductResource, campi ESISTENTI invariati + uno nuovo, SOLA LETTURA:
+        {
+          "id": number, "name": string, "description": ..., "cost": ..., "price": ...,
+          "category_id": number|null, "category": {"id","name"}|null,
+          "product_type": ..., "created_at": ...,
+
+          "business_function": { "id": number, "name": string } | null  // effettiva della categoria; null se il prodotto non ha categoria
+        }
+        // Un `business_function_id` inviato in POST/PATCH /products viene IGNORATO (non fillable).
+      </response>
+    </endpoint>
+
+    <tables>
+      // product-categories: nuova colonna `business_function` (type text, filterType `set`, derived).
+      //   Valore = nome della funzione EFFETTIVA (propria o ereditata).
+      // products: nuova colonna `business_function` (type text, filterType `set`, derived).
+      //   Valore = nome della funzione EFFETTIVA della categoria del prodotto.
+      // VINCOLO: filtro/sort server-side da ALLOW-LIST di colonne. Vietato passare input utente
+      //   a whereRaw/orderByRaw (backend.md §8). Se il sort su colonna derivata non e'
+      //   esprimibile in modo sicuro/efficiente, dichiararla non-sortable e riportarlo.
+    </tables>
+
+  </data_contract>
+
+  <acceptance_criteria>
+    <criterion id="AC-001">Schema: `product_categories.business_function_id` esiste, e' nullable, ha FK verso `business_functions` con `nullOnDelete`; la migrazione e' reversibile (up/down round-trip con dati).</criterion>
+    <criterion id="AC-002">Cancellando una `BusinessFunction` referenziata, la categoria sopravvive con `business_function_id = null` (nullOnDelete).</criterion>
+    <criterion id="AC-003">Categoria radice senza funzione: `POST` con `business_function_id` valido -> 201, `business_function_id` valorizzato, `effective_business_function.inherited === false`, `source_category === null`.</criterion>
+    <criterion id="AC-004">Ereditarieta' transitiva: A(BF=1) -> B(null) -> C(null). `GET /product-categories/{C}` restituisce `effective_business_function = {id:1, inherited:true, source_category:{id:A}}` e `business_function_id === null`.</criterion>
+    <criterion id="AC-005">No-override in create: `POST` di una categoria con `parent_id = B` (che eredita da A) e `business_function_id` valorizzato -> 422.</criterion>
+    <criterion id="AC-006">No-override in update: `PATCH /product-categories/{C}` con `business_function_id` valorizzato, mentre C eredita da A -> 422; il DB resta invariato.</criterion>
+    <criterion id="AC-007">Consentito quando non eredita: X(null) -> Y(null); `PATCH /product-categories/{Y}` con `business_function_id` valido -> 200 e valore persistito.</criterion>
+    <criterion id="AC-008">Cascade su spostamento: Y ha una funzione propria (BF=2) e viene spostata sotto A (BF=1) con `PATCH parent_id=A` -> 200; `Y.business_function_id === null` e `effective_business_function = {id:1, inherited:true}`.</criterion>
+    <criterion id="AC-009">Cascade sui discendenti: dato X(null) -> Y(BF=2) -> Z(null), `PATCH /product-categories/{X}` con `business_function_id = 1` -> 200; Y ha `business_function_id === null` e sia Y sia Z ereditano BF=1 da X. L'operazione e' atomica (transazione).</criterion>
+    <criterion id="AC-010">Invariante globale: dopo qualunque sequenza di store/update, in nessuna catena radice->foglia esistono due categorie con `business_function_id` non nullo.</criterion>
+    <criterion id="AC-011">Validazione: `business_function_id` inesistente -> 422. `business_function_id: null` esplicito su categoria che ne aveva una propria -> 200, valore azzerato.</criterion>
+    <criterion id="AC-012">Authz: utente senza `product-categories.update` -> 403 sul PATCH; il campo `business_function_id` e' registrato in `ProductCategoriesAuthorization` e la field-permission matrix lo rispetta (campo negato -> non scrivibile).</criterion>
+    <criterion id="AC-013">Prodotto: `GET /products/{p}` di un prodotto la cui categoria eredita BF=1 restituisce `business_function = {id:1, name:...}`; prodotto senza categoria -> `null`. Un `business_function_id` nel body di `POST/PATCH /products` viene ignorato (nessuna colonna scritta).</criterion>
+    <criterion id="AC-014">Tabelle SSRM: la colonna `business_function` compare nel catalogo di product-categories e di products, mostra il valore EFFETTIVO, e il filtro `set` restituisce le righe corrette (incluse quelle che ereditano). Nessun `whereRaw`/`orderByRaw` alimentato da input utente.</criterion>
+    <criterion id="AC-015">Frontend — form categoria: quando la categoria eredita, il selettore della funzione aziendale e' DISABILITATO e mostra il valore ereditato con l'indicazione della categoria sorgente; quando non eredita, e' abilitato e permette di sceglierla/azzerarla. Il payload non invia mai `business_function_id` quando il campo e' ereditato.</criterion>
+    <criterion id="AC-016">Frontend — il selettore usa `AsyncPaginatedSelect` sull'endpoint `business-functions/for-select` esistente (nessun nuovo endpoint), e le stringhe passano da i18next (it/en), zero hardcode.</criterion>
+    <criterion id="AC-018">(REV) `GET /product-categories/tree` espone `business_function_id` (funzione PROPRIA, non effettiva) su ogni nodo; i nodi senza funzione propria hanno `null`. Nessun altro campo del tree cambia.</criterion>
+    <criterion id="AC-019">(REV) Frontend — form categoria: lo stato "ereditata" e' calcolato dal parent SELEZIONATO risalendo il tree in cache, non dal solo detail caricato. Quindi: (a) in creazione, scegliendo un parent che porta una funzione, il selettore si disabilita e mostra la sorgente; (b) in modifica, spostando la categoria sotto un ramo con funzione, il selettore si disabilita; (c) spostandola sotto un ramo senza funzione, si riabilita.</criterion>
+    <criterion id="AC-017">Suite verde: Pest e Vitest passano interamente; `tsc --noEmit` pulito; Pint pulito sul diff. Nessuna regressione sui test esistenti di product-categories/products/business-functions.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie gia' presenti in `composer.json` / `package.json`.</item>
+    <item>Identificatori in INGLESE (colonne, rotte, metodi, componenti). Stringhe utente via i18next.</item>
+    <item>Risalita degli antenati: walk iterativo in PHP nel solo `CategoryHierarchy` (coerente con `effectiveAttributes`), MAX_DEPTH rispettato. Vietate CTE/SQL grezzo.</item>
+    <item>Attenzione N+1: la risoluzione della funzione effettiva per una LISTA (tabella SSRM, prodotti) NON deve fare una query per riga. Il catalogo categorie e' piccolo: e' ammesso caricare `id, parent_id, business_function_id` in una sola query e risolvere in memoria (stesso spirito di `CategoryHierarchy::tree()`).</item>
+    <item>Authz server-side su ogni endpoint (Policy `product-categories.*` esistente). L'UI nasconde, il backend autorizza.</item>
+    <item>Cascade e update nella stessa transazione DB.</item>
+    <item>Layering: Controller thin -> FormRequest -> DTO -> Service -> Resource. Nessun model Eloquent raw in risposta.</item>
+    <item>File entro 300 righe (soft) / 500 (hard). Zero dead code, zero emoji.</item>
+  </constraints>
+
+</spec>

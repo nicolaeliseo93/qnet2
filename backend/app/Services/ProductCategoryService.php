@@ -23,6 +23,10 @@ class ProductCategoryService
 
     public function create(CreateProductCategoryData $data): ProductCategory
     {
+        if ($data->businessFunctionId !== null) {
+            $this->assertNoInheritedBusinessFunction($data->parentId);
+        }
+
         return DB::transaction(function () use ($data): ProductCategory {
             /** @var ProductCategory $category */
             $category = ProductCategory::create([
@@ -30,13 +34,17 @@ class ProductCategoryService
                 'parent_id' => $data->parentId,
                 'inherits_attributes' => $data->inheritsAttributes,
                 'description' => $data->description,
+                'business_function_id' => $data->businessFunctionId,
             ]);
 
             if ($data->hasAttributes()) {
                 $this->syncAttributes($category, $data->attributes);
             }
 
-            return $category->fresh(['parent', 'attributes']);
+            // A freshly created category has no descendants yet, so no
+            // cascade-to-null is possible here — cascade only ever applies
+            // on update (see update()).
+            return $category->fresh(['parent', 'attributes', 'businessFunction']);
         });
     }
 
@@ -44,6 +52,11 @@ class ProductCategoryService
     {
         if ($data->hasParentId() && $data->parentId !== null) {
             $this->assertNoCycle($category, $data->parentId);
+        }
+
+        if ($data->businessFunctionIdSubmitted && $data->businessFunctionId !== null) {
+            $resolvedParentId = $data->hasParentId() ? $data->parentId : $category->parent_id;
+            $this->assertNoInheritedBusinessFunction($resolvedParentId);
         }
 
         return DB::transaction(function () use ($category, $data): ProductCategory {
@@ -58,7 +71,14 @@ class ProductCategoryService
                 $this->syncAttributes($category, $data->attributes);
             }
 
-            return $category->fresh(['parent', 'attributes']);
+            // Only reparenting/business_function_id changes can disturb the
+            // one-per-chain invariant (spec 0023) — skip the cascade check on
+            // an unrelated edit (name/description/attributes-only).
+            if ($data->hasParentId() || $data->businessFunctionIdSubmitted) {
+                $this->cascadeBusinessFunctionToDescendants($category);
+            }
+
+            return $category->fresh(['parent', 'attributes', 'businessFunction']);
         });
     }
 
@@ -100,6 +120,17 @@ class ProductCategoryService
     }
 
     /**
+     * $category's EFFECTIVE business function (spec 0023): its own, or the
+     * first ancestor's walking `parent_id` toward the root.
+     *
+     * @return array{id: int, name: string, inherited: bool, source_category: array{id: int, name: string}|null}|null
+     */
+    public function effectiveBusinessFunction(ProductCategory $category): ?array
+    {
+        return $this->hierarchy->effectiveBusinessFunction($category);
+    }
+
+    /**
      * $parentId may not be $category itself, nor one of its own descendants
      * (i.e. $category may not be an ancestor of the prospective new parent) —
      * either would create a cycle in the tree.
@@ -114,6 +145,48 @@ class ProductCategoryService
 
         if ($parent !== null && $this->hierarchy->isAncestorOf($parent, $category->id)) {
             abort(422, 'A category cannot be moved under one of its own descendants.');
+        }
+    }
+
+    /**
+     * NO-OVERRIDE guard (spec 0023): a category may not define its own
+     * business function while it inherits one from $parentId's branch.
+     */
+    private function assertNoInheritedBusinessFunction(?int $parentId): void
+    {
+        if ($this->hierarchy->inheritedBusinessFunctionFor($parentId) !== null) {
+            abort(422, 'This category inherits a business function from an ancestor and cannot define its own.');
+        }
+    }
+
+    /**
+     * CASCADE-TO-NULL (spec 0023): once $category owns an EFFECTIVE business
+     * function (its own, or freshly inherited via a reparent), every
+     * descendant's OWN business_function_id is cleared — the invariant
+     * allows at most one non-null value per root→leaf chain. If $category
+     * itself was moved under a branch that already provides one, its OWN
+     * value is cleared too (the ancestor's wins over a now-orphaned own
+     * value the no-override guard did not need to reject, since only
+     * `parent_id` — not `business_function_id` — was submitted).
+     */
+    private function cascadeBusinessFunctionToDescendants(ProductCategory $category): void
+    {
+        $inherited = $this->hierarchy->inheritedBusinessFunctionFor($category->parent_id);
+
+        if ($inherited !== null && $category->business_function_id !== null) {
+            $category->update(['business_function_id' => null]);
+        }
+
+        $effectiveId = $category->business_function_id ?? $inherited['id'] ?? null;
+
+        if ($effectiveId === null) {
+            return;
+        }
+
+        $descendantIds = $this->hierarchy->descendantIds($category->id);
+
+        if ($descendantIds !== []) {
+            ProductCategory::whereIn('id', $descendantIds)->whereNotNull('business_function_id')->update(['business_function_id' => null]);
         }
     }
 

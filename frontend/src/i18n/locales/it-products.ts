@@ -72,6 +72,7 @@ export const productCategories = {
     description: 'Descrizione',
     attributes_count: 'Attributi',
     products_count: 'Prodotti',
+    business_function: 'Funzione aziendale',
     created_at: 'Creato il',
     tooltipEmpty: 'Nessun elemento da mostrare.',
     productsMore: '+{{count}} altri',
@@ -80,6 +81,7 @@ export const productCategories = {
     title: 'Dettagli categoria',
     subtitle: 'Vista di sola lettura della categoria selezionata.',
     loadError: 'Impossibile caricare la categoria. Riprova.',
+    businessFunctionInherited: 'Ereditata da {{category}}',
   },
   form: {
     newRootCategory: 'Nuova categoria',
@@ -116,6 +118,13 @@ export const productCategories = {
     sortOrderHelp: 'La posizione in cui questo campo compare nel form del prodotto.',
     removeAttribute: 'Rimuovi attributo',
     inheritedAttributes: 'Ereditati dalle categorie antenate',
+    businessFunction: 'Funzione aziendale',
+    businessFunctionPlaceholder: 'Seleziona una funzione aziendale…',
+    businessFunctionSearch: 'Cerca funzioni aziendali…',
+    businessFunctionEmpty: 'Nessuna funzione aziendale trovata.',
+    businessFunctionError: 'Impossibile caricare le funzioni aziendali.',
+    businessFunctionInheritedHint:
+      'Ereditata da "{{category}}". Per modificarla, agisci su quella categoria.',
     save: 'Salva',
     saving: 'Salvataggio…',
     cancel: 'Annulla',
@@ -150,6 +159,7 @@ export const products = {
     price: 'Prezzo',
     category: 'Categoria',
     product_type: 'Tipo',
+    business_function: 'Funzione aziendale',
     created_at: 'Creato il',
   },
   detail: {

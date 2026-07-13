@@ -13,6 +13,20 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class ProductResource extends JsonResource
 {
     /**
+     * $effectiveBusinessFunction is resolved by ProductService (spec 0023)
+     * and passed in explicitly — never computed here — because it requires
+     * CategoryHierarchy's ancestor walk, which stays out of the Resource
+     * layer (Controller thin -> Service authoritative -> Resource pure
+     * output shape).
+     *
+     * @param  array{id: int, name: string}|null  $effectiveBusinessFunction
+     */
+    public function __construct(Product $resource, private readonly ?array $effectiveBusinessFunction = null)
+    {
+        parent::__construct($resource);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -26,6 +40,9 @@ class ProductResource extends JsonResource
             'category_id' => $this->category_id,
             'category' => $this->categorySummary($this->category),
             'product_type' => $this->product_type,
+            // Read-only, derived from the category (spec 0023): never
+            // writable via POST/PATCH (not in $fillable, no FormRequest rule).
+            'business_function' => $this->effectiveBusinessFunction,
             'created_at' => $this->created_at,
         ];
     }

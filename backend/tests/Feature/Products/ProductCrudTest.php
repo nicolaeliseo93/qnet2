@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Attribute;
+use App\Models\BusinessFunction;
 use App\Models\CustomFieldDefinition;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -61,6 +62,48 @@ it('show: 200 with category summary, no attributes key', function () {
 
     expect($response->json('data'))->not->toHaveKey('attributes');
     expect($response->json('permissions'))->toHaveKeys(['resource', 'fields', 'actions']);
+});
+
+// ---------------------------------------------------------------------------
+// AC-013 — read-only `business_function` (spec 0023)
+// ---------------------------------------------------------------------------
+
+it('show: business_function reflects the category\'s EFFECTIVE (own or inherited) function', function () {
+    $actor = productUserWith(['view']);
+    $function = BusinessFunction::factory()->create();
+    $root = ProductCategory::factory()->create(['business_function_id' => $function->id]);
+    $child = ProductCategory::factory()->childOf($root)->create();
+    $withInherited = Product::factory()->create(['category_id' => $child->id]);
+    $withoutFunction = Product::factory()->create(); // category_id is NOT NULL on products — every product has a category
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/products/{$withInherited->id}")
+        ->assertOk()
+        ->assertJsonPath('data.business_function.id', $function->id)
+        ->assertJsonPath('data.business_function.name', $function->name);
+
+    $this->getJson("/api/products/{$withoutFunction->id}")
+        ->assertOk()
+        ->assertJsonPath('data.business_function', null);
+});
+
+it('create/update: a submitted business_function_id is ignored — no column, response stays derived', function () {
+    $actor = productUserWith(['create', 'update']);
+    $function = BusinessFunction::factory()->create();
+    $category = ProductCategory::factory()->create(['business_function_id' => $function->id]);
+    Sanctum::actingAs($actor);
+
+    $created = $this->postJson('/api/products', productGenericFields([
+        'name' => 'Widget', 'category_id' => $category->id, 'business_function_id' => 999999,
+    ]))->assertCreated();
+
+    $created->assertJsonPath('data.business_function.id', $function->id);
+
+    $product = Product::where('name', 'Widget')->firstOrFail();
+
+    $this->patchJson("/api/products/{$product->id}", ['business_function_id' => 999999])
+        ->assertOk()
+        ->assertJsonPath('data.business_function.id', $function->id);
 });
 
 it('show: 403 without products.view / 404 for a non-existent product', function () {

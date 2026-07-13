@@ -52,6 +52,11 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           {product.price !== null && (
             <DetailField label={t('products.columns.price')}>{formatDecimal(product.price)}</DetailField>
           )}
+          {product.business_function && (
+            <DetailField label={t('products.columns.business_function')}>
+              {product.business_function.name}
+            </DetailField>
+          )}
         </DetailGrid>
       </DetailSection>
 

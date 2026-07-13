@@ -3,6 +3,7 @@
 namespace App\Services\ProductCategories;
 
 use App\Models\Attribute;
+use App\Models\BusinessFunction;
 use App\Models\ProductCategory;
 use Illuminate\Support\Collection;
 
@@ -106,6 +107,157 @@ final class CategoryHierarchy
     }
 
     /**
+     * $category's EFFECTIVE business function (spec 0023): its OWN
+     * business_function_id when set, else the first one found walking
+     * `parent_id` toward the root (inheritedBusinessFunctionFor) —
+     * TRANSITIVE inheritance, unlike attributes, `inherits_attributes` is
+     * NOT a barrier here. Null when neither $category nor any ancestor has
+     * one.
+     *
+     * @return array{id: int, name: string, inherited: bool, source_category: array{id: int, name: string}|null}|null
+     */
+    public function effectiveBusinessFunction(ProductCategory $category): ?array
+    {
+        if ($category->business_function_id !== null) {
+            return $this->businessFunctionSummary($category->business_function_id, inherited: false, source: null);
+        }
+
+        return $this->inheritedBusinessFunctionFor($category->parent_id);
+    }
+
+    /**
+     * The business function a hypothetical child of $parentId would
+     * INHERIT: $parentId's own business_function_id, else the first one
+     * found walking further up. Used by the read-side
+     * (effectiveBusinessFunction) AND by the write-side no-override guard
+     * (ProductCategoryService), which must evaluate this against a
+     * PROSPECTIVE parent before persisting.
+     *
+     * @return array{id: int, name: string, inherited: true, source_category: array{id: int, name: string}}|null
+     */
+    public function inheritedBusinessFunctionFor(?int $parentId): ?array
+    {
+        $currentId = $parentId;
+        $depth = 0;
+
+        while ($currentId !== null && $depth < self::MAX_DEPTH) {
+            $node = ProductCategory::find($currentId);
+
+            if ($node === null) {
+                return null;
+            }
+
+            if ($node->business_function_id !== null) {
+                return $this->businessFunctionSummary($node->business_function_id, inherited: true, source: $node);
+            }
+
+            $currentId = $node->parent_id;
+            $depth++;
+        }
+
+        return null;
+    }
+
+    /**
+     * Every DESCENDANT id of $categoryId (recursive, excludes itself), via a
+     * single id/parent_id projection grouped in memory (mirrors tree()'s
+     * $byParent index) — feeds the cascade-to-null write path
+     * (ProductCategoryService), never a query per row.
+     *
+     * @return array<int, int>
+     */
+    public function descendantIds(int $categoryId): array
+    {
+        $byParent = ProductCategory::query()->select('id', 'parent_id')->get()->groupBy('parent_id');
+
+        $ids = [];
+        $visited = [];
+        $queue = $byParent->get($categoryId, collect())->pluck('id')->all();
+
+        while ($queue !== []) {
+            $currentId = array_shift($queue);
+
+            if (isset($visited[$currentId])) {
+                continue;
+            }
+
+            $visited[$currentId] = true;
+            $ids[] = $currentId;
+
+            foreach ($byParent->get($currentId, collect()) as $child) {
+                $queue[] = $child->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * category id → EFFECTIVE business function NAME (or null), for every
+     * category in one shot: two queries total (categories'
+     * id/parent_id/business_function_id, then business_functions' id/name),
+     * the rest resolved in memory — the list/table read path (spec 0023
+     * constraint: never a query per row).
+     *
+     * @return array<int, string|null>
+     */
+    public function effectiveBusinessFunctionNames(): array
+    {
+        $categories = ProductCategory::query()->select('id', 'parent_id', 'business_function_id')->get()->keyBy('id');
+        $functionNames = BusinessFunction::query()->pluck('name', 'id');
+
+        return $categories->keys()->mapWithKeys(
+            fn (int $id): array => [$id => $this->walkForBusinessFunctionName($id, $categories, $functionNames)],
+        )->all();
+    }
+
+    /**
+     * @param  Collection<int, ProductCategory>  $categories
+     * @param  Collection<int, string>  $functionNames
+     */
+    private function walkForBusinessFunctionName(int $id, Collection $categories, Collection $functionNames): ?string
+    {
+        $currentId = $id;
+        $depth = 0;
+
+        while ($currentId !== null && $depth < self::MAX_DEPTH) {
+            $category = $categories->get($currentId);
+
+            if ($category === null) {
+                return null;
+            }
+
+            if ($category->business_function_id !== null) {
+                return $functionNames->get($category->business_function_id);
+            }
+
+            $currentId = $category->parent_id;
+            $depth++;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{id: int, name: string, inherited: bool, source_category: array{id: int, name: string}|null}|null
+     */
+    private function businessFunctionSummary(int $businessFunctionId, bool $inherited, ?ProductCategory $source): ?array
+    {
+        $function = BusinessFunction::find($businessFunctionId);
+
+        if ($function === null) {
+            return null;
+        }
+
+        return [
+            'id' => $function->id,
+            'name' => $function->name,
+            'inherited' => $inherited,
+            'source_category' => $source !== null ? ['id' => $source->id, 'name' => $source->name] : null,
+        ];
+    }
+
+    /**
      * $category's EFFECTIVE attributes: its own assignments UNION those of the
      * ancestors it actually inherits from (see inheritedAncestors — the chain
      * is cut at the first `inherits_attributes = false` node), root-first
@@ -195,7 +347,12 @@ final class CategoryHierarchy
 
     /**
      * The full category tree, roots first, each node carrying its own
-     * attributes/products counts (spec 0017 tree endpoint).
+     * attributes/products counts (spec 0017 tree endpoint) and its OWN
+     * business_function_id (spec 0023 REV — NOT the effective/inherited one:
+     * the frontend resolves inheritance itself by walking this cached tree's
+     * `parent_id` chain, so the write-side no-override 422 stays the sole
+     * authority). No extra query: `get()` below already hydrates the full
+     * row, business_function_id included.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -229,6 +386,7 @@ final class CategoryHierarchy
                 'children' => $this->buildNodes($byParent, $category->id),
                 'attributes_count' => (int) $category->attributes_count,
                 'products_count' => (int) $category->products_count,
+                'business_function_id' => $category->business_function_id,
             ];
         }
 

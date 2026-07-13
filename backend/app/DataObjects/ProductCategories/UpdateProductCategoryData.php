@@ -13,7 +13,10 @@ namespace App\DataObjects\ProductCategories;
  * "not submitted" from "submitted as null" — the `*Submitted` flags carry
  * that distinction explicitly, mirroring UpdateBusinessFunctionData.
  * `attributes`, when submitted, is a full-replace sync of the category's own
- * assignments.
+ * assignments. `businessFunctionId`/`businessFunctionIdSubmitted` follow the
+ * same submitted-flag pattern (spec 0023): a category's own function is
+ * legitimately nullable (explicit clear), so presence must be distinguished
+ * from a null value.
  */
 final readonly class UpdateProductCategoryData
 {
@@ -29,6 +32,8 @@ final readonly class UpdateProductCategoryData
         public ?string $description = null,
         public bool $descriptionSubmitted = false,
         public ?array $attributes = null,
+        public ?int $businessFunctionId = null,
+        public bool $businessFunctionIdSubmitted = false,
     ) {}
 
     /**
@@ -47,6 +52,8 @@ final readonly class UpdateProductCategoryData
             description: array_key_exists('description', $data) ? $data['description'] : null,
             descriptionSubmitted: array_key_exists('description', $data),
             attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
+            businessFunctionId: array_key_exists('business_function_id', $data) && $data['business_function_id'] !== null ? (int) $data['business_function_id'] : null,
+            businessFunctionIdSubmitted: array_key_exists('business_function_id', $data),
         );
     }
 
@@ -89,6 +96,10 @@ final readonly class UpdateProductCategoryData
 
         if ($this->descriptionSubmitted) {
             $attributes['description'] = $this->description;
+        }
+
+        if ($this->businessFunctionIdSubmitted) {
+            $attributes['business_function_id'] = $this->businessFunctionId;
         }
 
         return $attributes;

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Attribute;
+use App\Models\BusinessFunction;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\User;
@@ -60,6 +61,30 @@ it('tree: nested roots→children with attributes_count/products_count', functio
     expect($childNode)->not->toBeNull()
         ->and($childNode['products_count'])->toBe(1)
         ->and($childNode['children'])->toBe([]);
+});
+
+// ---------------------------------------------------------------------------
+// AC-018 (REV) — each tree node exposes its OWN business_function_id, not
+// the effective/inherited one; the frontend resolves inheritance itself by
+// walking parent_id on this cached tree.
+// ---------------------------------------------------------------------------
+
+it('tree: each node carries its OWN business_function_id (null if it has none, even when it inherits one)', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $function = BusinessFunction::factory()->create();
+    $root = ProductCategory::factory()->create(['name' => 'Root', 'business_function_id' => $function->id]);
+    $child = ProductCategory::factory()->childOf($root)->create(['name' => 'Child']);
+    Sanctum::actingAs($actor);
+
+    $data = $this->getJson('/api/product-categories/tree')->assertOk()->json('data');
+
+    $rootNode = collect($data)->firstWhere('name', 'Root');
+    expect($rootNode['business_function_id'])->toBe($function->id);
+
+    // Child inherits the function but the tree exposes only its OWN value —
+    // the frontend, not this endpoint, resolves the inherited state.
+    $childNode = collect($rootNode['children'])->firstWhere('name', 'Child');
+    expect($childNode['business_function_id'])->toBeNull();
 });
 
 // ---------------------------------------------------------------------------

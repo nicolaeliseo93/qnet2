@@ -47,8 +47,10 @@ class ProductController extends BaseApiController
         try {
             $this->authorize('view', $product);
 
+            $product->loadMissing('category');
+
             return $this->okWithPermissions(
-                new ProductResource($product->loadMissing('category')),
+                new ProductResource($product, $this->service->effectiveBusinessFunction($product)),
                 $this->buildPermissions($request->user(), $product),
             );
         } catch (Throwable $exception) {
@@ -67,7 +69,7 @@ class ProductController extends BaseApiController
             $product = $this->service->create($request->toData());
 
             return $this->okWithPermissions(
-                new ProductResource($product),
+                new ProductResource($product, $this->service->effectiveBusinessFunction($product)),
                 $this->buildPermissions($request->user(), $product),
                 'Created',
                 HttpStatusEnum::CREATED,
@@ -88,7 +90,7 @@ class ProductController extends BaseApiController
             $product = $this->service->update($product, $request->toData());
 
             return $this->okWithPermissions(
-                new ProductResource($product),
+                new ProductResource($product, $this->service->effectiveBusinessFunction($product)),
                 $this->buildPermissions($request->user(), $product),
             );
         } catch (Throwable $exception) {

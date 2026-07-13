@@ -73,6 +73,19 @@ final class ProductColumnCatalog
                 'filterType' => 'set',
             ],
             [
+                // The product's category's EFFECTIVE (own or inherited)
+                // business function name (spec 0023), read-only, resolved by
+                // CategoryHierarchy. NOT SORTABLE (see BusinessFunctionColumn
+                // docblock).
+                'id' => 'business_function',
+                'label' => 'products.columns.business_function',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => false,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
                 // Real DB column rendered as a badge (ProductType), driven by
                 // config/config.php form_enums `product_type`.
                 'id' => 'product_type',
@@ -106,6 +119,7 @@ final class ProductColumnCatalog
             ['columnId' => 'cost', 'type' => 'number'],
             ['columnId' => 'price', 'type' => 'number'],
             ['columnId' => 'category', 'type' => 'set'],
+            ['columnId' => 'business_function', 'type' => 'set'],
             ['columnId' => 'product_type', 'type' => 'set'],
             ['columnId' => 'created_at', 'type' => 'date'],
         ];

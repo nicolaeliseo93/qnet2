@@ -20,6 +20,7 @@ final readonly class CreateProductCategoryData
         public bool $inheritsAttributes = true,
         public ?string $description = null,
         public ?array $attributes = null,
+        public ?int $businessFunctionId = null,
     ) {}
 
     /**
@@ -35,6 +36,7 @@ final readonly class CreateProductCategoryData
             inheritsAttributes: array_key_exists('inherits_attributes', $data) ? (bool) $data['inherits_attributes'] : true,
             description: array_key_exists('description', $data) ? $data['description'] : null,
             attributes: array_key_exists('attributes', $data) ? (array) $data['attributes'] : null,
+            businessFunctionId: array_key_exists('business_function_id', $data) && $data['business_function_id'] !== null ? (int) $data['business_function_id'] : null,
         );
     }
 

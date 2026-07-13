@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\ProductCategoryService;
 use App\Tables\ProductCategories\ProductCategoryColumnCatalog;
 use App\Tables\ProductCategories\ProductCategoryCountColumn;
+use App\Tables\Shared\BusinessFunctionColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +49,7 @@ class ProductCategoriesTableDefinition extends AbstractTableDefinition
     public function __construct(
         private readonly ProductCategoryService $service,
         private readonly ProductCategoryCountColumn $countColumn,
+        private readonly BusinessFunctionColumn $businessFunctionColumn,
     ) {}
 
     public function domain(): string
@@ -145,6 +147,7 @@ class ProductCategoriesTableDefinition extends AbstractTableDefinition
             'name' => $row->name,
             'parent' => $this->parentSummary($row->parent),
             'description' => $row->description,
+            'business_function' => $this->businessFunctionColumn->nameFor($row->id),
             'attributes_count' => (int) $row->attributes_count,
             'products_count' => (int) $row->products_count,
             // The category's OWN assigned attributes — the exact set counted
@@ -210,10 +213,26 @@ class ProductCategoriesTableDefinition extends AbstractTableDefinition
     {
         return match ($columnId) {
             'parent' => $this->filterByParentName($query, $filter),
+            'business_function' => $this->filterByBusinessFunctionName($query, $filter),
             'attributes_count' => $this->countColumn->applyDerivedFilter($query, 'attributes', $filter),
             'products_count' => $this->countColumn->applyDerivedFilter($query, 'products', $filter),
             default => false,
         };
+    }
+
+    /**
+     * Derived set filter on the EFFECTIVE business function name (spec
+     * 0023), delegated to BusinessFunctionColumn (the category IS the row,
+     * so this filters on `id`).
+     *
+     * @param  Builder<ProductCategory>  $query
+     * @param  array<string, mixed>  $filter
+     */
+    private function filterByBusinessFunctionName(Builder $query, array $filter): bool
+    {
+        $this->businessFunctionColumn->applyCategoryIdFilter($query, $filter);
+
+        return true;
     }
 
     /**
@@ -282,6 +301,7 @@ class ProductCategoriesTableDefinition extends AbstractTableDefinition
     {
         return match ($columnId) {
             'parent' => $this->distinctParentNames($query, $search, $limit),
+            'business_function' => $this->businessFunctionColumn->distinctValues((clone $query)->pluck('id'), $search, $limit),
             'attributes_count' => $this->countColumn->distinctValues($query, 'attributes_count', $search, $limit),
             'products_count' => $this->countColumn->distinctValues($query, 'products_count', $search, $limit),
             default => null,

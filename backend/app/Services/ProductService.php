@@ -5,6 +5,7 @@ namespace App\Services;
 use App\DataObjects\Products\CreateProductData;
 use App\DataObjects\Products\UpdateProductData;
 use App\Models\Product;
+use App\Services\ProductCategories\CategoryHierarchy;
 
 /**
  * Business logic for the `products` resource (spec 0017): create/update
@@ -21,6 +22,32 @@ class ProductService
      * @var array<int, string>
      */
     private const array HYDRATED_RELATIONS = ['category'];
+
+    public function __construct(private readonly CategoryHierarchy $hierarchy) {}
+
+    /**
+     * The product's category's EFFECTIVE business function (spec 0023),
+     * read-only: `id`/`name` only — the category's own `inherited`/
+     * `source_category` detail is a product-categories-only concern. Null
+     * when the product has no category, or the category (and its ancestry)
+     * has none.
+     *
+     * @return array{id: int, name: string}|null
+     */
+    public function effectiveBusinessFunction(Product $product): ?array
+    {
+        if ($product->category === null) {
+            return null;
+        }
+
+        $effective = $this->hierarchy->effectiveBusinessFunction($product->category);
+
+        if ($effective === null) {
+            return null;
+        }
+
+        return ['id' => $effective['id'], 'name' => $effective['name']];
+    }
 
     public function create(CreateProductData $data): Product
     {

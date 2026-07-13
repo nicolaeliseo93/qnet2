@@ -16,7 +16,9 @@ namespace App\Tables\ProductCategories;
  * either) — sortable generically (ORDER BY sees the withCount alias), but
  * filtering/distinct-values are delegated to ProductCategoryCountColumn
  * (a raw WHERE on the alias is not portable — MySQL cannot see a SELECT-list
- * alias from WHERE).
+ * alias from WHERE). `business_function` (spec 0023) is DERIVED and NOT
+ * SORTABLE (see BusinessFunctionColumn) — the EFFECTIVE (own or inherited)
+ * function name, resolved by CategoryHierarchy.
  */
 final class ProductCategoryColumnCatalog
 {
@@ -58,6 +60,18 @@ final class ProductCategoryColumnCatalog
                 'sortable' => false,
                 'filterable' => true,
                 'filterType' => 'text',
+            ],
+            [
+                // The category's EFFECTIVE (own or inherited) business
+                // function name (spec 0023), resolved by CategoryHierarchy.
+                // NOT SORTABLE (see BusinessFunctionColumn docblock).
+                'id' => 'business_function',
+                'label' => 'productCategories.columns.business_function',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => false,
+                'filterable' => true,
+                'filterType' => 'set',
             ],
             [
                 // Number of attributes directly assigned to this category
@@ -103,6 +117,7 @@ final class ProductCategoryColumnCatalog
             ['columnId' => 'name', 'type' => 'text'],
             ['columnId' => 'parent', 'type' => 'set'],
             ['columnId' => 'description', 'type' => 'text'],
+            ['columnId' => 'business_function', 'type' => 'set'],
             ['columnId' => 'attributes_count', 'type' => 'number'],
             ['columnId' => 'products_count', 'type' => 'number'],
             ['columnId' => 'created_at', 'type' => 'date'],

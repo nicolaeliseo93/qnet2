@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * hierarchy. A category's EFFECTIVE attributes are its own `attributes()`
  * assignments UNION every ancestor's (see ProductCategoryService).
  */
-#[Fillable(['name', 'parent_id', 'inherits_attributes', 'description'])]
+#[Fillable(['name', 'parent_id', 'inherits_attributes', 'description', 'business_function_id'])]
 class ProductCategory extends BaseModel
 {
     /** @use HasFactory<ProductCategoryFactory> */
@@ -45,6 +45,16 @@ class ProductCategory extends BaseModel
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /**
+     * The category's OWN business function assignment (spec 0023) — never
+     * the EFFECTIVE (own-or-inherited) one, which is resolved read-side by
+     * CategoryHierarchy::effectiveBusinessFunction().
+     */
+    public function businessFunction(): BelongsTo
+    {
+        return $this->belongsTo(BusinessFunction::class);
     }
 
     /**
