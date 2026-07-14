@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
+import { RelationSelectField } from '@/components/form/relation-select-field'
+import { toRelationFieldRef } from '@/components/form/relation-field-ref'
 import type { ForSelectItem } from '@/features/for-select/types'
 import { MetaField } from '@/features/authorization/MetaField'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
@@ -53,33 +54,20 @@ export function ProfileTabContent({
       title={t('users.form.sections.profile.title')}
       description={t('users.form.sections.profile.description')}
     >
-      <MetaField
+      <RelationSelectField
         control={control}
         name="employment.business_function_id"
         metaKey="employment.business_function_id"
         label={t('users.form.employment.businessFunction')}
-      >
-        {({ field, disabled }) => (
-          <FormControl>
-            <AsyncPaginatedSelect
-              resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
-              value={field.value}
-              onChange={field.onChange}
-              selectedItem={selectedBusinessFunctionItem}
-              disabled={disabled}
-              labels={{
-                placeholder: t('users.form.employment.businessFunctionPlaceholder'),
-                searchPlaceholder: t('users.form.employment.businessFunctionSearch'),
-                empty: t('users.form.employment.businessFunctionEmpty'),
-                error: t('users.form.employment.businessFunctionError'),
-                clearLabel: t('common.clear'),
-                triggerLabel: t('users.form.employment.businessFunction'),
-                retry: t('common.retry'),
-              }}
-            />
-          </FormControl>
-        )}
-      </MetaField>
+        resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
+        searchPlaceholder={t('users.form.employment.businessFunctionSearch')}
+        selected={toRelationFieldRef(selectedBusinessFunctionItem)}
+        placeholder={t('users.form.employment.businessFunctionPlaceholder')}
+        emptyLabel={t('users.form.employment.businessFunctionEmpty')}
+        errorLabel={t('users.form.employment.businessFunctionError')}
+        clearLabel={t('common.clear')}
+        retryLabel={t('common.retry')}
+      />
 
       <MetaField
         control={control}
@@ -109,34 +97,21 @@ export function ProfileTabContent({
       </MetaField>
 
       {isManager ? null : (
-        <MetaField
+        <RelationSelectField
           control={control}
           name="employment.reports_to_id"
           metaKey="employment.reports_to_id"
           label={t('users.form.employment.reportsTo')}
-        >
-          {({ field, disabled }) => (
-            <FormControl>
-              <AsyncPaginatedSelect
-                resource={USERS_FOR_SELECT_RESOURCE}
-                value={field.value}
-                onChange={field.onChange}
-                selectedItem={selectedReportsToItem}
-                showAvatar
-                disabled={disabled}
-                labels={{
-                  placeholder: t('users.form.employment.reportsToPlaceholder'),
-                  searchPlaceholder: t('users.form.employment.reportsToSearch'),
-                  empty: t('users.form.employment.reportsToEmpty'),
-                  error: t('users.form.employment.reportsToError'),
-                  clearLabel: t('common.clear'),
-                  triggerLabel: t('users.form.employment.reportsTo'),
-                  retry: t('common.retry'),
-                }}
-              />
-            </FormControl>
-          )}
-        </MetaField>
+          resource={USERS_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('users.form.employment.reportsToSearch')}
+          selected={toRelationFieldRef(selectedReportsToItem)}
+          showAvatar
+          placeholder={t('users.form.employment.reportsToPlaceholder')}
+          emptyLabel={t('users.form.employment.reportsToEmpty')}
+          errorLabel={t('users.form.employment.reportsToError')}
+          clearLabel={t('common.clear')}
+          retryLabel={t('common.retry')}
+        />
       )}
     </FormSection>
   )
@@ -194,61 +169,35 @@ export function ContractTabContent({
         )}
       </MetaField>
 
-      <MetaField
+      <RelationSelectField
         control={control}
         name="employment.company_id"
         metaKey="employment.company_id"
         label={t('users.form.employment.company')}
-      >
-        {({ field, disabled }) => (
-          <FormControl>
-            <AsyncPaginatedSelect
-              resource={COMPANIES_FOR_SELECT_RESOURCE}
-              value={field.value}
-              onChange={field.onChange}
-              selectedItem={selectedCompanyItem}
-              disabled={disabled}
-              labels={{
-                placeholder: t('users.form.employment.companyPlaceholder'),
-                searchPlaceholder: t('users.form.employment.companySearch'),
-                empty: t('users.form.employment.companyEmpty'),
-                error: t('users.form.employment.companyError'),
-                clearLabel: t('common.clear'),
-                triggerLabel: t('users.form.employment.company'),
-                retry: t('common.retry'),
-              }}
-            />
-          </FormControl>
-        )}
-      </MetaField>
+        resource={COMPANIES_FOR_SELECT_RESOURCE}
+        searchPlaceholder={t('users.form.employment.companySearch')}
+        selected={toRelationFieldRef(selectedCompanyItem)}
+        placeholder={t('users.form.employment.companyPlaceholder')}
+        emptyLabel={t('users.form.employment.companyEmpty')}
+        errorLabel={t('users.form.employment.companyError')}
+        clearLabel={t('common.clear')}
+        retryLabel={t('common.retry')}
+      />
 
-      <MetaField
+      <RelationSelectField
         control={control}
         name="employment.operational_site_id"
         metaKey="employment.operational_site_id"
         label={t('users.form.employment.operationalSite')}
-      >
-        {({ field, disabled }) => (
-          <FormControl>
-            <AsyncPaginatedSelect
-              resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
-              value={field.value}
-              onChange={field.onChange}
-              selectedItem={selectedOperationalSiteItem}
-              disabled={disabled}
-              labels={{
-                placeholder: t('users.form.employment.operationalSitePlaceholder'),
-                searchPlaceholder: t('users.form.employment.operationalSiteSearch'),
-                empty: t('users.form.employment.operationalSiteEmpty'),
-                error: t('users.form.employment.operationalSiteError'),
-                clearLabel: t('common.clear'),
-                triggerLabel: t('users.form.employment.operationalSite'),
-                retry: t('common.retry'),
-              }}
-            />
-          </FormControl>
-        )}
-      </MetaField>
+        resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
+        searchPlaceholder={t('users.form.employment.operationalSiteSearch')}
+        selected={toRelationFieldRef(selectedOperationalSiteItem)}
+        placeholder={t('users.form.employment.operationalSitePlaceholder')}
+        emptyLabel={t('users.form.employment.operationalSiteEmpty')}
+        errorLabel={t('users.form.employment.operationalSiteError')}
+        clearLabel={t('common.clear')}
+        retryLabel={t('common.retry')}
+      />
     </FormSection>
   )
 }

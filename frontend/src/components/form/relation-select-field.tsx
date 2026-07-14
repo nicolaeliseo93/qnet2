@@ -2,6 +2,7 @@ import type { Control, FieldPath, FieldPathValue, FieldValues } from 'react-hook
 import { FormControl } from '@/components/ui/form'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { MetaField } from '@/features/authorization/MetaField'
+import { useQuickCreateAction } from '@/components/form/use-quick-create-action'
 import type { ForSelectItem } from '@/features/for-select/types'
 
 /** A hydrated `{id, name}` relation projection — the shape every module's single-relation ref shares. */
@@ -36,6 +37,8 @@ interface RelationSelectFieldProps<
   errorLabel: string
   clearLabel: string
   retryLabel: string
+  /** Renders an avatar in the trigger and every option (see `AsyncPaginatedSelect`). */
+  showAvatar?: boolean
 }
 
 /** Renders a `{id, name}` relation ref as the `ForSelectItem` shape `AsyncPaginatedSelect` hydrates from. */
@@ -69,29 +72,45 @@ export function RelationSelectField<
   errorLabel,
   clearLabel,
   retryLabel,
+  showAvatar = false,
 }: RelationSelectFieldProps<TFieldValues, TName>) {
+  const { quickCreated, renderAction } = useQuickCreateAction(resource)
+
   return (
     <MetaField control={control} name={name} metaKey={metaKey} label={label}>
-      {({ field, disabled }) => (
-        <FormControl>
-          <AsyncPaginatedSelect
-            resource={resource}
-            value={field.value}
-            onChange={(next) => field.onChange(next as FieldPathValue<TFieldValues, TName>)}
-            selectedItem={toForSelectItem(selected)}
-            disabled={disabled || forceDisabled}
-            labels={{
-              placeholder,
-              searchPlaceholder,
-              empty: emptyLabel,
-              error: errorLabel,
-              clearLabel,
-              triggerLabel: label,
-              retry: retryLabel,
-            }}
-          />
-        </FormControl>
-      )}
+      {({ field, disabled }) => {
+        const isDisabled = disabled || forceDisabled
+        // The just-created ref wins over the caller's `selected` prop so the
+        // field shows the new record even before it lands on an options page
+        // (AC-006); once `field.value` moves away from it, this falls back.
+        const quickCreatedMatch = quickCreated.find((ref) => ref.id === field.value) ?? null
+
+        return (
+          <FormControl>
+            <AsyncPaginatedSelect
+              resource={resource}
+              value={field.value}
+              onChange={(next) => field.onChange(next as FieldPathValue<TFieldValues, TName>)}
+              selectedItem={toForSelectItem(quickCreatedMatch ?? selected)}
+              showAvatar={showAvatar}
+              disabled={isDisabled}
+              labels={{
+                placeholder,
+                searchPlaceholder,
+                empty: emptyLabel,
+                error: errorLabel,
+                clearLabel,
+                triggerLabel: label,
+                retry: retryLabel,
+              }}
+              action={renderAction(
+                (ref) => field.onChange(ref.id as FieldPathValue<TFieldValues, TName>),
+                isDisabled,
+              )}
+            />
+          </FormControl>
+        )
+      }}
     </MetaField>
   )
 }

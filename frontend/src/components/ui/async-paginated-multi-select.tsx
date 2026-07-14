@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Popover as PopoverPrimitive } from 'radix-ui'
 import { Check, ChevronsUpDown, Loader2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -63,6 +71,13 @@ interface AsyncPaginatedMultiSelectProps {
   id?: string
   'aria-describedby'?: string
   'aria-invalid'?: boolean
+  /**
+   * Optional slot rendered inline next to the trigger (e.g. a quick-create
+   * icon-button). Domain-agnostic: this component only reserves the layout
+   * space, it has no knowledge of what the action does. Omitted, the trigger
+   * renders exactly as before (no extra wrapper node).
+   */
+  action?: ReactNode
 }
 
 /**
@@ -89,6 +104,7 @@ export function AsyncPaginatedMultiSelect({
   id,
   'aria-describedby': ariaDescribedBy,
   'aria-invalid': ariaInvalid,
+  action,
 }: AsyncPaginatedMultiSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -210,72 +226,84 @@ export function AsyncPaginatedMultiSelect({
     onChange(value.filter((current) => current !== id))
   }
 
-  return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-      <PopoverPrimitive.Trigger asChild>
-        <button
-          ref={setTrigger}
-          type="button"
-          id={id}
-          disabled={disabled}
-          aria-label={labels.triggerLabel}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          aria-describedby={ariaDescribedBy}
-          aria-invalid={ariaInvalid}
-          className={cn(
-            'flex min-h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
-            className,
-          )}
-        >
-          {value.length > 0 ? (
-            <span className="flex flex-1 flex-wrap items-center gap-1">
-              {value.map((id) => {
-                const item = labelById.get(id)
-                return (
-                  <Badge key={id} variant="secondary" className="gap-1 pl-1">
-                    {showAvatar ? (
-                      <UserAvatar
-                        name={item?.label ?? `#${id}`}
-                        src={item?.avatar_url}
-                        className="size-4 text-[0.5rem]"
-                      />
-                    ) : null}
-                    {item?.label ?? `#${id}`}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`${labels.removeLabel} ${item?.label ?? id}`}
-                      className="rounded-sm outline-none hover:text-foreground focus-visible:ring-[2px] focus-visible:ring-ring/50"
-                      onClick={(event) => {
+  const trigger = (
+    <PopoverPrimitive.Trigger asChild>
+      <button
+        ref={setTrigger}
+        type="button"
+        id={id}
+        disabled={disabled}
+        aria-label={labels.triggerLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
+        className={cn(
+          'flex min-h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
+          action ? 'min-w-0 flex-1' : null,
+          className,
+        )}
+      >
+        {value.length > 0 ? (
+          <span className="flex flex-1 flex-wrap items-center gap-1">
+            {value.map((id) => {
+              const item = labelById.get(id)
+              return (
+                <Badge key={id} variant="secondary" className="gap-1 pl-1">
+                  {showAvatar ? (
+                    <UserAvatar
+                      name={item?.label ?? `#${id}`}
+                      src={item?.avatar_url}
+                      className="size-4 text-[0.5rem]"
+                    />
+                  ) : null}
+                  {item?.label ?? `#${id}`}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${labels.removeLabel} ${item?.label ?? id}`}
+                    className="rounded-sm outline-none hover:text-foreground focus-visible:ring-[2px] focus-visible:ring-ring/50"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      remove(id)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
                         event.stopPropagation()
                         remove(id)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          remove(id)
-                        }
-                      }}
-                    >
-                      <X className="size-3" aria-hidden="true" />
-                    </span>
-                  </Badge>
-                )
-              })}
-            </span>
-          ) : (
-            <span className="flex-1 text-left text-muted-foreground">
-              {labels.placeholder}
-            </span>
-          )}
-          <ChevronsUpDown
-            className="size-4 shrink-0 opacity-50"
-            aria-hidden="true"
-          />
-        </button>
-      </PopoverPrimitive.Trigger>
+                      }
+                    }}
+                  >
+                    <X className="size-3" aria-hidden="true" />
+                  </span>
+                </Badge>
+              )
+            })}
+          </span>
+        ) : (
+          <span className="flex-1 text-left text-muted-foreground">
+            {labels.placeholder}
+          </span>
+        )}
+        <ChevronsUpDown
+          className="size-4 shrink-0 opacity-50"
+          aria-hidden="true"
+        />
+      </button>
+    </PopoverPrimitive.Trigger>
+  )
+
+  return (
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      {action ? (
+        <div className="flex items-center gap-1.5">
+          {trigger}
+          {action}
+        </div>
+      ) : (
+        trigger
+      )}
 
       <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
         <PopoverPrimitive.Content

@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { FormControl, FormDescription } from '@/components/ui/form'
-import { AsyncPaginatedMultiSelect } from '@/components/ui/async-paginated-multi-select'
+import { RelationMultiSelectField } from '@/components/form/relation-multi-select-field'
+import { toRelationFieldRefs } from '@/components/form/relation-field-ref'
 import type { ForSelectItem } from '@/features/for-select/types'
 import { MetaField } from '@/features/authorization/MetaField'
 import { ROLES_FOR_SELECT_RESOURCE } from '@/features/roles/for-select-api'
@@ -205,28 +206,20 @@ export function AccessTabContent({ control, selectedRoleItems }: AccessTabConten
       title={t('users.form.sections.access.title')}
       description={t('users.form.sections.access.description')}
     >
-      <MetaField control={control} name="roles" metaKey="roles" label={t('users.form.roles')}>
-        {({ field, disabled }) => (
-          <FormControl>
-            <AsyncPaginatedMultiSelect
-              resource={ROLES_FOR_SELECT_RESOURCE}
-              value={field.value}
-              onChange={field.onChange}
-              selectedItems={selectedRoleItems}
-              disabled={disabled}
-              labels={{
-                placeholder: t('users.form.rolesPlaceholder'),
-                searchPlaceholder: t('users.form.rolesSearch'),
-                empty: t('users.form.rolesEmpty'),
-                error: t('users.form.rolesError'),
-                retry: t('common.retry'),
-                removeLabel: t('users.form.rolesRemove'),
-                triggerLabel: t('users.form.roles'),
-              }}
-            />
-          </FormControl>
-        )}
-      </MetaField>
+      <RelationMultiSelectField
+        control={control}
+        name="roles"
+        metaKey="roles"
+        label={t('users.form.roles')}
+        resource={ROLES_FOR_SELECT_RESOURCE}
+        searchPlaceholder={t('users.form.rolesSearch')}
+        selected={toRelationFieldRefs(selectedRoleItems)}
+        placeholder={t('users.form.rolesPlaceholder')}
+        emptyLabel={t('users.form.rolesEmpty')}
+        errorLabel={t('users.form.rolesError')}
+        removeLabel={t('users.form.rolesRemove')}
+        retryLabel={t('common.retry')}
+      />
 
       <MetaField
         control={control}

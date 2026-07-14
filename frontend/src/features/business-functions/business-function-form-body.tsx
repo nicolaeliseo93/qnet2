@@ -11,10 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
-import { AsyncPaginatedMultiSelect } from '@/components/ui/async-paginated-multi-select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
+import { RelationSelectField } from '@/components/form/relation-select-field'
+import { toRelationFieldRef, toRelationFieldRefs } from '@/components/form/relation-field-ref'
+import { RelationMultiSelectField } from '@/components/form/relation-multi-select-field'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import { useBusinessFunctionForm } from '@/features/business-functions/use-business-function-form'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
@@ -132,63 +133,37 @@ export function BusinessFunctionFormBody({ mode, onSuccess, onCancel }: Business
               title={t('businessFunctions.form.sections.assignment.title')}
               description={t('businessFunctions.form.sections.assignment.description')}
             >
-              <MetaField
+              <RelationSelectField
                 control={form.control}
                 name="manager_id"
                 metaKey="manager_id"
                 label={t('businessFunctions.form.manager')}
-              >
-                {({ field, disabled }) => (
-                  <FormControl>
-                    <AsyncPaginatedSelect
-                      resource={USERS_FOR_SELECT_RESOURCE}
-                      value={field.value}
-                      onChange={field.onChange}
-                      selectedItem={selectedManagerItem}
-                      showAvatar
-                      disabled={disabled}
-                      labels={{
-                        placeholder: t('businessFunctions.form.managerPlaceholder'),
-                        searchPlaceholder: t('businessFunctions.form.usersSearch'),
-                        empty: t('businessFunctions.form.usersEmpty'),
-                        error: t('businessFunctions.form.usersError'),
-                        clearLabel: t('common.clear'),
-                        triggerLabel: t('businessFunctions.form.manager'),
-                        retry: t('common.retry'),
-                      }}
-                    />
-                  </FormControl>
-                )}
-              </MetaField>
+                resource={USERS_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('businessFunctions.form.usersSearch')}
+                selected={toRelationFieldRef(selectedManagerItem)}
+                showAvatar
+                placeholder={t('businessFunctions.form.managerPlaceholder')}
+                emptyLabel={t('businessFunctions.form.usersEmpty')}
+                errorLabel={t('businessFunctions.form.usersError')}
+                clearLabel={t('common.clear')}
+                retryLabel={t('common.retry')}
+              />
 
-              <MetaField
+              <RelationMultiSelectField
                 control={form.control}
                 name="users"
                 metaKey="users"
                 label={t('businessFunctions.form.users')}
-              >
-                {({ field, disabled }) => (
-                  <FormControl>
-                    <AsyncPaginatedMultiSelect
-                      resource={USERS_FOR_SELECT_RESOURCE}
-                      value={field.value}
-                      onChange={field.onChange}
-                      selectedItems={selectedUserItems}
-                      showAvatar
-                      disabled={disabled}
-                      labels={{
-                        placeholder: t('businessFunctions.form.usersPlaceholder'),
-                        searchPlaceholder: t('businessFunctions.form.usersSearch'),
-                        empty: t('businessFunctions.form.usersEmpty'),
-                        error: t('businessFunctions.form.usersError'),
-                        removeLabel: t('businessFunctions.form.usersRemove'),
-                        triggerLabel: t('businessFunctions.form.users'),
-                        retry: t('common.retry'),
-                      }}
-                    />
-                  </FormControl>
-                )}
-              </MetaField>
+                resource={USERS_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('businessFunctions.form.usersSearch')}
+                selected={toRelationFieldRefs(selectedUserItems)}
+                showAvatar
+                placeholder={t('businessFunctions.form.usersPlaceholder')}
+                emptyLabel={t('businessFunctions.form.usersEmpty')}
+                errorLabel={t('businessFunctions.form.usersError')}
+                removeLabel={t('businessFunctions.form.usersRemove')}
+                retryLabel={t('common.retry')}
+              />
             </FormSection>
           )}
 

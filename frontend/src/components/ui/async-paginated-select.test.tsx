@@ -308,4 +308,28 @@ describe('AsyncPaginatedSelect', () => {
     fireEvent.click(screen.getByText('Manager'))
     expect(screen.getByRole('listbox')).toBeInTheDocument()
   })
+
+  it('renders no extra wrapper around the trigger when action is omitted', () => {
+    const { container } = render(
+      <AsyncPaginatedSelect
+        resource="users"
+        value={null}
+        onChange={vi.fn()}
+        labels={labels}
+      />,
+    )
+    expect(container.firstElementChild).toBe(
+      screen.getByRole('combobox', { name: 'Manager' }),
+    )
+  })
+
+  it('renders the action slot next to the trigger, which stays accessible', () => {
+    renderSelect({ action: <button type="button">Add manager</button> })
+    expect(
+      screen.getByRole('combobox', { name: 'Manager' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Add manager' }),
+    ).toBeInTheDocument()
+  })
 })

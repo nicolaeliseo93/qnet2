@@ -4,6 +4,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { FormControl } from '@/components/ui/form'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { MetaField } from '@/features/authorization/MetaField'
+import { useQuickCreateAction } from '@/components/form/use-quick-create-action'
+import type { RelationFieldRef } from '@/components/form/relation-select-field'
 import type { ForSelectItem } from '@/features/for-select/types'
 import { PROJECTS_FOR_SELECT_RESOURCE } from '@/features/projects/for-select-api'
 import { fetchCampaignProjectMeta } from '@/features/campaigns/use-campaign-project-meta'
@@ -23,6 +25,11 @@ function toForSelectItem(ref: CampaignProjectRef | null): ForSelectItem | null {
   return ref ? { id: ref.id, label: `${ref.code} — ${ref.name}` } : null
 }
 
+/** The quick-create registry's `projects` entry already composes `name` as `"{code} — {name}"` (see `advanced-entries.tsx`). */
+function toForSelectItemFromRef(ref: RelationFieldRef | null): ForSelectItem | null {
+  return ref ? { id: ref.id, label: ref.name } : null
+}
+
 /**
  * The campaign's optional Project link. Picking a project prefills Client
  * (`registry_id`), Fonte (`source_id`) and Partner (`partner_id`) — still
@@ -40,6 +47,7 @@ function toForSelectItem(ref: CampaignProjectRef | null): ForSelectItem | null {
 export function CampaignProjectField({ control, setValue, selected }: CampaignProjectFieldProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { quickCreated, renderAction } = useQuickCreateAction(PROJECTS_FOR_SELECT_RESOURCE)
 
   const applyProjectSelection = async (projectId: number | null) => {
     if (projectId === null) {
@@ -76,31 +84,37 @@ export function CampaignProjectField({ control, setValue, selected }: CampaignPr
     })
   }
 
+  const selectProject = (field: { onChange: (value: number | null) => void }, projectId: number | null) => {
+    field.onChange(projectId)
+    void applyProjectSelection(projectId)
+  }
+
   return (
     <MetaField control={control} name="project_id" metaKey="project_id" label={t('campaigns.form.project')}>
-      {({ field, disabled }) => (
-        <FormControl>
-          <AsyncPaginatedSelect
-            resource={PROJECTS_FOR_SELECT_RESOURCE}
-            value={field.value}
-            onChange={(projectId) => {
-              field.onChange(projectId)
-              void applyProjectSelection(projectId)
-            }}
-            selectedItem={toForSelectItem(selected)}
-            disabled={disabled}
-            labels={{
-              placeholder: t('campaigns.form.selectPlaceholder'),
-              searchPlaceholder: t('campaigns.form.projectSearch'),
-              empty: t('campaigns.form.selectEmpty'),
-              error: t('campaigns.form.selectError'),
-              clearLabel: t('common.clear'),
-              triggerLabel: t('campaigns.form.project'),
-              retry: t('common.retry'),
-            }}
-          />
-        </FormControl>
-      )}
+      {({ field, disabled }) => {
+        const quickCreatedMatch = quickCreated.find((ref: RelationFieldRef) => ref.id === field.value) ?? null
+        return (
+          <FormControl>
+            <AsyncPaginatedSelect
+              resource={PROJECTS_FOR_SELECT_RESOURCE}
+              value={field.value}
+              onChange={(projectId) => selectProject(field, projectId)}
+              selectedItem={toForSelectItemFromRef(quickCreatedMatch) ?? toForSelectItem(selected)}
+              disabled={disabled}
+              labels={{
+                placeholder: t('campaigns.form.selectPlaceholder'),
+                searchPlaceholder: t('campaigns.form.projectSearch'),
+                empty: t('campaigns.form.selectEmpty'),
+                error: t('campaigns.form.selectError'),
+                clearLabel: t('common.clear'),
+                triggerLabel: t('campaigns.form.project'),
+                retry: t('common.retry'),
+              }}
+              action={renderAction((ref) => selectProject(field, ref.id), disabled)}
+            />
+          </FormControl>
+        )
+      }}
     </MetaField>
   )
 }

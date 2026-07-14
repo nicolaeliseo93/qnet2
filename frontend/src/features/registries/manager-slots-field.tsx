@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
+import { useQuickCreateAction } from '@/components/form/use-quick-create-action'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import type { ForSelectItem } from '@/features/for-select/types'
 
@@ -28,6 +29,7 @@ export function ManagerSlotsField({
   disabled = false,
 }: ManagerSlotsFieldProps) {
   const { t } = useTranslation()
+  const { quickCreated, renderAction } = useQuickCreateAction(USERS_FOR_SELECT_RESOURCE)
 
   const setSlot = (index: number, id: number | null) =>
     onChange(value.map((slot, i) => (i === index ? id : slot)))
@@ -40,8 +42,17 @@ export function ManagerSlotsField({
 
   const removeSlot = (index: number) => onChange(value.filter((_, i) => i !== index))
 
-  const selectedItemFor = (id: number | null): ForSelectItem | null =>
-    id === null ? null : (selectedItems.find((item) => item.id === id) ?? null)
+  const selectedItemFor = (id: number | null): ForSelectItem | null => {
+    if (id === null) {
+      return null
+    }
+    const known = selectedItems.find((item) => item.id === id)
+    if (known) {
+      return known
+    }
+    const created = quickCreated.find((ref) => ref.id === id)
+    return created ? { id: created.id, label: created.name } : null
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -69,6 +80,7 @@ export function ManagerSlotsField({
                   triggerLabel: t('registries.form.managerSlotLabel', { n: index + 1 }),
                   retry: t('common.retry'),
                 }}
+                action={renderAction((ref) => setSlot(index, ref.id), disabled)}
               />
             </div>
             <div className="flex shrink-0 gap-1">

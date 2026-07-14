@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Popover as PopoverPrimitive } from 'radix-ui'
 import { Check, ChevronsUpDown, Loader2, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -61,6 +69,13 @@ interface AsyncPaginatedSelectProps {
   id?: string
   'aria-describedby'?: string
   'aria-invalid'?: boolean
+  /**
+   * Optional slot rendered inline next to the trigger (e.g. a quick-create
+   * icon-button). Domain-agnostic: this component only reserves the layout
+   * space, it has no knowledge of what the action does. Omitted, the trigger
+   * renders exactly as before (no extra wrapper node).
+   */
+  action?: ReactNode
 }
 
 /**
@@ -89,6 +104,7 @@ export function AsyncPaginatedSelect({
   id,
   'aria-describedby': ariaDescribedBy,
   'aria-invalid': ariaInvalid,
+  action,
 }: AsyncPaginatedSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -194,70 +210,82 @@ export function AsyncPaginatedSelect({
 
   const triggerLabel = selected?.label ?? (value !== null ? `#${value}` : null)
 
-  return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-      <PopoverPrimitive.Trigger asChild>
-        <button
-          ref={setTrigger}
-          type="button"
-          id={id}
-          role="combobox"
-          disabled={disabled}
-          aria-label={labels.triggerLabel}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          aria-describedby={ariaDescribedBy}
-          aria-invalid={ariaInvalid}
-          className={cn(
-            'flex min-h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
-            className,
-          )}
-        >
+  const trigger = (
+    <PopoverPrimitive.Trigger asChild>
+      <button
+        ref={setTrigger}
+        type="button"
+        id={id}
+        role="combobox"
+        disabled={disabled}
+        aria-label={labels.triggerLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
+        className={cn(
+          'flex min-h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
+          action ? 'min-w-0 flex-1' : null,
+          className,
+        )}
+      >
+        {triggerLabel !== null ? (
+          <span className="flex flex-1 items-center gap-2 overflow-hidden">
+            {showAvatar ? (
+              <UserAvatar
+                name={triggerLabel}
+                src={selected?.avatar_url}
+                className="size-6 shrink-0 text-xs"
+              />
+            ) : null}
+            <span className="truncate">{triggerLabel}</span>
+          </span>
+        ) : (
+          <span className="flex-1 text-left text-muted-foreground">
+            {labels.placeholder}
+          </span>
+        )}
+        <span className="flex shrink-0 items-center gap-1">
           {triggerLabel !== null ? (
-            <span className="flex flex-1 items-center gap-2 overflow-hidden">
-              {showAvatar ? (
-                <UserAvatar
-                  name={triggerLabel}
-                  src={selected?.avatar_url}
-                  className="size-6 shrink-0 text-xs"
-                />
-              ) : null}
-              <span className="truncate">{triggerLabel}</span>
-            </span>
-          ) : (
-            <span className="flex-1 text-left text-muted-foreground">
-              {labels.placeholder}
-            </span>
-          )}
-          <span className="flex shrink-0 items-center gap-1">
-            {triggerLabel !== null ? (
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label={`${labels.clearLabel} ${triggerLabel}`}
-                className="rounded-sm p-0.5 outline-none hover:text-foreground focus-visible:ring-[2px] focus-visible:ring-ring/50"
-                onClick={(event) => {
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={`${labels.clearLabel} ${triggerLabel}`}
+              className="rounded-sm p-0.5 outline-none hover:text-foreground focus-visible:ring-[2px] focus-visible:ring-ring/50"
+              onClick={(event) => {
+                event.stopPropagation()
+                clear()
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
                   event.stopPropagation()
                   clear()
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    clear()
-                  }
-                }}
-              >
-                <X className="size-3.5" aria-hidden="true" />
-              </span>
-            ) : null}
-            <ChevronsUpDown
-              className="size-4 shrink-0 opacity-50"
-              aria-hidden="true"
-            />
-          </span>
-        </button>
-      </PopoverPrimitive.Trigger>
+                }
+              }}
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </span>
+          ) : null}
+          <ChevronsUpDown
+            className="size-4 shrink-0 opacity-50"
+            aria-hidden="true"
+          />
+        </span>
+      </button>
+    </PopoverPrimitive.Trigger>
+  )
+
+  return (
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      {action ? (
+        <div className="flex items-center gap-1.5">
+          {trigger}
+          {action}
+        </div>
+      ) : (
+        trigger
+      )}
 
       <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
         <PopoverPrimitive.Content

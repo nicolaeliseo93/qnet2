@@ -24,6 +24,14 @@ vi.mock('@/features/for-select/api', () => ({
   fetchForSelect: (resource: string, params: unknown) => fetchForSelectMock(resource, params),
 }))
 
+// This suite isn't about the quick-create "+" (spec 0028): the relation
+// control's `QuickCreateButton` (its `for_select_resource` is registered)
+// reads `useAbilities()` via `Can`, which needs an `AuthProvider` this suite
+// doesn't render.
+vi.mock('@/features/auth/use-abilities', () => ({
+  useAbilities: () => ({ can: () => false, hasRole: () => false, roles: [], isLoading: false }),
+}))
+
 beforeAll(async () => {
   await i18n.changeLanguage('en')
   i18n.addResourceBundle('en', 'translation', { customFields: enCustomFields }, true, true)

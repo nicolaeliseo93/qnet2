@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0028-relation-quick-create" status="approved" owner="lead" date="2026-07-14">
+
+  <goal>
+    Ogni select che rappresenta una relazione verso un altro modulo espone un pulsante "+"
+    accanto al controllo. Il click apre un Dialog centrato col form di creazione REALE di
+    quel modulo. Al salvataggio: record creato, dialog chiuso, opzioni della select
+    invalidate, e il nuovo record GIA' SELEZIONATO nella select — senza ricaricare la pagina
+    e senza abbandonare il form corrente.
+  </goal>
+
+  <context>
+    Grounding verificato sul repo (nomi reali, non ipotizzati):
+
+    - `components/form/relation-select-field.tsx` -> `RelationSelectField<TFieldValues, TName>`
+      props: control, name, metaKey, label, `resource` (segmento for-select), searchPlaceholder,
+      `selected: RelationFieldRef | null` ({id, name}), forceDisabled?, placeholder, emptyLabel,
+      errorLabel, clearLabel, retryLabel. Esporta `interface RelationFieldRef { id: number; name: string }`.
+    - `components/ui/async-paginated-select.tsx` -> `AsyncPaginatedSelect` (value: number|null,
+      onChange, selectedItem?: ForSelectItem|null, labels: AsyncPaginatedSelectLabels, resource, disabled).
+    - `components/ui/async-paginated-multi-select.tsx` -> `AsyncPaginatedMultiSelect`
+      (value: number[], onChange, selectedItems?: ForSelectItem[], labels con `removeLabel`).
+    - `features/for-select/query-keys.ts` -> `forSelectKeys.resource(resource) = ['for-select', resource]`.
+    - `features/for-select/types.ts` -> `ForSelectItem { id, label, subtitle?, avatar_url? }`.
+    - Ogni modulo espone `<X>Form { mode: <X>FormMode, onSuccess: (detail: <X>Detail) => void, onCancel: () => void }`
+      (verificato su 23 form). `mode` create e' `{type:'create'}` salvo `sectors`/`product-categories`
+      che accettano anche `parentId`.
+    - Gate permessi UI: `features/auth/can.tsx` -> `<Can permission="sources.create">`; hook `useAbilities()`.
+    - Dialog: `components/ui/dialog.tsx` (Radix, portalizzato -> nessun `<form>` annidato nel DOM).
+
+    LEVA ARCHITETTURALE: `RelationSelectField` riceve gia' `resource`. Il "+" si DERIVA dal
+    resource via registry. Nessun call site che usa il componente condiviso va modificato.
+  </context>
+
+  <decisions>
+    <decision id="D1">Contenitore = Dialog centrato (`components/ui/dialog.tsx`), non Sheet annidato: il form padre e' spesso gia' uno Sheet laterale.</decision>
+    <decision id="D2">Form dentro il popup = il form COMPLETO del modulo (`<X>Form mode={{type:'create'}}`). Zero duplicazione, zero drift: se il modulo cambia, il quick-create cambia gratis.</decision>
+    <decision id="D3">Copertura = tutte le relazioni async verso un modulo. FUORI: il geo (`features/geo/`, dati di riferimento non creabili) e i `SearchableSelect` su dati statici/tree.</decision>
+    <decision id="D4">Il "+" appare solo se il resource e' nel registry E l'utente ha il permesso `{domain}.create` (`<Can>`). Altrimenti il layout resta identico a oggi.</decision>
+  </decisions>
+
+  <contract>
+    Backend: NESSUNA modifica. Gli endpoint di create e i `/for-select` esistono gia'.
+
+    Nuovo modulo `frontend/src/features/quick-create/`:
+
+    <![CDATA[
+    // types.ts
+    export interface QuickCreateFormProps {
+      /** Chiamato col ref del record appena creato: {id, name} gia' proiettato dall'adapter. */
+      onSuccess: (ref: RelationFieldRef) => void
+      onCancel: () => void
+    }
+    export interface QuickCreateEntry {
+      /** Chiave i18n del titolo del dialog (riusa `<module>.form.createTitle` esistente). */
+      titleKey: string
+      /** Chiave i18n del sottotitolo (riusa `<module>.form.createSubtitle`). */
+      descriptionKey: string
+      /** Permesso richiesto per mostrare il "+", es. "sources.create". */
+      permission: string
+      /** Form del modulo, LAZY: spezza il ciclo form -> field -> registry -> form. */
+      form: LazyExoticComponent<ComponentType<QuickCreateFormProps>>
+    }
+
+    // quick-create-registry.tsx
+    /** resource (`SOURCES_FOR_SELECT_RESOURCE`, ...) -> QuickCreateEntry. Ogni adapter
+     *  conosce il campo label della propria detail e la proietta in {id, name}. */
+    export function resolveQuickCreate(resource: string): QuickCreateEntry | null
+
+    // quick-create-button.tsx
+    /** Icon-button "+" + Dialog. Rende `null` se il resource non e' nel registry
+     *  o se manca il permesso. `type="button"` obbligatorio (e' dentro un <form>). */
+    export function QuickCreateButton(props: {
+      resource: string
+      onCreated: (ref: RelationFieldRef) => void
+      disabled?: boolean
+    }): ReactElement | null
+
+    // use-quick-created.ts
+    /** Tiene il ref appena creato finche' resta il valore del campo, cosi' la select
+     *  lo mostra selezionato anche se non e' nella pagina corrente delle opzioni.
+     *  Invalida `forSelectKeys.resource(resource)` alla creazione. */
+    export function useQuickCreated(resource: string): {
+      quickCreated: RelationFieldRef[]
+      handleCreated: (ref: RelationFieldRef) => void
+    }
+    ]]>
+
+    Design system (`components/ui/`, domain-agnostic — NON conosce il registry):
+    `AsyncPaginatedSelect` e `AsyncPaginatedMultiSelect` ricevono una prop opzionale
+    `action?: ReactNode`, resa in riga accanto al trigger (il trigger resta `flex-1`).
+    Assente la prop, il markup e' byte-identico a oggi.
+
+    Composizione (`components/form/`): `RelationSelectField` inietta
+    `action={<QuickCreateButton resource={resource} onCreated={...} />}` e passa
+    `selectedItem = quickCreatedMatch ?? selected`. Nuovo `RelationMultiSelectField`
+    con la stessa forma per i campi a cardinalita' molti.
+  </contract>
+
+  <acceptance-criteria>
+    <ac id="AC-001">Su ogni select di relazione con resource nel registry e permesso `{domain}.create`, accanto al controllo compare un pulsante "+" con `aria-label` (non solo tooltip) e `type="button"`.</ac>
+    <ac id="AC-002">Senza il permesso `{domain}.create`, il "+" non e' renderizzato e la select resta invariata.</ac>
+    <ac id="AC-003">Click sul "+" apre un Dialog col form completo del modulo collegato (stesse validazioni Zod e stessi permessi di campo del modulo di riferimento).</ac>
+    <ac id="AC-004">Submit valido: il record e' creato via l'endpoint reale del modulo; il Dialog si chiude da solo.</ac>
+    <ac id="AC-005">Dopo la creazione le opzioni della select sono invalidate (`forSelectKeys.resource(resource)`) senza reload di pagina.</ac>
+    <ac id="AC-006">Dopo la creazione il campo RHF vale l'id del nuovo record e la select MOSTRA il nuovo record come selezionato, anche se non rientra nella prima pagina delle opzioni.</ac>
+    <ac id="AC-007">Il form padre non perde nessun valore gia' compilato quando si apre/chiude il Dialog.</ac>
+    <ac id="AC-008">Il click sul "+" non fa il submit del form padre; Escape / Annulla chiudono SOLO il Dialog, non lo Sheet o la pagina sottostante.</ac>
+    <ac id="AC-009">Errore di validazione server nel form del popup: gli errori si vedono nel popup, il Dialog resta aperto, la select non cambia.</ac>
+    <ac id="AC-010">Multi-select (es. `sector_ids`, `referent_ids`, `users`, `roles`): il nuovo record e' AGGIUNTO alla selezione esistente, non la sostituisce.</ac>
+    <ac id="AC-011">Un resource fuori registry (es. geo) o sconosciuto non rende alcun "+" e non solleva errori.</ac>
+    <ac id="AC-012">`AsyncPaginatedSelect` senza prop `action` rende esattamente come prima (nessuna regressione sui call site non-relazionali).</ac>
+    <ac id="AC-013">Il form del modulo collegato non e' nel bundle d'ingresso: e' caricato lazy solo all'apertura del Dialog.</ac>
+  </acceptance-criteria>
+
+  <ownership>
+    <lane id="A" role="ui-design">components/ui/async-paginated-select.tsx, components/ui/async-paginated-multi-select.tsx (+ i loro test): sola aggiunta della prop `action`.</lane>
+    <lane id="B" role="frontend">features/quick-create/** (nuovo modulo) + chiavi i18n it/en.</lane>
+    <lane id="C" role="frontend">components/form/relation-select-field.tsx, components/form/relation-multi-select-field.tsx (nuovo) + migrazione dei call site che usano ancora AsyncPaginatedSelect/MultiSelect grezzo. Parte dopo che A e B sono verdi.</lane>
+    <lane id="D" role="verifier">Nessuna ownership: esegue Vitest + tsc + ESLint, riproduce gli AC.</lane>
+  </ownership>
+
+  <non-goals>
+    <item>Nessuna modifica al backend.</item>
+    <item>Nessun form "semplificato" parallelo a quello del modulo (D2).</item>
+    <item>Geo (stati/province/comuni) e i `SearchableSelect` su dati statici/tree restano senza "+".</item>
+    <item>Quick-create annidato ricorsivo (creare un'anagrafica dal popup di un referente) non e' garantito: fuori scope, non va in crash.</item>
+    <item>Nessun commit: i commit li fa l'utente.</item>
+  </non-goals>
+
+  <definition-of-done>
+    Vitest verdi sui nuovi test + `tsc --noEmit` pulito + ESLint pulito + i rossi preesistenti
+    su main (4 vitest in features/table/, 2 ESLint) invariati e non attribuiti a questa feature.
+    `docs/HANDOFF.md` aggiornato a stato verde.
+  </definition-of-done>
+
+</spec>

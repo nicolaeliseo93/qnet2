@@ -4,6 +4,7 @@ import { useController, type Control } from 'react-hook-form'
 import { FormControl, FormDescription } from '@/components/ui/form'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { MetaField } from '@/features/authorization/MetaField'
+import { useQuickCreateAction } from '@/components/form/use-quick-create-action'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import type { ForSelectItem } from '@/features/for-select/types'
 import {
@@ -44,6 +45,7 @@ export function ProductCategoryBusinessFunctionField({
   const { t } = useTranslation()
   const treeQuery = useProductCategoryTree()
   const { field } = useController({ control, name: 'business_function_id' })
+  const { quickCreated, renderAction } = useQuickCreateAction(BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE)
 
   const nodesById = useMemo(() => indexCategoryTree(treeQuery.data ?? []), [treeQuery.data])
   const candidateInheritance = useMemo(
@@ -111,26 +113,36 @@ export function ProductCategoryBusinessFunctionField({
         ) : undefined
       }
     >
-      {({ disabled }) => (
-        <FormControl>
-          <AsyncPaginatedSelect
-            resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
-            value={inherited ? (inheritance?.businessFunctionId ?? null) : field.value}
-            onChange={field.onChange}
-            selectedItem={inherited ? knownInheritedItem : ownItem}
-            disabled={disabled || inherited}
-            labels={{
-              placeholder: t('productCategories.form.businessFunctionPlaceholder'),
-              searchPlaceholder: t('productCategories.form.businessFunctionSearch'),
-              empty: t('productCategories.form.businessFunctionEmpty'),
-              error: t('productCategories.form.businessFunctionError'),
-              clearLabel: t('common.clear'),
-              triggerLabel: t('productCategories.form.businessFunction'),
-              retry: t('common.retry'),
-            }}
-          />
-        </FormControl>
-      )}
+      {({ disabled }) => {
+        const isDisabled = disabled || inherited
+        const quickCreatedMatch = quickCreated.find((ref) => ref.id === field.value) ?? null
+        return (
+          <FormControl>
+            <AsyncPaginatedSelect
+              resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
+              value={inherited ? (inheritance?.businessFunctionId ?? null) : field.value}
+              onChange={field.onChange}
+              selectedItem={
+                inherited
+                  ? knownInheritedItem
+                  : (quickCreatedMatch && { id: quickCreatedMatch.id, label: quickCreatedMatch.name }) ??
+                    ownItem
+              }
+              disabled={isDisabled}
+              labels={{
+                placeholder: t('productCategories.form.businessFunctionPlaceholder'),
+                searchPlaceholder: t('productCategories.form.businessFunctionSearch'),
+                empty: t('productCategories.form.businessFunctionEmpty'),
+                error: t('productCategories.form.businessFunctionError'),
+                clearLabel: t('common.clear'),
+                triggerLabel: t('productCategories.form.businessFunction'),
+                retry: t('common.retry'),
+              }}
+              action={renderAction((ref) => field.onChange(ref.id), isDisabled)}
+            />
+          </FormControl>
+        )
+      }}
     </MetaField>
   )
 }

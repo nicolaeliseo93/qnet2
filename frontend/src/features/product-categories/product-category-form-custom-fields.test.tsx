@@ -35,6 +35,14 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
+// This suite isn't about the quick-create "+" (spec 0028): every relation
+// field's `QuickCreateButton` (the business function picker, the relation
+// custom field control) reads `useAbilities()` via `Can`, which needs an
+// `AuthProvider` this suite doesn't render.
+vi.mock('@/features/auth/use-abilities', () => ({
+  useAbilities: () => ({ can: () => false, hasRole: () => false, roles: [], isLoading: false }),
+}))
+
 const FULL_ACCESS: ResourcePermissions['resource'] = {
   view: true,
   create: true,

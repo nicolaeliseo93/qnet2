@@ -35,6 +35,13 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
+// This suite isn't about the quick-create "+" (spec 0028): every relation
+// field's `QuickCreateButton` reads `useAbilities()` via `Can`, which needs
+// an `AuthProvider` this suite doesn't render.
+vi.mock('@/features/auth/use-abilities', () => ({
+  useAbilities: () => ({ can: () => false, hasRole: () => false, roles: [], isLoading: false }),
+}))
+
 const localeOptions: EnumOption[] = [
   { value: 'en', label: 'English', color: null, icon: null, is_default: true, hidden_on_form: false },
   { value: 'it', label: 'Italiano', color: null, icon: null, is_default: false, hidden_on_form: false },

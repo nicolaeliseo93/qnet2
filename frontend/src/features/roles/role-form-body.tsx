@@ -8,7 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Form, FormControl } from '@/components/ui/form'
-import { AsyncPaginatedMultiSelect } from '@/components/ui/async-paginated-multi-select'
+import { RelationMultiSelectField } from '@/components/form/relation-multi-select-field'
 import { FormSection } from '@/components/form-section'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import { MetaField } from '@/features/authorization/MetaField'
@@ -90,28 +90,20 @@ export function RoleFormBody({
             )}
           </MetaField>
 
-          <MetaField control={form.control} name="users" metaKey="users" label={t('roles.form.users')}>
-            {({ field, disabled }) => (
-              <FormControl>
-                <AsyncPaginatedMultiSelect
-                  resource={USERS_FOR_SELECT_RESOURCE}
-                  value={field.value}
-                  onChange={field.onChange}
-                  showAvatar
-                  disabled={disabled}
-                  labels={{
-                    placeholder: t('roles.form.usersPlaceholder'),
-                    searchPlaceholder: t('roles.form.usersSearch'),
-                    empty: t('roles.form.usersEmpty'),
-                    error: t('roles.form.usersError'),
-                    retry: t('common.retry'),
-                    removeLabel: t('roles.form.usersRemove'),
-                    triggerLabel: t('roles.form.users'),
-                  }}
-                />
-              </FormControl>
-            )}
-          </MetaField>
+          <RelationMultiSelectField
+            control={form.control}
+            name="users"
+            metaKey="users"
+            label={t('roles.form.users')}
+            resource={USERS_FOR_SELECT_RESOURCE}
+            searchPlaceholder={t('roles.form.usersSearch')}
+            showAvatar
+            placeholder={t('roles.form.usersPlaceholder')}
+            emptyLabel={t('roles.form.usersEmpty')}
+            errorLabel={t('roles.form.usersError')}
+            removeLabel={t('roles.form.usersRemove')}
+            retryLabel={t('common.retry')}
+          />
         </FormSection>
 
         {/* `label=""`: `FormSection` below already carries the visible

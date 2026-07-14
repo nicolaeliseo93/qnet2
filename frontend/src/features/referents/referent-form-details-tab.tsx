@@ -11,9 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import type { ForSelectItem } from '@/features/for-select/types'
 import { MetaField } from '@/features/authorization/MetaField'
+import { RelationSelectField } from '@/components/form/relation-select-field'
+import { toRelationFieldRef } from '@/components/form/relation-field-ref'
 import { useEnumOptions } from '@/features/config/use-config'
 import { REFERENT_TYPES_FOR_SELECT_RESOURCE } from '@/features/referent-types/for-select-api'
 import type { ReferentFormValues } from '@/features/referents/use-referent-form'
@@ -39,33 +40,20 @@ export function DetailsTabContent({ control, selectedReferentTypeItem }: Details
       title={t('referents.form.sections.details.title')}
       description={t('referents.form.sections.details.description')}
     >
-      <MetaField
+      <RelationSelectField
         control={control}
         name="referent_type_id"
         metaKey="referent_type_id"
         label={t('referents.form.referentType')}
-      >
-        {({ field, disabled }) => (
-          <FormControl>
-            <AsyncPaginatedSelect
-              resource={REFERENT_TYPES_FOR_SELECT_RESOURCE}
-              value={field.value}
-              onChange={field.onChange}
-              selectedItem={selectedReferentTypeItem}
-              disabled={disabled}
-              labels={{
-                placeholder: t('referents.form.referentTypePlaceholder'),
-                searchPlaceholder: t('referents.form.referentTypeSearch'),
-                empty: t('referents.form.referentTypeEmpty'),
-                error: t('referents.form.referentTypeError'),
-                clearLabel: t('common.clear'),
-                triggerLabel: t('referents.form.referentType'),
-                retry: t('common.retry'),
-              }}
-            />
-          </FormControl>
-        )}
-      </MetaField>
+        resource={REFERENT_TYPES_FOR_SELECT_RESOURCE}
+        searchPlaceholder={t('referents.form.referentTypeSearch')}
+        selected={toRelationFieldRef(selectedReferentTypeItem)}
+        placeholder={t('referents.form.referentTypePlaceholder')}
+        emptyLabel={t('referents.form.referentTypeEmpty')}
+        errorLabel={t('referents.form.referentTypeError')}
+        clearLabel={t('common.clear')}
+        retryLabel={t('common.retry')}
+      />
 
       <MetaField
         control={control}

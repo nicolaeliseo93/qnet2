@@ -39,6 +39,14 @@ vi.mock('@/features/users/use-user-form-meta', () => ({
   useUserFormMeta: () => ({ status: 'ready', permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
+// This suite isn't about the quick-create "+" (spec 0028): the Account tab's
+// `roles` field (`AsyncPaginatedMultiSelect`, left un-mocked below) renders a
+// `QuickCreateButton` gated by `Can`/`useAbilities`, which needs an
+// `AuthProvider` this suite doesn't render.
+vi.mock('@/features/auth/use-abilities', () => ({
+  useAbilities: () => ({ can: () => false, hasRole: () => false, roles: [], isLoading: false }),
+}))
+
 // `useCustomFieldsForm` (spec 0021) also reads the resource meta directly,
 // bypassing `useUserFormMeta` above: stub it with no custom fields defined, so
 // this suite (not about custom fields) renders exactly as it did before.

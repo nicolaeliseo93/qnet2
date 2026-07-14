@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Form, FormControl } from '@/components/ui/form'
-import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { MetaField } from '@/features/authorization/MetaField'
+import { RelationSelectField } from '@/components/form/relation-select-field'
 import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/project-statuses/for-select-api'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
@@ -14,7 +14,6 @@ import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-a
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
 import { useProjectForm } from '@/features/projects/use-project-form'
-import { ProjectRelationField } from '@/features/projects/project-relation-field'
 import { ProjectGeographySection } from '@/features/projects/project-geography-section'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { ProjectDetail, ProjectFormMode } from '@/features/projects/types'
@@ -46,6 +45,14 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
   const { t } = useTranslation()
   const { form, serverError, onSubmit } = useProjectForm({ mode, onSuccess })
   const original = mode.type === 'edit' ? mode.project : null
+
+  const relationLabels = {
+    placeholder: t('projects.form.selectPlaceholder'),
+    emptyLabel: t('projects.form.selectEmpty'),
+    errorLabel: t('projects.form.selectError'),
+    clearLabel: t('common.clear'),
+    retryLabel: t('common.retry'),
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -106,37 +113,18 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
             title={t('projects.form.sections.classification.title')}
             description={t('projects.form.sections.classification.description')}
           >
-            <MetaField
+            <RelationSelectField
               control={form.control}
               name="project_status_id"
               metaKey="project_status_id"
               label={t('projects.form.status')}
-            >
-              {({ field, disabled }) => (
-                <FormControl>
-                  <AsyncPaginatedSelect
-                    resource={PROJECT_STATUSES_FOR_SELECT_RESOURCE}
-                    value={field.value}
-                    onChange={field.onChange}
-                    selectedItem={
-                      original ? { id: original.project_status.id, label: original.project_status.name } : null
-                    }
-                    disabled={disabled}
-                    labels={{
-                      placeholder: t('projects.form.selectPlaceholder'),
-                      searchPlaceholder: t('projects.form.statusSearch'),
-                      empty: t('projects.form.selectEmpty'),
-                      error: t('projects.form.selectError'),
-                      clearLabel: t('common.clear'),
-                      triggerLabel: t('projects.form.status'),
-                      retry: t('common.retry'),
-                    }}
-                  />
-                </FormControl>
-              )}
-            </MetaField>
+              resource={PROJECT_STATUSES_FOR_SELECT_RESOURCE}
+              searchPlaceholder={t('projects.form.statusSearch')}
+              selected={original ? { id: original.project_status.id, name: original.project_status.name } : null}
+              {...relationLabels}
+            />
 
-            <ProjectRelationField
+            <RelationSelectField
               control={form.control}
               name="registry_id"
               metaKey="registry_id"
@@ -144,9 +132,10 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
               resource={REGISTRIES_FOR_SELECT_RESOURCE}
               searchPlaceholder={t('projects.form.registrySearch')}
               selected={original?.registry ?? null}
+              {...relationLabels}
             />
 
-            <ProjectRelationField
+            <RelationSelectField
               control={form.control}
               name="source_id"
               metaKey="source_id"
@@ -154,9 +143,10 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
               resource={SOURCES_FOR_SELECT_RESOURCE}
               searchPlaceholder={t('projects.form.sourceSearch')}
               selected={original?.source ?? null}
+              {...relationLabels}
             />
 
-            <ProjectRelationField
+            <RelationSelectField
               control={form.control}
               name="business_function_id"
               metaKey="business_function_id"
@@ -164,9 +154,10 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
               resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
               searchPlaceholder={t('projects.form.businessFunctionSearch')}
               selected={original?.business_function ?? null}
+              {...relationLabels}
             />
 
-            <ProjectRelationField
+            <RelationSelectField
               control={form.control}
               name="product_category_id"
               metaKey="product_category_id"
@@ -174,9 +165,10 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
               resource={PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE}
               searchPlaceholder={t('projects.form.productCategorySearch')}
               selected={original?.product_category ?? null}
+              {...relationLabels}
             />
 
-            <ProjectRelationField
+            <RelationSelectField
               control={form.control}
               name="partner_id"
               metaKey="partner_id"
@@ -184,6 +176,7 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
               resource={REFERENTS_FOR_SELECT_RESOURCE}
               searchPlaceholder={t('projects.form.partnerSearch')}
               selected={original?.partner ?? null}
+              {...relationLabels}
             />
           </FormSection>
 

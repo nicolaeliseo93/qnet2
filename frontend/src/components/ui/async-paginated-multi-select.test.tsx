@@ -360,4 +360,26 @@ describe('AsyncPaginatedMultiSelect', () => {
     fireEvent.click(screen.getByText('Members'))
     expect(screen.getByRole('listbox')).toBeInTheDocument()
   })
+
+  it('renders no extra wrapper around the trigger when action is omitted', () => {
+    const { container } = render(
+      <AsyncPaginatedMultiSelect
+        resource="users"
+        value={[]}
+        onChange={vi.fn()}
+        labels={labels}
+      />,
+    )
+    expect(container.firstElementChild).toBe(
+      screen.getByRole('button', { name: 'Members' }),
+    )
+  })
+
+  it('renders the action slot next to the trigger, which stays accessible', () => {
+    renderSelect({ action: <button type="button">Add member</button> })
+    expect(screen.getByRole('button', { name: 'Members' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Add member' }),
+    ).toBeInTheDocument()
+  })
 })

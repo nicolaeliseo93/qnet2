@@ -2,6 +2,52 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — Relation quick-create "+" (spec 0028-relation-quick-create) — GREEN (not committed)
+
+Ogni select di relazione verso un modulo espone un "+" che apre un Dialog col form REALE del
+modulo (lazy), crea il record, invalida le opzioni e seleziona il nuovo record — senza reload.
+Lane A (ui-design) + Lane B (frontend, `features/quick-create/`) + Lane C (frontend, questa
+sessione) tutte verdi.
+
+ARCHITETTURA
+- `components/ui/async-paginated-select.tsx` / `async-paginated-multi-select.tsx`: prop `action?:
+  ReactNode` domain-agnostic, resa accanto al trigger. Assente, DOM byte-identico a prima.
+- `features/quick-create/`: `resolveQuickCreate(resource)` (registry resource→entry, split in
+  `quick-create-entries/{module,hierarchical,advanced}-entries.tsx`), `QuickCreateButton` (icon "+"
+  + Dialog, gated `<Can permission="{domain}.create">`, `type="button"`, barriera
+  `onSubmit stopPropagation` al confine del portale — AC-008), `useQuickCreated(resource)`
+  (accumula i ref creati, invalida `forSelectKeys.resource(resource)`).
+- `components/form/relation-select-field.tsx` / `relation-multi-select-field.tsx` (nuovo, gemello
+  multi): iniettano l'`action` via `use-quick-create-action.tsx` (hook condiviso: wire
+  `useQuickCreated` + gestisce la profondita' di annidamento). Multi AGGIUNGE alla selezione
+  (AC-010), non sostituisce. `RelationFieldRef`/adapter `toRelationFieldRef(s)` spostati in
+  `components/form/relation-field-ref.ts` (separati dal file component: altrimenti
+  `react-refresh/only-export-components` blocca, perche' il file esporta anche funzioni non-componente).
+- **Ricorsione** (form nel Dialog che contiene a sua volta un campo relazione): risolta con
+  `components/form/quick-create-depth-context.ts`, un `Context<number>` incrementato di 1 da ogni
+  "+" reso; profondita' > 0 → niente "+" (nessun secondo Dialog sopra il primo). Soluzione piu'
+  semplice possibile, zero modifiche a `QuickCreateButton`.
+- Call site con `Control` RHF piatto → `RelationSelectField`/`RelationMultiSelectField`. Call site
+  con logica custom (side-effect su altri campi, valore sostituito da un'inheritance, resource
+  RUNTIME come i custom fields) → `useQuickCreateAction` diretto sull'`AsyncPaginatedSelect`/`MultiSelect`
+  grezzo (vedi `campaign-project-field.tsx`, `manager-slots-field.tsx`,
+  `product-category-business-function-field.tsx`, `custom-fields/components/relation-field-control.tsx`).
+  Geo (`features/geo/`) ESCLUSO per decisione di spec (D3).
+
+REGRESSIONE DA CONOSCERE: iniettare un "+" reale (gated `Can`→`useAbilities`→`useAuth`) in un
+componente prima "silenzioso" rompe qualsiasi test che monta quel componente SENZA `AuthProvider` e
+SENZA mockare `@/features/auth/use-abilities`. Toccato in 6 file di test pre-esistenti (users,
+product-categories, custom-fields) aggiungendo il mock standard del repo
+(`vi.mock('@/features/auth/use-abilities', () => ({ useAbilities: () => ({ can: () => false, ... }) }))`,
+stesso pattern gia' usato in `projects-table.test.tsx`). Se aggiungi un nuovo call site del "+" su un
+campo gia' coperto da test che montano il form intero, verifica lo stesso.
+
+VERIFICATO: `tsc --noEmit` pulito, ESLint pulito (solo i 2 preesistenti: `_omit` in
+`registry-form-metadata.test.tsx`, `onChange` in `duration-input.test.tsx`), Vitest 1167 passed /
+25 failed — i 25 sono TUTTI preesistenti (4 in `features/table/` note nella DoD della spec, 21 in
+`features/registries/` per un bug di fixture su `manager_slots`/`sameSlots` segnalato da Lane B,
+NON di questa feature).
+
 ## FEATURE — Module stats panel, backend-driven (spec 0026-module-stats-panel, 2026-07-13) — GREEN (not committed)
 
 NOTA: un'altra sessione ha usato il numero 0026 per "projects card grid" (sezione sotto). Questa

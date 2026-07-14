@@ -13,10 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
-import { AsyncPaginatedMultiSelect } from '@/components/ui/async-paginated-multi-select'
 import type { ForSelectItem } from '@/features/for-select/types'
 import { MetaField } from '@/features/authorization/MetaField'
+import { RelationSelectField } from '@/components/form/relation-select-field'
+import { toRelationFieldRef, toRelationFieldRefs } from '@/components/form/relation-field-ref'
+import { RelationMultiSelectField } from '@/components/form/relation-multi-select-field'
 import { useEnumOptions } from '@/features/config/use-config'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { SECTORS_FOR_SELECT_RESOURCE } from '@/features/sectors/for-select-api'
@@ -68,74 +69,50 @@ export function DetailsTabContent({ control, selectedItems, isSupplier }: Detail
         title={t('registries.form.sections.relations.title')}
         description={t('registries.form.sections.relations.description')}
       >
-        <MetaField control={control} name="source_id" metaKey="source_id" label={t('registries.form.source')}>
-          {({ field, disabled }) => (
-            <FormControl>
-              <AsyncPaginatedSelect
-                resource={SOURCES_FOR_SELECT_RESOURCE}
-                value={field.value}
-                onChange={field.onChange}
-                selectedItem={selectedItems.source}
-                disabled={disabled}
-                labels={{
-                  placeholder: t('registries.form.sourcePlaceholder'),
-                  searchPlaceholder: t('registries.form.sourceSearch'),
-                  empty: t('registries.form.sourceEmpty'),
-                  error: t('registries.form.sourceError'),
-                  clearLabel: t('common.clear'),
-                  triggerLabel: t('registries.form.source'),
-                  retry: t('common.retry'),
-                }}
-              />
-            </FormControl>
-          )}
-        </MetaField>
+        <RelationSelectField
+          control={control}
+          name="source_id"
+          metaKey="source_id"
+          label={t('registries.form.source')}
+          resource={SOURCES_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('registries.form.sourceSearch')}
+          selected={toRelationFieldRef(selectedItems.source)}
+          placeholder={t('registries.form.sourcePlaceholder')}
+          emptyLabel={t('registries.form.sourceEmpty')}
+          errorLabel={t('registries.form.sourceError')}
+          clearLabel={t('common.clear')}
+          retryLabel={t('common.retry')}
+        />
 
-        <MetaField control={control} name="sector_ids" metaKey="sector_ids" label={t('registries.form.sectors')}>
-          {({ field, disabled }) => (
-            <FormControl>
-              <AsyncPaginatedMultiSelect
-                resource={SECTORS_FOR_SELECT_RESOURCE}
-                value={field.value}
-                onChange={field.onChange}
-                selectedItems={selectedItems.sectors}
-                disabled={disabled}
-                labels={{
-                  placeholder: t('registries.form.sectorsPlaceholder'),
-                  searchPlaceholder: t('registries.form.sectorsSearch'),
-                  empty: t('registries.form.sectorsEmpty'),
-                  error: t('registries.form.sectorsError'),
-                  removeLabel: t('registries.form.sectorsRemove'),
-                  triggerLabel: t('registries.form.sectors'),
-                  retry: t('common.retry'),
-                }}
-              />
-            </FormControl>
-          )}
-        </MetaField>
+        <RelationMultiSelectField
+          control={control}
+          name="sector_ids"
+          metaKey="sector_ids"
+          label={t('registries.form.sectors')}
+          resource={SECTORS_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('registries.form.sectorsSearch')}
+          selected={toRelationFieldRefs(selectedItems.sectors)}
+          placeholder={t('registries.form.sectorsPlaceholder')}
+          emptyLabel={t('registries.form.sectorsEmpty')}
+          errorLabel={t('registries.form.sectorsError')}
+          removeLabel={t('registries.form.sectorsRemove')}
+          retryLabel={t('common.retry')}
+        />
 
-        <MetaField control={control} name="referent_ids" metaKey="referent_ids" label={t('registries.form.referents')}>
-          {({ field, disabled }) => (
-            <FormControl>
-              <AsyncPaginatedMultiSelect
-                resource={REFERENTS_FOR_SELECT_RESOURCE}
-                value={field.value}
-                onChange={field.onChange}
-                selectedItems={selectedItems.referents}
-                disabled={disabled}
-                labels={{
-                  placeholder: t('registries.form.referentsPlaceholder'),
-                  searchPlaceholder: t('registries.form.referentsSearch'),
-                  empty: t('registries.form.referentsEmpty'),
-                  error: t('registries.form.referentsError'),
-                  removeLabel: t('registries.form.referentsRemove'),
-                  triggerLabel: t('registries.form.referents'),
-                  retry: t('common.retry'),
-                }}
-              />
-            </FormControl>
-          )}
-        </MetaField>
+        <RelationMultiSelectField
+          control={control}
+          name="referent_ids"
+          metaKey="referent_ids"
+          label={t('registries.form.referents')}
+          resource={REFERENTS_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('registries.form.referentsSearch')}
+          selected={toRelationFieldRefs(selectedItems.referents)}
+          placeholder={t('registries.form.referentsPlaceholder')}
+          emptyLabel={t('registries.form.referentsEmpty')}
+          errorLabel={t('registries.form.referentsError')}
+          removeLabel={t('registries.form.referentsRemove')}
+          retryLabel={t('common.retry')}
+        />
 
         <MetaField control={control} name="manager_slots" metaKey="manager_slots" label={t('registries.form.managers')}>
           {({ field, disabled }) => (
@@ -148,75 +125,51 @@ export function DetailsTabContent({ control, selectedItems, isSupplier }: Detail
           )}
         </MetaField>
 
-        <MetaField control={control} name="supervisor_id" metaKey="supervisor_id" label={t('registries.form.supervisor')}>
-          {({ field, disabled }) => (
-            <FormControl>
-              <AsyncPaginatedSelect
-                resource={USERS_FOR_SELECT_RESOURCE}
-                value={field.value}
-                onChange={field.onChange}
-                selectedItem={selectedItems.supervisor}
-                showAvatar
-                disabled={disabled}
-                labels={{
-                  placeholder: t('registries.form.supervisorPlaceholder'),
-                  searchPlaceholder: t('registries.form.managersSearch'),
-                  empty: t('registries.form.managersEmpty'),
-                  error: t('registries.form.managersError'),
-                  clearLabel: t('common.clear'),
-                  triggerLabel: t('registries.form.supervisor'),
-                  retry: t('common.retry'),
-                }}
-              />
-            </FormControl>
-          )}
-        </MetaField>
+        <RelationSelectField
+          control={control}
+          name="supervisor_id"
+          metaKey="supervisor_id"
+          label={t('registries.form.supervisor')}
+          resource={USERS_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('registries.form.managersSearch')}
+          selected={toRelationFieldRef(selectedItems.supervisor)}
+          showAvatar
+          placeholder={t('registries.form.supervisorPlaceholder')}
+          emptyLabel={t('registries.form.managersEmpty')}
+          errorLabel={t('registries.form.managersError')}
+          clearLabel={t('common.clear')}
+          retryLabel={t('common.retry')}
+        />
 
-        <MetaField control={control} name="commercial_id" metaKey="commercial_id" label={t('registries.form.commercial')}>
-          {({ field, disabled }) => (
-            <FormControl>
-              <AsyncPaginatedSelect
-                resource={REFERENTS_FOR_SELECT_RESOURCE}
-                value={field.value}
-                onChange={field.onChange}
-                selectedItem={selectedItems.commercial}
-                disabled={disabled}
-                labels={{
-                  placeholder: t('registries.form.commercialPlaceholder'),
-                  searchPlaceholder: t('registries.form.referentsSearch'),
-                  empty: t('registries.form.referentsEmpty'),
-                  error: t('registries.form.referentsError'),
-                  clearLabel: t('common.clear'),
-                  triggerLabel: t('registries.form.commercial'),
-                  retry: t('common.retry'),
-                }}
-              />
-            </FormControl>
-          )}
-        </MetaField>
+        <RelationSelectField
+          control={control}
+          name="commercial_id"
+          metaKey="commercial_id"
+          label={t('registries.form.commercial')}
+          resource={REFERENTS_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('registries.form.referentsSearch')}
+          selected={toRelationFieldRef(selectedItems.commercial)}
+          placeholder={t('registries.form.commercialPlaceholder')}
+          emptyLabel={t('registries.form.referentsEmpty')}
+          errorLabel={t('registries.form.referentsError')}
+          clearLabel={t('common.clear')}
+          retryLabel={t('common.retry')}
+        />
 
-        <MetaField control={control} name="reporter_id" metaKey="reporter_id" label={t('registries.form.reporter')}>
-          {({ field, disabled }) => (
-            <FormControl>
-              <AsyncPaginatedSelect
-                resource={REFERENTS_FOR_SELECT_RESOURCE}
-                value={field.value}
-                onChange={field.onChange}
-                selectedItem={selectedItems.reporter}
-                disabled={disabled}
-                labels={{
-                  placeholder: t('registries.form.reporterPlaceholder'),
-                  searchPlaceholder: t('registries.form.referentsSearch'),
-                  empty: t('registries.form.referentsEmpty'),
-                  error: t('registries.form.referentsError'),
-                  clearLabel: t('common.clear'),
-                  triggerLabel: t('registries.form.reporter'),
-                  retry: t('common.retry'),
-                }}
-              />
-            </FormControl>
-          )}
-        </MetaField>
+        <RelationSelectField
+          control={control}
+          name="reporter_id"
+          metaKey="reporter_id"
+          label={t('registries.form.reporter')}
+          resource={REFERENTS_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('registries.form.referentsSearch')}
+          selected={toRelationFieldRef(selectedItems.reporter)}
+          placeholder={t('registries.form.reporterPlaceholder')}
+          emptyLabel={t('registries.form.referentsEmpty')}
+          errorLabel={t('registries.form.referentsError')}
+          clearLabel={t('common.clear')}
+          retryLabel={t('common.retry')}
+        />
 
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium">{t('registries.form.atecoCodes')}</span>

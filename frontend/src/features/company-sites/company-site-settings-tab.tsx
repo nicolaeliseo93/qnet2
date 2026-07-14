@@ -5,8 +5,9 @@ import type { Control } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { Input } from '@/components/ui/input'
 import { FormControl } from '@/components/ui/form'
-import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { MetaField } from '@/features/authorization/MetaField'
+import { RelationSelectField } from '@/components/form/relation-select-field'
+import { toRelationFieldRef } from '@/components/form/relation-field-ref'
 import { COMPANIES_FOR_SELECT_RESOURCE } from '@/features/companies/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import type { ForSelectItem } from '@/features/for-select/types'
@@ -93,33 +94,20 @@ export function SettingsTabContent({
         title={t('companySites.form.sections.company.title')}
         description={t('companySites.form.sections.company.description')}
       >
-        <MetaField
+        <RelationSelectField
           control={control}
           name="company_id"
           metaKey="company_id"
           label={t('companySites.form.company')}
-        >
-          {({ field, disabled }) => (
-            <FormControl>
-              <AsyncPaginatedSelect
-                resource={COMPANIES_FOR_SELECT_RESOURCE}
-                value={field.value}
-                onChange={field.onChange}
-                selectedItem={selectedCompanyItem}
-                disabled={disabled}
-                labels={{
-                  placeholder: t('companySites.form.companyPlaceholder'),
-                  searchPlaceholder: t('companySites.form.companySearch'),
-                  empty: t('companySites.form.companyEmpty'),
-                  error: t('companySites.form.companyError'),
-                  clearLabel: t('common.clear'),
-                  triggerLabel: t('companySites.form.company'),
-                  retry: t('common.retry'),
-                }}
-              />
-            </FormControl>
-          )}
-        </MetaField>
+          resource={COMPANIES_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('companySites.form.companySearch')}
+          selected={toRelationFieldRef(selectedCompanyItem)}
+          placeholder={t('companySites.form.companyPlaceholder')}
+          emptyLabel={t('companySites.form.companyEmpty')}
+          errorLabel={t('companySites.form.companyError')}
+          clearLabel={t('common.clear')}
+          retryLabel={t('common.retry')}
+        />
       </FormSection>
 
       <FormSection
@@ -128,29 +116,22 @@ export function SettingsTabContent({
         description={t('companySites.form.sections.responsibles.description')}
       >
         {responsibleFields.map(({ name, label, selectedItem }) => (
-          <MetaField key={name} control={control} name={name} metaKey={name} label={label}>
-            {({ field, disabled }) => (
-              <FormControl>
-                <AsyncPaginatedSelect
-                  resource={USERS_FOR_SELECT_RESOURCE}
-                  value={field.value}
-                  onChange={field.onChange}
-                  selectedItem={selectedItem}
-                  showAvatar
-                  disabled={disabled}
-                  labels={{
-                    placeholder: t('companySites.form.responsiblePlaceholder'),
-                    searchPlaceholder: t('companySites.form.responsibleSearch'),
-                    empty: t('companySites.form.responsibleEmpty'),
-                    error: t('companySites.form.responsibleError'),
-                    clearLabel: t('common.clear'),
-                    triggerLabel: label,
-                    retry: t('common.retry'),
-                  }}
-                />
-              </FormControl>
-            )}
-          </MetaField>
+          <RelationSelectField
+            key={name}
+            control={control}
+            name={name}
+            metaKey={name}
+            label={label}
+            resource={USERS_FOR_SELECT_RESOURCE}
+            searchPlaceholder={t('companySites.form.responsibleSearch')}
+            selected={toRelationFieldRef(selectedItem)}
+            showAvatar
+            placeholder={t('companySites.form.responsiblePlaceholder')}
+            emptyLabel={t('companySites.form.responsibleEmpty')}
+            errorLabel={t('companySites.form.responsibleError')}
+            clearLabel={t('common.clear')}
+            retryLabel={t('common.retry')}
+          />
         ))}
       </FormSection>
 
