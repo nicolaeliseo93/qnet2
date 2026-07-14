@@ -51,6 +51,13 @@ class UsersStatsDefinition extends AbstractStatsDefinition
                 value: User::query()->where('is_active', false)->count(),
                 icon: 'user-x',
             ),
+            // `employment_profiles.user_id` is unique, so the flagged profiles
+            // ARE the managers (no distinct needed).
+            $this->stat(
+                key: 'managers',
+                value: DB::table(self::EMPLOYMENT_TABLE)->where('is_manager', true)->count(),
+                icon: 'briefcase',
+            ),
             $this->distribution(
                 key: 'by_role',
                 items: Aggregates::topRelated(

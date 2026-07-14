@@ -46,6 +46,11 @@ class BusinessFunctionsStatsDefinition extends AbstractStatsDefinition
                 value: BusinessFunction::query()->where('is_business_service', true)->count(),
                 icon: 'target',
             ),
+            $this->stat(
+                key: 'with_manager',
+                value: BusinessFunction::query()->whereNotNull('manager_id')->count(),
+                icon: 'user-check',
+            ),
             $this->distribution(
                 key: 'by_users',
                 items: Aggregates::topRelated(

@@ -8,6 +8,7 @@ use App\Models\OperationalSite;
 use App\Stats\AbstractStatsDefinition;
 use App\Stats\Support\Aggregates;
 use App\Stats\Widgets\Widget;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -25,6 +26,11 @@ class OperationalSitesStatsDefinition extends AbstractStatsDefinition
 
     private const string ADDRESSES_TABLE = 'addresses';
 
+    /** The staff assignment lives on the employment profile, not on the site. */
+    private const string EMPLOYMENT_TABLE = 'employment_profiles';
+
+    private const string LEADS_TABLE = 'leads';
+
     public function domain(): string
     {
         return 'operational-sites';
@@ -41,16 +47,38 @@ class OperationalSitesStatsDefinition extends AbstractStatsDefinition
     public function widgets(): array
     {
         $total = $this->totalRows();
+        $morphClass = (new OperationalSite)->getMorphClass();
 
         return [
             $this->stat('total', $total, icon: 'map-pin'),
+            $this->stat(
+                key: 'with_address',
+                value: Aggregates::countWithRelated(
+                    table: self::TABLE,
+                    relatedTable: self::ADDRESSES_TABLE,
+                    foreignKey: 'addressable_id',
+                    constrain: static fn (Builder $query) => $query
+                        ->where(self::ADDRESSES_TABLE.'.addressable_type', $morphClass),
+                ),
+                icon: 'map-pin',
+            ),
+            $this->stat(
+                key: 'staffed',
+                value: Aggregates::countWithRelated(self::TABLE, self::EMPLOYMENT_TABLE, 'operational_site_id'),
+                icon: 'users',
+            ),
+            $this->stat(
+                key: 'leads',
+                value: DB::table(self::LEADS_TABLE)->whereNotNull('operational_site_id')->count(),
+                icon: 'target',
+            ),
             // The region IS the address' `state` (the geo reference table the
             // module already filters/sorts by — see OperationalSiteGeoColumns).
             $this->distribution(
                 key: 'by_region',
                 items: Aggregates::topRelated(
                     query: DB::table(self::ADDRESSES_TABLE)
-                        ->where(self::ADDRESSES_TABLE.'.addressable_type', (new OperationalSite)->getMorphClass()),
+                        ->where(self::ADDRESSES_TABLE.'.addressable_type', $morphClass),
                     foreignKey: self::ADDRESSES_TABLE.'.state_id',
                     relatedTable: 'states',
                     labelColumn: 'name',

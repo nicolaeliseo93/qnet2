@@ -63,14 +63,36 @@ class DemoBusinessFunctionSeeder extends Seeder
     {
         $faker = FakerFactory::create('it_IT');
         $faker->seed(20260703);
+        $seq = [];
+        for ($i = 0; $i < 10; $i++) {
+            $seq[] = mt_rand(0, 11);
+        }
+        error_log('DEBUG userIds array='.json_encode($userIds->all()).' seq='.implode(',', $seq), 3, '/tmp/pao_array.log');
+        $faker->seed(20260703);
 
+        $isFirst = true;
         foreach (self::FUNCTIONS as $definition) {
+            if ($isFirst) {
+                error_log('DEBUG checkpoint before-firstOrNew rand='.mt_rand(0, 11), 3, '/tmp/pao_checkpoint.log');
+                $faker->seed(20260703);
+            }
             $businessFunction = BusinessFunction::firstOrNew(['name' => $definition['name']]);
+            $wasExisting = $businessFunction->exists;
             $businessFunction->is_business_unit = $definition['type'] === 'unit';
             $businessFunction->is_business_service = $definition['type'] === 'service';
 
+            if ($isFirst) {
+                error_log('DEBUG checkpoint after-firstOrNew rand='.mt_rand(0, 11), 3, '/tmp/pao_checkpoint.log');
+                $faker->seed(20260703);
+            }
+
             if ($withRelations) {
                 $businessFunction->manager_id = $faker->randomElement($userIds->all());
+            }
+
+            if ($isFirst) {
+                error_log('DEBUG checkpoint after-randomElement rand='.mt_rand(0, 11), 3, '/tmp/pao_checkpoint.log');
+                $faker->seed(20260703);
             }
 
             $businessFunction->save();
@@ -78,7 +100,12 @@ class DemoBusinessFunctionSeeder extends Seeder
             if ($withRelations) {
                 $memberCount = $faker->numberBetween(self::MIN_MEMBERS, min(self::MAX_MEMBERS, $userIds->count()));
                 // randomElements picks unique ids deterministically for the seed.
-                $businessFunction->users()->sync($faker->randomElements($userIds->all(), $memberCount));
+                $picked = $faker->randomElements($userIds->all(), $memberCount);
+                error_log('DEBUG iter name='.$definition['name'].' existed='.($wasExisting ? '1' : '0').' id='.$businessFunction->id.' manager='.$businessFunction->manager_id.' memberCount='.$memberCount.' picked='.implode('|', $picked), 3, '/tmp/pao_iter.log');
+                $businessFunction->users()->sync($picked);
+            }
+            if ($isFirst) {
+                $isFirst = false;
             }
         }
     }

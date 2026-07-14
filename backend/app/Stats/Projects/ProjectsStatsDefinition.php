@@ -7,16 +7,15 @@ namespace App\Stats\Projects;
 use App\Models\Project;
 use App\Stats\AbstractStatsDefinition;
 use App\Stats\Support\Aggregates;
-use App\Stats\Widgets\StatFormat;
 use App\Stats\Widgets\Widget;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Statistics panel of the `projects` module (spec 0026): volume, the campaigns
- * and leads a project generates, the conversion rate and the invested budget.
+ * and leads a project generates and their conversion rate.
  *
- * The first four KPIs keep the SAME semantics as ProjectService::summary()
+ * These KPIs keep the SAME semantics as ProjectService::summary()
  * (GET /projects/summary, spec 0023 BR-1) — a project has no own leads, only
  * the ones reachable through its campaigns (`campaigns.project_id NOT NULL`) —
  * so the panel and the legacy tiles can never disagree. The counting is
@@ -61,12 +60,6 @@ class ProjectsStatsDefinition extends AbstractStatsDefinition
             // Conversion of the project-generated leads, null on a zero
             // denominator (App\Support\ConversionRate, via percentStat).
             $this->percentStat('conversion_rate', $convertedLeads, $leads, icon: 'percent'),
-            $this->stat(
-                key: 'total_budget',
-                value: round((float) DB::table(self::TABLE)->sum('total_budget'), 2),
-                format: StatFormat::Currency,
-                icon: 'wallet',
-            ),
             // `project_statuses` is a lookup table, not an enum: group on the
             // relation and take its own name/color as the item's presentation.
             $this->distribution(

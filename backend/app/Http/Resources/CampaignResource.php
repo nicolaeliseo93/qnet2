@@ -18,9 +18,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * `derived_from_project` flag the frontend uses to render them read-only.
  *
  * Geo (spec 0027, BR-5) is a PER-LEVEL merge, not an all-or-nothing switch:
- * `country`/`state`/`province`/`city` are each the campaign's OWN value when
- * it has one, else the linked project's — `geo_locked_levels` tells the
- * frontend which of the four came from the project.
+ * `country`/`state`/`province`/`city` are each the linked project's value
+ * when IT has one, else the campaign's OWN — `geo_locked_levels` tells the
+ * frontend which of the four came from the project. Project-first (not
+ * campaign-first) mirrors the precedence already used above for the 3 BR-2
+ * classification fields: the write path (CampaignService + ProjectService's
+ * BR-5 realignment cascade, spec 0027 addendum) already guarantees the
+ * campaign's own column is NULL wherever the project owns the level, but
+ * resolving the merge this way too closes the read-side blast radius should
+ * that invariant ever be violated (stale row, future regression).
  *
  * Relies on CampaignService::loadDetail() having eager-loaded both branches
  * (own classification/geo + project's), so resolving either side here never
@@ -40,10 +46,10 @@ class CampaignResource extends JsonResource
         $businessFunction = $derivedFromProject ? $project->businessFunction : $this->businessFunction;
         $productCategory = $derivedFromProject ? $project->productCategory : $this->productCategory;
 
-        $country = $this->country ?? $project?->country;
-        $state = $this->state ?? $project?->state;
-        $province = $this->province ?? $project?->province;
-        $city = $this->city ?? $project?->city;
+        $country = $project?->country ?? $this->country;
+        $state = $project?->state ?? $this->state;
+        $province = $project?->province ?? $this->province;
+        $city = $project?->city ?? $this->city;
 
         return [
             'id' => $this->id,

@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ProductCategoriesStatsDefinition extends AbstractStatsDefinition
 {
+    private const string TABLE = 'product_categories';
+
     private const string PRODUCTS_TABLE = 'products';
 
     public function domain(): string
@@ -39,6 +41,18 @@ class ProductCategoriesStatsDefinition extends AbstractStatsDefinition
             $this->stat(
                 key: 'root_categories',
                 value: ProductCategory::query()->whereNull('parent_id')->count(),
+                icon: 'layers',
+            ),
+            $this->stat(
+                key: 'with_products',
+                value: Aggregates::countWithRelated(self::TABLE, self::PRODUCTS_TABLE, 'category_id'),
+                icon: 'package',
+            ),
+            // `inherits_attributes` false makes a category an inheritance ROOT
+            // (spec 0025): the flag counts the categories that still inherit.
+            $this->stat(
+                key: 'inherits_attributes',
+                value: ProductCategory::query()->where('inherits_attributes', true)->count(),
                 icon: 'layers',
             ),
             $this->distribution(

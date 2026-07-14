@@ -7,6 +7,7 @@ namespace App\Stats\Support;
 use App\Stats\Widgets\DistributionItem;
 use App\Stats\Widgets\TrendPoint;
 use BackedEnum;
+use Closure;
 use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
@@ -105,6 +106,42 @@ final class Aggregates
                 );
             })
             ->all();
+    }
+
+    /**
+     * How many rows of `$table` own at least one row of `$relatedTable` (an
+     * EXISTS semi-join: a single aggregate, never a loaded collection). The
+     * optional `$constrain` narrows the inner query — e.g. the morph type of a
+     * polymorphic child. Table/column names come from definition constants.
+     */
+    public static function countWithRelated(
+        string $table,
+        string $relatedTable,
+        string $foreignKey,
+        ?Closure $constrain = null,
+    ): int {
+        return DB::table($table)
+            ->whereExists(static function (Builder $query) use ($table, $relatedTable, $foreignKey, $constrain): void {
+                $query->from($relatedTable)
+                    ->whereColumn("{$relatedTable}.{$foreignKey}", "{$table}.id");
+
+                if ($constrain !== null) {
+                    $constrain($query);
+                }
+            })
+            ->count();
+    }
+
+    /**
+     * How many DISTINCT non-null values `$column` holds — the count of the
+     * parents actually referenced by `$table` (COUNT(DISTINCT ...) in SQL).
+     */
+    public static function distinctCount(string $table, string $column): int
+    {
+        return DB::table($table)
+            ->whereNotNull($column)
+            ->distinct()
+            ->count($column);
     }
 
     /**

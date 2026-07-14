@@ -179,12 +179,17 @@ it('campaigns: budget, generated leads and the effective project status split (A
         ->and($byStatus['Draft'])->toMatchArray(['value' => 1, 'color' => null]);
 });
 
-it('projects: campaigns, project-reachable leads, conversion, budget and status split (AC-005)', function () {
+/**
+ * REQUIREMENT CHANGE: the `total_budget` stat is gone from the module (every
+ * module exposes exactly 4 stats now), so this case no longer asserts it — the
+ * remaining KPIs keep the same semantics.
+ */
+it('projects: campaigns, project-reachable leads, conversion and status split (AC-005)', function () {
     $running = ProjectStatus::factory()->create(['name' => 'Running', 'color' => '#22c55e']);
     $draft = ProjectStatus::factory()->create(['name' => 'Draft', 'color' => null]);
 
-    $project = Project::factory()->create(['project_status_id' => $running->id, 'total_budget' => 1000]);
-    Project::factory()->create(['project_status_id' => $draft->id, 'total_budget' => 500]);
+    $project = Project::factory()->create(['project_status_id' => $running->id]);
+    Project::factory()->create(['project_status_id' => $draft->id]);
 
     $linked = Campaign::factory()->forProject($project)->create();
     Lead::factory()->create(['campaign_id' => $linked->id, 'is_converted' => true]);
@@ -202,8 +207,7 @@ it('projects: campaigns, project-reachable leads, conversion, budget and status 
         'type' => 'stat', 'label' => 'projects.stats.total', 'value' => 2, 'format' => 'number',
     ]);
     expect(statsWidget($widgets, 'campaigns')['value'])->toBe(1)
-        ->and(statsWidget($widgets, 'leads')['value'])->toBe(3)
-        ->and(statsWidget($widgets, 'total_budget'))->toMatchArray(['value' => 1500.0, 'format' => 'currency']);
+        ->and(statsWidget($widgets, 'leads')['value'])->toBe(3);
 
     $rate = statsWidget($widgets, 'conversion_rate');
     expect($rate)->toMatchArray(['value' => 33, 'format' => 'percent'])
@@ -224,7 +228,7 @@ it('projects: campaigns, project-reachable leads, conversion, budget and status 
 });
 
 it('projects: the conversion rate is null (not 0) with no project-reachable lead (AC-005)', function () {
-    Project::factory()->create(['total_budget' => null]);
+    Project::factory()->create();
 
     $widgets = statsWidgets('projects');
 
@@ -232,9 +236,6 @@ it('projects: the conversion rate is null (not 0) with no project-reachable lead
         ->and(statsWidget($widgets, 'campaigns')['value'])->toBe(0)
         ->and(statsWidget($widgets, 'leads')['value'])->toBe(0)
         ->and(statsWidget($widgets, 'conversion_rate')['value'])->toBeNull()
-        // No budget at all sums to 0 (a currency, unlike a percent, has no
-        // "unavailable" case: JSON carries the zero as 0).
-        ->and(statsWidget($widgets, 'total_budget')['value'])->toBe(0)
         ->and(statsWidget($widgets, 'by_status')['items'])->toHaveCount(1);
 });
 

@@ -1,0 +1,221 @@
+<?php
+
+use App\Models\BusinessFunction;
+use App\Models\Company;
+use App\Models\CompanySite;
+use App\Models\CompanySiteBank;
+use App\Models\EmploymentProfile;
+use App\Models\Lead;
+use App\Models\OperationalSite;
+use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Models\Referent;
+use App\Models\Registry;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+uses(RefreshDatabase::class);
+
+/**
+ * AC-005 for the counters added when the stat count was uniformed to exactly 4
+ * per module (requirement change on top of spec 0026). Each case pins the value
+ * of a new counter on a known factory dataset; the helpers (statsWidgets /
+ * statsWidget / statsUserWith) are the ones already used by the other Stats
+ * tests.
+ */
+
+// ---------------------------------------------------------------------------
+// registries · referents
+// ---------------------------------------------------------------------------
+
+it('registries: `agreed` counts only the registries whose agreement is signed (AC-005)', function () {
+    Registry::factory()->count(2)->create(['agreement_status' => 'agreed']);
+    Registry::factory()->create(['agreement_status' => 'negotiating']);
+    Registry::factory()->create(['agreement_status' => null]);
+
+    $widgets = statsWidgets('registries');
+
+    expect(statsWidget($widgets, 'total')['value'])->toBe(4)
+        ->and(statsWidget($widgets, 'agreed'))->toMatchArray([
+            'type' => 'stat', 'label' => 'registries.stats.agreed', 'value' => 2, 'format' => 'number',
+        ]);
+});
+
+it('referents: `assigned` counts the referents linked to at least one registry (AC-005)', function () {
+    $linked = Referent::factory()->count(2)->create();
+    Referent::factory()->create();
+
+    Registry::factory()->create()->referents()->attach($linked->pluck('id'));
+
+    // A second registry on the SAME referent must not count it twice.
+    Registry::factory()->create()->referents()->attach($linked->first()->id);
+
+    $widgets = statsWidgets('referents');
+
+    expect(statsWidget($widgets, 'total')['value'])->toBe(3)
+        ->and(statsWidget($widgets, 'assigned'))->toMatchArray([
+            'label' => 'referents.stats.assigned', 'value' => 2,
+        ]);
+});
+
+// ---------------------------------------------------------------------------
+// companies · company-sites
+// ---------------------------------------------------------------------------
+
+it('companies: `withSites` and `sites` count the company-site footprint (AC-005)', function () {
+    $company = Company::factory()->create();
+    CompanySite::factory()->count(2)->create(['company_id' => $company->id]);
+    Company::factory()->create();
+    // An orphan site (company_id is nullable) belongs to no company.
+    CompanySite::factory()->create(['company_id' => null]);
+
+    $widgets = statsWidgets('companies');
+
+    expect(statsWidget($widgets, 'total')['value'])->toBe(2)
+        ->and(statsWidget($widgets, 'with_sites'))->toMatchArray([
+            'label' => 'companies.stats.withSites', 'value' => 1,
+        ])
+        ->and(statsWidget($widgets, 'sites'))->toMatchArray([
+            'label' => 'companies.stats.sites', 'value' => 3,
+        ]);
+});
+
+it('company-sites: `withBank` and `companies` (distinct, non-null) (AC-005)', function () {
+    $company = Company::factory()->create();
+    $banked = CompanySite::factory()->create(['company_id' => $company->id]);
+    CompanySite::factory()->create(['company_id' => $company->id]);
+    CompanySite::factory()->create(['company_id' => null]);
+
+    // Two banks on the same site: the site still counts once.
+    CompanySiteBank::factory()->count(2)->create(['company_site_id' => $banked->id]);
+
+    $widgets = statsWidgets('company-sites');
+
+    expect(statsWidget($widgets, 'total')['value'])->toBe(3)
+        ->and(statsWidget($widgets, 'with_bank'))->toMatchArray([
+            'label' => 'companySites.stats.withBank', 'value' => 1,
+        ])
+        ->and(statsWidget($widgets, 'companies'))->toMatchArray([
+            'label' => 'companySites.stats.companies', 'value' => 1,
+        ]);
+});
+
+// ---------------------------------------------------------------------------
+// operational-sites
+// ---------------------------------------------------------------------------
+
+it('operational-sites: `withAddress`, `staffed` and `leads` (AC-005)', function () {
+    $addressed = OperationalSite::factory()->withAddress()->create();
+    $bare = OperationalSite::factory()->create();
+
+    // Staff assignment lives on the employment profile, not on the site.
+    EmploymentProfile::factory()->create(['operational_site_id' => $addressed->id]);
+    EmploymentProfile::factory()->create(['operational_site_id' => $addressed->id]);
+    EmploymentProfile::factory()->create(['operational_site_id' => null]);
+
+    Lead::factory()->count(3)->create(['operational_site_id' => $bare->id]);
+    Lead::factory()->create(['operational_site_id' => null]);
+
+    $widgets = statsWidgets('operational-sites');
+
+    expect(statsWidget($widgets, 'total')['value'])->toBe(2)
+        ->and(statsWidget($widgets, 'with_address'))->toMatchArray([
+            'label' => 'operationalSites.stats.withAddress', 'value' => 1,
+        ])
+        // Two profiles on the SAME site: the site counts once.
+        ->and(statsWidget($widgets, 'staffed'))->toMatchArray([
+            'label' => 'operationalSites.stats.staffed', 'value' => 1,
+        ])
+        ->and(statsWidget($widgets, 'leads'))->toMatchArray([
+            'label' => 'operationalSites.stats.leads', 'value' => 3,
+        ]);
+});
+
+it('operational-sites: every counter is 0 on an empty module (AC-005)', function () {
+    $widgets = statsWidgets('operational-sites');
+
+    expect(statsWidget($widgets, 'with_address')['value'])->toBe(0)
+        ->and(statsWidget($widgets, 'staffed')['value'])->toBe(0)
+        ->and(statsWidget($widgets, 'leads')['value'])->toBe(0);
+});
+
+// ---------------------------------------------------------------------------
+// products · product-categories
+// ---------------------------------------------------------------------------
+
+it('products: `averageCost` is an SQL AVG, null on an empty catalogue (AC-005)', function () {
+    Product::factory()->create(['price' => 100, 'cost' => 40]);
+    Product::factory()->create(['price' => 200, 'cost' => 60]);
+
+    $widgets = statsWidgets('products');
+
+    expect(statsWidget($widgets, 'average_cost'))->toMatchArray([
+        'label' => 'products.stats.averageCost', 'value' => 50.0, 'format' => 'currency',
+    ]);
+});
+
+it('products: `averageCost` is null on an empty catalogue (AC-005)', function () {
+    expect(statsWidget(statsWidgets('products'), 'average_cost')['value'])->toBeNull();
+});
+
+it('product-categories: `withProducts` and `inheritsAttributes` (AC-005)', function () {
+    $stocked = ProductCategory::factory()->create();
+    ProductCategory::factory()->create();
+    ProductCategory::factory()->notInheriting()->create();
+
+    Product::factory()->count(2)->create(['category_id' => $stocked->id]);
+
+    $widgets = statsWidgets('product-categories');
+
+    expect(statsWidget($widgets, 'total')['value'])->toBe(3)
+        // Two products in the SAME category: the category counts once.
+        ->and(statsWidget($widgets, 'with_products'))->toMatchArray([
+            'label' => 'productCategories.stats.withProducts', 'value' => 1,
+        ])
+        ->and(statsWidget($widgets, 'inherits_attributes'))->toMatchArray([
+            'label' => 'productCategories.stats.inheritsAttributes', 'value' => 2,
+        ]);
+});
+
+// ---------------------------------------------------------------------------
+// leads · business-functions · users
+// ---------------------------------------------------------------------------
+
+it('leads: `assigned` counts the leads with an operator (AC-005)', function () {
+    $operator = User::factory()->create();
+    Lead::factory()->count(2)->create(['operator_id' => $operator->id]);
+    Lead::factory()->create(['operator_id' => null]);
+
+    $widgets = statsWidgets('leads');
+
+    expect(statsWidget($widgets, 'total')['value'])->toBe(3)
+        ->and(statsWidget($widgets, 'assigned'))->toMatchArray([
+            'label' => 'leads.stats.assigned', 'value' => 2,
+        ]);
+});
+
+it('business-functions: `withManager` counts the functions with a manager (AC-005)', function () {
+    $manager = User::factory()->create();
+    BusinessFunction::factory()->count(2)->create(['manager_id' => $manager->id]);
+    BusinessFunction::factory()->create(['manager_id' => null]);
+
+    $widgets = statsWidgets('business-functions');
+
+    expect(statsWidget($widgets, 'total')['value'])->toBe(3)
+        ->and(statsWidget($widgets, 'with_manager'))->toMatchArray([
+            'label' => 'businessFunctions.stats.withManager', 'value' => 2,
+        ]);
+});
+
+it('users: `managers` counts the employment profiles flagged as manager (AC-005)', function () {
+    EmploymentProfile::factory()->count(2)->manager()->create();
+    EmploymentProfile::factory()->create();
+
+    $widgets = statsWidgets('users');
+
+    // 3 users from the profiles + the acting user (statsUserWith).
+    expect(statsWidget($widgets, 'total')['value'])->toBe(4)
+        ->and(statsWidget($widgets, 'managers'))->toMatchArray([
+            'label' => 'users.stats.managers', 'value' => 2,
+        ]);
+});

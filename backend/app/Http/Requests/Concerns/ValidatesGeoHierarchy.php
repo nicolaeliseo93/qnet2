@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Concerns;
 
-use App\Models\City;
-use App\Models\Province;
-use App\Models\State;
+use App\Support\Geo\GeoHierarchyMembership;
 use Illuminate\Contracts\Validation\Validator;
 
 /**
@@ -18,8 +16,10 @@ use Illuminate\Contracts\Validation\Validator;
  *   - province.state_id == state_id (province requires state)
  *   - city.state_id == state_id (city requires state, NOT province)
  *   - when province_id is also set: city.province_id == province_id
- * A violation is a 422 on the offending (child) field. Query-parametrized
- * (Eloquent `where`), never raw SQL on input.
+ * A violation is a 422 on the offending (child) field. The membership checks
+ * themselves live in `GeoHierarchyMembership` (single source of truth, also
+ * reused by ProjectService's BR-5 realignment cascade) — this trait only
+ * turns a violation into a validator error.
  *
  * Campaigns validate this against the MERGED tuple (BR-5): the caller
  * resolves country/state/province/city to whatever tuple is EFFECTIVE (its
@@ -38,13 +38,13 @@ trait ValidatesGeoHierarchy
         $provinceId = $geo['province_id'];
         $cityId = $geo['city_id'];
 
-        if ($stateId !== null && ! $this->stateBelongsToCountry($stateId, $countryId)) {
+        if ($stateId !== null && ! GeoHierarchyMembership::stateBelongsToCountry($stateId, $countryId)) {
             $validator->errors()->add('state_id', 'The selected state does not belong to the selected country.');
 
             return;
         }
 
-        if ($provinceId !== null && ($stateId === null || ! $this->provinceBelongsToState($provinceId, $stateId))) {
+        if ($provinceId !== null && ! GeoHierarchyMembership::provinceBelongsToState($provinceId, $stateId)) {
             $validator->errors()->add('province_id', 'The selected province does not belong to the selected state.');
 
             return;
@@ -54,34 +54,14 @@ trait ValidatesGeoHierarchy
             return;
         }
 
-        if ($stateId === null || ! $this->cityBelongsToState($cityId, $stateId)) {
+        if (! GeoHierarchyMembership::cityBelongsToState($cityId, $stateId)) {
             $validator->errors()->add('city_id', 'The selected city does not belong to the selected state.');
 
             return;
         }
 
-        if ($provinceId !== null && ! $this->cityBelongsToProvince($cityId, $provinceId)) {
+        if ($provinceId !== null && ! GeoHierarchyMembership::cityBelongsToProvince($cityId, $provinceId)) {
             $validator->errors()->add('city_id', 'The selected city does not belong to the selected province.');
         }
-    }
-
-    private function stateBelongsToCountry(int $stateId, ?int $countryId): bool
-    {
-        return State::query()->whereKey($stateId)->where('country_id', $countryId)->exists();
-    }
-
-    private function provinceBelongsToState(int $provinceId, int $stateId): bool
-    {
-        return Province::query()->whereKey($provinceId)->where('state_id', $stateId)->exists();
-    }
-
-    private function cityBelongsToState(int $cityId, int $stateId): bool
-    {
-        return City::query()->whereKey($cityId)->where('state_id', $stateId)->exists();
-    }
-
-    private function cityBelongsToProvince(int $cityId, int $provinceId): bool
-    {
-        return City::query()->whereKey($cityId)->where('province_id', $provinceId)->exists();
     }
 }

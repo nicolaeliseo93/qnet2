@@ -28,6 +28,13 @@ ARCHITETTURA (replica il pattern gia' usato 4 volte: tables, meta, imports, migr
 
 **AGGIUNGERE STATISTICHE A UN MODULO = 1 classe PHP + 1 riga in config/stats.php. ZERO frontend.**
 Nuovo TIPO di widget = 1 case in stats-widget.tsx + 1 builder PHP. Il pannello non cambia.
+(Prova sul campo: la richiesta "4 counter ovunque" e' costata SOLO widget PHP + traduzioni. Zero
+righe di logica frontend, zero modifiche al pannello.)
+
+INVARIANTE (testata lato BE, non farla regredire): OGNI dominio espone ESATTAMENTE 4 widget `stat`,
+e sono sempre i PRIMI 4 dell'array (il FE li rende in una griglia a 4 colonne); distribution/trend
+seguono. Il test strutturale in StatsEndpointTest lo impone su tutti e 12 i domini.
+I 4 counter per dominio sono elencati in `docs/specs/0026-module-stats-panel.xml` (<kpi-per-modulo>).
 
 CONTRATTI DA RISPETTARE (non reinventare)
 - `label` del widget = CHIAVE i18n `{domainCamel}.stats.{key}` (come le TableDefinition). Le label

@@ -107,19 +107,44 @@ it('emits exactly the i18n label keys the frontend translates (AC-001)', functio
 
     expect(array_column($widgets, 'label'))->toBe($expected);
 })->with([
-    ['registries', ['total', 'suppliers', 'qualifiedSuppliers', 'byAgreementStatus', 'bySizeClass', 'trend']],
-    ['referents', ['total', 'internal', 'external', 'byType', 'trend']],
-    ['companies', ['total', 'withVatNumber', 'trend']],
-    ['operational-sites', ['total', 'byRegion', 'trend']],
-    ['company-sites', ['total', 'defaultSites', 'byCompany']],
-    ['products', ['total', 'averagePrice', 'averageMargin', 'byType', 'byCategory']],
-    ['product-categories', ['total', 'rootCategories', 'byProducts']],
-    ['projects', ['total', 'campaigns', 'leads', 'conversionRate', 'totalBudget', 'byStatus', 'trend']],
+    ['registries', ['total', 'suppliers', 'qualifiedSuppliers', 'agreed', 'byAgreementStatus', 'bySizeClass', 'trend']],
+    ['referents', ['total', 'internal', 'external', 'assigned', 'byType', 'trend']],
+    ['companies', ['total', 'withVatNumber', 'withSites', 'sites', 'trend']],
+    ['operational-sites', ['total', 'withAddress', 'staffed', 'leads', 'byRegion', 'trend']],
+    ['company-sites', ['total', 'defaultSites', 'withBank', 'companies', 'byCompany']],
+    ['products', ['total', 'averagePrice', 'averageCost', 'averageMargin', 'byType', 'byCategory']],
+    ['product-categories', ['total', 'rootCategories', 'withProducts', 'inheritsAttributes', 'byProducts']],
+    ['projects', ['total', 'campaigns', 'leads', 'conversionRate', 'byStatus', 'trend']],
     ['campaigns', ['total', 'linkedToProject', 'totalBudget', 'generatedLeads', 'byProjectStatus', 'trend']],
-    ['leads', ['total', 'converted', 'conversionRate', 'bySource', 'byOperator', 'trend']],
-    ['business-functions', ['total', 'businessUnits', 'businessServices', 'byUsers']],
-    ['users', ['total', 'active', 'inactive', 'byRole', 'byBusinessFunction', 'trend']],
+    ['leads', ['total', 'converted', 'conversionRate', 'assigned', 'bySource', 'byOperator', 'trend']],
+    ['business-functions', ['total', 'businessUnits', 'businessServices', 'withManager', 'byUsers']],
+    ['users', ['total', 'active', 'inactive', 'managers', 'byRole', 'byBusinessFunction', 'trend']],
 ]);
+
+/**
+ * REQUIREMENT CHANGE (explicit, not a bent test): the stat count per module was
+ * heterogeneous (1 to 5). It is now EXACTLY 4 for every module — the frontend
+ * renders the counters in a 4-column grid — and the stats must lead the widget
+ * array, with the distributions/trends after them. This structural case guards
+ * the rule for the whole registry, so no future module can regress it.
+ */
+it('exposes exactly 4 leading stat widgets in every module (AC-001)', function (string $domain) {
+    Sanctum::actingAs(statsUserWith([$domain]));
+
+    $widgets = $this->getJson("/api/stats/{$domain}")->assertOk()->json('data.widgets');
+
+    $types = array_column($widgets, 'type');
+    $stats = array_filter($types, static fn (string $type): bool => $type === 'stat');
+
+    expect($stats)->toHaveCount(4)
+        // Leading: the first four widgets are the stats, nothing else is one.
+        ->and(array_slice($types, 0, 4))->toBe(['stat', 'stat', 'stat', 'stat'])
+        ->and(array_slice($types, 4))->not->toContain('stat');
+
+    // The keys stay unique within the domain (the frontend uses them as React keys).
+    $keys = array_column($widgets, 'key');
+    expect(array_unique($keys))->toHaveCount(count($keys));
+})->with(statsDomains());
 
 it('only emits icons the frontend allow-list knows (AC-001)', function (string $domain) {
     $allowed = [

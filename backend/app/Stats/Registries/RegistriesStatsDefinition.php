@@ -50,6 +50,11 @@ class RegistriesStatsDefinition extends AbstractStatsDefinition
                 total: $total,
                 icon: 'check-circle',
             ),
+            $this->stat(
+                key: 'agreed',
+                value: Registry::query()->where('agreement_status', AgreementStatusEnum::Agreed->value)->count(),
+                icon: 'check-circle',
+            ),
             $this->distribution(
                 key: 'by_agreement_status',
                 items: Aggregates::byEnumColumn(self::TABLE, 'agreement_status', AgreementStatusEnum::class),

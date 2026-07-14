@@ -19,6 +19,9 @@ class ReferentsStatsDefinition extends AbstractStatsDefinition
 {
     private const string TABLE = 'referents';
 
+    /** The referent <-> registry link (spec 0020): a referent with no row here belongs to no registry. */
+    private const string REGISTRY_PIVOT_TABLE = 'referent_registry';
+
     public function domain(): string
     {
         return 'referents';
@@ -47,6 +50,11 @@ class ReferentsStatsDefinition extends AbstractStatsDefinition
                 key: 'external',
                 value: $this->countByScope(ReferentContactScopeEnum::External),
                 icon: 'target',
+            ),
+            $this->stat(
+                key: 'assigned',
+                value: Aggregates::countWithRelated(self::TABLE, self::REGISTRY_PIVOT_TABLE, 'referent_id'),
+                icon: 'user-check',
             ),
             $this->distribution(
                 key: 'by_type',

@@ -14,15 +14,15 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Statistics panel of the `products` module (spec 0026): catalogue size, the
- * average price and the average margin (price - cost), plus the type and
- * category breakdowns.
+ * average price, the average cost and the average margin (price - cost), plus
+ * the type and category breakdowns.
  */
 class ProductsStatsDefinition extends AbstractStatsDefinition
 {
     private const string TABLE = 'products';
 
     /** AVG ignores NULL rows, so a catalogue with no priced product yields NULL, not 0. */
-    private const string AVERAGES_SELECT = 'AVG(price) as average_price, AVG(price - cost) as average_margin';
+    private const string AVERAGES_SELECT = 'AVG(price) as average_price, AVG(cost) as average_cost, AVG(price - cost) as average_margin';
 
     public function domain(): string
     {
@@ -47,6 +47,12 @@ class ProductsStatsDefinition extends AbstractStatsDefinition
             $this->stat(
                 key: 'average_price',
                 value: $this->money($averages?->average_price),
+                format: StatFormat::Currency,
+                icon: 'wallet',
+            ),
+            $this->stat(
+                key: 'average_cost',
+                value: $this->money($averages?->average_cost),
                 format: StatFormat::Currency,
                 icon: 'wallet',
             ),

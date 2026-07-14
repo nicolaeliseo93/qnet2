@@ -13,6 +13,7 @@ use App\DataObjects\Shared\ForSelectResult;
 use App\Models\Lead;
 use App\Models\Project;
 use App\Services\Concerns\GeneratesSequentialCode;
+use App\Services\Concerns\RealignsCampaignGeo;
 use App\Support\ConversionRate;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -27,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 class ProjectService
 {
     use GeneratesSequentialCode;
+    use RealignsCampaignGeo;
 
     private const string CODE_PREFIX = 'PRJ';
 
@@ -94,6 +96,13 @@ class ProjectService
      * partial (PATCH) updates leave untouched fields as-is. Lowering
      * `total_budget` below the campaigns' already-allocated sum is allowed
      * (D-4/BR-7): this update is never blocked by budget.
+     *
+     * BR-5 addendum (spec 0027, "the project wins"): a project update that
+     * actually claims or changes a geo level realigns every linked campaign
+     * in the SAME transaction (realignLinkedCampaignsGeo()) — otherwise two
+     * independently-valid requests (this update, plus an earlier campaign
+     * refinement) could leave the campaign row pointing at a geo tuple that
+     * is no longer coherent with the project it is locked to.
      */
     public function update(Project $project, UpdateProjectData $data): Project
     {
@@ -102,6 +111,10 @@ class ProjectService
             // attribute changed, so the HasCustomFields write pipeline (spec 0021)
             // persists a custom-fields-only edit. A clean save runs no UPDATE query.
             $project->fill($data->submittedAttributes())->save();
+
+            if ($project->wasChanged(self::GEO_LEVELS)) {
+                $this->realignLinkedCampaignsGeo($project);
+            }
         });
 
         return $this->loadDetail($project);

@@ -41,6 +41,11 @@ class LeadsStatsDefinition extends AbstractStatsDefinition
             $this->stat('total', $total, icon: 'users'),
             $this->stat('converted', $converted, icon: 'user-check'),
             $this->percentStat('conversion_rate', $converted, $total, icon: 'percent'),
+            $this->stat(
+                key: 'assigned',
+                value: Lead::query()->whereNotNull('operator_id')->count(),
+                icon: 'user-check',
+            ),
             $this->distribution(
                 key: 'by_source',
                 items: Aggregates::topRelated(
