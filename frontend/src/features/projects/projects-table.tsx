@@ -5,7 +5,6 @@ import axios from 'axios'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/page-header'
 import {
   Sheet,
@@ -24,6 +23,7 @@ import { DetailError, DetailLoading } from '@/components/detail/detail-panel'
 import { projectColumnRenderers } from '@/features/projects/column-renderers'
 import { deleteProject, fetchProject, projectDetailQueryKey } from '@/features/projects/api'
 import { ProjectForm } from '@/features/projects/project-form'
+import { ProjectEditLoader } from '@/features/projects/project-edit-loader'
 import { ProjectDetailView } from '@/features/projects/project-detail'
 import type { ProjectDetail } from '@/features/projects/types'
 
@@ -198,7 +198,7 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
                   <SheetTitle>{t('projects.form.editTitle')}</SheetTitle>
                   <SheetDescription>{t('projects.form.editSubtitle')}</SheetDescription>
                 </SheetHeader>
-                <EditProjectLoader
+                <ProjectEditLoader
                   projectId={sheet.row.id}
                   onSuccess={onMutationSuccess}
                   onCancel={closeSheet}
@@ -246,46 +246,3 @@ function ViewProjectLoader({ projectId }: ViewProjectLoaderProps) {
   return <ProjectDetailView project={project} />
 }
 
-interface EditProjectLoaderProps {
-  projectId: number
-  onSuccess: (project: ProjectDetail) => void
-  onCancel: () => void
-}
-
-/**
- * Fetches the fresh, re-authorized project detail before mounting the edit
- * form, so the partial PATCH starts from authoritative values rather than the
- * grid row snapshot.
- */
-function EditProjectLoader({ projectId, onSuccess, onCancel }: EditProjectLoaderProps) {
-  const { t } = useTranslation()
-  const {
-    data: project,
-    isLoading,
-    isError,
-    refetch,
-  } = useEntityDetail(projectDetailQueryKey(projectId), () => fetchProject(projectId))
-
-  if (isError) {
-    return (
-      <div className="flex flex-col items-start gap-3 p-4">
-        <p className="text-sm text-destructive">{t('projects.detail.loadError')}</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
-    )
-  }
-
-  if (isLoading || !project) {
-    return (
-      <div className="flex flex-col gap-4 p-4">
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-      </div>
-    )
-  }
-
-  return <ProjectForm mode={{ type: 'edit', project }} onSuccess={onSuccess} onCancel={onCancel} />
-}

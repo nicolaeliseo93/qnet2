@@ -40,6 +40,8 @@ class DemoBusinessFunctionSeeder extends Seeder
 
     private const int MAX_MEMBERS = 8;
 
+    private const int BASE_SEED = 20260703;
+
     /**
      * Seed the demo business functions, each with a responsible manager and a
      * set of associated users drawn from the already-seeded user pool
@@ -62,50 +64,37 @@ class DemoBusinessFunctionSeeder extends Seeder
     private function seedFunctions(Collection $userIds, bool $withRelations): void
     {
         $faker = FakerFactory::create('it_IT');
-        $faker->seed(20260703);
-        $seq = [];
-        for ($i = 0; $i < 10; $i++) {
-            $seq[] = mt_rand(0, 11);
-        }
-        error_log('DEBUG userIds array='.json_encode($userIds->all()).' seq='.implode(',', $seq), 3, '/tmp/pao_array.log');
-        $faker->seed(20260703);
 
-        $isFirst = true;
-        foreach (self::FUNCTIONS as $definition) {
-            if ($isFirst) {
-                error_log('DEBUG checkpoint before-firstOrNew rand='.mt_rand(0, 11), 3, '/tmp/pao_checkpoint.log');
-                $faker->seed(20260703);
-            }
+        foreach (self::FUNCTIONS as $index => $definition) {
             $businessFunction = BusinessFunction::firstOrNew(['name' => $definition['name']]);
-            $wasExisting = $businessFunction->exists;
             $businessFunction->is_business_unit = $definition['type'] === 'unit';
             $businessFunction->is_business_service = $definition['type'] === 'service';
 
-            if ($isFirst) {
-                error_log('DEBUG checkpoint after-firstOrNew rand='.mt_rand(0, 11), 3, '/tmp/pao_checkpoint.log');
-                $faker->seed(20260703);
-            }
-
             if ($withRelations) {
+                // Re-seed right before EACH draw (not once for the whole loop):
+                // `Faker\Generator::seed()` reseeds PHP's process-global
+                // `mt_rand()` (fakerphp/faker delegates every random draw to
+                // it), which every OTHER Faker consumer in this same
+                // single-process test run also shares (`fake()`, the
+                // container-bound singleton used by every other 0027
+                // factory). A single reseed at the top of the loop only
+                // guarantees THAT instant is deterministic; it does not
+                // protect the draws several iterations later from drifting
+                // if the shared PRNG is touched in between. Reseeding
+                // per-row, immediately before its own draws, keeps each
+                // row's outcome reproducible regardless of what else runs
+                // in the same process.
+                $faker->seed(self::BASE_SEED + $index);
                 $businessFunction->manager_id = $faker->randomElement($userIds->all());
-            }
-
-            if ($isFirst) {
-                error_log('DEBUG checkpoint after-randomElement rand='.mt_rand(0, 11), 3, '/tmp/pao_checkpoint.log');
-                $faker->seed(20260703);
             }
 
             $businessFunction->save();
 
             if ($withRelations) {
+                $faker->seed(self::BASE_SEED + $index);
                 $memberCount = $faker->numberBetween(self::MIN_MEMBERS, min(self::MAX_MEMBERS, $userIds->count()));
                 // randomElements picks unique ids deterministically for the seed.
-                $picked = $faker->randomElements($userIds->all(), $memberCount);
-                error_log('DEBUG iter name='.$definition['name'].' existed='.($wasExisting ? '1' : '0').' id='.$businessFunction->id.' manager='.$businessFunction->manager_id.' memberCount='.$memberCount.' picked='.implode('|', $picked), 3, '/tmp/pao_iter.log');
-                $businessFunction->users()->sync($picked);
-            }
-            if ($isFirst) {
-                $isFirst = false;
+                $businessFunction->users()->sync($faker->randomElements($userIds->all(), $memberCount));
             }
         }
     }

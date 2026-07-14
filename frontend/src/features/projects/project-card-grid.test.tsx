@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { ProjectCardGrid } from '@/features/projects/project-card-grid'
 import type { ProjectCard } from '@/features/projects/types'
@@ -11,6 +12,14 @@ const refetch = vi.fn()
 
 vi.mock('@/features/projects/use-project-cards', () => ({
   useProjectCards: (...args: unknown[]) => useProjectCardsMock(...args),
+}))
+
+// The edit form itself is covered by its own tests; here we only assert that
+// the pencil opens the Sheet instead of navigating to the dedicated page.
+vi.mock('@/features/projects/project-edit-loader', () => ({
+  ProjectEditLoader: ({ projectId }: { projectId: number }) => (
+    <div>edit-loader:{projectId}</div>
+  ),
 }))
 
 function buildCard(overrides: Partial<ProjectCard> = {}): ProjectCard {
@@ -64,10 +73,14 @@ function pagesOf(items: ProjectCard[]) {
 }
 
 function renderGrid() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
   return render(
-    <MemoryRouter>
-      <ProjectCardGrid />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <ProjectCardGrid />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 
@@ -166,6 +179,17 @@ describe('ProjectCardGrid (spec 0026 AC-007/009)', () => {
     renderGrid()
 
     expect(screen.getByRole('button', { name: 'Edit project' })).toBeInTheDocument()
+  })
+
+  it('opens the edit sheet on the pencil instead of navigating to the dedicated page', async () => {
+    useProjectCardsMock.mockReturnValue(baseState({ data: pagesOf([buildCard({ id: 7 })]) }))
+
+    renderGrid()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit project' }))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('edit-loader:7')).toBeInTheDocument()
   })
 
   it('shows the derived geo scope badge (spec 0027 AC-012)', () => {
