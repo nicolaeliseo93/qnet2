@@ -64,3 +64,25 @@ describe('projectColumnRenderers date columns', () => {
     expect(screen.getByText('—')).toBeInTheDocument()
   })
 })
+
+describe('projectColumnRenderers geo columns (spec 0027)', () => {
+  it.each(['country', 'province', 'city'])('renders the %s relation name', (columnId) => {
+    renderCell(columnId, { id: 1, name: 'Lombardy' })
+    expect(screen.getByText('Lombardy')).toBeInTheDocument()
+  })
+
+  it.each(['country', 'province', 'city'])('renders an em dash when %s is unset', (columnId) => {
+    renderCell(columnId, null)
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
+
+  it('renders the geo_scope column as its scope badge, without a place', () => {
+    renderCell('geo_scope', 'province')
+    expect(screen.getByText('Provincial')).toBeInTheDocument()
+  })
+
+  it('renders an em dash when geo_scope is null (no geo at all)', () => {
+    renderCell('geo_scope', null)
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
+})

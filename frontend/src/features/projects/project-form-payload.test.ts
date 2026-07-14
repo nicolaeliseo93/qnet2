@@ -3,7 +3,11 @@ import { buildCreatePayload, buildUpdatePayload } from '@/features/projects/proj
 import type { ProjectDetail } from '@/features/projects/types'
 import type { ProjectFormValues } from '@/features/projects/use-project-form'
 
-/** Spec 0023: create shape (never carries `code`, BR-1) and the update sparse diff. */
+/**
+ * Spec 0023: create shape and the update sparse diff. Spec 0025 AC-010/AC-011:
+ * the create payload carries a manual `code` only when set (never blank), the
+ * update payload never carries it (immutable after create).
+ */
 
 function values(overrides: Partial<ProjectFormValues> = {}): ProjectFormValues {
   return {
@@ -13,7 +17,10 @@ function values(overrides: Partial<ProjectFormValues> = {}): ProjectFormValues {
     project_status_id: 3,
     source_id: null,
     business_function_id: null,
+    country_id: 1,
     state_id: null,
+    province_id: null,
+    city_id: null,
     product_category_id: null,
     partner_id: null,
     start_date: '',
@@ -39,8 +46,15 @@ function original(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
     source: null,
     business_function_id: null,
     business_function: null,
+    country_id: 1,
+    country: { id: 1, name: 'Italy' },
     state_id: null,
     state: null,
+    province_id: null,
+    province: null,
+    city_id: null,
+    city: null,
+    geo_scope: 'country',
     product_category_id: null,
     product_category: null,
     partner_id: null,
@@ -58,7 +72,7 @@ function original(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
 }
 
 describe('buildCreatePayload', () => {
-  it('builds the full create payload shape without a code field (BR-1)', () => {
+  it('builds the full create payload shape without a code field when unset (AC-010)', () => {
     const payload = buildCreatePayload(values())
 
     expect(payload).toEqual({
@@ -68,7 +82,10 @@ describe('buildCreatePayload', () => {
       registry_id: null,
       source_id: null,
       business_function_id: null,
+      country_id: 1,
       state_id: null,
+      province_id: null,
+      city_id: null,
       product_category_id: null,
       partner_id: null,
       start_date: null,
@@ -76,6 +93,16 @@ describe('buildCreatePayload', () => {
       total_budget: null,
       target_lead: null,
     })
+    expect(payload).not.toHaveProperty('code')
+  })
+
+  it('includes a trimmed manual code when set (AC-010)', () => {
+    const payload = buildCreatePayload(values({ code: '  ACME-2026  ' }))
+    expect(payload.code).toBe('ACME-2026')
+  })
+
+  it('omits code when it is blank after trimming (empty equals absent, AC-003)', () => {
+    const payload = buildCreatePayload(values({ code: '   ' }))
     expect(payload).not.toHaveProperty('code')
   })
 
@@ -127,8 +154,16 @@ describe('buildUpdatePayload', () => {
     expect(payload).toEqual({ start_date: null })
   })
 
-  it('never includes a code field', () => {
-    const payload = buildUpdatePayload(values({ name: 'Renamed' }), original())
+  it('never includes a code field, even when the form value differs from the original (AC-011)', () => {
+    const payload = buildUpdatePayload(values({ name: 'Renamed', code: 'SOMETHING-ELSE' }), original())
     expect(payload).not.toHaveProperty('code')
+  })
+
+  it('includes only the changed geo levels (spec 0027 BR-4)', () => {
+    const payload = buildUpdatePayload(
+      values({ state_id: 10, city_id: 100 }),
+      original({ state_id: null, city_id: null }),
+    )
+    expect(payload).toEqual({ state_id: 10, city_id: 100 })
   })
 })

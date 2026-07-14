@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { CalendarRange, FolderKanban, Megaphone, Tags, Wallet } from 'lucide-react'
+import { CalendarRange, FolderKanban, Globe, Megaphone, Tags, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -13,6 +13,8 @@ import {
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
 import { formatDecimal } from '@/features/products/column-renderers'
+import { GeoScopeBadge } from '@/features/geo/geo-scope-badge'
+import { geoScopePlaceName } from '@/features/geo/geo-scope'
 import type { CampaignDetail as CampaignDetailData } from '@/features/campaigns/types'
 
 interface CampaignDetailViewProps {
@@ -35,13 +37,16 @@ function formatDate(value: string | null, language: string): string {
  * Read-only detail of a single campaign, fetched fresh from the
  * (re-authorized) detail endpoint. Composed from the shared detail kit;
  * rendered by the dedicated detail page (spec 0023, mirrors 0022/Projects).
- * The 4 classification fields always show the EFFECTIVE value (BR-2: read
- * through the project when linked) — `CampaignResource` already resolves
- * that server-side, so this view never special-cases `derived_from_project`.
+ * The 3 classification fields always show the EFFECTIVE value (BR-2: read
+ * through the project when linked); the 4 geo fields + `geo_scope` show the
+ * EFFECTIVE (merged) tuple instead (BR-5, spec 0027) — `CampaignResource`
+ * already resolves both server-side, so this view never special-cases
+ * `derived_from_project`/`geo_locked_levels` beyond the inherited-levels hint.
  */
 export function CampaignDetailView({ campaign }: CampaignDetailViewProps) {
   const { t, i18n } = useTranslation()
   const createdAt = formatDateTime(campaign.created_at)
+  const geoPlace = campaign.geo_scope ? geoScopePlaceName(campaign.geo_scope, campaign) : null
 
   return (
     <DetailPanel>
@@ -50,11 +55,16 @@ export function CampaignDetailView({ campaign }: CampaignDetailViewProps) {
         title={campaign.name}
         subtitle={campaign.code}
         badges={
-          campaign.derived_from_project ? (
-            <Badge variant="secondary">{t('campaigns.detail.linkedToProject')}</Badge>
-          ) : (
-            <Badge variant="outline">{t('campaigns.detail.standalone')}</Badge>
-          )
+          <>
+            {campaign.derived_from_project ? (
+              <Badge variant="secondary">{t('campaigns.detail.linkedToProject')}</Badge>
+            ) : (
+              <Badge variant="outline">{t('campaigns.detail.standalone')}</Badge>
+            )}
+            {campaign.geo_scope && geoPlace && (
+              <GeoScopeBadge scope={campaign.geo_scope} place={geoPlace} />
+            )}
+          </>
         }
       />
 
@@ -93,13 +103,22 @@ export function CampaignDetailView({ campaign }: CampaignDetailViewProps) {
           <DetailField label={t('campaigns.form.businessFunction')}>
             {campaign.business_function?.name ?? <DetailEmpty />}
           </DetailField>
-          <DetailField label={t('campaigns.form.state')}>
-            {campaign.state?.name ?? <DetailEmpty />}
-          </DetailField>
           <DetailField label={t('campaigns.form.productCategory')}>
             {campaign.product_category?.name ?? <DetailEmpty />}
           </DetailField>
         </DetailGrid>
+      </DetailSection>
+
+      <DetailSection title={t('campaigns.form.sections.geography.title')} icon={<Globe />}>
+        <DetailGrid>
+          <DetailField label={t('geo.country')}>{campaign.country?.name ?? <DetailEmpty />}</DetailField>
+          <DetailField label={t('geo.state')}>{campaign.state?.name ?? <DetailEmpty />}</DetailField>
+          <DetailField label={t('geo.province')}>{campaign.province?.name ?? <DetailEmpty />}</DetailField>
+          <DetailField label={t('geo.city')}>{campaign.city?.name ?? <DetailEmpty />}</DetailField>
+        </DetailGrid>
+        {campaign.geo_locked_levels.length > 0 && (
+          <p className="text-xs text-muted-foreground">{t('campaigns.form.geoInheritedFromProject')}</p>
+        )}
       </DetailSection>
 
       <DetailSection title={t('campaigns.form.sections.planning.title')} icon={<CalendarRange />}>

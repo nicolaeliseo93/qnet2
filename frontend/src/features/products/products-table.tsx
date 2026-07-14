@@ -7,6 +7,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { Can } from '@/features/auth/can'
+import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
+import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
+import { useStatsPanel } from '@/features/stats/use-stats-panel'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
@@ -26,6 +30,8 @@ const PRODUCTS_DOMAIN = 'products'
  */
 export function ProductsTable() {
   const { t } = useTranslation()
+  const stats = useStatsPanel(PRODUCTS_DOMAIN)
+  const invalidateStats = useInvalidateModuleStats(PRODUCTS_DOMAIN)
   const navigate = useNavigate()
 
   const tableRef = useRef<TableViewHandle>(null)
@@ -40,6 +46,7 @@ export function ProductsTable() {
         await deleteProduct(row.id)
         toast.success(t('products.form.deleted'))
         refreshGrid()
+        invalidateStats()
       } catch (error) {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined
         toast.error(
@@ -49,7 +56,7 @@ export function ProductsTable() {
         setDeletingId(null)
       }
     },
-    [refreshGrid, t],
+    [refreshGrid, t, invalidateStats],
   )
 
   const handleAction: RowActionHandler = useCallback(
@@ -77,14 +84,23 @@ export function ProductsTable() {
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
         actions={
-          <Can permission="products.create">
-            <Button onClick={() => void navigate('/products/new')}>
-              <Plus aria-hidden="true" />
-              {t('products.form.newProduct')}
-            </Button>
-          </Can>
+          <>
+            <StatsToggleButton
+              domain={PRODUCTS_DOMAIN}
+              isOpen={stats.isOpen}
+              onToggle={stats.toggle}
+            />
+            <Can permission="products.create">
+              <Button onClick={() => void navigate('/products/new')}>
+                <Plus aria-hidden="true" />
+                {t('products.form.newProduct')}
+              </Button>
+            </Can>
+          </>
         }
       />
+
+      <ModuleStatsPanel domain={PRODUCTS_DOMAIN} isOpen={stats.isOpen} />
 
       <TableView
         ref={tableRef}

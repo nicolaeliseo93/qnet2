@@ -13,6 +13,12 @@ namespace App\Tables\Campaigns;
  * their own and are DERIVED, resolved by CampaignsTableDefinition — only
  * `project` is sortable (a correlated subquery); `registry`/`project_status`/
  * `source` are filterable-only (spec 0023 table_definitions).
+ *
+ * `country`/`state`/`province`/`city`/`geo_scope` (spec 0027, BR-5/D-2) are
+ * DISPLAY-ONLY: neither sortable nor filterable. The MERGED (campaign-or-
+ * project) geo value is not a plain join like the other derived columns —
+ * the same pragmatic choice already made for `project_status` (AC-032),
+ * just without that column's set-filter/sort support.
  */
 final class CampaignColumnCatalog
 {
@@ -46,6 +52,11 @@ final class CampaignColumnCatalog
             self::derivedColumn('registry', 'campaigns.columns.registry'),
             self::derivedColumn('project_status', 'campaigns.columns.project_status'),
             self::derivedColumn('source', 'campaigns.columns.source'),
+            self::displayOnlyColumn('country', 'campaigns.columns.country'),
+            self::displayOnlyColumn('state', 'campaigns.columns.state'),
+            self::displayOnlyColumn('province', 'campaigns.columns.province'),
+            self::displayOnlyColumn('city', 'campaigns.columns.city'),
+            self::displayOnlyColumn('geo_scope', 'campaigns.columns.geo_scope'),
             [
                 'id' => 'start_date',
                 'label' => 'campaigns.columns.start_date',
@@ -115,17 +126,44 @@ final class CampaignColumnCatalog
     }
 
     /**
+     * A COMPUTED, DISPLAY-ONLY column (spec 0027): the merged geo values and
+     * `geo_scope` have no real column/relation of their own to sort or
+     * filter on, mirroring ProjectStatusColumnCatalog's `color`.
+     *
+     * @return array<string, mixed>
+     */
+    private static function displayOnlyColumn(string $id, string $label): array
+    {
+        return [
+            'id' => $id,
+            'label' => $label,
+            'type' => 'text',
+            'visible' => true,
+            'sortable' => false,
+            'filterable' => false,
+        ];
+    }
+
+    /**
+     * Only FILTERABLE columns get a filter declaration — the display-only
+     * geo columns (spec 0027) have no `filterType` to declare.
+     *
      * @return array<int, array<string, mixed>>
      */
     public static function filters(): array
     {
-        return array_map(
+        $filterable = array_filter(
+            self::columns(),
+            static fn (array $column): bool => ($column['filterable'] ?? false) === true,
+        );
+
+        return array_values(array_map(
             static fn (array $column): array => [
                 'columnId' => $column['id'],
                 'type' => $column['filterType'],
             ],
-            self::columns(),
-        );
+            $filterable,
+        ));
     }
 
     /**

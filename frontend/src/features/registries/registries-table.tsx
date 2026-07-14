@@ -7,6 +7,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { Can } from '@/features/auth/can'
+import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
+import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
+import { useStatsPanel } from '@/features/stats/use-stats-panel'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
@@ -26,6 +30,8 @@ const REGISTRIES_DOMAIN = 'registries'
  */
 export function RegistriesTable() {
   const { t } = useTranslation()
+  const stats = useStatsPanel(REGISTRIES_DOMAIN)
+  const invalidateStats = useInvalidateModuleStats(REGISTRIES_DOMAIN)
   const navigate = useNavigate()
 
   const tableRef = useRef<TableViewHandle>(null)
@@ -40,6 +46,7 @@ export function RegistriesTable() {
         await deleteRegistry(row.id)
         toast.success(t('registries.form.deleted'))
         refreshGrid()
+        invalidateStats()
       } catch (error) {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined
         toast.error(
@@ -49,7 +56,7 @@ export function RegistriesTable() {
         setDeletingId(null)
       }
     },
-    [refreshGrid, t],
+    [refreshGrid, t, invalidateStats],
   )
 
   const handleAction: RowActionHandler = useCallback(
@@ -77,14 +84,23 @@ export function RegistriesTable() {
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
         actions={
-          <Can permission="registries.create">
-            <Button onClick={() => void navigate('/registries/new')}>
-              <Plus aria-hidden="true" />
-              {t('registries.form.newRegistry')}
-            </Button>
-          </Can>
+          <>
+            <StatsToggleButton
+              domain={REGISTRIES_DOMAIN}
+              isOpen={stats.isOpen}
+              onToggle={stats.toggle}
+            />
+            <Can permission="registries.create">
+              <Button onClick={() => void navigate('/registries/new')}>
+                <Plus aria-hidden="true" />
+                {t('registries.form.newRegistry')}
+              </Button>
+            </Can>
+          </>
         }
       />
+
+      <ModuleStatsPanel domain={REGISTRIES_DOMAIN} isOpen={stats.isOpen} />
 
       <TableView
         ref={tableRef}

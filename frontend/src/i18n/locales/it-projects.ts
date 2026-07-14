@@ -4,9 +4,23 @@
  */
 
 export const projects = {
-  title: 'Progetti',
-  subtitle: "Sfoglia, filtra e gestisci i progetti dell'organizzazione.",
   forbidden: 'Non hai il permesso di visualizzare i progetti.',
+  view: {
+    toggleLabel: 'Vista progetti',
+    grid: 'Griglia',
+    table: 'Tabella',
+  },
+  grid: {
+    editAction: 'Modifica progetto',
+    openDetail: 'Apri scheda',
+    stats: {
+      campaigns: 'Campagne',
+      leads: 'Lead',
+      conversion: 'Convers.',
+    },
+    empty: 'Nessun progetto trovato.',
+    loadError: 'Impossibile caricare i progetti. Riprova.',
+  },
   columns: {
     code: 'Codice',
     name: 'Denominazione',
@@ -15,6 +29,10 @@ export const projects = {
     source: 'Fonte',
     business_function: 'Funzione aziendale',
     state: 'Regione',
+    country: 'Paese',
+    province: 'Provincia',
+    city: 'Città',
+    geo_scope: 'Ambito geografico',
     product_category: 'Categoria prodotto',
     partner: 'Partner',
     start_date: 'Data inizio',
@@ -24,6 +42,8 @@ export const projects = {
     created_at: 'Creato il',
   },
   detail: {
+    title: 'Dettagli progetto',
+    subtitle: 'Vista di sola lettura del progetto selezionato.',
     loadError: 'Impossibile caricare il progetto. Riprova.',
     budget: 'Budget',
     allocatedBudget: 'Budget allocato',
@@ -47,13 +67,18 @@ export const projects = {
         title: 'Classificazione',
         description: 'Cliente, stato e le altre relazioni di classificazione.',
       },
+      geography: {
+        title: 'Ambito geografico',
+        description: 'Paese, regione, provincia e città del progetto.',
+      },
       planning: {
         title: 'Pianificazione e budget',
         description: 'Tempistiche, budget e target lead.',
       },
     },
     code: 'Codice',
-    codePlaceholder: 'assegnato al salvataggio',
+    codePlaceholder: 'Lascia vuoto per generarlo automaticamente',
+    codeMax: 'Il codice deve avere al massimo 32 caratteri.',
     name: 'Denominazione',
     nameRequired: 'La denominazione è obbligatoria.',
     nameMax: 'La denominazione deve avere al massimo 191 caratteri.',
@@ -67,8 +92,9 @@ export const projects = {
     sourceSearch: 'Cerca fonti…',
     businessFunction: 'Funzione aziendale',
     businessFunctionSearch: 'Cerca funzioni aziendali…',
-    state: 'Regione',
-    stateSearch: 'Cerca regioni…',
+    countryRequired: 'Il paese è obbligatorio.',
+    provinceRequiresState: 'Seleziona prima una regione.',
+    cityRequiresState: 'Seleziona prima una regione.',
     productCategory: 'Categoria prodotto',
     productCategorySearch: 'Cerca categorie prodotto…',
     partner: 'Partner',

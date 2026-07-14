@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\GeoScopeLevel;
 use App\Models\Campaign;
+use App\Models\Project;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -11,12 +13,18 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * @mixin Campaign
  *
  * BR-2: when the campaign is linked to a project (`project_id` set), its own
- * 4 classification columns are NULL in DB — this Resource always exposes the
+ * 3 classification columns are NULL in DB — this Resource always exposes the
  * EFFECTIVE values (read through the project when linked), plus the
  * `derived_from_project` flag the frontend uses to render them read-only.
+ *
+ * Geo (spec 0027, BR-5) is a PER-LEVEL merge, not an all-or-nothing switch:
+ * `country`/`state`/`province`/`city` are each the campaign's OWN value when
+ * it has one, else the linked project's — `geo_locked_levels` tells the
+ * frontend which of the four came from the project.
+ *
  * Relies on CampaignService::loadDetail() having eager-loaded both branches
- * (own classification + project.classification), so resolving either side
- * here never N+1s.
+ * (own classification/geo + project's), so resolving either side here never
+ * N+1s.
  */
 class CampaignResource extends JsonResource
 {
@@ -30,8 +38,12 @@ class CampaignResource extends JsonResource
 
         $projectStatus = $derivedFromProject ? $project->projectStatus : $this->projectStatus;
         $businessFunction = $derivedFromProject ? $project->businessFunction : $this->businessFunction;
-        $state = $derivedFromProject ? $project->state : $this->state;
         $productCategory = $derivedFromProject ? $project->productCategory : $this->productCategory;
+
+        $country = $this->country ?? $project?->country;
+        $state = $this->state ?? $project?->state;
+        $province = $this->province ?? $project?->province;
+        $city = $this->city ?? $project?->city;
 
         return [
             'id' => $this->id,
@@ -59,8 +71,16 @@ class CampaignResource extends JsonResource
             ],
             'business_function_id' => $businessFunction?->id,
             'business_function' => $this->summarize($businessFunction),
+            'country_id' => $country?->id,
+            'country' => $this->summarize($country),
             'state_id' => $state?->id,
             'state' => $this->summarize($state),
+            'province_id' => $province?->id,
+            'province' => $this->summarize($province),
+            'city_id' => $city?->id,
+            'city' => $this->summarize($city),
+            'geo_scope' => GeoScopeLevel::for($country?->id, $state?->id, $province?->id, $city?->id)?->value,
+            'geo_locked_levels' => $this->geoLockedLevels($project),
             'product_category_id' => $productCategory?->id,
             'product_category' => $this->summarize($productCategory),
             'start_date' => $this->start_date,
@@ -69,6 +89,26 @@ class CampaignResource extends JsonResource
             'target_lead' => $this->target_lead,
             'created_at' => $this->created_at,
         ];
+    }
+
+    /**
+     * The geo levels OWNED by the linked project (BR-5) — the levels the
+     * frontend must render locked/read-only on the campaign form.
+     *
+     * @return array<int, string>
+     */
+    private function geoLockedLevels(?Project $project): array
+    {
+        if ($project === null) {
+            return [];
+        }
+
+        return array_values(array_filter([
+            $project->country_id !== null ? GeoScopeLevel::Country->value : null,
+            $project->state_id !== null ? GeoScopeLevel::State->value : null,
+            $project->province_id !== null ? GeoScopeLevel::Province->value : null,
+            $project->city_id !== null ? GeoScopeLevel::City->value : null,
+        ]));
     }
 
     /**

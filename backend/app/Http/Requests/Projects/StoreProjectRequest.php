@@ -4,15 +4,21 @@ namespace App\Http\Requests\Projects;
 
 use App\DataObjects\Projects\CreateProjectData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Http\Requests\Concerns\ValidatesGeoHierarchy;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Validates the payload for POST /api/projects (spec 0023). `code` is
- * intentionally NOT a rule: it is server-generated (BR-1), so any submitted
- * value is silently dropped by validated() and never reaches the DTO.
+ * Validates the payload for POST /api/projects (spec 0023; `code`
+ * writable-on-create per spec 0025, BR-1). `code` is optional: when absent,
+ * null or empty, the Service falls back to the sequential PRJ-0001
+ * generator; when submitted, it must be unique against `projects.code`.
+ *
+ * `country_id` is REQUIRED (spec 0027, BR-4); `state_id`/`province_id`/
+ * `city_id` are optional but must form a consistent geo chain, enforced by
+ * ValidatesGeoHierarchy.
  *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Project::class)). EnforcesFieldPermissions
@@ -22,6 +28,7 @@ use Illuminate\Validation\Rule;
 class StoreProjectRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
+    use ValidatesGeoHierarchy;
 
     public function authorize(): bool
     {
@@ -35,13 +42,17 @@ class StoreProjectRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'code' => ['nullable', 'string', 'max:32', Rule::unique('projects', 'code')],
             'name' => ['required', 'string', 'max:191'],
             'project_status_id' => ['required', 'integer', Rule::exists('project_statuses', 'id')],
             'description' => ['nullable', 'string'],
             'registry_id' => ['nullable', 'integer', Rule::exists('registries', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
             'business_function_id' => ['nullable', 'integer', Rule::exists('business_functions', 'id')],
+            'country_id' => ['required', 'integer', Rule::exists('countries', 'id')],
             'state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
+            'province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
+            'city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')],
             'product_category_id' => ['nullable', 'integer', Rule::exists('product_categories', 'id')],
             'partner_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'start_date' => ['nullable', 'date'],
@@ -55,6 +66,15 @@ class StoreProjectRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->enforceFieldPermissions($validator);
+
+            if (! $validator->errors()->hasAny(['country_id', 'state_id', 'province_id', 'city_id'])) {
+                $this->validateGeoHierarchy($validator, [
+                    'country_id' => $this->filled('country_id') ? (int) $this->input('country_id') : null,
+                    'state_id' => $this->filled('state_id') ? (int) $this->input('state_id') : null,
+                    'province_id' => $this->filled('province_id') ? (int) $this->input('province_id') : null,
+                    'city_id' => $this->filled('city_id') ? (int) $this->input('city_id') : null,
+                ]);
+            }
         });
     }
 

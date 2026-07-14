@@ -29,6 +29,7 @@ use App\Http\Controllers\ReferentTypes\ReferentTypeController;
 use App\Http\Controllers\ReferentTypes\ReferentTypeForSelectController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RoleForSelectController;
+use App\Http\Controllers\Stats\StatsController;
 use App\Http\Controllers\Table\TableController;
 use App\Http\Controllers\Table\TableFilterViewController;
 use App\Http\Controllers\Users\UserController;
@@ -207,6 +208,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // is enforced server-side in MetaController; unknown {resource} → 404.
     Route::middleware('throttle:60,1')->group(function () {
         Route::get('meta/{resource}', [MetaController::class, 'show']);
+
+        // Generic, domain-driven module statistics panel (spec 0026), same
+        // registry pattern: {domain} resolves the StatsDefinition
+        // (config/stats.php), unknown → 404. Authorization (the definition's
+        // `{domain}.viewAny`) is enforced server-side in StatsController.
+        // Rate-limited like the rest: the panel runs aggregate queries.
+        Route::get('stats/{domain}', StatsController::class);
     });
 
     // Field catalogue for the Role form's field-permission matrix section

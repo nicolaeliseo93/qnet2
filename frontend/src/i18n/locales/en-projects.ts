@@ -4,9 +4,23 @@
  */
 
 export const projects = {
-  title: 'Projects',
-  subtitle: 'Browse, filter and manage your organization projects.',
   forbidden: "You don't have permission to view projects.",
+  view: {
+    toggleLabel: 'Projects view',
+    grid: 'Grid',
+    table: 'Table',
+  },
+  grid: {
+    editAction: 'Edit project',
+    openDetail: 'Open detail',
+    stats: {
+      campaigns: 'Campaigns',
+      leads: 'Leads',
+      conversion: 'Convers.',
+    },
+    empty: 'No projects found.',
+    loadError: 'Unable to load the projects. Please try again.',
+  },
   columns: {
     code: 'Code',
     name: 'Name',
@@ -15,6 +29,10 @@ export const projects = {
     source: 'Source',
     business_function: 'Business function',
     state: 'Region',
+    country: 'Country',
+    province: 'Province',
+    city: 'City',
+    geo_scope: 'Geo scope',
     product_category: 'Product category',
     partner: 'Partner',
     start_date: 'Start date',
@@ -24,6 +42,8 @@ export const projects = {
     created_at: 'Created at',
   },
   detail: {
+    title: 'Project details',
+    subtitle: 'Read-only view of the selected project.',
     loadError: 'Unable to load the project. Please try again.',
     budget: 'Budget',
     allocatedBudget: 'Allocated budget',
@@ -47,13 +67,18 @@ export const projects = {
         title: 'Classification',
         description: 'Client, status and the other classification relations.',
       },
+      geography: {
+        title: 'Geography',
+        description: 'Country, region, province and city of the project.',
+      },
       planning: {
         title: 'Planning & budget',
         description: 'Timeline, budget and lead target.',
       },
     },
     code: 'Code',
-    codePlaceholder: 'assigned on save',
+    codePlaceholder: 'Leave empty to generate it automatically',
+    codeMax: 'Code must be at most 32 characters.',
     name: 'Name',
     nameRequired: 'Name is required.',
     nameMax: 'Name must be at most 191 characters.',
@@ -67,8 +92,9 @@ export const projects = {
     sourceSearch: 'Search sources…',
     businessFunction: 'Business function',
     businessFunctionSearch: 'Search business functions…',
-    state: 'Region',
-    stateSearch: 'Search regions…',
+    countryRequired: 'Country is required.',
+    provinceRequiresState: 'Select a region first.',
+    cityRequiresState: 'Select a region first.',
     productCategory: 'Product category',
     productCategorySearch: 'Search product categories…',
     partner: 'Partner',

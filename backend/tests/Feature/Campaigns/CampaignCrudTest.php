@@ -2,6 +2,7 @@
 
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
+use App\Models\Country;
 use App\Models\ProductCategory;
 use App\Models\Project;
 use App\Models\ProjectStatus;
@@ -34,7 +35,10 @@ if (! function_exists('campaignUserWith')) {
 }
 
 /**
- * The 4 BR-2 classification fields, required for a standalone campaign.
+ * The 3 BR-2 classification fields, required for a standalone campaign.
+ * `state_id` LEFT this group (spec 0027, D-3): it now follows BR-5 like
+ * every other geo level, so a standalone campaign only needs `country_id`
+ * (see standaloneCampaignFields() below) alongside these three.
  *
  * @return array<string, int>
  */
@@ -44,9 +48,21 @@ if (! function_exists('standaloneClassificationFields')) {
         return [
             'project_status_id' => ProjectStatus::factory()->create()->id,
             'business_function_id' => BusinessFunction::factory()->create()->id,
-            'state_id' => State::factory()->create()->id,
             'product_category_id' => ProductCategory::factory()->create()->id,
         ];
+    }
+}
+
+/**
+ * Every field required to create a valid STANDALONE campaign: the 3 BR-2
+ * classification fields plus `country_id` (BR-4, spec 0027).
+ *
+ * @return array<string, int>
+ */
+if (! function_exists('standaloneCampaignFields')) {
+    function standaloneCampaignFields(): array
+    {
+        return array_merge(standaloneClassificationFields(), ['country_id' => Country::factory()->create()->id]);
     }
 }
 
@@ -54,7 +70,7 @@ if (! function_exists('standaloneClassificationFields')) {
 // AC-020/AC-022 — linked campaign: the 4 derived columns stay NULL in DB
 // ---------------------------------------------------------------------------
 
-it('create: linked to a project, without the 4 derived fields -> 201, DB columns NULL (AC-020)', function () {
+it('create: linked to a project, without the 3 derived fields -> 201, DB columns NULL (AC-020)', function () {
     $actor = campaignUserWith(['create']);
     $project = Project::factory()->create();
     Sanctum::actingAs($actor);
@@ -70,8 +86,13 @@ it('create: linked to a project, without the 4 derived fields -> 201, DB columns
         'project_id' => $project->id,
         'project_status_id' => null,
         'business_function_id' => null,
-        'state_id' => null,
         'product_category_id' => null,
+        // The project fills country_id by default (ProjectFactory) -> prohibited
+        // and NULL on the campaign row (BR-5, spec 0027).
+        'country_id' => null,
+        'state_id' => null,
+        'province_id' => null,
+        'city_id' => null,
     ]);
 });
 
@@ -89,6 +110,9 @@ it('create: linked to a project AND an explicit project_status_id -> 422 (AC-022
 
     expect(Campaign::count())->toBe(0);
 });
+
+// BR-5 geo refinement (spec 0027, AC-004/AC-005/AC-006) moved to
+// CampaignGeoScopeTest.php (file-size split, engineering.md §6).
 
 // ---------------------------------------------------------------------------
 // AC-021 — GET linked campaign: derived_from_project + effective project values
@@ -135,24 +159,35 @@ it('show: 404 for a non-existent campaign', function () {
 });
 
 // ---------------------------------------------------------------------------
-// AC-023 — standalone campaign: the 4 fields are required
+// AC-023 — standalone campaign: the 3 BR-2 fields + country_id are required
 // ---------------------------------------------------------------------------
 
-it('create: standalone (project_id null) missing one of the 4 derived fields -> 422 on that field (AC-023)', function () {
+it('create: standalone (project_id null) missing one of the 3 BR-2 fields -> 422 on that field (AC-023)', function () {
     $actor = campaignUserWith(['create']);
-    $fields = standaloneClassificationFields();
-    unset($fields['state_id']);
+    $fields = standaloneCampaignFields();
+    unset($fields['business_function_id']);
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/campaigns', array_merge(['name' => 'Incomplete Standalone'], $fields))
-        ->assertStatus(422)->assertJsonValidationErrors('state_id');
+        ->assertStatus(422)->assertJsonValidationErrors('business_function_id');
 
     expect(Campaign::count())->toBe(0);
 });
 
-it('create: standalone with all 4 derived fields -> 201, derived_from_project=false (AC-023)', function () {
+it('create: standalone missing country_id -> 422 on country_id (AC-023, BR-4)', function () {
     $actor = campaignUserWith(['create']);
     $fields = standaloneClassificationFields();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/campaigns', array_merge(['name' => 'No Country'], $fields))
+        ->assertStatus(422)->assertJsonValidationErrors('country_id');
+
+    expect(Campaign::count())->toBe(0);
+});
+
+it('create: standalone with all 3 BR-2 fields + country_id -> 201, derived_from_project=false (AC-023)', function () {
+    $actor = campaignUserWith(['create']);
+    $fields = standaloneCampaignFields();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/campaigns', array_merge(['name' => 'Full Standalone'], $fields))
@@ -163,7 +198,7 @@ it('create: standalone with all 4 derived fields -> 201, derived_from_project=fa
 
 it('create: 403 without campaigns.create', function () {
     $actor = campaignUserWith([]);
-    $fields = standaloneClassificationFields();
+    $fields = standaloneCampaignFields();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/campaigns', array_merge(['name' => 'Nope'], $fields))->assertForbidden();
@@ -240,13 +275,19 @@ it('update: the campaign\'s own budget is excluded from its allocated sum (AC-02
 });
 
 // ---------------------------------------------------------------------------
-// AC-028 — update: standalone -> linked nulls the 4 derived columns in DB
+// AC-028 — update: standalone -> linked nulls the 3 BR-2 columns in DB;
+// geo now follows BR-5 instead (spec 0027, D-3 — this is NOT the former
+// blanket "4 derived columns" behaviour, rewritten because the requirement
+// changed, not test tampering).
 // ---------------------------------------------------------------------------
 
-it('update: setting project_id on a standalone campaign zeroes the 4 derived columns in DB (AC-028)', function () {
+it('update: setting project_id on a standalone campaign zeroes the 3 BR-2 columns in DB, geo follows BR-5 (AC-028)', function () {
     $actor = campaignUserWith(['update']);
     $fields = standaloneClassificationFields();
-    $campaign = Campaign::factory()->create(array_merge(['name' => 'Was Standalone'], $fields));
+    // state_id explicitly null: the campaign's OWN country (its default
+    // factory geo) has no state, so linking to a project with a DIFFERENT
+    // country never produces an inconsistent merged tuple below.
+    $campaign = Campaign::factory()->create(array_merge(['name' => 'Was Standalone', 'state_id' => null], $fields));
     $project = Project::factory()->create();
     Sanctum::actingAs($actor);
 
@@ -259,8 +300,10 @@ it('update: setting project_id on a standalone campaign zeroes the 4 derived col
         'project_id' => $project->id,
         'project_status_id' => null,
         'business_function_id' => null,
-        'state_id' => null,
         'product_category_id' => null,
+        // The project fills country_id by default (ProjectFactory) -> nulled
+        // on the campaign row, defence in depth (BR-5).
+        'country_id' => null,
     ]);
 });
 
@@ -273,22 +316,96 @@ it('update: 403 without campaigns.update', function () {
 });
 
 // ---------------------------------------------------------------------------
-// AC-029 — code is server-generated, an explicit `code` is ignored
+// spec 0025 (AC-001..AC-009 for campaigns, mirroring projects) — `code`
+// manual-on-create, replacing the former AC-029 "explicit code is ignored".
 // ---------------------------------------------------------------------------
 
-it('create: code is server-generated CMP-0001, an explicit `code` payload is ignored (AC-029)', function () {
+it('create: no `code` in the payload -> code is server-generated CMP-0001 (AC-001/AC-008)', function () {
     $actor = campaignUserWith(['create']);
-    $fields = standaloneClassificationFields();
+    $fields = standaloneCampaignFields();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/campaigns', array_merge(['name' => 'No Code'], $fields))
+        ->assertCreated()
+        ->assertJsonPath('data.code', 'CMP-0001');
+});
+
+it('create: an explicit `code` in the payload is persisted as-is (AC-002/AC-008)', function () {
+    $actor = campaignUserWith(['create']);
+    $fields = standaloneCampaignFields();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/campaigns', array_merge([
-        'name' => 'Coded',
-        'code' => 'HACKED-0001',
+        'name' => 'Manual Code',
+        'code' => 'ACME-CMP-2026',
     ], $fields))
         ->assertCreated()
-        ->assertJsonPath('data.code', 'CMP-0001');
+        ->assertJsonPath('data.code', 'ACME-CMP-2026');
 
-    $this->assertDatabaseMissing('campaigns', ['code' => 'HACKED-0001']);
+    $this->assertDatabaseHas('campaigns', ['code' => 'ACME-CMP-2026']);
+});
+
+it('create: `code` as an empty string -> code is server-generated (AC-003/AC-008)', function () {
+    $actor = campaignUserWith(['create']);
+    $fields = standaloneCampaignFields();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/campaigns', array_merge(['name' => 'Empty Code', 'code' => ''], $fields))
+        ->assertCreated()
+        ->assertJsonPath('data.code', 'CMP-0001');
+});
+
+it('create: a duplicate `code` -> 422 on the `code` field (AC-004/AC-008)', function () {
+    $actor = campaignUserWith(['create']);
+    $fields = standaloneCampaignFields();
+    Campaign::factory()->create(['code' => 'ACME-CMP-2026']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/campaigns', array_merge([
+        'name' => 'Duplicate Code',
+        'code' => 'ACME-CMP-2026',
+    ], $fields))
+        ->assertStatus(422)->assertJsonValidationErrors('code');
+});
+
+it('create: a `code` of 33+ characters -> 422 (AC-005/AC-008)', function () {
+    $actor = campaignUserWith(['create']);
+    $fields = standaloneCampaignFields();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/campaigns', array_merge([
+        'name' => 'Too Long',
+        'code' => str_repeat('A', 33),
+    ], $fields))
+        ->assertStatus(422)->assertJsonValidationErrors('code');
+});
+
+it('create: a manual non-CMP code does not break the sequential generator (AC-006/AC-008)', function () {
+    $actor = campaignUserWith(['create']);
+    $fields = standaloneCampaignFields();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/campaigns', array_merge([
+        'name' => 'Manual First',
+        'code' => 'ACME-CMP-2026',
+    ], $fields))
+        ->assertCreated()
+        ->assertJsonPath('data.code', 'ACME-CMP-2026');
+
+    $this->postJson('/api/campaigns', array_merge(['name' => 'Generated Second'], $fields))
+        ->assertCreated()
+        ->assertJsonPath('data.code', 'CMP-0001');
+});
+
+it('update: a `code` different from the persisted one -> 422, code unchanged (AC-007/AC-008)', function () {
+    $actor = campaignUserWith(['update']);
+    $campaign = Campaign::factory()->create(['code' => 'CMP-0001']);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/campaigns/{$campaign->id}", ['code' => 'CMP-9999'])
+        ->assertStatus(422)->assertJsonValidationErrors('code');
+
+    $this->assertDatabaseHas('campaigns', ['id' => $campaign->id, 'code' => 'CMP-0001']);
 });
 
 // ---------------------------------------------------------------------------

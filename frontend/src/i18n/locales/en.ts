@@ -25,6 +25,8 @@ import { projectStatuses } from './en-project-statuses'
 import { projects } from './en-projects'
 import { campaigns } from './en-campaigns'
 import { leads } from './en-leads'
+import { businessFunctions } from './en-business-functions'
+import { moduleStats, statsPanel } from './en-stats'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -99,7 +101,11 @@ export const en = {
     delete: 'Delete',
   },
   table,
+  // Strings of the generic statistics panel (spec 0026). The per-module widget
+  // labels live under each module's own `stats` key, merged below.
+  statsPanel,
   users: {
+    stats: moduleStats.users,
     title: 'Users',
     subtitle: 'Browse, filter and manage the users of your application.',
     forbidden: "You don't have permission to view users.",
@@ -212,6 +218,13 @@ export const en = {
     search: 'Search',
     noMatch: 'No matches found',
     retry: 'Retry',
+    // Derived geo scope (spec 0027 D-2): the finest level that is filled in.
+    scope: {
+      country: 'National',
+      state: 'Regional',
+      province: 'Provincial',
+      city: 'City',
+    },
   },
   roles: {
     title: 'Roles',
@@ -283,8 +296,8 @@ export const en = {
       mandatory: 'Required to create the record — cannot be restricted by a role.',
     },
   },
-  companies,
-  companySites,
+  companies: { ...companies, stats: moduleStats.companies },
+  companySites: { ...companySites, stats: moduleStats.companySites },
   settings: {
     title: 'Settings',
     subtitle: 'Manage your account preferences.',
@@ -406,89 +419,24 @@ export const en = {
   },
   // Localized labels for backend domain enums (extracted to `en-enums.ts`).
   enums,
-  businessFunctions: {
-    title: 'Business Functions',
-    subtitle: 'Browse, filter and manage the business functions of your organization.',
-    forbidden: "You don't have permission to view business functions.",
-    columns: {
-      name: 'Name',
-      is_business_unit: 'Business Unit',
-      is_business_service: 'Business Service',
-      manager: 'Responsible',
-      users: 'Associated users',
-      created_at: 'Created at',
-    },
-    detail: {
-      title: 'Business function details',
-      subtitle: 'Read-only view of the selected business function.',
-      loadError: 'Unable to load the business function. Please try again.',
-      name: 'Name',
-      type: 'Type',
-      manager: 'Responsible',
-      users: 'Associated users',
-      created_at: 'Created at',
-    },
-    form: {
-      newBusinessFunction: 'New business function',
-      createTitle: 'Create business function',
-      createSubtitle: 'Add a new business function to your organization.',
-      editTitle: 'Edit business function',
-      editSubtitle: 'Update the selected business function.',
-      name: 'Name',
-      manager: 'Responsible',
-      managerPlaceholder: 'Select a responsible…',
-      users: 'Associated users',
-      usersPlaceholder: 'Select users…',
-      usersSearch: 'Search users…',
-      usersEmpty: 'No users found.',
-      usersError: 'Unable to load users.',
-      usersRemove: 'Remove user',
-      type: {
-        label: 'Type',
-        businessUnit: 'Business Unit',
-        businessService: 'Business Service',
-        none: 'None',
-      },
-      save: 'Save',
-      saving: 'Saving…',
-      cancel: 'Cancel',
-      created: 'Business function created successfully.',
-      updated: 'Business function updated successfully.',
-      deleted: 'Business function deleted successfully.',
-      nameRequired: 'Name is required.',
-      nameMax: 'Name must be at most 191 characters.',
-      genericError: 'Something went wrong. Please try again.',
-      deleteError: 'Unable to delete the business function. Please try again.',
-      deleteForbidden: 'You cannot delete this business function.',
-      sections: {
-        identity: {
-          title: 'Details',
-          description: 'Name and type of the business function.',
-        },
-        assignment: {
-          title: 'Assignment',
-          description: 'Responsible and associated users.',
-        },
-      },
-    },
-  },
-  operationalSites,
+  businessFunctions,
+  operationalSites: { ...operationalSites, stats: moduleStats.operationalSites },
   imports,
   exports,
-  referents,
+  referents: { ...referents, stats: moduleStats.referents },
   referentTypes,
-  registries,
+  registries: { ...registries, stats: moduleStats.registries },
   attributes,
   customFields,
-  productCategories,
+  productCategories: { ...productCategories, stats: moduleStats.productCategories },
   sectors,
-  products,
+  products: { ...products, stats: moduleStats.products },
   sources,
   tags,
-  projects,
+  projects: { ...projects, stats: moduleStats.projects },
   projectStatuses,
-  campaigns,
-  leads,
+  campaigns: { ...campaigns, stats: moduleStats.campaigns },
+  leads: { ...leads, stats: moduleStats.leads },
 }
 
 export type TranslationResources = typeof en

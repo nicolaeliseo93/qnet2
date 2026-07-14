@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Country;
 use App\Models\Project;
 use App\Models\ProjectStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -14,6 +15,11 @@ class ProjectFactory extends Factory
     protected $model = Project::class;
 
     /**
+     * `country_id` is REQUIRED at the FormRequest layer (BR-4, spec 0027), so
+     * the default fixture always carries one; `state_id`/`province_id`/
+     * `city_id` stay unset here (as before) since they were never part of the
+     * default fixture and remain optional.
+     *
      * @return array<string, mixed>
      */
     public function definition(): array
@@ -22,6 +28,7 @@ class ProjectFactory extends Factory
             'name' => fake()->unique()->words(3, true),
             'description' => fake()->optional()->paragraph(),
             'project_status_id' => ProjectStatus::factory(),
+            'country_id' => Country::factory(),
             'start_date' => null,
             'end_date' => null,
             'total_budget' => fake()->optional()->randomFloat(2, 1000, 500000),

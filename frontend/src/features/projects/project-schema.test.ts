@@ -3,7 +3,11 @@ import i18n from '@/i18n'
 import { buildCreateProjectSchema } from '@/features/projects/project-schema'
 import { buildCustomFieldsSchema } from '@/features/custom-fields/build-custom-fields-schema'
 
-/** Spec 0023 D-5 (required status) and BR-6 (end_date >= start_date), mirrored client-side. */
+/**
+ * Spec 0023 D-5 (required status) and BR-6 (end_date >= start_date), mirrored
+ * client-side. Spec 0025 AC-010: `code` is optional and, when set, mirrors
+ * the backend's max:32.
+ */
 
 const EMPTY_CUSTOM_FIELDS_SCHEMA = buildCustomFieldsSchema(
   [],
@@ -19,7 +23,10 @@ function baseValues() {
     project_status_id: 1,
     source_id: null,
     business_function_id: null,
+    country_id: 1,
     state_id: null,
+    province_id: null,
+    city_id: null,
     product_category_id: null,
     partner_id: null,
     start_date: '',
@@ -82,6 +89,78 @@ describe('buildCreateProjectSchema', () => {
   it('accepts an end_date with no start_date set', () => {
     const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
     const result = schema.safeParse({ ...baseValues(), end_date: '2026-02-01' })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe('buildCreateProjectSchema — manual code (spec 0025 AC-010)', () => {
+  it('accepts a payload with no code (falls back to server generation)', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse(baseValues())
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts a valid manual code and trims it', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({ ...baseValues(), code: '  ACME-2026  ' })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.code).toBe('ACME-2026')
+    }
+  })
+
+  it('rejects a code of 33+ characters (mirrors backend max:32, AC-005)', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({ ...baseValues(), code: 'A'.repeat(33) })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'code')).toBe(true)
+    }
+  })
+})
+
+describe('buildCreateProjectSchema — geo hierarchy (spec 0027 BR-4)', () => {
+  it('rejects a null country_id', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({ ...baseValues(), country_id: null })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'country_id')).toBe(true)
+    }
+  })
+
+  it('accepts a full country -> state -> province -> city tuple', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({
+      ...baseValues(),
+      state_id: 10,
+      province_id: 50,
+      city_id: 100,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a province set without a state', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({ ...baseValues(), province_id: 50 })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'province_id')).toBe(true)
+    }
+  })
+
+  it('rejects a city set without a state', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({ ...baseValues(), city_id: 100 })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'city_id')).toBe(true)
+    }
+  })
+
+  it('accepts a city set alongside a state but no province (province is optional)', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({ ...baseValues(), state_id: 10, city_id: 100 })
     expect(result.success).toBe(true)
   })
 })

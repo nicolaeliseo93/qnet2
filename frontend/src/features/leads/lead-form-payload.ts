@@ -12,6 +12,7 @@ export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
     operational_site_id: values.operational_site_id,
     source_id: values.source_id,
     operator_id: values.operator_id,
+    is_converted: values.is_converted,
     notes: values.notes,
   }
 }
@@ -39,6 +40,9 @@ export function buildUpdatePayload(values: LeadFormValues, original: LeadDetail)
   }
   if (values.operator_id !== original.operator_id) {
     payload.operator_id = values.operator_id
+  }
+  if (values.is_converted !== original.is_converted) {
+    payload.is_converted = values.is_converted
   }
   if (values.notes !== original.notes) {
     payload.notes = values.notes

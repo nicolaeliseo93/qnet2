@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\GeoScopeLevel;
 use App\Models\Project;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -35,8 +36,15 @@ class ProjectResource extends JsonResource
             'source' => $this->summarize($this->source),
             'business_function_id' => $this->business_function_id,
             'business_function' => $this->summarize($this->businessFunction),
+            'country_id' => $this->country_id,
+            'country' => $this->summarize($this->country),
             'state_id' => $this->state_id,
             'state' => $this->summarize($this->state),
+            'province_id' => $this->province_id,
+            'province' => $this->summarize($this->province),
+            'city_id' => $this->city_id,
+            'city' => $this->summarize($this->city),
+            'geo_scope' => GeoScopeLevel::for($this->country_id, $this->state_id, $this->province_id, $this->city_id)?->value,
             'product_category_id' => $this->product_category_id,
             'product_category' => $this->summarize($this->productCategory),
             'partner_id' => $this->partner_id,

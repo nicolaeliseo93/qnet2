@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\DataObjects\Projects\CreateProjectData;
+use App\DataObjects\Projects\ProjectIndexQuery;
+use App\DataObjects\Projects\ProjectIndexResult;
 use App\DataObjects\Projects\UpdateProjectData;
 use App\DataObjects\Shared\ForSelectQuery;
 use App\DataObjects\Shared\ForSelectResult;
+use App\Models\Lead;
 use App\Models\Project;
 use App\Services\Concerns\GeneratesSequentialCode;
+use App\Support\ConversionRate;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -33,7 +37,7 @@ class ProjectService
     /**
      * Relations eager-loaded for the detail/write-result read tree
      * (ProjectResource), so a single query never N+1s across the 7
-     * classification FKs.
+     * classification FKs plus the 4 geo levels (spec 0027).
      *
      * @var array<int, string>
      */
@@ -42,7 +46,10 @@ class ProjectService
         'projectStatus',
         'source',
         'businessFunction',
+        'country',
         'state',
+        'province',
+        'city',
         'productCategory',
         'partner',
     ];
@@ -60,8 +67,9 @@ class ProjectService
     }
 
     /**
-     * Create a new project. The code is generated inside the transaction with
-     * a pessimistic lock (BR-1), so two concurrent creates never collide.
+     * Create a new project. A manual `code` (spec 0025, BR-1) is persisted as
+     * submitted; otherwise one is generated inside the transaction with a
+     * pessimistic lock, so two concurrent creates never collide.
      */
     public function create(CreateProjectData $data): Project
     {
@@ -72,7 +80,7 @@ class ProjectService
             // (bypasses mass-assignment guarding) AFTER the fillable attributes,
             // mirroring CampaignService::create().
             $project = new Project($data->attributes());
-            $project->code = $this->nextSequentialCode(self::CODE_TABLE, self::CODE_COLUMN, self::CODE_PREFIX);
+            $project->code = $data->code ?? $this->nextSequentialCode(self::CODE_TABLE, self::CODE_COLUMN, self::CODE_PREFIX);
             $project->save();
 
             return $project;
@@ -150,12 +158,85 @@ class ProjectService
     }
 
     /**
+     * The card-grid list (spec 0026, D-3), newest-first, carrying the 3
+     * lead-conversion stats (BR-1: campaigns_count/leads_count/
+     * converted_leads_count) as aggregate counts — a single query, no N+1.
+     */
+    public function index(ProjectIndexQuery $query): ProjectIndexResult
+    {
+        $base = $this->indexBaseQuery();
+
+        if ($query->hasSearch()) {
+            $base->where(function (Builder $relatedQuery) use ($query): void {
+                $relatedQuery->where('code', 'like', '%'.$query->search.'%')
+                    ->orWhere('name', 'like', '%'.$query->search.'%');
+            });
+        }
+
+        if ($query->projectStatusId !== null) {
+            $base->where('project_status_id', $query->projectStatusId);
+        }
+
+        $total = (clone $base)->count();
+
+        /** @var Collection<int, Project> $items */
+        $items = $base->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->offset($query->offset)
+            ->limit($query->limit)
+            ->get();
+
+        return new ProjectIndexResult(items: $items, total: $total, offset: $query->offset, limit: $query->limit);
+    }
+
+    /**
+     * @return Builder<Project>
+     */
+    private function indexBaseQuery(): Builder
+    {
+        return Project::query()
+            ->with(['projectStatus', 'country', 'state', 'province', 'city'])
+            ->withCount([
+                'campaigns',
+                'leads',
+                'leads as converted_leads_count' => static fn (Builder $leadsQuery) => $leadsQuery->where('is_converted', true),
+            ])
+            ->withSum('campaigns as allocated_budget_sum', 'total_budget');
+    }
+
+    /**
+     * Global KPI tiles (spec 0026): counts of projects/campaigns/leads
+     * reachable through a project, plus the derived conversion rate (BR-1).
+     * Cheap aggregate query, no N+1.
+     *
+     * @return array{projects_count: int, campaigns_count: int, leads_count: int, converted_leads_count: int, conversion_rate: int|null}
+     */
+    public function summary(): array
+    {
+        $projectsCount = Project::query()->count();
+        $campaignsCount = (int) DB::table('campaigns')->whereNotNull('project_id')->count();
+        $leadsCount = (int) Lead::query()->whereHas('campaign', fn (Builder $campaignQuery) => $campaignQuery->whereNotNull('project_id'))->count();
+        $convertedLeadsCount = (int) Lead::query()
+            ->where('is_converted', true)
+            ->whereHas('campaign', fn (Builder $campaignQuery) => $campaignQuery->whereNotNull('project_id'))
+            ->count();
+
+        return [
+            'projects_count' => $projectsCount,
+            'campaigns_count' => $campaignsCount,
+            'leads_count' => $leadsCount,
+            'converted_leads_count' => $convertedLeadsCount,
+            'conversion_rate' => ConversionRate::of($convertedLeadsCount, $leadsCount),
+        ];
+    }
+
+    /**
      * @return Builder<Project>
      */
     private function forSelectBaseQuery(): Builder
     {
         return Project::query()
-            ->select(['id', 'code', 'name', 'registry_id', 'project_status_id', 'source_id', 'business_function_id', 'state_id', 'product_category_id', 'partner_id', 'total_budget'])
+            ->select(['id', 'code', 'name', 'registry_id', 'project_status_id', 'source_id', 'business_function_id', 'country_id', 'state_id', 'province_id', 'city_id', 'product_category_id', 'partner_id', 'total_budget'])
             ->with(self::DETAIL_RELATIONS)
             ->withSum('campaigns as allocated_budget_sum', 'total_budget');
     }

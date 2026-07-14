@@ -13,9 +13,9 @@ import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
-import { STATES_FOR_SELECT_RESOURCE } from '@/features/geo/state-for-select-api'
 import { useProjectForm } from '@/features/projects/use-project-form'
 import { ProjectRelationField } from '@/features/projects/project-relation-field'
+import { ProjectGeographySection } from '@/features/projects/project-geography-section'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { ProjectDetail, ProjectFormMode } from '@/features/projects/types'
 
@@ -25,7 +25,7 @@ interface ProjectFormBodyProps {
   onCancel: () => void
 }
 
-/** Placeholder shown for the read-only, server-generated `code` field until the project is saved (AC-046). */
+/** Placeholder shown for the manual `code` field in create, declaring the server-generation fallback (spec 0025 AC-010). */
 const CODE_PLACEHOLDER_KEY = 'projects.form.codePlaceholder'
 
 function numberInputValue(value: number | null): string {
@@ -33,11 +33,14 @@ function numberInputValue(value: number | null): string {
 }
 
 /**
- * The project create/edit form UI: the read-only `code` (AC-046), identity
- * (name, description), the required Stato relation (D-5) plus the 6 optional
- * relation pickers (`ProjectRelationField`), planning dates (BR-6) and
- * budget/target — all wrapped in `MetaField` (spec 0004). All non-render
- * logic lives in `useProjectForm`.
+ * The project create/edit form UI: the manual/read-only `code` (spec 0025,
+ * editable only in create — gated by the `code` field permission, editable
+ * in create and read-only in update), identity (name, description), the
+ * required Stato relation (D-5) plus the 5 optional relation pickers
+ * (`ProjectRelationField`), the geo cascade (spec 0027 BR-4,
+ * `ProjectGeographySection`), planning dates (BR-6) and budget/target — all
+ * wrapped in `MetaField` (spec 0004). All non-render logic lives in
+ * `useProjectForm`.
  */
 export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyProps) {
   const { t } = useTranslation()
@@ -53,18 +56,20 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
             title={t('projects.form.sections.identity.title')}
             description={t('projects.form.sections.identity.description')}
           >
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium" htmlFor="project-code">
-                {t('projects.form.code')}
-              </label>
-              <Input
-                id="project-code"
-                disabled
-                readOnly
-                value={original?.code ?? ''}
-                placeholder={t(CODE_PLACEHOLDER_KEY)}
-              />
-            </div>
+            <MetaField control={form.control} name="code" metaKey="code" label={t('projects.form.code')}>
+              {({ field, disabled, readOnly }) => (
+                <FormControl>
+                  <Input
+                    autoComplete="off"
+                    disabled={disabled}
+                    readOnly={readOnly}
+                    placeholder={t(CODE_PLACEHOLDER_KEY)}
+                    {...field}
+                    value={field.value ?? ''}
+                  />
+                </FormControl>
+              )}
+            </MetaField>
 
             <MetaField control={form.control} name="name" metaKey="name" label={t('projects.form.name')}>
               {({ field, disabled, readOnly }) => (
@@ -163,16 +168,6 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
 
             <ProjectRelationField
               control={form.control}
-              name="state_id"
-              metaKey="state_id"
-              label={t('projects.form.state')}
-              resource={STATES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('projects.form.stateSearch')}
-              selected={original?.state ?? null}
-            />
-
-            <ProjectRelationField
-              control={form.control}
               name="product_category_id"
               metaKey="product_category_id"
               label={t('projects.form.productCategory')}
@@ -191,6 +186,8 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
               selected={original?.partner ?? null}
             />
           </FormSection>
+
+          <ProjectGeographySection control={form.control} setValue={form.setValue} />
 
           <FormSection
             icon={CalendarRange}

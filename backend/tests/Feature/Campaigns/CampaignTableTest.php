@@ -54,6 +54,7 @@ it('GET /api/tables/campaigns/columns: 200 with the declared columns, 403 withou
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
         'code', 'project', 'name', 'registry', 'project_status', 'source',
+        'country', 'state', 'province', 'city', 'geo_scope',
         'start_date', 'end_date', 'total_budget', 'target_lead', 'created_at',
     ]);
 
@@ -61,6 +62,53 @@ it('GET /api/tables/campaigns/columns: 200 with the declared columns, 403 withou
     expect($columns['project']['sortable'])->toBeTrue()
         ->and($columns['project_status']['sortable'])->toBeFalse()
         ->and($columns['project_status']['filterType'])->toBe('set');
+});
+
+// ---------------------------------------------------------------------------
+// AC-013 — the 4 geo columns + geo_scope are DISPLAY-ONLY (spec 0027)
+// ---------------------------------------------------------------------------
+
+it('the geo columns and geo_scope are neither sortable nor filterable (AC-013)', function () {
+    $actor = campaignUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $data = $this->getJson('/api/tables/campaigns/columns')->assertOk()->json('data');
+    $columns = collect($data['columns'])->keyBy('id');
+
+    foreach (['country', 'state', 'province', 'city', 'geo_scope'] as $columnId) {
+        expect($columns[$columnId]['sortable'])->toBeFalse()
+            ->and($columns[$columnId]['filterable'])->toBeFalse();
+    }
+
+    $filterColumnIds = collect($data['filters'])->pluck('columnId')->all();
+    foreach (['country', 'state', 'province', 'city', 'geo_scope'] as $columnId) {
+        expect($filterColumnIds)->not->toContain($columnId);
+    }
+});
+
+it('rows: a linked campaign shows the MERGED geo (own refinement over the project\'s) (AC-013, BR-5)', function () {
+    $actor = campaignUserWith(['viewAny']);
+    $geo = geoChain();
+    $project = Project::factory()->create([
+        'country_id' => $geo['country']->id,
+        'state_id' => null,
+        'province_id' => null,
+        'city_id' => null,
+    ]);
+    $campaign = Campaign::factory()->forProject($project)->create([
+        'name' => 'Refined Row',
+        'state_id' => $geo['state']->id,
+        'city_id' => $geo['city']->id,
+    ]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/campaigns/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $campaign->id);
+
+    expect($row['country'])->toMatchArray(['id' => $geo['country']->id, 'name' => 'Italia'])
+        ->and($row['state'])->toMatchArray(['id' => $geo['state']->id, 'name' => 'Lombardia'])
+        ->and($row['city'])->toMatchArray(['id' => $geo['city']->id, 'name' => 'Milano'])
+        ->and($row['geo_scope'])->toBe('city');
 });
 
 // ---------------------------------------------------------------------------

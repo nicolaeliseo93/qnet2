@@ -27,6 +27,17 @@ final class LeadColumnCatalog
             self::derivedColumn('source', 'leads.columns.source'),
             self::derivedColumn('operator', 'leads.columns.operator'),
             [
+                // Real boolean column (spec 0026, D-1): sort/set-filter owned
+                // entirely by the generic engine, mirrors users' is_active.
+                'id' => 'is_converted',
+                'label' => 'leads.columns.isConverted',
+                'type' => 'boolean',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
                 'id' => 'created_at',
                 'label' => 'leads.columns.createdAt',
                 'type' => 'datetime',

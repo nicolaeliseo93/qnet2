@@ -22,11 +22,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'source_id',
     'operator_id',
     'notes',
+    'is_converted',
 ])]
 class Lead extends BaseModel
 {
     /** @use HasFactory<LeadFactory> */
     use HasFactory, LogsModelActivity;
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_converted' => 'bool',
+        ];
+    }
 
     public function referent(): BelongsTo
     {

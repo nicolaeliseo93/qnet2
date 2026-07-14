@@ -6,8 +6,10 @@ use App\Authorization\AuthorizationRegistry;
 use App\Authorization\ResourcePermissionsBuilder;
 use App\Enums\HttpStatusEnum;
 use App\Http\Controllers\Abstract\BaseApiController;
+use App\Http\Requests\Projects\ProjectIndexRequest;
 use App\Http\Requests\Projects\StoreProjectRequest;
 use App\Http\Requests\Projects\UpdateProjectRequest;
+use App\Http\Resources\ProjectCardResource;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use App\Models\User;
@@ -38,6 +40,29 @@ class ProjectController extends BaseApiController
         private readonly AuthorizationRegistry $authorization,
         private readonly ResourcePermissionsBuilder $permissionsBuilder,
     ) {}
+
+    /**
+     * GET /api/projects — card-grid list (spec 0026, D-3): paginated,
+     * searchable, status-filterable, carrying the per-card lead-conversion
+     * stats (BR-1) and can.update/can.delete affordances (BR-2).
+     */
+    public function index(ProjectIndexRequest $request): JsonResponse
+    {
+        try {
+            $this->authorize('viewAny', Project::class);
+
+            $result = $this->service->index($request->toData());
+
+            return $this->paginatedResponse(
+                ProjectCardResource::collection($result->items),
+                $result->total,
+                $result->offset,
+                $result->limit,
+            );
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
 
     /**
      * GET /api/projects/{project} — single project (view row-action).

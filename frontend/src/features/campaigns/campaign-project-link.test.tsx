@@ -8,16 +8,21 @@ import { campaigns as campaignsEn } from '@/i18n/locales/en-campaigns'
 import { CampaignForm } from '@/features/campaigns/campaign-form'
 import type { CampaignDetailWithPermissions } from '@/features/campaigns/types'
 import type { ResourceMeta } from '@/features/authorization/types'
-import type { ProjectForSelectItem } from '@/features/projects/for-select-api'
+import type { ProjectForSelectMeta } from '@/features/projects/for-select-api'
+import type { ProjectGeoMeta } from '@/features/campaigns/campaign-geo'
 
 /**
  * Spec 0023 FRONTEND acceptance criteria:
  * - AC-042: picking a Project prefills Client/Source/Partner (editable) and
- *   forces the 4 classification fields read-only from the project's values,
+ *   forces the 3 classification fields read-only from the project's values,
  *   which are excluded from the payload regardless of what they display.
- * - AC-043: clearing the Project makes the 4 classification fields editable
+ * - AC-043: clearing the Project makes the 3 classification fields editable
  *   and required again (client validation error when left empty).
  * - BR-3: the backend's 422 budget message is shown verbatim, not a generic one.
+ * Spec 0027 BR-5 (replaces BR-2 for geo, D-3 — REWRITTEN, not tampered: the
+ * requirement changed): picking a project also prefills+locks the geo levels
+ * the project fills (`<GeoSelect lockedLevels>`), excluded from the payload;
+ * clearing the project unlocks and resets all four, re-requiring `country_id`.
  * AC-046 (the `code` field) lives in `campaign-form-body.test.tsx`.
  */
 
@@ -92,6 +97,35 @@ vi.mock('@/components/ui/async-paginated-select', () => ({
   ),
 }))
 
+/**
+ * `GeoSelect` is covered by its own test; here a controllable read-only stub
+ * exposes the wired value and `lockedLevels` so BR-5's prefill+lock (AC-042)
+ * and unlock-on-unlink (AC-043) are observable without a real cascade.
+ */
+vi.mock('@/features/geo/geo-select', () => ({
+  GeoSelect: ({
+    value,
+    lockedLevels,
+  }: {
+    value: {
+      country_id: number | null
+      state_id: number | null
+      province_id: number | null
+      city_id: number | null
+    }
+    lockedLevels?: readonly string[]
+  }) => (
+    <div
+      data-testid="geo-select"
+      data-country={value.country_id ?? ''}
+      data-state={value.state_id ?? ''}
+      data-province={value.province_id ?? ''}
+      data-city={value.city_id ?? ''}
+      data-locked={(lockedLevels ?? []).join(',')}
+    />
+  ),
+}))
+
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return ({ children }: { children: ReactNode }) => (
@@ -99,7 +133,10 @@ function wrapper() {
   )
 }
 
-function projectForSelectItem(overrides: Partial<ProjectForSelectItem['meta']> = {}): ProjectForSelectItem {
+function projectForSelectItem(overrides: {
+  meta?: Partial<ProjectForSelectMeta>
+  geo?: Partial<ProjectGeoMeta>
+} = {}) {
   return {
     id: TEST_PROJECT_ID,
     label: 'PRJ-0042 — Acme rollout',
@@ -109,12 +146,19 @@ function projectForSelectItem(overrides: Partial<ProjectForSelectItem['meta']> =
       partner: { id: 31, label: 'Jane Partner' },
       project_status: { id: 41, label: 'Active' },
       business_function: { id: 51, label: 'Marketing' },
-      state: { id: 61, label: 'Lombardy' },
+      state: null,
       product_category: { id: 71, label: 'Hardware' },
       total_budget: '1000.00',
       allocated_budget: '600.00',
       remaining_budget: '400.00',
-      ...overrides,
+      ...overrides.meta,
+      geo: {
+        country: { id: 61, name: 'Italy' },
+        state: null,
+        province: null,
+        city: null,
+        ...overrides.geo,
+      },
     },
   }
 }
@@ -140,8 +184,16 @@ function campaign(
     project_status: { id: 1, name: 'Active', color: 'blue' },
     business_function_id: 2,
     business_function: { id: 2, name: 'Sales' },
+    country_id: 61,
+    country: { id: 61, name: 'Italy' },
     state_id: 3,
     state: { id: 3, name: 'Lombardy' },
+    province_id: null,
+    province: null,
+    city_id: null,
+    city: null,
+    geo_scope: 'state',
+    geo_locked_levels: [],
     product_category_id: 4,
     product_category: { id: 4, name: 'Hardware' },
     start_date: null,
@@ -173,7 +225,7 @@ beforeEach(() => {
 })
 
 describe('CampaignForm — selecting a Project (AC-042)', () => {
-  it('prefills Client/Source/Partner and forces the 4 classification fields read-only from the project, excluded from the payload', async () => {
+  it('prefills Client/Source/Partner, forces the 3 classification fields read-only, and locks the geo levels the project fills (BR-5)', async () => {
     createCampaignMock.mockResolvedValue(campaign({ project_id: TEST_PROJECT_ID }))
 
     render(<CampaignForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
@@ -189,17 +241,20 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
     expect(screen.getByTestId('value-Partner')).toHaveTextContent('31')
     expect(screen.getByTestId('value-Status')).toHaveTextContent('41')
     expect(screen.getByTestId('value-Business function')).toHaveTextContent('51')
-    expect(screen.getByTestId('value-Region')).toHaveTextContent('61')
     expect(screen.getByTestId('value-Product category')).toHaveTextContent('71')
 
-    // The 4 derived fields are forced read-only while linked; Client/Source/Partner stay editable.
+    // The 3 derived fields are forced read-only while linked; Client/Source/Partner stay editable.
     expect(screen.getByTestId('disabled-Status')).toHaveTextContent('true')
     expect(screen.getByTestId('disabled-Business function')).toHaveTextContent('true')
-    expect(screen.getByTestId('disabled-Region')).toHaveTextContent('true')
     expect(screen.getByTestId('disabled-Product category')).toHaveTextContent('true')
     expect(screen.getByTestId('disabled-Client')).toHaveTextContent('false')
     expect(screen.getByTestId('disabled-Source')).toHaveTextContent('false')
     expect(screen.getByTestId('disabled-Partner')).toHaveTextContent('false')
+
+    // BR-5: the project's own country is prefilled and locked; the rest stay editable/empty.
+    await waitFor(() => expect(screen.getByTestId('geo-select')).toHaveAttribute('data-country', '61'))
+    expect(screen.getByTestId('geo-select')).toHaveAttribute('data-locked', 'country')
+    expect(screen.getByTestId('geo-select')).toHaveAttribute('data-state', '')
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -207,8 +262,8 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
     const payload = createCampaignMock.mock.calls[0][0] as Record<string, unknown>
     expect(payload).not.toHaveProperty('project_status_id')
     expect(payload).not.toHaveProperty('business_function_id')
-    expect(payload).not.toHaveProperty('state_id')
     expect(payload).not.toHaveProperty('product_category_id')
+    expect(payload).not.toHaveProperty('country_id')
     expect(payload.project_id).toBe(TEST_PROJECT_ID)
     expect(payload.registry_id).toBe(11)
     expect(payload.source_id).toBe(21)
@@ -217,11 +272,12 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
 })
 
 describe('CampaignForm — deselecting the Project (AC-043)', () => {
-  it('clears the 4 classification fields, makes them editable again and requires them at submit', async () => {
+  it('clears and unlocks the 3 classification fields and the 4 geo levels, requiring Status and Country again', async () => {
     const linkedCampaign = campaign({
       project_id: TEST_PROJECT_ID,
       project: { id: TEST_PROJECT_ID, code: 'PRJ-0042', name: 'Acme rollout' },
       derived_from_project: true,
+      geo_locked_levels: ['country'],
     })
 
     render(
@@ -230,14 +286,16 @@ describe('CampaignForm — deselecting the Project (AC-043)', () => {
     )
 
     expect(screen.getByTestId('disabled-Status')).toHaveTextContent('true')
+    expect(screen.getByTestId('geo-select')).toHaveAttribute('data-locked', 'country')
 
     fireEvent.click(screen.getByRole('button', { name: 'clear Project' }))
 
     await waitFor(() => expect(screen.getByTestId('disabled-Status')).toHaveTextContent('false'))
     expect(screen.getByTestId('value-Status')).toHaveTextContent('')
     expect(screen.getByTestId('value-Business function')).toHaveTextContent('')
-    expect(screen.getByTestId('value-Region')).toHaveTextContent('')
     expect(screen.getByTestId('value-Product category')).toHaveTextContent('')
+    expect(screen.getByTestId('geo-select')).toHaveAttribute('data-locked', '')
+    expect(screen.getByTestId('geo-select')).toHaveAttribute('data-country', '')
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -246,6 +304,9 @@ describe('CampaignForm — deselecting the Project (AC-043)', () => {
         screen.getByText('Status is required when the campaign is not linked to a project.'),
       ).toBeInTheDocument(),
     )
+    expect(
+      screen.getByText('Country is required when the linked project does not provide one.'),
+    ).toBeInTheDocument()
     expect(updateCampaignMock).not.toHaveBeenCalled()
   })
 })

@@ -7,6 +7,7 @@
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
 import type { ProjectRelationRef, ProjectStatusRef } from '@/features/projects/types'
+import type { GeoScope } from '@/features/geo/geo-scope'
 
 /** Hydrated `{id, name}` relation shared by registry/source/partner/business_function/state/product_category (identical shape to a project's, reused rather than redeclared). */
 export type CampaignRelationRef = ProjectRelationRef
@@ -21,9 +22,14 @@ export interface CampaignProjectRef {
 /**
  * Single campaign detail returned by GET/POST/PATCH /campaigns (envelope
  * `data`). Matches `CampaignResource`. Per BR-2, when `project_id` is set the
- * 4 classification fields are NULL in DB but this shape always carries the
+ * 3 classification fields (`project_status`/`business_function`/
+ * `product_category`) are NULL in DB but this shape always carries the
  * EFFECTIVE values (read through the project) plus `derived_from_project`, so
  * the form/detail never need to special-case a linked campaign's data source.
+ * Per BR-5 (spec 0027, replaces BR-2 for geo), the 4 geo fields carry the
+ * EFFECTIVE (merged `campaign.<level> ?? project.<level>`) tuple, and
+ * `geo_locked_levels` lists which of those levels are owned by the linked
+ * project (not stored on this row).
  */
 export interface CampaignDetail {
   id: number
@@ -43,8 +49,19 @@ export interface CampaignDetail {
   project_status: ProjectStatusRef | null
   business_function_id: number | null
   business_function: CampaignRelationRef | null
+  /** Geo cascade (spec 0027 BR-4/BR-5): EFFECTIVE (merged) values, `country_id` required only when standalone or the project has none. */
+  country_id: number | null
+  country: CampaignRelationRef | null
   state_id: number | null
   state: CampaignRelationRef | null
+  province_id: number | null
+  province: CampaignRelationRef | null
+  city_id: number | null
+  city: CampaignRelationRef | null
+  /** Finest non-null geo level of the effective tuple, derived server-side (D-2). Never re-derived here. */
+  geo_scope: GeoScope | null
+  /** The geo levels owned by the linked project (BR-5): `prohibited` on write, not stored on this row. */
+  geo_locked_levels: GeoScope[]
   product_category_id: number | null
   product_category: CampaignRelationRef | null
   start_date: string | null
@@ -66,12 +83,18 @@ export interface CampaignDetailWithPermissions extends CampaignDetail {
 }
 
 /**
- * Payload for POST /campaigns (create). `code` is NEVER part of this shape
- * (BR-1): it is server-generated and any client-submitted value is ignored.
- * The 4 classification fields are `required_if project_id == null` server-side
- * (BR-2) — enforced client-side by the Zod schema, not by this type.
+ * Payload for POST /campaigns (create). `code` is optional and manual
+ * (spec 0025): omitted or empty falls back to server-side sequential
+ * generation (`CMP-xxxx`); PATCH never accepts it (immutable after create).
+ * The 3 classification fields are `required_if project_id == null`
+ * server-side (BR-2) — enforced client-side by the Zod schema, not by this
+ * type. The 4 geo fields follow BR-5/BR-4 instead (spec 0027): `country_id`
+ * is required unless the linked project already provides one, the rest are
+ * optional; any level the project fills is `prohibited` and omitted by the
+ * payload builder, never sent regardless of the (disabled) form value.
  */
 export interface CreateCampaignPayload {
+  code?: string
   name: string
   project_id?: number | null
   description?: string | null
@@ -80,8 +103,11 @@ export interface CreateCampaignPayload {
   partner_id?: number | null
   project_status_id?: number | null
   business_function_id?: number | null
-  state_id?: number | null
   product_category_id?: number | null
+  country_id?: number | null
+  state_id?: number | null
+  province_id?: number | null
+  city_id?: number | null
   start_date?: string | null
   end_date?: string | null
   total_budget?: number | null

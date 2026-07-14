@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Contact, StickyNote } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Form, FormControl } from '@/components/ui/form'
 import { RelationSelectField } from '@/components/form/relation-select-field'
@@ -105,6 +106,14 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
               selected={original?.operator ?? null}
               {...selectLabels}
             />
+
+            <MetaField control={form.control} name="is_converted" metaKey="is_converted" label={t('leads.form.isConverted')}>
+              {({ field, disabled }) => (
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} disabled={disabled} />
+                </FormControl>
+              )}
+            </MetaField>
           </FormSection>
 
           <FormSection

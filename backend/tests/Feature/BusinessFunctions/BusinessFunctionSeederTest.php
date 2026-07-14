@@ -31,11 +31,14 @@ it('seeds the curated business functions with managers and members', function ()
 
 it('is idempotent — re-running does not duplicate functions or memberships', function () {
     User::factory()->count(12)->create();
+    error_log('DEBUG userIds before 1st seed: '.User::query()->pluck('id')->implode(','), 3, '/tmp/pao_debug.log');
 
     $this->seed(DemoBusinessFunctionSeeder::class);
     $membershipCount = BusinessFunction::first()->users()->count();
+    error_log('DEBUG after 1st seed: bfCount='.BusinessFunction::count().' membership='.$membershipCount.' userIds='.User::query()->pluck('id')->implode(','), 3, '/tmp/pao_debug.log');
 
     $this->seed(DemoBusinessFunctionSeeder::class);
+    error_log('DEBUG after 2nd seed: bfCount='.BusinessFunction::count().' membership='.BusinessFunction::first()->users()->count().' userIds='.User::query()->pluck('id')->implode(','), 3, '/tmp/pao_debug.log');
 
     expect(BusinessFunction::count())->toBe(15);
     expect(BusinessFunction::first()->users()->count())->toBe($membershipCount);

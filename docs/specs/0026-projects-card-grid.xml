@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0026" title="Projects card grid, KPI summary, lead conversion flag" status="approved">
+
+  <context>
+    The projects page currently renders only the generic AG Grid SSRM table (domain `projects`).
+    The user wants a card grid as the DEFAULT view: 4 KPI tiles on top, then a responsive grid of
+    project cards with infinite scroll. The AG Grid table stays reachable through a view toggle
+    (filters / saved views / export are not lost).
+
+    The reference mock shows a per-card conversion rate. That data did not exist: leads had no
+    "converted" flag and Project had no path to leads except Project -> campaigns -> leads.
+    The user approved adding the flag (in scope of this spec).
+  </context>
+
+  <decisions>
+    <d id="D-1">Lead conversion is a single boolean column `leads.is_converted` (default false,
+      indexed). No separate timestamp: activity log already records who/when. Conversion rate is
+      always DERIVED, never stored.</d>
+    <d id="D-2">Pagination for the card grid follows the existing codebase convention
+      (offset/limit + `paginatedResponse` envelope, as for-select and notifications). No cursor,
+      no page/per_page: those exist nowhere in this backend.</d>
+    <d id="D-3">The card grid is a NEW plain index endpoint `GET /api/projects`, not the table
+      framework: card payload != table row payload. The table framework stays untouched.</d>
+    <d id="D-4">Project reaches leads via `hasManyThrough(Lead, Campaign)`. No direct FK.</d>
+  </decisions>
+
+  <business_rules>
+    <br id="BR-1">`conversion_rate` = converted_leads_count / leads_count * 100, rounded to an
+      integer, and is NULL when leads_count = 0 (never 0% on an empty denominator).</br>
+    <br id="BR-2">Every new endpoint is authorized server-side with `projects.viewAny`
+      (ProjectPolicy). Per-card action affordances are gated by `can.update` / `can.delete`,
+      computed server-side with the Gate; the UI only hides.</br>
+    <br id="BR-3">`is_converted` is subject to the field-permission ceiling of the leads
+      authorization resource, like every other lead field (spec 0004).</br>
+  </business_rules>
+
+  <data_contract>
+
+    <endpoint method="GET" uri="/api/projects" name="projects.index">
+      <request>
+        search?: string (max 100, matches code or name)
+        offset?: int >= 0 (default 0)
+        limit?:  int 1..60 (default 12)
+        project_status_id?: int (exists:project_statuses,id)
+      </request>
+      <response status="200">
+        {
+          items: [{
+            id: int,
+            code: string,                       // "PRJ-0001"
+            name: string,
+            description: string|null,
+            project_status: { id, name, color: string|null } | null,
+            campaigns_count: int,
+            leads_count: int,
+            converted_leads_count: int,
+            conversion_rate: int|null,          // BR-1
+            total_budget: string|null,
+            allocated_budget: string,
+            remaining_budget: string|null,
+            start_date: string|null,            // Y-m-d
+            end_date: string|null,
+            can: { update: bool, delete: bool } // BR-2
+          }],
+          export_link: null,
+          pagination: { total, offset, limit, total_pages }
+        }
+      </response>
+      <response status="403">missing projects.viewAny</response>
+    </endpoint>
+
+    <endpoint method="GET" uri="/api/projects/summary" name="projects.summary">
+      <request>none</request>
+      <response status="200">
+        {
+          success: true, message: "OK",
+          data: {
+            projects_count: int,
+            campaigns_count: int,           // campaigns belonging to a project
+            leads_count: int,               // leads reachable through those campaigns
+            converted_leads_count: int,
+            conversion_rate: int|null       // BR-1, global
+          }
+        }
+      </response>
+      <response status="403">missing projects.viewAny</response>
+    </endpoint>
+
+    <endpoint method="POST|PATCH" uri="/api/leads[/{lead}]">
+      <change>New optional field `is_converted: boolean` (defaults to false on create).
+        Emitted by LeadResource as `is_converted: bool`. Exposed as a leads table column
+        and as a field in the leads authorization resource.</change>
+    </endpoint>
+
+  </data_contract>
+
+  <acceptance_criteria>
+    <ac id="AC-001">GET /api/projects returns projects ordered by created_at desc, paginated with
+      offset/limit, each item carrying campaigns_count, leads_count, converted_leads_count and a
+      conversion_rate consistent with BR-1.</ac>
+    <ac id="AC-002">GET /api/projects with `search` matches on code OR name; with
+      `project_status_id` filters by status.</ac>
+    <ac id="AC-003">Both new endpoints return 403 for a user without `projects.viewAny`.</ac>
+    <ac id="AC-004">A project with 0 leads exposes conversion_rate: null (not 0).</ac>
+    <ac id="AC-005">`can.update` / `can.delete` reflect the real Gate result per user.</ac>
+    <ac id="AC-006">Leads accept and persist `is_converted`; it round-trips through the resource
+      and is filterable in the leads table.</ac>
+    <ac id="AC-007">The projects page shows 4 KPI tiles fed by /api/projects/summary and a
+      responsive card grid (1 / 2 / 3 columns at 375 / 768 / 1024+) that loads the next page when
+      the bottom sentinel becomes visible (infinite scroll), with skeletons while fetching.</ac>
+    <ac id="AC-008">A view toggle switches between the card grid (default) and the existing AG Grid
+      table; the "Nuovo progetto" button stays available in both.</ac>
+    <ac id="AC-009">Each card shows code, status badge, name, the 3 stats (campaigns / leads /
+      conversion) and an "Apri scheda" link to /projects/{id}; edit affordance only when
+      can.update.</ac>
+  </acceptance_criteria>
+
+</spec>

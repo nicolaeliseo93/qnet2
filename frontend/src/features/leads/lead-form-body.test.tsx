@@ -78,6 +78,7 @@ function lead(overrides: Partial<LeadDetailWithPermissions> = {}): LeadDetailWit
     source: null,
     operator_id: null,
     operator: null,
+    is_converted: false,
     notes: 'Original note.',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -98,7 +99,7 @@ beforeEach(() => {
 })
 
 describe('LeadForm — fields render (AC-061)', () => {
-  it('renders the 6 fields: 5 relational selects and a notes textarea', async () => {
+  it('renders the 7 fields: 5 relational selects, the converted switch and a notes textarea', async () => {
     render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
@@ -108,7 +109,17 @@ describe('LeadForm — fields render (AC-061)', () => {
     expect(screen.getByTestId('select-Site')).toBeInTheDocument()
     expect(screen.getByTestId('select-Source')).toBeInTheDocument()
     expect(screen.getByTestId('select-Operator')).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Converted lead' })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Notes' })).toBeInTheDocument()
+  })
+
+  it('the converted switch is unchecked by default in create mode', async () => {
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    const toggle = await screen.findByRole('switch', { name: 'Converted lead' })
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
   })
 })
 

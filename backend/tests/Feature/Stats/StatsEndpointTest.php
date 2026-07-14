@@ -1,0 +1,192 @@
+<?php
+
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Permission;
+
+uses(RefreshDatabase::class);
+
+/**
+ * The domains in scope (spec 0026). Declared here as a literal — NOT read from
+ * config at collection time — and cross-checked against config/stats.php by
+ * the registration test below, so a domain added/removed in config without a
+ * test is caught.
+ *
+ * `projects` is now IN scope (explicit requirement change on top of spec 0026,
+ * whose <scope> excluded it): it has a definition like any other module and its
+ * legacy GET /projects/summary keeps working unchanged.
+ *
+ * @return array<int, string>
+ */
+function statsDomains(): array
+{
+    return [
+        'registries',
+        'referents',
+        'companies',
+        'operational-sites',
+        'company-sites',
+        'products',
+        'product-categories',
+        'projects',
+        'campaigns',
+        'leads',
+        'business-functions',
+        'users',
+    ];
+}
+
+if (! function_exists('statsUserWith')) {
+    /**
+     * A user granted `{domain}.viewAny` for each domain in $domains. Every
+     * domain's permission is created first (idempotent), so a user granted
+     * none is genuinely unauthorized rather than merely missing a permission
+     * row.
+     *
+     * @param  array<int, string>  $domains
+     */
+    function statsUserWith(array $domains): User
+    {
+        foreach (statsDomains() as $domain) {
+            Permission::findOrCreate("{$domain}.viewAny");
+        }
+
+        $user = User::factory()->create();
+
+        foreach ($domains as $domain) {
+            $user->givePermissionTo("{$domain}.viewAny");
+        }
+
+        return $user;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AC-001 — 200 + envelope for each of the 12 registered domains
+// ---------------------------------------------------------------------------
+
+it('registers exactly the 12 in-scope domains, projects included (AC-001)', function () {
+    expect(array_keys(config('stats.definitions')))
+        ->toEqualCanonicalizing(statsDomains())
+        ->and(array_keys(config('stats.definitions')))->toContain('projects');
+});
+
+it('returns the widgets envelope for every registered domain (AC-001)', function (string $domain) {
+    Sanctum::actingAs(statsUserWith([$domain]));
+
+    $response = $this->getJson("/api/stats/{$domain}")
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('message', 'OK')
+        ->assertJsonStructure(['success', 'message', 'data' => ['widgets']]);
+
+    $widgets = $response->json('data.widgets');
+
+    expect($widgets)->toBeArray()->not->toBeEmpty();
+
+    foreach ($widgets as $widget) {
+        expect($widget)->toHaveKeys(['type', 'key', 'label'])
+            ->and($widget['type'])->toBeIn(['stat', 'distribution', 'trend'])
+            // Labels are i18n KEYS, never translated text (D-4).
+            ->and($widget['label'])->toStartWith(Str::camel($domain).'.stats.');
+    }
+})->with(statsDomains());
+
+// ---------------------------------------------------------------------------
+// AC-001 — the frozen frontend contract: i18n label keys + lucide icon allow-list
+// ---------------------------------------------------------------------------
+
+it('emits exactly the i18n label keys the frontend translates (AC-001)', function (string $domain, array $keys) {
+    Sanctum::actingAs(statsUserWith([$domain]));
+
+    $widgets = $this->getJson("/api/stats/{$domain}")->assertOk()->json('data.widgets');
+
+    $expected = array_map(static fn (string $key): string => Str::camel($domain).".stats.{$key}", $keys);
+
+    expect(array_column($widgets, 'label'))->toBe($expected);
+})->with([
+    ['registries', ['total', 'suppliers', 'qualifiedSuppliers', 'byAgreementStatus', 'bySizeClass', 'trend']],
+    ['referents', ['total', 'internal', 'external', 'byType', 'trend']],
+    ['companies', ['total', 'withVatNumber', 'trend']],
+    ['operational-sites', ['total', 'byRegion', 'trend']],
+    ['company-sites', ['total', 'defaultSites', 'byCompany']],
+    ['products', ['total', 'averagePrice', 'averageMargin', 'byType', 'byCategory']],
+    ['product-categories', ['total', 'rootCategories', 'byProducts']],
+    ['projects', ['total', 'campaigns', 'leads', 'conversionRate', 'totalBudget', 'byStatus', 'trend']],
+    ['campaigns', ['total', 'linkedToProject', 'totalBudget', 'generatedLeads', 'byProjectStatus', 'trend']],
+    ['leads', ['total', 'converted', 'conversionRate', 'bySource', 'byOperator', 'trend']],
+    ['business-functions', ['total', 'businessUnits', 'businessServices', 'byUsers']],
+    ['users', ['total', 'active', 'inactive', 'byRole', 'byBusinessFunction', 'trend']],
+]);
+
+it('only emits icons the frontend allow-list knows (AC-001)', function (string $domain) {
+    $allowed = [
+        'briefcase', 'building', 'check-circle', 'folder-tree', 'layers', 'map-pin', 'megaphone',
+        'package', 'percent', 'target', 'trending-up', 'user-check', 'user-x', 'users', 'wallet',
+    ];
+
+    Sanctum::actingAs(statsUserWith([$domain]));
+
+    $widgets = $this->getJson("/api/stats/{$domain}")->assertOk()->json('data.widgets');
+
+    foreach ($widgets as $widget) {
+        if (($widget['icon'] ?? null) !== null) {
+            expect($widget['icon'])->toBeIn($allowed);
+        }
+    }
+})->with(statsDomains());
+
+// ---------------------------------------------------------------------------
+// AC-002 — 403 without {domain}.viewAny
+// ---------------------------------------------------------------------------
+
+it('returns 403 to an actor without {domain}.viewAny (AC-002)', function (string $domain) {
+    Sanctum::actingAs(statsUserWith([]));
+
+    $this->getJson("/api/stats/{$domain}")->assertForbidden();
+})->with(statsDomains());
+
+it('returns 403 when the actor may view another domain only (AC-002)', function () {
+    Sanctum::actingAs(statsUserWith(['leads']));
+
+    $this->getJson('/api/stats/users')->assertForbidden();
+    $this->getJson('/api/stats/leads')->assertOk();
+});
+
+// ---------------------------------------------------------------------------
+// AC-003 — 404 on an unknown domain, with no internal class name leaked
+// ---------------------------------------------------------------------------
+
+it('returns 404 for an unregistered domain without leaking a class name (AC-003)', function () {
+    Sanctum::actingAs(statsUserWith(statsDomains()));
+
+    $response = $this->getJson('/api/stats/non-existent')->assertNotFound();
+
+    expect($response->json('success'))->toBeFalse()
+        ->and($response->json('message'))->not->toContain('App\\');
+});
+
+/**
+ * REQUIREMENT CHANGE (not a bent test): spec 0026 excluded `projects` from the
+ * generic panel and this case asserted 404 on it. `projects` is now a
+ * registered domain by explicit request, so the case is re-pointed at a domain
+ * that genuinely does not exist — the 404 contract on an unregistered
+ * {domain} segment is still covered, and the new behaviour of `projects` is
+ * pinned in the same test.
+ */
+it('returns 404 only for a genuinely unregistered domain, no longer for projects (AC-003)', function () {
+    Sanctum::actingAs(statsUserWith(statsDomains()));
+
+    $this->getJson('/api/stats/not-a-domain')->assertNotFound();
+    $this->getJson('/api/stats/projects')->assertOk();
+});
+
+// ---------------------------------------------------------------------------
+// AC-004 — 401 unauthenticated
+// ---------------------------------------------------------------------------
+
+it('returns 401 without authentication (AC-004)', function () {
+    $this->getJson('/api/stats/leads')->assertUnauthorized();
+});

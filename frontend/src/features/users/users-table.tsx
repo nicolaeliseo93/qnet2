@@ -15,6 +15,10 @@ import {
 } from '@/components/ui/sheet'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Can } from '@/features/auth/can'
+import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
+import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
+import { useStatsPanel } from '@/features/stats/use-stats-panel'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { useAuth } from '@/features/auth/use-auth'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
@@ -49,6 +53,8 @@ type SheetState =
  */
 export function UsersTable() {
   const { t } = useTranslation()
+  const stats = useStatsPanel(USERS_DOMAIN)
+  const invalidateStats = useInvalidateModuleStats(USERS_DOMAIN)
   const { user: currentUser } = useAuth()
 
   const tableRef = useRef<TableViewHandle>(null)
@@ -67,6 +73,7 @@ export function UsersTable() {
         await deleteUser(row.id)
         toast.success(t('users.form.deleted'))
         refreshGrid()
+        invalidateStats()
       } catch (error) {
         // 403 covers self-delete (and any other policy denial) surfaced as a
         // dedicated message; everything else falls back to a generic error.
@@ -80,7 +87,7 @@ export function UsersTable() {
         setDeletingId(null)
       }
     },
-    [refreshGrid, t],
+    [refreshGrid, t, invalidateStats],
   )
 
   const handleAction: RowActionHandler = useCallback(
@@ -131,20 +138,30 @@ export function UsersTable() {
   const onMutationSuccess = useCallback(() => {
     closeSheet()
     refreshGrid()
-  }, [closeSheet, refreshGrid])
+    invalidateStats()
+  }, [closeSheet, refreshGrid, invalidateStats])
 
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
         actions={
-          <Can permission="users.create">
-            <Button onClick={() => setSheet({ kind: 'create' })}>
-              <Plus aria-hidden="true" />
-              {t('users.form.newUser')}
-            </Button>
-          </Can>
+          <>
+            <StatsToggleButton
+              domain={USERS_DOMAIN}
+              isOpen={stats.isOpen}
+              onToggle={stats.toggle}
+            />
+            <Can permission="users.create">
+              <Button onClick={() => setSheet({ kind: 'create' })}>
+                <Plus aria-hidden="true" />
+                {t('users.form.newUser')}
+              </Button>
+            </Can>
+          </>
         }
       />
+
+      <ModuleStatsPanel domain={USERS_DOMAIN} isOpen={stats.isOpen} />
 
       <TableView
         ref={tableRef}

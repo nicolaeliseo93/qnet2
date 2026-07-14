@@ -21,6 +21,7 @@ final readonly class CreateLeadData
         public ?int $sourceId,
         public ?int $operatorId,
         public ?string $notes,
+        public bool $isConverted = false,
     ) {}
 
     /**
@@ -37,6 +38,7 @@ final readonly class CreateLeadData
             sourceId: isset($data['source_id']) ? (int) $data['source_id'] : null,
             operatorId: isset($data['operator_id']) ? (int) $data['operator_id'] : null,
             notes: $data['notes'] ?? null,
+            isConverted: (bool) ($data['is_converted'] ?? false),
         );
     }
 
@@ -55,6 +57,7 @@ final readonly class CreateLeadData
             'source_id' => $this->sourceId,
             'operator_id' => $this->operatorId,
             'notes' => $this->notes,
+            'is_converted' => $this->isConverted,
         ];
     }
 }

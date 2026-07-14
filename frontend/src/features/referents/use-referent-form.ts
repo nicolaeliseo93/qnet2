@@ -20,6 +20,7 @@ import type {
   PersonalDataFieldPermission,
 } from '@/features/personal-data/types'
 import type { ForSelectItem } from '@/features/for-select/types'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { createReferent, updateReferent } from '@/features/referents/api'
 import { buildCreatePayload, buildUpdatePayload } from '@/features/referents/referent-form-payload'
 import {
@@ -40,6 +41,9 @@ const SERVER_ERROR_FIELDS = ['referent_type_id', 'contact_scope', 'notes'] as co
 
 /** Form pre-selects 'internal' (spec 0016, user-approved decision). */
 const DEFAULT_CONTACT_SCOPE = 'internal' as const
+
+/** Domain key of the module statistics (mirrors `REFERENTS_DOMAIN` in `referents-table.tsx`). */
+const REFERENTS_DOMAIN = 'referents'
 
 export type ReferentFormValues = CreateReferentFormValues & UpdateReferentFormValues
 
@@ -82,6 +86,7 @@ function personalDataServerErrorMessage(error: unknown): string | null {
 export function useReferentForm({ mode, onSuccess }: UseReferentFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const invalidateStats = useInvalidateModuleStats(REFERENTS_DOMAIN)
   const { field: fieldPermission } = useResourcePermissions()
 
   // Adapts the resolved authorization metadata to the personal-data domain's
@@ -202,6 +207,7 @@ export function useReferentForm({ mode, onSuccess }: UseReferentFormArgs) {
         )
         queryClient.setQueryData(['referents', 'detail', mode.referent.id], saved)
         toast.success(t('referents.form.updated'))
+        invalidateStats()
         onSuccess(saved)
         return
       }
@@ -210,6 +216,7 @@ export function useReferentForm({ mode, onSuccess }: UseReferentFormArgs) {
         buildCreatePayload(values, profileDraft, personalDataFieldPermission),
       )
       toast.success(t('referents.form.created'))
+      invalidateStats()
       onSuccess(created)
     } catch (error) {
       const errorFields: Path<ReferentFormValues>[] = [

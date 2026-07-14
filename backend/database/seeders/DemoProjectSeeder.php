@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\DataObjects\Projects\CreateProjectData;
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
-use App\Models\Country;
 use App\Models\ProductCategory;
 use App\Models\Project;
 use App\Models\ProjectStatus;
@@ -14,6 +13,7 @@ use App\Models\Registry;
 use App\Models\Source;
 use App\Models\State;
 use App\Services\ProjectService;
+use Database\Seeders\Concerns\SeedsItalianGeo;
 use Faker\Factory as FakerFactory;
 use Faker\Generator;
 use Illuminate\Database\Seeder;
@@ -29,8 +29,9 @@ use Illuminate\Support\Collection;
  * in DemoDataSeeder (registries/sources/business-functions/product-categories
  * seeded via their own Demo*Seeder, states via `locations:add`, partner via
  * DemoReferentSeeder), degrading gracefully to null when a lookup produced no
- * rows. `state_id` is scoped to Italy's regions: this gestionale's demo data
- * is Italian-flavoured (it_IT faker across the other seeders).
+ * rows. The geo columns are scoped to Italy (regions/provinces/cities): this
+ * gestionale's demo data is Italian-flavoured (it_IT faker across the other
+ * seeders).
  *
  * Depends on DemoProjectStatusSeeder, DemoRegistrySeeder, DemoSourceSeeder,
  * DemoBusinessFunctionSeeder, DemoProductCatalogSeeder and DemoReferentSeeder
@@ -39,12 +40,18 @@ use Illuminate\Support\Collection;
  * `restrictOnDelete`, BR-5 — so a stale campaign would block the project
  * delete on a second run); DemoCampaignSeeder recreates the campaigns right
  * after this seeder runs.
+ *
+ * Geo (spec 0027, BR-4): `SeedsItalianGeo::geoTuple()` cycles every project
+ * through the four scope depths — country only / +region / +province /
+ * +city — so all four `geo_scope` values are visible in the demo data
+ * (AC-003), each tuple built from REAL rows read back from the `states`/
+ * `provinces`/`cities` tables seeded by `locations:add`.
  */
 class DemoProjectSeeder extends Seeder
 {
-    private const int PROJECTS = 14;
+    use SeedsItalianGeo;
 
-    private const int STATE_SAMPLE = 20;
+    private const int PROJECTS = 14;
 
     public function __construct(private readonly ProjectService $projects) {}
 
@@ -106,20 +113,33 @@ class DemoProjectSeeder extends Seeder
             ? (clone $startDate)->modify('+'.$faker->numberBetween(2, 14).' months')
             : null;
 
+        // Offset by 1 so the geo-depth cycle (mod 4) does NOT land on the same
+        // indices as DemoCampaignSeeder::linkedCampaignCount()'s "0 campaigns
+        // on every 4th project" rule (also mod 4, unoffset): without this,
+        // every country-only-scope project would coincidentally be exactly
+        // the one with zero linked campaigns, so BR-5's central case (a
+        // campaign refining a country-only project down to region/city) would
+        // never appear in the demo data.
+        $geo = $this->geoTuple($states, $index + 1);
+
         $data = new CreateProjectData(
+            code: null,
             name: $faker->unique()->catchPhrase(),
             projectStatusId: $statuses[$index % $statuses->count()]->id,
             description: $faker->boolean(60) ? $faker->paragraph() : null,
             registryId: $this->pick($registries, $index)?->id,
             sourceId: $this->pick($sources, $index)?->id,
             businessFunctionId: $this->pick($businessFunctions, $index)?->id,
-            stateId: $this->pick($states, $index)?->id,
+            stateId: $geo['state_id'],
             productCategoryId: $this->pick($productCategories, $index)?->id,
             partnerId: $this->pick($partners, $index)?->id,
             startDate: $startDate->format('Y-m-d'),
             endDate: $endDate?->format('Y-m-d'),
             totalBudget: $hasBudgetCap ? $faker->randomFloat(2, 5000, 250000) : null,
             targetLead: $faker->boolean(80) ? $faker->numberBetween(5, 300) : null,
+            countryId: $geo['country_id'],
+            provinceId: $geo['province_id'],
+            cityId: $geo['city_id'],
         );
 
         $this->projects->create($data);
@@ -134,24 +154,5 @@ class DemoProjectSeeder extends Seeder
     private function pick(Collection $items, int $index): mixed
     {
         return $items->isNotEmpty() ? $items[$index % $items->count()] : null;
-    }
-
-    /**
-     * Italy's regions ("Regione"), sampled from the `states` geo table seeded
-     * by `locations:add` — this gestionale's demo data is Italian-flavoured,
-     * so scoping to Italy keeps the values meaningful instead of a random
-     * worldwide region.
-     *
-     * @return Collection<int, State>
-     */
-    private function italianStates(): Collection
-    {
-        $italy = Country::query()->where('iso2', 'IT')->first();
-
-        if ($italy === null) {
-            return State::query()->inRandomOrder()->limit(self::STATE_SAMPLE)->get();
-        }
-
-        return State::query()->where('country_id', $italy->id)->orderBy('name')->get();
     }
 }

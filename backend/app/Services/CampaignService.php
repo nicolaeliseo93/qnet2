@@ -18,10 +18,12 @@ use Illuminate\Validation\ValidationException;
 /**
  * Business logic for the `campaigns` resource (spec 0023): create/update
  * (with the server-generated CMP-0001 code, BR-1), the BR-2 classification
- * derivation (forcing the 4 classification fields null when linked to a
- * project) and the BR-3 budget guard, both computed inside the write
- * transaction with a pessimistic lock on the project row so two concurrent
- * writes against the same project's budget always serialize.
+ * derivation (forcing the 3 classification fields null when linked to a
+ * project), the BR-5 geo refinement (nulling out, defence in depth, whatever
+ * geo level the linked project already fills — spec 0027) and the BR-3
+ * budget guard, all computed inside the write transaction with a
+ * pessimistic lock on the project row so two concurrent writes against the
+ * same project's budget always serialize.
  */
 class CampaignService
 {
@@ -34,6 +36,14 @@ class CampaignService
     private const string CODE_COLUMN = 'code';
 
     /**
+     * The 4 geo levels (spec 0027, BR-5), in parent-to-child order — the
+     * single source of truth for applyGeoInheritance() below.
+     *
+     * @var array<int, string>
+     */
+    private const array GEO_LEVELS = ['country_id', 'state_id', 'province_id', 'city_id'];
+
+    /**
      * Relations eager-loaded for the detail read tree (CampaignResource):
      * the campaign's OWN classification (standalone case) plus the linked
      * project's (the read-through source when derived_from_project=true),
@@ -44,14 +54,20 @@ class CampaignService
     private const array DETAIL_RELATIONS = [
         'project.projectStatus',
         'project.businessFunction',
+        'project.country',
         'project.state',
+        'project.province',
+        'project.city',
         'project.productCategory',
         'registry',
         'source',
         'partner',
         'projectStatus',
         'businessFunction',
+        'country',
         'state',
+        'province',
+        'city',
         'productCategory',
     ];
 
@@ -61,25 +77,30 @@ class CampaignService
     }
 
     /**
-     * Create a new campaign. The code is generated inside the transaction
-     * with a pessimistic lock (BR-1); when linked, the target project is
-     * locked first and the BR-3 budget guard runs before the insert.
+     * Create a new campaign. A manual `code` (spec 0025, BR-1) is persisted
+     * as submitted; otherwise one is generated inside the transaction with a
+     * pessimistic lock. When linked, the target project is locked first and
+     * the BR-3 budget guard runs before the insert.
      */
     public function create(CreateCampaignData $data): Campaign
     {
         $campaign = DB::transaction(function () use ($data): Campaign {
+            $project = null;
+
             if ($data->isLinkedToProject()) {
                 $project = $this->lockProject($data->projectId);
                 $this->assertBudgetAvailable($project, $data->totalBudget, excludingCampaignId: null);
             }
+
+            $attributes = $this->applyGeoInheritance($data->attributes(), $project);
 
             // `code` is deliberately absent from Campaign's #[Fillable] (BR-1),
             // so a mass-assigned Campaign::create() would silently drop it,
             // leaving the NOT NULL `code` column unset — assign it directly
             // (bypasses mass-assignment guarding, mirroring how
             // CampaignFactory itself sets it) AFTER the fillable attributes.
-            $campaign = new Campaign($data->attributes());
-            $campaign->code = $this->nextSequentialCode(self::CODE_TABLE, self::CODE_COLUMN, self::CODE_PREFIX);
+            $campaign = new Campaign($attributes);
+            $campaign->code = $data->code ?? $this->nextSequentialCode(self::CODE_TABLE, self::CODE_COLUMN, self::CODE_PREFIX);
             $campaign->save();
 
             return $campaign;
@@ -90,26 +111,30 @@ class CampaignService
 
     /**
      * Update an existing campaign. Only keys present in $data are touched
-     * (partial PATCH), except the 4 BR-2 classification fields, which are
-     * additionally forced by resolveUpdateAttributes() whenever the
-     * EFFECTIVE project_id (after this update) is non-null.
+     * (partial PATCH), except the 3 BR-2 classification fields and the geo
+     * levels the EFFECTIVE project fills (BR-5), which are additionally
+     * forced by resolveUpdateAttributes() whenever the EFFECTIVE project_id
+     * (after this update) is non-null.
      */
     public function update(Campaign $campaign, UpdateCampaignData $data): Campaign
     {
         DB::transaction(function () use ($campaign, $data): void {
-            $attributes = $this->resolveUpdateAttributes($campaign, $data);
-            $effectiveProjectId = array_key_exists('project_id', $attributes)
-                ? $attributes['project_id']
+            $submitted = $data->submittedAttributes();
+            $effectiveProjectId = array_key_exists('project_id', $submitted)
+                ? $submitted['project_id']
                 : $campaign->project_id;
 
-            if ($effectiveProjectId !== null) {
-                $project = $this->lockProject($effectiveProjectId);
-                $requestedBudget = array_key_exists('total_budget', $attributes)
-                    ? $attributes['total_budget']
+            $project = $effectiveProjectId !== null ? $this->lockProject($effectiveProjectId) : null;
+
+            if ($project !== null) {
+                $requestedBudget = array_key_exists('total_budget', $submitted)
+                    ? $submitted['total_budget']
                     : ($campaign->total_budget !== null ? (float) $campaign->total_budget : null);
 
                 $this->assertBudgetAvailable($project, $requestedBudget, excludingCampaignId: $campaign->id);
             }
+
+            $attributes = $this->resolveUpdateAttributes($submitted, $project);
 
             // Unconditional save: fire the model's saved event even when no
             // native attribute changed, so the HasCustomFields write pipeline
@@ -202,27 +227,46 @@ class CampaignService
     }
 
     /**
-     * BR-2: force the 4 classification fields null whenever the campaign
+     * BR-2: force the 3 classification fields null whenever the campaign
      * will be linked to a project once this update applies — regardless of
      * what was actually submitted (the FormRequest already rejects an
      * explicit conflicting value; this is the transition-to-linked case,
-     * AC-028, plus defence in depth).
+     * AC-028, plus defence in depth). BR-5's geo nulling is delegated to
+     * applyGeoInheritance() (it needs the loaded $project, not just its id).
      *
+     * @param  array<string, mixed>  $submitted
      * @return array<string, mixed>
      */
-    private function resolveUpdateAttributes(Campaign $campaign, UpdateCampaignData $data): array
+    private function resolveUpdateAttributes(array $submitted, ?Project $project): array
     {
-        $attributes = $data->submittedAttributes();
+        if ($project !== null) {
+            $submitted['project_status_id'] = null;
+            $submitted['business_function_id'] = null;
+            $submitted['product_category_id'] = null;
+        }
 
-        $effectiveProjectId = array_key_exists('project_id', $attributes)
-            ? $attributes['project_id']
-            : $campaign->project_id;
+        return $this->applyGeoInheritance($submitted, $project);
+    }
 
-        if ($effectiveProjectId !== null) {
-            $attributes['project_status_id'] = null;
-            $attributes['business_function_id'] = null;
-            $attributes['state_id'] = null;
-            $attributes['product_category_id'] = null;
+    /**
+     * BR-5: null out (defence in depth, on top of the FormRequest's
+     * per-level `prohibited` rule) whatever geo level the linked $project
+     * already fills. A level the project leaves empty is untouched here —
+     * it stays whatever the campaign itself submitted/already has.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function applyGeoInheritance(array $attributes, ?Project $project): array
+    {
+        if ($project === null) {
+            return $attributes;
+        }
+
+        foreach (self::GEO_LEVELS as $level) {
+            if ($project->{$level} !== null) {
+                $attributes[$level] = null;
+            }
         }
 
         return $attributes;

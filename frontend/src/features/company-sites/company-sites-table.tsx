@@ -15,6 +15,10 @@ import {
 } from '@/components/ui/sheet'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Can } from '@/features/auth/can'
+import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
+import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
+import { useStatsPanel } from '@/features/stats/use-stats-panel'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
@@ -47,6 +51,8 @@ type SheetState =
  */
 export function CompanySitesTable() {
   const { t } = useTranslation()
+  const stats = useStatsPanel(COMPANY_SITES_DOMAIN)
+  const invalidateStats = useInvalidateModuleStats(COMPANY_SITES_DOMAIN)
 
   const tableRef = useRef<TableViewHandle>(null)
   const refreshGrid = useCallback(() => tableRef.current?.refresh(), [])
@@ -64,6 +70,7 @@ export function CompanySitesTable() {
         await deleteCompanySite(row.id)
         toast.success(t('companySites.form.deleted'))
         refreshGrid()
+        invalidateStats()
       } catch (error) {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined
         toast.error(
@@ -75,7 +82,7 @@ export function CompanySitesTable() {
         setDeletingId(null)
       }
     },
-    [refreshGrid, t],
+    [refreshGrid, t, invalidateStats],
   )
 
   const handleAction: RowActionHandler = useCallback(
@@ -111,20 +118,30 @@ export function CompanySitesTable() {
   const onMutationSuccess = useCallback(() => {
     closeSheet()
     refreshGrid()
-  }, [closeSheet, refreshGrid])
+    invalidateStats()
+  }, [closeSheet, refreshGrid, invalidateStats])
 
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
         actions={
-          <Can permission="company-sites.create">
-            <Button onClick={() => setSheet({ kind: 'create' })}>
-              <Plus aria-hidden="true" />
-              {t('companySites.form.newCompanySite')}
-            </Button>
-          </Can>
+          <>
+            <StatsToggleButton
+              domain={COMPANY_SITES_DOMAIN}
+              isOpen={stats.isOpen}
+              onToggle={stats.toggle}
+            />
+            <Can permission="company-sites.create">
+              <Button onClick={() => setSheet({ kind: 'create' })}>
+                <Plus aria-hidden="true" />
+                {t('companySites.form.newCompanySite')}
+              </Button>
+            </Can>
+          </>
         }
       />
+
+      <ModuleStatsPanel domain={COMPANY_SITES_DOMAIN} isOpen={stats.isOpen} />
 
       <TableView
         ref={tableRef}

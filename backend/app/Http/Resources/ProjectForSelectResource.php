@@ -41,6 +41,14 @@ class ProjectForSelectResource extends ForSelectResource
                 'total_budget' => $totalBudget === null ? null : $this->formatMoney((float) $totalBudget),
                 'allocated_budget' => $this->formatMoney($allocatedBudget),
                 'remaining_budget' => $totalBudget === null ? null : $this->formatMoney((float) $totalBudget - $allocatedBudget),
+                // spec 0027, D-5: which geo levels this project already fills,
+                // so the Campaign form knows which to lock/prefill.
+                'geo' => [
+                    'country' => $this->summarizeGeo($this->country),
+                    'state' => $this->summarizeGeo($this->state),
+                    'province' => $this->summarizeGeo($this->province),
+                    'city' => $this->summarizeGeo($this->city),
+                ],
             ],
         ];
     }
@@ -55,6 +63,22 @@ class ProjectForSelectResource extends ForSelectResource
         }
 
         return ['id' => $related->id, 'label' => $related->name];
+    }
+
+    /**
+     * `meta.geo.*` shape (spec 0027, D-5): `{id, name}`, distinct from the
+     * rest of `meta`'s `{id, label}` — this block feeds GeoSelect directly,
+     * which already speaks `name`.
+     *
+     * @return array{id: int, name: string}|null
+     */
+    private function summarizeGeo(?Model $related): ?array
+    {
+        if ($related === null) {
+            return null;
+        }
+
+        return ['id' => $related->id, 'name' => $related->name];
     }
 
     private function formatMoney(float $value): string

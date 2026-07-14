@@ -1,5 +1,9 @@
 <?php
 
+use App\Models\City;
+use App\Models\Country;
+use App\Models\Province;
+use App\Models\State;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Tests\TestCase;
@@ -62,4 +66,23 @@ function navigationSectionKeys(array $data, string $sectionKey): Collection
     $section = collect($data)->firstWhere('key', $sectionKey);
 
     return collect(data_get($section, 'children', []))->pluck('key');
+}
+
+/**
+ * A consistent 4-level geo chain (Country -> State -> Province -> City),
+ * shared across every domain that validates BR-4 geo-hierarchy consistency
+ * (spec 0027): projects, campaigns, operational sites, addresses. Extracted
+ * here (engineering.md §1.2) instead of duplicating the local
+ * `siteGeoChain()` pattern already used by OperationalSiteCrudTest.
+ *
+ * @return array{country: Country, state: State, province: Province, city: City}
+ */
+function geoChain(): array
+{
+    $country = Country::factory()->create(['name' => 'Italia']);
+    $state = State::factory()->create(['name' => 'Lombardia', 'country_id' => $country->id]);
+    $province = Province::factory()->create(['name' => 'Milano', 'state_id' => $state->id, 'country_id' => $country->id]);
+    $city = City::factory()->create(['name' => 'Milano', 'province_id' => $province->id, 'state_id' => $state->id, 'country_id' => $country->id]);
+
+    return compact('country', 'state', 'province', 'city');
 }

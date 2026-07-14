@@ -2,6 +2,7 @@
 
 namespace App\Tables;
 
+use App\Enums\GeoScopeLevel;
 use App\Models\Campaign;
 use App\Models\Project;
 use App\Models\User;
@@ -82,8 +83,23 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     public function baseQuery(): Builder
     {
         // Eager-load every relation mapRow/effectiveStatus touches to avoid
-        // N+1 across the page.
-        return Campaign::query()->with(['project.projectStatus', 'registry', 'source', 'projectStatus']);
+        // N+1 across the page. `project.{country,state,province,city}` plus
+        // the campaign's own geo (spec 0027, BR-5) feed the merged display
+        // columns below.
+        return Campaign::query()->with([
+            'project.projectStatus',
+            'project.country',
+            'project.state',
+            'project.province',
+            'project.city',
+            'registry',
+            'source',
+            'projectStatus',
+            'country',
+            'state',
+            'province',
+            'city',
+        ]);
     }
 
     /**
@@ -137,14 +153,25 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     public function mapRow(User $actor, Model $row): array
     {
         /** @var Campaign $row */
+        $project = $row->project;
+        $country = $row->country ?? $project?->country;
+        $state = $row->state ?? $project?->state;
+        $province = $row->province ?? $project?->province;
+        $city = $row->city ?? $project?->city;
+
         return [
             'id' => $row->id,
             'code' => $row->code,
-            'project' => $this->summarizeProject($row->project),
+            'project' => $this->summarizeProject($project),
             'name' => $row->name,
             'registry' => $this->summarize($row->registry),
             'project_status' => $this->summarize($this->projectStatusResolver->effectiveStatus($row)),
             'source' => $this->summarize($row->source),
+            'country' => $this->summarize($country),
+            'state' => $this->summarize($state),
+            'province' => $this->summarize($province),
+            'city' => $this->summarize($city),
+            'geo_scope' => GeoScopeLevel::for($country?->id, $state?->id, $province?->id, $city?->id)?->value,
             'start_date' => $row->start_date,
             'end_date' => $row->end_date,
             'total_budget' => $row->total_budget,

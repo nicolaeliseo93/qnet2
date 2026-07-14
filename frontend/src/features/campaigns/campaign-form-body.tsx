@@ -13,10 +13,10 @@ import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
-import { STATES_FOR_SELECT_RESOURCE } from '@/features/geo/state-for-select-api'
 import { useCampaignForm } from '@/features/campaigns/use-campaign-form'
 import { CampaignProjectField } from '@/features/campaigns/campaign-project-field'
 import { CampaignRelationField } from '@/features/campaigns/campaign-relation-field'
+import { CampaignGeoSection } from '@/features/campaigns/campaign-geo-section'
 import { CampaignPlanningSection } from '@/features/campaigns/campaign-planning-section'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { CampaignDetail, CampaignFormMode } from '@/features/campaigns/types'
@@ -27,15 +27,19 @@ interface CampaignFormBodyProps {
   onCancel: () => void
 }
 
-/** Placeholder shown for the read-only, server-generated `code` field until the campaign is saved (AC-046). */
+/** Placeholder shown for the manual `code` field in create, declaring the server-generation fallback (spec 0025 AC-010). */
 const CODE_PLACEHOLDER_KEY = 'campaigns.form.codePlaceholder'
 
 /**
- * The campaign create/edit form UI: the read-only `code` (AC-046), identity
- * (name, description), the optional Project link driving the AC-042/AC-043
- * derivation, the always-own relations, the 4 BR-2 classification fields
- * (forced read-only while linked) and planning/budget — all wrapped in
- * `MetaField` (spec 0004). All non-render logic lives in `useCampaignForm`.
+ * The campaign create/edit form UI: the manual/read-only `code` (spec 0025,
+ * editable only in create — gated by the `code` field permission, editable
+ * in create and read-only in update), identity (name, description), the
+ * optional Project link driving the AC-042/AC-043 derivation, the always-own
+ * relations, the 3 BR-2 classification fields (forced read-only while
+ * linked), the geo cascade (BR-4/BR-5, spec 0027 — some levels forced
+ * read-only while the linked project fills them) and planning/budget — all
+ * wrapped in `MetaField` (spec 0004). All non-render logic lives in
+ * `useCampaignForm`.
  */
 export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBodyProps) {
   const { t } = useTranslation()
@@ -54,18 +58,20 @@ export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBody
             title={t('campaigns.form.sections.identity.title')}
             description={t('campaigns.form.sections.identity.description')}
           >
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium" htmlFor="campaign-code">
-                {t('campaigns.form.code')}
-              </label>
-              <Input
-                id="campaign-code"
-                disabled
-                readOnly
-                value={original?.code ?? ''}
-                placeholder={t(CODE_PLACEHOLDER_KEY)}
-              />
-            </div>
+            <MetaField control={form.control} name="code" metaKey="code" label={t('campaigns.form.code')}>
+              {({ field, disabled, readOnly }) => (
+                <FormControl>
+                  <Input
+                    autoComplete="off"
+                    disabled={disabled}
+                    readOnly={readOnly}
+                    placeholder={t(CODE_PLACEHOLDER_KEY)}
+                    {...field}
+                    value={field.value ?? ''}
+                  />
+                </FormControl>
+              )}
+            </MetaField>
 
             <MetaField control={form.control} name="name" metaKey="name" label={t('campaigns.form.name')}>
               {({ field, disabled, readOnly }) => (
@@ -172,17 +178,6 @@ export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBody
 
             <CampaignRelationField
               control={form.control}
-              name="state_id"
-              metaKey="state_id"
-              label={t('campaigns.form.state')}
-              resource={STATES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('campaigns.form.stateSearch')}
-              selected={original?.state ?? null}
-              forceDisabled={isLinked}
-            />
-
-            <CampaignRelationField
-              control={form.control}
               name="product_category_id"
               metaKey="product_category_id"
               label={t('campaigns.form.productCategory')}
@@ -192,6 +187,8 @@ export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBody
               forceDisabled={isLinked}
             />
           </FormSection>
+
+          <CampaignGeoSection control={form.control} setValue={form.setValue} />
 
           <CampaignPlanningSection control={form.control} projectId={projectId} />
 

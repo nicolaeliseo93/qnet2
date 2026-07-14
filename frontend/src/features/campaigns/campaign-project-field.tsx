@@ -7,6 +7,7 @@ import { MetaField } from '@/features/authorization/MetaField'
 import type { ForSelectItem } from '@/features/for-select/types'
 import { PROJECTS_FOR_SELECT_RESOURCE } from '@/features/projects/for-select-api'
 import { fetchCampaignProjectMeta } from '@/features/campaigns/use-campaign-project-meta'
+import { EMPTY_PROJECT_GEO, lockedLevelsFromProjectGeo } from '@/features/campaigns/campaign-geo'
 import type { CampaignFormValues } from '@/features/campaigns/use-campaign-form'
 import type { CampaignProjectRef } from '@/features/campaigns/types'
 
@@ -25,13 +26,16 @@ function toForSelectItem(ref: CampaignProjectRef | null): ForSelectItem | null {
 /**
  * The campaign's optional Project link. Picking a project prefills Client
  * (`registry_id`), Fonte (`source_id`) and Partner (`partner_id`) — still
- * editable — plus the 4 BR-2 classification fields (which the sibling
- * `CampaignRelationField`s then force read-only) straight from the picker's
- * own `for-select` `meta` block (AC-042): a single one-shot fetch, run as a
- * direct consequence of the user's selection (never a render-time effect), so
- * it never re-overwrites the user's own edits on a later re-render. Clearing
- * the project resets the 4 derived fields to `null`, so they become editable
- * and required again (AC-043); the 3 always-own fields are left untouched.
+ * editable — plus the 3 BR-2 classification fields (which the sibling
+ * `CampaignRelationField`s then force read-only) and the geo levels the
+ * project fills (BR-5, spec 0027: the sibling `<GeoSelect lockedLevels>`
+ * then forces those read-only), straight from the picker's own `for-select`
+ * `meta` block (AC-042): a single one-shot fetch, run as a direct consequence
+ * of the user's selection (never a render-time effect), so it never
+ * re-overwrites the user's own edits on a later re-render. Clearing the
+ * project resets the 3 classification fields AND all 4 geo levels to `null`
+ * (and unlocks them), so they become editable and required again (AC-043);
+ * the 3 always-own fields are left untouched.
  */
 export function CampaignProjectField({ control, setValue, selected }: CampaignProjectFieldProps) {
   const { t } = useTranslation()
@@ -41,8 +45,12 @@ export function CampaignProjectField({ control, setValue, selected }: CampaignPr
     if (projectId === null) {
       setValue('project_status_id', null, { shouldValidate: true, shouldDirty: true })
       setValue('business_function_id', null, { shouldValidate: true, shouldDirty: true })
-      setValue('state_id', null, { shouldValidate: true, shouldDirty: true })
       setValue('product_category_id', null, { shouldValidate: true, shouldDirty: true })
+      setValue('country_id', null, { shouldValidate: true, shouldDirty: true })
+      setValue('state_id', null, { shouldDirty: true })
+      setValue('province_id', null, { shouldDirty: true })
+      setValue('city_id', null, { shouldDirty: true })
+      setValue('geo_locked_levels', [], { shouldValidate: true, shouldDirty: true })
       return
     }
 
@@ -55,8 +63,17 @@ export function CampaignProjectField({ control, setValue, selected }: CampaignPr
     setValue('partner_id', meta.partner?.id ?? null, { shouldDirty: true })
     setValue('project_status_id', meta.project_status.id, { shouldDirty: true, shouldValidate: true })
     setValue('business_function_id', meta.business_function?.id ?? null, { shouldDirty: true })
-    setValue('state_id', meta.state?.id ?? null, { shouldDirty: true })
     setValue('product_category_id', meta.product_category?.id ?? null, { shouldDirty: true })
+
+    const geo = meta.geo ?? EMPTY_PROJECT_GEO
+    setValue('country_id', geo.country?.id ?? null, { shouldDirty: true, shouldValidate: true })
+    setValue('state_id', geo.state?.id ?? null, { shouldDirty: true })
+    setValue('province_id', geo.province?.id ?? null, { shouldDirty: true })
+    setValue('city_id', geo.city?.id ?? null, { shouldDirty: true })
+    setValue('geo_locked_levels', lockedLevelsFromProjectGeo(geo), {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
   }
 
   return (

@@ -6,6 +6,8 @@ import i18n from '@/i18n'
 import { formatDecimal } from '@/features/products/column-renderers'
 import { DateTimeCell } from '@/features/table/cell-renderers'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
+import { GeoScopeBadge } from '@/features/geo/geo-scope-badge'
+import type { GeoScope } from '@/features/geo/geo-scope'
 import type { ProjectRelationRef, ProjectStatusRef } from '@/features/projects/types'
 
 /** Em-dash placeholder for an empty/unknown cell value. */
@@ -86,16 +88,40 @@ function TotalBudgetCell({ value }: ICellRendererParams) {
 }
 
 /**
+ * Renders the DISPLAY-ONLY `geo_scope` column (spec 0027 D-2): the scope
+ * label alone, no place name — the row's own country/state/province/city
+ * columns already carry the names, so `<GeoScopeBadge>` is used without its
+ * optional `place`.
+ */
+function GeoScopeCell({ value }: ICellRendererParams) {
+  const scope = value as GeoScope | null | undefined
+  if (!scope) {
+    return <EmptyCell />
+  }
+  return (
+    <div className="flex h-full w-full items-center justify-center px-2 py-1">
+      <GeoScopeBadge scope={scope} />
+    </div>
+  )
+}
+
+/**
  * Custom cell renderers keyed by the backend column `id`. `code`/`name`/
  * `target_lead` fall back to the AG Grid default cell; `created_at` reuses
- * the shared domain-agnostic renderer (spec 0023).
+ * the shared domain-agnostic renderer (spec 0023). `country`/`province`/
+ * `city` reuse `RelationCell` exactly like `state` (same derived `{id,name}`
+ * shape, spec 0027); `geo_scope` is DISPLAY-ONLY (D-2).
  */
 export const projectColumnRenderers: TableRendererMap = {
   registry: (params) => <RelationCell {...params} />,
   project_status: (params) => <ProjectStatusCell {...params} />,
   source: (params) => <RelationCell {...params} />,
   business_function: (params) => <RelationCell {...params} />,
+  country: (params) => <RelationCell {...params} />,
   state: (params) => <RelationCell {...params} />,
+  province: (params) => <RelationCell {...params} />,
+  city: (params) => <RelationCell {...params} />,
+  geo_scope: (params) => <GeoScopeCell {...params} />,
   product_category: (params) => <RelationCell {...params} />,
   partner: (params) => <RelationCell {...params} />,
   start_date: (params) => <DateCell {...params} />,

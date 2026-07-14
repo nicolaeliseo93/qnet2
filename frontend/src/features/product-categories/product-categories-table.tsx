@@ -15,6 +15,10 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Can } from '@/features/auth/can'
+import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
+import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
+import { useStatsPanel } from '@/features/stats/use-stats-panel'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
@@ -51,6 +55,8 @@ type SheetState =
  */
 export function ProductCategoriesTable() {
   const { t } = useTranslation()
+  const stats = useStatsPanel(PRODUCT_CATEGORIES_DOMAIN)
+  const invalidateStats = useInvalidateModuleStats(PRODUCT_CATEGORIES_DOMAIN)
   const queryClient = useQueryClient()
 
   const tableRef = useRef<TableViewHandle>(null)
@@ -68,6 +74,7 @@ export function ProductCategoriesTable() {
         await deleteProductCategory(row.id)
         toast.success(t('productCategories.form.deleted'))
         refreshGrid()
+        invalidateStats()
       } catch (error) {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined
         if (status === 403) {
@@ -81,7 +88,7 @@ export function ProductCategoriesTable() {
         setDeletingId(null)
       }
     },
-    [refreshGrid, t],
+    [refreshGrid, t, invalidateStats],
   )
 
   const handleAction: RowActionHandler = useCallback(
@@ -118,24 +125,34 @@ export function ProductCategoriesTable() {
     (category: ProductCategoryDetail) => {
       closeSheet()
       refreshGrid()
+      invalidateStats()
       queryClient.setQueryData(productCategoryKeys.detail(category.id), category)
       void queryClient.invalidateQueries({ queryKey: productCategoryKeys.tree })
     },
-    [closeSheet, refreshGrid, queryClient],
+    [closeSheet, refreshGrid, queryClient, invalidateStats],
   )
 
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
         actions={
-          <Can permission="product-categories.create">
-            <Button onClick={() => setSheet({ kind: 'create' })}>
-              <Plus aria-hidden="true" />
-              {t('productCategories.form.newRootCategory')}
-            </Button>
-          </Can>
+          <>
+            <StatsToggleButton
+              domain={PRODUCT_CATEGORIES_DOMAIN}
+              isOpen={stats.isOpen}
+              onToggle={stats.toggle}
+            />
+            <Can permission="product-categories.create">
+              <Button onClick={() => setSheet({ kind: 'create' })}>
+                <Plus aria-hidden="true" />
+                {t('productCategories.form.newRootCategory')}
+              </Button>
+            </Can>
+          </>
         }
       />
+
+      <ModuleStatsPanel domain={PRODUCT_CATEGORIES_DOMAIN} isOpen={stats.isOpen} />
 
       <TableView
         ref={tableRef}

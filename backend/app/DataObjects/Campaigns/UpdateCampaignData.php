@@ -16,11 +16,15 @@ namespace App\DataObjects\Campaigns;
  * key actually present" distinction a plain null property cannot express.
  * `code` is never accepted (BR-1): no property for it at all.
  *
- * The BR-2 derivation (forcing the 4 classification fields null/required
+ * The BR-2 derivation (forcing the 3 classification fields null/required
  * depending on the EFFECTIVE `project_id` — submitted or, when absent,
  * the campaign's current one) needs the target Campaign and is therefore
  * resolved by CampaignService, not here (this DTO only carries what the
- * client actually submitted).
+ * client actually submitted). `country_id`/`state_id`/`province_id`/
+ * `city_id` (spec 0027, D-3) LEFT that group: they follow BR-5 instead — a
+ * per-level refinement of the linked project's geo, also resolved by
+ * CampaignService (it needs the loaded Project row to know which levels it
+ * fills).
  */
 final readonly class UpdateCampaignData
 {
@@ -40,8 +44,14 @@ final readonly class UpdateCampaignData
         public bool $projectStatusIdSubmitted = false,
         public ?int $businessFunctionId = null,
         public bool $businessFunctionIdSubmitted = false,
+        public ?int $countryId = null,
+        public bool $countryIdSubmitted = false,
         public ?int $stateId = null,
         public bool $stateIdSubmitted = false,
+        public ?int $provinceId = null,
+        public bool $provinceIdSubmitted = false,
+        public ?int $cityId = null,
+        public bool $cityIdSubmitted = false,
         public ?int $productCategoryId = null,
         public bool $productCategoryIdSubmitted = false,
         public ?string $startDate = null,
@@ -77,8 +87,14 @@ final readonly class UpdateCampaignData
             projectStatusIdSubmitted: array_key_exists('project_status_id', $data),
             businessFunctionId: self::nullableInt($data, 'business_function_id'),
             businessFunctionIdSubmitted: array_key_exists('business_function_id', $data),
+            countryId: self::nullableInt($data, 'country_id'),
+            countryIdSubmitted: array_key_exists('country_id', $data),
             stateId: self::nullableInt($data, 'state_id'),
             stateIdSubmitted: array_key_exists('state_id', $data),
+            provinceId: self::nullableInt($data, 'province_id'),
+            provinceIdSubmitted: array_key_exists('province_id', $data),
+            cityId: self::nullableInt($data, 'city_id'),
+            cityIdSubmitted: array_key_exists('city_id', $data),
             productCategoryId: self::nullableInt($data, 'product_category_id'),
             productCategoryIdSubmitted: array_key_exists('product_category_id', $data),
             startDate: array_key_exists('start_date', $data) ? $data['start_date'] : null,
@@ -136,8 +152,20 @@ final readonly class UpdateCampaignData
             $attributes['business_function_id'] = $this->businessFunctionId;
         }
 
+        if ($this->countryIdSubmitted) {
+            $attributes['country_id'] = $this->countryId;
+        }
+
         if ($this->stateIdSubmitted) {
             $attributes['state_id'] = $this->stateId;
+        }
+
+        if ($this->provinceIdSubmitted) {
+            $attributes['province_id'] = $this->provinceId;
+        }
+
+        if ($this->cityIdSubmitted) {
+            $attributes['city_id'] = $this->cityId;
         }
 
         if ($this->productCategoryIdSubmitted) {

@@ -34,8 +34,14 @@ final readonly class UpdateProjectData
         public bool $sourceIdSubmitted = false,
         public ?int $businessFunctionId = null,
         public bool $businessFunctionIdSubmitted = false,
+        public ?int $countryId = null,
+        public bool $countryIdSubmitted = false,
         public ?int $stateId = null,
         public bool $stateIdSubmitted = false,
+        public ?int $provinceId = null,
+        public bool $provinceIdSubmitted = false,
+        public ?int $cityId = null,
+        public bool $cityIdSubmitted = false,
         public ?int $productCategoryId = null,
         public bool $productCategoryIdSubmitted = false,
         public ?int $partnerId = null,
@@ -68,8 +74,14 @@ final readonly class UpdateProjectData
             sourceIdSubmitted: array_key_exists('source_id', $data),
             businessFunctionId: self::nullableInt($data, 'business_function_id'),
             businessFunctionIdSubmitted: array_key_exists('business_function_id', $data),
+            countryId: self::nullableInt($data, 'country_id'),
+            countryIdSubmitted: array_key_exists('country_id', $data),
             stateId: self::nullableInt($data, 'state_id'),
             stateIdSubmitted: array_key_exists('state_id', $data),
+            provinceId: self::nullableInt($data, 'province_id'),
+            provinceIdSubmitted: array_key_exists('province_id', $data),
+            cityId: self::nullableInt($data, 'city_id'),
+            cityIdSubmitted: array_key_exists('city_id', $data),
             productCategoryId: self::nullableInt($data, 'product_category_id'),
             productCategoryIdSubmitted: array_key_exists('product_category_id', $data),
             partnerId: self::nullableInt($data, 'partner_id'),
@@ -120,8 +132,20 @@ final readonly class UpdateProjectData
             $attributes['business_function_id'] = $this->businessFunctionId;
         }
 
+        if ($this->countryIdSubmitted) {
+            $attributes['country_id'] = $this->countryId;
+        }
+
         if ($this->stateIdSubmitted) {
             $attributes['state_id'] = $this->stateId;
+        }
+
+        if ($this->provinceIdSubmitted) {
+            $attributes['province_id'] = $this->provinceId;
+        }
+
+        if ($this->cityIdSubmitted) {
+            $attributes['city_id'] = $this->cityId;
         }
 
         if ($this->productCategoryIdSubmitted) {

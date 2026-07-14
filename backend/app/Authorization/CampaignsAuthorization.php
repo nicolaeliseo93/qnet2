@@ -9,16 +9,17 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * ResourceAuthorization for the `campaigns` resource (spec 0023).
+ * ResourceAuthorization for the `campaigns` resource (spec 0023, `code`
+ * writable-on-create per spec 0025).
  *
- * No contextual rules: every field's ceiling is simply visible+editable when
- * the actor may write (create/update), else visible+readonly, mirroring
- * ProjectsAuthorization. The BR-2 derivation (the 4 classification fields
- * forced null/required depending on `project_id`) is a VALUE-level rule
- * enforced by the FormRequest + CampaignService, not a field-permission
- * concern — this class only answers "may this actor touch this field at
- * all", same as every other resource. `code` is intentionally NOT a
- * catalogue field: it is server-generated (BR-1), never submitted.
+ * Every field's ceiling is visible+editable when the actor may write
+ * (create/update), else visible+readonly, mirroring ProjectsAuthorization —
+ * EXCEPT `code` (spec 0025, BR-1): writable only in create ($model === null),
+ * permanently readonly once persisted. The BR-2 derivation (the 4
+ * classification fields forced null/required depending on `project_id`) is a
+ * VALUE-level rule enforced by the FormRequest + CampaignService, not a
+ * field-permission concern — this class only answers "may this actor touch
+ * this field at all", same as every other resource.
  */
 class CampaignsAuthorization extends AbstractResourceAuthorization
 {
@@ -38,6 +39,7 @@ class CampaignsAuthorization extends AbstractResourceAuthorization
     public function fields(): array
     {
         return [
+            new FieldDefinition('code', 'text'),
             new FieldDefinition('project_id', 'select'),
             new FieldDefinition('name', 'text', mandatory: true),
             new FieldDefinition('description', 'textarea'),
@@ -46,7 +48,10 @@ class CampaignsAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('partner_id', 'select'),
             new FieldDefinition('project_status_id', 'select'),
             new FieldDefinition('business_function_id', 'select'),
+            new FieldDefinition('country_id', 'select'),
             new FieldDefinition('state_id', 'select'),
+            new FieldDefinition('province_id', 'select'),
+            new FieldDefinition('city_id', 'select'),
             new FieldDefinition('product_category_id', 'select'),
             new FieldDefinition('start_date', 'date'),
             new FieldDefinition('end_date', 'date'),
@@ -71,6 +76,9 @@ class CampaignsAuthorization extends AbstractResourceAuthorization
         $mayWrite = $this->actorMayWrite($actor, $model);
 
         return [
+            // code is writable only in create (spec 0025, BR-1): permanently
+            // readonly once a $model exists, regardless of write ability.
+            'code' => $mayWrite && $model === null ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'project_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'name' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'description' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
@@ -79,7 +87,10 @@ class CampaignsAuthorization extends AbstractResourceAuthorization
             'partner_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'project_status_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'business_function_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'country_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'state_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'province_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'city_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'product_category_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'start_date' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'end_date' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),

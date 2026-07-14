@@ -12,11 +12,34 @@ export interface ProjectForSelectRelation {
 }
 
 /**
+ * A geo level's `{id, name}` projection inside `meta.geo` (spec 0027 D-5) —
+ * distinct from `ProjectForSelectRelation`'s `{id, label}`: this block feeds
+ * `GeoSelect` directly, which already speaks `name`.
+ */
+export interface ProjectForSelectGeoRelation {
+  id: number
+  name: string
+}
+
+/**
+ * Which geo levels the linked project already fills (spec 0027 D-5): the
+ * Campaign form's source for which of the 4 cascade levels to lock/prefill
+ * when a project is picked.
+ */
+export interface ProjectForSelectGeo {
+  country: ProjectForSelectGeoRelation | null
+  state: ProjectForSelectGeoRelation | null
+  province: ProjectForSelectGeoRelation | null
+  city: ProjectForSelectGeoRelation | null
+}
+
+/**
  * The `meta` block carried by every `/projects/for-select` item (spec 0023):
  * the Campaign form's default-population source when a Project is linked
  * (AC-042) — no extra request, the picker's own response already carries it.
  * `total_budget`/`allocated_budget`/`remaining_budget` are decimal columns
- * cast `decimal:2`, serialized as numeric strings.
+ * cast `decimal:2`, serialized as numeric strings. `geo` (spec 0027 D-5) is
+ * the project's own geo cascade, used to lock/prefill the campaign form.
  */
 export interface ProjectForSelectMeta {
   registry: ProjectForSelectRelation | null
@@ -29,6 +52,7 @@ export interface ProjectForSelectMeta {
   total_budget: string | null
   allocated_budget: string
   remaining_budget: string | null
+  geo: ProjectForSelectGeo
 }
 
 /** A single project option as returned by `GET /api/projects/for-select`, label = "PRJ-0001 — Name". */

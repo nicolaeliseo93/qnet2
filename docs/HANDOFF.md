@@ -2,6 +2,170 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — Module stats panel, backend-driven (spec 0026-module-stats-panel, 2026-07-13) — GREEN (not committed)
+
+NOTA: un'altra sessione ha usato il numero 0026 per "projects card grid" (sezione sotto). Questa
+feature vive in `docs/specs/0026-module-stats-panel.xml`. Collisione di numerazione, non di contenuto.
+
+Pannello statistiche uniforme su TUTTI E 12 i moduli (registries, referents, companies,
+operational-sites, company-sites, products, campaigns, leads, business-functions,
+product-categories, users, projects). Backend-driven: il FE non sa nulla dei moduli.
+
+ARCHITETTURA (replica il pattern gia' usato 4 volte: tables, meta, imports, migrations)
+  BE: `app/Stats/` — StatsDefinition (contratto) + AbstractStatsDefinition (authz FAIL-SAFE:
+      Gate::allows('viewAny', modelClass()) → permesso `{domain}.viewAny`, nessun permesso nuovo)
+      + StatsRegistry (risolve da `config/stats.php` via container; domain ignoto → 404)
+      + `Widgets/` (StatWidget|DistributionWidget|TrendWidget: UNICO posto che conosce la shape JSON)
+      + `Support/Aggregates.php` (COUNT/AVG/GROUP BY/LIMIT lato SQL, monthlyTrend driver-aware)
+      + 12 `<Domain>StatsDefinition`. Endpoint UNICO: `GET /api/stats/{domain}` (auth:sanctum,
+      throttle:60,1), envelope ok() `{success,message,data.widgets}`.
+  FE: `features/stats/` — UN SOLO `ModuleStatsPanel` + `StatsToggleButton` (icon-only + tooltip,
+      MA con aria-label: il tooltip non e' un nome accessibile) + `use-stats-panel` (localStorage
+      `stats-panel:{domain}`, default CHIUSO) + `use-module-stats` (enabled → zero fetch da chiuso)
+      + `stats-widget` (switch sul type; type ignoto → null, forward-compatible)
+      + `resolve-distribution-color` + `format-stat-value` + `use-invalidate-module-stats`.
+      UI: `components/ui/stat-bar-list.tsx` (barre CSS) + `stat-chart.tsx` (recharts LAZY).
+
+**AGGIUNGERE STATISTICHE A UN MODULO = 1 classe PHP + 1 riga in config/stats.php. ZERO frontend.**
+Nuovo TIPO di widget = 1 case in stats-widget.tsx + 1 builder PHP. Il pannello non cambia.
+
+CONTRATTI DA RISPETTARE (non reinventare)
+- `label` del widget = CHIAVE i18n `{domainCamel}.stats.{key}` (come le TableDefinition). Le label
+  degli ITEM di una distribution sono invece testo di dominio dal DB.
+- `color` degli item NON e' un hex: e' un TOKEN ("teal"/"slate"/"amber"/null). slate/amber NON sono
+  colori CSS validi → SEMPRE risolvere da allow-list (`resolve-distribution-color`), mai passare la
+  stringa DB al CSS. Bug reale trovato e corretto.
+- `distribution.total` = popolazione piena, PUO' essere > somma degli items (top-N).
+- `percent` = int|null; null se denominatore 0 (mai "0%"), via `App\Support\ConversionRate`.
+- Icone: allow-list FE (briefcase, building, check-circle, folder-tree, layers, map-pin, megaphone,
+  package, percent, target, trending-up, user-check, user-x, users, wallet). Fuori lista → nessuna icona.
+
+DECISIONI UTENTE: recharts 3.9.2 AUTORIZZATO ma SOLO lazy (verificato sul bundle: chunk separato
+`stat-chart-impl-*.js` 348KB, zero simboli nell'entry). Pannello chiuso di default con memoria per
+modulo. Le stats si invalidano dopo OGNI mutation (tabelle + pagine dedicate: gli hook
+use-{project,registry,referent,product}-form). Bottone solo icona + tooltip. Animazione via
+Collapsible Radix (keyframes gia' esistenti, prefers-reduced-motion rispettato).
+
+PAGINA PROJECTS (allineata su richiesta utente; era inizialmente fuori scope):
+UNA SOLA PageHeader in `projects-view.tsx`, senza title/subtitle, con actions
+[toggle vista | bottone stats | Nuovo Progetto]. Il pannello sta FUORI dal ramo grid/table: cambiare
+vista cambia SOLO la griglia (nessun refetch). `projects-table.tsx` ha la prop `hideHeader` e il
+create Sheet e' stato SOLLEVATO in `projects-view` (in grid mode la tabella non e' montata, quindi un
+ref-trigger non poteva funzionare). Il vecchio pannello hardcoded (ProjectSummaryTiles,
+use-projects-summary, fetchProjectsSummary, tipo ProjectsSummary, i18n `projects.summary.*`) e'
+CANCELLATO come dead code. `format-conversion-rate.ts` TENUTO (lo usa project-card).
+
+DEBITO LASCIATO APERTO (owner = modulo projects/altra sessione, NON questa feature):
+- `GET /api/projects/summary` + `ProjectSummaryController` + `ProjectService::summary()` sono ora
+  ORFANI (nessun consumatore FE). Dead code da rimuovere da chi possiede quel modulo.
+- `features/projects/status-badge-classes.ts:29` fa `STATUS_BADGE_CLASSES[color]` senza guardia
+  hasOwnProperty: un token `constructor` dal DB finirebbe come funzione in className. Allineare a
+  `resolve-distribution-color.ts`.
+
+VERIFICATO (verifier indipendente, esecuzione reale): Pest `--filter Stats` 65/65 (678 assert),
+`--filter Projects` 100/100, suite BE 2177/2179. Vitest 1160 passed; `tsc --noEmit` pulito;
+`vite build` ok con recharts isolato. 17/17 AC verdi (AC-014 superseded dall'amendment).
+
+ROSSI PREESISTENTI SU MAIN (NON nostri, file mai toccati — verificato byte-identici a main):
+4 test vitest in `features/table/` (cell-renderers: il describe lascia la lingua a 'it';
+use-table-preferences: il test passa un array dove il codice attende un Set), 1 Pest
+(AbstractMigrationSourcePreviewTest, colonna roles.description gia' committata), 1 violazione Pint
+(CompanySiteUpdateTest), 2 errori ESLint (registry-form-metadata.test.tsx, duration-input.test.tsx).
+La DoD letterale non e' raggiungibile finche' non li sistema chi li possiede.
+
+## FEATURE — Projects card grid + KPI tiles + lead conversion flag (spec 0026, 2026-07-13) — GREEN (not committed)
+
+Spec: `docs/specs/0026-projects-card-grid.xml` (contract frozen before dispatch). Built by an agent
+team (backend / frontend / frontend-leads / verifier). Uncommitted, per the standing "i commit li
+faccio io".
+
+SPEC NUMBERING — READ THIS BEFORE ADDING A SPEC. This work was written as "0025" and RENUMBERED to
+0026 after the fact, because a CONCURRENT session created a second `0025` (manual `code` + modal
+Sheets) in the same working tree. The renumbering was applied to the spec file and to the code
+comments of THIS spec's files only. Every remaining `spec 0025` reference in the code (manual `code`
+field, modal Sheets, campaigns schema/authorization) belongs to that OTHER spec and is CORRECT — do
+not "fix" it. Next free number is 0027.
+
+WHAT CHANGED
+- Projects page is now a CARD GRID by default (the user's mock): 4 KPI tiles + responsive card grid
+  (1/2/3 cols at 375/768/1024) + infinite scroll. The AG Grid table is NOT gone: a grid/table toggle
+  (`use-projects-view-preference`, localStorage) mounts the untouched `<ProjectsTable />`.
+- New backend endpoints, both gated `projects.viewAny`: `GET /api/projects` (offset/limit/search/
+  project_status_id, `paginatedResponse` envelope, `ProjectCardResource`) and `GET /api/projects/
+  summary` (KPI counters, `ok()` envelope). `/projects/summary` MUST stay declared BEFORE
+  `/projects/{project}` in `routes/api/projects.php` or the model binding swallows it.
+- Card/KPI counts come from `Project::leads()` = `hasManyThrough(Lead, Campaign)` (there is NO direct
+  project→lead FK) plus `withCount(['campaigns','leads','leads as converted_leads_count' => ...])`.
+- NEW COLUMN `leads.is_converted` (boolean, indexed, default false) — the conversion metric did not
+  exist before; the user approved adding it. Surfaced in the lead form (Switch), detail (badge),
+  leads table column, and `LeadsAuthorization` field ceiling.
+- BR-1 is centralized in `App\Support\ConversionRate::of()` — shared by card + summary. It returns
+  NULL (never 0) when leads_count = 0. Do not re-derive the formula anywhere else.
+
+KNOWN DEBT (accepted, flagged): `STATUS_BADGE_CLASSES` is an exact duplicate between
+`features/projects/column-renderers.tsx` and the new `features/projects/status-badge-classes.ts`.
+The extraction was deliberately NOT done to avoid clobbering the concurrent session's live edits to
+`column-renderers.tsx`. Dedupe once that lands.
+
+PRE-EXISTING FAILURES (verified NOT ours, via a `git worktree` of HEAD — do not attribute them to
+this work): backend `AbstractMigrationSourcePreviewTest`; backend `BusinessFunctionSeederTest::it is
+idempotent` (genuinely FLAKY — `DemoBusinessFunctionSeeder`'s `Faker::seed()` does not pin `mt_rand`
+across the full-suite process; two runs of the identical tree gave two different failure values —
+worth its own ticket); frontend `features/table/cell-renderers.test.tsx` (expects EN strings, default
+locale is `it`) and `features/table/use-table-preferences.test.ts` (stale: passes a string where the
+signature now wants `ReadonlySet<string>`, since commit c7fabe6).
+
+VERIFIED GREEN (real output): backend `--filter="Project|Lead"` 163 passed / 761 assertions; Pint
+`--dirty` passed; migration up→down→up round-trip clean. Frontend projects+leads 101/101 (14 files);
+`tsc --noEmit` clean. Independent `verifier` confirmed AC-001..AC-009 met against the real code
+(server-side authz on both endpoints, no raw SQL on user input, useInfiniteQuery+IntersectionObserver
+rather than useEffect+fetch).
+
+OPEN PRODUCT DECISION: the concurrent spec moves project CRUD into a Sheet/modal. The card's
+"Apri scheda" link still navigates to `/projects/{id}`. If the modal pattern wins, that link (and the
+card's edit button) must open the Sheet instead.
+
+## FEATURE — Modal Sheets for projects/campaigns/leads (spec 0025 Parte B, 2026-07-13) — GREEN (not committed)
+
+Spec: `docs/specs/0025-manual-code-and-modal-modules.xml` Parte B (Lane FE-2). `projects-table.tsx`,
+`campaigns-table.tsx`, `leads-table.tsx` rewritten to the canonical Sheet-based CRUD pattern
+(`SheetState = {kind:'none'|'create'|'view'|'edit'}`, `storageKey="sheet-width:<domain>"`,
+`View<X>Loader`/`Edit<X>Loader` refetching the detail fresh via the existing exported
+`<domain>DetailQueryKey`/`fetch<X>` from each `api.ts`), mirroring `users-table.tsx` /
+`operational-sites-table.tsx`. `view` mounts the existing `*DetailView` (unchanged, presentational);
+`edit`/`create` mount the existing `*Form` (unchanged — already `{mode, onSuccess, onCancel}`,
+needed zero adaptation). Delete stays inline/unchanged. On success: sheet closes, grid refreshes,
+detail query invalidated via the SAME query key the dedicated pages already use (no drift).
+
+DEDICATED PAGES (`/projects/:id`, `/campaigns/new`, etc.) UNCHANGED per user decision — they remain
+as deep-links; only the table's row-actions/"New" button changed from `navigate()` to opening the Sheet.
+`useNavigate` removed from all three tables (now orphaned).
+
+i18n: `detail.title`/`detail.subtitle` keys (sr-only Sheet header on `view`) added to
+`en-leads.ts`/`it-leads.ts` (mine to touch). Projects/campaigns i18n files are OUT of this lane's
+ownership (Lane FE-1) — asked `fe-code` to add the equivalent `projects.detail.title/subtitle` and
+`campaigns.detail.title/subtitle` keys; until added, i18next falls back to the raw key (no crash,
+just wrong sr-only text).
+
+Old `*-table.test.tsx` asserted `navigate()` — REWRITTEN (requirement changed, spec 0025 supersedes
+0022/0023/0024's page-navigation ACs for these 3 domains): now assert the Sheet opens with the right
+title and does not navigate, plus an explicit AC-023 case (mocks the domain's `*Form` to fire
+`onSuccess`/`onCancel` directly, asserts sheet close + grid refresh + `invalidateQueries` on the exact
+query key). `campaigns-table.test.tsx`/`leads-table.test.tsx` are new (none existed before).
+
+VERIFIED GREEN (real output): `npx vitest run src/features/projects/projects-table.test.tsx
+src/features/campaigns/campaigns-table.test.tsx src/features/leads/leads-table.test.tsx src/pages`
+→ 6 files / 46 tests passed (includes the pre-existing dedicated-page tests, AC-025 non-regression).
+`npx tsc --noEmit` clean.
+
+CONCURRENT WORK NOTE: `projects-table.tsx` was extended mid-task by another stream with an optional
+`hideHeader` prop (default `false`, backward-compatible) for a separate projects grid/card-view
+toggle (`project-card-grid.tsx`, `projects-view-toggle.tsx`, `projects-view.test.tsx` — NOT part of
+spec 0025, not touched by this lane). Compatible with the Sheet wiring above; both `tsc` and this
+lane's own tests stay green with it in place. The broader `src/features/projects` directory currently
+has ONE unrelated failing test (`projects-view.test.tsx`, that other stream's own WIP) — not caused
+by and out of scope for this handoff.
+
 ## FEATURE — Registry supervisor→user, responsible-people primary contacts, geo to Referents (2026-07-13) — GREEN (not committed)
 
 Follow-up to the bugfix below (same commit group). Three user-approved changes.

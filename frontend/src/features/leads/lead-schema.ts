@@ -28,6 +28,7 @@ function baseFields(t: TFunction) {
     operational_site_id: z.number().nullable(),
     source_id: z.number().nullable(),
     operator_id: z.number().nullable(),
+    is_converted: z.boolean(),
     notes: z.string().max(NOTES_MAX_LENGTH, t('leads.form.notesMax')).nullable(),
   }
 }

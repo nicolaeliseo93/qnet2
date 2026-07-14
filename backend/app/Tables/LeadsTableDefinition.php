@@ -137,6 +137,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
             'source' => $this->summarize($row->source),
             'operator' => $this->summarize($row->operator),
             'notes' => $row->notes,
+            'is_converted' => (bool) $row->is_converted,
             'created_at' => $row->created_at,
         ];
     }

@@ -17,8 +17,14 @@ export const leads = {
     created_at: 'Creato il',
   },
   detail: {
+    title: 'Dettagli lead',
+    subtitle: 'Visualizzazione in sola lettura del lead selezionato.',
     loadError: 'Impossibile caricare il lead. Riprova.',
     unknownReferent: 'Contatto sconosciuto',
+  },
+  status: {
+    converted: 'Convertito',
+    notConverted: 'Non convertito',
   },
   form: {
     newLead: 'Nuovo lead',
@@ -52,6 +58,7 @@ export const leads = {
     sourceSearch: 'Cerca fonti…',
     operator: 'Operatore',
     operatorSearch: 'Cerca operatori…',
+    isConverted: 'Lead convertito',
     notes: 'Note',
     notesMax: 'Le note devono avere al massimo 5000 caratteri.',
     selectPlaceholder: 'Seleziona…',

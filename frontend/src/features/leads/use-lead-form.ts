@@ -22,6 +22,7 @@ const SERVER_ERROR_FIELDS = [
   'operational_site_id',
   'source_id',
   'operator_id',
+  'is_converted',
   'notes',
 ] as const
 
@@ -59,6 +60,7 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
         operational_site_id: lead.operational_site_id,
         source_id: lead.source_id,
         operator_id: lead.operator_id,
+        is_converted: lead.is_converted,
         notes: lead.notes,
       }
     }
@@ -68,6 +70,7 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
       operational_site_id: null,
       source_id: null,
       operator_id: null,
+      is_converted: false,
       notes: null,
     }
   }, [mode])

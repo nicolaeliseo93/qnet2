@@ -311,4 +311,55 @@ describe('GeoSelect', () => {
 
     vi.unstubAllGlobals()
   })
+
+  describe('lockedLevels (spec 0027)', () => {
+    it('disables only the locked levels while leaving the rest editable', () => {
+      render(
+        <GeoSelect
+          value={{ country_id: 1, state_id: 10, province_id: 50, city_id: 100 }}
+          onChange={() => {}}
+          lockedLevels={['country']}
+        />,
+      )
+
+      const selects = screen.getAllByRole('combobox')
+      expect(selects[0]).toBeDisabled() // country: locked
+      expect(selects[1]).not.toBeDisabled() // state: not locked
+      expect(selects[2]).not.toBeDisabled() // province: not locked
+      expect(selects[3]).not.toBeDisabled() // city: not locked
+    })
+
+    it('disables every select when every level is locked', () => {
+      render(
+        <GeoSelect
+          value={{ country_id: 1, state_id: 10, province_id: 50, city_id: 100 }}
+          onChange={() => {}}
+          lockedLevels={['country', 'state', 'province', 'city']}
+        />,
+      )
+
+      for (const select of screen.getAllByRole('combobox')) {
+        expect(select).toBeDisabled()
+      }
+    })
+
+    it('keeps a locked descendant level disabled even before its parent is chosen', () => {
+      render(<GeoSelect value={empty} onChange={() => {}} lockedLevels={['state']} />)
+
+      expect(screen.getAllByRole('combobox')[1]).toBeDisabled()
+    })
+
+    it('defaults to no locked level, leaving every existing caller unaffected', () => {
+      render(
+        <GeoSelect
+          value={{ country_id: 1, state_id: 10, province_id: 50, city_id: 100 }}
+          onChange={() => {}}
+        />,
+      )
+
+      for (const select of screen.getAllByRole('combobox')) {
+        expect(select).not.toBeDisabled()
+      }
+    })
+  })
 })

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Campaign;
+use App\Models\Country;
 use App\Models\Project;
 use App\Models\ProjectStatus;
 use App\Models\User;
@@ -37,29 +38,208 @@ if (! function_exists('projectUserWith')) {
 it('create: code is server-generated PRJ-0001, then PRJ-0002 (AC-010)', function () {
     $actor = projectUserWith(['create']);
     $status = ProjectStatus::factory()->create();
+    $countryId = Country::factory()->create()->id;
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/projects', ['name' => 'First', 'project_status_id' => $status->id])
+    $this->postJson('/api/projects', ['name' => 'First', 'project_status_id' => $status->id, 'country_id' => $countryId])
         ->assertCreated()
         ->assertJsonPath('data.code', 'PRJ-0001');
 
-    $this->postJson('/api/projects', ['name' => 'Second', 'project_status_id' => $status->id])
+    $this->postJson('/api/projects', ['name' => 'Second', 'project_status_id' => $status->id, 'country_id' => $countryId])
         ->assertCreated()
         ->assertJsonPath('data.code', 'PRJ-0002');
 });
 
-it('create: an explicit `code` in the payload is ignored (AC-011)', function () {
+// ---------------------------------------------------------------------------
+// create — country_id (AC-001/AC-002/AC-003, spec 0027 BR-4)
+// ---------------------------------------------------------------------------
+
+it('create: without country_id -> 422 (AC-001)', function () {
     $actor = projectUserWith(['create']);
     $status = ProjectStatus::factory()->create();
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/projects', [
-        'name' => 'Spoofed',
-        'project_status_id' => $status->id,
-        'code' => 'HACKED-9999',
-    ])->assertCreated()->assertJsonPath('data.code', 'PRJ-0001');
+    $this->postJson('/api/projects', ['name' => 'No Country', 'project_status_id' => $status->id])
+        ->assertStatus(422)->assertJsonValidationErrors('country_id');
 
-    $this->assertDatabaseMissing('projects', ['code' => 'HACKED-9999']);
+    expect(Project::count())->toBe(0);
+});
+
+it('create: with country_id only -> 201, geo_scope=country (AC-001, D-2)', function () {
+    $actor = projectUserWith(['create']);
+    $status = ProjectStatus::factory()->create();
+    $country = Country::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/projects', ['name' => 'Country Scoped', 'project_status_id' => $status->id, 'country_id' => $country->id])
+        ->assertCreated()
+        ->assertJsonPath('data.geo_scope', 'country')
+        ->assertJsonPath('data.country_id', $country->id);
+});
+
+it('create: a state_id that does not belong to country_id -> 422 on state_id (AC-002, BR-4)', function () {
+    $actor = projectUserWith(['create']);
+    $status = ProjectStatus::factory()->create();
+    $geo = geoChain();
+    $otherCountry = Country::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/projects', [
+        'name' => 'Inconsistent Geo',
+        'project_status_id' => $status->id,
+        'country_id' => $otherCountry->id,
+        'state_id' => $geo['state']->id,
+    ])->assertStatus(422)->assertJsonValidationErrors('state_id');
+
+    expect(Project::count())->toBe(0);
+});
+
+it('create: a full consistent geo chain -> 201, geo_scope=city (AC-003, D-2)', function () {
+    $actor = projectUserWith(['create']);
+    $status = ProjectStatus::factory()->create();
+    $geo = geoChain();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/projects', [
+        'name' => 'City Scoped',
+        'project_status_id' => $status->id,
+        'country_id' => $geo['country']->id,
+        'state_id' => $geo['state']->id,
+        'province_id' => $geo['province']->id,
+        'city_id' => $geo['city']->id,
+    ])->assertCreated()
+        ->assertJsonPath('data.geo_scope', 'city')
+        ->assertJsonPath('data.city.name', 'Milano');
+});
+
+// spec 0025 changed the requirement: `code` is now manual-on-create (AC-002),
+// no longer server-only — the former "explicit code is ignored" behavior
+// (AC-011 pre-0025) is replaced by these tests.
+
+it('create: no `code` in the payload -> code is server-generated PRJ-0001 (AC-001)', function () {
+    $actor = projectUserWith(['create']);
+    $status = ProjectStatus::factory()->create();
+    $countryId = Country::factory()->create()->id;
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/projects', ['name' => 'No Code', 'project_status_id' => $status->id, 'country_id' => $countryId])
+        ->assertCreated()
+        ->assertJsonPath('data.code', 'PRJ-0001');
+});
+
+it('create: an explicit `code` in the payload is persisted as-is (AC-002)', function () {
+    $actor = projectUserWith(['create']);
+    $status = ProjectStatus::factory()->create();
+    $countryId = Country::factory()->create()->id;
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/projects', [
+        'name' => 'Manual Code',
+        'project_status_id' => $status->id,
+        'country_id' => $countryId,
+        'code' => 'ACME-2026',
+    ])->assertCreated()->assertJsonPath('data.code', 'ACME-2026');
+
+    $this->assertDatabaseHas('projects', ['code' => 'ACME-2026']);
+});
+
+it('create: `code` as an empty string -> code is server-generated (AC-003)', function () {
+    $actor = projectUserWith(['create']);
+    $status = ProjectStatus::factory()->create();
+    $countryId = Country::factory()->create()->id;
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/projects', [
+        'name' => 'Empty Code',
+        'project_status_id' => $status->id,
+        'country_id' => $countryId,
+        'code' => '',
+    ])->assertCreated()->assertJsonPath('data.code', 'PRJ-0001');
+});
+
+it('create: a duplicate `code` -> 422 on the `code` field (AC-004)', function () {
+    $actor = projectUserWith(['create']);
+    $status = ProjectStatus::factory()->create();
+    $countryId = Country::factory()->create()->id;
+    Project::factory()->create(['code' => 'ACME-2026']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/projects', [
+        'name' => 'Duplicate Code',
+        'project_status_id' => $status->id,
+        'country_id' => $countryId,
+        'code' => 'ACME-2026',
+    ])->assertStatus(422)->assertJsonValidationErrors('code');
+});
+
+it('create: a `code` of 33+ characters -> 422 (AC-005)', function () {
+    $actor = projectUserWith(['create']);
+    $status = ProjectStatus::factory()->create();
+    $countryId = Country::factory()->create()->id;
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/projects', [
+        'name' => 'Too Long',
+        'project_status_id' => $status->id,
+        'country_id' => $countryId,
+        'code' => str_repeat('A', 33),
+    ])->assertStatus(422)->assertJsonValidationErrors('code');
+});
+
+it('create: a manual non-PRJ code does not break the sequential generator (AC-006)', function () {
+    $actor = projectUserWith(['create']);
+    $status = ProjectStatus::factory()->create();
+    $countryId = Country::factory()->create()->id;
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/projects', [
+        'name' => 'Manual First',
+        'project_status_id' => $status->id,
+        'country_id' => $countryId,
+        'code' => 'ACME-2026',
+    ])->assertCreated()->assertJsonPath('data.code', 'ACME-2026');
+
+    $this->postJson('/api/projects', ['name' => 'Generated Second', 'project_status_id' => $status->id, 'country_id' => $countryId])
+        ->assertCreated()
+        ->assertJsonPath('data.code', 'PRJ-0001');
+});
+
+it('update: a `code` different from the persisted one -> 422, code unchanged (AC-007)', function () {
+    $actor = projectUserWith(['update']);
+    $project = Project::factory()->create(['code' => 'PRJ-0001']);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/projects/{$project->id}", ['code' => 'PRJ-9999'])
+        ->assertStatus(422)->assertJsonValidationErrors('code');
+
+    $this->assertDatabaseHas('projects', ['id' => $project->id, 'code' => 'PRJ-0001']);
+});
+
+it('update: resubmitting the SAME persisted `code` is a no-op, not rejected', function () {
+    $actor = projectUserWith(['update']);
+    $project = Project::factory()->create(['code' => 'PRJ-0001']);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/projects/{$project->id}", ['code' => 'PRJ-0001', 'name' => 'Renamed'])
+        ->assertOk()
+        ->assertJsonPath('data.code', 'PRJ-0001')
+        ->assertJsonPath('data.name', 'Renamed');
+});
+
+it('meta: permissions.fields.code is editable in create and readonly in update (AC-009)', function () {
+    $actor = projectUserWith(['viewAny', 'create', 'view', 'update']);
+    $project = Project::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/meta/projects')
+        ->assertOk()
+        ->assertJsonPath('permissions.fields.code.editable', true)
+        ->assertJsonPath('permissions.fields.code.readonly', false);
+
+    $this->getJson("/api/projects/{$project->id}")
+        ->assertOk()
+        ->assertJsonPath('permissions.fields.code.editable', false)
+        ->assertJsonPath('permissions.fields.code.readonly', true);
 });
 
 it('create: 422 when name is missing (AC-012)', function () {
@@ -97,9 +277,10 @@ it('create: 422 when end_date < start_date (AC-013)', function () {
 it('create: 403 without projects.create, no row persisted', function () {
     $actor = projectUserWith([]);
     $status = ProjectStatus::factory()->create();
+    $countryId = Country::factory()->create()->id;
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/projects', ['name' => 'Nope', 'project_status_id' => $status->id])->assertForbidden();
+    $this->postJson('/api/projects', ['name' => 'Nope', 'project_status_id' => $status->id, 'country_id' => $countryId])->assertForbidden();
 
     expect(Project::count())->toBe(0);
 });

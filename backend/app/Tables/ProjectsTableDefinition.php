@@ -2,6 +2,7 @@
 
 namespace App\Tables;
 
+use App\Enums\GeoScopeLevel;
 use App\Models\Project;
 use App\Models\User;
 use App\Tables\Projects\ProjectColumnCatalog;
@@ -14,16 +15,19 @@ use Illuminate\Support\Facades\Gate;
  * Table definition for the `projects` domain (spec 0023).
  *
  * Real columns (code, name, start_date, end_date, total_budget, target_lead,
- * created_at) are handled entirely by the generic engine. The 7
- * classification FKs (registry, project_status, source, business_function,
- * state, product_category, partner) have no real column of their own — each
- * is DERIVED against the related row's `name`, resolved here generically via
- * DERIVED_RELATIONS: a `whereHas` set filter (allow-listed columns only,
- * never orderByRaw/whereRaw on raw input — backend.md §8), a correlated
- * subquery sort (registry/project_status only, per the column catalogue) and
- * a `SELECT DISTINCT` for the Excel-like filter list, mirroring
+ * created_at) are handled entirely by the generic engine. The 10
+ * classification/geo FKs (registry, project_status, source,
+ * business_function, country, state, province, city, product_category,
+ * partner) have no real column of their own — each is DERIVED against the
+ * related row's `name`, resolved here generically via DERIVED_RELATIONS: a
+ * `whereHas` set filter (allow-listed columns only, never orderByRaw/
+ * whereRaw on raw input — backend.md §8), a correlated subquery sort
+ * (registry/project_status only, per the column catalogue) and a
+ * `SELECT DISTINCT` for the Excel-like filter list, mirroring
  * ReferentsTableDefinition's `referent_type` / ProductsTableDefinition's
- * `category`.
+ * `category`. `geo_scope` (spec 0027, D-2) is NOT in DERIVED_RELATIONS: it
+ * has no FK/relation of its own (computed from the 4 geo ids), so it is
+ * mapped directly in mapRow() and stays outside every filter/sort hook.
  */
 class ProjectsTableDefinition extends AbstractTableDefinition
 {
@@ -34,9 +38,9 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     private const int MAX_FILTER_VALUES = 200;
 
     /**
-     * Allow-list of the 7 classification FKs with no real column of their
-     * own: relation accessor, related table and owning FK column, keyed by
-     * the derived column id. Single source of truth for
+     * Allow-list of the 10 classification/geo FKs with no real column of
+     * their own: relation accessor, related table and owning FK column,
+     * keyed by the derived column id. Single source of truth for
      * applyDerivedFilter/applyDerivedSort/distinctValues below.
      *
      * @var array<string, array{relation: string, table: string, fk: string}>
@@ -46,7 +50,10 @@ class ProjectsTableDefinition extends AbstractTableDefinition
         'project_status' => ['relation' => 'projectStatus', 'table' => 'project_statuses', 'fk' => 'project_status_id'],
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
         'business_function' => ['relation' => 'businessFunction', 'table' => 'business_functions', 'fk' => 'business_function_id'],
+        'country' => ['relation' => 'country', 'table' => 'countries', 'fk' => 'country_id'],
         'state' => ['relation' => 'state', 'table' => 'states', 'fk' => 'state_id'],
+        'province' => ['relation' => 'province', 'table' => 'provinces', 'fk' => 'province_id'],
+        'city' => ['relation' => 'city', 'table' => 'cities', 'fk' => 'city_id'],
         'product_category' => ['relation' => 'productCategory', 'table' => 'product_categories', 'fk' => 'product_category_id'],
         'partner' => ['relation' => 'partner', 'table' => 'referents', 'fk' => 'partner_id'],
     ];
@@ -138,6 +145,8 @@ class ProjectsTableDefinition extends AbstractTableDefinition
         foreach (self::DERIVED_RELATIONS as $columnId => $config) {
             $mapped[$columnId] = $this->summarize($row->{$config['relation']});
         }
+
+        $mapped['geo_scope'] = GeoScopeLevel::for($row->country_id, $row->state_id, $row->province_id, $row->city_id)?->value;
 
         $mapped['start_date'] = $row->start_date;
         $mapped['end_date'] = $row->end_date;

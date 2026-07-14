@@ -4,27 +4,39 @@ import {
   asCustomFieldsField,
   type CustomFieldsSchema,
 } from '@/features/custom-fields/build-custom-fields-schema'
+import { GEO_LEVELS } from '@/features/campaigns/campaign-geo'
 
 /**
  * Zod schema for the campaign create/edit form, built as a factory so
  * validation messages are localized via the i18n `t` function. The shape
- * mirrors the frozen backend contract (spec 0023) 1:1. `code` is intentionally
- * absent (BR-1, AC-046): it is never part of the form values or the payload.
+ * mirrors the frozen backend contract (spec 0025/0027) 1:1. `code` is
+ * optional and manual-entry-in-create-only: the create payload includes it
+ * when valued, the update payload never includes it (spec 0025 PARTE A).
  */
 
 /** Backend `name` column limit (`max:191`). */
 const NAME_MAX_LENGTH = 191
 
-/** The 4 classification fields whose requiredness flips with `project_id` (BR-2). */
+/** Backend `code` column limit (`string(32)`). */
+const CODE_MAX_LENGTH = 32
+
+/**
+ * The 3 classification fields whose requiredness flips with `project_id`
+ * (BR-2). `state_id` LEFT this group (spec 0027 D-3): it is now one of the 4
+ * geo fields, following BR-5 instead.
+ */
 const DERIVED_FIELDS = [
   'project_status_id',
   'business_function_id',
-  'state_id',
   'product_category_id',
 ] as const
 
 function baseFields(t: TFunction) {
   return {
+    // Optional manual code (spec 0025): trimmed, max 32; empty/unset falls
+    // back to server-side sequential generation. Read-only in edit (enforced
+    // by the field-permission ceiling, not by the schema).
+    code: z.string().trim().max(CODE_MAX_LENGTH, t('campaigns.form.codeMax')).optional(),
     // `null` = unset/standalone (for-select standard).
     project_id: z.number().nullable(),
     name: z
@@ -41,8 +53,20 @@ function baseFields(t: TFunction) {
     // required-when-standalone superRefine below mirrors the backend's rule.
     project_status_id: z.number().nullable(),
     business_function_id: z.number().nullable(),
-    state_id: z.number().nullable(),
     product_category_id: z.number().nullable(),
+    // Geo cascade (spec 0027 BR-4/BR-5): EFFECTIVE values (own or inherited),
+    // held nullable like every other controlled select. `country_id`'s
+    // requiredness and the parent-before-child shape are enforced by
+    // `withGeoHierarchyRule` below, aware of which levels are locked.
+    country_id: z.number().nullable(),
+    state_id: z.number().nullable(),
+    province_id: z.number().nullable(),
+    city_id: z.number().nullable(),
+    // UI-only (never sent to the server): the geo levels currently owned by
+    // the linked project, synced from `meta.geo` on selection (create) or
+    // from `CampaignDetail.geo_locked_levels` (edit). Drives both
+    // `<GeoSelect lockedLevels>` and this schema's hierarchy rule.
+    geo_locked_levels: z.array(z.enum(GEO_LEVELS)),
     // Date inputs hold `''` for "empty" (never `null`), converted to `null` at
     // the payload boundary (mirrors the `projects` dates convention).
     start_date: z.string(),
@@ -67,7 +91,7 @@ function withDateOrderRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
 }
 
 /**
- * BR-2/AC-023/AC-043: the 4 classification fields are required only when the
+ * BR-2/AC-023/AC-043: the 3 classification fields are required only when the
  * campaign is standalone (`project_id === null`). When linked, the backend
  * forces/derives them and the payload builder never sends them regardless of
  * their form value, so no "must be empty" counterpart is needed here.
@@ -84,7 +108,6 @@ function withRequiredDerivedFieldsRule<T extends z.ZodTypeAny>(schema: T, t: TFu
     const messages: Record<(typeof DERIVED_FIELDS)[number], string> = {
       project_status_id: t('campaigns.form.statusRequired'),
       business_function_id: t('campaigns.form.businessFunctionRequired'),
-      state_id: t('campaigns.form.stateRequired'),
       product_category_id: t('campaigns.form.productCategoryRequired'),
     }
     for (const field of DERIVED_FIELDS) {
@@ -95,10 +118,46 @@ function withRequiredDerivedFieldsRule<T extends z.ZodTypeAny>(schema: T, t: TFu
   })
 }
 
+/**
+ * BR-4 (client mirror) + BR-5 (spec 0027): `country_id` is required unless
+ * the linked project already provides one (i.e. `'country'` is not one of
+ * `geo_locked_levels`); a child level may only be set once its parent is
+ * effectively present (own value OR inherited/locked) — `province`/`city`
+ * both depend on `state`, not on each other (D-1). Full ancestry (state
+ * belongs to country, etc.) is validated server-side only (BR-4 note).
+ */
+function withGeoHierarchyRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
+  return schema.superRefine((values, ctx) => {
+    const record = values as {
+      country_id: number | null
+      state_id: number | null
+      province_id: number | null
+      city_id: number | null
+      geo_locked_levels: (typeof GEO_LEVELS)[number][]
+    }
+    const locked = new Set(record.geo_locked_levels)
+    const hasState = locked.has('state') || record.state_id !== null
+
+    if (!locked.has('country') && record.country_id === null) {
+      ctx.addIssue({ code: 'custom', path: ['country_id'], message: t('campaigns.form.countryRequired') })
+    }
+    if (record.province_id !== null && !hasState) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['province_id'],
+        message: t('campaigns.form.provinceRequiresState'),
+      })
+    }
+    if (record.city_id !== null && !hasState) {
+      ctx.addIssue({ code: 'custom', path: ['city_id'], message: t('campaigns.form.cityRequiresState') })
+    }
+  })
+}
+
 /** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
 export function buildCreateCampaignSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
   const object = z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
-  return withRequiredDerivedFieldsRule(withDateOrderRule(object, t), t)
+  return withGeoHierarchyRule(withRequiredDerivedFieldsRule(withDateOrderRule(object, t), t), t)
 }
 
 /** Edit schema (same shape; partial PATCH is computed by the caller). */

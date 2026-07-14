@@ -1,20 +1,66 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AxiosError } from 'axios'
+import { toast } from 'sonner'
 import i18n from '@/i18n'
-import { projects as projectsEn } from '@/i18n/locales/en-projects'
 import { ProjectsTable } from '@/features/projects/projects-table'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
+import type { ProjectDetailWithPermissions } from '@/features/projects/types'
 
 /**
- * AC-040/041 (spec 0023): the Projects adapter navigates to the dedicated
- * pages instead of opening a Sheet (mirrors `RegistriesTable`, spec 0022).
+ * Spec 0025 Parte B, AC-020/021/022/023 — the Projects adapter now opens a
+ * resizable Sheet for view/edit/create instead of navigating to the dedicated
+ * pages (those remain as deep-links, covered separately by the page tests).
+ * The generic `<TableView>` (AG Grid + SSRM) is stubbed with buttons that fire
+ * `onAction` for a fixed row, mirroring the sheet-based adapters' suites
+ * (e.g. `SectorsTable`).
  */
-const canMock = vi.fn<(permission: string) => boolean>()
 
+const mockProject: ProjectDetailWithPermissions = {
+  id: 12,
+  code: 'PRJ-0012',
+  name: 'Acme rollout',
+  description: null,
+  registry_id: null,
+  registry: null,
+  project_status_id: 1,
+  project_status: { id: 1, name: 'Active', color: null },
+  source_id: null,
+  source: null,
+  business_function_id: null,
+  business_function: null,
+  country_id: 1,
+  country: { id: 1, name: 'Italy' },
+  state_id: null,
+  state: null,
+  province_id: null,
+  province: null,
+  city_id: null,
+  city: null,
+  geo_scope: 'country',
+  product_category_id: null,
+  product_category: null,
+  partner_id: null,
+  partner: null,
+  start_date: null,
+  end_date: null,
+  total_budget: null,
+  target_lead: null,
+  allocated_budget: '0.00',
+  remaining_budget: null,
+  campaigns_count: 0,
+  created_at: '2026-01-01T00:00:00Z',
+  permissions: {
+    resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+    fields: {},
+    actions: {},
+  },
+}
+
+const canMock = vi.fn<(permission: string) => boolean>()
 vi.mock('@/features/auth/use-abilities', () => ({
   useAbilities: () => ({
     can: (permission: string) => canMock(permission),
@@ -28,89 +74,143 @@ vi.mock('@/components/page-header', () => ({
   PageHeader: ({ actions }: { actions?: ReactNode }) => <div>{actions}</div>,
 }))
 
-const ROW: TableRow = { id: 12, actions: ['view', 'edit'] }
-const action = (key: string): TableActionDefinition => ({
-  key,
-  label: key,
-  icon: key,
-  type: 'action',
-  confirm: false,
-})
+const refreshMock = vi.fn()
+let capturedOnAction: RowActionHandler | null = null
+
+const ROW: TableRow = { id: 12, actions: ['view', 'edit', 'delete'], name: 'Acme rollout' }
+
+function action(key: string): TableActionDefinition {
+  return {
+    key,
+    label: `actions.${key}`,
+    icon: 'eye',
+    type: key === 'delete' ? 'danger' : 'action',
+    confirm: key === 'delete',
+  }
+}
 
 vi.mock('@/features/table/table-view', () => ({
-  TableView: forwardRef<
-    { refresh: () => void },
-    { domain: string; onAction: RowActionHandler }
-  >(function TableViewStub({ domain, onAction }, ref) {
-    useImperativeHandle(ref, () => ({ refresh: () => {} }))
-    return (
-      <div role="region" aria-label={`table-${domain}`}>
-        <button type="button" onClick={() => onAction(action('view'), ROW)}>
-          row-view
-        </button>
-        <button type="button" onClick={() => onAction(action('edit'), ROW)}>
-          row-edit
-        </button>
-      </div>
-    )
-  }),
+  TableView: forwardRef<{ refresh: () => void }, { domain: string; onAction: RowActionHandler }>(
+    function TableViewStub({ domain, onAction }, ref) {
+      useImperativeHandle(ref, () => ({ refresh: refreshMock }))
+      capturedOnAction = onAction
+      return (
+        <div role="region" aria-label={`table-${domain}`}>
+          <button type="button" onClick={() => onAction(action('view'), ROW)}>
+            trigger-view
+          </button>
+          <button type="button" onClick={() => onAction(action('edit'), ROW)}>
+            trigger-edit
+          </button>
+          <button type="button" onClick={() => onAction(action('delete'), ROW)}>
+            trigger-delete
+          </button>
+        </div>
+      )
+    },
+  ),
 }))
 
-function LocationProbe() {
-  const { pathname } = useLocation()
-  return <span>location:{pathname}</span>
-}
+const fetchProjectMock = vi.fn<() => Promise<ProjectDetailWithPermissions>>()
+const deleteProjectMock = vi.fn()
+
+vi.mock('@/features/projects/api', () => ({
+  fetchProject: () => fetchProjectMock(),
+  deleteProject: (...args: unknown[]) => deleteProjectMock(...args),
+  projectDetailQueryKey: (id: number | null) => ['projects', 'detail', id],
+}))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+/**
+ * `ProjectForm` submission (RHF + Zod + the metadata-driven field catalogue)
+ * is owned by a different lane and covered by its own test suite. Here it is
+ * stubbed to two buttons that invoke `onSuccess`/`onCancel` directly, so this
+ * suite can verify the table's own responsibility: what happens to the Sheet
+ * and the grid once a create/edit round-trips (AC-023).
+ */
+vi.mock('@/features/projects/project-form', () => ({
+  ProjectForm: ({
+    onSuccess,
+    onCancel,
+  }: {
+    onSuccess: (project: ProjectDetailWithPermissions) => void
+    onCancel: () => void
+  }) => (
+    <div>
+      <button type="button" onClick={() => onSuccess(mockProject)}>
+        stub-save
+      </button>
+      <button type="button" onClick={onCancel}>
+        stub-cancel
+      </button>
+    </div>
+  ),
+}))
 
 function renderTable() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  return { client, ...render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/projects']}>
-        <LocationProbe />
-        <Routes>
-          <Route path="/projects" element={<ProjectsTable />} />
-          <Route path="*" element={null} />
-        </Routes>
-      </MemoryRouter>
+      <ProjectsTable />
     </QueryClientProvider>,
-  )
+  ) }
+}
+
+function axiosErrorWithStatus(status: number) {
+  return new AxiosError('failed', String(status), undefined, undefined, {
+    status,
+    data: { success: false, message: 'error' },
+  } as never)
 }
 
 beforeAll(async () => {
   await i18n.changeLanguage('en')
-  // `projects` is not yet wired into `en.ts` (pending the wiring lane, see
-  // handoff): registered here so the feature's own copy renders for real.
-  i18n.addResourceBundle('en', 'translation', { projects: projectsEn }, true, true)
 })
 
 beforeEach(() => {
   canMock.mockReset()
   canMock.mockReturnValue(true)
+  refreshMock.mockReset()
+  capturedOnAction = null
+  fetchProjectMock.mockReset()
+  fetchProjectMock.mockResolvedValue(mockProject)
+  deleteProjectMock.mockReset()
+  vi.mocked(toast.success).mockClear()
+  vi.mocked(toast.error).mockClear()
 })
 
-describe('ProjectsTable — navigation to the dedicated pages (AC-040/041)', () => {
-  it('navigates to the detail page on the view row action', async () => {
+describe('ProjectsTable — Sheet-based CRUD (AC-020/021/022)', () => {
+  it('mounts <TableView domain="projects">', () => {
     renderTable()
 
-    fireEvent.click(screen.getByRole('button', { name: 'row-view' }))
-
-    expect(screen.getByText('location:/projects/12')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'table-projects' })).toBeInTheDocument()
+    expect(capturedOnAction).not.toBeNull()
   })
 
-  it('navigates to the edit page on the edit row action', async () => {
+  it('opens the view sheet with the project detail on the view action, without navigating', async () => {
     renderTable()
 
-    fireEvent.click(screen.getByRole('button', { name: 'row-edit' }))
+    fireEvent.click(screen.getByText('trigger-view'))
 
-    expect(screen.getByText('location:/projects/12/edit')).toBeInTheDocument()
+    await waitFor(() => expect(fetchProjectMock).toHaveBeenCalled())
+    expect(await screen.findAllByText('Acme rollout')).not.toHaveLength(0)
   })
 
-  it('navigates to the create page from the New project button', async () => {
+  it('opens the edit sheet on the edit action', async () => {
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-edit'))
+
+    expect(await screen.findByText('Edit project')).toBeInTheDocument()
+  })
+
+  it('opens the create sheet from the New project button', async () => {
     renderTable()
 
     fireEvent.click(screen.getByRole('button', { name: /new project/i }))
 
-    expect(screen.getByText('location:/projects/new')).toBeInTheDocument()
+    expect(await screen.findByText('Create project')).toBeInTheDocument()
   })
 
   it('hides the New project button without projects.create', () => {
@@ -119,5 +219,79 @@ describe('ProjectsTable — navigation to the dedicated pages (AC-040/041)', () 
     renderTable()
 
     expect(screen.queryByRole('button', { name: /new project/i })).not.toBeInTheDocument()
+  })
+
+  it('deletes the row, refreshes the grid and shows a success toast', async () => {
+    deleteProjectMock.mockResolvedValue(undefined)
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-delete'))
+
+    await waitFor(() => expect(deleteProjectMock).toHaveBeenCalledWith(12))
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled())
+    expect(toast.success).toHaveBeenCalledWith('Project deleted successfully.')
+  })
+
+  it('maps a 409 delete failure to the "has campaigns" message', async () => {
+    deleteProjectMock.mockRejectedValue(axiosErrorWithStatus(409))
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-delete'))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'This project cannot be deleted: it still has campaigns linked to it.',
+      ),
+    )
+  })
+
+  it('maps a 403 delete failure to the forbidden message', async () => {
+    deleteProjectMock.mockRejectedValue(axiosErrorWithStatus(403))
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-delete'))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('You cannot delete this project.'),
+    )
+  })
+
+  it('maps any other delete failure to the generic error message', async () => {
+    deleteProjectMock.mockRejectedValue(axiosErrorWithStatus(500))
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-delete'))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Unable to delete the project. Please try again.'),
+    )
+  })
+})
+
+describe('ProjectsTable — mutation success closes the sheet and refreshes (AC-023)', () => {
+  it('closes the create sheet, refreshes the grid and invalidates the detail query on save', async () => {
+    const { client } = renderTable()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    fireEvent.click(screen.getByRole('button', { name: /new project/i }))
+    expect(await screen.findByText('Create project')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('stub-save'))
+
+    await waitFor(() => expect(screen.queryByText('Create project')).not.toBeInTheDocument())
+    expect(refreshMock).toHaveBeenCalled()
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects', 'detail', 12] })
+  })
+
+  it('closes the edit sheet on cancel without refreshing the grid', async () => {
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-edit'))
+    expect(await screen.findByText('Edit project')).toBeInTheDocument()
+
+    fireEvent.click(await screen.findByText('stub-cancel'))
+
+    await waitFor(() => expect(screen.queryByText('Edit project')).not.toBeInTheDocument())
+    expect(refreshMock).not.toHaveBeenCalled()
   })
 })

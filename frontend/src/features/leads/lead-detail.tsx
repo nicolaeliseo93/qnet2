@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Contact, Info, StickyNote } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
   DetailField,
@@ -35,6 +36,11 @@ export function LeadDetailView({ lead }: LeadDetailViewProps) {
         media={<DetailMonogram name={referentName} icon={<Contact />} />}
         title={referentName}
         subtitle={lead.campaign?.name}
+        badges={
+          <Badge variant={lead.is_converted ? 'default' : 'secondary'}>
+            {lead.is_converted ? t('leads.status.converted') : t('leads.status.notConverted')}
+          </Badge>
+        }
       />
 
       <DetailSection title={t('leads.form.sections.contact.title')} icon={<Contact />}>

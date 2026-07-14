@@ -21,8 +21,15 @@ function project(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
     source: null,
     business_function_id: null,
     business_function: null,
+    country_id: 1,
+    country: { id: 1, name: 'Italy' },
     state_id: null,
     state: null,
+    province_id: null,
+    province: null,
+    city_id: null,
+    city: null,
+    geo_scope: 'country',
     product_category_id: null,
     product_category: null,
     partner_id: null,
@@ -74,5 +81,39 @@ describe('ProjectDetailView — budget over-allocation warning (AC-044)', () => 
     )
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('ProjectDetailView — derived geo scope (spec 0027 AC-012)', () => {
+  it('shows the scope badge and the geography fields for a city-scoped project', () => {
+    render(
+      <ProjectDetailView
+        project={project({
+          country_id: 1,
+          country: { id: 1, name: 'Italy' },
+          state_id: 2,
+          state: { id: 2, name: 'Lombardy' },
+          province_id: 3,
+          province: { id: 3, name: 'Milan' },
+          city_id: 4,
+          city: { id: 4, name: 'Milan (city)' },
+          geo_scope: 'city',
+        })}
+      />,
+    )
+
+    // "City" is both the scope badge label and the geography field label
+    // (Geography section shows the full breakdown, the badge a compact
+    // summary): assert presence via count rather than a single unique match.
+    expect(screen.getAllByText('City').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Milan (city)').length).toBeGreaterThan(0)
+    expect(screen.getByText('Italy')).toBeInTheDocument()
+    expect(screen.getByText('Lombardy')).toBeInTheDocument()
+  })
+
+  it('shows no scope badge when the project has no geo at all (legacy row)', () => {
+    render(<ProjectDetailView project={project({ country_id: null, country: null, geo_scope: null })} />)
+
+    expect(screen.queryByText('National')).not.toBeInTheDocument()
   })
 })

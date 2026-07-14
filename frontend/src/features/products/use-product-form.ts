@@ -15,12 +15,16 @@ import {
 } from '@/features/products/product-schema'
 import type { ProductDetail, ProductFormMode } from '@/features/products/types'
 import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 
 /** Server-side generic field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = ['name', 'description', 'cost', 'price', 'category_id', 'product_type'] as const
 
 /** Default product type for a new product (SERVICE-only catalogue for now). */
 const DEFAULT_PRODUCT_TYPE = 'SERVICE' as const
+
+/** Domain key of the module statistics (mirrors `PRODUCTS_DOMAIN` in `products-table.tsx`). */
+const PRODUCTS_DOMAIN = 'products'
 
 export type ProductFormValues = CreateProductFormValues
 
@@ -38,6 +42,7 @@ interface UseProductFormArgs {
 export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const invalidateStats = useInvalidateModuleStats(PRODUCTS_DOMAIN)
   const [serverError, setServerError] = useState<string | null>(null)
 
   const isEdit = mode.type === 'edit'
@@ -97,12 +102,14 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
         const saved = await updateProduct(mode.product.id, buildUpdatePayload(values, mode.product))
         queryClient.setQueryData(['products', 'detail', mode.product.id], saved)
         toast.success(t('products.form.updated'))
+        invalidateStats()
         onSuccess(saved)
         return
       }
 
       const created = await createProduct(buildCreatePayload(values))
       toast.success(t('products.form.created'))
+      invalidateStats()
       onSuccess(created)
     } catch (error) {
       const handled = applyServerValidationErrors(error, form.setError, errorFields)

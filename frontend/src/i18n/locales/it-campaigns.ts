@@ -14,6 +14,11 @@ export const campaigns = {
     registry: 'Cliente',
     project_status: 'Stato',
     source: 'Fonte',
+    country: 'Nazione',
+    state: 'Regione',
+    province: 'Provincia',
+    city: 'Città',
+    geo_scope: 'Ambito geografico',
     start_date: 'Data inizio',
     end_date: 'Data fine',
     total_budget: 'Budget totale',
@@ -21,6 +26,8 @@ export const campaigns = {
     created_at: 'Creato il',
   },
   detail: {
+    title: 'Dettagli campagna',
+    subtitle: 'Vista di sola lettura della campagna selezionata.',
     loadError: 'Impossibile caricare la campagna. Riprova.',
     budget: 'Budget',
     linkedToProject: 'Collegata a un progetto',
@@ -43,9 +50,14 @@ export const campaigns = {
       },
       classification: {
         title: 'Classificazione',
-        description: 'Stato, funzione aziendale, regione e categoria prodotto.',
+        description: 'Stato, funzione aziendale e categoria prodotto.',
         descriptionLinked:
           'Sola lettura: ereditati dal progetto collegato. Scollega il progetto per impostarli tu stesso.',
+      },
+      geography: {
+        title: 'Geografia',
+        description:
+          'Nazione, regione, provincia e città. Un livello valorizzato dal progetto collegato viene ereditato e bloccato.',
       },
       planning: {
         title: 'Pianificazione e budget',
@@ -53,7 +65,8 @@ export const campaigns = {
       },
     },
     code: 'Codice',
-    codePlaceholder: 'assegnato al salvataggio',
+    codePlaceholder: 'Lascia vuoto per generarlo automaticamente',
+    codeMax: 'Il codice deve avere al massimo 32 caratteri.',
     name: 'Denominazione',
     nameRequired: 'La denominazione è obbligatoria.',
     nameMax: 'La denominazione deve avere al massimo 191 caratteri.',
@@ -71,9 +84,10 @@ export const campaigns = {
     businessFunctionSearch: 'Cerca funzioni aziendali…',
     businessFunctionRequired:
       'La funzione aziendale è obbligatoria quando la campagna non è collegata a un progetto.',
-    state: 'Regione',
-    stateSearch: 'Cerca regioni…',
-    stateRequired: 'La regione è obbligatoria quando la campagna non è collegata a un progetto.',
+    countryRequired: 'La nazione è obbligatoria quando il progetto collegato non ne fornisce una.',
+    provinceRequiresState: 'Seleziona una regione prima di una provincia.',
+    cityRequiresState: 'Seleziona una regione prima di una città.',
+    geoInheritedFromProject: 'Ereditato dal progetto collegato: i livelli corrispondenti sono bloccati.',
     productCategory: 'Categoria prodotto',
     productCategorySearch: 'Cerca categorie prodotto…',
     productCategoryRequired:

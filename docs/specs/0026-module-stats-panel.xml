@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0026" slug="module-stats-panel">
+
+  <title>Pannello statistiche di modulo, backend-driven e riusabile</title>
+
+  <goal>
+    Ogni modulo principale del gestionale espone un pannello statistiche apribile da un pulsante
+    accanto a "Nuovo {Modulo}". Il pannello e' UN SOLO componente frontend, generico: non conosce i
+    moduli. Il contenuto (quali KPI, quali grafici, in che ordine) e' deciso interamente dal backend.
+    Aggiungere statistiche a un modulo = 1 classe PHP + 1 riga di config. Zero modifiche al frontend.
+  </goal>
+
+  <scope>
+    <modules>
+      registries, referents, companies, operational-sites, company-sites, products,
+      campaigns, leads, business-functions, product-categories, users, projects
+    </modules>
+    <amendment date="2026-07-13">
+      PROGETTI era inizialmente FUORI SCOPE (in modifica in un'altra sessione). L'utente ha poi
+      richiesto esplicitamente di allinearlo agli altri moduli, quindi projects E' ORA IN SCOPE:
+      - aggiunta ProjectsStatsDefinition + riga in config/stats.php (l'architettura reggeva gia':
+        nessuna modifica al codice generico, esattamente come previsto);
+      - il vecchio pannello hardcoded (ProjectSummaryTiles, use-projects-summary, fetchProjectsSummary)
+        e' rimosso in quanto DEAD CODE, sostituito dal pannello generico;
+      - il toggle vista griglia/tabella resta, ma le statistiche NON dipendono piu' dalla vista:
+        cambiando vista cambia solo la griglia sottostante;
+      - il toggle vista e' allineato in altezza ai due bottoni accanto (statistiche + Nuovo Progetto).
+      CONSEGUENZA: AC-014 (sotto) e' SUPERATO e non piu' applicabile. L'endpoint backend
+      GET /projects/summary e ProjectSummaryController NON sono toccati (appartengono all'altra
+      sessione); se restano senza consumatori andranno rimossi da chi possiede quel modulo.
+    </amendment>
+  </scope>
+
+  <decisions>
+    <d id="D-1">Grafici: si aggiunge recharts (autorizzato esplicitamente dall'utente). Va caricato
+      SOLO in lazy (React.lazy) dentro il pannello, che a sua volta e' montato solo quando aperto:
+      il bundle iniziale di ogni pagina non deve crescere.</d>
+    <d id="D-2">Pannello chiuso di default. La preferenza aperto/chiuso e' persistita per modulo in
+      localStorage. La query parte SOLO alla prima apertura (enabled: isOpen) — nessuna richiesta
+      sulle pagine in cui l'utente tiene il pannello chiuso.</d>
+    <d id="D-3">Autorizzazione: si riusa {domain}.viewAny. Nessun nuovo permesso da sincronizzare.</d>
+    <d id="D-4">Le label sono CHIAVI i18n risolte dal frontend, esattamente come gia' fa il framework
+      tabellare (es. 'leads.columns.isConverted'). Il backend non restituisce mai testo tradotto.</d>
+  </decisions>
+
+  <architecture>
+    Replica del pattern gia' presente 4 volte nel repo (tables, authorization/meta, imports,
+    migrations): contratto → registry risolto dal container → mappa in config → un controller generico.
+
+    BACKEND
+      app/Stats/StatsDefinition.php          interfaccia
+      app/Stats/AbstractStatsDefinition.php  base: authorizeViewAny() = Gate::allows('viewAny', modelClass()) [fail-safe]
+      app/Stats/StatsRegistry.php            resolve(string $domain): StatsDefinition — legge config('stats.definitions'),
+                                             risolve via Container::make (DI), domain sconosciuto → ModelNotFoundException → 404
+      app/Stats/Widgets/                     builder tipizzati dei widget (StatWidget, DistributionWidget, TrendWidget)
+      app/Stats/<Domain>/<Domain>StatsDefinition.php   una per modulo (11)
+      config/stats.php                       'definitions' => ['leads' => LeadsStatsDefinition::class, ...]
+      app/Http/Controllers/Stats/StatsController.php   invokable, estende BaseApiController
+      routes/api.php                         Route::get('stats/{domain}', StatsController::class) accanto a meta/{resource},
+                                             dentro auth:sanctum + throttle:60,1
+
+    FRONTEND
+      components/ui/stat-card.tsx            GIA' ESISTENTE, riusato invariato
+      components/ui/stat-bar-list.tsx        nuovo widget UI: barre di distribuzione (SVG/CSS, no dep)
+      components/ui/stat-chart.tsx           nuovo: wrapper recharts, LAZY, per i widget 'trend'
+      features/stats/types.ts                tipi del contratto (discriminated union sul campo `type`)
+      features/stats/api.ts                  fetchModuleStats(domain) + moduleStatsQueryKey(domain)
+      features/stats/use-module-stats.ts     useQuery({ enabled: isOpen })
+      features/stats/use-stats-panel.ts      toggle + persistenza localStorage per dominio
+      features/stats/stats-widget.tsx        renderer: switch esaustivo sul tipo di widget
+      features/stats/module-stats-panel.tsx  IL pannello: griglia responsive, loading, empty, error
+      features/stats/stats-toggle-button.tsx il pulsante, da mettere nelle `actions` del PageHeader
+
+    Un nuovo tipo di widget in futuro = 1 case in stats-widget.tsx + 1 builder PHP. Il pannello,
+    l'hook, l'endpoint e le 11 definition NON cambiano (OCP).
+  </architecture>
+
+  <contract>
+    GET /api/stats/{domain}     auth:sanctum, throttle:60,1
+    403 se !Gate::allows('viewAny', model)   404 se {domain} non e' in config/stats.php
+
+    Envelope standard ok():
+    {
+      "success": true,
+      "message": "OK",
+      "data": {
+        "widgets": [ Widget, ... ]     // [] ammesso → il frontend mostra l'empty state
+      }
+    }
+
+    Widget = StatWidget | DistributionWidget | TrendWidget   (discriminante: "type")
+
+    StatWidget {
+      "type": "stat",
+      "key": "total",                        // univoco nel dominio
+      "label": "leads.stats.total",          // CHIAVE i18n (D-4)
+      "value": 128,                          // number | null  (null = dato non disponibile)
+      "format": "number"|"currency"|"percent",
+      "subtitle": { "key": "leads.stats.convertedSubtitle", "count": 42 } | null,
+      "icon": "users"                        // nome lucide da ALLOW-LIST frontend; sconosciuto → nessuna icona
+    }
+
+    DistributionWidget {
+      "type": "distribution",
+      "key": "by_source",
+      "label": "leads.stats.bySource",
+      "items": [ { "key": "web", "label": "Web", "value": 51, "color": "teal"|null } ],
+      "total": 128                            // denominatore delle percentuali (0 ammesso → 0%)
+    }
+    ATTENZIONE (causa di un bug reale, vedi AC-018): `color` NON e' un hex. E' un TOKEN di dominio
+    letto dalle lookup (es. project_statuses.color = "teal"|"slate"|"amber"|null). "slate"/"amber"
+    NON sono colori CSS validi: il frontend DEVE risolvere il token da allow-list e ricadere su un
+    default per i valori non riconosciuti, senza mai passare al CSS una stringa grezza dal DB.
+    `total` e' la popolazione piena e PUO' essere maggiore della somma degli items (top-N, o righe
+    prive di valore su quella dimensione): le percentuali si calcolano su `total`, non sulla somma.
+    NB: `label` degli items e' un valore di DOMINIO letto dal DB (nome fonte, nome stato), NON una
+    chiave i18n: si mostra cosi' com'e'. Solo il `label` del widget e' una chiave i18n.
+
+    TrendWidget {
+      "type": "trend",
+      "key": "created_trend",
+      "label": "leads.stats.trend",
+      "points": [ { "label": "2026-02", "value": 12 }, ... ],   // ultimi 12 mesi, mesi vuoti inclusi con 0
+      "format": "number"|"currency"
+    }
+
+    REGOLE DI CONTRATTO
+      - percent: value e' 0..100 gia' calcolato lato server (int|null). null quando il denominatore
+        e' 0 (mai "0%"), coerente con App\Support\ConversionRate gia' esistente.
+      - currency: value e' un numero (non stringa formattata); la valuta la formatta il frontend.
+      - Il frontend ignora silenziosamente un widget con "type" sconosciuto (forward-compatibility):
+        un backend piu' nuovo di un frontend deployato non rompe la pagina.
+  </contract>
+
+  <kpi-per-modulo>
+    Proposti sulle colonne REALI verificate nelle migrazioni. Ogni definition espone i widget elencati.
+
+    registries      stat: totale · stat: fornitori (%) · stat: fornitori qualificati (%)
+                    distribution: per agreement_status · distribution: per size_class · trend: nuovi per mese
+    referents       stat: totale · stat: interni · stat: esterni
+                    distribution: per referent_type · trend: nuovi per mese
+    companies       stat: totale · stat: con P.IVA (%) · trend: nuove per mese
+    operational-sites  stat: totale · distribution: per stato/regione (via addresses) · trend: nuove per mese
+    company-sites   stat: totale · stat: sedi di default · distribution: per company (top 10)
+    products        stat: totale · stat: prezzo medio (currency) · stat: margine medio (currency)
+                    distribution: per product_type · distribution: per categoria (top 10)
+    campaigns       stat: totale · stat: collegate a progetto · stat: budget totale (currency)
+                    stat: lead generati · distribution: per stato progetto · trend: nuove per mese
+    leads           stat: totale · stat: convertiti · stat: tasso conversione (percent)
+                    distribution: per fonte · distribution: per operatore (top 10) · trend: nuovi per mese
+    business-functions  stat: totale · stat: business unit · stat: business service
+                    distribution: utenti per funzione (top 10)
+    product-categories  stat: totale · stat: radice · distribution: prodotti per categoria (top 10)
+    users           stat: totale · stat: attivi · stat: disattivati
+                    distribution: per ruolo · distribution: per business function (top 10) · trend: assunzioni per mese
+
+    PERFORMANCE: ogni definition esegue query aggregate (COUNT/SUM/AVG + groupBy), MAI il caricamento
+    delle collection in memoria. Nessun N+1. I "top 10" sono LIMIT lato SQL, non slice PHP.
+  </kpi-per-modulo>
+
+  <acceptance-criteria>
+    <ac id="AC-001">GET /api/stats/{domain} risponde 200 con l'envelope {success,message,data.widgets}
+      per ognuno degli 11 domini in scope.</ac>
+    <ac id="AC-002">GET /api/stats/{domain} risponde 403 a un utente privo di {domain}.viewAny.</ac>
+    <ac id="AC-003">GET /api/stats/non-esistente risponde 404 (mai 500, mai leak del nome classe).</ac>
+    <ac id="AC-004">GET /api/stats/{domain} senza autenticazione risponde 401.</ac>
+    <ac id="AC-005">I valori dei widget sono corretti: su un dataset noto (factory) ogni KPI e'
+      asserito col valore atteso. Un percent con denominatore 0 e' null, non 0.</ac>
+    <ac id="AC-006">Il pulsante di toggle compare accanto a "Nuovo {Modulo}" in tutti gli 11 moduli,
+      con lo stesso aspetto, la stessa posizione e la stessa etichetta accessibile
+      (aria-expanded / aria-controls corretti).</ac>
+    <ac id="AC-007">Al primo caricamento il pannello e' chiuso e NESSUNA richiesta a /api/stats/* parte.
+      Alla prima apertura parte esattamente una richiesta.</ac>
+    <ac id="AC-008">La preferenza aperto/chiuso e' persistita per modulo: riaprendo la pagina il
+      pannello e' nello stato scelto (localStorage, chiave `stats-panel:{domain}`); un localStorage
+      indisponibile non genera crash (try/catch, come use-projects-view-preference).</ac>
+    <ac id="AC-009">Il pannello mostra tre stati distinti: skeleton in loading, messaggio di errore
+      (con possibilita' di riprovare) su errore, empty state se widgets e' [].</ac>
+    <ac id="AC-010">Layout responsive: 1 colonna a 375px, 2 a 768px, 4 (stat) / 2 (grafici) a 1024px+.
+      Nessuna scrollbar orizzontale, nessuna altezza fissa.</ac>
+    <ac id="AC-011">Il componente pannello e' UNO SOLO: nessuna copia per modulo. Aggiungere un modulo
+      alle statistiche non richiede alcuna modifica a file frontend condivisi (solo le chiavi i18n
+      del modulo).</ac>
+    <ac id="AC-012">Un widget con "type" sconosciuto viene ignorato senza rompere il rendering.</ac>
+    <ac id="AC-013">recharts e' caricato in lazy: non compare nel chunk iniziale delle pagine modulo.</ac>
+    <ac id="AC-014" status="superseded">SUPERATO dall'amendment 2026-07-13 (vedi <scope>): projects
+      e' ora IN SCOPE su richiesta esplicita dell'utente. Sostituito da AC-015/AC-016/AC-017.</ac>
+    <ac id="AC-015">GET /api/stats/projects risponde 200 con i widget del modulo (non piu' 404).</ac>
+    <ac id="AC-016">Nella pagina Progetti, cambiare vista griglia/tabella NON altera il pannello
+      statistiche (resta aperto/chiuso secondo la preferenza dell'utente): cambia solo la griglia.</ac>
+    <ac id="AC-017">Il vecchio pannello hardcoded di Progetti e' stato RIMOSSO (nessun
+      ProjectSummaryTiles, nessuna duplicazione): la pagina usa lo stesso pannello generico degli altri.</ac>
+    <ac id="AC-018">I colori degli item di una distribution possono essere TOKEN di dominio
+      ("teal", "slate", "amber") o null, non solo hex: il renderer non passa mai al CSS una stringa
+      arbitraria dal DB e ricade su un colore di default per i valori non riconosciuti.</ac>
+  </acceptance-criteria>
+
+  <definition-of-done>
+    Pest verde (nuovi test per StatsController + le 11 definition) · Vitest verde (pannello, toggle,
+    persistenza, widget renderer) · Pint pulito · ESLint pulito · tsc --noEmit pulito ·
+    zero dead code · docs/HANDOFF.md aggiornato.
+  </definition-of-done>
+
+</spec>

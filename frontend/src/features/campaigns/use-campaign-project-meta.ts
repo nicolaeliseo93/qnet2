@@ -1,5 +1,14 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { fetchProjectsForSelect, type ProjectForSelectMeta } from '@/features/projects/for-select-api'
+import type { ProjectGeoMeta } from '@/features/campaigns/campaign-geo'
+
+/**
+ * Widens `ProjectForSelectMeta` with its (spec 0027 D-5) `geo` block. FE-1
+ * dependency: `ProjectForSelectMeta` itself does not declare `geo` yet — see
+ * `campaign-geo.ts`'s `ProjectGeoMeta` doc. Kept optional so this lane
+ * type-checks and runs regardless of the other lane's landing order.
+ */
+export type ProjectMetaWithGeo = ProjectForSelectMeta & { geo?: ProjectGeoMeta }
 
 /**
  * Query key of a single project's `for-select` `meta` block, keyed by id.
@@ -12,7 +21,7 @@ export function campaignProjectMetaQueryKey(projectId: number | null) {
 }
 
 /** Fetches the single project's `for-select` item by id and extracts its `meta` block. */
-async function loadProjectMeta(projectId: number): Promise<ProjectForSelectMeta | null> {
+async function loadProjectMeta(projectId: number): Promise<ProjectMetaWithGeo | null> {
   const page = await fetchProjectsForSelect({ ids: [projectId] })
   return page.items[0]?.meta ?? null
 }
@@ -41,7 +50,7 @@ export function useCampaignProjectMeta(projectId: number | null) {
 export function fetchCampaignProjectMeta(
   queryClient: QueryClient,
   projectId: number,
-): Promise<ProjectForSelectMeta | null> {
+): Promise<ProjectMetaWithGeo | null> {
   return queryClient.fetchQuery({
     queryKey: campaignProjectMetaQueryKey(projectId),
     queryFn: () => loadProjectMeta(projectId),

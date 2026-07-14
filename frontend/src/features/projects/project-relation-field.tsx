@@ -7,12 +7,15 @@ import type { ForSelectItem } from '@/features/for-select/types'
 import type { ProjectFormValues } from '@/features/projects/use-project-form'
 import type { ProjectRelationRef } from '@/features/projects/types'
 
-/** The project's 6 optional single-relation fields, all sharing the exact same picker shape. */
+/**
+ * The project's 5 optional single-relation fields, all sharing the exact same
+ * picker shape. `state_id` is NOT one of them: it is one of the 4 geo cascade
+ * levels, rendered by `<GeoSelect>` in the Geography section (spec 0027).
+ */
 type ProjectRelationFieldName =
   | 'registry_id'
   | 'source_id'
   | 'business_function_id'
-  | 'state_id'
   | 'product_category_id'
   | 'partner_id'
 
@@ -33,9 +36,9 @@ function toForSelectItem(ref: ProjectRelationRef | null): ForSelectItem | null {
 }
 
 /**
- * One of the project's 6 optional single-relation pickers (registry, source,
- * business function, region, product category, partner): identical shape —
- * an `AsyncPaginatedSelect` inside `MetaField`, hydrated from the loaded
+ * One of the project's 5 optional single-relation pickers (registry, source,
+ * business function, product category, partner): identical shape — an
+ * `AsyncPaginatedSelect` inside `MetaField`, hydrated from the loaded
  * detail's `{id, name}` projection in edit mode. Extracted so
  * `ProjectFormBody` stays within the engineering size limits (spec 0023).
  */

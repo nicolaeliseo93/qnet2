@@ -16,6 +16,10 @@ import {
 } from '@/components/ui/sheet'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Can } from '@/features/auth/can'
+import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
+import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
+import { useStatsPanel } from '@/features/stats/use-stats-panel'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type {
@@ -57,6 +61,8 @@ function detailQueryKey(id: number) {
  */
 export function BusinessFunctionsTable() {
   const { t } = useTranslation()
+  const stats = useStatsPanel(BUSINESS_FUNCTIONS_DOMAIN)
+  const invalidateStats = useInvalidateModuleStats(BUSINESS_FUNCTIONS_DOMAIN)
   const queryClient = useQueryClient()
 
   const tableRef = useRef<TableViewHandle>(null)
@@ -75,6 +81,7 @@ export function BusinessFunctionsTable() {
         await deleteBusinessFunction(row.id)
         toast.success(t('businessFunctions.form.deleted'))
         refreshGrid()
+        invalidateStats()
       } catch (error) {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined
         toast.error(
@@ -86,7 +93,7 @@ export function BusinessFunctionsTable() {
         setDeletingId(null)
       }
     },
-    [refreshGrid, t],
+    [refreshGrid, t, invalidateStats],
   )
 
   const handleAction: RowActionHandler = useCallback(
@@ -126,23 +133,33 @@ export function BusinessFunctionsTable() {
     (businessFunction: BusinessFunctionDetail) => {
       closeSheet()
       refreshGrid()
+      invalidateStats()
       queryClient.invalidateQueries({ queryKey: detailQueryKey(businessFunction.id) })
     },
-    [closeSheet, refreshGrid, queryClient],
+    [closeSheet, refreshGrid, queryClient, invalidateStats],
   )
 
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
         actions={
-          <Can permission="business-functions.create">
-            <Button onClick={() => setSheet({ kind: 'create' })}>
-              <Plus aria-hidden="true" />
-              {t('businessFunctions.form.newBusinessFunction')}
-            </Button>
-          </Can>
+          <>
+            <StatsToggleButton
+              domain={BUSINESS_FUNCTIONS_DOMAIN}
+              isOpen={stats.isOpen}
+              onToggle={stats.toggle}
+            />
+            <Can permission="business-functions.create">
+              <Button onClick={() => setSheet({ kind: 'create' })}>
+                <Plus aria-hidden="true" />
+                {t('businessFunctions.form.newBusinessFunction')}
+              </Button>
+            </Can>
+          </>
         }
       />
+
+      <ModuleStatsPanel domain={BUSINESS_FUNCTIONS_DOMAIN} isOpen={stats.isOpen} />
 
       <TableView
         ref={tableRef}

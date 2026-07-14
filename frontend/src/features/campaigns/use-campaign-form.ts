@@ -18,6 +18,7 @@ import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-
 
 /** Server-side field names mapped onto the form for 422 handling. `total_budget` also carries BR-3's insufficient-budget message. */
 const SERVER_ERROR_FIELDS = [
+  'code',
   'name',
   'project_id',
   'description',
@@ -26,8 +27,11 @@ const SERVER_ERROR_FIELDS = [
   'partner_id',
   'project_status_id',
   'business_function_id',
-  'state_id',
   'product_category_id',
+  'country_id',
+  'state_id',
+  'province_id',
+  'city_id',
   'start_date',
   'end_date',
   'total_budget',
@@ -76,6 +80,7 @@ export function useCampaignForm({ mode, onSuccess }: UseCampaignFormArgs) {
     if (mode.type === 'edit') {
       const { campaign } = mode
       return {
+        code: campaign.code,
         project_id: campaign.project_id,
         name: campaign.name,
         description: campaign.description,
@@ -84,8 +89,12 @@ export function useCampaignForm({ mode, onSuccess }: UseCampaignFormArgs) {
         partner_id: campaign.partner_id,
         project_status_id: campaign.project_status_id,
         business_function_id: campaign.business_function_id,
-        state_id: campaign.state_id,
         product_category_id: campaign.product_category_id,
+        country_id: campaign.country_id,
+        state_id: campaign.state_id,
+        province_id: campaign.province_id,
+        city_id: campaign.city_id,
+        geo_locked_levels: campaign.geo_locked_levels,
         start_date: campaign.start_date ?? '',
         end_date: campaign.end_date ?? '',
         total_budget: campaign.total_budget === null ? null : Number(campaign.total_budget),
@@ -94,6 +103,7 @@ export function useCampaignForm({ mode, onSuccess }: UseCampaignFormArgs) {
       }
     }
     return {
+      code: '',
       project_id: null,
       name: '',
       description: null,
@@ -102,8 +112,12 @@ export function useCampaignForm({ mode, onSuccess }: UseCampaignFormArgs) {
       partner_id: null,
       project_status_id: null,
       business_function_id: null,
-      state_id: null,
       product_category_id: null,
+      country_id: null,
+      state_id: null,
+      province_id: null,
+      city_id: null,
+      geo_locked_levels: [],
       start_date: '',
       end_date: '',
       total_budget: null,

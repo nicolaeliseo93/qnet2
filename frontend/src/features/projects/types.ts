@@ -6,6 +6,7 @@
 
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
+import type { GeoScope } from '@/features/geo/geo-scope'
 
 /** Hydrated projection of a plain `{id, name}` relation (registry/source/business_function/state/product_category/partner). */
 export interface ProjectRelationRef {
@@ -41,8 +42,17 @@ export interface ProjectDetail {
   source: ProjectRelationRef | null
   business_function_id: number | null
   business_function: ProjectRelationRef | null
+  /** Geo cascade (spec 0027 BR-4): `country_id` is required server-side, the other three optional. */
+  country_id: number | null
+  country: ProjectRelationRef | null
   state_id: number | null
   state: ProjectRelationRef | null
+  province_id: number | null
+  province: ProjectRelationRef | null
+  city_id: number | null
+  city: ProjectRelationRef | null
+  /** Finest non-null geo level, derived server-side (spec 0027 D-2). Never re-derived here. */
+  geo_scope: GeoScope | null
   product_category_id: number | null
   product_category: ProjectRelationRef | null
   partner_id: number | null
@@ -72,17 +82,23 @@ export interface ProjectDetailWithPermissions extends ProjectDetail {
 }
 
 /**
- * Payload for POST /projects (create). `code` is NEVER part of this shape
- * (BR-1): it is server-generated and any client-submitted value is ignored.
+ * Payload for POST /projects (create). `code` is optional and manual
+ * (spec 0025): omitted or empty falls back to server-side sequential
+ * generation (`PRJ-xxxx`); PATCH never accepts it (immutable after create).
  */
 export interface CreateProjectPayload {
+  code?: string
   name: string
   project_status_id: number
   description?: string | null
   registry_id?: number | null
   source_id?: number | null
   business_function_id?: number | null
+  /** Geo cascade (spec 0027 BR-4): `country_id` is required on create. */
+  country_id?: number | null
   state_id?: number | null
+  province_id?: number | null
+  city_id?: number | null
   product_category_id?: number | null
   partner_id?: number | null
   start_date?: string | null
@@ -100,3 +116,46 @@ export type UpdateProjectPayload = Partial<CreateProjectPayload>
 export type ProjectFormMode =
   | { type: 'create' }
   | { type: 'edit'; project: ProjectDetailWithPermissions }
+
+/** Per-card action affordances, computed server-side with the Gate (spec 0026 BR-2). */
+export interface ProjectCardPermissions {
+  update: boolean
+  delete: boolean
+}
+
+/**
+ * Single project card as returned by `GET /projects` (spec 0026), the plain
+ * index endpoint powering the card grid. A different payload than
+ * `ProjectDetail`/the AG Grid `TableRow`: no relations besides `project_status`,
+ * plus the lead-conversion counters the table doesn't carry.
+ */
+export interface ProjectCard {
+  id: number
+  code: string
+  name: string
+  description: string | null
+  project_status: ProjectStatusRef | null
+  campaigns_count: number
+  leads_count: number
+  converted_leads_count: number
+  /** BR-1: `converted_leads_count / leads_count * 100`, rounded; `null` when `leads_count` is 0. */
+  conversion_rate: number | null
+  /** Finest non-null geo level, derived server-side (spec 0027 D-2). Never re-derived here. */
+  geo_scope: GeoScope | null
+  /** The `geo_scope` level's place name (e.g. "Milano"), ready-made so the card avoids a second request. */
+  geo_label: string | null
+  total_budget: string | null
+  allocated_budget: string
+  remaining_budget: string | null
+  start_date: string | null
+  end_date: string | null
+  can: ProjectCardPermissions
+}
+
+/** Query params accepted by `GET /projects` (spec 0026). */
+export interface ProjectCardListParams {
+  search?: string
+  offset?: number
+  limit?: number
+  project_status_id?: number
+}

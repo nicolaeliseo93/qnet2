@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0025-manual-code-and-modal-modules" status="approved" owner="nicola" date="2026-07-13">
+
+  <goal>
+    Due cambi indipendenti, decisi dall'utente, sui moduli Progetti/Campagne/Lead.
+
+    PARTE A — Codice manuale (projects, campaigns).
+    Oggi il `code` (PRJ-0001 / CMP-0001) e' esclusivamente server-generated e un `code` inviato
+    dal client viene scartato. Deve diventare SCRIVIBILE A MANO IN CREAZIONE: se l'utente
+    valorizza il campo, si usa quello; se lo lascia vuoto, si usa la generazione sequenziale
+    attuale, che resta invariata. In MODIFICA il code resta immutabile e read-only.
+
+    PARTE B — Modale (projects, campaigns, leads).
+    I tre moduli usano oggi solo pagine dedicate (spec 0022 parte A). Create, edit e detail
+    devono avvenire in MODALE (lo Sheet ridimensionabile gia' usato dagli altri 13 moduli).
+    Le rotte dedicate RESTANO, come deep-link condivisibile: non si cancellano pagine ne' rotte.
+  </goal>
+
+  <context>
+    Nomi VERIFICATI sul codice reale.
+
+    PARTE A — stato attuale:
+    - `backend/app/Services/Concerns/GeneratesSequentialCode.php` -> `nextSequentialCode($table, $column, $prefix)`.
+    - `ProjectService::create()` / `CampaignService::create()` assegnano `$model->code = $this->nextSequentialCode(...)`
+      dentro la `DB::transaction`, con `lockForUpdate()`. `code` NON e' in `#[Fillable]` (Project.php, Campaign.php).
+    - Colonna DB: `string('code', 32)->unique()` NOT NULL su entrambe le tabelle.
+    - `StoreProjectRequest` / `StoreCampaignRequest`: nessuna regola `code`.
+    - `ProjectsAuthorization` / `CampaignsAuthorization`: `code` NON e' un FieldDefinition di catalogo.
+    - Frontend: `code` assente dagli schema Zod; in `project-form-body.tsx` / `campaign-form-body.tsx`
+      e' un `<Input disabled readOnly value={original?.code ?? ''}>`.
+
+    LEVA ARCHITETTURALE (riuso, non nuovo meccanismo): la matrice di field-permission (spec 0004/0006)
+    esprime gia' "editabile / readonly" per campo, per attore E PER MODELLO (`fieldPermissionCeiling(User $actor, ?Model $model)`,
+    dove `$model === null` significa create). Dichiarando `code` come campo di catalogo editabile solo
+    quando `$model === null`, si ottengono gratis: (1) l'enforcement server-side (`EnforcesFieldPermissions`
+    rifiuta con 422 un `code` cambiato in update), (2) il gating dell'input in frontend, che legge gia'
+    `permissions.fields.<field>.editable`. Nessun flag ad-hoc.
+
+    PARTE B — stato attuale:
+    - Pattern modale canonico: `frontend/src/features/users/users-table.tsx` (SheetState
+      `{kind:'none'|'create'|'view'|'edit'}`, `SheetContent storageKey={`sheet-width:${DOMAIN}`}`,
+      `ViewXLoader` / `EditXLoader` che rifetchano il detail dentro lo sheet).
+    - `Sheet` ridimensionabile: `components/ui/sheet.tsx` + `hooks/use-resizable-width.ts` (spec 0022 parte B).
+    - projects/campaigns/leads `*-table.tsx` fanno oggi `navigate('/projects/new' | '/projects/:id' | '/projects/:id/edit')`.
+    - I componenti di detail (`project-detail.tsx`) e di form (`project-form.tsx`) sono gia' PRESENTATIONAL
+      e riusabili: la modale li monta cosi' come sono. Le pagine (`pages/project-*.tsx`) restano e li montano
+      anch'esse. Zero duplicazione di UI: cambia solo il punto di mount.
+  </context>
+
+  <contract>
+    <!-- PARTE A -->
+    POST /api/projects  — nuovo campo OPZIONALE nel body:
+      code: string|null, max 32, unique su projects.code.
+      Assente / null / stringa vuota -> il Service genera `PRJ-{seq:4}` come oggi.
+      Valorizzato -> viene persistito cosi' com'e' (nessuna normalizzazione, nessun prefisso imposto).
+      Duplicato -> 422 con errore sul campo `code`.
+    POST /api/campaigns — identico, con `CMP-{seq:4}` come fallback e unique su campaigns.code.
+
+    PATCH /api/projects/{id} e PATCH /api/campaigns/{id} — INVARIATI: `code` non e' accettato.
+      Un `code` DIVERSO da quello persistito inviato in update -> 422 `code: field not editable`
+      (via EnforcesFieldPermissions, perche' il ceiling e' readonly quando $model !== null).
+
+    permissions.fields.code (in ogni response con envelope permissions):
+      create ($model === null) + attore con `<resource>.create` -> { visible: true, editable: true, required: false }
+      update ($model !== null) o attore senza write                -> { visible: true, editable: false }
+
+    <!-- PARTE B -->
+    Nessun cambio di contratto API. Cambia solo il punto di mount in frontend.
+  </contract>
+
+  <acceptance-criteria>
+    <!-- PARTE A — backend -->
+    <ac id="AC-001">POST /api/projects senza `code` -> 201, code generato `PRJ-0001` (comportamento attuale invariato).</ac>
+    <ac id="AC-002">POST /api/projects con `code: "ACME-2026"` -> 201, il progetto persiste esattamente `ACME-2026`.</ac>
+    <ac id="AC-003">POST /api/projects con `code: ""` (stringa vuota) -> 201, code generato dal sistema (l'empty equivale ad assente).</ac>
+    <ac id="AC-004">POST /api/projects con un `code` gia' esistente -> 422, errore sul campo `code`.</ac>
+    <ac id="AC-005">POST /api/projects con `code` di 33+ caratteri -> 422 (max:32, la colonna e' varchar(32)).</ac>
+    <ac id="AC-006">Un code manuale non rompe la sequenza: creato manualmente `ACME-2026`, la create successiva
+      SENZA code genera comunque il prossimo `PRJ-xxxx` corretto (il generatore filtra su `like 'PRJ-%'`).</ac>
+    <ac id="AC-007">PATCH /api/projects/{id} con un `code` diverso -> 422 `code` non editabile; il code persistito non cambia.</ac>
+    <ac id="AC-008">AC-001..AC-007 valgono identici per campaigns (prefisso CMP).</ac>
+    <ac id="AC-009">Le response di projects/campaigns espongono `permissions.fields.code` come da contract
+      (editable in create, readonly in update).</ac>
+
+    <!-- PARTE A — frontend -->
+    <ac id="AC-010">In CREATE il campo Codice e' un input abilitato, opzionale, con placeholder che dichiara
+      il fallback ("lascia vuoto per generarlo automaticamente"); il payload include `code` solo se non vuoto.</ac>
+    <ac id="AC-011">In EDIT il campo Codice resta disabled/readOnly col valore persistito e il payload non lo include mai.</ac>
+    <ac id="AC-012">Un 422 sul campo `code` (duplicato) viene mostrato sul campo, non solo come toast.</ac>
+
+    <!-- PARTE B -->
+    <ac id="AC-020">Nella tabella Progetti la row-action `view` apre lo Sheet in sola lettura col
+      `ProjectDetailView`, `edit` apre lo Sheet col `ProjectForm` in modifica, e il bottone "Nuovo"
+      del PageHeader apre lo Sheet in creazione. Nessuna navigazione.</ac>
+    <ac id="AC-021">La delete resta com'e' (inline, conferma + toast + refresh della griglia).</ac>
+    <ac id="AC-022">Lo Sheet e' ridimensionabile e persiste la larghezza con `storageKey="sheet-width:projects"`
+      (rispettivamente `sheet-width:campaigns`, `sheet-width:leads`).</ac>
+    <ac id="AC-023">Su create/edit riusciti lo Sheet si chiude, la griglia si aggiorna e la query del detail
+      viene invalidata (nessun dato stantio).</ac>
+    <ac id="AC-024">AC-020..AC-023 valgono identici per campaigns e leads.</ac>
+    <ac id="AC-025">Le rotte `/projects/new`, `/projects/:id`, `/projects/:id/edit` (e le omologhe di campaigns
+      e leads) CONTINUANO a funzionare come deep-link: le pagine restano montate e non regrediscono.</ac>
+  </acceptance-criteria>
+
+  <non-goals>
+    - Il `code` dei Lead: non e' in scope (l'utente ha chiesto il code manuale solo per progetti e campagne).
+    - Cambiare il formato o l'algoritmo di generazione sequenziale (`nextSequentialCode` resta identico).
+    - Rendere il code editabile in update.
+    - Cancellare pagine o rotte dedicate di projects/campaigns/leads (decisione utente: restano come deep-link).
+    - Toccare registries / referents / products, che restano a pagina.
+  </non-goals>
+
+  <ownership>
+    Lane BE   -> backend/** (requests, DTO, services, authorization, test Pest).
+    Lane FE-1 -> frontend/src/features/{projects,campaigns}/{*-schema.ts,*-form-body.tsx,*-form-payload.ts,types.ts}
+                 + i18n locales projects/campaigns + i relativi test. (Parte A frontend)
+    Lane FE-2 -> frontend/src/features/{projects,campaigns,leads}/*-table.tsx + *-form.tsx + i relativi test. (Parte B)
+    File disgiunti: FE-1 non tocca i *-table.tsx / *-form.tsx, FE-2 non tocca schema/payload/form-body.
+  </ownership>
+
+</spec>

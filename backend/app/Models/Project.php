@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 /**
  * Project entity (spec 0023): may stand alone or own Campaigns, which then
@@ -28,7 +29,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'project_status_id',
     'source_id',
     'business_function_id',
+    'country_id',
     'state_id',
+    'province_id',
+    'city_id',
     'product_category_id',
     'partner_id',
     'start_date',
@@ -74,9 +78,24 @@ class Project extends BaseModel
         return $this->belongsTo(BusinessFunction::class);
     }
 
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
+    }
+
     public function state(): BelongsTo
     {
         return $this->belongsTo(State::class);
+    }
+
+    public function province(): BelongsTo
+    {
+        return $this->belongsTo(Province::class);
+    }
+
+    public function city(): BelongsTo
+    {
+        return $this->belongsTo(City::class);
     }
 
     public function productCategory(): BelongsTo
@@ -100,5 +119,16 @@ class Project extends BaseModel
     public function campaigns(): HasMany
     {
         return $this->hasMany(Campaign::class);
+    }
+
+    /**
+     * The leads reachable through this project's campaigns (spec 0026, D-4:
+     * no direct FK — a Project has no own leads, only through Campaign).
+     *
+     * @return HasManyThrough<Lead, Campaign, $this>
+     */
+    public function leads(): HasManyThrough
+    {
+        return $this->hasManyThrough(Lead::class, Campaign::class);
     }
 }

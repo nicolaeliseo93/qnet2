@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\DataObjects\Campaigns\CreateCampaignData;
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
-use App\Models\Country;
 use App\Models\ProductCategory;
 use App\Models\Project;
 use App\Models\ProjectStatus;
@@ -14,6 +13,7 @@ use App\Models\Registry;
 use App\Models\Source;
 use App\Models\State;
 use App\Services\CampaignService;
+use Database\Seeders\Concerns\SeedsItalianGeo;
 use Faker\Factory as FakerFactory;
 use Faker\Generator;
 use Illuminate\Database\Seeder;
@@ -34,6 +34,14 @@ use Illuminate\Support\Collection;
  * by construction — CampaignService::create() still runs the real guard, so
  * any seeding mistake here fails loudly rather than silently violating it.
  *
+ * Geo (spec 0027, BR-5): `SeedsItalianGeo::refineGeo()` fills a linked
+ * campaign's geo with ONLY the levels its project leaves empty (never one
+ * the project already fills — that stays absent, exactly what BR-5 requires),
+ * alternating deterministically with "no refinement at all" so both outcomes
+ * are visible in the demo data. Standalone campaigns get their own full,
+ * BR-4-coherent tuple via `geoTuple()`, cycling the same four scope depths as
+ * DemoProjectSeeder.
+ *
  * Depends on DemoProjectSeeder (linked campaigns) plus the same
  * classification lookups it uses (standalone campaigns need their own
  * project-status/business-function/state/product-category). Idempotent:
@@ -42,9 +50,9 @@ use Illuminate\Support\Collection;
  */
 class DemoCampaignSeeder extends Seeder
 {
-    private const int STANDALONE_CAMPAIGNS = 8;
+    use SeedsItalianGeo;
 
-    private const int STATE_SAMPLE = 20;
+    private const int STANDALONE_CAMPAIGNS = 8;
 
     public function __construct(private readonly CampaignService $campaigns) {}
 
@@ -109,6 +117,8 @@ class DemoCampaignSeeder extends Seeder
                     $partnerId = $partners[($index + $slot + 1) % $partners->count()]->id;
                 }
 
+                $geo = $this->refineGeo($project, $index * 10 + $slot);
+
                 $this->createCampaign($faker, [
                     'project_id' => $project->id,
                     'name' => $faker->unique()->bs(),
@@ -116,6 +126,10 @@ class DemoCampaignSeeder extends Seeder
                     'source_id' => $project->source_id,
                     'partner_id' => $partnerId,
                     'total_budget' => $budget,
+                    'country_id' => $geo['country_id'] ?? null,
+                    'state_id' => $geo['state_id'] ?? null,
+                    'province_id' => $geo['province_id'] ?? null,
+                    'city_id' => $geo['city_id'] ?? null,
                 ]);
             }
         }
@@ -174,6 +188,8 @@ class DemoCampaignSeeder extends Seeder
         Collection $partners,
     ): void {
         for ($index = 0; $index < self::STANDALONE_CAMPAIGNS; $index++) {
+            $geo = $this->geoTuple($states, $index);
+
             $this->createCampaign($faker, [
                 'project_id' => null,
                 'name' => $faker->unique()->bs(),
@@ -182,7 +198,10 @@ class DemoCampaignSeeder extends Seeder
                 'partner_id' => $this->pick($partners, $index)?->id,
                 'project_status_id' => $statuses[$index % $statuses->count()]->id,
                 'business_function_id' => $businessFunctions[$index % $businessFunctions->count()]->id,
-                'state_id' => $states[$index % $states->count()]->id,
+                'country_id' => $geo['country_id'],
+                'state_id' => $geo['state_id'],
+                'province_id' => $geo['province_id'],
+                'city_id' => $geo['city_id'],
                 'product_category_id' => $productCategories[$index % $productCategories->count()]->id,
                 'total_budget' => $faker->boolean(75) ? $faker->randomFloat(2, 500, 60000) : null,
             ]);
@@ -206,6 +225,7 @@ class DemoCampaignSeeder extends Seeder
             : null;
 
         $data = new CreateCampaignData(
+            code: null,
             projectId: $overrides['project_id'] ?? null,
             name: $overrides['name'],
             description: $faker->boolean(50) ? $faker->sentence() : null,
@@ -220,6 +240,9 @@ class DemoCampaignSeeder extends Seeder
             endDate: $endDate?->format('Y-m-d'),
             totalBudget: $overrides['total_budget'] ?? null,
             targetLead: $faker->boolean(75) ? $faker->numberBetween(1, 150) : null,
+            countryId: $overrides['country_id'] ?? null,
+            provinceId: $overrides['province_id'] ?? null,
+            cityId: $overrides['city_id'] ?? null,
         );
 
         $this->campaigns->create($data);
@@ -234,21 +257,5 @@ class DemoCampaignSeeder extends Seeder
     private function pick(Collection $items, int $index): mixed
     {
         return $items->isNotEmpty() ? $items[$index % $items->count()] : null;
-    }
-
-    /**
-     * Italy's regions, mirroring DemoProjectSeeder::italianStates().
-     *
-     * @return Collection<int, State>
-     */
-    private function italianStates(): Collection
-    {
-        $italy = Country::query()->where('iso2', 'IT')->first();
-
-        if ($italy === null) {
-            return State::query()->inRandomOrder()->limit(self::STATE_SAMPLE)->get();
-        }
-
-        return State::query()->where('country_id', $italy->id)->orderBy('name')->get();
     }
 }

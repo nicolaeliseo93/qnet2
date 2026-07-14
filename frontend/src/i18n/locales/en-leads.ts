@@ -17,8 +17,14 @@ export const leads = {
     created_at: 'Created at',
   },
   detail: {
+    title: 'Lead details',
+    subtitle: 'Read-only view of the selected lead.',
     loadError: 'Unable to load the lead. Please try again.',
     unknownReferent: 'Unknown contact',
+  },
+  status: {
+    converted: 'Converted',
+    notConverted: 'Not converted',
   },
   form: {
     newLead: 'New lead',
@@ -52,6 +58,7 @@ export const leads = {
     sourceSearch: 'Search sources…',
     operator: 'Operator',
     operatorSearch: 'Search operators…',
+    isConverted: 'Converted lead',
     notes: 'Notes',
     notesMax: 'Notes must be at most 5000 characters.',
     selectPlaceholder: 'Select…',

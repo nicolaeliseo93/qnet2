@@ -15,16 +15,24 @@ import {
 } from '@/features/projects/project-schema'
 import type { ProjectDetail, ProjectFormMode } from '@/features/projects/types'
 import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
+
+/** Domain key of the module statistics (mirrors `PROJECTS_DOMAIN` in `projects-table.tsx`). */
+const PROJECTS_DOMAIN = 'projects'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = [
+  'code',
   'name',
   'project_status_id',
   'description',
   'registry_id',
   'source_id',
   'business_function_id',
+  'country_id',
   'state_id',
+  'province_id',
+  'city_id',
   'product_category_id',
   'partner_id',
   'start_date',
@@ -49,6 +57,7 @@ interface UseProjectFormArgs {
 export function useProjectForm({ mode, onSuccess }: UseProjectFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const invalidateStats = useInvalidateModuleStats(PROJECTS_DOMAIN)
   const [serverError, setServerError] = useState<string | null>(null)
 
   const isEdit = mode.type === 'edit'
@@ -74,13 +83,17 @@ export function useProjectForm({ mode, onSuccess }: UseProjectFormArgs) {
     if (mode.type === 'edit') {
       const { project } = mode
       return {
+        code: project.code,
         name: project.name,
         description: project.description,
         registry_id: project.registry_id,
         project_status_id: project.project_status_id,
         source_id: project.source_id,
         business_function_id: project.business_function_id,
+        country_id: project.country_id,
         state_id: project.state_id,
+        province_id: project.province_id,
+        city_id: project.city_id,
         product_category_id: project.product_category_id,
         partner_id: project.partner_id,
         start_date: project.start_date ?? '',
@@ -91,13 +104,17 @@ export function useProjectForm({ mode, onSuccess }: UseProjectFormArgs) {
       }
     }
     return {
+      code: '',
       name: '',
       description: null,
       registry_id: null,
       project_status_id: null,
       source_id: null,
       business_function_id: null,
+      country_id: null,
       state_id: null,
+      province_id: null,
+      city_id: null,
       product_category_id: null,
       partner_id: null,
       start_date: '',
@@ -124,12 +141,14 @@ export function useProjectForm({ mode, onSuccess }: UseProjectFormArgs) {
         const saved = await updateProject(mode.project.id, buildUpdatePayload(values, mode.project))
         queryClient.setQueryData(projectDetailQueryKey(mode.project.id), saved)
         toast.success(t('projects.form.updated'))
+        invalidateStats()
         onSuccess(saved)
         return
       }
 
       const created = await createProject(buildCreatePayload(values))
       toast.success(t('projects.form.created'))
+      invalidateStats()
       onSuccess(created)
     } catch (error) {
       if (!applyServerValidationErrors(error, form.setError, errorFields)) {

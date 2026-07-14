@@ -7,6 +7,7 @@ import {
   useProvinces,
   useStates,
 } from '@/features/geo/use-geo'
+import type { GeoScope } from '@/features/geo/geo-scope'
 
 /** The cascading geo selection, all ids nullable until chosen. */
 export interface GeoValue {
@@ -16,10 +17,19 @@ export interface GeoValue {
   city_id: number | null
 }
 
+/** Stable empty default (no level locked), hoisted so it never changes identity across renders. */
+const NO_LOCKED_LEVELS: ReadonlyArray<GeoScope> = []
+
 interface GeoSelectProps {
   value: GeoValue
   onChange: (value: GeoValue) => void
   disabled?: boolean
+  /**
+   * Levels owned by a linked parent entity (spec 0027 BR-5): rendered
+   * disabled, value still shown, independently of whether their own parent
+   * level is chosen. Defaults to none, the pre-existing behaviour.
+   */
+  lockedLevels?: ReadonlyArray<GeoScope>
 }
 
 interface GeoOption {
@@ -119,10 +129,19 @@ function GeoField({
  * province). This keeps every country reachable.
  *
  * This component must NOT depend on any feature domain (e.g. personal-data): it
- * only speaks the generic `GeoValue` contract.
+ * only speaks the generic `GeoValue`/`GeoScope` contract.
  */
-export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps) {
+export function GeoSelect({
+  value,
+  onChange,
+  disabled = false,
+  lockedLevels = NO_LOCKED_LEVELS,
+}: GeoSelectProps) {
   const { t } = useTranslation()
+  const countryLocked = lockedLevels.includes('country')
+  const stateLocked = lockedLevels.includes('state')
+  const provinceLocked = lockedLevels.includes('province')
+  const cityLocked = lockedLevels.includes('city')
 
   // Cities are capped server-side, so their list is narrowed by a server search
   // term rather than filtered client-side like the other levels.
@@ -172,7 +191,7 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         options={countries.data ?? []}
         isPending={countries.isPending}
         isError={countries.isError}
-        disabled={disabled}
+        disabled={disabled || countryLocked}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
         retryLabel={t('geo.retry')}
@@ -189,7 +208,7 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         options={states.data ?? []}
         isPending={states.isPending}
         isError={states.isError}
-        disabled={disabled || value.country_id == null}
+        disabled={disabled || stateLocked || value.country_id == null}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
         retryLabel={t('geo.retry')}
@@ -206,7 +225,7 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         options={provinces.data ?? []}
         isPending={provinces.isPending}
         isError={provinces.isError}
-        disabled={disabled || value.state_id == null}
+        disabled={disabled || provinceLocked || value.state_id == null}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
         retryLabel={t('geo.retry')}
@@ -223,7 +242,7 @@ export function GeoSelect({ value, onChange, disabled = false }: GeoSelectProps)
         options={cityOptions}
         isPending={cities.isPending}
         isError={cities.isError}
-        disabled={disabled || value.state_id == null}
+        disabled={disabled || cityLocked || value.state_id == null}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
         retryLabel={t('geo.retry')}

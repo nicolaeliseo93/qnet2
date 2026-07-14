@@ -1,0 +1,59 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Stats\ProductCategories;
+
+use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Stats\AbstractStatsDefinition;
+use App\Stats\Support\Aggregates;
+use App\Stats\Widgets\Widget;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Statistics panel of the `product-categories` module (spec 0026): the size
+ * and shape of the tree (roots) plus how the catalogue distributes over it.
+ */
+class ProductCategoriesStatsDefinition extends AbstractStatsDefinition
+{
+    private const string PRODUCTS_TABLE = 'products';
+
+    public function domain(): string
+    {
+        return 'product-categories';
+    }
+
+    public function modelClass(): string
+    {
+        return ProductCategory::class;
+    }
+
+    /**
+     * @return array<int, Widget>
+     */
+    public function widgets(): array
+    {
+        return [
+            $this->stat('total', $this->totalRows(), icon: 'folder-tree'),
+            $this->stat(
+                key: 'root_categories',
+                value: ProductCategory::query()->whereNull('parent_id')->count(),
+                icon: 'layers',
+            ),
+            $this->distribution(
+                key: 'by_products',
+                items: Aggregates::topRelated(
+                    query: DB::table(self::PRODUCTS_TABLE),
+                    foreignKey: self::PRODUCTS_TABLE.'.category_id',
+                    relatedTable: 'product_categories',
+                    labelColumn: 'name',
+                    limit: self::TOP_LIMIT,
+                ),
+                // Denominator: the catalogue, not the categories — each bar is
+                // the share of products that sit in that category.
+                total: Product::query()->count(),
+            ),
+        ];
+    }
+}

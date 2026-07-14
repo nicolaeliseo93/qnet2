@@ -94,8 +94,7 @@ function switchTab(name: string) {
   fireEvent.mouseDown(screen.getByRole('tab', { name: new RegExp(`^${name}`) }))
 }
 
-function wrapper() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function wrapper(client: QueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
       <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
@@ -269,5 +268,23 @@ describe('ReferentForm — create/edit (AC-020, AC-021, AC-022)', () => {
     const [id, payload] = updateReferentMock.mock.calls[0]
     expect(id).toBe(7)
     expect(payload).toEqual({ notes: 'Updated note' })
+  })
+
+  it('invalidates the referents module statistics after a successful save (spec 0026)', async () => {
+    createReferentMock.mockResolvedValue(referent())
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    render(
+      <ReferentForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper(client) },
+    )
+
+    fireEvent.change(screen.getByLabelText(/^First name/), { target: { value: 'Ada' } })
+    fireEvent.change(screen.getByLabelText(/^Last name/), { target: { value: 'Lovelace' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(createReferentMock).toHaveBeenCalledTimes(1))
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['stats', 'referents'] })
   })
 })

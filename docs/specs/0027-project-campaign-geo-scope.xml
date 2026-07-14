@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0027" title="Geographic scope (country / state / province / city) on projects and campaigns" status="approved">
+
+  <context>
+    Projects and campaigns already carry a single geo column, `state_id` (FK `states` = the Italian
+    "regione"). On campaigns it is currently one of the four BR-2 "derived" fields: when the campaign
+    is linked to a project it is `prohibited` on write and read through from the project.
+
+    The user wants a full address-style geo cascade on both entities, identical to the rest of the
+    codebase (companies, operational sites, registries): Country -> State -> Province -> City, driven
+    by the existing `<GeoSelect>` component and the existing `/api/geo/*` endpoints (ADR 0010 / 0014).
+    No new geo tables, no new geo endpoints.
+
+    The purpose is a derived SCOPE: a project/campaign whose city is empty is regional; one whose
+    state is empty is national. That scope is what the user reads on the card/detail/table.
+
+    Two deviations from the existing address pattern are deliberate and approved:
+    - The four FKs live ON the `projects` / `campaigns` tables (like the existing `state_id`), NOT on
+      the polymorphic `addresses` table. These entities have a scope, not a postal address: no line1,
+      no postal code, no coordinates.
+    - The hierarchy IS validated server-side (state belongs to country, city belongs to state, ...).
+      The address pattern validates only `exists` per column; here an inconsistent tuple would corrupt
+      the derived scope, so consistency is enforced.
+  </context>
+
+  <decisions>
+    <d id="D-1">Four levels, reusing the existing cascade verbatim: `country_id`, `state_id` (already
+      present), `province_id`, `city_id`. Same `Rule::exists` targets, same `<GeoSelect>` component,
+      same `/api/geo/*` endpoints. The province stays optional (many countries have none) exactly as
+      in `GeoSelect`: the city depends on the STATE, not on the province.</d>
+
+    <d id="D-2">The scope is DERIVED, never persisted. Single source of truth:
+      `App\Enums\GeoScopeLevel::for(?int $countryId, ?int $stateId, ?int $provinceId, ?int $cityId)`
+      returns the finest non-null level, or null when no geo at all. Emitted by the resources as
+      `geo_scope`. Do not re-derive this rule anywhere else.</d>
+
+    <d id="D-3">`state_id` LEAVES the campaign BR-2 derived group. BR-2 stays untouched on the three
+      non-geo fields (`project_status_id`, `business_function_id`, `product_category_id`): still
+      prohibited when linked, still read through from the project. Geo now follows BR-5 (refinement).
+      The existing BR-2 tests that assert `state_id` is prohibited/derived MUST be rewritten — the
+      requirement changed, this is not test tampering.</d>
+
+    <d id="D-4">The DB columns stay nullable. `country_id` is required at the FormRequest layer only:
+      existing rows (demo data, legacy) have no country and must not break the migration.</d>
+
+    <d id="D-5">The campaign form learns which levels are locked from the project's `for-select`
+      `meta` block (the mechanism that already prefills the campaign from the project and feeds the
+      remaining-budget hint). No new endpoint.</d>
+  </decisions>
+
+  <business_rules>
+    <br id="BR-4">GEO HIERARCHY (projects and campaigns alike). `country_id` is REQUIRED.
+      `state_id`, `province_id`, `city_id` are optional, but a level may only be set when its parent
+      is set AND it must actually belong to that parent:
+        - `state.country_id` == `country_id`
+        - `province.state_id` == `state_id`  (province requires state)
+        - `city.state_id` == `state_id`      (city requires state, NOT province)
+        - when `province_id` is also set: `city.province_id` == `province_id`
+      A violation is a 422 on the offending field. Enforced by a shared FormRequest concern
+      (`ValidatesGeoHierarchy`), used by all four requests.</br>
+
+    <br id="BR-5">CAMPAIGN GEO REFINEMENT (replaces BR-2 for `state_id`). A campaign linked to a
+      project INHERITS every geo level the project has filled, and may REFINE the levels the project
+      left empty.
+        - A level the project has filled is `prohibited` on the campaign (422 if sent). It is not
+          stored on the campaign row: that column stays NULL.
+        - A level the project left empty is writable on the campaign.
+        - The campaign's EFFECTIVE geo is the merge `campaign.<level> ?? project.<level>`, and BR-4
+          is validated against that merged tuple (a campaign under an Italian project cannot pick a
+          French region).
+      Example: project = (Italy, -, -, -) -> the campaign shows Italy locked and may pick
+      Lombardia / Milano (province) / Milano (city). Its scope is City, the project's is Country.
+      A standalone campaign (no project) is just BR-4.</br>
+
+    <br id="BR-6">Every geo field is subject to the field-permission ceiling of its authorization
+      resource (spec 0004), like every other field. `country_id` is declared mandatory on
+      `ProjectsAuthorization` only: on campaigns it may legitimately arrive by inheritance.</br>
+  </business_rules>
+
+  <data_contract>
+
+    <migration>
+      ADD to `projects` and to `campaigns` (both), nullable + nullOnDelete, mirroring the existing
+      `state_id` column:
+        country_id  FK -> countries.id
+        province_id FK -> provinces.id
+        city_id     FK -> cities.id
+      Index `country_id` and `city_id` on both tables (the table module filters on them).
+      `state_id` already exists on both: DO NOT recreate it.
+      Reversible `down()`.
+    </migration>
+
+    <endpoint method="POST|PATCH" uri="/api/projects[/{project}]">
+      <request>
+        country_id:  int   REQUIRED on POST, exists:countries,id   (PATCH: sometimes|required)
+        state_id:    int?  nullable, exists:states,id
+        province_id: int?  nullable, exists:provinces,id
+        city_id:     int?  nullable, exists:cities,id
+        // BR-4 enforced across the four
+      </request>
+      <response status="422">BR-4 violation, on the offending field key</response>
+    </endpoint>
+
+    <endpoint method="GET" uri="/api/projects/{project}" name="ProjectResource">
+      <change>
+        Adds, next to the existing state_id/state:
+          country_id: int|null,  country:  {id,name}|null   // whenLoaded
+          province_id: int|null, province: {id,name}|null
+          city_id: int|null,     city:     {id,name}|null
+          geo_scope: "country"|"state"|"province"|"city"|null   // D-2, derived
+      </change>
+    </endpoint>
+
+    <endpoint method="GET" uri="/api/projects" name="ProjectCardResource">
+      <change>Adds `geo_scope` and `geo_label: string|null` (the finest non-null level's NAME, e.g.
+        "Milano" / "Lombardia" / "Italia") so the card can render one compact scope badge without a
+        second request.</change>
+    </endpoint>
+
+    <endpoint method="GET" uri="/api/projects/for-select" name="ProjectForSelectResource">
+      <change>The existing `meta` block gains the project's own geo, used by the campaign form to
+        know which levels to lock and prefill (D-5):
+          meta.geo: {
+            country:  {id,name}|null,
+            state:    {id,name}|null,
+            province: {id,name}|null,
+            city:     {id,name}|null
+          }
+        `meta` keeps everything it already carries (remaining budget, the BR-2 defaults).
+      </change>
+    </endpoint>
+
+    <endpoint method="POST|PATCH" uri="/api/campaigns[/{campaign}]">
+      <request>
+        country_id / state_id / province_id / city_id
+        - standalone (project_id null): country_id REQUIRED, rest nullable, BR-4.
+        - linked: each level the project filled is `prohibited`; the rest are nullable and validated
+          by BR-4 against the MERGED tuple (BR-5). `country_id` is required only if the project has
+          no country (legacy rows).
+      </request>
+      <response status="422">sending a level the project already fills; or a BR-4 violation on the
+        merged tuple</response>
+    </endpoint>
+
+    <endpoint method="GET" uri="/api/campaigns/{campaign}" name="CampaignResource">
+      <change>
+        Emits the EFFECTIVE (merged) geo — same shape as ProjectResource:
+          country_id/country, state_id/state, province_id/province, city_id/city, geo_scope
+        plus:
+          geo_locked_levels: ("country"|"state"|"province"|"city")[]   // levels owned by the project
+        `derived_from_project` keeps its current meaning and now covers ONLY the three non-geo BR-2
+        fields (D-3).
+      </change>
+    </endpoint>
+
+    <tables>
+      projects: three new derived columns `country`, `province`, `city` (alongside the existing
+        `state`), declared in ProjectColumnCatalog through the existing `derivedColumn()` helper and
+        wired into `DERIVED_RELATIONS` — filterable/sortable like the other derived columns.
+      campaigns: the same four geo columns are DISPLAY-ONLY (mapRow renders the merged value; not
+        sortable, not filterable) — the merged value is not a plain join. Same pragmatic choice
+        already made for the campaign `project_status` column.
+      both: a `geo_scope` column, DISPLAY-ONLY (derived, not persisted: no sort, no filter).
+    </tables>
+
+    <frontend>
+      GeoSelect gains ONE optional prop, defaulting to today's behaviour (no existing caller changes):
+        lockedLevels?: ReadonlyArray<'country'|'state'|'province'|'city'>
+      A locked level renders its select disabled (value shown, not editable). All existing
+      geo-select tests must keep passing.
+
+      Scope badge: `features/geo/geo-scope-badge.tsx` (+ `geo-scope.ts` for the label helper), reused
+      by project detail, project card and campaign detail. i18n keys `geo.scope.{country,state,
+      province,city}` in the shared geo namespace.
+
+      Zod: the four fields on both schemas, with a `withGeoHierarchyRule` superRefine mirroring BR-4's
+      parent-before-child part (the ancestry check is server-side only — the client has no such data).
+      On campaigns, `country_id` is required only when the project does not provide it.
+      Payload builders omit the locked levels entirely (exactly as they already omit the BR-2 fields).
+    </frontend>
+  </data_contract>
+
+  <acceptance_criteria>
+    <ac id="AC-001">POST /api/projects without `country_id` -> 422. With country only -> 201 and
+      `geo_scope: "country"`.</ac>
+    <ac id="AC-002">POST /api/projects with a `state_id` that does not belong to `country_id` -> 422
+      on `state_id`. Same for province/state and city/state and city/province (BR-4).</ac>
+    <ac id="AC-003">A project with city set exposes `geo_scope: "city"`; with province but no city ->
+      "province"; with state but no province/city -> "state"; with country only -> "country".</ac>
+    <ac id="AC-004">A campaign linked to a project that has only a country: sending `country_id` ->
+      422 (prohibited); sending `state_id` + `city_id` consistent with that country -> 201, the
+      campaign row stores state/city and country stays NULL, and CampaignResource returns the merged
+      country + `geo_locked_levels: ["country"]` and `geo_scope: "city"` (BR-5).</ac>
+    <ac id="AC-005">A campaign linked to an Italian project cannot pick a state of another country ->
+      422 (BR-4 on the merged tuple).</ac>
+    <ac id="AC-006">A campaign linked to a project that fills every level: all four are prohibited;
+      `geo_locked_levels` lists all four.</ac>
+    <ac id="AC-007">A standalone campaign behaves exactly like a project (AC-001..AC-003).</ac>
+    <ac id="AC-008">BR-2 still holds for `project_status_id`, `business_function_id`,
+      `product_category_id` on a linked campaign (prohibited + read-through). `state_id` is no longer
+      part of that group.</ac>
+    <ac id="AC-009">Both `/meta` endpoints list the four geo fields with the field-permission ceiling
+      applied; a user with `country_id` not editable gets 422 when sending it (BR-6).</ac>
+    <ac id="AC-010">Project form: a Geography section with the 4-level cascade; changing the country
+      resets state/province/city (existing GeoSelect behaviour); saving without a country blocks with
+      the required message.</ac>
+    <ac id="AC-011">Campaign form: picking a project locks and prefills the levels the project fills
+      (disabled selects showing the inherited values) and leaves the rest editable; unlinking the
+      project unlocks all four.</ac>
+    <ac id="AC-012">Project detail, project card and campaign detail each show the derived scope badge
+      (Nazionale / Regionale / Provinciale / Cittadino) with the corresponding place name.</ac>
+    <ac id="AC-013">The projects table exposes country/state/province/city as filterable+sortable
+      derived columns; the campaigns table shows the merged geo values; both show a `geo_scope`
+      display-only column.</ac>
+  </acceptance_criteria>
+
+  <out_of_scope>
+    - Any change to the `addresses` table or to the geo lookup endpoints.
+    - Filtering/sorting the derived `geo_scope` column server-side.
+    - Geo filters on the projects card grid (`GET /api/projects` query params) — not requested.
+  </out_of_scope>
+
+</spec>

@@ -6,6 +6,7 @@ use App\Http\Controllers\Geo\StateForSelectController;
 use App\Http\Controllers\ProductCategories\ProductCategoryForSelectController;
 use App\Http\Controllers\Projects\ProjectController;
 use App\Http\Controllers\Projects\ProjectForSelectController;
+use App\Http\Controllers\Projects\ProjectSummaryController;
 use App\Http\Controllers\ProjectStatuses\ProjectStatusController;
 use App\Http\Controllers\ProjectStatuses\ProjectStatusForSelectController;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +57,17 @@ Route::middleware('throttle:60,1')->group(function () {
     // bound wildcard. Gated by projects.viewAny server-side in
     // ProjectForSelectController.
     Route::get('projects/for-select', ProjectForSelectController::class);
+
+    // KPI tiles for the card grid (spec 0025, D-3). Declared ABOVE
+    // projects/{project} so the literal `summary` segment wins over the
+    // bound wildcard. Gated by projects.viewAny server-side in
+    // ProjectSummaryController.
+    Route::get('projects/summary', ProjectSummaryController::class);
+
+    // Card-grid list (spec 0025, D-3): a plain index, distinct from the
+    // table framework — the card payload differs from the table row
+    // payload. Gated by projects.viewAny server-side in ProjectController.
+    Route::get('projects', [ProjectController::class, 'index']);
 
     Route::get('projects/{project}', [ProjectController::class, 'show']);
     Route::post('projects', [ProjectController::class, 'store']);

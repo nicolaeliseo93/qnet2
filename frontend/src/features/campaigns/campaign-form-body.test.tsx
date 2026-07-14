@@ -1,18 +1,22 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import axios, { AxiosError } from 'axios'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { campaigns as campaignsEn } from '@/i18n/locales/en-campaigns'
 import { CampaignForm } from '@/features/campaigns/campaign-form'
 import type { CampaignDetailWithPermissions } from '@/features/campaigns/types'
-import type { ResourceMeta } from '@/features/authorization/types'
+import type { FieldPermission, ResourceMeta } from '@/features/authorization/types'
 
 /**
- * AC-046: the `code` field is always read-only — empty with a placeholder on
- * create, showing the saved value (still disabled) on edit. The AC-042/
- * AC-043/BR-3 Project-link behaviour lives in `campaign-project-link.test.tsx`
- * (split for file-size, engineering.md §6).
+ * Spec 0025 PARTE A: `code` is a manual, optional field — an enabled input
+ * with a fallback-declaring placeholder in create (AC-010), disabled/
+ * read-only showing the saved value in edit (AC-011), with a 422 duplicate
+ * mapped onto the field itself (AC-012). Gated by the `code` field
+ * permission, exactly like every other `MetaField`-driven control. The
+ * AC-042/AC-043/BR-3 Project-link behaviour lives in
+ * `campaign-project-link.test.tsx` (split for file-size, engineering.md §6).
  */
 
 const createCampaignMock = vi.fn()
@@ -42,16 +46,74 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
-/** Stubs every single-select field, keyed by its accessible trigger label (mirrors `project-form-body.test.tsx`). */
+/**
+ * Stubs every single-select field, keyed by its accessible trigger label
+ * (mirrors `project-form-body.test.tsx`). Renders as a button calling
+ * `onChange` so standalone-create tests can satisfy the 3 required
+ * classification selects without a real dropdown.
+ */
 vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
     value,
+    onChange,
     labels,
   }: {
     value: number | null
+    onChange: (value: number) => void
     labels: { triggerLabel: string }
-  }) => <div data-testid={`select-${labels.triggerLabel}`}>{value ?? ''}</div>,
+  }) => (
+    <button type="button" data-testid={`select-${labels.triggerLabel}`} onClick={() => onChange(3)}>
+      {value ?? ''}
+    </button>
+  ),
 }))
+
+/**
+ * `GeoSelect` is covered by its own test (`features/geo/geo-select.test.tsx`);
+ * here a controllable stub lets standalone-create tests satisfy the
+ * `country_id` required field (spec 0027 BR-4) without a real cascade.
+ */
+vi.mock('@/features/geo/geo-select', () => ({
+  GeoSelect: ({
+    value,
+    onChange,
+  }: {
+    value: { country_id: number | null }
+    onChange: (next: {
+      country_id: number | null
+      state_id: number | null
+      province_id: number | null
+      city_id: number | null
+    }) => void
+  }) => (
+    <button
+      type="button"
+      data-testid="geo-select"
+      data-country={value.country_id ?? ''}
+      onClick={() => onChange({ country_id: 10, state_id: null, province_id: null, city_id: null })}
+    >
+      geo
+    </button>
+  ),
+}))
+
+/** `code` field-permission fixtures mirroring the spec 0025 contract's create/update ceilings. */
+const CODE_EDITABLE_PERMISSION: FieldPermission = {
+  visible: true,
+  hidden: false,
+  editable: true,
+  readonly: false,
+  required: false,
+  disabled: false,
+}
+const CODE_READONLY_PERMISSION: FieldPermission = {
+  visible: true,
+  hidden: false,
+  editable: false,
+  readonly: true,
+  required: false,
+  disabled: false,
+}
 
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -81,8 +143,16 @@ function campaign(
     project_status: { id: 1, name: 'Active', color: 'blue' },
     business_function_id: 2,
     business_function: { id: 2, name: 'Sales' },
+    country_id: 10,
+    country: { id: 10, name: 'Italy' },
     state_id: 3,
     state: { id: 3, name: 'Lombardy' },
+    province_id: null,
+    province: null,
+    city_id: null,
+    city: null,
+    geo_scope: 'state',
+    geo_locked_levels: [],
     product_category_id: 4,
     product_category: { id: 4, name: 'Hardware' },
     start_date: null,
@@ -109,27 +179,131 @@ beforeEach(() => {
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
 })
 
-describe('CampaignForm — code is read-only (AC-046)', () => {
-  it('shows an empty, disabled code field with the "assigned on save" placeholder on create', async () => {
+describe('CampaignForm — manual code (spec 0025 AC-010/AC-011)', () => {
+  it('shows an enabled, empty code field with the fallback-declaring placeholder on create (AC-010)', async () => {
+    fetchResourceMetaMock.mockResolvedValue({
+      fields: [],
+      permissions: { ...FULL_PERMISSIONS, fields: { code: CODE_EDITABLE_PERMISSION } },
+    })
+
     render(<CampaignForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
 
     await waitFor(() => expect(screen.getByLabelText('Code')).toBeInTheDocument())
     const code = screen.getByLabelText('Code') as HTMLInputElement
-    expect(code).toBeDisabled()
+    expect(code).not.toBeDisabled()
     expect(code.value).toBe('')
-    expect(code.placeholder).toBe('assigned on save')
+    expect(code.placeholder).toBe('Leave empty to generate it automatically')
   })
 
-  it('shows the saved code value, disabled, on edit', () => {
+  it('sends the trimmed manual code on create submit when the user fills it (AC-010)', async () => {
+    fetchResourceMetaMock.mockResolvedValue({
+      fields: [],
+      permissions: { ...FULL_PERMISSIONS, fields: { code: CODE_EDITABLE_PERMISSION } },
+    })
+    createCampaignMock.mockResolvedValue(campaign({ code: 'ACME-2026' }))
+
+    render(<CampaignForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Code')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: '  ACME-2026  ' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Spring push' } })
+    fireEvent.click(screen.getByTestId('select-Status'))
+    fireEvent.click(screen.getByTestId('select-Business function'))
+    fireEvent.click(screen.getByTestId('select-Product category'))
+    fireEvent.click(screen.getByTestId('geo-select'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(createCampaignMock).toHaveBeenCalledTimes(1))
+    const payload = createCampaignMock.mock.calls[0][0] as Record<string, unknown>
+    expect(payload.code).toBe('ACME-2026')
+  })
+
+  it('shows the saved code value, disabled/read-only, on edit (AC-011)', () => {
     render(
-      <CampaignForm mode={{ type: 'edit', campaign: campaign() }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      <CampaignForm
+        mode={{
+          type: 'edit',
+          campaign: campaign({ permissions: { ...FULL_PERMISSIONS, fields: { code: CODE_READONLY_PERMISSION } } }),
+        }}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
       { wrapper: wrapper() },
     )
 
     const code = screen.getByLabelText('Code') as HTMLInputElement
     expect(code).toBeDisabled()
+    expect(code).toHaveAttribute('readonly')
     expect(code.value).toBe('CMP-0009')
+  })
+
+  it('never sends a code field on edit submit (AC-011)', async () => {
+    updateCampaignMock.mockResolvedValue(campaign({ name: 'Renamed push' }))
+
+    render(
+      <CampaignForm
+        mode={{
+          type: 'edit',
+          campaign: campaign({ permissions: { ...FULL_PERMISSIONS, fields: { code: CODE_READONLY_PERMISSION } } }),
+        }}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    )
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed push' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(updateCampaignMock).toHaveBeenCalledTimes(1))
+    const payload = updateCampaignMock.mock.calls[0][1] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('code')
+    expect(payload).toEqual({ name: 'Renamed push' })
+  })
+})
+
+describe('CampaignForm — 422 duplicate code (spec 0025 AC-012)', () => {
+  it('maps a 422 on the code field onto the field itself, not only a toast', async () => {
+    fetchResourceMetaMock.mockResolvedValue({
+      fields: [],
+      permissions: { ...FULL_PERMISSIONS, fields: { code: CODE_EDITABLE_PERMISSION } },
+    })
+    createCampaignMock.mockRejectedValue(
+      new AxiosError(
+        'Unprocessable',
+        '422',
+        undefined,
+        undefined,
+        {
+          status: 422,
+          data: { success: false, message: 'Validation failed.', errors: { code: ['The code has already been taken.'] } },
+        } as never,
+      ),
+    )
+    vi.spyOn(axios, 'isAxiosError').mockReturnValue(true)
+
+    render(<CampaignForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Code')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'ACME-2026' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Spring push' } })
+    fireEvent.click(screen.getByTestId('select-Status'))
+    fireEvent.click(screen.getByTestId('select-Business function'))
+    fireEvent.click(screen.getByTestId('select-Product category'))
+    fireEvent.click(screen.getByTestId('geo-select'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('The code has already been taken.')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('Something went wrong. Please try again.')).not.toBeInTheDocument()
+
+    vi.restoreAllMocks()
   })
 })

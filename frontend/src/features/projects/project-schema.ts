@@ -8,15 +8,23 @@ import {
 /**
  * Zod schema for the project create/edit form, built as a factory so
  * validation messages are localized via the i18n `t` function. The shape
- * mirrors the frozen backend contract (spec 0023) 1:1. `code` is intentionally
- * absent (BR-1, AC-046): it is never part of the form values or the payload.
+ * mirrors the frozen backend contract (spec 0025) 1:1. `code` is optional and
+ * manual-entry-in-create-only: the create payload includes it when valued,
+ * the update payload never includes it (spec 0025 PARTE A).
  */
 
 /** Backend `name` column limit (`max:191`). */
 const NAME_MAX_LENGTH = 191
 
+/** Backend `code` column limit (`string(32)`). */
+const CODE_MAX_LENGTH = 32
+
 function baseFields(t: TFunction) {
   return {
+    // Optional manual code (spec 0025): trimmed, max 32; empty/unset falls
+    // back to server-side sequential generation. Read-only in edit (enforced
+    // by the field-permission ceiling, not by the schema).
+    code: z.string().trim().max(CODE_MAX_LENGTH, t('projects.form.codeMax')).optional(),
     name: z
       .string()
       .min(1, t('projects.form.nameRequired'))
@@ -30,7 +38,12 @@ function baseFields(t: TFunction) {
     project_status_id: z.number().nullable(),
     source_id: z.number().nullable(),
     business_function_id: z.number().nullable(),
+    // Geo cascade (spec 0027 BR-4): `country_id` required (withGeoHierarchyRule
+    // below), the other three optional but parent-gated.
+    country_id: z.number().nullable(),
     state_id: z.number().nullable(),
+    province_id: z.number().nullable(),
+    city_id: z.number().nullable(),
     product_category_id: z.number().nullable(),
     partner_id: z.number().nullable(),
     // Date inputs hold `''` for "empty" (never `null`), converted to `null` at
@@ -70,10 +83,48 @@ function withRequiredStatusRule<T extends z.ZodTypeAny>(schema: T, t: TFunction)
   })
 }
 
+/**
+ * BR-4 (client-side part only): `country_id` is required, and a child level
+ * may only be set when its parent is. The parent-BELONGS-TO-ancestor check
+ * (e.g. state actually belongs to country) is server-side only — the client
+ * has no such data (spec 0027 frontend note).
+ */
+function withGeoHierarchyRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
+  return schema.superRefine((values, ctx) => {
+    const record = values as {
+      country_id: number | null
+      state_id: number | null
+      province_id: number | null
+      city_id: number | null
+    }
+    if (record.country_id === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['country_id'],
+        message: t('projects.form.countryRequired'),
+      })
+    }
+    if (record.province_id !== null && record.state_id === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['province_id'],
+        message: t('projects.form.provinceRequiresState'),
+      })
+    }
+    if (record.city_id !== null && record.state_id === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['city_id'],
+        message: t('projects.form.cityRequiresState'),
+      })
+    }
+  })
+}
+
 /** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
 export function buildCreateProjectSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
   const object = z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
-  return withRequiredStatusRule(withDateOrderRule(object, t), t)
+  return withGeoHierarchyRule(withRequiredStatusRule(withDateOrderRule(object, t), t), t)
 }
 
 /** Edit schema (same shape; partial PATCH is computed by the caller). */

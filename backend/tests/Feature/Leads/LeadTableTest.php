@@ -56,7 +56,7 @@ it('GET /api/tables/leads/columns: 200 with the declared columns, 403 without vi
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['referent', 'campaign', 'operational_site', 'source', 'operator', 'created_at']);
+    expect($ids)->toBe(['referent', 'campaign', 'operational_site', 'source', 'operator', 'is_converted', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['operational_site']['sortable'])->toBeTrue()
@@ -112,6 +112,22 @@ it('rows: sorting by operational_site orders leads by the site\'s primary addres
 
     $ids = collect($response->json('items'))->pluck('id');
     expect($ids->all())->toBe([$leadAlpha->id, $leadZulu->id]);
+});
+
+it('rows: a set filter on is_converted returns only matching leads (AC-006)', function () {
+    $actor = leadUserWith(['viewAny']);
+    $converted = Lead::factory()->create(['is_converted' => true]);
+    Lead::factory()->create(['is_converted' => false]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/leads/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['is_converted' => ['filterType' => 'set', 'values' => [true]]],
+    ])->assertOk();
+
+    $ids = collect($response->json('items'))->pluck('id');
+    expect($ids->all())->toBe([$converted->id]);
 });
 
 it('rows: an unknown sort column is rejected (allow-list, no raw SQL escape hatch)', function () {

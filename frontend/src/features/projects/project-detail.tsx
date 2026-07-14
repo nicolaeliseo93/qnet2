@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, CalendarRange, FolderKanban, Tags, Wallet } from 'lucide-react'
+import { AlertTriangle, CalendarRange, FolderKanban, Globe, Tags, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import {
@@ -14,6 +14,8 @@ import {
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
 import { formatDecimal } from '@/features/products/column-renderers'
+import { GeoScopeBadge } from '@/features/geo/geo-scope-badge'
+import { geoScopePlaceName } from '@/features/geo/geo-scope'
 import type { ProjectDetail as ProjectDetailData } from '@/features/projects/types'
 
 interface ProjectDetailViewProps {
@@ -64,6 +66,14 @@ function BudgetOverallocationWarning({ remainingBudget }: { remainingBudget: str
 export function ProjectDetailView({ project }: ProjectDetailViewProps) {
   const { t, i18n } = useTranslation()
   const createdAt = formatDateTime(project.created_at)
+  const geoPlaceName = project.geo_scope
+    ? geoScopePlaceName(project.geo_scope, {
+        country: project.country,
+        state: project.state,
+        province: project.province,
+        city: project.city,
+      })
+    : null
 
   return (
     <DetailPanel>
@@ -72,9 +82,14 @@ export function ProjectDetailView({ project }: ProjectDetailViewProps) {
         title={project.name}
         subtitle={project.code}
         badges={
-          <Badge variant="secondary">
-            {t('projects.detail.campaignsCount', { count: project.campaigns_count })}
-          </Badge>
+          <>
+            <Badge variant="secondary">
+              {t('projects.detail.campaignsCount', { count: project.campaigns_count })}
+            </Badge>
+            {project.geo_scope && geoPlaceName ? (
+              <GeoScopeBadge scope={project.geo_scope} place={geoPlaceName} />
+            ) : null}
+          </>
         }
       />
 
@@ -100,15 +115,21 @@ export function ProjectDetailView({ project }: ProjectDetailViewProps) {
           <DetailField label={t('projects.form.businessFunction')}>
             {project.business_function?.name ?? <DetailEmpty />}
           </DetailField>
-          <DetailField label={t('projects.form.state')}>
-            {project.state?.name ?? <DetailEmpty />}
-          </DetailField>
           <DetailField label={t('projects.form.productCategory')}>
             {project.product_category?.name ?? <DetailEmpty />}
           </DetailField>
           <DetailField label={t('projects.form.partner')}>
             {project.partner?.name ?? <DetailEmpty />}
           </DetailField>
+        </DetailGrid>
+      </DetailSection>
+
+      <DetailSection title={t('projects.form.sections.geography.title')} icon={<Globe />}>
+        <DetailGrid>
+          <DetailField label={t('geo.country')}>{project.country?.name ?? <DetailEmpty />}</DetailField>
+          <DetailField label={t('geo.state')}>{project.state?.name ?? <DetailEmpty />}</DetailField>
+          <DetailField label={t('geo.province')}>{project.province?.name ?? <DetailEmpty />}</DetailField>
+          <DetailField label={t('geo.city')}>{project.city?.name ?? <DetailEmpty />}</DetailField>
         </DetailGrid>
       </DetailSection>
 

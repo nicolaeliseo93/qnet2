@@ -20,6 +20,7 @@ import type {
   PersonalDataFieldPermission,
 } from '@/features/personal-data/types'
 import type { ForSelectItem } from '@/features/for-select/types'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { createRegistry, registryDetailQueryKey, updateRegistry } from '@/features/registries/api'
 import { buildCreatePayload, buildUpdatePayload } from '@/features/registries/registry-form-payload'
 import {
@@ -55,6 +56,9 @@ const SERVER_ERROR_FIELDS = [
   'size_class',
   'employee_count',
 ] as const
+
+/** Domain key of the module statistics (mirrors `REGISTRIES_DOMAIN` in `registries-table.tsx`). */
+const REGISTRIES_DOMAIN = 'registries'
 
 export type RegistryFormValues = CreateRegistryFormValues & UpdateRegistryFormValues
 
@@ -97,6 +101,7 @@ function personalDataServerErrorMessage(error: unknown): string | null {
 export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const invalidateStats = useInvalidateModuleStats(REGISTRIES_DOMAIN)
   const { field: fieldPermission } = useResourcePermissions()
 
   // Adapts the resolved authorization metadata to the personal-data domain's
@@ -269,6 +274,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
           { ...saved, permissions: mode.registry.permissions },
         )
         toast.success(t('registries.form.updated'))
+        invalidateStats()
         onSuccess(saved)
         return
       }
@@ -277,6 +283,7 @@ export function useRegistryForm({ mode, onSuccess }: UseRegistryFormArgs) {
         buildCreatePayload(values, profileDraft, personalDataFieldPermission),
       )
       toast.success(t('registries.form.created'))
+      invalidateStats()
       onSuccess(created)
     } catch (error) {
       const mappedScalar = applyServerValidationErrors(error, form.setError, [

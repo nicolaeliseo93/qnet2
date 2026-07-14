@@ -7,6 +7,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { Can } from '@/features/auth/can'
+import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
+import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
+import { useStatsPanel } from '@/features/stats/use-stats-panel'
+import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
@@ -26,6 +30,8 @@ const REFERENTS_DOMAIN = 'referents'
  */
 export function ReferentsTable() {
   const { t } = useTranslation()
+  const stats = useStatsPanel(REFERENTS_DOMAIN)
+  const invalidateStats = useInvalidateModuleStats(REFERENTS_DOMAIN)
   const navigate = useNavigate()
 
   const tableRef = useRef<TableViewHandle>(null)
@@ -40,6 +46,7 @@ export function ReferentsTable() {
         await deleteReferent(row.id)
         toast.success(t('referents.form.deleted'))
         refreshGrid()
+        invalidateStats()
       } catch (error) {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined
         toast.error(
@@ -49,7 +56,7 @@ export function ReferentsTable() {
         setDeletingId(null)
       }
     },
-    [refreshGrid, t],
+    [refreshGrid, t, invalidateStats],
   )
 
   const handleAction: RowActionHandler = useCallback(
@@ -77,14 +84,23 @@ export function ReferentsTable() {
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
         actions={
-          <Can permission="referents.create">
-            <Button onClick={() => void navigate('/referents/new')}>
-              <Plus aria-hidden="true" />
-              {t('referents.form.newReferent')}
-            </Button>
-          </Can>
+          <>
+            <StatsToggleButton
+              domain={REFERENTS_DOMAIN}
+              isOpen={stats.isOpen}
+              onToggle={stats.toggle}
+            />
+            <Can permission="referents.create">
+              <Button onClick={() => void navigate('/referents/new')}>
+                <Plus aria-hidden="true" />
+                {t('referents.form.newReferent')}
+              </Button>
+            </Can>
+          </>
         }
       />
+
+      <ModuleStatsPanel domain={REFERENTS_DOMAIN} isOpen={stats.isOpen} />
 
       <TableView
         ref={tableRef}

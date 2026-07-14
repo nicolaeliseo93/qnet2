@@ -47,6 +47,8 @@ export interface LeadDetail {
   source: LeadRelationRef | null
   operator_id: number | null
   operator: LeadRelationRef | null
+  /** BR-3/spec 0026: single boolean conversion flag, subject to the leads field-permission ceiling. */
+  is_converted: boolean
   notes: string | null
   created_at: string
   updated_at: string
@@ -71,6 +73,8 @@ export interface CreateLeadPayload {
   operational_site_id?: number | null
   source_id?: number | null
   operator_id?: number | null
+  /** Optional; the backend defaults it to `false` on create (spec 0026). */
+  is_converted?: boolean
   notes?: string | null
 }
 

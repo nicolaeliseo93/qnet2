@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Country;
 use App\Models\Project;
 use App\Models\ProjectStatus;
 use App\Models\User;
@@ -53,8 +54,8 @@ it('GET /api/tables/projects/columns: 200 with the declared columns, 403 without
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
         'code', 'name', 'registry', 'project_status', 'source', 'business_function',
-        'state', 'product_category', 'partner', 'start_date', 'end_date',
-        'total_budget', 'target_lead', 'created_at',
+        'country', 'state', 'province', 'city', 'geo_scope', 'product_category', 'partner',
+        'start_date', 'end_date', 'total_budget', 'target_lead', 'created_at',
     ]);
 
     $columns = collect($data['columns'])->keyBy('id');
@@ -63,6 +64,67 @@ it('GET /api/tables/projects/columns: 200 with the declared columns, 403 without
         ->and($columns['registry']['sortable'])->toBeTrue()
         ->and($columns['source']['sortable'])->toBeFalse()
         ->and($columns['source']['filterType'])->toBe('set');
+});
+
+// ---------------------------------------------------------------------------
+// AC-013 — country/province/city are filterable derived columns (spec 0027);
+// geo_scope is DISPLAY-ONLY (D-2)
+// ---------------------------------------------------------------------------
+
+it('country/province/city are filterable derived columns, geo_scope is display-only (AC-013)', function () {
+    $actor = projectUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $data = $this->getJson('/api/tables/projects/columns')->assertOk()->json('data');
+    $columns = collect($data['columns'])->keyBy('id');
+
+    foreach (['country', 'province', 'city'] as $columnId) {
+        expect($columns[$columnId]['filterable'])->toBeTrue()
+            ->and($columns[$columnId]['filterType'])->toBe('set');
+    }
+
+    expect($columns['geo_scope']['sortable'])->toBeFalse()
+        ->and($columns['geo_scope']['filterable'])->toBeFalse();
+
+    $filterColumnIds = collect($data['filters'])->pluck('columnId')->all();
+    expect($filterColumnIds)->not->toContain('geo_scope');
+});
+
+it('the derived country set filter matches by the related country name (AC-013)', function () {
+    $actor = projectUserWith(['viewAny']);
+    $geo = geoChain();
+    $otherCountry = Country::factory()->create(['name' => 'Francia']);
+    Project::factory()->create(['name' => 'Progetto IT', 'country_id' => $geo['country']->id]);
+    Project::factory()->create(['name' => 'Projet FR', 'country_id' => $otherCountry->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/projects/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['country' => ['filterType' => 'set', 'values' => ['Italia']]],
+    ])->assertOk();
+
+    $names = collect($response->json('items'))->pluck('name');
+    expect($names->all())->toBe(['Progetto IT']);
+});
+
+it('rows: geo_scope reflects the finest non-null geo level (AC-013, D-2)', function () {
+    $actor = projectUserWith(['viewAny']);
+    $geo = geoChain();
+    $project = Project::factory()->create([
+        'name' => 'City Scoped',
+        'country_id' => $geo['country']->id,
+        'state_id' => $geo['state']->id,
+        'province_id' => $geo['province']->id,
+        'city_id' => $geo['city']->id,
+    ]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/projects/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $project->id);
+
+    expect($row['geo_scope'])->toBe('city')
+        ->and($row['city'])->toMatchArray(['id' => $geo['city']->id, 'name' => 'Milano']);
 });
 
 // ---------------------------------------------------------------------------
