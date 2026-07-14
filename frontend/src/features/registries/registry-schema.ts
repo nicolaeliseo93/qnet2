@@ -16,7 +16,7 @@ import {
  * registry's display `name` is derived server-side from that card.
  */
 
-/** Backend `manager_ids` limit (`max:4`, spec 0020 constraint). */
+/** Backend limit on FILLED manager slots (`max:4`, spec 0020 constraint). */
 const MAX_MANAGERS = 4
 
 /** Backend `agreement_notes` column limit (`max:5000`). */
@@ -39,7 +39,14 @@ function baseFields(t: TFunction) {
     // Multiselect relations (for-select standard): ids, full-replace.
     sector_ids: z.array(z.number()),
     referent_ids: z.array(z.number()),
-    manager_ids: z.array(z.number()).max(MAX_MANAGERS, t('registries.form.managersMax')),
+    // Ordered, gap-aware "G.A. n" manager slots: index+1 = G.A. number, `null`
+    // = an intentionally empty slot. At most MAX_MANAGERS filled.
+    manager_slots: z
+      .array(z.number().nullable())
+      .refine(
+        (slots) => slots.filter((slot) => slot !== null).length <= MAX_MANAGERS,
+        t('registries.form.managersMax'),
+      ),
     // Empty string = "no VAT group", mapped to `null` at the payload boundary.
     vat_group: z.string().max(VAT_GROUP_MAX_LENGTH, t('registries.form.vatGroupMax')),
     is_supplier: z.boolean(),

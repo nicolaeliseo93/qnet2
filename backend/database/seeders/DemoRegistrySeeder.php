@@ -137,7 +137,13 @@ class DemoRegistrySeeder extends Seeder
         }
 
         if ($managers->isNotEmpty()) {
-            $registry->managers()->sync($this->roundRobinIds($managers, $index, 3));
+            // Assign 1-based "G.A. n" positions in round-robin order.
+            $registry->managers()->sync(
+                collect($this->roundRobinIds($managers, $index, 3))
+                    ->values()
+                    ->mapWithKeys(fn (int $id, int $slot): array => [$id => ['position' => $slot + 1]])
+                    ->all(),
+            );
         }
     }
 

@@ -45,11 +45,15 @@ class RegistryService
         'personalData.addresses.province',
         'personalData.addresses.state',
         'personalData.addresses.country',
-        // Cards of the three responsible people so the detail can render their
-        // PRIMARY contacts beside the name (RegistryResource filters is_primary).
+        // Cards of the responsible people + the referent/manager lists so the
+        // detail can render their PRIMARY contacts beside the name
+        // (RegistryResource filters is_primary). Managers keep their pivot
+        // `position` order (the belongsToMany already orderByPivot).
         'supervisor.personalData.contacts',
         'commercial.personalData.contacts',
         'reporter.personalData.contacts',
+        'referents.personalData.contacts',
+        'managers.personalData.contacts',
     ];
 
     public function __construct(private readonly RegistryProfileWriter $profileWriter) {}
@@ -219,9 +223,31 @@ class RegistryService
             $registry->referents()->sync($data->referentIds);
         }
 
-        if ($data->hasManagerIds()) {
-            $registry->managers()->sync($data->managerIds);
+        if ($data->hasManagerSlots()) {
+            $registry->managers()->sync($this->managerSyncMap($data->managerSlots));
         }
+    }
+
+    /**
+     * Turn the ordered, gap-aware manager slots into the pivot sync map
+     * `[userId => ['position' => n]]`: index+1 is the 1-based "G.A. n" position,
+     * null slots are skipped so a removed manager leaves a persistent gap. The
+     * FormRequest guarantees no duplicate user across slots.
+     *
+     * @param  array<int, int|null>  $slots
+     * @return array<int, array{position: int}>
+     */
+    private function managerSyncMap(array $slots): array
+    {
+        $map = [];
+
+        foreach (array_values($slots) as $index => $userId) {
+            if ($userId !== null) {
+                $map[$userId] = ['position' => $index + 1];
+            }
+        }
+
+        return $map;
     }
 
     /**

@@ -29,9 +29,14 @@ class RegistryResource extends JsonResource
             'sector_ids' => $this->sectors->pluck('id')->all(),
             'sectors' => $this->toRefList($this->sectors),
             'referent_ids' => $this->referents->pluck('id')->all(),
-            'referents' => $this->toRefList($this->referents),
+            // Referents as person cards (name + primary contacts).
+            'referents' => $this->toPersonRefList($this->referents),
             'manager_ids' => $this->managers->pluck('id')->all(),
-            'managers' => $this->toRefList($this->managers),
+            // Managers as ordered "G.A. n" person cards (name + position +
+            // primary contacts); `manager_slots` is the gap-aware slot array
+            // (index+1 = G.A. n, null = empty slot) the form/detail render from.
+            'managers' => $this->toManagerRefList($this->managers),
+            'manager_slots' => $this->buildManagerSlots($this->managers),
             'supervisor_id' => $this->supervisor_id,
             'supervisor' => $this->toPersonRef($this->supervisor),
             'commercial_id' => $this->commercial_id,
@@ -111,5 +116,70 @@ class RegistryResource extends JsonResource
     private function toRefList(iterable $related): array
     {
         return collect($related)->map(fn ($item): array => ['id' => $item->id, 'name' => $item->name])->all();
+    }
+
+    /**
+     * A person list (referents) projected to {id, name, primary_contacts},
+     * mirroring toPersonRef for the multi relations.
+     *
+     * @param  iterable<int, Model>  $related
+     * @return array<int, array{id: int, name: string, primary_contacts: array<int, array{type: string, icon: string|null, label: string, value: string}>}>
+     */
+    private function toPersonRefList(iterable $related): array
+    {
+        return collect($related)
+            ->map(fn (Model $person): array => [
+                'id' => $person->id,
+                'name' => $person->name,
+                'primary_contacts' => (new PrimaryContactColumn)->format($this->primaryContactsOf($person)),
+            ])
+            ->all();
+    }
+
+    /**
+     * Managers as ordered "G.A. n" person cards: like toPersonRefList plus the
+     * pivot `position`. Already ordered by position (relation orderByPivot).
+     *
+     * @param  iterable<int, Model>  $managers
+     * @return array<int, array{id: int, name: string, position: int, primary_contacts: array<int, array{type: string, icon: string|null, label: string, value: string}>}>
+     */
+    private function toManagerRefList(iterable $managers): array
+    {
+        return collect($managers)
+            ->map(fn (Model $manager): array => [
+                'id' => $manager->id,
+                'name' => $manager->name,
+                'position' => (int) $manager->pivot->position,
+                'primary_contacts' => (new PrimaryContactColumn)->format($this->primaryContactsOf($manager)),
+            ])
+            ->all();
+    }
+
+    /**
+     * The gap-aware manager slot array: a list of `user_id|null` whose length is
+     * the highest occupied position, each manager placed at `position - 1` and
+     * every unoccupied index left null (a persistent empty "G.A. n" slot). An
+     * empty relation yields an empty array.
+     *
+     * @param  iterable<int, Model>  $managers
+     * @return array<int, int|null>
+     */
+    private function buildManagerSlots(iterable $managers): array
+    {
+        $byPosition = [];
+        $max = 0;
+
+        foreach ($managers as $manager) {
+            $position = (int) $manager->pivot->position;
+            $byPosition[$position] = $manager->id;
+            $max = max($max, $position);
+        }
+
+        $slots = [];
+        for ($position = 1; $position <= $max; $position++) {
+            $slots[] = $byPosition[$position] ?? null;
+        }
+
+        return $slots;
     }
 }

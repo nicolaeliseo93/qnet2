@@ -6,6 +6,7 @@ use App\DataObjects\Registries\CreateRegistryData;
 use App\Enums\AgreementStatusEnum;
 use App\Enums\SizeClassEnum;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Http\Requests\Concerns\ValidatesManagerSlots;
 use App\Http\Requests\Concerns\ValidatesUserProfile;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
@@ -26,6 +27,7 @@ use Illuminate\Validation\Rule;
 class StoreRegistryRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
+    use ValidatesManagerSlots;
     use ValidatesUserProfile;
 
     public function authorize(): bool
@@ -65,10 +67,6 @@ class StoreRegistryRequest extends FormRequest
             'sector_ids.*' => ['integer', Rule::exists('sectors', 'id')],
             'referent_ids' => ['sometimes', 'array'],
             'referent_ids.*' => ['integer', Rule::exists('referents', 'id')],
-            // MAX 4 internal managers is a validation-layer rule (spec 0020
-            // scope note), never a DB constraint.
-            'manager_ids' => ['sometimes', 'array', 'max:4'],
-            'manager_ids.*' => ['integer', Rule::exists('users', 'id')],
             // Supervisor is an INTERNAL user (like managers); commercial/reporter
             // stay external referents.
             'supervisor_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
@@ -81,7 +79,7 @@ class StoreRegistryRequest extends FormRequest
             'agreement_notes' => ['nullable', 'string', 'max:5000'],
             'size_class' => ['nullable', Rule::enum(SizeClassEnum::class)],
             'employee_count' => ['nullable', 'integer', 'min:0'],
-        ], $this->profileRules());
+        ], $this->managerSlotsRules(), $this->profileRules());
     }
 
     /**
@@ -92,6 +90,7 @@ class StoreRegistryRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->validateProfile($validator);
+            $this->validateManagerSlots($validator);
             $this->enforceFieldPermissions($validator);
         });
     }

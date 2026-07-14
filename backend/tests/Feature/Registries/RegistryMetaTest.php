@@ -44,7 +44,7 @@ it('200: field catalogue matches the frozen contract (14 registry + 11 personal_
 
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
     expect($keys)->toBe([
-        'source_id', 'sector_ids', 'referent_ids', 'manager_ids',
+        'source_id', 'sector_ids', 'referent_ids', 'manager_slots',
         'supervisor_id', 'commercial_id', 'reporter_id',
         'vat_group', 'is_supplier', 'is_qualified_supplier',
         'agreement_status', 'agreement_notes', 'size_class', 'employee_count',
@@ -59,7 +59,7 @@ it('200: field catalogue matches the frozen contract (14 registry + 11 personal_
     expect($fields['source_id']['type'])->toBe('select')
         ->and($fields['sector_ids']['type'])->toBe('multiselect')
         ->and($fields['referent_ids']['type'])->toBe('multiselect')
-        ->and($fields['manager_ids']['type'])->toBe('multiselect')
+        ->and($fields['manager_slots']['type'])->toBe('multiselect')
         ->and($fields['is_supplier']['type'])->toBe('boolean')
         ->and($fields['is_supplier']['mandatory'])->toBeTrue()
         ->and($fields['is_qualified_supplier']['type'])->toBe('boolean')

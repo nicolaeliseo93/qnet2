@@ -11,23 +11,24 @@ namespace App\DataObjects\Registries;
  *
  * `name` is intentionally absent: it is derived server-side from the
  * required nested personal-data card (mirrors CreateReferentData).
- * `sectorIds`/`referentIds`/`managerIds` are to-many references, synced by
+ * `sectorIds`/`referentIds`/`managerSlots` are to-many references, synced by
  * RegistryService post-create via `->sync()` — they are NOT mass-assignable
  * columns, so they stay out of attributes() (mirrors CreateSectorData's
- * tagIds).
+ * tagIds). `managerSlots` is ORDERED and gap-aware: index+1 is the manager's
+ * static "G.A. n" position, a null entry an intentionally empty slot.
  */
 final readonly class CreateRegistryData
 {
     /**
      * @param  array<int, int>|null  $sectorIds
      * @param  array<int, int>|null  $referentIds
-     * @param  array<int, int>|null  $managerIds
+     * @param  array<int, int|null>|null  $managerSlots
      */
     public function __construct(
         public ?int $sourceId,
         public ?array $sectorIds,
         public ?array $referentIds,
-        public ?array $managerIds,
+        public ?array $managerSlots,
         public ?int $supervisorId,
         public ?int $commercialId,
         public ?int $reporterId,
@@ -51,7 +52,9 @@ final readonly class CreateRegistryData
             sourceId: isset($data['source_id']) ? (int) $data['source_id'] : null,
             sectorIds: array_key_exists('sector_ids', $data) ? array_map('intval', $data['sector_ids']) : null,
             referentIds: array_key_exists('referent_ids', $data) ? array_map('intval', $data['referent_ids']) : null,
-            managerIds: array_key_exists('manager_ids', $data) ? array_map('intval', $data['manager_ids']) : null,
+            managerSlots: array_key_exists('manager_slots', $data)
+                ? array_map(static fn ($id): ?int => $id === null ? null : (int) $id, $data['manager_slots'])
+                : null,
             supervisorId: isset($data['supervisor_id']) ? (int) $data['supervisor_id'] : null,
             commercialId: isset($data['commercial_id']) ? (int) $data['commercial_id'] : null,
             reporterId: isset($data['reporter_id']) ? (int) $data['reporter_id'] : null,
@@ -75,9 +78,9 @@ final readonly class CreateRegistryData
         return $this->referentIds !== null;
     }
 
-    public function hasManagerIds(): bool
+    public function hasManagerSlots(): bool
     {
-        return $this->managerIds !== null;
+        return $this->managerSlots !== null;
     }
 
     /**

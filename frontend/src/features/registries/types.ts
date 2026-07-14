@@ -25,11 +25,19 @@ export interface ReferenceRef {
   id: number
   name: string
   /**
-   * The person's PRIMARY contacts (one per type), present only on the
-   * responsible-people refs (supervisor/commercial/reporter). Empty when the
+   * The person's PRIMARY contacts (one per type), present on the person refs
+   * (supervisor/commercial/reporter, referents, managers). Empty when the
    * person has no primary contact; absent on plain refs (source/sectors/...).
    */
   primary_contacts?: PrimaryContact[]
+}
+
+/**
+ * A manager ref carrying its static "G.A. n" `position` (1-based) on top of the
+ * person ref. Managers are always returned ordered by position.
+ */
+export interface ManagerRef extends ReferenceRef {
+  position: number
 }
 
 /**
@@ -48,9 +56,16 @@ export interface RegistryDetail {
   referent_ids: number[]
   /** Hydrates the "Referents" multiselect control. */
   referents: ReferenceRef[]
+  /** Filled manager ids, ordered by G.A. position. */
   manager_ids: number[]
-  /** Hydrates the "Managers" multiselect control (max 4). */
-  managers: ReferenceRef[]
+  /** Managers as ordered "G.A. n" cards (name + position + primary contacts). */
+  managers: ManagerRef[]
+  /**
+   * Gap-aware slot array: index+1 = G.A. number, `null` = empty slot. Length =
+   * highest occupied position. Seeds the form's slot editor and the detail's
+   * G.A. cards directly.
+   */
+  manager_slots: (number | null)[]
   supervisor_id: number | null
   supervisor: ReferenceRef | null
   commercial_id: number | null
@@ -94,7 +109,8 @@ export interface CreateRegistryPayload {
   source_id?: number | null
   sector_ids?: number[]
   referent_ids?: number[]
-  manager_ids?: number[]
+  /** Ordered, gap-aware G.A. slots: index+1 = G.A. n, `null` = empty slot. */
+  manager_slots?: (number | null)[]
   supervisor_id?: number | null
   commercial_id?: number | null
   reporter_id?: number | null
@@ -120,7 +136,8 @@ export interface UpdateRegistryPayload {
   source_id?: number | null
   sector_ids?: number[]
   referent_ids?: number[]
-  manager_ids?: number[]
+  /** Ordered, gap-aware G.A. slots: index+1 = G.A. n, `null` = empty slot. */
+  manager_slots?: (number | null)[]
   supervisor_id?: number | null
   commercial_id?: number | null
   reporter_id?: number | null
