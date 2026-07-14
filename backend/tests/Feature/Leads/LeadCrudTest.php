@@ -86,35 +86,6 @@ it('create: 201, response shape matches the frozen contract', function () {
         ->assertJsonPath('data.notes', 'Follow up next week');
 });
 
-it('create: defaults is_converted to false when omitted, round-trips through the resource (AC-006)', function () {
-    $actor = leadUserWith(['create']);
-    $referent = Referent::factory()->create();
-    $campaign = Campaign::factory()->create();
-    Sanctum::actingAs($actor);
-
-    $response = $this->postJson('/api/leads', [
-        'referent_id' => $referent->id,
-        'campaign_id' => $campaign->id,
-    ])->assertCreated()->assertJsonPath('data.is_converted', false);
-
-    $this->assertDatabaseHas('leads', ['id' => $response->json('data.id'), 'is_converted' => false]);
-});
-
-it('create: is_converted true persists and round-trips through the resource (AC-006)', function () {
-    $actor = leadUserWith(['create']);
-    $referent = Referent::factory()->create();
-    $campaign = Campaign::factory()->create();
-    Sanctum::actingAs($actor);
-
-    $response = $this->postJson('/api/leads', [
-        'referent_id' => $referent->id,
-        'campaign_id' => $campaign->id,
-        'is_converted' => true,
-    ])->assertCreated()->assertJsonPath('data.is_converted', true);
-
-    $this->assertDatabaseHas('leads', ['id' => $response->json('data.id'), 'is_converted' => true]);
-});
-
 it('create: missing referent_id -> 422 on that field, no row created (AC-011)', function () {
     $actor = leadUserWith(['create']);
     $campaign = Campaign::factory()->create();
@@ -185,23 +156,6 @@ it('update: PATCH with only notes -> 200, only notes changes, the 5 FKs stay put
         'source_id' => $lead->source_id,
         'operator_id' => $lead->operator_id,
         'notes' => 'After',
-    ]);
-});
-
-it('update: PATCH is_converted flips the flag without touching the 5 FKs (AC-006)', function () {
-    $actor = leadUserWith(['update']);
-    $lead = Lead::factory()->create(['is_converted' => false]);
-    Sanctum::actingAs($actor);
-
-    $this->patchJson("/api/leads/{$lead->id}", ['is_converted' => true])
-        ->assertOk()
-        ->assertJsonPath('data.is_converted', true);
-
-    $this->assertDatabaseHas('leads', [
-        'id' => $lead->id,
-        'referent_id' => $lead->referent_id,
-        'campaign_id' => $lead->campaign_id,
-        'is_converted' => true,
     ]);
 });
 

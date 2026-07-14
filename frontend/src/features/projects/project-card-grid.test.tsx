@@ -31,8 +31,6 @@ function buildCard(overrides: Partial<ProjectCard> = {}): ProjectCard {
     project_status: { id: 1, name: 'Active', color: 'green' },
     campaigns_count: 3,
     leads_count: 20,
-    converted_leads_count: 5,
-    conversion_rate: 25,
     geo_scope: 'country',
     geo_label: 'Italy',
     total_budget: '1000.00',

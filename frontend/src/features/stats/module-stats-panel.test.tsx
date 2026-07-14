@@ -38,12 +38,12 @@ const LEADS_STATS: ModuleStats = {
     },
     {
       type: 'stat',
-      key: 'conversion_rate',
-      label: 'leads.stats.conversionRate',
-      value: null,
-      format: 'percent',
+      key: 'with_source',
+      label: 'leads.stats.withSource',
+      value: 96,
+      format: 'number',
       subtitle: null,
-      icon: 'percent',
+      icon: 'megaphone',
     },
     {
       type: 'distribution',
@@ -104,9 +104,8 @@ describe('ModuleStatsPanel', () => {
 
     expect(await screen.findByText('Leads')).toBeInTheDocument()
     expect(screen.getByText('128')).toBeInTheDocument()
-    // A percent with a 0 denominator is null: it must never read "0%".
-    expect(screen.getByText('—')).toBeInTheDocument()
-    expect(screen.queryByText('0%')).not.toBeInTheDocument()
+    expect(screen.getByText('With source')).toBeInTheDocument()
+    expect(screen.getByText('96')).toBeInTheDocument()
     expect(screen.getByRole('meter', { name: 'Web' })).toBeInTheDocument()
   })
 

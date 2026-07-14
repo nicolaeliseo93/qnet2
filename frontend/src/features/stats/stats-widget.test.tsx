@@ -56,12 +56,12 @@ describe('StatsWidgetView', () => {
       <StatsWidgetView
         widget={{
           ...LEADS_TOTAL,
-          subtitle: { key: 'leads.stats.converted', count: 42 },
+          subtitle: { key: 'leads.stats.assigned', count: 42 },
         }}
       />,
     )
 
-    expect(screen.getByText('Converted')).toBeInTheDocument()
+    expect(screen.getByText('Assigned to an operator')).toBeInTheDocument()
   })
 
   it('pluralizes a subtitle key with i18next _one/_other (delta: subtitle keys)', () => {
@@ -69,13 +69,13 @@ describe('StatsWidgetView', () => {
       <StatsWidgetView
         widget={{
           ...LEADS_TOTAL,
-          label: 'leads.stats.conversionRate',
-          subtitle: { key: 'leads.stats.conversionRateSubtitle', count: 1 },
+          label: 'companies.stats.total',
+          subtitle: { key: 'companies.stats.withVatNumberSubtitle', count: 1 },
         }}
       />,
     )
 
-    expect(screen.getByText('1 converted')).toBeInTheDocument()
+    expect(screen.getByText('1 with VAT number')).toBeInTheDocument()
   })
 
   it('picks the plural form for a count other than one', () => {

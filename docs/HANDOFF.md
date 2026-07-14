@@ -2,6 +2,66 @@
 
 > Injected at session start. Update at every green state.
 
+## REVOCA — flag `is_converted` sui lead (2026-07-14) — GREEN (not committed)
+
+Richiesta utente: "lead convertito true/false non lo voglio ne' nella migration ne' sul form ne'
+sulla tabella". Il flag e' stato rimosso INSIEME a tutto cio' che ci era costruito sopra (decisione
+esplicita dell'utente): conversion rate per-card e globale, widget stat `converted`/`conversion_rate`
+dei moduli leads e projects, aggregato `converted_leads_count`.
+
+- Colonna: NON si e' toccata la migration gia' committata; c'e' una NUOVA
+  `2026_07_14_150000_drop_is_converted_from_leads_table.php` (dropIndex prima del dropColumn,
+  altrimenti SQLite si pianta sull'indice orfano; `down()` reversibile).
+- Contratto: nessun payload lead espone piu' `is_converted` (Resource, riga tabella, meta, form).
+  `ProjectCardResource` perde `converted_leads_count`/`conversion_rate`. `GET /api/projects/summary`
+  restituisce solo `{projects_count, campaigns_count, leads_count}`.
+- INVARIANTE PRESERVATA (esattamente 4 widget `stat` in testa per ogni modulo, testata in
+  `StatsEndpointTest`): i contatori rimossi sono stati SOSTITUITI, non tolti —
+  leads = `total, assigned, with_source, with_site`; projects = `total, campaigns, leads,
+  allocated_budget` (SUM `campaigns.total_budget` con `project_id` NOT NULL, format currency).
+- `App\Support\ConversionRate` SOPRAVVIVE: `percentStat` serve ancora registries e companies. Il suo
+  docblock e' stato riscritto (citava consumer che non esistono piu').
+- `frontend/src/features/projects/format-conversion-rate.ts` CANCELLATO (zero call site).
+- Spec `docs/specs/0026-projects-card-grid.xml`: aggiunto blocco `<amendment>`; D-1, BR-1, BR-3,
+  AC-004, AC-006 marcati `status="revoked"`, AC-001 emendato.
+
+BUGFIX i18n incluso: il catalogo backend emette `leads.columns.operationalSite` e
+`leads.columns.createdAt` (camelCase), i locale file avevano `operational_site`/`created_at`
+(snake_case) → quelle due colonne mostravano la chiave grezza. Allineati i FE locale al camelCase.
+ATTENZIONE: la convenzione delle label key NON e' uniforme tra domini (campaigns usa snake_case e
+il suo locale combacia). Quando aggiungi una colonna, verifica la chiave REALE emessa dal catalogo.
+Residuo noto: `leads.columns.notes` e' orfano nei locale (il catalogo non dichiara la colonna notes).
+
+VERIFICATO (eseguito, non assunto): Pint passed; Pest 2206/2208 (1 rosso PREESISTENTE,
+`AbstractMigrationSourcePreviewTest`, dominio non toccato); `tsc --noEmit` pulito; ESLint solo i 2
+errori preesistenti (`_omit`, `onChange`); Vitest 1165 passed / 24 failed — i 24 tutti PREESISTENTI
+(registries + table/cell-renderers), zero rossi in leads/projects/stats.
+
+## BUGFIX — "Impossibile aggiornare il layout della tabella" al resize colonna — GREEN (not committed)
+
+SINTOMO: allargando una colonna appariva il toast `table.layoutError` e il layout NON si salvava
+(ne' width, ne' order, ne' visibility: un solo campo invalido 422a l'INTERO payload).
+
+ROOT CAUSE (frontend, non backend): AG Grid calcola il resize manuale come
+`startWidth + delta del puntatore`, **senza arrotondare e senza cap** (v35, `onResizing`). Quindi la
+width in `getColumnState()` puo' essere (a) frazionaria — basta lo zoom del browser o un trackpad
+HiDPI — e (b) oltre i 1000px. Il server valida `columns.*.width => integer|min:50|max:1000`
+(`TablePreferencesRequest.php:47`): entrambi i casi → 422. NB: le width dei flex sono gia' intere
+(AG Grid arrotonda solo li'), per questo il bug si vedeva SOLO dopo un drag manuale.
+
+FIX (`features/table/use-table-preferences.ts`): `toColumnPreferences` ora arrotonda e clampa la
+width in `[MIN_COLUMN_WIDTH=50, MAX_COLUMN_WIDTH=1000]` — costanti esportate che **mirrorano la
+regola del server**, unica fonte di verita'. `data-table.tsx` usa `maxWidth: MAX_COLUMN_WIDTH` nel
+`defaultColDef` cosi' il drag si ferma dove si ferma la persistenza (niente snap-back al reload).
+Se serve consentire colonne piu' larghe: alzare i DUE lati insieme (regola PHP + costante TS).
+
+Corretta anche una fixture rotta in `use-table-preferences.test.ts` (passava la stringa `ACTIONS`
+dove va il `Set` di allow-list → `.has is not a function`): era uno dei 4 rossi preesistenti noti in
+`features/table/`, ora ne restano 3 (tutti `ContactsCell` in `cell-renderers.test.tsx`, estranei).
+
+VERIFICATO: `tsc --noEmit` pulito, ESLint pulito, `use-table-preferences.test.ts` 7/7,
+`components/data-table/` 48/48.
+
 ## FEATURE — Relation quick-create "+" (spec 0028-relation-quick-create) — GREEN (not committed)
 
 Ogni select di relazione verso un modulo espone un "+" che apre un Dialog col form REALE del

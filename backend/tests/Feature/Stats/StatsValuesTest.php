@@ -3,6 +3,7 @@
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\Lead;
+use App\Models\OperationalSite;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Project;
@@ -46,21 +47,19 @@ if (! function_exists('statsWidgets')) {
 // AC-005 — widget values on a known dataset
 // ---------------------------------------------------------------------------
 
-it('leads: total, converted, conversion rate, source split and trend (AC-005)', function () {
+it('leads: total, with_source, with_site, source split and trend (AC-005)', function () {
     $source = Source::factory()->create(['name' => 'Web']);
-    Lead::factory()->count(3)->create(['is_converted' => true, 'source_id' => $source->id]);
-    Lead::factory()->create(['is_converted' => false]);
+    $site = OperationalSite::factory()->create();
+    Lead::factory()->count(3)->create(['source_id' => $source->id, 'operational_site_id' => $site->id]);
+    Lead::factory()->create(['source_id' => null, 'operational_site_id' => null]);
 
     $widgets = statsWidgets('leads');
 
     expect(statsWidget($widgets, 'total'))->toMatchArray([
         'type' => 'stat', 'label' => 'leads.stats.total', 'value' => 4, 'format' => 'number',
     ]);
-    expect(statsWidget($widgets, 'converted')['value'])->toBe(3);
-
-    $rate = statsWidget($widgets, 'conversion_rate');
-    expect($rate)->toMatchArray(['value' => 75, 'format' => 'percent'])
-        ->and($rate['subtitle'])->toBe(['key' => 'leads.stats.conversionRateSubtitle', 'count' => 3]);
+    expect(statsWidget($widgets, 'with_source')['value'])->toBe(3);
+    expect(statsWidget($widgets, 'with_site')['value'])->toBe(3);
 
     $bySource = statsWidget($widgets, 'by_source');
     expect($bySource)->toMatchArray(['type' => 'distribution', 'label' => 'leads.stats.bySource', 'total' => 4])
@@ -75,11 +74,12 @@ it('leads: total, converted, conversion rate, source split and trend (AC-005)', 
         ->and($trend['points'][0]['value'])->toBe(0);
 });
 
-it('leads: a percent with a zero denominator is null, not 0 (AC-005)', function () {
+it('leads: with_source and with_site are 0 on an empty module (AC-005)', function () {
     $widgets = statsWidgets('leads');
 
     expect(statsWidget($widgets, 'total')['value'])->toBe(0)
-        ->and(statsWidget($widgets, 'conversion_rate')['value'])->toBeNull()
+        ->and(statsWidget($widgets, 'with_source')['value'])->toBe(0)
+        ->and(statsWidget($widgets, 'with_site')['value'])->toBe(0)
         ->and(statsWidget($widgets, 'by_source')['items'])->toBe([])
         ->and(statsWidget($widgets, 'by_source')['total'])->toBe(0);
 });
@@ -184,22 +184,21 @@ it('campaigns: budget, generated leads and the effective project status split (A
  * module exposes exactly 4 stats now), so this case no longer asserts it — the
  * remaining KPIs keep the same semantics.
  */
-it('projects: campaigns, project-reachable leads, conversion and status split (AC-005)', function () {
+it('projects: campaigns, project-reachable leads, allocated budget and status split (AC-005)', function () {
     $running = ProjectStatus::factory()->create(['name' => 'Running', 'color' => '#22c55e']);
     $draft = ProjectStatus::factory()->create(['name' => 'Draft', 'color' => null]);
 
     $project = Project::factory()->create(['project_status_id' => $running->id]);
     Project::factory()->create(['project_status_id' => $draft->id]);
 
-    $linked = Campaign::factory()->forProject($project)->create();
-    Lead::factory()->create(['campaign_id' => $linked->id, 'is_converted' => true]);
-    Lead::factory()->count(2)->create(['campaign_id' => $linked->id, 'is_converted' => false]);
+    $linked = Campaign::factory()->forProject($project)->create(['total_budget' => 500]);
+    Lead::factory()->count(3)->create(['campaign_id' => $linked->id]);
 
-    // A standalone campaign (project_id null): neither it nor its lead is
-    // reachable through a project, so both stay out of every project KPI —
-    // the exact semantics of ProjectService::summary().
-    $standalone = Campaign::factory()->create();
-    Lead::factory()->create(['campaign_id' => $standalone->id, 'is_converted' => true]);
+    // A standalone campaign (project_id null): neither it, its budget, nor its
+    // lead is reachable through a project, so all stay out of every project
+    // KPI — the exact semantics of ProjectService::summary().
+    $standalone = Campaign::factory()->create(['total_budget' => 1000]);
+    Lead::factory()->create(['campaign_id' => $standalone->id]);
 
     $widgets = statsWidgets('projects');
 
@@ -209,9 +208,7 @@ it('projects: campaigns, project-reachable leads, conversion and status split (A
     expect(statsWidget($widgets, 'campaigns')['value'])->toBe(1)
         ->and(statsWidget($widgets, 'leads')['value'])->toBe(3);
 
-    $rate = statsWidget($widgets, 'conversion_rate');
-    expect($rate)->toMatchArray(['value' => 33, 'format' => 'percent'])
-        ->and($rate['subtitle'])->toBe(['key' => 'projects.stats.conversionRateSubtitle', 'count' => 1]);
+    expect(statsWidget($widgets, 'allocated_budget'))->toMatchArray(['value' => 500.0, 'format' => 'currency']);
 
     $byStatus = statsWidget($widgets, 'by_status');
     expect($byStatus)->toMatchArray(['type' => 'distribution', 'label' => 'projects.stats.byStatus', 'total' => 2]);
@@ -227,7 +224,7 @@ it('projects: campaigns, project-reachable leads, conversion and status split (A
         ->and($trend['points'][0]['value'])->toBe(0);
 });
 
-it('projects: the conversion rate is null (not 0) with no project-reachable lead (AC-005)', function () {
+it('projects: allocated_budget is 0 (not null) with no project-linked campaign (AC-005)', function () {
     Project::factory()->create();
 
     $widgets = statsWidgets('projects');
@@ -235,7 +232,7 @@ it('projects: the conversion rate is null (not 0) with no project-reachable lead
     expect(statsWidget($widgets, 'total')['value'])->toBe(1)
         ->and(statsWidget($widgets, 'campaigns')['value'])->toBe(0)
         ->and(statsWidget($widgets, 'leads')['value'])->toBe(0)
-        ->and(statsWidget($widgets, 'conversion_rate')['value'])->toBeNull()
+        ->and(statsWidget($widgets, 'allocated_budget'))->toMatchArray(['value' => 0.0, 'format' => 'currency'])
         ->and(statsWidget($widgets, 'by_status')['items'])->toHaveCount(1);
 });
 

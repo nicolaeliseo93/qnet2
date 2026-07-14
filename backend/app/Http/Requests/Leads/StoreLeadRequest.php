@@ -41,7 +41,6 @@ class StoreLeadRequest extends FormRequest
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
             'operator_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'notes' => ['nullable', 'string', 'max:5000'],
-            'is_converted' => ['sometimes', 'boolean'],
         ];
     }
 

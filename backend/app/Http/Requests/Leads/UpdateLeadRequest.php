@@ -42,7 +42,6 @@ class UpdateLeadRequest extends FormRequest
             'source_id' => ['sometimes', 'nullable', 'integer', Rule::exists('sources', 'id')],
             'operator_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')],
             'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
-            'is_converted' => ['sometimes', 'boolean'],
         ];
     }
 

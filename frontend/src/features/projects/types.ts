@@ -126,8 +126,7 @@ export interface ProjectCardPermissions {
 /**
  * Single project card as returned by `GET /projects` (spec 0026), the plain
  * index endpoint powering the card grid. A different payload than
- * `ProjectDetail`/the AG Grid `TableRow`: no relations besides `project_status`,
- * plus the lead-conversion counters the table doesn't carry.
+ * `ProjectDetail`/the AG Grid `TableRow`: no relations besides `project_status`.
  */
 export interface ProjectCard {
   id: number
@@ -137,9 +136,6 @@ export interface ProjectCard {
   project_status: ProjectStatusRef | null
   campaigns_count: number
   leads_count: number
-  converted_leads_count: number
-  /** BR-1: `converted_leads_count / leads_count * 100`, rounded; `null` when `leads_count` is 0. */
-  conversion_rate: number | null
   /** Finest non-null geo level, derived server-side (spec 0027 D-2). Never re-derived here. */
   geo_scope: GeoScope | null
   /** The `geo_scope` level's place name (e.g. "Milano"), ready-made so the card avoids a second request. */

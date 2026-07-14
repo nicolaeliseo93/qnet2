@@ -37,7 +37,6 @@ class LeadResource extends JsonResource
             'operator_id' => $this->operator_id,
             'operator' => $this->summarizeByName($this->operator),
             'notes' => $this->notes,
-            'is_converted' => (bool) $this->is_converted,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

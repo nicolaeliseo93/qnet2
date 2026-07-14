@@ -7,15 +7,17 @@ namespace App\Stats\Projects;
 use App\Models\Project;
 use App\Stats\AbstractStatsDefinition;
 use App\Stats\Support\Aggregates;
+use App\Stats\Widgets\StatFormat;
 use App\Stats\Widgets\Widget;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Statistics panel of the `projects` module (spec 0026): volume, the campaigns
- * and leads a project generates and their conversion rate.
+ * Statistics panel of the `projects` module (spec 0026): volume, the
+ * campaigns and leads a project generates, and the budget allocated to
+ * project-linked campaigns.
  *
- * These KPIs keep the SAME semantics as ProjectService::summary()
+ * The `leads` KPI keeps the SAME semantics as ProjectService::summary()
  * (GET /projects/summary, spec 0023 BR-1) — a project has no own leads, only
  * the ones reachable through its campaigns (`campaigns.project_id NOT NULL`) —
  * so the panel and the legacy tiles can never disagree. The counting is
@@ -47,7 +49,7 @@ class ProjectsStatsDefinition extends AbstractStatsDefinition
     {
         $total = $this->totalRows();
         $leads = $this->projectLeadsQuery()->count();
-        $convertedLeads = $this->projectLeadsQuery()->where(self::LEADS_TABLE.'.is_converted', true)->count();
+        $allocatedBudget = (float) DB::table(self::CAMPAIGNS_TABLE)->whereNotNull('project_id')->sum('total_budget');
 
         return [
             $this->stat('total', $total, icon: 'layers'),
@@ -57,9 +59,12 @@ class ProjectsStatsDefinition extends AbstractStatsDefinition
                 icon: 'megaphone',
             ),
             $this->stat('leads', $leads, icon: 'users'),
-            // Conversion of the project-generated leads, null on a zero
-            // denominator (App\Support\ConversionRate, via percentStat).
-            $this->percentStat('conversion_rate', $convertedLeads, $leads, icon: 'percent'),
+            $this->stat(
+                key: 'allocated_budget',
+                value: round($allocatedBudget, 2),
+                format: StatFormat::Currency,
+                icon: 'wallet',
+            ),
             // `project_statuses` is a lookup table, not an enum: group on the
             // relation and take its own name/color as the item's presentation.
             $this->distribution(

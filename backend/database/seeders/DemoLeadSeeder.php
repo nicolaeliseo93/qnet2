@@ -84,7 +84,6 @@ class DemoLeadSeeder extends Seeder
             sourceId: $this->maybePick($sources, $index + 1, $faker, 70)?->id,
             operatorId: $this->maybePick($operators, $index + 2, $faker, 50)?->id,
             notes: $faker->boolean(40) ? $faker->sentence() : null,
-            isConverted: $faker->boolean(35),
         );
 
         $this->leads->create($data);

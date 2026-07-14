@@ -10,6 +10,22 @@ import { tableKeys } from '@/features/table/use-table-config'
 import type { ColumnPreferenceInput } from '@/features/table/types'
 
 /**
+ * Bounds of the server's `columns.*.width` rule (integer, min:50, max:1000 — see
+ * TablePreferencesRequest). AG Grid does NOT keep a dragged width inside them: a
+ * manual resize is `startWidth + pointer delta`, neither rounded nor capped, so
+ * under browser zoom or on a HiDPI trackpad it lands on a fractional pixel, and a
+ * wide drag sails past the cap. Either one fails validation, and since a single
+ * offending column 422s the WHOLE payload, one dragged column used to discard the
+ * entire layout — order and visibility included.
+ */
+export const MIN_COLUMN_WIDTH = 50
+export const MAX_COLUMN_WIDTH = 1000
+
+function toPersistableWidth(width: number): number {
+  return Math.min(Math.max(Math.round(width), MIN_COLUMN_WIDTH), MAX_COLUMN_WIDTH)
+}
+
+/**
  * Translate AG Grid's column state into the preferences payload (0003).
  *
  * Pure and side-effect free so it is unit-testable without a live grid:
@@ -20,8 +36,8 @@ import type { ColumnPreferenceInput } from '@/features/table/types'
  *    even one would 422 the whole save and silently lose every change;
  *  - `order` is the column's current display position;
  *  - `visible` is the inverse of AG Grid's `hide`;
- *  - `width` is sent only when it is a real number (omitted, never null, so it
- *    satisfies the backend's integer validation).
+ *  - `width` is sent only when it is a real number, rounded and clamped into the
+ *    range the server accepts (omitted, never null, so it satisfies `sometimes`).
  *
  * The backend computes the sparse delta from this full state, so the frontend
  * does not need to know the defaults.
@@ -39,8 +55,8 @@ export function toColumnPreferences(
         order: index,
       }
 
-      if (typeof column.width === 'number') {
-        preference.width = column.width
+      if (typeof column.width === 'number' && Number.isFinite(column.width)) {
+        preference.width = toPersistableWidth(column.width)
       }
 
       return preference

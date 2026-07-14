@@ -4,7 +4,6 @@ namespace App\Http\Resources;
 
 use App\Enums\GeoScopeLevel;
 use App\Models\Project;
-use App\Support\ConversionRate;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -13,12 +12,12 @@ use Illuminate\Support\Facades\Gate;
 /**
  * Card-grid projection of a Project (GET /api/projects, spec 0026, D-3).
  * Deliberately separate from ProjectResource (the detail-page payload): the
- * card payload carries the 3 lead-conversion stats (BR-1) and per-item
- * `can` affordances (BR-2), neither of which the detail page needs.
+ * card payload carries per-item `can` affordances (BR-2), which the detail
+ * page does not need.
  *
  * Relies on the caller (ProjectService::index) having eager-loaded
- * project_status and the campaigns_count/leads_count/converted_leads_count
- * aggregates via withCount, so resolving this never N+1s.
+ * project_status and the campaigns_count/leads_count aggregates via
+ * withCount, so resolving this never N+1s.
  *
  * @mixin Project
  */
@@ -30,7 +29,6 @@ class ProjectCardResource extends JsonResource
     public function toArray(Request $request): array
     {
         $leadsCount = (int) $this->leads_count;
-        $convertedLeadsCount = (int) $this->converted_leads_count;
         $totalBudget = $this->total_budget;
         $allocatedBudget = (float) ($this->allocated_budget_sum ?? 0);
         $actor = $request->user();
@@ -48,8 +46,6 @@ class ProjectCardResource extends JsonResource
             'geo_label' => $this->geoLabel($geoScope),
             'campaigns_count' => (int) $this->campaigns_count,
             'leads_count' => $leadsCount,
-            'converted_leads_count' => $convertedLeadsCount,
-            'conversion_rate' => ConversionRate::of($convertedLeadsCount, $leadsCount),
             'total_budget' => $totalBudget === null ? null : $this->formatMoney((float) $totalBudget),
             'allocated_budget' => $this->formatMoney($allocatedBudget),
             'remaining_budget' => $totalBudget === null ? null : $this->formatMoney((float) $totalBudget - $allocatedBudget),

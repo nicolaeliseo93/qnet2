@@ -12,10 +12,23 @@
     The user approved adding the flag (in scope of this spec).
   </context>
 
+  <amendment date="2026-07-14" status="applied">
+    The user revoked the lead conversion flag: `leads.is_converted` must not exist in the
+    migration, in the lead form or in the leads table. Everything built on top of it is removed
+    with it — the per-card and global conversion rate, the `converted` / `conversion_rate` stat
+    widgets of the `leads` and `projects` modules, the `converted_leads_count` aggregate.
+    REVOKED by this amendment: D-1, BR-1, BR-3, the leads endpoint change in the data contract,
+    AC-004, AC-006, and the conversion part of AC-001.
+    The "exactly 4 leading stat widgets per module" invariant (spec 0026-module-stats-panel) is
+    preserved by replacing the removed counters: `leads` now exposes total / assigned /
+    with_source / with_site, `projects` exposes total / campaigns / leads / allocated_budget
+    (sum of the linked campaigns' total_budget, currency format).
+    `App\Support\ConversionRate` survives: percentStat still serves `registries` and `companies`.
+  </amendment>
+
   <decisions>
-    <d id="D-1">Lead conversion is a single boolean column `leads.is_converted` (default false,
-      indexed). No separate timestamp: activity log already records who/when. Conversion rate is
-      always DERIVED, never stored.</d>
+    <d id="D-1" status="revoked">REVOKED (see amendment). Was: lead conversion is a single boolean
+      column `leads.is_converted` (default false, indexed).</d>
     <d id="D-2">Pagination for the card grid follows the existing codebase convention
       (offset/limit + `paginatedResponse` envelope, as for-select and notifications). No cursor,
       no page/per_page: those exist nowhere in this backend.</d>
@@ -25,13 +38,13 @@
   </decisions>
 
   <business_rules>
-    <br id="BR-1">`conversion_rate` = converted_leads_count / leads_count * 100, rounded to an
-      integer, and is NULL when leads_count = 0 (never 0% on an empty denominator).</br>
+    <br id="BR-1" status="revoked">REVOKED (see amendment): no conversion rate is computed or
+      exposed anywhere for projects or leads.</br>
     <br id="BR-2">Every new endpoint is authorized server-side with `projects.viewAny`
       (ProjectPolicy). Per-card action affordances are gated by `can.update` / `can.delete`,
       computed server-side with the Gate; the UI only hides.</br>
-    <br id="BR-3">`is_converted` is subject to the field-permission ceiling of the leads
-      authorization resource, like every other lead field (spec 0004).</br>
+    <br id="BR-3" status="revoked">REVOKED (see amendment): `is_converted` no longer exists, so it
+      is no longer a field of the leads authorization resource.</br>
   </business_rules>
 
   <data_contract>
@@ -86,25 +99,24 @@
       <response status="403">missing projects.viewAny</response>
     </endpoint>
 
-    <endpoint method="POST|PATCH" uri="/api/leads[/{lead}]">
-      <change>New optional field `is_converted: boolean` (defaults to false on create).
-        Emitted by LeadResource as `is_converted: bool`. Exposed as a leads table column
-        and as a field in the leads authorization resource.</change>
+    <endpoint method="POST|PATCH" uri="/api/leads[/{lead}]" status="revoked">
+      <change>REVOKED (see amendment): the leads contract is unchanged by this spec. No
+        `is_converted` field exists on the request, the resource, the table or the meta.</change>
     </endpoint>
 
   </data_contract>
 
   <acceptance_criteria>
     <ac id="AC-001">GET /api/projects returns projects ordered by created_at desc, paginated with
-      offset/limit, each item carrying campaigns_count, leads_count, converted_leads_count and a
-      conversion_rate consistent with BR-1.</ac>
+      offset/limit, each item carrying campaigns_count and leads_count. (Amended: no
+      converted_leads_count, no conversion_rate.)</ac>
     <ac id="AC-002">GET /api/projects with `search` matches on code OR name; with
       `project_status_id` filters by status.</ac>
     <ac id="AC-003">Both new endpoints return 403 for a user without `projects.viewAny`.</ac>
-    <ac id="AC-004">A project with 0 leads exposes conversion_rate: null (not 0).</ac>
+    <ac id="AC-004" status="revoked">REVOKED (see amendment).</ac>
     <ac id="AC-005">`can.update` / `can.delete` reflect the real Gate result per user.</ac>
-    <ac id="AC-006">Leads accept and persist `is_converted`; it round-trips through the resource
-      and is filterable in the leads table.</ac>
+    <ac id="AC-006" status="revoked">REVOKED (see amendment): no lead payload, table column or
+      form field carries `is_converted`.</ac>
     <ac id="AC-007">The projects page shows 4 KPI tiles fed by /api/projects/summary and a
       responsive card grid (1 / 2 / 3 columns at 375 / 768 / 1024+) that loads the next page when
       the bottom sentinel becomes visible (infinite scroll), with skeletons while fetching.</ac>

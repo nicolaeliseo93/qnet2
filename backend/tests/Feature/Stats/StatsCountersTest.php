@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\BusinessFunction;
+use App\Models\Campaign;
 use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\CompanySiteBank;
@@ -9,8 +10,10 @@ use App\Models\Lead;
 use App\Models\OperationalSite;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Project;
 use App\Models\Referent;
 use App\Models\Registry;
+use App\Models\Source;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -192,6 +195,41 @@ it('leads: `assigned` counts the leads with an operator (AC-005)', function () {
         ->and(statsWidget($widgets, 'assigned'))->toMatchArray([
             'label' => 'leads.stats.assigned', 'value' => 2,
         ]);
+});
+
+it('leads: `withSource` and `withSite` count leads with a non-null source/site (AC-005)', function () {
+    $source = Source::factory()->create();
+    $site = OperationalSite::factory()->create();
+    Lead::factory()->count(2)->create(['source_id' => $source->id, 'operational_site_id' => $site->id]);
+    Lead::factory()->create(['source_id' => null, 'operational_site_id' => null]);
+
+    $widgets = statsWidgets('leads');
+
+    expect(statsWidget($widgets, 'total')['value'])->toBe(3)
+        ->and(statsWidget($widgets, 'with_source'))->toMatchArray([
+            'label' => 'leads.stats.withSource', 'value' => 2,
+        ])
+        ->and(statsWidget($widgets, 'with_site'))->toMatchArray([
+            'label' => 'leads.stats.withSite', 'value' => 2,
+        ]);
+});
+
+// ---------------------------------------------------------------------------
+// projects
+// ---------------------------------------------------------------------------
+
+it('projects: `allocatedBudget` sums total_budget of campaigns linked to a project (AC-005)', function () {
+    $project = Project::factory()->create();
+    Campaign::factory()->forProject($project)->create(['total_budget' => 300]);
+    Campaign::factory()->forProject($project)->create(['total_budget' => 200]);
+    // A standalone campaign (project_id null) is not allocated to any project.
+    Campaign::factory()->create(['total_budget' => 1000]);
+
+    $widgets = statsWidgets('projects');
+
+    expect(statsWidget($widgets, 'allocated_budget'))->toMatchArray([
+        'label' => 'projects.stats.allocatedBudget', 'value' => 500.0, 'format' => 'currency',
+    ]);
 });
 
 it('business-functions: `withManager` counts the functions with a manager (AC-005)', function () {

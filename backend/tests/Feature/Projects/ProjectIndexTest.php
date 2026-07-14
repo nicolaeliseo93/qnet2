@@ -66,31 +66,27 @@ it('index: paginates offset/limit, ordered by created_at desc (AC-001)', functio
         ->assertJsonPath('items.0.id', $older->id);
 });
 
-it('index: campaigns_count/leads_count/converted_leads_count/conversion_rate are correct (AC-001)', function () {
+it('index: campaigns_count/leads_count are correct (AC-001)', function () {
     $actor = projectUserWith(['viewAny']);
     $project = Project::factory()->create();
     $campaign = Campaign::factory()->forProject($project)->create();
-    Lead::factory()->count(3)->create(['campaign_id' => $campaign->id, 'is_converted' => true]);
-    Lead::factory()->count(1)->create(['campaign_id' => $campaign->id, 'is_converted' => false]);
+    Lead::factory()->count(4)->create(['campaign_id' => $campaign->id]);
     Sanctum::actingAs($actor);
 
     $item = collect($this->getJson('/api/projects')->assertOk()->json('items'))->firstWhere('id', $project->id);
 
     expect($item['campaigns_count'])->toBe(1)
-        ->and($item['leads_count'])->toBe(4)
-        ->and($item['converted_leads_count'])->toBe(3)
-        ->and($item['conversion_rate'])->toBe(75);
+        ->and($item['leads_count'])->toBe(4);
 });
 
-it('index: a project with 0 leads exposes conversion_rate null, not 0 (AC-004)', function () {
+it('index: a project with 0 leads exposes leads_count 0 (AC-004)', function () {
     $actor = projectUserWith(['viewAny']);
     $project = Project::factory()->create();
     Sanctum::actingAs($actor);
 
     $item = collect($this->getJson('/api/projects')->assertOk()->json('items'))->firstWhere('id', $project->id);
 
-    expect($item['leads_count'])->toBe(0)
-        ->and($item['conversion_rate'])->toBeNull();
+    expect($item['leads_count'])->toBe(0);
 });
 
 it('index: search matches code OR name (AC-002)', function () {
@@ -137,12 +133,12 @@ it('index: can.update/can.delete reflect the real Gate result per user (AC-005)'
 // GET /api/projects/summary
 // ---------------------------------------------------------------------------
 
-it('summary: aggregates projects/campaigns/leads reachable through a project, conversion_rate null on 0 leads (AC-004)', function () {
+it('summary: aggregates projects/campaigns/leads reachable through a project (AC-004)', function () {
     $actor = projectUserWith(['viewAny']);
     $project = Project::factory()->create();
     $linkedCampaign = Campaign::factory()->forProject($project)->create();
     Campaign::factory()->create(); // standalone, not counted
-    Lead::factory()->count(2)->create(['campaign_id' => $linkedCampaign->id, 'is_converted' => true]);
+    Lead::factory()->count(2)->create(['campaign_id' => $linkedCampaign->id]);
     Sanctum::actingAs($actor);
 
     $this->getJson('/api/projects/summary')
@@ -150,17 +146,14 @@ it('summary: aggregates projects/campaigns/leads reachable through a project, co
         ->assertJsonPath('success', true)
         ->assertJsonPath('data.projects_count', 1)
         ->assertJsonPath('data.campaigns_count', 1)
-        ->assertJsonPath('data.leads_count', 2)
-        ->assertJsonPath('data.converted_leads_count', 2)
-        ->assertJsonPath('data.conversion_rate', 100);
+        ->assertJsonPath('data.leads_count', 2);
 });
 
-it('summary: conversion_rate is null when there are no leads', function () {
+it('summary: leads_count is 0 when there are no leads', function () {
     $actor = projectUserWith(['viewAny']);
     Sanctum::actingAs($actor);
 
     $this->getJson('/api/projects/summary')
         ->assertOk()
-        ->assertJsonPath('data.leads_count', 0)
-        ->assertJsonPath('data.conversion_rate', null);
+        ->assertJsonPath('data.leads_count', 0);
 });

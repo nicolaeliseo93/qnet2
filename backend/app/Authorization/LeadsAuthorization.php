@@ -40,7 +40,6 @@ class LeadsAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('source_id', 'select'),
             new FieldDefinition('operator_id', 'select'),
             new FieldDefinition('notes', 'textarea'),
-            new FieldDefinition('is_converted', 'boolean'),
         ];
     }
 
@@ -66,7 +65,6 @@ class LeadsAuthorization extends AbstractResourceAuthorization
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'operator_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'notes' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'is_converted' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];
     }
 

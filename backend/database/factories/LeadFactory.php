@@ -29,7 +29,6 @@ class LeadFactory extends Factory
             'source_id' => null,
             'operator_id' => null,
             'notes' => fake()->optional()->sentence(),
-            'is_converted' => false,
         ];
     }
 }

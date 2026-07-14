@@ -16,7 +16,6 @@ export const projects = {
     stats: {
       campaigns: 'Campaigns',
       leads: 'Leads',
-      conversion: 'Convers.',
     },
     empty: 'No projects found.',
     loadError: 'Unable to load the projects. Please try again.',

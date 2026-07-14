@@ -19,7 +19,6 @@ function lead(overrides: Partial<LeadDetail> = {}): LeadDetail {
     source: { id: 40, name: 'Web' },
     operator_id: 50,
     operator: { id: 50, name: 'Anna Bianchi' },
-    is_converted: false,
     notes: 'Interested in the enterprise plan.',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-02T00:00:00Z',
@@ -73,17 +72,5 @@ describe('LeadDetailView — read-only (AC-065)', () => {
     render(<LeadDetailView lead={lead({ referent_id: 10, referent: null })} />)
 
     expect(screen.getByRole('heading', { name: 'Unknown contact' })).toBeInTheDocument()
-  })
-
-  it('shows the "Not converted" badge when is_converted is false', () => {
-    render(<LeadDetailView lead={lead({ is_converted: false })} />)
-
-    expect(screen.getByText('Not converted')).toBeInTheDocument()
-  })
-
-  it('shows the "Converted" badge when is_converted is true', () => {
-    render(<LeadDetailView lead={lead({ is_converted: true })} />)
-
-    expect(screen.getByText('Converted')).toBeInTheDocument()
   })
 })

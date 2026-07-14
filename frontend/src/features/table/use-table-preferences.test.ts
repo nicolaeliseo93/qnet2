@@ -1,6 +1,10 @@
 import { SELECTION_COLUMN_ID, type ColumnState } from 'ag-grid-community'
 import { describe, expect, it } from 'vitest'
-import { toColumnPreferences } from '@/features/table/use-table-preferences'
+import {
+  MAX_COLUMN_WIDTH,
+  MIN_COLUMN_WIDTH,
+  toColumnPreferences,
+} from '@/features/table/use-table-preferences'
 
 /**
  * Build a minimal AG Grid ColumnState. Only the fields the mapper reads
@@ -48,7 +52,7 @@ describe('toColumnPreferences', () => {
       columnState({ colId: 'email', hide: false }),
     ]
 
-    const result = toColumnPreferences(state, ACTIONS)
+    const result = toColumnPreferences(state, new Set(['name', 'email']))
 
     expect(result).toEqual([
       { id: 'name', visible: true, order: 0 },
@@ -69,6 +73,31 @@ describe('toColumnPreferences', () => {
     expect(result).toEqual([
       { id: 'name', visible: true, order: 0 },
       { id: 'email', visible: true, order: 1 },
+    ])
+  })
+
+  it('rounds a fractional dragged width to an integer', () => {
+    // Regression: AG Grid computes a manual resize as `startWidth + pointer
+    // delta`, unrounded — under browser zoom / HiDPI the width is fractional and
+    // the server's `integer` rule 422s the whole payload, losing the layout.
+    const state = [columnState({ colId: 'name', hide: false, width: 247.5 })]
+
+    expect(toColumnPreferences(state, new Set(['name']))).toEqual([
+      { id: 'name', visible: true, order: 0, width: 248 },
+    ])
+  })
+
+  it('clamps a width to the range the server accepts', () => {
+    // Same failure mode: AG Grid sets no maxWidth of its own, so a wide drag
+    // exceeds the server's max:1000 and 422s every column with it.
+    const state = [
+      columnState({ colId: 'name', hide: false, width: 1400 }),
+      columnState({ colId: 'email', hide: false, width: 12 }),
+    ]
+
+    expect(toColumnPreferences(state, new Set(['name', 'email']))).toEqual([
+      { id: 'name', visible: true, order: 0, width: MAX_COLUMN_WIDTH },
+      { id: 'email', visible: true, order: 1, width: MIN_COLUMN_WIDTH },
     ])
   })
 

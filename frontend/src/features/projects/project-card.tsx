@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { statusBadgeClassName } from '@/features/projects/status-badge-classes'
-import { formatConversionRate } from '@/features/projects/format-conversion-rate'
 import { GeoScopeBadge } from '@/features/geo/geo-scope-badge'
 import type { ProjectCard as ProjectCardData } from '@/features/projects/types'
 
@@ -15,7 +14,7 @@ interface ProjectCardProps {
   onEdit: (id: number) => void
 }
 
-/** A single stat cell inside a card (campaigns / leads / conversion). */
+/** A single stat cell inside a card (campaigns / leads). */
 function CardStat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="flex flex-col items-center gap-0.5 rounded-md bg-muted/50 py-1.5">
@@ -27,7 +26,7 @@ function CardStat({ label, value }: { label: string; value: number | string }) {
 
 /**
  * A single project card in the card grid (spec 0026 AC-009): code, status
- * badge, name, the 3 stats and an "Open detail" link. The edit affordance
+ * badge, name, the 2 stats and an "Open detail" link. The edit affordance
  * only renders when `project.can.update` (server-computed, BR-2) — UI hides,
  * the backend re-authorizes the actual mutation.
  */
@@ -68,13 +67,9 @@ export function ProjectCard({ project, onEdit }: ProjectCardProps) {
           <GeoScopeBadge scope={project.geo_scope} place={project.geo_label} />
         ) : null}
 
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
           <CardStat label={t('projects.grid.stats.campaigns')} value={project.campaigns_count} />
           <CardStat label={t('projects.grid.stats.leads')} value={project.leads_count} />
-          <CardStat
-            label={t('projects.grid.stats.conversion')}
-            value={formatConversionRate(project.conversion_rate)}
-          />
         </div>
 
         <Link

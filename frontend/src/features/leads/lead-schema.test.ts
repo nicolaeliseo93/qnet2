@@ -11,7 +11,6 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     operational_site_id: null,
     source_id: null,
     operator_id: null,
-    is_converted: false,
     notes: null,
     ...overrides,
   }
@@ -66,11 +65,5 @@ describe('buildCreateLeadSchema', () => {
     const schema = buildCreateLeadSchema(i18n.t)
     const result = schema.safeParse(baseValues({ notes: 'a'.repeat(5001) }))
     expect(result.success).toBe(false)
-  })
-
-  it('accepts is_converted set to true', () => {
-    const schema = buildCreateLeadSchema(i18n.t)
-    const result = schema.safeParse(baseValues({ is_converted: true }))
-    expect(result.success).toBe(true)
   })
 })

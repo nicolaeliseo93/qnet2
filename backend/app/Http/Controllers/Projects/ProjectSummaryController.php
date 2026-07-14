@@ -10,9 +10,8 @@ use Illuminate\Http\JsonResponse;
 use Throwable;
 
 /**
- * GET /api/projects/summary — the 4 KPI tiles feeding the projects card grid
- * (spec 0026): projects_count/campaigns_count/leads_count/
- * converted_leads_count plus the global conversion_rate (BR-1).
+ * GET /api/projects/summary — the 3 KPI tiles feeding the projects card grid
+ * (spec 0026): projects_count/campaigns_count/leads_count.
  *
  * Thin invokable controller, mirroring ProjectForSelectController:
  * server-side authorization (projects.viewAny via ProjectPolicy), Service

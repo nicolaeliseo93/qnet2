@@ -43,8 +43,8 @@ class ProjectController extends BaseApiController
 
     /**
      * GET /api/projects — card-grid list (spec 0026, D-3): paginated,
-     * searchable, status-filterable, carrying the per-card lead-conversion
-     * stats (BR-1) and can.update/can.delete affordances (BR-2).
+     * searchable, status-filterable, carrying the per-card campaigns/leads
+     * counts and can.update/can.delete affordances (BR-2).
      */
     public function index(ProjectIndexRequest $request): JsonResponse
     {

@@ -16,7 +16,6 @@ export const projects = {
     stats: {
       campaigns: 'Campagne',
       leads: 'Lead',
-      conversion: 'Convers.',
     },
     empty: 'Nessun progetto trovato.',
     loadError: 'Impossibile caricare i progetti. Riprova.',

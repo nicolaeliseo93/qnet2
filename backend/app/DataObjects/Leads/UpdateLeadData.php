@@ -29,8 +29,6 @@ final readonly class UpdateLeadData
         public bool $operatorIdSubmitted = false,
         public ?string $notes = null,
         public bool $notesSubmitted = false,
-        public bool $isConverted = false,
-        public bool $isConvertedSubmitted = false,
     ) {}
 
     /**
@@ -53,8 +51,6 @@ final readonly class UpdateLeadData
             operatorIdSubmitted: array_key_exists('operator_id', $data),
             notes: array_key_exists('notes', $data) ? $data['notes'] : null,
             notesSubmitted: array_key_exists('notes', $data),
-            isConverted: array_key_exists('is_converted', $data) ? (bool) $data['is_converted'] : false,
-            isConvertedSubmitted: array_key_exists('is_converted', $data),
         );
     }
 
@@ -90,10 +86,6 @@ final readonly class UpdateLeadData
 
         if ($this->notesSubmitted) {
             $attributes['notes'] = $this->notes;
-        }
-
-        if ($this->isConvertedSubmitted) {
-            $attributes['is_converted'] = $this->isConverted;
         }
 
         return $attributes;

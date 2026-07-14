@@ -12,7 +12,6 @@ function values(overrides: Partial<LeadFormValues> = {}): LeadFormValues {
     operational_site_id: null,
     source_id: null,
     operator_id: null,
-    is_converted: false,
     notes: null,
     ...overrides,
   }
@@ -31,7 +30,6 @@ function original(overrides: Partial<LeadDetail> = {}): LeadDetail {
     source: null,
     operator_id: null,
     operator: null,
-    is_converted: false,
     notes: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -42,7 +40,7 @@ function original(overrides: Partial<LeadDetail> = {}): LeadDetail {
 describe('buildCreatePayload', () => {
   it('includes the required referent_id/campaign_id and the 4 optional fields', () => {
     const payload = buildCreatePayload(
-      values({ operational_site_id: 3, source_id: 4, operator_id: 5, is_converted: true, notes: 'Note' }),
+      values({ operational_site_id: 3, source_id: 4, operator_id: 5, notes: 'Note' }),
     )
 
     expect(payload).toEqual({
@@ -51,12 +49,11 @@ describe('buildCreatePayload', () => {
       operational_site_id: 3,
       source_id: 4,
       operator_id: 5,
-      is_converted: true,
       notes: 'Note',
     })
   })
 
-  it('sends null for the unset optional fields and is_converted false by default', () => {
+  it('sends null for the unset optional fields', () => {
     const payload = buildCreatePayload(values())
 
     expect(payload).toEqual({
@@ -65,7 +62,6 @@ describe('buildCreatePayload', () => {
       operational_site_id: null,
       source_id: null,
       operator_id: null,
-      is_converted: false,
       notes: null,
     })
   })
@@ -100,10 +96,5 @@ describe('buildUpdatePayload', () => {
       original({ source_id: 4, source: { id: 4, name: 'Web' } }),
     )
     expect(payload).toEqual({ source_id: null })
-  })
-
-  it('includes the changed is_converted flag', () => {
-    const payload = buildUpdatePayload(values({ is_converted: true }), original())
-    expect(payload).toEqual({ is_converted: true })
   })
 })

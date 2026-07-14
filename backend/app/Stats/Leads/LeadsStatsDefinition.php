@@ -12,8 +12,9 @@ use App\Stats\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Statistics panel of the `leads` module (spec 0026): volume, conversion and
- * the two breakdowns the commercial team works by (source, operator).
+ * Statistics panel of the `leads` module (spec 0026): volume, assignment and
+ * data-completeness (source/site), plus the two breakdowns the commercial
+ * team works by (source, operator).
  */
 class LeadsStatsDefinition extends AbstractStatsDefinition
 {
@@ -35,16 +36,23 @@ class LeadsStatsDefinition extends AbstractStatsDefinition
     public function widgets(): array
     {
         $total = $this->totalRows();
-        $converted = Lead::query()->where('is_converted', true)->count();
 
         return [
             $this->stat('total', $total, icon: 'users'),
-            $this->stat('converted', $converted, icon: 'user-check'),
-            $this->percentStat('conversion_rate', $converted, $total, icon: 'percent'),
             $this->stat(
                 key: 'assigned',
                 value: Lead::query()->whereNotNull('operator_id')->count(),
                 icon: 'user-check',
+            ),
+            $this->stat(
+                key: 'with_source',
+                value: Lead::query()->whereNotNull('source_id')->count(),
+                icon: 'target',
+            ),
+            $this->stat(
+                key: 'with_site',
+                value: Lead::query()->whereNotNull('operational_site_id')->count(),
+                icon: 'map-pin',
             ),
             $this->distribution(
                 key: 'by_source',

@@ -32,6 +32,7 @@ import {
 import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { TableColumn, TableRow } from '@/features/table/types'
+import { MAX_COLUMN_WIDTH } from '@/features/table/use-table-preferences'
 
 // Re-exported so existing domain renderer maps (`features/table/renderer-registry.ts`)
 // keep importing `CellRenderer` from this module; the type itself now lives in
@@ -402,6 +403,10 @@ export function DataTable({
         resizable: true,
         flex: 1,
         minWidth: DEFAULT_MIN_WIDTH,
+        // Stop the drag where persistence stops: the server caps a saved width at
+        // MAX_COLUMN_WIDTH, so without this the user can widen a column past the
+        // cap and see the layout snap back on the next load.
+        maxWidth: MAX_COLUMN_WIDTH,
       },
       // Stable row ids are required for SSRM selection to survive block
       // reloads; only wired when selection is actually enabled.

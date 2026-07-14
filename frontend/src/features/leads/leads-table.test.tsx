@@ -31,7 +31,6 @@ const mockLead: LeadDetailWithPermissions = {
   source: null,
   operator_id: null,
   operator: null,
-  is_converted: false,
   notes: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',

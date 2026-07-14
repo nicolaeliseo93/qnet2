@@ -14,7 +14,6 @@ use App\Models\Lead;
 use App\Models\Project;
 use App\Services\Concerns\GeneratesSequentialCode;
 use App\Services\Concerns\RealignsCampaignGeo;
-use App\Support\ConversionRate;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -171,9 +170,8 @@ class ProjectService
     }
 
     /**
-     * The card-grid list (spec 0026, D-3), newest-first, carrying the 3
-     * lead-conversion stats (BR-1: campaigns_count/leads_count/
-     * converted_leads_count) as aggregate counts — a single query, no N+1.
+     * The card-grid list (spec 0026, D-3), newest-first, carrying the
+     * campaigns_count/leads_count aggregate counts — a single query, no N+1.
      */
     public function index(ProjectIndexQuery $query): ProjectIndexResult
     {
@@ -209,37 +207,26 @@ class ProjectService
     {
         return Project::query()
             ->with(['projectStatus', 'country', 'state', 'province', 'city'])
-            ->withCount([
-                'campaigns',
-                'leads',
-                'leads as converted_leads_count' => static fn (Builder $leadsQuery) => $leadsQuery->where('is_converted', true),
-            ])
+            ->withCount(['campaigns', 'leads'])
             ->withSum('campaigns as allocated_budget_sum', 'total_budget');
     }
 
     /**
      * Global KPI tiles (spec 0026): counts of projects/campaigns/leads
-     * reachable through a project, plus the derived conversion rate (BR-1).
-     * Cheap aggregate query, no N+1.
+     * reachable through a project. Cheap aggregate query, no N+1.
      *
-     * @return array{projects_count: int, campaigns_count: int, leads_count: int, converted_leads_count: int, conversion_rate: int|null}
+     * @return array{projects_count: int, campaigns_count: int, leads_count: int}
      */
     public function summary(): array
     {
         $projectsCount = Project::query()->count();
         $campaignsCount = (int) DB::table('campaigns')->whereNotNull('project_id')->count();
         $leadsCount = (int) Lead::query()->whereHas('campaign', fn (Builder $campaignQuery) => $campaignQuery->whereNotNull('project_id'))->count();
-        $convertedLeadsCount = (int) Lead::query()
-            ->where('is_converted', true)
-            ->whereHas('campaign', fn (Builder $campaignQuery) => $campaignQuery->whereNotNull('project_id'))
-            ->count();
 
         return [
             'projects_count' => $projectsCount,
             'campaigns_count' => $campaignsCount,
             'leads_count' => $leadsCount,
-            'converted_leads_count' => $convertedLeadsCount,
-            'conversion_rate' => ConversionRate::of($convertedLeadsCount, $leadsCount),
         ];
     }
 
