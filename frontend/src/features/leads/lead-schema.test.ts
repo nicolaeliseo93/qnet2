@@ -2,12 +2,16 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import i18n from '@/i18n'
 import { buildCreateLeadSchema } from '@/features/leads/lead-schema'
 
-/** AC-060: contact and campaign missing produce a localized validation error; the other 4 fields empty pass. */
+/**
+ * AC-060: contact, campaign and lead status missing produce a localized
+ * validation error (BR-1, D-1); the other 3 fields empty pass.
+ */
 
 function baseValues(overrides: Record<string, unknown> = {}) {
   return {
     referent_id: 1,
     campaign_id: 2,
+    lead_status_id: 3,
     operational_site_id: null,
     source_id: null,
     operator_id: null,
@@ -42,6 +46,15 @@ describe('buildCreateLeadSchema', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues.some((issue) => issue.path.join('.') === 'campaign_id')).toBe(true)
+    }
+  })
+
+  it('rejects a missing lead_status_id (D-1)', () => {
+    const schema = buildCreateLeadSchema(i18n.t)
+    const result = schema.safeParse(baseValues({ lead_status_id: null }))
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'lead_status_id')).toBe(true)
     }
   })
 

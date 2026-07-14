@@ -5,6 +5,7 @@ import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-a
 import { REFERENT_TYPES_FOR_SELECT_RESOURCE } from '@/features/referent-types/for-select-api'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/project-statuses/for-select-api'
+import { LEAD_STATUSES_FOR_SELECT_RESOURCE } from '@/features/lead-statuses/for-select-api'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-api'
 import { TAGS_FOR_SELECT_RESOURCE } from '@/features/tags/for-select-api'
@@ -109,6 +110,24 @@ const projectStatuses: QuickCreateEntry = {
   }),
 }
 
+const leadStatuses: QuickCreateEntry = {
+  titleKey: 'leadStatuses.form.createTitle',
+  descriptionKey: 'leadStatuses.form.createSubtitle',
+  permission: 'lead-statuses.create',
+  form: lazy(async () => {
+    const { LeadStatusForm } = await import('@/features/lead-statuses/lead-status-form')
+    return {
+      default: ({ onSuccess, onCancel }: QuickCreateFormProps) => (
+        <LeadStatusForm
+          mode={{ type: 'create' }}
+          onSuccess={(leadStatus) => onSuccess({ id: leadStatus.id, name: leadStatus.name })}
+          onCancel={onCancel}
+        />
+      ),
+    }
+  }),
+}
+
 const registries: QuickCreateEntry = {
   titleKey: 'registries.form.createTitle',
   descriptionKey: 'registries.form.createSubtitle',
@@ -206,6 +225,7 @@ export const moduleEntries: Record<string, QuickCreateEntry> = {
   [REFERENT_TYPES_FOR_SELECT_RESOURCE]: referentTypes,
   [BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE]: businessFunctions,
   [PROJECT_STATUSES_FOR_SELECT_RESOURCE]: projectStatuses,
+  [LEAD_STATUSES_FOR_SELECT_RESOURCE]: leadStatuses,
   [REGISTRIES_FOR_SELECT_RESOURCE]: registries,
   [CAMPAIGNS_FOR_SELECT_RESOURCE]: campaigns,
   [TAGS_FOR_SELECT_RESOURCE]: tags,

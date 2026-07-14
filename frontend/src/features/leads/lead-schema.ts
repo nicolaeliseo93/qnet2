@@ -11,9 +11,10 @@ import type { TFunction } from 'i18next'
 const NOTES_MAX_LENGTH = 5000
 
 /**
- * BR-1: contact and campaign are unconditionally required (unlike campaigns'
- * conditionally-required classification fields), so a plain `refine` on the
- * controlled-select's `null` unset state is enough — no cross-field rule needed.
+ * BR-1/D-1: contact, campaign and lead status are unconditionally required
+ * (unlike campaigns' conditionally-required classification fields), so a
+ * plain `refine` on the controlled-select's `null` unset state is enough —
+ * no cross-field rule needed.
  */
 function baseFields(t: TFunction) {
   return {
@@ -25,6 +26,10 @@ function baseFields(t: TFunction) {
       .number()
       .nullable()
       .refine((value) => value !== null, { message: t('leads.form.campaignRequired') }),
+    lead_status_id: z
+      .number()
+      .nullable()
+      .refine((value) => value !== null, { message: t('leads.form.leadStatusRequired') }),
     operational_site_id: z.number().nullable(),
     source_id: z.number().nullable(),
     operator_id: z.number().nullable(),

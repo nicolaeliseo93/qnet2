@@ -9,6 +9,7 @@ function values(overrides: Partial<LeadFormValues> = {}): LeadFormValues {
   return {
     referent_id: 10,
     campaign_id: 20,
+    lead_status_id: 30,
     operational_site_id: null,
     source_id: null,
     operator_id: null,
@@ -24,6 +25,8 @@ function original(overrides: Partial<LeadDetail> = {}): LeadDetail {
     referent: { id: 10, name: 'Mario Rossi' },
     campaign_id: 20,
     campaign: { id: 20, code: 'CMP-0001', name: 'Spring push' },
+    lead_status_id: 30,
+    lead_status: { id: 30, name: 'New', color: 'slate' },
     operational_site_id: null,
     operational_site: null,
     source_id: null,
@@ -38,7 +41,7 @@ function original(overrides: Partial<LeadDetail> = {}): LeadDetail {
 }
 
 describe('buildCreatePayload', () => {
-  it('includes the required referent_id/campaign_id and the 4 optional fields', () => {
+  it('includes the required referent_id/campaign_id/lead_status_id and the 4 optional fields', () => {
     const payload = buildCreatePayload(
       values({ operational_site_id: 3, source_id: 4, operator_id: 5, notes: 'Note' }),
     )
@@ -46,6 +49,7 @@ describe('buildCreatePayload', () => {
     expect(payload).toEqual({
       referent_id: 10,
       campaign_id: 20,
+      lead_status_id: 30,
       operational_site_id: 3,
       source_id: 4,
       operator_id: 5,
@@ -59,6 +63,7 @@ describe('buildCreatePayload', () => {
     expect(payload).toEqual({
       referent_id: 10,
       campaign_id: 20,
+      lead_status_id: 30,
       operational_site_id: null,
       source_id: null,
       operator_id: null,
@@ -80,6 +85,12 @@ describe('buildUpdatePayload', () => {
 
   it('includes only the changed campaign_id', () => {
     expect(buildUpdatePayload(values({ campaign_id: 99 }), original())).toEqual({ campaign_id: 99 })
+  })
+
+  it('includes only the changed lead_status_id', () => {
+    expect(buildUpdatePayload(values({ lead_status_id: 99 }), original())).toEqual({
+      lead_status_id: 99,
+    })
   })
 
   it('includes multiple changed fields together', () => {

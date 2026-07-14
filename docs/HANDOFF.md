@@ -2,6 +2,57 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — modulo Lead Statuses (spec 0029) — GREEN (committed)
+
+Nuovo modulo lookup `lead-statuses` (name UNIVOCO + color + sort_order) e FK OBBLIGATORIA
+`leads.lead_status_id`. Template 1:1 = `project-statuses`, NON `sources`/`tags` (che non hanno colore).
+
+CONTRATTO (congelato nella spec, rispettato da BE e FE):
+- Tabella `lead_statuses` · Model `LeadStatus` · relazioni `Lead::leadStatus()` / `LeadStatus::leads()`.
+- Resource key / route / permessi: `lead-statuses` · `/api/lead-statuses/*` (+ `/for-select`) ·
+  `lead-statuses.{viewAny,view,create,update,delete,export,import}` (derivate dal glob su Policy:
+  NON si scrivono a mano, basta `LeadStatusPolicy extends BasePolicy`).
+- Entity: `{id, name, color: string|null, sort_order, created_at}`. Il COLORE E' UN TOKEN della
+  palette condivisa (`BADGE_COLOR_TOKENS`, 14 token), NON un hex: si riusa `<ColorTokenPicker>`.
+- Delete-guard (BR-3): stato in uso => 409 `"This lead status is used by a lead and cannot be
+  deleted."` Il guard vive nel SERVICE; la FK e' comunque `restrictOnDelete()` (difesa in profondita':
+  senza il guard applicativo la QueryException uscirebbe come 500).
+- `name` UNIVOCO (unique DB + `Rule::unique`, `->ignore()` in update): duplicato => 422, mai 500.
+  E' una NOVITA' rispetto a tutti gli altri moduli lookup, che non hanno unique sul nome.
+
+MIGRATION A 3 STEP (il punto delicato, `2026_07_14_160100_add_lead_status_id_to_leads_table`):
+la tabella `leads` aveva gia' dati, quindi in una sola `up()`: (a) colonna nullable + FK
+restrictOnDelete, (b) SE esistono lead: crea via DB facade lo stato di default `{New, slate, 0}` e
+fa il backfill, (c) `->change()` a NOT NULL. Su DB vuoto lo step (b) e' un no-op => il seed pulito
+resta pulito. VERIFICATO ISPEZIONANDO LO SCHEMA (non assunto): dopo il rebuild SQLite indotto da
+`->change()`, `PRAGMA foreign_key_list(leads)` mostra la FK con `on_delete: RESTRICT` ancora viva e
+`notnull: 1`. Se in futuro tocchi una FK con `->change()` su SQLite, ricontrolla questo.
+
+TRAPPOLA COSTATA CARA (memorizzala): un nuovo model con `LogsModelActivity` DEVE essere aggiunto a
+`Relation::enforceMorphMap()` in `AppServiceProvider::boot()`, altrimenti OGNI scrittura HTTP reale
+lancia `ClassMorphViolationException` (500). Non si vede col seeding, perche' `DemoDataSeeder` usa
+`WithoutModelEvents` e sopprime l'observer: il seed e' verde mentre l'API e' rotta.
+
+CONVENZIONE LABEL i18n (NON uniforme, non "aggiustarla"): il dominio `lead-statuses` emette chiavi
+colonna in snake_case (`leadStatuses.columns.sort_order`) come project-statuses; il dominio `leads`
+le emette in camelCase (`leads.columns.leadStatus`). Ogni dominio segue la propria.
+
+DEBITO NOTO APERTO (non introdotto qui, ma ora piu' visibile):
+- La mappa "color token -> classi badge" esiste in TRE copie non esportate
+  (`features/table/cell-renderers.tsx`, `features/projects/column-renderers.tsx`,
+  `features/leads/column-renderers.tsx`). Follow-up: centralizzarla ed esportarla.
+- `ProjectsTableDefinition::mapRow()` passa lo stato da `summarize()`, che scarta il `color`: il badge
+  di `project_status` NELLA TABELLA progetti e' quindi SCOLORITO (bug preesistente, fuori scope).
+  Per i lead la cella `lead_status` e' mappata esplicitamente `{id, name, color}` per non ereditarlo.
+- `LeadsTableDefinition` e' a 329 righe (soft limit 300): al prossimo intervento valutare lo split.
+
+VERIFICATO DAL VERIFIER (eseguito, non assunto): Pest 2251/2253 (unico rosso
+`AbstractMigrationSourcePreviewTest`, PREESISTENTE); Pint pulito salvo `CompanySiteUpdateTest.php`
+(sporco PREESISTENTE, mai toccato); `tsc --noEmit` pulito; Vitest 1189/1213 (i 24 rossi sono i
+PREESISTENTI di registries + cell-renderers). Zero nuove dipendenze. Nessun test indebolito: i diff
+sui test preesistenti sono solo adeguamenti al nuovo contratto (fixture che creano un LeadStatus,
+catalogo field che cresce di una resource).
+
 ## REVOCA — flag `is_converted` sui lead (2026-07-14) — GREEN (not committed)
 
 Richiesta utente: "lead convertito true/false non lo voglio ne' nella migration ne' sul form ne'

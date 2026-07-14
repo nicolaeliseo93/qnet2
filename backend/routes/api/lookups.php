@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\LeadStatuses\LeadStatusController;
+use App\Http\Controllers\LeadStatuses\LeadStatusForSelectController;
 use App\Http\Controllers\Sectors\SectorController;
 use App\Http\Controllers\Sectors\SectorForSelectController;
 use App\Http\Controllers\Sources\SourceController;
@@ -14,11 +16,12 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 |
 | Extracted out of routes/api.php (file-size split, engineering.md §6):
-| Sources (spec 0018), Tags (spec 0019) and Sectors (spec 0018) are all
-| thin CRUD (+ for-select where applicable) wrappers over the generic
-| table/authorization framework, sharing no state with the rest of the API.
-| Required from routes/api.php INSIDE the existing `auth:sanctum` group, so
-| every route below inherits that same middleware/prefix context.
+| Sources (spec 0018), Tags (spec 0019), Sectors (spec 0018) and Lead
+| statuses (spec 0029) are all thin CRUD (+ for-select where applicable)
+| wrappers over the generic table/authorization framework, sharing no state
+| with the rest of the API. Required from routes/api.php INSIDE the existing
+| `auth:sanctum` group, so every route below inherits that same
+| middleware/prefix context.
 */
 
 // Sources CRUD (spec 0018): a standalone lookup used to classify the
@@ -75,4 +78,21 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::post('sectors', [SectorController::class, 'store']);
     Route::match(['put', 'patch'], 'sectors/{sector}', [SectorController::class, 'update']);
     Route::delete('sectors/{sector}', [SectorController::class, 'destroy']);
+});
+
+// Lead statuses CRUD (spec 0029): the Lead working-state pick-list (BR-3
+// delete-guard lives in LeadStatusService). Authorization
+// (lead-statuses.view/create/update/delete) is enforced server-side in
+// LeadStatusController via LeadStatusPolicy.
+Route::middleware('throttle:60,1')->group(function () {
+    // Minimal searchable/paginated list for entity-backed selects (ADR 0011).
+    // Declared ABOVE lead-statuses/{leadStatus} so the literal `for-select`
+    // segment wins over the bound wildcard. Gated by lead-statuses.viewAny
+    // server-side in LeadStatusForSelectController.
+    Route::get('lead-statuses/for-select', LeadStatusForSelectController::class);
+
+    Route::get('lead-statuses/{leadStatus}', [LeadStatusController::class, 'show']);
+    Route::post('lead-statuses', [LeadStatusController::class, 'store']);
+    Route::match(['put', 'patch'], 'lead-statuses/{leadStatus}', [LeadStatusController::class, 'update']);
+    Route::delete('lead-statuses/{leadStatus}', [LeadStatusController::class, 'destroy']);
 });

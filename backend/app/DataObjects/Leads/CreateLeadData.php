@@ -9,8 +9,8 @@ namespace App\DataObjects\Leads;
  *
  * Declared DTO (no "magic flying array") so the StoreLeadRequest ->
  * LeadService contract is explicit — see standards/architecture.md → Data
- * Transfer Objects. `referent_id`/`campaign_id` are mandatory (BR-1); no
- * `code` field exists for a Lead (D-3).
+ * Transfer Objects. `referent_id`/`campaign_id`/`lead_status_id` are
+ * mandatory (BR-1, spec 0029 D-1); no `code` field exists for a Lead (D-3).
  */
 final readonly class CreateLeadData
 {
@@ -20,6 +20,7 @@ final readonly class CreateLeadData
         public ?int $operationalSiteId,
         public ?int $sourceId,
         public ?int $operatorId,
+        public int $leadStatusId,
         public ?string $notes,
     ) {}
 
@@ -36,6 +37,7 @@ final readonly class CreateLeadData
             operationalSiteId: isset($data['operational_site_id']) ? (int) $data['operational_site_id'] : null,
             sourceId: isset($data['source_id']) ? (int) $data['source_id'] : null,
             operatorId: isset($data['operator_id']) ? (int) $data['operator_id'] : null,
+            leadStatusId: (int) $data['lead_status_id'],
             notes: $data['notes'] ?? null,
         );
     }
@@ -54,6 +56,7 @@ final readonly class CreateLeadData
             'operational_site_id' => $this->operationalSiteId,
             'source_id' => $this->sourceId,
             'operator_id' => $this->operatorId,
+            'lead_status_id' => $this->leadStatusId,
             'notes' => $this->notes,
         ];
     }

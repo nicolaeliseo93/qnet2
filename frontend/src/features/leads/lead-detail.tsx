@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Contact, Info, StickyNote } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import {
   DetailEmpty,
   DetailField,
@@ -11,6 +13,7 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { LEAD_STATUS_BADGE_CLASSES } from '@/features/leads/column-renderers'
 import type { LeadDetail as LeadDetailData } from '@/features/leads/types'
 
 interface LeadDetailViewProps {
@@ -55,6 +58,17 @@ export function LeadDetailView({ lead }: LeadDetailViewProps) {
           </DetailField>
           <DetailField label={t('leads.form.source')}>
             {lead.source?.name ?? <DetailEmpty />}
+          </DetailField>
+          <DetailField label={t('leads.form.leadStatus')}>
+            <Badge
+              variant="secondary"
+              className={cn(
+                'h-5 min-h-5',
+                lead.lead_status.color ? LEAD_STATUS_BADGE_CLASSES[lead.lead_status.color] : undefined,
+              )}
+            >
+              {lead.lead_status.name}
+            </Badge>
           </DetailField>
           <DetailField label={t('leads.form.operator')}>
             {lead.operator?.name ?? <DetailEmpty />}

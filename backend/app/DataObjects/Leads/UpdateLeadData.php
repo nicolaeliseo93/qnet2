@@ -12,7 +12,7 @@ namespace App\DataObjects\Leads;
  * LeadService contract is explicit, mirroring UpdateCampaignData: every field
  * is a legitimately nullable/omittable VALUE, so the `*Submitted` flags carry
  * the "was this key actually present" distinction a plain property cannot
- * express (AC-013: a PATCH with only `notes` must leave the 5 FKs untouched).
+ * express (AC-013: a PATCH with only `notes` must leave the 6 FKs untouched).
  */
 final readonly class UpdateLeadData
 {
@@ -27,6 +27,8 @@ final readonly class UpdateLeadData
         public bool $sourceIdSubmitted = false,
         public ?int $operatorId = null,
         public bool $operatorIdSubmitted = false,
+        public ?int $leadStatusId = null,
+        public bool $leadStatusIdSubmitted = false,
         public ?string $notes = null,
         public bool $notesSubmitted = false,
     ) {}
@@ -49,6 +51,8 @@ final readonly class UpdateLeadData
             sourceIdSubmitted: array_key_exists('source_id', $data),
             operatorId: self::nullableInt($data, 'operator_id'),
             operatorIdSubmitted: array_key_exists('operator_id', $data),
+            leadStatusId: self::nullableInt($data, 'lead_status_id'),
+            leadStatusIdSubmitted: array_key_exists('lead_status_id', $data),
             notes: array_key_exists('notes', $data) ? $data['notes'] : null,
             notesSubmitted: array_key_exists('notes', $data),
         );
@@ -82,6 +86,10 @@ final readonly class UpdateLeadData
 
         if ($this->operatorIdSubmitted) {
             $attributes['operator_id'] = $this->operatorId;
+        }
+
+        if ($this->leadStatusIdSubmitted) {
+            $attributes['lead_status_id'] = $this->leadStatusId;
         }
 
         if ($this->notesSubmitted) {

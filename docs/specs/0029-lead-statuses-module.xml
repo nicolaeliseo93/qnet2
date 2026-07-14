@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0029-lead-statuses-module" status="draft" owner="nicola" date="2026-07-14">
+
+  <goal>
+    Introdurre il modulo `lead-statuses`: tabella di supporto che descrive lo stato di lavorazione
+    di un Lead (nome univoco, colore, ordine). Ogni Lead ha esattamente uno stato (FK obbligatoria);
+    uno stato e' usato da N Lead. Uno stato in uso non e' cancellabile.
+  </goal>
+
+  <context>
+    <!-- Tutti i nomi qui sotto sono VERIFICATI sul codice reale, non ipotizzati. -->
+
+    <precedent>
+      Il modulo `project-statuses` (spec 0023) e' il template 1:1: stessa forma (name + color +
+      sort_order), stesso delete-guard 409, stesso for-select ordinato per sort_order. Il nuovo
+      modulo lo replica su tutti i layer. NON si prende `sources`/`tags` come modello: non hanno
+      colore. File di riferimento da leggere prima di scrivere:
+      backend/app/Models/ProjectStatus.php, app/Services/ProjectStatusService.php,
+      app/Tables/ProjectStatusesTableDefinition.php + app/Tables/ProjectStatuses/ProjectStatusColumnCatalog.php,
+      app/Authorization/ProjectStatusesAuthorization.php, app/Policies/ProjectStatusPolicy.php,
+      app/Http/{Controllers/ProjectStatuses,Requests/ProjectStatuses,Resources/ProjectStatusResource.php},
+      app/DataObjects/ProjectStatuses/*, backend/routes/api/projects.php:36-47,
+      frontend/src/features/project-statuses/* (13 file), frontend/src/pages/project-statuses-page.tsx.
+    </precedent>
+
+    <naming>
+      Tabella `lead_statuses` · Model `LeadStatus` · FK `leads.lead_status_id` · relazione Eloquent
+      `Lead::leadStatus()` (BelongsTo) / `LeadStatus::leads()` (HasMany) · resource key e route
+      segment `lead-statuses` · permessi `lead-statuses.{viewAny,view,create,update,delete,export,import}`
+      · namespace i18n FE `leadStatuses`.
+    </naming>
+
+    <dead_scaffold>
+      Esistono cartelle VUOTE, residuo di un tentativo abortito, da CANCELLARE nel primo microtask:
+      backend/app/{Http/Controllers,Http/Requests,DataObjects,Tables}/LeadStatusConfigs,
+      backend/tests/Feature/LeadStatusConfigs, frontend/src/features/lead-status-configs.
+      Il nome `LeadStatusConfig` NON si usa: il naming e' `LeadStatus` (vedi <naming>).
+    </dead_scaffold>
+
+    <color_is_a_token>
+      Nel progetto il colore NON e' un hex: e' un token della palette condivisa. Sorgente di verita':
+      frontend/src/features/custom-fields/badge-color-tokens.ts (`BADGE_COLOR_TOKENS`, 14 token:
+      slate, gray, red, orange, amber, yellow, green, emerald, teal, blue, indigo, violet, purple,
+      pink). Il picker riusabile esiste gia': features/custom-fields/components/color-token-picker.tsx.
+      Backend: `string('color', 32)->nullable()`, FieldDefinition di tipo `'color'`.
+    </color_is_a_token>
+
+    <permissions_are_derived>
+      I permessi CRUD non si scrivono a mano: `SyncPermissions` (app/Console/Commands/SyncPermissions.php)
+      fa glob su app/Policies/*.php e deriva le 7 abilities da BasePolicy::permissions(). Creare
+      `LeadStatusPolicy extends BasePolicy` con `resource(): 'lead-statuses'` e' sufficiente.
+      I FIELD PERMISSIONS sono un'altra cosa: si dichiarano in `LeadStatusesAuthorization`
+      (fields() + fieldPermissionCeiling()) e si registrano in config/authorization.php.
+    </permissions_are_derived>
+
+    <export_is_free>
+      L'export e' gratuito per ogni dominio registrato in config/tables.php (vedi config/exports.php:8-20):
+      non va scritto codice di export. L'IMPORT invece richiederebbe una definition dedicata in
+      config/imports.php ed e' FUORI SCOPE (vedi scope/out).
+    </export_is_free>
+
+    <known_defect_not_ours>
+      In ProjectsTableDefinition::mapRow() lo stato passa da `summarize()`, che ritorna solo
+      {id, name}: il badge colorato di project_status in TABELLA e' quindi scolorito (il FE legge
+      `status.color`, che arriva undefined). Difetto PREESISTENTE, fuori scope. Per i lead la cella
+      `lead_status` si mappa ESPLICITAMENTE come {id, name, color} per non ereditare lo stesso bug.
+    </known_defect_not_ours>
+  </context>
+
+  <decisions>
+    <!-- Decisioni prese dall'utente in fase di pianificazione. Non rinegoziabili senza emendamento. -->
+    <decision id="D-1">
+      `leads.lead_status_id` e' NOT NULL: ogni lead ha sempre uno stato. Conseguenze obbligatorie:
+      backfill dei lead esistenti in migration (vedi BR-1), `required` nel FormRequest dei lead,
+      `mandatory: true` nel FieldDefinition, `LeadFactory` deve valorizzare la FK.
+    </decision>
+    <decision id="D-2">
+      Il colore e' un TOKEN della palette esistente (vedi context/color_is_a_token), non un hex.
+      Nessun nuovo componente UI di colore: si riusa `&lt;ColorTokenPicker&gt;`.
+    </decision>
+    <decision id="D-3">
+      Si include `sort_order` (integer, default 0): ordina la select e la tabella, perche' gli stati
+      hanno una progressione che l'ordine alfabetico distruggerebbe. `defaultSort` = sort_order asc.
+    </decision>
+    <decision id="D-4">
+      `name` e' UNIVOCO (unique DB + Rule::unique con ignore in update). E' una novita' rispetto agli
+      altri moduli lookup, che non hanno alcun unique sul nome.
+    </decision>
+  </decisions>
+
+  <business_rules>
+    <rule id="BR-1" name="mandatory-fk-backfill">
+      La colonna `leads.lead_status_id` viene aggiunta a una tabella con dati esistenti, quindi la
+      migration procede in 3 step nella stessa `up()`:
+      (1) aggiunge la colonna NULLABLE con `constrained('lead_statuses')->restrictOnDelete()`;
+      (2) SE e solo se esiste almeno un lead: crea via DB facade lo stato di default
+          {name: 'New', color: 'slate', sort_order: 0} e fa il backfill di tutti i lead;
+      (3) porta la colonna a NOT NULL con `->change()`.
+      Su un DB vuoto (migrate:fresh, test) lo step 2 e' un no-op e nessuna riga viene creata: il seed
+      pulito resta pulito. `down()` deve essere reversibile (drop FK + drop colonna).
+      RISCHIO NOTO: `->change()` su una colonna FK si comporta diversamente su SQLite (rebuild della
+      tabella) e MySQL. Va verificato su ENTRAMBI, non assunto (vedi AC-012).
+    </rule>
+    <rule id="BR-2" name="unique-name">
+      `name` univoco a livello DB (`unique`) e di validazione: `Rule::unique('lead_statuses','name')`
+      in store, con `->ignore($leadStatus->id)` in update. Violazione => 422, non 500.
+    </rule>
+    <rule id="BR-3" name="delete-guard">
+      Uno stato referenziato da almeno un Lead non e' cancellabile: `LeadStatusService::delete()`
+      fa `abort(409, 'This lead status is used by a lead and cannot be deleted.')` PRIMA della delete.
+      Difesa in profondita': la FK e' comunque `restrictOnDelete()` a livello schema (senza il guard
+      applicativo la QueryException uscirebbe come 500 anziche' 409). Identico a
+      ProjectStatusService::delete().
+    </rule>
+    <rule id="BR-4" name="select-order">
+      `LeadStatusService::forSelect()` ordina per `sort_order` asc, poi `name` asc, cosi' la select
+      rispecchia l'ordine della tabella. Idratazione degli id gia' selezionati via `appendHydratedIds()`.
+    </rule>
+  </business_rules>
+
+  <scope>
+    <in>
+      <item>Backend modulo `lead-statuses` completo: migration, Model, Factory, DataObjects, FormRequest (store/update/for-select), Policy, Resource (+ ForSelectResource), Service, Controller (+ ForSelectController), rotte, TableDefinition + ColumnCatalog, Authorization (field permissions), registrazione in config/{tables,authorization,navigation}.php.</item>
+      <item>Migration di `leads`: FK `lead_status_id` NOT NULL con backfill (BR-1); aggiornamento di Lead (Fillable + relazione), LeadFactory, LeadResource, LeadsTableDefinition (colonna derivata `lead_status`), LeadColumnCatalog, StoreLeadRequest/UpdateLeadRequest, LeadsAuthorization, DTO dei lead.</item>
+      <item>Seeder demo: `DemoLeadStatusSeeder` registrato in `DemoDataSeeder` PRIMA di DemoLeadSeeder; DemoLeadSeeder assegna uno stato a ogni lead.</item>
+      <item>Frontend feature `features/lead-statuses/` (13 file, clone di project-statuses): api, types, schema zod, form + form-body + hook + meta-hook + payload, tabella + column-renderers (ColorCell), detail, for-select-api, test.</item>
+      <item>Frontend registrazioni: pages/lead-statuses-page.tsx, routes/router.tsx (lazy + route), quick-create module-entries.tsx, i18n en/it (file di dominio + navigation + spread).</item>
+      <item>Frontend leads: campo `lead_status_id` come RelationSelectField obbligatorio (types, schema, use-lead-form, payload, form-body, detail, column-renderers con badge colorato).</item>
+      <item>Test: Pest (Crud, Table, ForSelect, Meta, Security, DeleteGuard, Migration) + Vitest (schema, payload, form, table).</item>
+      <item>Cancellazione delle cartelle vuote `LeadStatusConfigs` / `lead-status-configs`.</item>
+    </in>
+    <out>
+      <item>IMPORT del modulo (config/imports.php + ImportDefinition): fuori scope, come per sources/project-statuses.</item>
+      <item>Custom fields universali (spec 0021) sul modulo lead-statuses: project-statuses non e' custom-fieldable, il nuovo modulo nemmeno.</item>
+      <item>Fix del badge scolorito di `project_status` nella tabella progetti (difetto preesistente, vedi context/known_defect_not_ours): si SEGNALA, non si tocca.</item>
+      <item>Widget/statistiche per stato lead (es. conteggio lead per stato): non richiesto.</item>
+      <item>Workflow/transizioni di stato (stato iniziale, transizioni ammesse, storico): lo stato e' un semplice lookup.</item>
+      <item>Nuove dipendenze npm/composer: nessuna.</item>
+      <item>Rinominare o toccare i moduli esistenti (sources, tags, project-statuses).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Envelope di progetto: { success, message, data } — okWithPermissions() aggiunge `permissions`. -->
+
+    <entity name="LeadStatus">
+      id: int · name: string(191, unique) · color: string(32)|null (token palette) ·
+      sort_order: int (default 0) · created_at: ISO8601 · updated_at: ISO8601
+    </entity>
+
+    <endpoint method="GET" path="/api/lead-statuses/for-select">
+      <request>search?: string · offset?: int · limit?: int (max 100) · ids?: int[]</request>
+      <response status="200">
+        { success: true, message: string, data: [{ id: int, label: string }], meta: { total: int, offset: int, limit: int } }
+        Ordinamento: sort_order asc, name asc (BR-4). `label` = name.
+      </response>
+      <errors>403 senza `lead-statuses.viewAny`</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/lead-statuses/{leadStatus}">
+      <response status="200">
+        { success, message, data: { id, name, color, sort_order, created_at }, permissions: {...} }
+      </response>
+      <errors>403 senza `lead-statuses.view` · 404 id inesistente</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/lead-statuses">
+      <request>{ name: string (required, max 191, unique), color?: string|null (max 32), sort_order?: int (min 0) }</request>
+      <response status="201">{ success, message, data: { id, name, color, sort_order, created_at }, permissions }</response>
+      <errors>403 senza `lead-statuses.create` · 422 name mancante / duplicato (BR-2) / color troppo lungo</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/lead-statuses/{leadStatus}">
+      <request>Campi `sometimes`: { name?, color? (null ammesso = svuota), sort_order? }. Il DTO di update
+      distingue "non inviato" da "inviato a null" con un flag esplicito `colorSubmitted`, come
+      UpdateProjectStatusData.</request>
+      <response status="200">{ success, message, data: {...}, permissions }</response>
+      <errors>403 senza `lead-statuses.update` · 404 · 422 (unique ignora se stesso, BR-2)</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/lead-statuses/{leadStatus}">
+      <response status="204">nessun body</response>
+      <errors>
+        403 senza `lead-statuses.delete` · 404 ·
+        409 { success: false, message: "This lead status is used by a lead and cannot be deleted." } (BR-3)
+      </errors>
+    </endpoint>
+
+    <endpoint method="GENERIC" path="framework tabellare, domain `lead-statuses`">
+      <request>Nessun endpoint nuovo: registrazione in config/tables.php. Export incluso (context/export_is_free).</request>
+      <response status="200">
+        Colonne (ColumnCatalog): id · name (text, sortable, filterable, searchable) ·
+        color (text, NON sortable, NON filterable) · sort_order (number, sortable) ·
+        created_at (date, sortable). defaultSort = [{columnId: 'sort_order', direction: 'asc'}].
+        Azioni per riga via Policy: view · edit · delete.
+      </response>
+      <errors>403 senza `lead-statuses.viewAny` (fail-safe di AbstractTableDefinition, non si override authorizeViewAny)</errors>
+    </endpoint>
+
+    <endpoint method="CHANGED" path="/api/leads/* (contratto ESTESO)">
+      <request>
+        Store: `lead_status_id` REQUIRED (integer, Rule::exists('lead_statuses','id')) — D-1.
+        Update: `sometimes|required` (mai nullable).
+      </request>
+      <response status="200">
+        LeadResource aggiunge: `lead_status_id: int` e
+        `lead_status: { id: int, name: string, color: string|null }` (MAI null, D-1).
+        Riga di tabella lead: cella `lead_status` = { id, name, color } — mappata ESPLICITAMENTE,
+        non via summarize() (context/known_defect_not_ours). Colonna derivata `lead_status`
+        (DERIVED_RELATIONS: relation `leadStatus`, table `lead_statuses`, fk `lead_status_id`),
+        filterType `set`, sortable. Label i18n: `leads.columns.leadStatus` (camelCase: e' la
+        convenzione REALE del dominio leads, mentre lead-statuses usa snake_case come project-statuses).
+      </response>
+      <errors>422 se `lead_status_id` assente in creazione</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- Ogni AC mappa 1:1 su un test eseguibile. Il verifier li esegue uno per uno. -->
+
+    <criterion id="AC-001">Dato un utente con `lead-statuses.create`, quando POSTa { name: 'Qualified', color: 'green', sort_order: 2 }, allora 201 e la riga esiste in `lead_statuses` con quei valori.</criterion>
+    <criterion id="AC-002">Dato uno stato 'Qualified' esistente, quando un utente POSTa un altro stato con name 'Qualified', allora 422 sul campo `name` (BR-2, D-4) — non 500, non 201.</criterion>
+    <criterion id="AC-003">Dato uno stato esistente, quando lo si aggiorna con il PROPRIO name invariato, allora 200 (l'unique ignora se stesso, BR-2).</criterion>
+    <criterion id="AC-004">Dato uno stato NON referenziato da alcun lead, quando un utente con `lead-statuses.delete` fa DELETE, allora 204 e la riga sparisce.</criterion>
+    <criterion id="AC-005">Dato uno stato referenziato da ALMENO un lead, quando si fa DELETE, allora 409 con message "This lead status is used by a lead and cannot be deleted.", e sia lo stato sia il lead sono ancora in DB (BR-3).</criterion>
+    <criterion id="AC-006">Dato un utente SENZA i permessi, allora ciascuno di GET show / POST / PATCH / DELETE / for-select / tabella risponde 403 (uno per ability).</criterion>
+    <criterion id="AC-007">Dopo `permissions:sync`, esistono le 7 permission `lead-statuses.{viewAny,view,create,update,delete,export,import}`.</criterion>
+    <criterion id="AC-008">GET /api/lead-statuses/for-select restituisce gli stati ordinati per sort_order asc (non alfabetico), rispetta `search`, e idrata gli `ids` richiesti anche se fuori pagina (BR-4).</criterion>
+    <criterion id="AC-009">La tabella `lead-statuses` risponde con le 5 colonne del catalogo, defaultSort su sort_order asc, filtro/sort su `name` funzionanti, e l'export del dominio produce un file (nessun endpoint nuovo).</criterion>
+    <criterion id="AC-010">GET /api/meta/lead-statuses espone i field permission per name (mandatory, required), color, sort_order; un ruolo con field permission ristretta su `color` non puo' scriverlo (il FormRequest lo rifiuta via EnforcesFieldPermissions).</criterion>
+    <criterion id="AC-011">POST /api/leads SENZA `lead_status_id` risponde 422 (D-1); CON un `lead_status_id` valido risponde 201 e LeadResource espone `lead_status: {id, name, color}`.</criterion>
+    <criterion id="AC-012">`php artisan migrate:fresh` gira verde su SQLite E la migration di backfill gira verde su un DB che contiene GIA' dei lead (BR-1): tutti i lead preesistenti finiscono sullo stato di default e la colonna e' NOT NULL. Verificato eseguendo, non assunto.</criterion>
+    <criterion id="AC-013">La riga della tabella lead contiene `lead_status` = {id, name, color} (color incluso), la colonna e' filtrabile come `set` e ordinabile.</criterion>
+    <criterion id="AC-014">(FE) Il form di creazione stato mostra name (required) + ColorTokenPicker + sort_order; salvando con name vuoto mostra l'errore di validazione e non chiama l'API.</criterion>
+    <criterion id="AC-015">(FE) La tabella lead-statuses renderizza la cella `color` come swatch + label del token; la tabella lead renderizza `lead_status` come badge COLORATO col token dello stato.</criterion>
+    <criterion id="AC-016">(FE) Il form lead mostra la select "Stato Lead" obbligatoria, con il "+" di quick-create che crea uno stato e lo seleziona senza reload (registry quick-create).</criterion>
+    <criterion id="AC-017">La voce di menu "Stati Lead" compare in navigazione solo per chi ha `lead-statuses.view`, e la rotta /lead-statuses e' gated da `&lt;Can permission="lead-statuses.viewAny"&gt;`.</criterion>
+    <criterion id="AC-018">Le cartelle vuote LeadStatusConfigs / lead-status-configs non esistono piu' nel repo.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>ZERO nuove dipendenze (composer/npm).</item>
+    <item>Authorization SEMPRE server-side: Policy su ogni endpoint, `viewAny` fail-safe sulla TableDefinition. L'UI nasconde, il backend autorizza.</item>
+    <item>Nessun `whereRaw`/`orderByRaw` su input grezzo: filtri e sort solo da allow-list di colonne (backend.md §8) — vale per la colonna derivata `lead_status`.</item>
+    <item>Layering: Controller (thin) → FormRequest → Service → DTO → Resource → Policy. Il delete-guard vive nel Service, non nel Controller.</item>
+    <item>`#[Fillable]` sul Model (attributo PHP, convenzione di questo repo — NON `protected $fillable`).</item>
+    <item>Seed pulito intoccabile: i dati fake stanno in `Demo*Seeder` richiamati SOLO da DemoDataSeeder. Lo stato di default creato dalla migration di backfill NON e' un dato fake: nasce solo se esistono gia' dei lead.</item>
+    <item>File ≤ 300 righe (soft) / 500 (hard). Zero dead code, zero emoji, identificatori in inglese.</item>
+    <item>Definition of Done: Pint + Pest + ESLint + `tsc --noEmit` + Vitest ESEGUITI (non "dovrebbero passare").</item>
+  </constraints>
+
+</spec>

@@ -19,6 +19,7 @@ import type { LeadDetail, LeadFormMode } from '@/features/leads/types'
 const SERVER_ERROR_FIELDS = [
   'referent_id',
   'campaign_id',
+  'lead_status_id',
   'operational_site_id',
   'source_id',
   'operator_id',
@@ -56,6 +57,7 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
       return {
         referent_id: lead.referent_id,
         campaign_id: lead.campaign_id,
+        lead_status_id: lead.lead_status_id,
         operational_site_id: lead.operational_site_id,
         source_id: lead.source_id,
         operator_id: lead.operator_id,
@@ -65,6 +67,7 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
     return {
       referent_id: null,
       campaign_id: null,
+      lead_status_id: null,
       operational_site_id: null,
       source_id: null,
       operator_id: null,

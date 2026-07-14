@@ -13,6 +13,8 @@ function lead(overrides: Partial<LeadDetail> = {}): LeadDetail {
     referent: { id: 10, name: 'Mario Rossi' },
     campaign_id: 20,
     campaign: { id: 20, code: 'CMP-0001', name: 'Spring push' },
+    lead_status_id: 60,
+    lead_status: { id: 60, name: 'Qualified', color: 'green' },
     operational_site_id: 30,
     operational_site: { id: 30, label: 'Via Roma 1 - Milano' },
     source_id: 40,
@@ -31,13 +33,14 @@ beforeAll(async () => {
 })
 
 describe('LeadDetailView — read-only (AC-065)', () => {
-  it('renders the 6 fields as read-only text', () => {
+  it('renders the 7 fields as read-only text, including the colored lead status badge (AC-015)', () => {
     render(<LeadDetailView lead={lead()} />)
 
     expect(screen.getByRole('heading', { name: 'Mario Rossi' })).toBeInTheDocument()
     expect(screen.getByText('CMP-0001 — Spring push')).toBeInTheDocument()
     expect(screen.getByText('Via Roma 1 - Milano')).toBeInTheDocument()
     expect(screen.getByText('Web')).toBeInTheDocument()
+    expect(screen.getByText('Qualified')).toBeInTheDocument()
     expect(screen.getByText('Anna Bianchi')).toBeInTheDocument()
     expect(screen.getByText('Interested in the enterprise plan.')).toBeInTheDocument()
   })

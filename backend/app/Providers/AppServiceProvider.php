@@ -18,6 +18,7 @@ use App\Models\CustomFieldDefinition;
 use App\Models\CustomFieldOption;
 use App\Models\EmploymentProfile;
 use App\Models\Lead;
+use App\Models\LeadStatus;
 use App\Models\OperationalSite;
 use App\Models\PersonalData;
 use App\Models\Product;
@@ -115,6 +116,7 @@ class AppServiceProvider extends ServiceProvider
             'project' => Project::class,
             'campaign' => Campaign::class,
             'lead' => Lead::class,
+            'lead_status' => LeadStatus::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

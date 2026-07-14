@@ -5,6 +5,7 @@ use App\Models\Campaign;
 use App\Models\City;
 use App\Models\ExportRun;
 use App\Models\Lead;
+use App\Models\LeadStatus;
 use App\Models\OperationalSite;
 use App\Models\Referent;
 use App\Models\User;
@@ -56,7 +57,7 @@ it('GET /api/tables/leads/columns: 200 with the declared columns, 403 without vi
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['referent', 'campaign', 'operational_site', 'source', 'operator', 'created_at']);
+    expect($ids)->toBe(['referent', 'campaign', 'operational_site', 'source', 'operator', 'lead_status', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['operational_site']['sortable'])->toBeTrue()
@@ -176,6 +177,60 @@ it('rows: referent/source/operator surface as {id, name} summaries', function ()
     $row = collect($response->json('items'))->firstWhere('id', $lead->id);
 
     expect($row['referent'])->toMatchArray(['id' => $referent->id, 'name' => 'Ada Contact']);
+});
+
+// ---------------------------------------------------------------------------
+// spec 0029 AC-013 — lead_status row shape includes color (never through
+// summarize(), unlike ProjectsTableDefinition's scolored-badge defect), and
+// the derived column is filterable (set) and sortable via the allow-list.
+// ---------------------------------------------------------------------------
+
+it('rows: lead_status is {id, name, color}, mapped explicitly (AC-013)', function () {
+    $actor = leadUserWith(['viewAny']);
+    $status = LeadStatus::factory()->create(['name' => 'Qualified', 'color' => 'green']);
+    $lead = Lead::factory()->create(['lead_status_id' => $status->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/leads/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $lead->id);
+
+    expect($row['lead_status'])->toBe(['id' => $status->id, 'name' => 'Qualified', 'color' => 'green']);
+});
+
+it('rows: a filter on the lead_status column returns only that status\' leads (AC-013)', function () {
+    $actor = leadUserWith(['viewAny']);
+    $status = LeadStatus::factory()->create(['name' => 'Matching Status']);
+    $otherStatus = LeadStatus::factory()->create(['name' => 'Other Status']);
+    $matching = Lead::factory()->create(['lead_status_id' => $status->id]);
+    Lead::factory()->create(['lead_status_id' => $otherStatus->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/leads/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['lead_status' => ['filterType' => 'set', 'values' => ['Matching Status']]],
+    ])->assertOk();
+
+    $ids = collect($response->json('items'))->pluck('id');
+    expect($ids->all())->toBe([$matching->id]);
+});
+
+it('rows: sorting by lead_status orders leads by the related status name (AC-013)', function () {
+    $actor = leadUserWith(['viewAny']);
+    $statusAlpha = LeadStatus::factory()->create(['name' => 'Alpha Status']);
+    $statusZulu = LeadStatus::factory()->create(['name' => 'Zulu Status']);
+    $leadZulu = Lead::factory()->create(['lead_status_id' => $statusZulu->id]);
+    $leadAlpha = Lead::factory()->create(['lead_status_id' => $statusAlpha->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/leads/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'lead_status', 'sort' => 'asc']],
+    ])->assertOk();
+
+    $ids = collect($response->json('items'))->pluck('id');
+    expect($ids->all())->toBe([$leadAlpha->id, $leadZulu->id]);
 });
 
 // ---------------------------------------------------------------------------

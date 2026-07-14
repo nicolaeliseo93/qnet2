@@ -11,8 +11,8 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for POST /api/leads (spec 0024). `referent_id`/
- * `campaign_id` are required (BR-1); the other 3 relations are optional,
- * `notes` is a plain nullable text.
+ * `campaign_id`/`lead_status_id` are required (BR-1, spec 0029 D-1); the
+ * other 3 relations are optional, `notes` is a plain nullable text.
  *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Lead::class)). EnforcesFieldPermissions
@@ -40,6 +40,7 @@ class StoreLeadRequest extends FormRequest
             'operational_site_id' => ['nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
             'operator_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'lead_status_id' => ['required', 'integer', Rule::exists('lead_statuses', 'id')],
             'notes' => ['nullable', 'string', 'max:5000'],
         ];
     }

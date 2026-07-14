@@ -48,7 +48,7 @@ it('200: field catalogue matches LeadsAuthorization::fields(), in order (AC-031)
 
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
     expect($keys)->toBe([
-        'referent_id', 'campaign_id', 'operational_site_id', 'source_id', 'operator_id', 'notes',
+        'referent_id', 'campaign_id', 'operational_site_id', 'source_id', 'operator_id', 'lead_status_id', 'notes',
     ]);
 
     foreach ($response->json('permissions.fields') as $field) {
@@ -65,6 +65,7 @@ it('200: create-context permissions.fields are editable when the actor may creat
         ->assertJsonPath('permissions.fields.referent_id.editable', true)
         ->assertJsonPath('permissions.fields.referent_id.required', true)
         ->assertJsonPath('permissions.fields.campaign_id.required', true)
+        ->assertJsonPath('permissions.fields.lead_status_id.required', true)
         ->assertJsonPath('permissions.fields.notes.required', false);
 });
 
@@ -82,7 +83,7 @@ it('permissions.fields are readonly when the actor may not create', function () 
 // AC-034 — the resource surfaces in the Role matrix's field catalogue too
 // ---------------------------------------------------------------------------
 
-it('GET /api/authorization/fields includes leads with its 6 fields (AC-034)', function () {
+it('GET /api/authorization/fields includes leads with its 7 fields (AC-034)', function () {
     foreach (['viewAny', 'create'] as $ability) {
         Permission::findOrCreate("roles.{$ability}");
     }
@@ -98,6 +99,6 @@ it('GET /api/authorization/fields includes leads with its 6 fields (AC-034)', fu
     $leadsEntry = collect($response->json('data.resources'))->firstWhere('resource', 'leads');
     $keys = collect($leadsEntry['fields'])->pluck('key')->all();
     expect($keys)->toBe([
-        'referent_id', 'campaign_id', 'operational_site_id', 'source_id', 'operator_id', 'notes',
+        'referent_id', 'campaign_id', 'operational_site_id', 'source_id', 'operator_id', 'lead_status_id', 'notes',
     ]);
 });

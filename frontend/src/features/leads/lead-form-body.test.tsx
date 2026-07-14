@@ -72,6 +72,8 @@ function lead(overrides: Partial<LeadDetailWithPermissions> = {}): LeadDetailWit
     referent: { id: 10, name: 'Mario Rossi' },
     campaign_id: 20,
     campaign: { id: 20, code: 'CMP-0001', name: 'Spring push' },
+    lead_status_id: 30,
+    lead_status: { id: 30, name: 'New', color: 'slate' },
     operational_site_id: null,
     operational_site: null,
     source_id: null,
@@ -97,8 +99,8 @@ beforeEach(() => {
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
 })
 
-describe('LeadForm — fields render (AC-061)', () => {
-  it('renders the 6 fields: 5 relational selects and a notes textarea', async () => {
+describe('LeadForm — fields render (AC-061, AC-016)', () => {
+  it('renders the 7 fields: 6 relational selects and a notes textarea', async () => {
     render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
@@ -107,6 +109,7 @@ describe('LeadForm — fields render (AC-061)', () => {
     expect(screen.getByTestId('select-Campaign')).toBeInTheDocument()
     expect(screen.getByTestId('select-Site')).toBeInTheDocument()
     expect(screen.getByTestId('select-Source')).toBeInTheDocument()
+    expect(screen.getByTestId('select-Lead status')).toBeInTheDocument()
     expect(screen.getByTestId('select-Operator')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Notes' })).toBeInTheDocument()
   })

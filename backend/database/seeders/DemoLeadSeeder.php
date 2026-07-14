@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\DataObjects\Leads\CreateLeadData;
 use App\Models\Campaign;
 use App\Models\Lead;
+use App\Models\LeadStatus;
 use App\Models\OperationalSite;
 use App\Models\Referent;
 use App\Models\Source;
@@ -17,19 +18,20 @@ use Illuminate\Support\Collection;
 
 /**
  * Development seed for the leads module (spec 0024): round-robins existing
- * referents/campaigns (BR-1, mandatory) against the optional site/source/
- * operator lookups, so the demo grid exercises every derived table column
- * (referent/campaign/operational_site/source/operator) with realistic,
- * varied values.
+ * referents/campaigns/lead-statuses (BR-1/D-1, mandatory) against the
+ * optional site/source/operator lookups, so the demo grid exercises every
+ * derived table column (referent/campaign/lead_status/operational_site/
+ * source/operator) with realistic, varied values.
  *
  * Every lead is created through LeadService::create() — the same path
  * POST /api/leads uses — so this exercises the real write path, not a raw
  * insert. Idempotent: existing leads are cleared first (harmless — nothing
  * else references a Lead, restrictOnDelete only runs the OTHER way).
  *
- * Depends on DemoReferentSeeder, DemoCampaignSeeder, DemoOperationalSiteSeeder,
- * DemoSourceSeeder and DemoUsersSeeder (all seeded earlier in DemoDataSeeder)
- * — a no-op (nothing to seed) if referents or campaigns are empty.
+ * Depends on DemoReferentSeeder, DemoCampaignSeeder, DemoLeadStatusSeeder,
+ * DemoOperationalSiteSeeder, DemoSourceSeeder and DemoUsersSeeder (all
+ * seeded earlier in DemoDataSeeder) — a no-op (nothing to seed) if
+ * referents, campaigns or lead statuses are empty.
  */
 class DemoLeadSeeder extends Seeder
 {
@@ -46,9 +48,10 @@ class DemoLeadSeeder extends Seeder
 
         $referents = Referent::query()->orderBy('id')->get();
         $campaigns = Campaign::query()->orderBy('id')->get();
+        $statuses = LeadStatus::query()->orderBy('sort_order')->get();
 
-        if ($referents->isEmpty() || $campaigns->isEmpty()) {
-            // Nothing sensible to seed without the 2 mandatory relations (BR-1).
+        if ($referents->isEmpty() || $campaigns->isEmpty() || $statuses->isEmpty()) {
+            // Nothing sensible to seed without the 3 mandatory relations (BR-1, D-1).
             return;
         }
 
@@ -57,13 +60,14 @@ class DemoLeadSeeder extends Seeder
         $operators = User::query()->orderBy('id')->get();
 
         for ($index = 0; $index < self::LEADS; $index++) {
-            $this->createLead($faker, $index, $referents, $campaigns, $sites, $sources, $operators);
+            $this->createLead($faker, $index, $referents, $campaigns, $statuses, $sites, $sources, $operators);
         }
     }
 
     /**
      * @param  Collection<int, Referent>  $referents
      * @param  Collection<int, Campaign>  $campaigns
+     * @param  Collection<int, LeadStatus>  $statuses
      * @param  Collection<int, OperationalSite>  $sites
      * @param  Collection<int, Source>  $sources
      * @param  Collection<int, User>  $operators
@@ -73,6 +77,7 @@ class DemoLeadSeeder extends Seeder
         int $index,
         Collection $referents,
         Collection $campaigns,
+        Collection $statuses,
         Collection $sites,
         Collection $sources,
         Collection $operators,
@@ -83,6 +88,7 @@ class DemoLeadSeeder extends Seeder
             operationalSiteId: $this->maybePick($sites, $index, $faker, 60)?->id,
             sourceId: $this->maybePick($sources, $index + 1, $faker, 70)?->id,
             operatorId: $this->maybePick($operators, $index + 2, $faker, 50)?->id,
+            leadStatusId: $statuses[$index % $statuses->count()]->id,
             notes: $faker->boolean(40) ? $faker->sentence() : null,
         );
 

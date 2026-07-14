@@ -203,6 +203,15 @@ return [
                     'permission' => 'project-statuses.view',
                 ],
                 [
+                    // Lead statuses (spec 0029): the Lead working-state
+                    // pick-list, delete-guarded (BR-3).
+                    'key' => 'lead-statuses',
+                    'label' => 'navigation.leadStatuses',
+                    'icon' => 'tag',
+                    'route' => '/lead-statuses',
+                    'permission' => 'lead-statuses.view',
+                ],
+                [
                     // Universal custom fields (spec 0021): the admin catalogue
                     // of dynamic fields grafted onto every custom-fieldable
                     // module.

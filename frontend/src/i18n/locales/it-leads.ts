@@ -10,6 +10,7 @@ export const leads = {
   columns: {
     referent: 'Contatto',
     campaign: 'Campagna',
+    leadStatus: 'Stato lead',
     operationalSite: 'Sede',
     source: 'Fonte',
     operator: 'Operatore',
@@ -48,6 +49,9 @@ export const leads = {
     campaign: 'Campagna',
     campaignSearch: 'Cerca campagne…',
     campaignRequired: 'La campagna è obbligatoria.',
+    leadStatus: 'Stato lead',
+    leadStatusSearch: 'Cerca stati lead…',
+    leadStatusRequired: 'Lo stato lead è obbligatorio.',
     operationalSite: 'Sede',
     operationalSiteSearch: 'Cerca sedi…',
     source: 'Fonte',

@@ -21,6 +21,17 @@ export interface LeadCampaignRef {
 }
 
 /**
+ * The linked lead status's identity, as exposed by `LeadResource.lead_status`
+ * (spec 0029). Unlike the other relations, this one is NEVER null (D-1: the
+ * FK is NOT NULL, every lead always has a status).
+ */
+export interface LeadStatusRef {
+  id: number
+  name: string
+  color: string | null
+}
+
+/**
  * The linked operational site's identity, as exposed by `LeadResource.operational_site`.
  * `operational_sites` has no `name` column (BR-3): the identity is a server-composed
  * "{line1} - {city}" label.
@@ -32,8 +43,8 @@ export interface LeadOperationalSiteRef {
 
 /**
  * Single lead detail returned by GET/POST/PATCH /leads (envelope `data`).
- * Matches `LeadResource`. `referent_id`/`campaign_id` are always set (BR-1);
- * the other 4 fields are nullable.
+ * Matches `LeadResource`. `referent_id`/`campaign_id`/`lead_status_id` are
+ * always set (BR-1, D-1); the other 3 fields are nullable.
  */
 export interface LeadDetail {
   id: number
@@ -41,6 +52,8 @@ export interface LeadDetail {
   referent: LeadRelationRef | null
   campaign_id: number
   campaign: LeadCampaignRef | null
+  lead_status_id: number
+  lead_status: LeadStatusRef
   operational_site_id: number | null
   operational_site: LeadOperationalSiteRef | null
   source_id: number | null
@@ -62,12 +75,14 @@ export interface LeadDetailWithPermissions extends LeadDetail {
 }
 
 /**
- * Payload for POST /leads (create). `referent_id`/`campaign_id` are required
- * (BR-1); the other 4 fields are optional/nullable.
+ * Payload for POST /leads (create). `referent_id`/`campaign_id`/
+ * `lead_status_id` are required (BR-1, D-1); the other 3 fields are
+ * optional/nullable.
  */
 export interface CreateLeadPayload {
   referent_id: number
   campaign_id: number
+  lead_status_id: number
   operational_site_id?: number | null
   source_id?: number | null
   operator_id?: number | null

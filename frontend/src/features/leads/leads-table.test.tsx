@@ -25,6 +25,8 @@ const mockLead: LeadDetailWithPermissions = {
   referent: { id: 5, name: 'Jane Doe' },
   campaign_id: 21,
   campaign: { id: 21, code: 'CMP-0021', name: 'Spring outreach' },
+  lead_status_id: 7,
+  lead_status: { id: 7, name: 'New', color: 'slate' },
   operational_site_id: null,
   operational_site: null,
   source_id: null,

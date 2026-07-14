@@ -30,6 +30,7 @@ class LeadService
         'operationalSite.addresses.city',
         'source',
         'operator',
+        'leadStatus',
     ];
 
     public function loadDetail(Lead $lead): Lead

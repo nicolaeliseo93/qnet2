@@ -3,6 +3,7 @@
 namespace App\Tables;
 
 use App\Models\Lead;
+use App\Models\LeadStatus;
 use App\Models\User;
 use App\Tables\Leads\LeadColumnCatalog;
 use App\Tables\Leads\LeadOperationalSiteColumn;
@@ -45,6 +46,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
         'campaign' => ['relation' => 'campaign', 'table' => 'campaigns', 'fk' => 'campaign_id'],
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
         'operator' => ['relation' => 'operator', 'table' => 'users', 'fk' => 'operator_id'],
+        'lead_status' => ['relation' => 'leadStatus', 'table' => 'lead_statuses', 'fk' => 'lead_status_id'],
     ];
 
     public function __construct(private readonly LeadOperationalSiteColumn $operationalSiteColumn) {}
@@ -73,7 +75,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
     {
         // Eager-load every relation mapRow touches to avoid N+1 across the
         // page (operationalSite's address+city for the composed label, BR-3).
-        return Lead::query()->with(['referent', 'campaign', 'operationalSite.addresses.city', 'source', 'operator']);
+        return Lead::query()->with(['referent', 'campaign', 'operationalSite.addresses.city', 'source', 'operator', 'leadStatus']);
     }
 
     /**
@@ -136,6 +138,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
             'operational_site' => $this->operationalSiteColumn->summarize($row),
             'source' => $this->summarize($row->source),
             'operator' => $this->summarize($row->operator),
+            'lead_status' => $this->summarizeLeadStatus($row->leadStatus),
             'notes' => $row->notes,
             'created_at' => $row->created_at,
         ];
@@ -151,6 +154,25 @@ class LeadsTableDefinition extends AbstractTableDefinition
         }
 
         return ['id' => $related->id, 'name' => $related->name];
+    }
+
+    /**
+     * `lead_status_id` is NOT NULL (spec 0029 D-1). Mapped EXPLICITLY with
+     * `color`, never via summarize(): reusing it here would reproduce the
+     * scolored badge defect ProjectsTableDefinition::mapRow() has via
+     * summarize() on `project_status` (spec 0029 context/known_defect_not_ours,
+     * out of scope to fix there).
+     *
+     * @return array{id: int, name: string, color: ?string}|null
+     */
+    private function summarizeLeadStatus(?Model $related): ?array
+    {
+        if ($related === null) {
+            return null;
+        }
+
+        /** @var LeadStatus $related */
+        return ['id' => $related->id, 'name' => $related->name, 'color' => $related->color];
     }
 
     /**

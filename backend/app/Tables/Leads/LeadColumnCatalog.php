@@ -8,10 +8,13 @@ namespace App\Tables\Leads;
  * engineering.md §6): pure data (no logic).
  *
  * `created_at` is a real DB column handled entirely by the generic engine.
- * `referent`/`campaign`/`source`/`operator` are STANDARD derived (related-row
- * name) columns, resolved by LeadsTableDefinition. `operational_site` is the
- * ONE specially-derived column (BR-3: no own name, sort/filter pass through
- * the site's primary address `line1`), delegated to LeadOperationalSiteColumn.
+ * `referent`/`campaign`/`source`/`operator`/`lead_status` are STANDARD
+ * derived (related-row name) columns, resolved by LeadsTableDefinition.
+ * `lead_status`'s label is `leads.columns.leadStatus` (camelCase: the real
+ * convention of this domain, unlike lead-statuses' own snake_case, spec 0029).
+ * `operational_site` is the ONE specially-derived column (BR-3: no own name,
+ * sort/filter pass through the site's primary address `line1`), delegated to
+ * LeadOperationalSiteColumn.
  */
 final class LeadColumnCatalog
 {
@@ -26,6 +29,7 @@ final class LeadColumnCatalog
             self::derivedColumn('operational_site', 'leads.columns.operationalSite'),
             self::derivedColumn('source', 'leads.columns.source'),
             self::derivedColumn('operator', 'leads.columns.operator'),
+            self::derivedColumn('lead_status', 'leads.columns.leadStatus'),
             [
                 'id' => 'created_at',
                 'label' => 'leads.columns.createdAt',

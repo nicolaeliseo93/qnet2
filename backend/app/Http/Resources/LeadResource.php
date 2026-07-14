@@ -36,6 +36,8 @@ class LeadResource extends JsonResource
             'source' => $this->summarizeByName($this->source),
             'operator_id' => $this->operator_id,
             'operator' => $this->summarizeByName($this->operator),
+            'lead_status_id' => $this->lead_status_id,
+            'lead_status' => $this->summarizeLeadStatus($this->leadStatus),
             'notes' => $this->notes,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
@@ -52,6 +54,24 @@ class LeadResource extends JsonResource
         }
 
         return ['id' => $related->id, 'name' => $related->name];
+    }
+
+    /**
+     * `lead_status_id` is NOT NULL (spec 0029 D-1), so this is always
+     * populated. Mapped EXPLICITLY with `color` — never through
+     * summarizeByName(), which would drop it and reproduce the scolored
+     * badge defect of ProjectsTableDefinition (spec 0029
+     * context/known_defect_not_ours).
+     *
+     * @return array{id: int, name: string, color: ?string}|null
+     */
+    private function summarizeLeadStatus(mixed $leadStatus): ?array
+    {
+        if ($leadStatus === null) {
+            return null;
+        }
+
+        return ['id' => $leadStatus->id, 'name' => $leadStatus->name, 'color' => $leadStatus->color];
     }
 
     /**

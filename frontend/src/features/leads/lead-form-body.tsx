@@ -8,6 +8,7 @@ import { RelationSelectField } from '@/components/form/relation-select-field'
 import { MetaField } from '@/features/authorization/MetaField'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-api'
+import { LEAD_STATUSES_FOR_SELECT_RESOURCE } from '@/features/lead-statuses/for-select-api'
 import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
@@ -21,9 +22,9 @@ interface LeadFormBodyProps {
 }
 
 /**
- * The lead create/edit form UI: the required Contact/Campaign pair (BR-1)
- * plus the 3 optional relations and the note — all wrapped in `MetaField`
- * (spec 0004). All non-render logic lives in `useLeadForm`.
+ * The lead create/edit form UI: the required Contact/Campaign/Lead-status
+ * trio (BR-1, D-1) plus the 3 optional relations and the note — all wrapped
+ * in `MetaField` (spec 0004). All non-render logic lives in `useLeadForm`.
  */
 export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
   const { t } = useTranslation()
@@ -92,6 +93,17 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
               resource={SOURCES_FOR_SELECT_RESOURCE}
               searchPlaceholder={t('leads.form.sourceSearch')}
               selected={original?.source ?? null}
+              {...selectLabels}
+            />
+
+            <RelationSelectField
+              control={form.control}
+              name="lead_status_id"
+              metaKey="lead_status_id"
+              label={t('leads.form.leadStatus')}
+              resource={LEAD_STATUSES_FOR_SELECT_RESOURCE}
+              searchPlaceholder={t('leads.form.leadStatusSearch')}
+              selected={original?.lead_status ?? null}
               {...selectLabels}
             />
 

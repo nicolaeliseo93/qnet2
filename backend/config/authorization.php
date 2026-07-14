@@ -7,6 +7,7 @@ use App\Authorization\CompaniesAuthorization;
 use App\Authorization\CompanySitesAuthorization;
 use App\Authorization\CustomFieldsAuthorization;
 use App\Authorization\LeadsAuthorization;
+use App\Authorization\LeadStatusesAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
 use App\Authorization\ProductCategoriesAuthorization;
 use App\Authorization\ProductsAuthorization;
@@ -63,6 +64,7 @@ return [
         'projects' => ProjectsAuthorization::class,
         'campaigns' => CampaignsAuthorization::class,
         'leads' => LeadsAuthorization::class,
+        'lead-statuses' => LeadStatusesAuthorization::class,
     ],
 
 ];
