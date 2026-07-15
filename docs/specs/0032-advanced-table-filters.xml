@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0032 — Filtri avanzati backend-driven (secondo livello, sopra la griglia).
+  Contract-first. Congelato PRIMA del dispatch: backend implementa, frontend consuma.
+  Naming identificatori in INGLESE (regola engineering.md §1.2); label = chiavi i18n.
+-->
+<spec id="0032-advanced-table-filters" status="draft" owner="tu" date="2026-07-15">
+
+  <goal>
+    Introdurre un secondo livello di filtri "avanzati" comune a tutte le tabelle del
+    gestionale: un pannello unico, generico e completamente backend-driven, montato
+    SOPRA la griglia (a scomparsa), orientato al dominio di ciascun modulo. Il frontend
+    non conosce la struttura dei filtri: il backend dichiara per ogni tabella quali
+    filtri esporre (tipo, ordine, opzioni, default, obbligatorieta', dipendenze, sorgente
+    dati). Lo stesso componente serve tutti i moduli senza codice frontend dedicato.
+  </goal>
+
+  <context>
+    Framework tabellare esistente da rispettare (nomi reali verificati):
+    - Backend: interface `App\Tables\TableDefinition` + `App\Tables\AbstractTableDefinition`
+      + `App\Tables\TableRegistry` (config `config/tables.php`, 21 domini registrati).
+      Ogni definition espone `columns()/filters()/actions()` (delegando a un catalogo
+      `App\Tables\<Domain>\<Domain>ColumnCatalog`), allow-list `sortableColumnIds()`,
+      `filterableColumnIds()`, `filterableColumnMap()`, `searchableColumnIds()`, hook
+      derivati `applyDerivedFilter()/applyDerivedSort()/distinctValues()`, e
+      `resolveConfig()` che compone il payload di `GET /tables/{domain}/columns`.
+    - Motore SSRM: `App\Services\TableService::rows()` delega a
+      `App\Services\Table\TableQueryBuilder` (`applyFilters/applySearch/applySorting`,
+      solo colonne in allow-list, parametri bound, nessun raw); i filtri per-tipo sono in
+      `App\Services\Table\FilterApplier` (text/number/boolean/date/set/multi/combined).
+      Endpoint `POST /tables/{domain}/rows` validato da
+      `App\Http\Requests\Table\TableRowsRequest`.
+    - Persistenza filtri per-utente: model `App\Models\UserTableFilter` (col. `filters` JSON)
+      via `App\Services\Table\TableFilterStateService`, endpoint
+      `POST/DELETE /tables/{domain}/filters` (`TableFilterStateRequest`). Viste salvate
+      (spec 0007): model `App\Models\TableFilterView`, controller
+      `App\Http\Controllers\Table\TableFilterViewController`.
+    - for-select standard (ADR 0011): `GET /{resource}/for-select`, DTO
+      `App\DataObjects\Shared\ForSelectQuery` `{search, offset, limit, ids}`, item shape
+      `{ id, label, subtitle?, avatar?, meta? }` (base `ForSelectResource`).
+    - Envelope: `BaseApiController::ok()` -> `{ success, message, data }`;
+      `paginatedResponse()` -> `{ items, export_link, pagination }` (usato da rows/for-select).
+    - Autorizzazione: `authorizeViewAny()` per-endpoint (Gate `viewAny` sul model);
+      permessi `{resource}.{ability}` via `BasePolicy` (glob).
+    - Frontend: orchestratore `features/table/table-view.tsx` (+ `TableViewHandle.refresh()`),
+      wrapper AG Grid puro `components/data-table/data-table.tsx`, datasource
+      `features/table/ssrm-datasource.ts` (`createSsrmDatasource(domain, getSearch)`),
+      toolbar unificata `features/table/table-toolbar.tsx` (+ `use-table-toolbar-state.ts`),
+      config via `features/table/use-table-config.ts` + `api.ts`, tipi
+      `features/table/types.ts`. Select async condivise: `components/ui/async-paginated-select.tsx`
+      e `async-paginated-multi-select.tsx` su `features/for-select/use-for-select.ts`.
+      i18n per-dominio (`i18n/locales/*-table.ts`, `*-<domain>.ts`); label = chiavi i18n.
+    - Vista card di Projects (spec 0026 `projects-card-grid`): stesso pannello e stessa
+      logica filtri devono valere sia in modalita' AG Grid sia in modalita' card.
+
+    Decisioni utente congelate:
+    1) I filtri avanzati viaggiano in una chiave SEPARATA `advancedFilters` nel body di
+       `POST /rows`, accanto a `filterModel` (colonna AG Grid, INVARIATO). Combinati in AND
+       con filtri colonna e quick-search. Applicazione lato server via nuovo hook per-definition
+       `applyAdvancedFilter()` + servizio `AdvancedFilterApplier`, sempre da allow-list.
+    2) Rollout: framework generico + catalogo di filtri avanzati per TUTTI i 21 domini.
+    3) Applicazione via bottone "Applica" esplicito (un solo refresh). "Reset" -> default.
+       Filtri obbligatori bloccano l'Applica lato FE; lato server i required senza valore
+       ricadono sul loro `defaultValue` (difesa in profondita').
+    4) Persistenza: nuova colonna `advanced_filters` JSON su `user_table_filters` e su
+       `table_filter_views` (NON si riscrive la colonna `filters` esistente). Le viste
+       salvate catturano anche gli advanced filters.
+    5) Pannello a scomparsa: icona toggle nella toolbar (mostra/nascondi) + badge conteggio
+       filtri attivi visibile anche a pannello chiuso.
+  </context>
+
+  <scope>
+    <in>
+      <item>Nuovo concetto backend `advancedFilters()` su `TableDefinition` (default `[]` in
+        `AbstractTableDefinition`), catalogo per-dominio, emesso in `resolveConfig()` e quindi
+        in `GET /tables/{domain}/columns` come array `advancedFilters` (descrittori FE-facing).</item>
+      <item>Enum `App\Enums\AdvancedFilterType` con i 17 tipi supportati.</item>
+      <item>Applicazione server-side: `POST /rows` accetta `advancedFilters` (validato,
+        allow-list = id dichiarati nel catalogo); nuovo hook `applyAdvancedFilter()` in
+        `AbstractTableDefinition` + servizio `AdvancedFilterApplier` per i tipi diretti-su-colonna;
+        override di dominio per i filtri relazionali/derivati. Sempre bound, nessun raw.</item>
+      <item>Required + default lato server: un required assente ricade sul `defaultValue`.</item>
+      <item>Dipendenze tra filtri: descrittore `dependency {on, param?}`; il figlio si disabilita/
+        azzera finche' il padre non ha valore; se `param` presente, il valore del padre viene
+        passato alla for-select del figlio.</item>
+      <item>Persistenza: colonna `advanced_filters` su `user_table_filters` e `table_filter_views`;
+        estensione di `TableFilterStateService`/`TableFilterStateRequest`,
+        `POST/DELETE /tables/{domain}/filters`, e del ciclo viste salvate (0007) per includere gli
+        advanced filters; ripristino nello stato al `GET /columns`.</item>
+      <item>Cataloghi di filtri avanzati per tutti i 21 domini registrati in `config/tables.php`,
+        curati dalle colonne/relazioni gia' filtrabili di ciascun modulo.</item>
+      <item>Frontend: componente generico `AdvancedFilterPanel` (a scomparsa) + registry
+        di field per-tipo (riuso `components/ui/`) + hook `useAdvancedFilters(domain)`
+        (draft/applied, default, dipendenze, persistenza) + integrazione in `TableView`,
+        `TableToolbar` (icona toggle + badge), e nel datasource SSRM (`advancedFilters` nel body).</item>
+      <item>Integrazione della vista card Projects (spec 0026): stesso pannello e stesso stato
+        applicato alimentano sia AG Grid sia la card-grid.</item>
+      <item>Tipi FE (`features/table/types.ts`) e stringhe i18n framework + chiavi label per-dominio.</item>
+      <item>Test: Pest (config, apply, allow-list/security, required-default, persistenza) e
+        Vitest (panel, field per-tipo, toggle/badge, apply/reset, dipendenze, integrazione datasource).</item>
+    </in>
+    <out>
+      <item>Filtri nativi di colonna AG Grid (`filterModel`) e quick-search globale: INVARIATI,
+        nessuna modifica al loro comportamento o contratto.</item>
+      <item>Endpoint `POST /tables/{domain}/values` (distinct values, spec 0005): invariato.</item>
+      <item>Nuovi tipi di input non elencati (es. slider, color, geo-map picker).</item>
+      <item>Operatori configurabili dall'utente in UI (es. scelta =/≠/contains a runtime):
+        l'operatore e' fissato dal tipo/descrittore, non scelto dall'utente.</item>
+      <item>Nuove dipendenze npm/composer.</item>
+      <item>Modifica dello shape della colonna `filters` esistente di `user_table_filters`.</item>
+      <item>Riscrittura del motore export (spec 0014): fuori scope in questa feature (gli export
+        continuano a rispecchiare `filterModel`+search; l'estensione agli advanced filters e'
+        un follow-up separato).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <!-- Descrittore FE-facing (il catalogo backend contiene in piu' `target`/`operator`
+         INTERNI, NON emessi al frontend). -->
+    <type name="AdvancedFilterType">
+      text | textarea | number | number_range | date | date_range | datetime |
+      select | multiselect | autocomplete | autocomplete_multi | checkbox | switch |
+      radio | enum | relation | async_search
+    </type>
+
+    <type name="AdvancedFilterDescriptor">
+      {
+        name: string,              // id univoco nel dominio (chiave in advancedFilters payload)
+        label: string,             // chiave i18n
+        type: AdvancedFilterType,
+        placeholder?: string,      // chiave i18n
+        order: number,             // ordine di visualizzazione
+        defaultValue?: AdvancedFilterValue | null,
+        required: boolean,
+        visible: boolean,
+        width: "sm" | "md" | "lg" | "full",
+        multiple: boolean,         // rilevante per select/autocomplete/relation
+        source?: { resource: string },        // for-select resource (autocomplete/relation/async_search)
+        options?: { value: string|number, label: string }[],  // statiche (select/radio inline)
+        enumKey?: string,          // enum/radio da form_enums
+        dependency?: { on: string, param?: string }
+      }
+    </type>
+
+    <!-- Valori inviati dal FE, keyed per descriptor.name. Shape per tipo: -->
+    <type name="AdvancedFilterValue">
+      text|textarea|async_search(single): string
+      number: number
+      number_range: { from?: number, to?: number }
+      date|datetime: string (ISO)
+      date_range: { from?: string, to?: string }   // ISO date
+      select|enum|radio: string | number
+      checkbox|switch: boolean
+      multiselect|autocomplete_multi: (string|number)[]
+      autocomplete(single): string | number
+      relation: (number) | (number)[]              // secondo `multiple`
+    </type>
+
+    <endpoint method="GET" path="/api/tables/{domain}/columns">
+      <request><!-- invariato --></request>
+      <response status="200">
+        {
+          success: true, message: "OK",
+          data: {
+            resource, columns, filters, actions, defaultSort, defaultPagination, searchable,  // invariati
+            advancedFilters: AdvancedFilterDescriptor[],       // NUOVO (ordinato per `order`)
+            appliedAdvancedFilters: { [name]: AdvancedFilterValue } | null  // NUOVO: stato salvato per-utente
+          }
+        }
+      </response>
+      <errors>403 (viewAny negato) · 404 (dominio sconosciuto)</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/{domain}/rows">
+      <request>
+        {
+          startRow, endRow, sortModel, filterModel, search,   // invariati
+          advancedFilters?: { [name: string]: AdvancedFilterValue }   // NUOVO
+        }
+        <!-- validazione: chiavi ⊆ advancedFilterableIds() (allow-list dal catalogo);
+             ogni valore validato per tipo del descrittore; required assente -> default applicato server-side. -->
+      </request>
+      <response status="200"><!-- invariato: { items, export_link, pagination } -->
+        Le righe rispettano advancedFilters AND filterModel AND search.
+      </response>
+      <errors>403 · 404 · 422 (chiave non in allow-list o valore mal tipizzato)</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/{domain}/filters">
+      <request>
+        {
+          filterModel?: {...},                                  // invariato (persistito in col. `filters`)
+          advancedFilters?: { [name]: AdvancedFilterValue }     // NUOVO (persistito in col. `advanced_filters`)
+        }
+      </request>
+      <response status="200">{ success, message, data: null } <!-- envelope ok() --></response>
+      <errors>403 · 404 · 422</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/tables/{domain}/filters">
+      <request><!-- reset: azzera sia filterModel sia advancedFilters persistiti --></request>
+      <response status="200">{ success, message, data: null }</response>
+      <errors>403 · 404</errors>
+    </endpoint>
+
+    <endpoint method="POST|PUT" path="/api/tables/{domain}/filter-views[/{filterView}]">
+      <request>
+        <!-- invariato + nuovo campo -->
+        { name, visibility, filterModel, advancedFilters?: { [name]: AdvancedFilterValue } }
+      </request>
+      <response status="200|201">
+        <!-- risorsa vista salvata + `advanced_filters` incluso -->
+      </response>
+      <errors>403 (non owner in update/delete) · 404 · 422</errors>
+    </endpoint>
+
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- BACKEND — config & catalogo -->
+    <criterion id="AC-001">Dato un dominio registrato, quando chiamo `GET /tables/{domain}/columns`,
+      allora la risposta include `advancedFilters` (array di descrittori ordinato per `order`) e
+      `appliedAdvancedFilters`; i descrittori NON espongono i campi interni `target`/`operator`.
+      (Pest feature)</criterion>
+    <criterion id="AC-002">Dato ciascuno dei 21 domini in `config/tables.php`, quando risolvo la sua
+      `advancedFilters()`, allora ritorna un array non vuoto e ogni descrittore e' schema-valido
+      (name univoco, type in enum, order int, width in {sm,md,lg,full}, required/visible/multiple bool;
+      source XOR options XOR enumKey coerente col tipo). (Pest unit, data-provider sui 21 domini)</criterion>
+
+    <!-- BACKEND — applicazione & sicurezza -->
+    <criterion id="AC-003">Dato `POST /rows` con `advancedFilters` valido, quando eseguo, allora le
+      righe sono ristrette in AND da ciascun filtro secondo l'operatore del tipo (es. text -> LIKE
+      bound/escaped; number_range -> between; multiselect/relation -> whereIn/whereHas). (Pest feature)</criterion>
+    <criterion id="AC-004">Dato `POST /rows` con una chiave `advancedFilters` NON presente nel catalogo
+      del dominio, allora risposta 422 e nessuna riga filtrata da quella chiave (allow-list). Dato un
+      valore mal tipizzato per un filtro noto, allora 422. (Pest feature)</criterion>
+    <criterion id="AC-005">Dato un tentativo di injection in un valore di filtro (es. `"' OR 1=1--"`),
+      quando applico, allora e' trattato come literal bound (nessun `whereRaw`/interpolazione) e non
+      altera il result set oltre il match letterale. (Pest feature)</criterion>
+    <criterion id="AC-006">Dato un filtro `required` con `defaultValue`, quando `POST /rows` OMETTE quel
+      filtro, allora il server applica comunque il `defaultValue` (la tabella non risulta mai non
+      filtrata sui required). (Pest feature)</criterion>
+    <criterion id="AC-007">Dato un dominio con filtro relazionale/derivato (es. `leads` referent/campaign),
+      quando applico quel filtro avanzato, allora la definition usa il proprio `applyAdvancedFilter()`
+      (whereHas su relazione), non la via colonna-diretta. (Pest feature)</criterion>
+
+    <!-- BACKEND — persistenza -->
+    <criterion id="AC-008">Dato `POST /tables/{domain}/filters` con `advancedFilters`, quando poi
+      chiamo `GET /columns`, allora `appliedAdvancedFilters` riflette lo stato salvato per quell'utente;
+      `DELETE .../filters` lo azzera. La colonna esistente `filters` (filterModel) non e' alterata nello
+      shape. (Pest feature + migration test colonna `advanced_filters` nullable)</criterion>
+    <criterion id="AC-009">Dato il salvataggio di una vista filtro (spec 0007) con `advancedFilters`,
+      quando la rileggo/applico, allora include e ripristina gli advanced filters; solo l'owner puo'
+      modificarla/cancellarla (403 altrimenti). (Pest feature)</criterion>
+    <criterion id="AC-010">Dato un utente senza permesso `{domain}.viewAny`, quando chiama
+      `GET /columns` o `POST /rows`, allora 403 (authz invariata, gli advanced filters non aprono
+      superficie). (Pest feature)</criterion>
+
+    <!-- FRONTEND — pannello -->
+    <criterion id="AC-011">Dato un `advancedFilters` config dal backend, quando monto `AdvancedFilterPanel`,
+      allora renderizza i campi visibili ordinati per `order`, ognuno col field-component corretto per
+      tipo (text->Input, number_range->due number, date_range->range date, multiselect->MultiSelect,
+      relation/async_search->AsyncPaginated(Multi)Select, checkbox/switch/radio/enum coerenti). (Vitest)</criterion>
+    <criterion id="AC-012">Dato il pannello a scomparsa, quando clicco l'icona toggle nella toolbar,
+      allora il pannello si mostra/nasconde; il badge di conteggio filtri attivi e' visibile anche a
+      pannello chiuso e riflette il numero di filtri applicati non-default. (Vitest)</criterion>
+    <criterion id="AC-013">Dato il pannello, quando modifico i campi e premo "Applica", allora parte UN
+      SOLO refresh SSRM e il body di `POST /rows` contiene `advancedFilters` con i valori applicati;
+      modifiche non applicate (draft) NON aggiornano la tabella. (Vitest: spy su datasource/refresh)</criterion>
+    <criterion id="AC-014">Dato filtri con `defaultValue`, quando premo "Reset", allora i campi tornano
+      ai default, il conteggio attivi si ricalcola e la tabella si aggiorna una volta. (Vitest)</criterion>
+    <criterion id="AC-015">Dato un filtro `required` non valorizzato, quando provo ad applicare, allora
+      il bottone "Applica" e' disabilitato e il campo espone errore accessibile
+      (`aria-invalid`+`aria-describedby`, `role="alert"`). (Vitest)</criterion>
+    <criterion id="AC-016">Dato un filtro con `dependency.on`, quando il filtro padre e' vuoto, allora il
+      figlio e' disabilitato; quando il padre cambia valore, il figlio si azzera e (se `param`) la sua
+      for-select riceve il valore del padre come parametro. (Vitest)</criterion>
+    <criterion id="AC-017">Dato lo stato applicato, quando navigo via e torno alla tabella, allora gli
+      advanced filters applicati sono ripristinati da `appliedAdvancedFilters` (persistenza per-utente). (Vitest)</criterion>
+
+    <!-- FRONTEND — integrazione Projects card/grid -->
+    <criterion id="AC-018">Dato il modulo Projects, quando applico un filtro avanzato, allora SIA la
+      vista AG Grid SIA la vista card-grid mostrano lo stesso risultato filtrato usando lo stesso stato
+      applicato (stesso `advancedFilters` inviato al backend). (Vitest)</criterion>
+
+    <!-- Regressione -->
+    <criterion id="AC-019">Dato un modulo qualsiasi, quando uso i filtri nativi di colonna AG Grid e la
+      quick-search insieme agli advanced filters, allora convivono in AND senza conflitti e i test
+      esistenti di column-filter/search restano verdi. (Pest+Vitest suite esistente invariata)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza npm/composer. Solo librerie gia' presenti.</item>
+    <item>Sicurezza: applicazione filtri SOLO da allow-list (`advancedFilterableIds()`), parametri
+      bound, LIKE escaped, nessun `whereRaw/orderByRaw/interpolazione`. Il campo `target` e' server-only.</item>
+    <item>Authz server-side invariata: `authorizeViewAny()` su ogni endpoint; for-select gia' autorizzati.</item>
+    <item>Layering backend: Controller thin -> FormRequest -> Service/Definition -> Resource. Nessun
+      model Eloquent raw in risposta. Envelope di progetto rispettato.</item>
+    <item>Frontend: nessun `useEffect`+fetch per i dati (TanStack Query / for-select esistenti); axios
+      client configurato; logica in hook, JSX puro; niente `any`; errori campo con triade ARIA.</item>
+    <item>UI compatta (ui-design.md §2): pannello e field ai token piu' piccoli; `width` mappa su
+      classi max-w, mai larghezze fisse; responsive 375/768/1024; pannello a scomparsa accessibile
+      da tastiera, focus visibile.</item>
+    <item>Riuso obbligatorio: `AsyncPaginatedSelect`/`AsyncPaginatedMultiSelect` + `useForSelect` per
+      autocomplete/relation/async_search; componenti `components/ui/` esistenti per gli altri tipi.
+      Nessuna duplicazione dei filtri di colonna.</item>
+    <item>File entro 300/500 righe: catalogo advanced filters per-dominio in file dedicato
+      (`App\Tables\<Domain>\<Domain>AdvancedFilterCatalog` o metodo nel catalog esistente), field FE
+      splittati per-tipo. Write-surface disgiunta per dominio.</item>
+    <item>Test eseguiti (non solo scritti); Pint/ESLint/`tsc --noEmit` puliti; coverage per-layer
+      (Definition/Service/Request alti).</item>
+  </constraints>
+
+</spec>
