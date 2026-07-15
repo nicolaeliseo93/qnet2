@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { IdCard, Info, MapPin, Phone, Users } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { IdCard, Info, MapPin, Phone, UserRound, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -55,7 +56,7 @@ function PersonCard({
 }: {
   name: string
   contacts?: PrimaryContact[]
-  badge?: string
+  badge?: ReactNode
   muted?: boolean
 }) {
   return (
@@ -264,7 +265,15 @@ export function RegistryDetailView({ registry }: RegistryDetailViewProps) {
             {managerSlots.length > 0 ? (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {managerSlots.map((manager, index) => {
-                  const badge = t('registries.form.managerSlotLabel', { n: index + 1 })
+                  const badge = (
+                    <span
+                      className="flex items-center gap-1"
+                      title={t('registries.form.managerSlotLabel', { n: index + 1 })}
+                    >
+                      <UserRound aria-hidden="true" className="size-3" />
+                      {index + 1}
+                    </span>
+                  )
                   return manager ? (
                     <PersonCard
                       key={index}

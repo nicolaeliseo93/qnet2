@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus, Trash2, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { useQuickCreateAction } from '@/components/form/use-quick-create-action'
@@ -60,8 +60,12 @@ export function ManagerSlotsField({
         {value.map((slot, index) => (
           // The slot's identity IS its position, so the index is the correct key.
           <li key={index} className="flex items-center gap-2">
-            <span className="w-12 shrink-0 text-xs font-medium text-muted-foreground">
-              {t('registries.form.managerSlotLabel', { n: index + 1 })}
+            <span
+              className="flex w-9 shrink-0 items-center gap-1 text-xs font-semibold text-muted-foreground"
+              title={t('registries.form.managerSlotLabel', { n: index + 1 })}
+            >
+              <UserRound aria-hidden="true" className="size-3.5" />
+              {index + 1}
             </span>
             <div className="min-w-0 flex-1">
               <AsyncPaginatedSelect
@@ -125,9 +129,9 @@ export function ManagerSlotsField({
         size="sm"
         disabled={disabled}
         onClick={() => onChange([...value, null])}
-        className="self-start"
+        className="w-full justify-center border-dashed text-muted-foreground hover:border-solid hover:text-foreground"
       >
-        <Plus aria-hidden="true" />
+        <Plus aria-hidden="true" className="size-3.5" />
         {t('registries.form.managersAddSlot')}
       </Button>
 
