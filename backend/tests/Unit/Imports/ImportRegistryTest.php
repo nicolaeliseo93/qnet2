@@ -3,6 +3,7 @@
 use App\Imports\BusinessFunctionsImportDefinition;
 use App\Imports\CompaniesImportDefinition;
 use App\Imports\ImportRegistry;
+use App\Imports\LeadsImportDefinition;
 use App\Imports\OperationalSitesImportDefinition;
 use App\Imports\RolesImportDefinition;
 use App\Imports\UsersImportDefinition;
@@ -36,10 +37,13 @@ it('throws ModelNotFoundException for an unregistered domain (404 via BaseApiCon
 
 // Requirement changed across Lane A + the roles/users follow-up: config/
 // imports.php now registers the 5 real definitions instead of shipping empty.
-it('config/imports.php registers the 5 real definitions', function () {
+// Requirement changed again by spec 0033 (leads adopts the unified wizard):
+// config/imports.php now registers a 6th real definition, `leads`.
+it('config/imports.php registers the 6 real definitions', function () {
     expect(config('imports.definitions'))->toBe([
         'business-functions' => BusinessFunctionsImportDefinition::class,
         'companies' => CompaniesImportDefinition::class,
+        'leads' => LeadsImportDefinition::class,
         'operational-sites' => OperationalSitesImportDefinition::class,
         'roles' => RolesImportDefinition::class,
         'users' => UsersImportDefinition::class,

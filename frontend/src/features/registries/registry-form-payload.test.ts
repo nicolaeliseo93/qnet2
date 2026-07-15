@@ -58,7 +58,8 @@ function original(
     referent_ids: [20],
     referents: [{ id: 20, name: 'Referent A' }],
     manager_ids: [30],
-    managers: [{ id: 30, name: 'Manager A' }],
+    managers: [{ id: 30, name: 'Manager A', position: 1 }],
+    manager_slots: [30],
     supervisor_id: 40,
     supervisor: { id: 40, name: 'Supervisor A' },
     commercial_id: null,
@@ -87,7 +88,7 @@ const formValues: RegistryFormValues = {
   source_id: 1,
   sector_ids: [10, 11],
   referent_ids: [20],
-  manager_ids: [30],
+  manager_slots: [30],
   supervisor_id: 40,
   commercial_id: null,
   reporter_id: null,
@@ -107,7 +108,7 @@ describe('buildCreatePayload', () => {
 
     expect(payload.source_id).toBe(1)
     expect(payload.sector_ids).toEqual([10, 11])
-    expect(payload.manager_ids).toEqual([30])
+    expect(payload.manager_slots).toEqual([30])
     expect(payload.is_supplier).toBe(false)
     expect(payload.personal_data.first_name).toBe('Ada')
   })

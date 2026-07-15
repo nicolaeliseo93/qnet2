@@ -130,6 +130,7 @@ function registry(
     referents: [],
     manager_ids: [],
     managers: [],
+    manager_slots: [],
     supervisor_id: null,
     supervisor: null,
     commercial_id: null,
@@ -144,7 +145,7 @@ function registry(
     size_class: null,
     employee_count: null,
     personal_data: card(),
-    created_at: null,
+    created_at: '2026-01-01T00:00:00Z',
     permissions: {
       resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
       fields: {},

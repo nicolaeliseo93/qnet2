@@ -139,22 +139,26 @@ Route::middleware('auth:sanctum')->group(function () {
             ->scopeBindings();
     });
 
-    // Generic, domain-driven CSV import engine (spec 0012), mirroring
-    // tables/{domain}: one controller serves every domain; {domain} resolves
-    // the ImportDefinition (config/imports.php), unknown → 404. Authorization
-    // (the definition's {resource}.import ability) is enforced server-side in
-    // ImportController on every action; a bound {importRun} that does not
-    // belong to the actor OR whose resource != {domain} 404s. Upload/confirm
-    // are rate-limited tighter (throttle:10,1) as costly/queue-dispatching
-    // writes; template/show/errors stay at the standard throttle:60,1.
+    // Generic, domain-driven CSV/XLSX import engine (spec 0012, extended by
+    // the wizard flow spec 0033): {domain} resolves the ImportDefinition
+    // (config/imports.php), unknown → 404. Authorization enforced server-side
+    // in ImportController; a bound {importRun} not owned by the actor OR
+    // whose resource != {domain} 404s. Upload/configure/confirm: throttle
+    // 10,1; the rest (SSRM rows/updateRow mirror tables/{domain}/rows): 60,1.
+    // {row}: scopeBindings() + explicit assertRowBelongsToRun 404 guard.
     Route::middleware('throttle:60,1')->group(function () {
         Route::get('imports/{domain}/template', [ImportController::class, 'template']);
+        Route::get('imports/{domain}', [ImportController::class, 'index']);
         Route::get('imports/{domain}/{importRun}', [ImportController::class, 'show']);
+        Route::get('imports/{domain}/{importRun}/summary', [ImportController::class, 'summary']);
         Route::get('imports/{domain}/{importRun}/errors', [ImportController::class, 'errors']);
+        Route::post('imports/{domain}/{importRun}/rows', [ImportController::class, 'rows']);
+        Route::patch('imports/{domain}/{importRun}/rows/{row}', [ImportController::class, 'updateRow'])->scopeBindings();
     });
 
     Route::middleware('throttle:10,1')->group(function () {
         Route::post('imports/{domain}', [ImportController::class, 'upload']);
+        Route::put('imports/{domain}/{importRun}/configure', [ImportController::class, 'configure']);
         Route::post('imports/{domain}/{importRun}/confirm', [ImportController::class, 'confirm']);
     });
 

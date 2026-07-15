@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import type { Path } from 'react-hook-form'
+import type { Path, Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -76,7 +76,12 @@ export function usePipelineStatusForm({ mode, onSuccess }: UsePipelineStatusForm
   }, [mode, customFields.defaultValues])
 
   const form = useForm<PipelineStatusFormValues>({
-    resolver: zodResolver(schema),
+    // See `useLeadStatusForm`: `schema` is a create/edit union and
+    // `sort_order`'s `z.coerce.number()` widens the schema's own inferred
+    // input to `unknown`, so `zodResolver` can't infer/unify its generics —
+    // asserting the resolver's type at this one boundary (not `any`) is the
+    // fix: at runtime it still validates through the same schema.
+    resolver: zodResolver(schema) as Resolver<PipelineStatusFormValues>,
     defaultValues,
   })
 

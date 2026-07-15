@@ -6,6 +6,8 @@ interface UserAvatarProps {
   name: string
   /** Avatar image source (data: URI or URL); falls back to initials when null. */
   src?: string | null
+  /** Forwarded to the underlying `Avatar` root; defaults to `"default"`. */
+  size?: 'default' | 'sm' | 'lg'
   /** Extra classes forwarded to the avatar root (e.g. sizing, rounding). */
   className?: string
 }

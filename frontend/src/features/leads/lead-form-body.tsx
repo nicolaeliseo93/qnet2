@@ -13,6 +13,7 @@ import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-si
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import { useLeadForm } from '@/features/leads/use-lead-form'
+import { ExtraFieldsEditor } from '@/features/leads/extra-fields-editor'
 import type { LeadDetail, LeadFormMode } from '@/features/leads/types'
 
 interface LeadFormBodyProps {
@@ -140,6 +141,8 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
               )}
             </MetaField>
           </FormSection>
+
+          <ExtraFieldsEditor control={form.control} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

@@ -31,6 +31,9 @@ export const leads = {
     subtitle: 'Read-only view of the selected lead.',
     loadError: 'Unable to load the lead. Please try again.',
     unknownReferent: 'Unknown contact',
+    importedData: {
+      title: 'Imported data',
+    },
   },
   form: {
     newLead: 'New lead',
@@ -51,6 +54,10 @@ export const leads = {
         title: 'Notes',
         description: 'Free-form notes about the lead.',
       },
+      extraFields: {
+        title: 'Extra fields / Imported data',
+        description: 'Free-form key/value pairs, usually carried over from an import.',
+      },
     },
     referent: 'Contact',
     referentSearch: 'Search contacts…',
@@ -69,6 +76,17 @@ export const leads = {
     operatorSearch: 'Search operators…',
     notes: 'Notes',
     notesMax: 'Notes must be at most 5000 characters.',
+    extraFields: {
+      add: 'Add field',
+      remove: 'Remove field',
+      empty: 'No extra fields.',
+      key: 'Key',
+      value: 'Value',
+      keyPlaceholder: 'e.g. original column name',
+      valuePlaceholder: 'Value',
+      keyRequired: 'Key is required.',
+      duplicateKey: 'This key is already used by another row.',
+    },
     selectPlaceholder: 'Select…',
     selectEmpty: 'No results found.',
     selectError: 'Unable to load the options.',

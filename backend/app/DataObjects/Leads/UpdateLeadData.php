@@ -13,9 +13,13 @@ namespace App\DataObjects\Leads;
  * is a legitimately nullable/omittable VALUE, so the `*Submitted` flags carry
  * the "was this key actually present" distinction a plain property cannot
  * express (AC-013: a PATCH with only `notes` must leave the 6 FKs untouched).
+ * `extra_fields` (spec 0033) follows the same submitted-flag convention.
  */
 final readonly class UpdateLeadData
 {
+    /**
+     * @param  array<string, string>|null  $extraFields
+     */
     public function __construct(
         public ?int $referentId = null,
         public bool $referentIdSubmitted = false,
@@ -31,6 +35,8 @@ final readonly class UpdateLeadData
         public bool $leadStatusIdSubmitted = false,
         public ?string $notes = null,
         public bool $notesSubmitted = false,
+        public ?array $extraFields = null,
+        public bool $extraFieldsSubmitted = false,
     ) {}
 
     /**
@@ -55,6 +61,8 @@ final readonly class UpdateLeadData
             leadStatusIdSubmitted: array_key_exists('lead_status_id', $data),
             notes: array_key_exists('notes', $data) ? $data['notes'] : null,
             notesSubmitted: array_key_exists('notes', $data),
+            extraFields: array_key_exists('extra_fields', $data) ? $data['extra_fields'] : null,
+            extraFieldsSubmitted: array_key_exists('extra_fields', $data),
         );
     }
 
@@ -94,6 +102,10 @@ final readonly class UpdateLeadData
 
         if ($this->notesSubmitted) {
             $attributes['notes'] = $this->notes;
+        }
+
+        if ($this->extraFieldsSubmitted) {
+            $attributes['extra_fields'] = $this->extraFields;
         }
 
         return $attributes;

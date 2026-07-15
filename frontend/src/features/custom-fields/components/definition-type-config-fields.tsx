@@ -15,8 +15,8 @@ import {
 import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 import type { CustomFieldType } from '@/features/custom-fields/types'
 
-interface DefinitionTypeConfigFieldsProps {
-  control: Control<FieldDefinitionFormValues>
+interface DefinitionTypeConfigFieldsProps<T extends FieldDefinitionFormValues> {
+  control: Control<T>
   type: CustomFieldType
 }
 
@@ -48,13 +48,24 @@ function numberInputValue(value: number | null): string {
  * string-backed scalars — see TYPES_WITHOUT_CONFIG). Not metadata-gated: it is
  * a per-type sub-form of the `type` field itself, mirroring the ENUM options
  * editor's status.
+ *
+ * Generic over `T` (see `DefinitionTypePicker` for why `Control<T>` cannot be
+ * fixed to `Control<FieldDefinitionFormValues>`).
  */
-export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConfigFieldsProps) {
+export function DefinitionTypeConfigFields<T extends FieldDefinitionFormValues>({
+  control,
+  type,
+}: DefinitionTypeConfigFieldsProps<T>) {
   const { t } = useTranslation()
 
   if (TYPES_WITHOUT_CONFIG.includes(type)) {
     return null
   }
+
+  // See `DefinitionTypePicker`: `T` only ever adds fields on top of
+  // `FieldDefinitionFormValues`, so every `config.*` path here is guaranteed
+  // present; the narrowing happens once, here, not per field.
+  const baseControl = control as unknown as Control<FieldDefinitionFormValues>
 
   return (
     <FormSection
@@ -64,7 +75,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
     >
       {(type === 'text' || type === 'textarea') && (
         <FormField
-          control={control}
+          control={baseControl}
           name="config.maxLength"
           render={({ field }) => (
             <FormItem>
@@ -92,7 +103,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
       {type === 'text' && (
         <>
           <FormField
-            control={control}
+            control={baseControl}
             name="config.minLength"
             render={({ field }) => (
               <FormItem>
@@ -116,7 +127,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             )}
           />
           <FormField
-            control={control}
+            control={baseControl}
             name="config.regex"
             render={({ field }) => (
               <FormItem>
@@ -133,7 +144,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             )}
           />
           <FormField
-            control={control}
+            control={baseControl}
             name="config.transform"
             render={({ field }) => (
               <FormItem>
@@ -164,7 +175,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
 
       {type === 'textarea' && (
         <FormField
-          control={control}
+          control={baseControl}
           name="config.rows"
           render={({ field }) => (
             <FormItem>
@@ -192,7 +203,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
       {(type === 'integer' || type === 'decimal') && (
         <>
           <FormField
-            control={control}
+            control={baseControl}
             name="config.min"
             render={({ field }) => (
               <FormItem>
@@ -216,7 +227,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             )}
           />
           <FormField
-            control={control}
+            control={baseControl}
             name="config.max"
             render={({ field }) => (
               <FormItem>
@@ -240,7 +251,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
             )}
           />
           <FormField
-            control={control}
+            control={baseControl}
             name="config.step"
             render={({ field }) => (
               <FormItem>
@@ -266,7 +277,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
           />
           {type === 'decimal' && (
             <FormField
-              control={control}
+              control={baseControl}
               name="config.decimals"
               render={({ field }) => (
                 <FormItem>
@@ -295,7 +306,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
 
       {type === 'boolean' && (
         <FormField
-          control={control}
+          control={baseControl}
           name="config.display"
           render={({ field }) => (
             <FormItem>
@@ -323,7 +334,7 @@ export function DefinitionTypeConfigFields({ control, type }: DefinitionTypeConf
 
       {type === 'enum' && (
         <FormField
-          control={control}
+          control={baseControl}
           name="config.display"
           render={({ field }) => (
             <FormItem>

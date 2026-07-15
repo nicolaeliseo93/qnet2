@@ -39,10 +39,12 @@ export function buildUpdatePayload(
     payload.description = values.description
   }
   if (values.cost !== original.cost) {
-    payload.cost = values.cost
+    // See buildCreatePayload: validated non-null by the schema's
+    // required-value superRefine before submit.
+    payload.cost = values.cost as number
   }
   if (values.price !== original.price) {
-    payload.price = values.price
+    payload.price = values.price as number
   }
   if (values.category_id !== original.category_id) {
     payload.category_id = values.category_id as number

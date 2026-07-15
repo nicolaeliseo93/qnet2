@@ -22,6 +22,7 @@ function lead(overrides: Partial<LeadDetail> = {}): LeadDetail {
     operator_id: 50,
     operator: { id: 50, name: 'Anna Bianchi' },
     notes: 'Interested in the enterprise plan.',
+    extra_fields: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-02T00:00:00Z',
     ...overrides,
@@ -75,5 +76,34 @@ describe('LeadDetailView — read-only (AC-065)', () => {
     render(<LeadDetailView lead={lead({ referent_id: 10, referent: null })} />)
 
     expect(screen.getByRole('heading', { name: 'Unknown contact' })).toBeInTheDocument()
+  })
+})
+
+/** AC-014: the "Imported data" section shows extra_fields read-only, only when non-empty. */
+describe('LeadDetailView — imported data (AC-014)', () => {
+  it('shows the section with every key/value pair when extra_fields is set', () => {
+    render(
+      <LeadDetailView
+        lead={lead({ extra_fields: { 'Original column A': 'foo', 'Original column B': 'bar' } })}
+      />,
+    )
+
+    expect(screen.getByText('Imported data')).toBeInTheDocument()
+    expect(screen.getByText('Original column A')).toBeInTheDocument()
+    expect(screen.getByText('foo')).toBeInTheDocument()
+    expect(screen.getByText('Original column B')).toBeInTheDocument()
+    expect(screen.getByText('bar')).toBeInTheDocument()
+  })
+
+  it('does not render the section when extra_fields is null', () => {
+    render(<LeadDetailView lead={lead({ extra_fields: null })} />)
+
+    expect(screen.queryByText('Imported data')).not.toBeInTheDocument()
+  })
+
+  it('does not render the section when extra_fields is an empty object', () => {
+    render(<LeadDetailView lead={lead({ extra_fields: {} })} />)
+
+    expect(screen.queryByText('Imported data')).not.toBeInTheDocument()
   })
 })

@@ -2,6 +2,7 @@
 
 use App\Imports\BusinessFunctionsImportDefinition;
 use App\Imports\CompaniesImportDefinition;
+use App\Imports\LeadsImportDefinition;
 use App\Imports\OperationalSitesImportDefinition;
 use App\Imports\RolesImportDefinition;
 use App\Imports\UsersImportDefinition;
@@ -31,6 +32,7 @@ return [
     'definitions' => [
         'business-functions' => BusinessFunctionsImportDefinition::class,
         'companies' => CompaniesImportDefinition::class,
+        'leads' => LeadsImportDefinition::class,
         'operational-sites' => OperationalSitesImportDefinition::class,
         'roles' => RolesImportDefinition::class,
         'users' => UsersImportDefinition::class,
@@ -62,5 +64,37 @@ return [
     // chunked-commit optimization hook; per-row transactions are the current
     // isolation unit — see ProcessImportJob).
     'batch_size' => (int) env('IMPORT_BATCH_SIZE', 200),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Column mapping aliases (spec 0033 — App\Imports\Support\ColumnMapper)
+    |--------------------------------------------------------------------------
+    |
+    | Extra human header variants (IT/EN), on top of a field's own id/label,
+    | that ColumnMapper's auto-mapping resolves to the given mappable field
+    | id. Matched after normalization (lower/trim/accent-strip/underscore-
+    | and-dash-to-space), so "E-mail" already matches "email" without an
+    | alias — these entries cover the variants that normalization alone
+    | does not bridge. Centralized here, never scattered across
+    | ImportDefinition classes.
+    */
+    'column_aliases' => [
+        'full_name' => ['nome completo', 'full name', 'nominativo'],
+        'first_name' => ['nome', 'first name'],
+        'last_name' => ['cognome', 'last name'],
+        'email' => ['e mail', 'indirizzo email'],
+        'phone' => ['telefono', 'tel'],
+        'mobile' => ['cellulare', 'cell'],
+        'company_name' => ['ragione sociale', 'azienda', 'company'],
+        'tax_code' => ['codice fiscale', 'cf'],
+        'vat_number' => ['partita iva', 'piva', 'vat'],
+        'street' => ['indirizzo', 'via'],
+        'postal_code' => ['cap', 'zip', 'zip code'],
+        'country' => ['nazione', 'stato'],
+        'region' => ['regione'],
+        'province' => ['provincia'],
+        'city' => ['citta', 'comune'],
+        'notes' => ['note'],
+    ],
 
 ];

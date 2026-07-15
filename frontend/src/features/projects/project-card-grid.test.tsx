@@ -5,13 +5,29 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { ProjectCardGrid } from '@/features/projects/project-card-grid'
 import type { ProjectCard } from '@/features/projects/types'
+import type { AdvancedFilterDescriptor } from '@/features/table/advanced-filters/types'
+import type { TableConfig } from '@/features/table/types'
 
 const useProjectCardsMock = vi.fn()
+const useTableConfigMock = vi.fn()
+const saveFiltersMutateMock = vi.fn()
 const fetchNextPage = vi.fn()
 const refetch = vi.fn()
 
 vi.mock('@/features/projects/use-project-cards', () => ({
   useProjectCards: (...args: unknown[]) => useProjectCardsMock(...args),
+}))
+
+// Advanced filters (spec 0032 AC-018): the card grid reuses `useTableConfig`
+// (the same catalog/applied-state source `TableView` reads for the AG Grid
+// view) and `useSaveTableFilters` (persistence) — both mocked here so the
+// panel/toggle behavior is tested in isolation from the network.
+vi.mock('@/features/table/use-table-config', () => ({
+  useTableConfig: (...args: unknown[]) => useTableConfigMock(...args),
+}))
+
+vi.mock('@/features/table/use-table-filters', () => ({
+  useSaveTableFilters: () => ({ mutate: saveFiltersMutateMock, isPending: false }),
 }))
 
 // The edit form itself is covered by its own tests; here we only assert that
@@ -86,10 +102,29 @@ beforeAll(async () => {
   await i18n.changeLanguage('en')
 })
 
+/** Minimal, schema-valid descriptor fixture. */
+function descriptor(
+  overrides: Partial<AdvancedFilterDescriptor> & Pick<AdvancedFilterDescriptor, 'name' | 'type'>,
+): AdvancedFilterDescriptor {
+  return {
+    label: 'Status',
+    order: 0,
+    required: false,
+    visible: true,
+    width: 'md',
+    multiple: false,
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   useProjectCardsMock.mockReset()
+  useTableConfigMock.mockReset()
+  saveFiltersMutateMock.mockReset()
   fetchNextPage.mockReset()
   refetch.mockReset()
+  // Default: no advanced filter catalog (existing behavior, toggle hidden).
+  useTableConfigMock.mockReturnValue({ data: undefined })
 })
 
 describe('ProjectCardGrid (spec 0026 AC-007/009)', () => {
@@ -209,5 +244,88 @@ describe('ProjectCardGrid (spec 0026 AC-007/009)', () => {
     renderGrid()
 
     expect(screen.queryByText('National')).not.toBeInTheDocument()
+  })
+})
+
+describe('ProjectCardGrid — advanced filters (spec 0032 AC-018)', () => {
+  it('hides the advanced-filters toggle when the domain declares no catalog', () => {
+    useProjectCardsMock.mockReturnValue(baseState({ data: pagesOf([]) }))
+
+    renderGrid()
+
+    expect(
+      screen.queryByRole('button', { name: 'Advanced filters' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the toggle and, once opened, the same field-per-type panel the AG Grid view uses', () => {
+    useTableConfigMock.mockReturnValue({
+      data: {
+        advancedFilters: [descriptor({ name: 'status', type: 'text', label: 'Status' })],
+        appliedAdvancedFilters: null,
+      } as unknown as TableConfig,
+    })
+    useProjectCardsMock.mockReturnValue(baseState({ data: pagesOf([]) }))
+
+    renderGrid()
+
+    const toggle = screen.getByRole('button', { name: 'Advanced filters' })
+    fireEvent.click(toggle)
+
+    expect(screen.getByRole('textbox', { name: 'Status' })).toBeInTheDocument()
+  })
+
+  it('applying an advanced filter sends the SAME advancedFilters shape to useProjectCards as the AG Grid view sends to POST /rows', async () => {
+    useTableConfigMock.mockReturnValue({
+      data: {
+        advancedFilters: [descriptor({ name: 'status', type: 'text', label: 'Status' })],
+        appliedAdvancedFilters: null,
+      } as unknown as TableConfig,
+    })
+    useProjectCardsMock.mockReturnValue(baseState({ data: pagesOf([]) }))
+
+    renderGrid()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced filters' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Status' }), {
+      target: { value: 'won' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    await waitFor(() =>
+      expect(useProjectCardsMock).toHaveBeenLastCalledWith({
+        advancedFilters: { status: 'won' },
+      }),
+    )
+    // Persisted the same way the AG Grid path persists (spec 0032), so
+    // switching views resumes the same applied state.
+    expect(saveFiltersMutateMock).toHaveBeenCalledWith({
+      advancedFilters: { status: 'won' },
+    })
+  })
+
+  it('shows the active-filter count as a badge on the toggle', async () => {
+    useTableConfigMock.mockReturnValue({
+      data: {
+        advancedFilters: [descriptor({ name: 'status', type: 'text', label: 'Status' })],
+        appliedAdvancedFilters: null,
+      } as unknown as TableConfig,
+    })
+    useProjectCardsMock.mockReturnValue(baseState({ data: pagesOf([]) }))
+
+    renderGrid()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced filters' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Status' }), {
+      target: { value: 'won' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    // The toggle's own accessible name stays stable ("Advanced filters"); the
+    // count is a separately-labeled badge, mirroring NotificationBell's unread badge.
+    await waitFor(() =>
+      expect(screen.getByLabelText('1 active filter')).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('button', { name: 'Advanced filters' })).toBeInTheDocument()
   })
 })

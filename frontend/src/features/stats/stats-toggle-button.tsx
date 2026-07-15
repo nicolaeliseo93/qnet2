@@ -30,6 +30,7 @@ export function StatsToggleButton({ domain, isOpen, onToggle }: StatsToggleButto
             type="button"
             variant="outline"
             size="icon"
+            className="bg-field"
             onClick={onToggle}
             aria-label={t('statsPanel.toggle')}
             aria-expanded={isOpen}

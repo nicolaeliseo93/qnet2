@@ -1,0 +1,132 @@
+/**
+ * Stringhe localizzate per il wizard di import lead avanzato (spec 0033):
+ * step upload, configurazione globale, mappatura colonne, revisione e
+ * riepilogo. Mirror di `en-import-wizard.ts` (vedi quel file per il
+ * contesto sul namespace i18next dedicato).
+ */
+export const importWizard = {
+  nav: {
+    label: 'Importa',
+  },
+  page: {
+    title: 'Importa lead',
+    subtitle: 'Carica un file per importare lead in massa con un wizard guidato a fasi.',
+    forbidden: 'Non hai i permessi per importare lead.',
+    loadError: 'Impossibile caricare questo import. Riprova.',
+  },
+  stepper: {
+    upload: 'Caricamento',
+    config: 'Configurazione',
+    mapping: 'Mappatura',
+    review: 'Revisione',
+    summary: 'Riepilogo',
+  },
+  upload: {
+    fileLabel: 'File (.csv, .xlsx)',
+    submit: 'Analizza file',
+    uploading: 'Caricamento…',
+    analyzing: 'Analisi del file in corso…',
+    summaryTitle: 'Analisi del file',
+    columnsLabel: 'Colonne rilevate',
+    rowsLabel: 'Righe rilevate',
+    duplicateColumnsLabel: 'Nomi colonna duplicati',
+    noDuplicateColumns: 'Nessuno',
+    continue: 'Continua alla configurazione',
+    errors: {
+      fileRequired: 'Seleziona un file da caricare.',
+      fileType: 'Sono supportati solo file .csv e .xlsx.',
+    },
+  },
+  config: {
+    title: 'Configurazione globale',
+    subtitle: 'Questi valori si applicano a ogni lead importato.',
+    continue: 'Continua alla mappatura',
+    back: 'Indietro',
+    errors: {
+      required: 'Questo campo è obbligatorio.',
+    },
+    select: {
+      placeholder: 'Seleziona…',
+      searchPlaceholder: 'Cerca…',
+      empty: 'Nessun risultato.',
+      error: 'Impossibile caricare le opzioni.',
+      clear: 'Rimuovi selezione',
+      retry: 'Riprova',
+    },
+  },
+  mapping: {
+    title: 'Mappatura colonne',
+    subtitle: 'Associa ogni colonna del file a un campo lead, oppure ignorala.',
+    targetHeader: 'Campo di destinazione',
+    ignore: 'Ignora questa colonna',
+    extra: 'Campo extra',
+    duplicateStrategy: 'Gestione duplicati',
+    submit: 'Salva mappatura e continua',
+    submitting: 'Salvataggio…',
+    badges: {
+      requiredMissing: 'Campi obbligatori non mappati: {{fields}}',
+      duplicateColumn: 'Nome colonna duplicato',
+      conflict: 'Mappato più volte',
+    },
+    dedupModes: {
+      create_new: 'Crea sempre un nuovo lead',
+      update_existing: 'Aggiorna l’anagrafica corrispondente',
+      ignore: 'Salta le righe corrispondenti',
+      manual: 'Decidi in revisione',
+    },
+    errors: {
+      dedupRequired: 'Seleziona una strategia di gestione dei duplicati.',
+    },
+  },
+  review: {
+    title: 'Revisione',
+    placeholder: 'La griglia di revisione riga per riga non è ancora disponibile.',
+    continue: 'Continua al riepilogo',
+    loading: 'Caricamento della revisione…',
+    gridLabel: 'Griglia di revisione delle righe caricate',
+    needsAttention: 'Alcune righe richiedono attenzione',
+    editedTitle: 'Modificata',
+    columns: {
+      rowNumber: '#',
+      status: 'Stato',
+      messages: 'Messaggi',
+      extraSuffix: 'extra',
+    },
+    status: {
+      valid: 'Valida',
+      warning: 'Avviso',
+      error: 'Errore',
+      duplicate: 'Duplicato',
+      skipped: 'Saltata',
+    },
+    counts: {
+      total: 'Totale',
+      valid: 'Valide',
+      warning: 'Avvisi',
+      error: 'Errori',
+      duplicate: 'Duplicati',
+      modified: 'Modificate',
+    },
+  },
+  summary: {
+    title: 'Riepilogo',
+    placeholder: 'Il riepilogo dell’import non è ancora disponibile.',
+    statusLabel: 'Stato: {{status}}',
+  },
+  status: {
+    analyzing: 'Analisi in corso',
+    configuring: 'Configurazione',
+    staging: 'Applicazione mappatura…',
+    reviewing: 'Revisione',
+    processing: 'Importazione…',
+    completed: 'Completato',
+    failed: 'Fallito',
+  },
+  errors: {
+    forbidden: 'Non hai i permessi per importare lead.',
+    notFound: 'Questo import non esiste.',
+    validation: 'Alcuni valori non sono validi. Controlla e riprova.',
+    invalidState: 'Questa azione non è disponibile in questa fase.',
+    generic: 'Si è verificato un errore. Riprova.',
+  },
+}

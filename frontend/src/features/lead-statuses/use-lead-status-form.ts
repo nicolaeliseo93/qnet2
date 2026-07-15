@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import type { Path } from 'react-hook-form'
+import type { Path, Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -73,7 +73,17 @@ export function useLeadStatusForm({ mode, onSuccess }: UseLeadStatusFormArgs) {
   }, [mode, customFields.defaultValues])
 
   const form = useForm<LeadStatusFormValues>({
-    resolver: zodResolver(schema),
+    // `schema` is a UNION of the create/edit Zod object types (picked at
+    // runtime by `isEdit`); `zodResolver` cannot infer its generics from a
+    // union schema value and falls back to bare `FieldValues`, which then
+    // fails to unify with `LeadStatusFormValues` everywhere `form.control` is
+    // passed downstream. `sort_order`'s `z.coerce.number()` additionally
+    // widens the schema's OWN inferred input to `unknown` (pre-coercion), so
+    // even an explicit `<LeadStatusFormValues, unknown, LeadStatusFormValues>`
+    // fails the structural check — asserting the resolver's type at this one
+    // boundary (not `any`) is the correct fix: at runtime it still validates
+    // through the same schema and yields `LeadStatusFormValues`.
+    resolver: zodResolver(schema) as Resolver<LeadStatusFormValues>,
     defaultValues,
   })
 

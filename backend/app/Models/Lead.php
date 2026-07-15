@@ -14,7 +14,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * `campaign_id`/`lead_status_id` are mandatory (BR-1, spec 0029 D-1);
  * `operational_site_id`/`source_id`/`operator_id`/`notes` are optional. No
  * `code` (D-3): unlike Project/Campaign, a Lead carries no sequential
- * identifier.
+ * identifier. `extra_fields` (spec 0033) is a raw JSON key/value store for
+ * free-form data — typed manually on the Lead form or mapped to `__extra__`
+ * during the import wizard — deliberately NOT the Universal Custom Fields
+ * system (spec 0021).
  */
 #[Fillable([
     'referent_id',
@@ -24,11 +27,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'operator_id',
     'lead_status_id',
     'notes',
+    'extra_fields',
 ])]
 class Lead extends BaseModel
 {
     /** @use HasFactory<LeadFactory> */
     use HasFactory, LogsModelActivity;
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'extra_fields' => 'array',
+        ];
+    }
 
     public function referent(): BelongsTo
     {

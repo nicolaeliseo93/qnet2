@@ -45,6 +45,10 @@ export interface LeadOperationalSiteRef {
  * Single lead detail returned by GET/POST/PATCH /leads (envelope `data`).
  * Matches `LeadResource`. `referent_id`/`campaign_id`/`lead_status_id` are
  * always set (BR-1, D-1); the other 3 fields are nullable.
+ *
+ * `extra_fields` (spec 0033, AC-014) is a free-form key/value store: no
+ * fixed shape, no per-field permissions. Keys either mirror an imported
+ * file's original column name or are typed manually in the form.
  */
 export interface LeadDetail {
   id: number
@@ -61,6 +65,7 @@ export interface LeadDetail {
   operator_id: number | null
   operator: LeadRelationRef | null
   notes: string | null
+  extra_fields: Record<string, string> | null
   created_at: string
   updated_at: string
 }
@@ -87,6 +92,7 @@ export interface CreateLeadPayload {
   source_id?: number | null
   operator_id?: number | null
   notes?: string | null
+  extra_fields?: Record<string, string> | null
 }
 
 /** Payload for PATCH /leads/{id} (partial update). Every field is optional (sparse diff). */

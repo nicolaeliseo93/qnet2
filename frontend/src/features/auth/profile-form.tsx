@@ -99,7 +99,7 @@ export function ProfileForm() {
     // field-level messages inline; this is the gate before the request fires.
     const profileValid = buildPersonalDataSchema(t).safeParse({
       type: draft.type,
-      title: draft.title ?? undefined,
+      gender: draft.gender ?? undefined,
       first_name: draft.first_name ?? undefined,
       last_name: draft.last_name ?? undefined,
       company_name: draft.company_name ?? undefined,

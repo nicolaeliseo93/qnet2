@@ -1,0 +1,167 @@
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import i18n from '@/i18n'
+import { ImportWizard } from '@/features/imports/wizard/import-wizard'
+import type { ImportRunDetail, ImportRunSummary } from '@/features/imports/wizard/types'
+
+/**
+ * Spec 0033: end-to-end orchestration of the wizard's server-driven state
+ * machine (AC-020/021/022/025) — upload through mapping submit, resume via
+ * `?runId=`, and the top-level loading/error states.
+ */
+
+const analyzeImportMock = vi.fn()
+const getImportWizardRunMock = vi.fn()
+const configureImportRunMock = vi.fn()
+const confirmImportRunMock = vi.fn()
+
+vi.mock('@/features/imports/wizard/api', () => ({
+  analyzeImport: (...args: unknown[]) => analyzeImportMock(...args),
+  getImportWizardRun: (...args: unknown[]) => getImportWizardRunMock(...args),
+  configureImportRun: (...args: unknown[]) => configureImportRunMock(...args),
+  confirmImportRun: (...args: unknown[]) => confirmImportRunMock(...args),
+}))
+
+const useForSelectMock = vi.fn()
+vi.mock('@/features/for-select/use-for-select', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/features/for-select/use-for-select')>(
+      '@/features/for-select/use-for-select',
+    )
+  return {
+    flattenForSelectPages: actual.flattenForSelectPages,
+    useForSelect: (args: unknown) => useForSelectMock(args),
+  }
+})
+
+function createdRun(overrides: Partial<ImportRunSummary> = {}): ImportRunSummary {
+  return {
+    id: 1,
+    resource: 'leads',
+    status: 'analyzing',
+    original_filename: 'leads.csv',
+    total_rows: 0,
+    valid_rows: 0,
+    warning_rows: 0,
+    error_rows: 0,
+    duplicate_rows: 0,
+    imported_rows: null,
+    modified_rows: 0,
+    has_error_report: false,
+    created_at: '2026-07-15T00:00:00Z',
+    ...overrides,
+  }
+}
+
+function detailRun(overrides: Partial<ImportRunDetail> = {}): ImportRunDetail {
+  return {
+    ...createdRun(),
+    status: 'configuring',
+    total_rows: 5,
+    error_count: 0,
+    detected_columns: [{ key: 'Email', name: 'Email', index: 0, duplicate: false }],
+    column_mapping: null,
+    global_config: null,
+    dedup_strategy: null,
+    suggested_mapping: { Email: 'email' },
+    fields: [{ id: 'email', label: 'Email', required: true, group: 'contact', type: 'string' }],
+    global_fields: [
+      { id: 'campaign_id', label: 'Campaign', required: true, for_select_resource: 'campaigns', default: null },
+    ],
+    dedup_modes: ['create_new'],
+    ...overrides,
+  }
+}
+
+function renderWizard(initialEntry: string) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path="/leads/import" element={<ImportWizard domain="leads" />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+beforeAll(async () => {
+  await i18n.changeLanguage('en')
+})
+
+beforeEach(() => {
+  analyzeImportMock.mockReset()
+  getImportWizardRunMock.mockReset()
+  configureImportRunMock.mockReset()
+  confirmImportRunMock.mockReset()
+  useForSelectMock.mockReset()
+  useForSelectMock.mockReturnValue({
+    data: { pages: [{ items: [{ id: 9, label: 'Spring campaign' }] }] },
+    isPending: false,
+    isError: false,
+    fetchNextPage: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    refetch: vi.fn(),
+  })
+})
+
+describe('ImportWizard', () => {
+  it('starts on the upload step with the full stepper visible', () => {
+    renderWizard('/leads/import')
+
+    expect(screen.getByRole('navigation', { name: 'Progress' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Analyze file' })).toBeInTheDocument()
+  })
+
+  it('runs upload -> analysis summary -> config -> mapping submit end to end', async () => {
+    analyzeImportMock.mockResolvedValue(createdRun())
+    getImportWizardRunMock.mockResolvedValue(detailRun())
+    configureImportRunMock.mockResolvedValue(createdRun({ status: 'staging' }))
+
+    renderWizard('/leads/import')
+
+    const file = new File(['a'], 'leads.csv', { type: 'text/csv' })
+    fireEvent.change(screen.getByLabelText(/File \(\.csv, \.xlsx\)/), { target: { files: [file] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze file' }))
+
+    expect(await screen.findByText('File analysis')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to configuration' }))
+
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Campaign' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Spring campaign' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to mapping' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Save mapping and continue' }))
+
+    await waitFor(() =>
+      expect(configureImportRunMock).toHaveBeenCalledWith('leads', 1, {
+        column_mapping: { Email: 'email' },
+        global_config: { campaign_id: 9 },
+        dedup_strategy: 'create_new',
+      }),
+    )
+  })
+
+  it('resumes directly at the configuration step from ?runId=', async () => {
+    getImportWizardRunMock.mockResolvedValue(detailRun())
+
+    renderWizard('/leads/import?runId=7')
+
+    expect(await screen.findByRole('combobox', { name: 'Campaign' })).toBeInTheDocument()
+    expect(getImportWizardRunMock).toHaveBeenCalledWith('leads', 7)
+  })
+
+  it('shows a retry action when loading the resumed run fails', async () => {
+    getImportWizardRunMock.mockRejectedValueOnce(new Error('network')).mockResolvedValue(detailRun())
+
+    renderWizard('/leads/import?runId=7')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Campaign' })).toBeInTheDocument())
+  })
+})

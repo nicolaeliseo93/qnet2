@@ -54,7 +54,7 @@ vi.mock('@/features/config/use-config', () => ({
 const validCard: PersonalDataCard = {
   id: 99,
   type: 'individual',
-  title: null,
+  gender: null,
   first_name: 'Ada',
   last_name: 'Lovelace',
   company_name: null,

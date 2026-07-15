@@ -114,6 +114,39 @@ it('index: pipeline_status_id filters by status (AC-002)', function () {
     expect($ids->all())->toBe([$matching->id]);
 });
 
+it('index: advancedFilters[budget_range] filters card-grid rows (AC-018)', function () {
+    $actor = projectUserWith(['viewAny']);
+    $matching = Project::factory()->create(['total_budget' => 5000]);
+    Project::factory()->create(['total_budget' => 50]);
+    Sanctum::actingAs($actor);
+
+    $query = http_build_query(['advancedFilters' => ['budget_range' => ['from' => 1000, 'to' => 10000]]]);
+
+    $ids = collect($this->getJson("/api/projects?{$query}")->assertOk()->json('items'))->pluck('id');
+
+    expect($ids->all())->toBe([$matching->id]);
+});
+
+it('index: advancedFilters with a key outside the allow-list returns 422 (AC-018)', function () {
+    $actor = projectUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $query = http_build_query(['advancedFilters' => ['not_a_real_filter' => 'x']]);
+
+    $this->getJson("/api/projects?{$query}")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['advancedFilters.not_a_real_filter']);
+});
+
+it('index: advancedFilters is authorized the same as the plain index — 403 without projects.viewAny (AC-018)', function () {
+    $actor = projectUserWith([]);
+    Sanctum::actingAs($actor);
+
+    $query = http_build_query(['advancedFilters' => ['budget_range' => ['from' => 1000]]]);
+
+    $this->getJson("/api/projects?{$query}")->assertForbidden();
+});
+
 it('index: can.update/can.delete reflect the real Gate result per user (AC-005)', function () {
     $withUpdate = projectUserWith(['viewAny', 'update']);
     $project = Project::factory()->create();

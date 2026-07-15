@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import type { Path } from 'react-hook-form'
+import type { Path, Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -98,7 +98,12 @@ export function useOperationalSiteForm({ mode, onSuccess }: UseOperationalSiteFo
   }, [mode, customFields.defaultValues])
 
   const form = useForm<OperationalSiteFormValues>({
-    resolver: zodResolver(schema),
+    // See `useLeadStatusForm`: `schema` is a create/edit union (and one of
+    // its coerced/nullable numeric fields widens the schema's own inferred
+    // input), so `zodResolver` can't infer/unify its generics — asserting the
+    // resolver's type at this one boundary (not `any`) is the fix: at
+    // runtime it still validates through the same schema.
+    resolver: zodResolver(schema) as Resolver<OperationalSiteFormValues>,
     defaultValues,
   })
 

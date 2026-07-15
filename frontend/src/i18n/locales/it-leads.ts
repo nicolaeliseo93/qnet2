@@ -31,6 +31,9 @@ export const leads = {
     subtitle: 'Visualizzazione in sola lettura del lead selezionato.',
     loadError: 'Impossibile caricare il lead. Riprova.',
     unknownReferent: 'Contatto sconosciuto',
+    importedData: {
+      title: 'Dati importati',
+    },
   },
   form: {
     newLead: 'Nuovo lead',
@@ -51,6 +54,10 @@ export const leads = {
         title: 'Note',
         description: 'Annotazioni libere sul lead.',
       },
+      extraFields: {
+        title: 'Campi extra / Dati importati',
+        description: 'Coppie chiave/valore libere, di solito provenienti da un import.',
+      },
     },
     referent: 'Contatto',
     referentSearch: 'Cerca contatti…',
@@ -69,6 +76,17 @@ export const leads = {
     operatorSearch: 'Cerca operatori…',
     notes: 'Note',
     notesMax: 'Le note devono avere al massimo 5000 caratteri.',
+    extraFields: {
+      add: 'Aggiungi campo',
+      remove: 'Rimuovi campo',
+      empty: 'Nessun campo extra.',
+      key: 'Chiave',
+      value: 'Valore',
+      keyPlaceholder: 'es. nome colonna originale',
+      valuePlaceholder: 'Valore',
+      keyRequired: 'La chiave è obbligatoria.',
+      duplicateKey: 'Questa chiave è già usata da un\'altra riga.',
+    },
     selectPlaceholder: 'Seleziona…',
     selectEmpty: 'Nessun risultato trovato.',
     selectError: 'Impossibile caricare le opzioni.',

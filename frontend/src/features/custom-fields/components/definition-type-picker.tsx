@@ -13,8 +13,8 @@ import { FIELD_TYPE_ICONS } from '@/features/custom-fields/field-type-icons'
 import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 import { CUSTOM_FIELD_TYPES, type CustomFieldType } from '@/features/custom-fields/types'
 
-interface DefinitionTypePickerProps {
-  control: Control<FieldDefinitionFormValues>
+interface DefinitionTypePickerProps<T extends FieldDefinitionFormValues> {
+  control: Control<T>
   /** `type` is immutable once the field has values; the edit form locks it. */
   lockIdentity: boolean
 }
@@ -25,12 +25,27 @@ interface DefinitionTypePickerProps {
  * governs every other section of the form. Each option carries its icon + a
  * one-line description, and an always-visible callout under the select explains
  * the currently-selected type with a concrete example (spec AC-025 UX refactor).
+ *
+ * Generic over `T` (each host form's own, wider values type) rather than
+ * fixed to `FieldDefinitionFormValues`: RHF's `Control<T>` is not covariant,
+ * so a fixed `Control<FieldDefinitionFormValues>` prop rejects every concrete
+ * host control (which extends it with `code`/`name`/`custom_fields`, etc.).
  */
-export function DefinitionTypePicker({ control, lockIdentity }: DefinitionTypePickerProps) {
+export function DefinitionTypePicker<T extends FieldDefinitionFormValues>({
+  control,
+  lockIdentity,
+}: DefinitionTypePickerProps<T>) {
   const { t } = useTranslation()
+  // `T` only ever ADDS fields on top of `FieldDefinitionFormValues` (never
+  // narrows/reshapes them), so every path this component reads (`type`) is
+  // guaranteed present and identically shaped for any `T`. RHF's `Path<T>`
+  // can't express that guarantee for a generic, recursively-conditional
+  // type, so the implementation narrows to the shared base once, here,
+  // rather than casting per field.
+  const baseControl = control as unknown as Control<FieldDefinitionFormValues>
 
   return (
-    <MetaField control={control} name="type" metaKey="type" label={t('customFields.form.type')}>
+    <MetaField control={baseControl} name="type" metaKey="type" label={t('customFields.form.type')}>
       {({ field, disabled }) => {
         const selected = field.value
         const SelectedIcon = FIELD_TYPE_ICONS[selected]

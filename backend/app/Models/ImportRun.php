@@ -7,6 +7,7 @@ use App\Models\Abstracts\BaseModel;
 use Database\Factories\ImportRunFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One row per CSV import upload (spec 0012): tracks the two-phase
@@ -32,6 +33,15 @@ class ImportRun extends BaseModel
         'imported_rows',
         'error_report_path',
         'preview',
+        'detected_columns',
+        'column_mapping',
+        'global_config',
+        'dedup_strategy',
+        'warning_rows',
+        'duplicate_rows',
+        'modified_rows',
+        'notified_at',
+        'error_count',
     ];
 
     protected $casts = [
@@ -45,10 +55,24 @@ class ImportRun extends BaseModel
         'imported_rows' => 'int',
         'error_report_path' => 'string',
         'preview' => 'array',
+        'detected_columns' => 'array',
+        'column_mapping' => 'array',
+        'global_config' => 'array',
+        'dedup_strategy' => 'string',
+        'warning_rows' => 'int',
+        'duplicate_rows' => 'int',
+        'modified_rows' => 'int',
+        'notified_at' => 'datetime',
+        'error_count' => 'int',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function rows(): HasMany
+    {
+        return $this->hasMany(ImportRunRow::class);
     }
 }

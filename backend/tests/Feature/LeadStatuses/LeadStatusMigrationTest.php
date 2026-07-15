@@ -33,9 +33,15 @@ it('migrate:fresh runs clean on an empty database (AC-012)', function () {
 it('backfills lead_status_id for pre-existing leads and locks the column NOT NULL (AC-012, BR-1)', function () {
     Artisan::call('migrate:fresh');
 
-    // Roll back only the backfill migration, simulating the leads table as
-    // it existed before this feature: no lead_status_id column at all.
-    Artisan::call('migrate:rollback', ['--step' => 1]);
+    // Roll back ONLY the backfill migration directly (not via `migrate:rollback
+    // --step=1`, which counts the single most-recently-RUN migration file
+    // chronologically — spec 0033 added 3 more `leads`/`import_runs`
+    // migrations after this one, so that would now roll back the wrong file),
+    // simulating the leads table as it existed before this feature: no
+    // lead_status_id column at all. Mirrors LeadTest's direct migration
+    // require()/down()/up() pattern.
+    $migration = require database_path('migrations/2026_07_14_160100_add_lead_status_id_to_leads_table.php');
+    $migration->down();
     expect(Schema::hasColumn('leads', 'lead_status_id'))->toBeFalse();
 
     $referentId = DB::table('referents')->insertGetId(['name' => 'Backfill Referent']);
@@ -45,7 +51,7 @@ it('backfills lead_status_id for pre-existing leads and locks the column NOT NUL
         'campaign_id' => $campaignId,
     ]);
 
-    Artisan::call('migrate');
+    $migration->up();
 
     expect(Schema::hasColumn('leads', 'lead_status_id'))->toBeTrue();
 

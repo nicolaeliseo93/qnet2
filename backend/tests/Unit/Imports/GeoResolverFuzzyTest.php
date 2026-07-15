@@ -1,0 +1,115 @@
+<?php
+
+use App\Imports\Support\GeoResolver;
+use App\Models\City;
+use App\Models\Country;
+use App\Models\Province;
+use App\Models\State;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+uses(TestCase::class, RefreshDatabase::class);
+
+/**
+ * @return array{country: Country, state: State, province: Province, city: City}
+ */
+function fuzzyGeoChain(): array
+{
+    $country = Country::factory()->create(['name' => 'Italy']);
+    $state = State::factory()->create(['name' => 'Lombardy', 'country_id' => $country->id]);
+    $province = Province::factory()->create(['name' => 'Milan', 'state_id' => $state->id, 'country_id' => $country->id]);
+    $city = City::factory()->create(['name' => 'Milan', 'province_id' => $province->id, 'state_id' => $state->id, 'country_id' => $country->id]);
+
+    return compact('country', 'state', 'province', 'city');
+}
+
+// ---------------------------------------------------------------------------
+// AC-005 — GeoResolver::resolveFuzzy() — single-assign, 0/multi -> ambiguous
+// ---------------------------------------------------------------------------
+
+it('assigns via the exact path when the name matches exactly (identical to resolve())', function () {
+    $geo = fuzzyGeoChain();
+
+    $result = app(GeoResolver::class)->resolveFuzzy('Italy', 'Lombardy', null, 'Milan');
+
+    expect($result->isResolved())->toBeTrue()
+        ->and($result->ambiguous)->toBeFalse()
+        ->and($result->countryId)->toBe($geo['country']->id)
+        ->and($result->stateId)->toBe($geo['state']->id)
+        ->and($result->cityId)->toBe($geo['city']->id);
+});
+
+it('assigns via a single close fuzzy match (typo/near-miss) above the threshold', function () {
+    $geo = fuzzyGeoChain();
+
+    // "Milano" vs "Milan" is a single-character near miss, well above the
+    // acceptance threshold, and no other province in scope competes with it.
+    $result = app(GeoResolver::class)->resolveFuzzy('Italy', 'Lombardy', 'Milano', null);
+
+    expect($result->isResolved())->toBeTrue()
+        ->and($result->ambiguous)->toBeFalse()
+        ->and($result->provinceId)->toBe($geo['province']->id);
+});
+
+it('returns an ambiguous result with candidates when NO name is close enough', function () {
+    fuzzyGeoChain();
+
+    $result = app(GeoResolver::class)->resolveFuzzy('Ruritania', null, null, null);
+
+    expect($result->isResolved())->toBeFalse()
+        ->and($result->ambiguous)->toBeTrue()
+        ->and($result->error)->toContain('Ruritania')
+        ->and($result->countryId)->toBeNull();
+});
+
+it('returns an ambiguous result with candidates when MULTIPLE names are close enough', function () {
+    $geo = fuzzyGeoChain();
+    // A second province name within the same state scope, close enough to
+    // "Milann" (a typo query) that BOTH "Milan" and "Milano" clear the
+    // similarity threshold (90.9% and 83.3% respectively).
+    Province::factory()->create(['name' => 'Milano', 'state_id' => $geo['state']->id, 'country_id' => $geo['country']->id]);
+
+    $result = app(GeoResolver::class)->resolveFuzzy('Italy', 'Lombardy', 'Milann', null);
+
+    expect($result->isResolved())->toBeFalse()
+        ->and($result->ambiguous)->toBeTrue()
+        ->and($result->candidates)->toHaveCount(2)
+        ->and(collect($result->candidates)->pluck('name')->all())->toEqualCanonicalizing(['Milan', 'Milano']);
+});
+
+it('is a non-blocking result (never ::failed()) on ambiguity, distinct from a hard exact failure', function () {
+    fuzzyGeoChain();
+
+    $result = app(GeoResolver::class)->resolveFuzzy(null, null, null, 'Nonexistentville');
+
+    expect($result->ambiguous)->toBeTrue()
+        ->and($result->error)->not->toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// AC-005 — retro-compat: resolve() (exact) behavior is unchanged by the
+// fuzzy addition — same inputs, same outputs as before.
+// ---------------------------------------------------------------------------
+
+it('leaves resolve() exact behavior unchanged: a near-miss name still fails (no fuzzy fallback)', function () {
+    fuzzyGeoChain();
+
+    // "Milano" only fuzzy-matches "Milan" — the EXACT resolver must still
+    // reject it, exactly as it did before resolveFuzzy() existed.
+    $result = app(GeoResolver::class)->resolve('Italy', 'Lombardy', 'Milano', null);
+
+    expect($result->isResolved())->toBeFalse()
+        ->and($result->error)->toContain('Milano');
+});
+
+it('leaves resolve() exact behavior unchanged: an exact hierarchical match still resolves', function () {
+    $geo = fuzzyGeoChain();
+
+    $result = app(GeoResolver::class)->resolve('Italy', 'Lombardy', 'Milan', 'Milan');
+
+    expect($result->isResolved())->toBeTrue()
+        ->and($result->countryId)->toBe($geo['country']->id)
+        ->and($result->stateId)->toBe($geo['state']->id)
+        ->and($result->provinceId)->toBe($geo['province']->id)
+        ->and($result->cityId)->toBe($geo['city']->id);
+});

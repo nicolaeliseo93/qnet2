@@ -1,3 +1,4 @@
+import { entriesToRecord } from '@/features/leads/extra-fields'
 import type { CreateLeadPayload, LeadDetail, UpdateLeadPayload } from '@/features/leads/types'
 import type { LeadFormValues } from '@/features/leads/use-lead-form'
 
@@ -14,6 +15,7 @@ export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
     source_id: values.source_id,
     operator_id: values.operator_id,
     notes: values.notes,
+    extra_fields: entriesToRecord(values.extra_fields),
   }
 }
 
@@ -47,6 +49,19 @@ export function buildUpdatePayload(values: LeadFormValues, original: LeadDetail)
   if (values.notes !== original.notes) {
     payload.notes = values.notes
   }
+  const nextExtraFields = entriesToRecord(values.extra_fields)
+  if (!extraFieldsEqual(nextExtraFields, original.extra_fields)) {
+    payload.extra_fields = nextExtraFields
+  }
 
   return payload
+}
+
+/** Order-independent equality of two `extra_fields` records, for the update sparse diff. */
+function extraFieldsEqual(a: Record<string, string> | null, b: Record<string, string> | null): boolean {
+  if (a === null || b === null) return a === b
+  const aKeys = Object.keys(a).sort()
+  const bKeys = Object.keys(b).sort()
+  if (aKeys.length !== bKeys.length) return false
+  return aKeys.every((key, index) => key === bKeys[index] && a[key] === b[key])
 }

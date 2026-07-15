@@ -14,6 +14,8 @@ use App\Models\Lead;
 use App\Models\Project;
 use App\Services\Concerns\GeneratesSequentialCode;
 use App\Services\Concerns\RealignsCampaignGeo;
+use App\Services\Table\TableQueryBuilder;
+use App\Tables\TableRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +36,11 @@ class ProjectService
     private const string CODE_TABLE = 'projects';
 
     private const string CODE_COLUMN = 'code';
+
+    public function __construct(
+        private readonly TableRegistry $tableRegistry,
+        private readonly TableQueryBuilder $queryBuilder,
+    ) {}
 
     /**
      * Relations eager-loaded for the detail/write-result read tree
@@ -172,6 +179,12 @@ class ProjectService
     /**
      * The card-grid list (spec 0026, D-3), newest-first, carrying the
      * campaigns_count/leads_count aggregate counts — a single query, no N+1.
+     *
+     * `advancedFilters` (spec 0032, AC-018) is applied via the SAME
+     * TableQueryBuilder::applyAdvancedFilters() the AG Grid `POST /rows` path
+     * uses against ProjectsTableDefinition's own catalogue — one
+     * implementation of "what does this advanced filter mean", never
+     * duplicated per-type logic here.
      */
     public function index(ProjectIndexQuery $query): ProjectIndexResult
     {
@@ -186,6 +199,10 @@ class ProjectService
 
         if ($query->pipelineStatusId !== null) {
             $base->where('pipeline_status_id', $query->pipelineStatusId);
+        }
+
+        if ($query->advancedFilters !== []) {
+            $this->queryBuilder->applyAdvancedFilters($this->tableRegistry->resolve('projects'), $base, $query->advancedFilters);
         }
 
         $total = (clone $base)->count();

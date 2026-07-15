@@ -115,6 +115,7 @@ function card(overrides: Partial<PersonalDataCard> = {}): PersonalDataCard {
     vat_number: null,
     sdi_code: null,
     birth_date: null,
+    gender: null,
     personable_type: 'referent',
     personable_id: 7,
     contacts: [

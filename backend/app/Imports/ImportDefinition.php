@@ -2,11 +2,13 @@
 
 namespace App\Imports;
 
+use App\Enums\ImportDedupMode;
+use App\Models\ImportRunRow;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Contract for a single domain's CSV import (spec 0012).
+ * Contract for a single domain's import (spec 0012, extended spec 0033).
  *
  * A definition declares EVERYTHING about its import: which columns the fixed
  * CSV template carries, how to validate one row, how to detect a natural-key
@@ -18,7 +20,16 @@ use Illuminate\Database\Eloquent\Model;
  * place and every domain inherits it identically — adding a resource is 1
  * class + 1 config line (config/imports.php), mirroring App\Tables.
  *
+ * Spec 0033 extends the contract with the mapping-driven wizard shape
+ * (fields/globalConfig/recognizers/supportsExtraFields/dedupModes/
+ * persistRow), all with retro-compatible defaults in AbstractImportDefinition
+ * so the 5 legacy definitions keep compiling and behaving identically
+ * (AC-019) — legacy columns()/validateRow()/dedupKey()/existsInDatabase()/
+ * createRow() are untouched and still drive the legacy flow underneath.
+ *
  * @phpstan-type ImportColumn array{id: string, required: bool}
+ * @phpstan-type ImportField array{id: string, label: string, required: bool, group: ?string, type: string}
+ * @phpstan-type ImportGlobalField array{id: string, label: string, required: bool, for_select_resource: ?string, default: mixed}
  */
 interface ImportDefinition
 {
@@ -107,4 +118,79 @@ interface ImportDefinition
      * @param  array<string, string>  $row
      */
     public function createRow(User $actor, array $row): void;
+
+    /**
+     * Catalogue of MAPPABLE fields the wizard's mapping step offers a file
+     * column against (in addition to `__ignore__`/`__extra__`). Defaults (in
+     * AbstractImportDefinition) to one field per columns() entry (label
+     * falls back to the column id; concrete definitions override with real
+     * i18n label keys/groups/types when adopting the unified wizard).
+     *
+     * @return array<int, ImportField>
+     */
+    public function fields(): array;
+
+    /**
+     * Catalogue of the wizard's configuration-step global fields (values that
+     * apply to every row, e.g. campaign/status for leads — never mapped from
+     * a file column). Defaults to none, matching the 5 legacy domains which
+     * have no global config.
+     *
+     * @return array<int, ImportGlobalField>
+     */
+    public function globalConfig(): array;
+
+    /**
+     * Row recognizers to run during staging (StageImportJob), in order, to
+     * resolve values that are not a direct column mapping (e.g. splitting a
+     * full name, resolving a geo name). Defaults to none.
+     *
+     * @return array<int, class-string>
+     */
+    public function recognizers(): array;
+
+    /**
+     * Whether file columns may be mapped to `__extra__` and stored verbatim
+     * (keyed by original column name) instead of a declared field. Defaults
+     * to false.
+     */
+    public function supportsExtraFields(): bool;
+
+    /**
+     * Duplicate-handling strategies this definition supports, offered to the
+     * configuration step and validated against on configure. Defaults to
+     * [ImportDedupMode::CreateOnly], matching the legacy create-only
+     * behaviour.
+     *
+     * @return array<int, ImportDedupMode>
+     */
+    public function dedupModes(): array;
+
+    /**
+     * Create or update ONE domain record from a staged row according to the
+     * given dedup strategy, using the EXISTING domain Service(s) — never
+     * duplicated creation logic here. Called by ProcessImportJob inside its
+     * own per-row DB::transaction, so a thrown exception isolates cleanly to
+     * this row. Defaults (in AbstractImportDefinition) to delegating to the
+     * legacy createRow(), ignoring $dedupStrategy — retro-compat for the 5
+     * legacy domains, which are always create-only.
+     *
+     * @param  array<string, mixed>  $globalConfig
+     */
+    public function persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy): void;
+
+    /**
+     * Resolve the primary-key id of the EXISTING dominant record this staged
+     * row would collide with / update (for leads: the matching Referent id,
+     * found by email/phone/mobile), or null when the row is new. Drives the
+     * wizard's duplicate handling at staging: StageImportJob stores it on
+     * import_run_rows.duplicate_of_id and maps it to a row status per the
+     * chosen dedup strategy (ignore→skipped, manual→duplicate, create_new/
+     * update_existing→valid). Defaults (in AbstractImportDefinition) to null:
+     * the 5 legacy create-only domains keep rejecting existing rows through
+     * existsInDatabase()/dedupKey(), unaffected by this.
+     *
+     * @param  array<string, mixed>  $mapped  field id => resolved value (after recognizers)
+     */
+    public function resolveDuplicate(array $mapped): ?int;
 }

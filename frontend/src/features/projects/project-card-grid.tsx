@@ -12,7 +12,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
-import { AdvancedFilterPanel } from '@/features/table/advanced-filters/advanced-filter-panel'
+import { AdvancedFilterPanel, ADVANCED_FILTER_PANEL_ANIMATION } from '@/features/table/advanced-filters/advanced-filter-panel'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useTableAdvancedFilters } from '@/features/table/advanced-filters/use-table-advanced-filters'
 import { useTableConfig } from '@/features/table/use-table-config'
 import { projectCardsQueryKeyPrefix, projectDetailQueryKey } from '@/features/projects/api'
@@ -172,10 +173,14 @@ export function ProjectCardGrid() {
         </div>
       ) : null}
 
-      {filtersOpen && advancedFilterDescriptors.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-border">
-          <AdvancedFilterPanel descriptors={advancedFilterDescriptors} filters={advancedFilters} />
-        </div>
+      {advancedFilterDescriptors.length > 0 ? (
+        <Collapsible open={filtersOpen}>
+          <CollapsibleContent className={ADVANCED_FILTER_PANEL_ANIMATION}>
+            <div className="overflow-hidden rounded-xl border border-border">
+              <AdvancedFilterPanel descriptors={advancedFilterDescriptors} filters={advancedFilters} />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
 
       {body}

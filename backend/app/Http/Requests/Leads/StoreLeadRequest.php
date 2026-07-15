@@ -42,6 +42,8 @@ class StoreLeadRequest extends FormRequest
             'operator_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'lead_status_id' => ['required', 'integer', Rule::exists('lead_statuses', 'id')],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'extra_fields' => ['nullable', 'array'],
+            'extra_fields.*' => ['string'],
         ];
     }
 

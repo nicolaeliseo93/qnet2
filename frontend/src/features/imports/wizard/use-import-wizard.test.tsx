@@ -1,0 +1,173 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useImportWizard } from '@/features/imports/wizard/use-import-wizard'
+import type { ImportRunDetail, ImportRunSummary } from '@/features/imports/wizard/types'
+
+/**
+ * Spec 0033 AC-025: the wizard's step is derived from the run's server
+ * status (never client state alone), so reloading mid-`configuring`/
+ * `reviewing` resumes at the right step from `GET run`; config/mapping
+ * drafts persist locally until the mapping step's single submit.
+ */
+
+const analyzeImportMock = vi.fn()
+const getImportWizardRunMock = vi.fn()
+const configureImportRunMock = vi.fn()
+const confirmImportRunMock = vi.fn()
+
+vi.mock('@/features/imports/wizard/api', () => ({
+  analyzeImport: (...args: unknown[]) => analyzeImportMock(...args),
+  getImportWizardRun: (...args: unknown[]) => getImportWizardRunMock(...args),
+  configureImportRun: (...args: unknown[]) => configureImportRunMock(...args),
+  confirmImportRun: (...args: unknown[]) => confirmImportRunMock(...args),
+}))
+
+function createdRun(overrides: Partial<ImportRunSummary> = {}): ImportRunSummary {
+  return {
+    id: 1,
+    resource: 'leads',
+    status: 'analyzing',
+    original_filename: 'leads.csv',
+    total_rows: 0,
+    valid_rows: 0,
+    warning_rows: 0,
+    error_rows: 0,
+    duplicate_rows: 0,
+    imported_rows: null,
+    modified_rows: 0,
+    has_error_report: false,
+    created_at: '2026-07-15T00:00:00Z',
+    ...overrides,
+  }
+}
+
+function detailRun(overrides: Partial<ImportRunDetail> = {}): ImportRunDetail {
+  return {
+    ...createdRun(),
+    status: 'configuring',
+    error_count: 0,
+    detected_columns: [{ key: 'Email', name: 'Email', index: 0, duplicate: false }],
+    column_mapping: null,
+    global_config: null,
+    dedup_strategy: null,
+    suggested_mapping: { Email: 'email' },
+    fields: [{ id: 'email', label: 'Email', required: true, group: 'contact', type: 'string' }],
+    global_fields: [
+      { id: 'campaign_id', label: 'Campaign', required: true, for_select_resource: 'campaigns', default: null },
+    ],
+    dedup_modes: ['create_new'],
+    ...overrides,
+  }
+}
+
+function wrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+}
+
+beforeEach(() => {
+  analyzeImportMock.mockReset()
+  getImportWizardRunMock.mockReset()
+  configureImportRunMock.mockReset()
+  confirmImportRunMock.mockReset()
+})
+
+describe('useImportWizard', () => {
+  it('starts at step 0 with no run for a fresh wizard', () => {
+    const { result } = renderHook(() => useImportWizard({ domain: 'leads', initialRunId: null }), {
+      wrapper: wrapper(),
+    })
+
+    expect(result.current.currentStep).toBe(0)
+    expect(result.current.run).toBeNull()
+  })
+
+  it('uploads a file, then requires an explicit continue past the analysis summary', async () => {
+    analyzeImportMock.mockResolvedValue(createdRun())
+    getImportWizardRunMock.mockResolvedValue(detailRun())
+    const onRunCreated = vi.fn()
+
+    const { result } = renderHook(
+      () => useImportWizard({ domain: 'leads', initialRunId: null, onRunCreated }),
+      { wrapper: wrapper() },
+    )
+
+    act(() => result.current.upload(new File(['a'], 'a.csv')))
+
+    await waitFor(() => expect(result.current.run?.status).toBe('configuring'))
+    expect(onRunCreated).toHaveBeenCalledWith(1)
+    // Analysis is ready, but the user has not clicked "continue" yet.
+    expect(result.current.currentStep).toBe(0)
+
+    act(() => result.current.advanceFromUpload())
+    expect(result.current.currentStep).toBe(1)
+  })
+
+  it('resumes directly at the config/mapping step for an in-progress run, skipping the upload gate', async () => {
+    getImportWizardRunMock.mockResolvedValue(detailRun())
+
+    const { result } = renderHook(() => useImportWizard({ domain: 'leads', initialRunId: 1 }), {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(result.current.run?.status).toBe('configuring'))
+    expect(result.current.currentStep).toBe(1)
+  })
+
+  it('carries the config draft into the mapping submit, calling configure once', async () => {
+    getImportWizardRunMock
+      .mockResolvedValueOnce(detailRun())
+      .mockResolvedValue(detailRun({ status: 'staging' }))
+    configureImportRunMock.mockResolvedValue(createdRun({ status: 'staging' }))
+
+    const { result } = renderHook(() => useImportWizard({ domain: 'leads', initialRunId: 1 }), {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(result.current.run).not.toBeNull())
+
+    act(() => result.current.submitConfig({ campaign_id: 9 }))
+    expect(result.current.currentStep).toBe(2)
+
+    act(() => result.current.submitMapping({ Email: 'email' }, 'create_new'))
+
+    await waitFor(() =>
+      expect(configureImportRunMock).toHaveBeenCalledWith('leads', 1, {
+        column_mapping: { Email: 'email' },
+        global_config: { campaign_id: 9 },
+        dedup_strategy: 'create_new',
+      }),
+    )
+    await waitFor(() => expect(result.current.currentStep).toBe(3))
+  })
+
+  it('allows navigating back from mapping to config while still configuring', async () => {
+    getImportWizardRunMock.mockResolvedValue(detailRun())
+
+    const { result } = renderHook(() => useImportWizard({ domain: 'leads', initialRunId: 1 }), {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(result.current.run).not.toBeNull())
+
+    act(() => result.current.goToStep(2))
+    expect(result.current.currentStep).toBe(2)
+
+    act(() => result.current.goToStep(1))
+    expect(result.current.currentStep).toBe(1)
+  })
+
+  it('routes processing/completed/failed statuses to the summary step', async () => {
+    getImportWizardRunMock.mockResolvedValue(detailRun({ status: 'processing' }))
+
+    const { result } = renderHook(() => useImportWizard({ domain: 'leads', initialRunId: 1 }), {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(result.current.currentStep).toBe(4))
+  })
+})

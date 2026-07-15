@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Contact, Info, StickyNote } from 'lucide-react'
+import { Contact, Database, Info, StickyNote } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import {
@@ -31,6 +31,7 @@ export function LeadDetailView({ lead }: LeadDetailViewProps) {
   const { t } = useTranslation()
   const referentName = lead.referent?.name ?? t('leads.detail.unknownReferent')
   const createdAt = formatDateTime(lead.created_at)
+  const extraFieldEntries = lead.extra_fields ? Object.entries(lead.extra_fields) : []
 
   return (
     <DetailPanel>
@@ -83,6 +84,18 @@ export function LeadDetailView({ lead }: LeadDetailViewProps) {
           </DetailField>
         </DetailGrid>
       </DetailSection>
+
+      {extraFieldEntries.length > 0 ? (
+        <DetailSection title={t('leads.detail.importedData.title')} icon={<Database />}>
+          <DetailGrid>
+            {extraFieldEntries.map(([key, value]) => (
+              <DetailField key={key} label={key}>
+                {value}
+              </DetailField>
+            ))}
+          </DetailGrid>
+        </DetailSection>
+      ) : null}
 
       {createdAt ? <DetailMeta label={t('leads.columns.createdAt')}>{createdAt}</DetailMeta> : null}
     </DetailPanel>

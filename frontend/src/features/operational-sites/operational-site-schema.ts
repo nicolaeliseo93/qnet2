@@ -37,7 +37,12 @@ function baseFields(t: TFunction) {
     city_id: z
       .number()
       .nullable()
-      .refine((value) => value !== null, { message: t('operationalSites.form.cityRequired') }),
+      // Explicit `boolean` return annotation: without it, TS 5.5+'s automatic
+      // type-predicate inference turns this plain null-check into an implicit
+      // `value is number`, which silently narrows `z.infer<>` to non-nullable
+      // — contradicting the comment above (`city_id` must stay `number |
+      // null` in the TYPE; only the runtime validation rejects `null`).
+      .refine((value): boolean => value !== null, { message: t('operationalSites.form.cityRequired') }),
   }
 }
 

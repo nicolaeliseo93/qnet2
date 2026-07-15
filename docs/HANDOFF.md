@@ -2,6 +2,167 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — Filtri avanzati backend-driven (spec 0032) — GREEN, scope Marketing e Lead (2026-07-15)
+
+Secondo livello di filtri "avanzati" sopra la griglia, COMPLETAMENTE backend-driven, distinto dai
+filtri di colonna AG Grid (invariati). Il backend dichiara quali filtri esporre; il FE renderizza
+solo cio' che riceve. Spec: `docs/specs/0032-advanced-table-filters.xml` (numero 0031 era occupato da
+altra feature concorrente -> rinumerata 0032). Commit gia' fatti: `64a5946` (spec), `6809b9f` (backbone
+BE). Il RESTO e' NON COMMITTATO (regola utente §3.6: non committare senza ok esplicito nel momento).
+
+CONTRATTO CONGELATO:
+- `GET /tables/{domain}/columns` emette `advancedFilters: AdvancedFilterDescriptor[]` + `appliedAdvancedFilters`.
+  Descrittore FE-facing: {name,label(i18n key),type,placeholder?,order,defaultValue?,required,visible,
+  width(sm|md|lg|full),multiple,source?{resource},options?,enumKey?,dependency?{on,param?}}. Campi interni
+  `target`/`operator` NON emessi al FE. 17 tipi (`App\Enums\AdvancedFilterType`): text,textarea,number,
+  number_range,date,date_range,datetime,select,multiselect,autocomplete,autocomplete_multi,checkbox,switch,
+  radio,enum,relation,async_search. NB: async_search e' ID-BASED come autocomplete (deciso in corsa; era
+  ambiguo in spec) — target = relazione/FK, mai colonna testuale.
+- `POST /tables/{domain}/rows` accetta chiave `advancedFilters` (allow-list = advancedFilterableIds(),
+  valore per-tipo). AND con filterModel colonna + search. `POST/DELETE /tables/{domain}/filters` e le viste
+  salvate (0007) persistono `advancedFilters` in nuova colonna `advanced_filters` (JSON) su
+  `user_table_filters` e `table_filter_views` (NON si tocca la colonna `filters` esistente).
+- Card-grid Projects (spec 0026, `GET /projects`) applica anch'essa `advancedFilters` riusando lo STESSO
+  `TableQueryBuilder::applyAdvancedFilters`/`AdvancedFilterApplier` (AC-018 end-to-end).
+
+BACKEND (framework + 5 cataloghi Marketing e Lead): `App\Tables\TableDefinition` +3 metodi
+(`advancedFilters()`, `advancedFilterableIds()`, `applyAdvancedFilter()`); default in
+`AbstractTableDefinition` (relation-by-id generico); `App\Services\Table\AdvancedFilterApplier` (per-tipo,
+bound, LIKE escaped, NO raw); `TableQueryBuilder::applyAdvancedFilters` (AND, allow-list, required->default).
+Cataloghi: `Lead/Campaign/Project/PipelineStatus/LeadStatus AdvancedFilterCatalog`. Override
+`applyAdvancedFilter` solo dove derivato (es. Campaign pipeline_status own-or-through-project;
+Lead operational_site). TRAPPOLA risolta: il trait `CustomFields\DelegatesUnaugmentedTableMethods` VA esteso
+coi 3 nuovi metodi d'interfaccia, altrimenti fatal su ogni dominio custom-fieldable.
+
+FRONTEND (framework, generico per tutti i domini): `features/table/advanced-filters/` (AdvancedFilterPanel
+a scomparsa, field-registry per-tipo, `useAdvancedFilters`); toggle+badge in `table-toolbar`; datasource
+`createSsrmDatasource(domain, getSearch, getAdvancedFilters)`; viste salvate estese (AC-009); card-grid
+Projects riusa gli stessi componenti/hook (`project-card-grid.tsx`). Il pannello e l'icona compaiono SOLO se
+`advancedFilters.length > 0` -> i 16 domini senza catalogo non mostrano nulla.
+
+ANIMAZIONE APRI/CHIUDI PANNELLO (2026-07-15, NON COMMITTATO): il pannello ora anima in apertura E chiusura,
+riusando il pattern di `ModuleStatsPanel` (Radix `Collapsible`/`CollapsibleContent` + keyframe
+`animate-collapsible-down/up` di tw-animate-css, altezza via `--radix-collapsible-content-height`). Classe
+condivisa esportata da `advanced-filter-panel.tsx`: `ADVANCED_FILTER_PANEL_ANIMATION`
+(`overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up
+motion-reduce:animate-none`) — usata in ENTRAMBI i call-site (`table-view.tsx`, `project-card-grid.tsx`) per
+non duplicare la stringa. Cambio chiave: da montaggio condizionale secco (`open && ... ? <Panel/> : null`, che
+azzerava l'exit) a `<Collapsible open={...}><CollapsibleContent>...</Collapsible>` sempre montato quando
+`descriptors.length > 0`; Radix tiene il contenuto durante l'uscita poi lo smonta (`hidden` -> niente gap
+residuo nel flex-col gap-3 di project-card-grid). `AdvancedFilterPanel` resta contenuto puro (test invariati).
+NB code-guard: `table-view.tsx` e' a 500 righe esatte (hard limit) -> import e JSX del blocco sono compattati
+su singola riga apposta; ogni aggiunta futura a quel file richiede uno split.
+VERIFICATO (eseguito): `tsc -b --force` = 0 errori; Vitest `advanced-filters`+`projects` = 114/114.
+
+SCOPE: solo Marketing e Lead (leads, campaigns, projects, pipeline-statuses, lead-statuses). Gli altri 16
+domini: framework pronto, cataloghi DIFFERITI (richiesta utente "il resto lo faremo poi").
+
+VERIFICATO (eseguito, XDEBUG_MODE=off / tsc -b --force): BE scope 398/399, FE scope 241/244, tsc scope PULITO.
+Gli UNICI rossi sono ESTERNI/preesistenti: `AbstractMigrationSourcePreviewTest` (colonna roles.description,
+altra sessione) e `LeadStatusMigrationTest` (rotto dalle migrazioni untracked import `2026_07_15_09*` dell'altra
+sessione che rubano lo slot "ultima migrazione"; la nostra migr. `advanced_filters` e' datata 2026_07_03 apposta
+per NON esserlo); 3 test FE `cell-renderers ContactsCell` (baseline IT/EN, nei 24 rossi noti). NOTA repo (RISOLTA):
+l'hook `typecheck.sh` USAVA `tsc --noEmit` dal root con tsconfig `files:[]`+references => era un NO-OP
+silenzioso. FIXATO a `tsc -b --force` (2026-07-15): ora type-checka davvero ed e' di nuovo BLOCCANTE (exit 2).
+Ha scoperto 72 errori di tipo PREESISTENTI in 42 file (non legati ai filtri avanzati) -> TUTTI SALDATI nello
+stesso intervento. Root cause principali: (1) le sotto-form custom-fields fissavano `control: Control<FieldDefinitionFormValues>`
+invece di essere generiche `<T extends FieldDefinitionFormValues>` (RHF Control non e' covariante) -> rotto ogni
+form-body; (2) `zodResolver(schema-union)` non inferiva i generici -> `as Resolver<XFormValues>`; (3) TS 5.5
+"inferred type predicate" su un `.refine` narrowava silenziosamente `city_id` a non-null. Piu' fix puntuali
+(user-avatar prop `size`, dynamic-icon Omit `name`, profile-form `draft.gender`, product-form-payload cast,
+`node` in tsconfig.app.json types) e fixture di test allineate al contratto reale. Verificato: `tsc -b --force`
+= 0 errori (stabile su 2 run), Vitest 1270/1273 (i 3 rossi = `cell-renderers` preesistente IT/EN, non di tipo).
+IMPORTANTE: verifica SEMPRE il FE con `tsc -b --force`, MAI `tsc --noEmit` dal root (no-op).
+
+## FEATURE — spec 0033 Advanced Lead Import Wizard (2026-07-15) — IN PROGRESS (NO COMMIT per ordine utente)
+
+Wizard import Lead avanzato (upload xlsx/csv -> config globali -> mappatura -> revisione editabile
+-> riepilogo -> import background + storico + notifiche). Spec: `docs/specs/0033-advanced-lead-import-wizard.xml`.
+Decisioni utente: campi extra = JSON grezzo `leads.extra_fields` (editabile nel form + scheda);
+duplicati = match Referent per email/phone/mobile (4 strategie); motore EVOLUTO in place; NESSUN COMMIT
+(a verde aggiorna HANDOFF e CHIEDI, non committare — CLAUDE.md §3.6).
+
+FATTO STRUTTURALE CHIAVE: un Lead NON ha dati di contatto propri -> vivono sul Referent
+(HasPersonalData: card + contacts + addresses). Import = crea/risolve Referent (ReferentService) +
+crea/aggiorna Lead (LeadService). Split nome e geo agiscono sul Referent.
+
+STRATEGIA MOTORE (importante): ADD-not-modify. I 5 domini legacy (business-functions/companies/
+operational-sites/roles/users) restano sul flusso legacy INTATTO (ValidateImportJob/ProcessImportJob,
+status validating/awaiting_confirmation). Il flusso wizard CONVIVE come job/metodi NUOVI, selezionati
+per status. => La "migrazione dei 5 domini legacy al flusso unificato" e' DEFERITA (passo evolve-in-place
+successivo, non ancora fatto). Documentato: se serve, e' un follow-up pulito.
+
+STATO LANE (verde = test eseguiti reali):
+- G1 schema (VERDE): migration additiva `import_runs` (+detected_columns/column_mapping/global_config/
+  dedup_strategy/warning_rows/duplicate_rows/modified_rows/notified_at/error_count) + tabella
+  `import_run_rows` + Model `ImportRunRow` + enum `ImportRowStatus` (valid/warning/error/duplicate/skipped)
+  + enum `ImportStatus` esteso (analyzing/configuring/staging/reviewing). `error_rows` del contratto =
+  esposto da `invalid_rows` esistente. AC-001/002.
+- G2 contratto (VERDE): `ImportDefinition` esteso con default retro-compat in AbstractImportDefinition:
+  fields()/globalConfig()/recognizers()/supportsExtraFields()/dedupModes()/persistRow()/resolveDuplicate().
+  Enum `ImportDedupMode` (create_only/create_new/update_existing/ignore/manual). Le 5 legacy NON toccate. AC-019(parz).
+- B1 (VERDE): `App\Imports\Support\SpreadsheetReader` (openspout xlsx+csv, .xls NON supportato) +
+  `ColumnMapper` (+ ColumnAnalysis/MappingSuggestion; alias in `config/imports.php` chiave `column_aliases`).
+  ColumnAnalysis::columnKeys() = chiavi colonna deterministiche/lossless. AC-003/006.
+- B2 (VERDE): `App\Imports\Recognition\{RowRecognizer,RecognitionResult,NameSplitRecognizer,GeoRecognizer}`
+  + `GeoResolver::resolveFuzzy()` (exact `resolve()` INVARIATO) + `GeoFuzzyMatcher` (soglia 82%) +
+  GeoResolutionResult con ambiguous/candidates. AC-004/005.
+- B3 (VERDE): job NUOVI `AnalyzeImportJob`/`StageImportJob`/`ProcessStagedImportJob` + `ImportService`
+  metodi NUOVI startAnalyze/configure/confirmStaged/recomputeCounts + `ImportCompletedNotification`
+  (canale database) + `App\Imports\Staging\{StagedRowBuilder,StageOutcome,StagingErrorReporter}`. Legacy
+  intatto. AC-007/008/009/010. suggested_mapping NON persistito: B5 lo ricalcola live con ColumnMapper::suggest.
+- B4 (VERDE): `LeadsImportDefinition` (+ `Imports/Leads/{LeadImportFieldCatalog,LeadRowValidator,
+  LeadDuplicateMatcher,LeadProfileBuilder,LeadRowPersister,LeadContactFields}`) registrata `config/imports.php`
+  come 'leads'. `leads.extra_fields` json (Lead fillable+cast, LeadResource espone, Store/UpdateLeadRequest
+  regola nullable|array, LeadsAuthorization campo, CreateLeadData/UpdateLeadData extraFields). AC-011/012/013/014-BE.
+  NB firme: `LeadService::create(CreateLeadData)` (NO actor), `ReferentService::create(User,CreateReferentData,?ProfileData)`.
+- FE-G(ui) (VERDE): `components/ui/{stepper,progress}.tsx` (compatti, WCAG, radix). 
+- F4 (VERDE): form Lead sezione Campi Extra (`extra-fields-editor.tsx`) + scheda "Dati Importati" +
+  schema/payload/types. 48 test leads verdi. LeadResource DEVE sempre includere extra_fields (obj|null).
+- BACKEND full suite: 2429/2430 (1 rosso PRE-ESISTENTE non correlato: AbstractMigrationSourcePreviewTest).
+
+- B5 (VERDE): `ImportController` azioni wizard branch-aware (index/upload/show/configure/rows/updateRow/
+  summary/confirm) + `ConfigureImportRequest`/`UpdateImportRowRequest` + `ImportRunRowResource` + rotte
+  in routes/api.php + `Support/Import/{ReviewRowsQuery(allow-list SSRM, no raw SQL),StagedRowReviser,
+  ImportRunPayloadBuilder,ImportRunSummaryBuilder}`. AC-015/016/017/018. NB: `POST rows`/`GET index` usano
+  shape FLAT `{items,pagination}` (paginatedResponse, come tables SSRM); gli altri sono envelope
+  `{data:{import_run|summary|row+counts}}`. `detected_columns[].key` = ColumnAnalysis::columnKeys;
+  column_mapping chiavettato per `key`.
+- F1 (VERDE): scaffolding `features/imports/wizard/` (api/types/query-keys/i18n) + orchestratore
+  `import-wizard.tsx` (stato-macchina per status, ripresa via ?runId) + step upload/config/mapping +
+  `pages/lead-import-page.tsx` + rotta `/leads/import`. AC-020/021/022/025/026.
+- F2 (VERDE): `import-step-review.tsx` + AG Grid SSRM EDITABILE inline (review-grid/review-columns/
+  use-review-rows) — capacita' nuova isolata alla review. AC-023.
+- F3 (VERDE): `import-step-summary.tsx` + `import-run-progress.tsx`. AC-024.
+- F5 (VERDE): `import-history.tsx` + `pages/lead-import-history-page.tsx` + rotta `/leads/import/history` +
+  wiring azione "Import Lead"/"Import history" in `features/leads/leads-table.tsx` -> /leads/import. AC-018(UI).
+- FIXUP integrazione (lead, VERDI): `api.ts` getImportRunRows/getImportRunHistory leggono shape FLAT (no
+  data.data); `DetectedColumn.key` + mapping step/signals chiavettati per `key` (fix binding colonne
+  duplicate); `import-step-upload.tsx` accept con MIME xlsx. Frontend `tsc -b` = 0 errori; wizard 68/68.
+
+- XLS (VERDE, dipendenza AUTORIZZATA utente): `phpoffice/phpspreadsheet` v5.9.0 installato per leggere il
+  binario `.xls` (Excel 97-2003) che openspout non supporta. `app/Imports/Support/XlsRowReader.php` (Xls
+  reader sola-lettura, read-filter memory-safe cap-bound, stessa shape righe/header). `SpreadsheetReader`
+  dispatch esteso a .xls (csv/xlsx via openspout INVARIATI). `UploadImportRequest` mimes/extensions
+  csv,txt,xlsx,xls. FE `import-step-upload.tsx` accept + `import-upload-schema.ts` includono .xls + MIME
+  application/vnd.ms-excel. Parità .xls↔csv testata.
+  UPLOAD VALIDATION (lezione appresa): `UploadImportRequest` usa SOLO `extensions:csv,txt,xlsx,xls` + file +
+  max (NIENTE mimes/mimetypes): il content-sniffing finfo e' inaffidabile per CSV/Office (falsi 422:
+  xlsx->application/zip, csv->tipi vari); il vero controllo contenuto e' il PARSER. `XlsRowReader` NON forza
+  il reader OLE ma usa `IOFactory::createReaderForFile` (auto-detect per CONTENUTO): un `.xls` che in realta'
+  e' HTML/XML SpreadsheetML/xlsx-rinominato/csv (export legacy) viene letto dal reader giusto invece di
+  "not recognised as an OLE file". Test mislabeled-.xls aggiunto.
+
+STATO: FEATURE COMPLETA E VERIFICATA. VERIFIER = VERDE su TUTTI i 26 AC (001-026) con test reali. Backend
+full 2466/2468 (1 rosso PRE-ESISTENTE AbstractMigrationSourcePreviewTest + 1 skip). Frontend: vitest mirato
+verde, tsc -b 0 errori; full-run 1346/1349 (3 rossi in cell-renderers.test.tsx PRE-ESISTENTE, locale it).
+NESSUN COMMIT ancora (attende ok esplicito utente — CLAUDE.md §3.6).
+
+FOLLOW-UP DEFERITI (documentati, non bloccanti): (1) migrazione dei 5 domini legacy al flusso unificato
+(oggi ADD-not-modify: convivono); (2) storico UI non mostra ancora campagna/progetto per riga (serve
+esporre global_config risolto a label nel tipo ImportRunSummary); (3) chiave i18n `review.placeholder`
+orfana; (4) `leads-table.tsx` a 309 righe (soft-limit 300) -> eventuale estrazione `LeadsImportMenu`.
+
 ## RENAME + NAV — `project-statuses` -> `pipeline-statuses` + gruppo "Marketing e Lead" (2026-07-15) — GREEN (not committed)
 
 Richiesta utente: raggruppare progetti/campagne/lead + tabelle di contorno sotto un item padre

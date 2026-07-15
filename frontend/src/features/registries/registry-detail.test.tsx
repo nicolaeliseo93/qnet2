@@ -50,6 +50,7 @@ function registry(overrides: Partial<RegistryDetail> = {}): RegistryDetail {
     referents: [],
     manager_ids: [],
     managers: [],
+    manager_slots: [],
     supervisor_id: 9,
     supervisor: {
       id: 9,
@@ -70,7 +71,7 @@ function registry(overrides: Partial<RegistryDetail> = {}): RegistryDetail {
     size_class: null,
     employee_count: null,
     personal_data: card(),
-    created_at: null,
+    created_at: '2026-01-01T00:00:00Z',
     ...overrides,
   }
 }

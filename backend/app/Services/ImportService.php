@@ -2,12 +2,17 @@
 
 namespace App\Services;
 
+use App\Enums\ImportRowStatus;
 use App\Enums\ImportStatus;
 use App\Imports\ImportDefinition;
 use App\Imports\RowOutcome;
+use App\Jobs\AnalyzeImportJob;
 use App\Jobs\ProcessImportJob;
+use App\Jobs\ProcessStagedImportJob;
+use App\Jobs\StageImportJob;
 use App\Jobs\ValidateImportJob;
 use App\Models\ImportRun;
+use App\Models\ImportRunRow;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -15,9 +20,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Business logic for the generic CSV import engine (spec 0012): create the
- * ImportRun (phase 1 dispatch), validate the confirm transition (phase 2
- * dispatch), and write the downloadable errors CSV report. The controller
+ * Business logic for the generic import engine. Legacy two-phase flow (spec
+ * 0012): create the ImportRun (start(), phase 1 dispatch), validate the
+ * confirm transition (confirm(), phase 2 dispatch), and write the
+ * downloadable errors CSV report — UNTOUCHED by the unified wizard flow
+ * below. Unified wizard flow (spec 0033, additive): startAnalyze()/
+ * configure()/confirmStaged() drive the analyze -> configure -> stage ->
+ * review -> confirm state machine, each dispatching its own job; the two
+ * flows never share a run (status alone tells them apart). The controller
  * stays thin; this Service is the single authority — mirrors
  * AttachmentService's disk-write conventions (private disk, uuid path, never
  * the client's filename).
@@ -74,6 +84,104 @@ class ImportService
         ProcessImportJob::dispatch($run->id);
 
         return $run->fresh();
+    }
+
+    /**
+     * Store the uploaded file, create the ImportRun (status=analyzing) and
+     * dispatch the wizard's header/auto-mapping analysis job (spec 0033,
+     * AC-007). Separate entry point from start(): the two-phase legacy flow
+     * and the unified wizard flow never share a run.
+     */
+    public function startAnalyze(User $actor, ImportDefinition $definition, UploadedFile $file): ImportRun
+    {
+        $storedPath = $this->storeUpload($file);
+
+        /** @var ImportRun $run */
+        $run = DB::transaction(fn (): ImportRun => ImportRun::create([
+            'resource' => $definition->resource(),
+            'user_id' => $actor->id,
+            'status' => ImportStatus::Analyzing,
+            'original_filename' => $file->getClientOriginalName(),
+            'stored_path' => $storedPath,
+            'total_rows' => 0,
+            'valid_rows' => 0,
+            'invalid_rows' => 0,
+        ]));
+
+        AnalyzeImportJob::dispatch($run->id);
+
+        return $run;
+    }
+
+    /**
+     * Persist the wizard's configuration step (column mapping, global config,
+     * dedup strategy — already validated by the caller's FormRequest against
+     * the definition) and dispatch staging. Valid only from `configuring`
+     * (AC-008); any other status is a 422, mirroring confirm()'s guard.
+     *
+     * @param  array<string, string>  $columnMapping
+     * @param  array<string, mixed>  $globalConfig
+     */
+    public function configure(ImportRun $run, array $columnMapping, array $globalConfig, string $dedupStrategy): ImportRun
+    {
+        if ($run->status !== ImportStatus::Configuring) {
+            abort(422, 'The import cannot be configured in its current status.');
+        }
+
+        $run->update([
+            'column_mapping' => $columnMapping,
+            'global_config' => $globalConfig,
+            'dedup_strategy' => $dedupStrategy,
+            'status' => ImportStatus::Staging,
+        ]);
+
+        StageImportJob::dispatch($run->id);
+
+        return $run->fresh();
+    }
+
+    /**
+     * Move a reviewing run to processing and dispatch the commit job that
+     * reads FROM the staged `import_run_rows` (AC-009) — never the source
+     * file again. Valid only from `reviewing`; any other status is a 422.
+     */
+    public function confirmStaged(ImportRun $run): ImportRun
+    {
+        if ($run->status !== ImportStatus::Reviewing) {
+            abort(422, 'The import cannot be confirmed in its current status.');
+        }
+
+        $run->update(['status' => ImportStatus::Processing]);
+
+        ProcessStagedImportJob::dispatch($run->id);
+
+        return $run->fresh();
+    }
+
+    /**
+     * Recompute the run's row counters (valid/warning/invalid=error/duplicate/
+     * modified) and total from its CURRENT `import_run_rows` set. Called by
+     * StageImportJob after writing every row, and by the wizard's inline-edit
+     * endpoint (PATCH .../rows/{row}) after a single row is re-validated — so
+     * the counters shown to the user are always derived from the database,
+     * never accumulated by hand.
+     */
+    public function recomputeCounts(ImportRun $run): void
+    {
+        $statusCounts = ImportRunRow::query()
+            ->where('import_run_id', $run->id)
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $run->update([
+            'total_rows' => ImportRunRow::query()->where('import_run_id', $run->id)->count(),
+            'valid_rows' => (int) ($statusCounts[ImportRowStatus::Valid->value] ?? 0),
+            'warning_rows' => (int) ($statusCounts[ImportRowStatus::Warning->value] ?? 0),
+            'invalid_rows' => (int) ($statusCounts[ImportRowStatus::Error->value] ?? 0),
+            'duplicate_rows' => (int) ($statusCounts[ImportRowStatus::Duplicate->value] ?? 0),
+            'modified_rows' => ImportRunRow::query()->where('import_run_id', $run->id)->where('is_edited', true)->count(),
+        ]);
     }
 
     /**

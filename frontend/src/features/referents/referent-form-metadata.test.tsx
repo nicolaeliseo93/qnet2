@@ -80,6 +80,7 @@ function card(overrides: Partial<PersonalDataCard> = {}): PersonalDataCard {
     vat_number: null,
     sdi_code: null,
     birth_date: null,
+    gender: null,
     personable_type: 'referent',
     personable_id: 7,
     contacts: [],
@@ -100,7 +101,7 @@ function referent(
     contact_scope: 'internal',
     notes: null,
     personal_data: card(),
-    created_at: null,
+    created_at: '2026-01-01T00:00:00Z',
     permissions: {
       resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
       fields: {},

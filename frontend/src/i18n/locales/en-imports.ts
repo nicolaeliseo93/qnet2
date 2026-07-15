@@ -16,6 +16,37 @@ export const imports = {
   fields: {
     file: 'CSV file',
   },
+  // Human labels for the advanced lead-import wizard's mappable fields and
+  // configuration-step global fields (spec 0033): the backend sends these
+  // paths as `ImportDefinition::fields()`/`globalConfig()` label keys
+  // (`imports.leads.fields.*` / `imports.leads.global.*`), resolved here.
+  leads: {
+    fields: {
+      full_name: 'Full name',
+      first_name: 'First name',
+      last_name: 'Last name',
+      company_name: 'Company name',
+      tax_code: 'Tax code',
+      vat_number: 'VAT number',
+      email: 'Email',
+      phone: 'Phone',
+      mobile: 'Mobile',
+      street: 'Street',
+      postal_code: 'Postal code',
+      country: 'Country',
+      region: 'Region',
+      province: 'Province',
+      city: 'City',
+      notes: 'Notes',
+    },
+    global: {
+      campaign_id: 'Campaign',
+      project_id: 'Project',
+      source_id: 'Source',
+      lead_status_id: 'Initial status',
+      operator_id: 'Assigned operator',
+    },
+  },
   buttons: {
     downloadTemplate: 'Download template',
     upload: 'Upload',

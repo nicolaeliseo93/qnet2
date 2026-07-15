@@ -39,6 +39,7 @@ class LeadResource extends JsonResource
             'lead_status_id' => $this->lead_status_id,
             'lead_status' => $this->summarizeLeadStatus($this->leadStatus),
             'notes' => $this->notes,
+            'extra_fields' => $this->extra_fields,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

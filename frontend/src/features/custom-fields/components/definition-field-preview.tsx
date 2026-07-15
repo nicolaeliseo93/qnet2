@@ -13,8 +13,8 @@ import {
   type CustomFieldValue,
 } from '@/features/custom-fields/types'
 
-interface DefinitionFieldPreviewProps {
-  control: Control<FieldDefinitionFormValues>
+interface DefinitionFieldPreviewProps<T extends FieldDefinitionFormValues> {
+  control: Control<T>
   /** The field's display label — watched by the caller under its own identity field (`label` for custom fields, `name` for attributes). */
   label: string
   /** Whether the field is required. Custom field definitions carry their own `validation.required`; attributes have no such concept (required lives on the category pivot) and simply omit it. */
@@ -59,8 +59,15 @@ function buildOptions(values: Partial<FieldDefinitionFormValues>): CustomFieldOp
  * will look to end users (label, icon, help text, placeholder, options) while
  * they edit. Read-only mirror: it maintains its own throwaway value state and
  * feeds nothing back to the form. Sits sticky at the top of the (narrow) sheet.
+ *
+ * Generic over `T` (see `DefinitionTypePicker` for why `Control<T>` cannot be
+ * fixed to `Control<FieldDefinitionFormValues>`).
  */
-export function DefinitionFieldPreview({ control, label, required }: DefinitionFieldPreviewProps) {
+export function DefinitionFieldPreview<T extends FieldDefinitionFormValues>({
+  control,
+  label,
+  required,
+}: DefinitionFieldPreviewProps<T>) {
   const { t } = useTranslation()
   const values = useWatch({ control }) as Partial<FieldDefinitionFormValues>
   const type = values.type ?? 'text'

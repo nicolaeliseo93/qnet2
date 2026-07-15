@@ -10,6 +10,14 @@ import type {
   AdvancedFilterWidth,
 } from '@/features/table/advanced-filters/types'
 
+/**
+ * Height transition applied to the `CollapsibleContent` that wraps the panel at
+ * every call site, so opening and closing animate (spec 0032). Mirrors the
+ * `ModuleStatsPanel` pattern; `motion-reduce` disables it for reduced-motion.
+ */
+export const ADVANCED_FILTER_PANEL_ANIMATION =
+  'overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up motion-reduce:animate-none'
+
 /** Compact `max-w` token per declared width (ui-design.md §2: small elements by default). */
 const WIDTH_CLASS: Record<AdvancedFilterWidth, string> = {
   sm: 'w-full sm:max-w-40',

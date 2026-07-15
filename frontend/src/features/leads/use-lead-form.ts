@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
 import { createLead, leadDetailQueryKey, updateLead } from '@/features/leads/api'
 import { buildCreatePayload, buildUpdatePayload } from '@/features/leads/lead-form-payload'
+import { recordToEntries } from '@/features/leads/extra-fields'
 import {
   buildCreateLeadSchema,
   buildUpdateLeadSchema,
@@ -62,6 +63,7 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
         source_id: lead.source_id,
         operator_id: lead.operator_id,
         notes: lead.notes,
+        extra_fields: recordToEntries(lead.extra_fields),
       }
     }
     return {
@@ -72,6 +74,7 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
       source_id: null,
       operator_id: null,
       notes: null,
+      extra_fields: [],
     }
   }, [mode])
 

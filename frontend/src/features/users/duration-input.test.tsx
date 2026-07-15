@@ -41,7 +41,6 @@ describe('DurationInput', () => {
   })
 
   it('returns to null once the field is cleared', () => {
-    const onChange = vi.fn()
     render(<ControlledDurationInput initial={90} />)
 
     fireEvent.change(screen.getByLabelText(label), { target: { value: '' } })

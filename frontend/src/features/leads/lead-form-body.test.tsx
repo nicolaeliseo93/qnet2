@@ -81,6 +81,7 @@ function lead(overrides: Partial<LeadDetailWithPermissions> = {}): LeadDetailWit
     operator_id: null,
     operator: null,
     notes: 'Original note.',
+    extra_fields: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     permissions: FULL_PERMISSIONS,
@@ -209,5 +210,71 @@ describe('LeadForm — server 422 mapping (AC-064)', () => {
     expect(notes.getAttribute('aria-describedby')).toContain(message.id)
 
     vi.restoreAllMocks()
+  })
+})
+
+describe('LeadForm — extra fields editor (AC-014)', () => {
+  it('shows the empty state with no rows', async () => {
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Contact')).toBeInTheDocument())
+    expect(screen.getByText('No extra fields.')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Key' })).not.toBeInTheDocument()
+  })
+
+  it('adds a row on "Add field", accepts input, and removes it on "Remove field"', async () => {
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Contact')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add field' }))
+    expect(screen.getAllByRole('textbox', { name: 'Key' })).toHaveLength(1)
+    expect(screen.getAllByRole('textbox', { name: 'Value' })).toHaveLength(1)
+    expect(screen.queryByText('No extra fields.')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Key' }), {
+      target: { value: 'Original column' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value' }), { target: { value: 'foo' } })
+    expect(screen.getByRole('textbox', { name: 'Key' })).toHaveValue('Original column')
+    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveValue('foo')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove field' }))
+    expect(screen.queryAllByRole('textbox', { name: 'Key' })).toHaveLength(0)
+    expect(screen.getByText('No extra fields.')).toBeInTheDocument()
+  })
+
+  it('adds multiple rows independently', async () => {
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Contact')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add field' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add field' }))
+    expect(screen.getAllByRole('textbox', { name: 'Key' })).toHaveLength(2)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove field' })[0])
+    expect(screen.getAllByRole('textbox', { name: 'Key' })).toHaveLength(1)
+  })
+
+  it('pre-populates rows from the lead extra_fields in edit mode', async () => {
+    render(
+      <LeadForm
+        mode={{ type: 'edit', lead: lead({ extra_fields: { 'Original column': 'foo' } }) }}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Key' })).toBeInTheDocument())
+    expect(screen.getByRole('textbox', { name: 'Key' })).toHaveValue('Original column')
+    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveValue('foo')
   })
 })

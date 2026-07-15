@@ -16,6 +16,7 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     source_id: null,
     operator_id: null,
     notes: null,
+    extra_fields: [],
     ...overrides,
   }
 }
@@ -78,5 +79,56 @@ describe('buildCreateLeadSchema', () => {
     const schema = buildCreateLeadSchema(i18n.t)
     const result = schema.safeParse(baseValues({ notes: 'a'.repeat(5001) }))
     expect(result.success).toBe(false)
+  })
+})
+
+/** AC-014: extra_fields free-form key/value pairs (spec 0033). */
+describe('buildCreateLeadSchema — extra_fields', () => {
+  it('accepts an empty extra_fields array', () => {
+    const schema = buildCreateLeadSchema(i18n.t)
+    const result = schema.safeParse(baseValues({ extra_fields: [] }))
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts valid key/value pairs', () => {
+    const schema = buildCreateLeadSchema(i18n.t)
+    const result = schema.safeParse(
+      baseValues({
+        extra_fields: [
+          { key: 'Original column A', value: 'foo' },
+          { key: 'Original column B', value: '' },
+        ],
+      }),
+    )
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a row with an empty (or whitespace-only) key', () => {
+    const schema = buildCreateLeadSchema(i18n.t)
+    const result = schema.safeParse(baseValues({ extra_fields: [{ key: '   ', value: 'foo' }] }))
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'extra_fields.0.key')).toBe(
+        true,
+      )
+    }
+  })
+
+  it('rejects duplicate keys (case-insensitive)', () => {
+    const schema = buildCreateLeadSchema(i18n.t)
+    const result = schema.safeParse(
+      baseValues({
+        extra_fields: [
+          { key: 'Source', value: 'a' },
+          { key: 'source', value: 'b' },
+        ],
+      }),
+    )
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'extra_fields.1.key')).toBe(
+        true,
+      )
+    }
   })
 })

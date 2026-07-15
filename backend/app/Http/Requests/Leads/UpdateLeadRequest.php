@@ -43,6 +43,8 @@ class UpdateLeadRequest extends FormRequest
             'operator_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')],
             'lead_status_id' => ['sometimes', 'required', 'integer', Rule::exists('lead_statuses', 'id')],
             'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'extra_fields' => ['sometimes', 'nullable', 'array'],
+            'extra_fields.*' => ['string'],
         ];
     }
 

@@ -1,7 +1,7 @@
 import type { LucideProps } from 'lucide-react'
 import { ICON_CATALOG } from '@/features/custom-fields/icon-catalog'
 
-interface DynamicIconProps extends Omit<LucideProps, 'ref'> {
+interface DynamicIconProps extends Omit<LucideProps, 'ref' | 'name'> {
   /** Canonical kebab-case lucide name stored on the definition/option. */
   name: string | null | undefined
 }

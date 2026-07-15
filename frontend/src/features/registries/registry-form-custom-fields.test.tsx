@@ -127,6 +127,7 @@ function registry(
     referents: [],
     manager_ids: [],
     managers: [],
+    manager_slots: [],
     supervisor_id: null,
     supervisor: null,
     commercial_id: null,

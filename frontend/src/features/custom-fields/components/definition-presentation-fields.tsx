@@ -9,8 +9,8 @@ import { FormControl, FormDescription, useFormField } from '@/components/ui/form
 import { MetaField } from '@/features/authorization/MetaField'
 import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 
-interface DefinitionPresentationFieldsProps {
-  control: Control<FieldDefinitionFormValues>
+interface DefinitionPresentationFieldsProps<T extends FieldDefinitionFormValues> {
+  control: Control<T>
 }
 
 /**
@@ -20,9 +20,17 @@ interface DefinitionPresentationFieldsProps {
  * type-dependent settings so the visual polish comes last. Grouping/ordering
  * among sibling fields (`group`/`sort_order`) is custom-fields-only —
  * see `DefinitionOrganizationFields`.
+ *
+ * Generic over `T` (see `DefinitionTypePicker` for why `Control<T>` cannot be
+ * fixed to `Control<FieldDefinitionFormValues>`).
  */
-export function DefinitionPresentationFields({ control }: DefinitionPresentationFieldsProps) {
+export function DefinitionPresentationFields<T extends FieldDefinitionFormValues>({
+  control,
+}: DefinitionPresentationFieldsProps<T>) {
   const { t } = useTranslation()
+  // See `DefinitionTypePicker`: `T` only ever adds fields on top of
+  // `FieldDefinitionFormValues`, so every path here is guaranteed present.
+  const baseControl = control as unknown as Control<FieldDefinitionFormValues>
 
   return (
     <FormSection
@@ -31,7 +39,7 @@ export function DefinitionPresentationFields({ control }: DefinitionPresentation
       description={t('customFields.form.sections.presentation.description')}
     >
       <MetaField
-        control={control}
+        control={baseControl}
         name="description"
         metaKey="description"
         label={t('customFields.form.description')}
@@ -45,7 +53,7 @@ export function DefinitionPresentationFields({ control }: DefinitionPresentation
       </MetaField>
 
       <MetaField
-        control={control}
+        control={baseControl}
         name="help_text"
         metaKey="help_text"
         label={t('customFields.form.helpText')}
@@ -59,7 +67,7 @@ export function DefinitionPresentationFields({ control }: DefinitionPresentation
       </MetaField>
 
       <MetaField
-        control={control}
+        control={baseControl}
         name="placeholder"
         metaKey="placeholder"
         label={t('customFields.form.placeholder')}
@@ -73,7 +81,7 @@ export function DefinitionPresentationFields({ control }: DefinitionPresentation
       </MetaField>
 
       <MetaField
-        control={control}
+        control={baseControl}
         name="icon"
         metaKey="icon"
         label={t('customFields.form.icon')}

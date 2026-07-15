@@ -11,8 +11,8 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/comp
 import { blankFieldDefinitionOption } from '@/features/custom-fields/field-definition-defaults'
 import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 
-interface DefinitionOptionsEditorProps {
-  control: Control<FieldDefinitionFormValues>
+interface DefinitionOptionsEditorProps<T extends FieldDefinitionFormValues> {
+  control: Control<T>
   /** The `options` array's own cross-field error (enum-requires-options / unique values), attached by `superRefine`. */
   optionsError?: string
 }
@@ -23,10 +23,19 @@ interface DefinitionOptionsEditorProps {
  * value/label/color/icon/is_default. Shown/hidden purely by the selected
  * `type` (see the host form body), not metadata-gated — it is part of the
  * `type`/`options` field pair.
+ *
+ * Generic over `T` (see `DefinitionTypePicker` for why `Control<T>` cannot be
+ * fixed to `Control<FieldDefinitionFormValues>`).
  */
-export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOptionsEditorProps) {
+export function DefinitionOptionsEditor<T extends FieldDefinitionFormValues>({
+  control,
+  optionsError,
+}: DefinitionOptionsEditorProps<T>) {
   const { t } = useTranslation()
-  const { fields, append, remove } = useFieldArray({ control, name: 'options' })
+  // See `DefinitionTypePicker`: `T` only ever adds fields on top of
+  // `FieldDefinitionFormValues`, so `options` is guaranteed present.
+  const baseControl = control as unknown as Control<FieldDefinitionFormValues>
+  const { fields, append, remove } = useFieldArray({ control: baseControl, name: 'options' })
 
   return (
     <FormSection
@@ -47,7 +56,7 @@ export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOpt
           <div key={optionField.id} className="flex flex-col gap-2 rounded-lg border p-3">
             <div className="flex items-start gap-2">
               <FormField
-                control={control}
+                control={baseControl}
                 name={`options.${index}.value`}
                 render={({ field }) => (
                   <FormItem className="flex-1">
@@ -60,7 +69,7 @@ export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOpt
                 )}
               />
               <FormField
-                control={control}
+                control={baseControl}
                 name={`options.${index}.label`}
                 render={({ field }) => (
                   <FormItem className="flex-1">
@@ -85,7 +94,7 @@ export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOpt
             </div>
             <div className="flex items-end gap-2">
               <FormField
-                control={control}
+                control={baseControl}
                 name={`options.${index}.color`}
                 render={({ field }) => (
                   <FormItem className="flex-1">
@@ -95,7 +104,7 @@ export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOpt
                 )}
               />
               <FormField
-                control={control}
+                control={baseControl}
                 name={`options.${index}.icon`}
                 render={({ field }) => (
                   <FormItem className="flex-1">
@@ -114,7 +123,7 @@ export function DefinitionOptionsEditor({ control, optionsError }: DefinitionOpt
                 )}
               />
               <FormField
-                control={control}
+                control={baseControl}
                 name={`options.${index}.is_default`}
                 render={({ field }) => (
                   <FormItem className="flex items-center gap-2 pb-2">

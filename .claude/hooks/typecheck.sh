@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Stop hook — gate TYPECHECK frontend (il pezzo che ESLint NON copre e che
-# `vite build` NON esegue). Gira `tsc --noEmit` sul progetto frontend a fine
+# `vite build` NON esegue). Gira `tsc -b --force` sul progetto frontend a fine
 # turno. Exit 2 = rimanda gli errori di tipo all'agente; 0 = pulito/non applicabile.
+#
+# NB: si usa la build-mode (`-b`) e NON `tsc --noEmit`: il tsconfig.json root ha
+# `files: []` + `references`, quindi `tsc --noEmit` compilerebbe la lista vuota e
+# uscirebbe SEMPRE pulito (no-op silenzioso). `-b` segue i references (tsconfig.app/node);
+# `--force` evita falsi verdi da cache .tsbuildinfo stale.
 #
 # Batch a fine turno (non per-edit) per non rallentare ogni Edit.
 # Opt-out: TYPECHECK_GATE=off
@@ -25,11 +30,11 @@ else
   TSC="npx --no-install tsc"
 fi
 
-OUT="$(cd "$FE" && $TSC --noEmit --pretty false 2>&1)"
+OUT="$(cd "$FE" && $TSC -b --force --pretty false 2>&1)"
 STATUS=$?
 
 if [ $STATUS -ne 0 ]; then
-  echo "[typecheck] tsc --noEmit ha trovato errori di tipo nel frontend:" >&2
+  echo "[typecheck] tsc -b ha trovato errori di tipo nel frontend:" >&2
   printf '%s\n' "$OUT" | head -40 >&2
   echo "[typecheck] Correggi i tipi prima di considerare il task completo (vite build NON li intercetta)." >&2
   exit 2

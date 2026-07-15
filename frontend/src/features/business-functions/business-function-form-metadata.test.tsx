@@ -70,7 +70,7 @@ function businessFunction(
     manager: { id: 5, name: 'Ada Lovelace', avatar_url: null },
     user_ids: [],
     users: [],
-    created_at: null,
+    created_at: '2026-01-01T00:00:00Z',
     permissions: {
       resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
       fields: {},

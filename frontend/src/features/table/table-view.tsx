@@ -25,7 +25,8 @@ import { createSsrmDatasource } from '@/features/table/ssrm-datasource'
 import { SavedViewsSlot } from '@/features/table/saved-views-slot'
 import { TableToolbar } from '@/features/table/table-toolbar'
 import { useTableToolbarState } from '@/features/table/use-table-toolbar-state'
-import { AdvancedFilterPanel } from '@/features/table/advanced-filters/advanced-filter-panel'
+import { AdvancedFilterPanel, ADVANCED_FILTER_PANEL_ANIMATION } from '@/features/table/advanced-filters/advanced-filter-panel'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useTableAdvancedFilters } from '@/features/table/advanced-filters/use-table-advanced-filters'
 import { useBulkDelete } from '@/features/table/use-bulk-delete'
 import { ExportDialog } from '@/features/exports/export-dialog'
@@ -460,11 +461,12 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
               exportSlot={exportSlot}
             />
 
-            {toolbar.advancedFiltersOpen && advancedFilterDescriptors.length > 0 ? (
-              <AdvancedFilterPanel
-                descriptors={advancedFilterDescriptors}
-                filters={advancedFilters}
-              />
+            {advancedFilterDescriptors.length > 0 ? (
+              <Collapsible open={toolbar.advancedFiltersOpen}>
+                <CollapsibleContent className={ADVANCED_FILTER_PANEL_ANIMATION}>
+                  <AdvancedFilterPanel descriptors={advancedFilterDescriptors} filters={advancedFilters} />
+                </CollapsibleContent>
+              </Collapsible>
             ) : null}
 
             <div

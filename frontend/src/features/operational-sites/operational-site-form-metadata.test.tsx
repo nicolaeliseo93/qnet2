@@ -59,6 +59,7 @@ function operationalSite(
 ): OperationalSiteDetailWithPermissions {
   return {
     id: 9,
+    alias: 'HQ',
     line1: 'Via Roma 1',
     postal_code: '20100',
     country_id: 1,
@@ -69,7 +70,7 @@ function operationalSite(
     province: { id: 3, name: 'Milan' },
     city_id: 4,
     city: { id: 4, name: 'Milan' },
-    created_at: null,
+    created_at: '2026-01-01T00:00:00Z',
     permissions: {
       resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
       fields: {},

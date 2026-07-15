@@ -14,6 +14,7 @@ function values(overrides: Partial<LeadFormValues> = {}): LeadFormValues {
     source_id: null,
     operator_id: null,
     notes: null,
+    extra_fields: [],
     ...overrides,
   }
 }
@@ -34,6 +35,7 @@ function original(overrides: Partial<LeadDetail> = {}): LeadDetail {
     operator_id: null,
     operator: null,
     notes: null,
+    extra_fields: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -54,6 +56,7 @@ describe('buildCreatePayload', () => {
       source_id: 4,
       operator_id: 5,
       notes: 'Note',
+      extra_fields: null,
     })
   })
 
@@ -68,7 +71,16 @@ describe('buildCreatePayload', () => {
       source_id: null,
       operator_id: null,
       notes: null,
+      extra_fields: null,
     })
+  })
+
+  it('includes extra_fields as an object when rows are set (AC-014)', () => {
+    const payload = buildCreatePayload(
+      values({ extra_fields: [{ key: 'Original column', value: 'foo' }] }),
+    )
+
+    expect(payload.extra_fields).toEqual({ 'Original column': 'foo' })
   })
 })
 
@@ -107,5 +119,26 @@ describe('buildUpdatePayload', () => {
       original({ source_id: 4, source: { id: 4, name: 'Web' } }),
     )
     expect(payload).toEqual({ source_id: null })
+  })
+
+  it('omits extra_fields when the rows are unchanged (order-independent, AC-014)', () => {
+    const payload = buildUpdatePayload(
+      values({ extra_fields: [{ key: 'b', value: '2' }, { key: 'a', value: '1' }] }),
+      original({ extra_fields: { a: '1', b: '2' } }),
+    )
+    expect(payload).toEqual({})
+  })
+
+  it('includes extra_fields when a value changed', () => {
+    const payload = buildUpdatePayload(
+      values({ extra_fields: [{ key: 'a', value: 'updated' }] }),
+      original({ extra_fields: { a: '1' } }),
+    )
+    expect(payload).toEqual({ extra_fields: { a: 'updated' } })
+  })
+
+  it('includes extra_fields as null when every row is removed', () => {
+    const payload = buildUpdatePayload(values({ extra_fields: [] }), original({ extra_fields: { a: '1' } }))
+    expect(payload).toEqual({ extra_fields: null })
   })
 })

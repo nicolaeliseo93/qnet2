@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { toast } from 'sonner'
@@ -34,6 +35,7 @@ const mockLead: LeadDetailWithPermissions = {
   operator_id: null,
   operator: null,
   notes: null,
+  extra_fields: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   permissions: {
@@ -63,7 +65,13 @@ let capturedOnAction: RowActionHandler | null = null
 const ROW: TableRow = { id: 33, actions: ['view', 'edit', 'delete'], name: 'Jane Doe' }
 
 function action(key: string): TableActionDefinition {
-  return { key, label: `actions.${key}`, icon: 'eye', type: key === 'delete' ? 'danger' : 'action' }
+  return {
+    key,
+    label: `actions.${key}`,
+    icon: 'eye',
+    type: key === 'delete' ? 'danger' : 'action',
+    confirm: key === 'delete',
+  }
 }
 
 vi.mock('@/features/table/table-view', () => ({
@@ -131,7 +139,9 @@ function renderTable() {
     client,
     ...render(
       <QueryClientProvider client={client}>
-        <LeadsTable />
+        <MemoryRouter>
+          <LeadsTable />
+        </MemoryRouter>
       </QueryClientProvider>,
     ),
   }

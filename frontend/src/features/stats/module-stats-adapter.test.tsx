@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { LeadsTable } from '@/features/leads/leads-table'
@@ -43,7 +44,10 @@ vi.mock('@/features/table/table-view', () => ({
         <button
           type="button"
           onClick={() =>
-            onAction({ key: 'delete', label: 'actions.delete', icon: 'trash', type: 'danger' }, ROW)
+            onAction(
+              { key: 'delete', label: 'actions.delete', icon: 'trash', type: 'danger', confirm: true },
+              ROW,
+            )
           }
         >
           trigger-delete
@@ -83,7 +87,9 @@ function renderTable() {
 
   return render(
     <QueryClientProvider client={client}>
-      <LeadsTable />
+      <MemoryRouter>
+        <LeadsTable />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

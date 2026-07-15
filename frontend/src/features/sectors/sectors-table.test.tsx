@@ -39,7 +39,13 @@ let capturedOnAction: RowActionHandler | null = null
 const ROW: TableRow = { id: 7, actions: ['view', 'edit', 'delete'], name: 'Applications' }
 
 function action(key: string): TableActionDefinition {
-  return { key, label: `actions.${key}`, icon: 'eye', type: key === 'delete' ? 'danger' : 'action' }
+  return {
+    key,
+    label: `actions.${key}`,
+    icon: 'eye',
+    type: key === 'delete' ? 'danger' : 'action',
+    confirm: key === 'delete',
+  }
 }
 
 vi.mock('@/features/table/table-view', () => ({

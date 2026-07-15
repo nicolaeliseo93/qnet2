@@ -44,6 +44,7 @@ function draft(overrides: Partial<PersonalDataDraft> = {}): PersonalDataDraft {
         province_id: null,
         state_id: null,
         country_id: null,
+        site_type: null,
         is_primary: true,
       },
     ],

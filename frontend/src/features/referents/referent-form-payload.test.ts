@@ -23,7 +23,7 @@ function card(overrides: Partial<PersonalDataCard> = {}): PersonalDataCard {
   return {
     id: 99,
     type: 'individual',
-    title: null,
+    gender: null,
     first_name: 'Ada',
     last_name: 'Lovelace',
     company_name: null,

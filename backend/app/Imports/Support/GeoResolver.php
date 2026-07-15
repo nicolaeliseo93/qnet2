@@ -36,7 +36,10 @@ use Illuminate\Database\Eloquent\Model;
  */
 class GeoResolver
 {
-    public function __construct(private readonly ItalianGeoLocalizer $localizer) {}
+    public function __construct(
+        private readonly ItalianGeoLocalizer $localizer,
+        private readonly GeoFuzzyMatcher $fuzzyMatcher,
+    ) {}
 
     public function resolve(
         ?string $countryName,
@@ -96,6 +99,105 @@ class GeoResolver
                 return GeoResolutionResult::failed("City \"{$cityName}\" not found or ambiguous.");
             }
 
+            $cityId = $city->id;
+            $provinceId ??= $city->province_id;
+            $stateId ??= $city->state_id;
+            $countryId ??= $city->country_id;
+        }
+
+        return GeoResolutionResult::ok($countryId, $stateId, $provinceId, $cityId);
+    }
+
+    /**
+     * Fuzzy sibling of resolve() (spec 0033 AC-005): the SAME exact,
+     * case-insensitive, hierarchical match runs first — an unambiguous exact
+     * hit behaves identically to resolve() — and only a level with ZERO
+     * exact matches falls back to a similarity threshold
+     * (GeoFuzzyMatcher::match()). A level resolving to exactly one candidate
+     * (exact or fuzzy) assigns; 0 or >1 candidates make the WHOLE result
+     * `ambiguous()` (never `failed()`), short-circuiting the remaining levels
+     * exactly like resolve() does on a hard failure — but carrying candidates
+     * for the review UI instead of just a reason. resolve() itself is
+     * untouched by this method.
+     */
+    public function resolveFuzzy(
+        ?string $countryName,
+        ?string $stateName,
+        ?string $provinceName,
+        ?string $cityName,
+    ): GeoResolutionResult {
+        $countryId = null;
+        $stateId = null;
+        $provinceId = null;
+        $cityId = null;
+
+        if ($this->present($countryName)) {
+            $match = $this->fuzzyMatcher->match(Country::query(), $this->localizer->country($countryName));
+
+            if ($match['model'] === null) {
+                return GeoResolutionResult::ambiguous(null, null, null, null, "Country \"{$countryName}\" not found or ambiguous.", $match['candidates']);
+            }
+
+            $countryId = $match['model']->getAttribute('id');
+        }
+
+        if ($this->present($stateName)) {
+            $query = State::query();
+
+            if ($countryId !== null) {
+                $query->where('country_id', $countryId);
+            }
+
+            $match = $this->fuzzyMatcher->match($query, $this->localizer->region($stateName));
+
+            if ($match['model'] === null) {
+                return GeoResolutionResult::ambiguous($countryId, null, null, null, "Region \"{$stateName}\" not found or ambiguous.", $match['candidates']);
+            }
+
+            $stateId = $match['model']->getAttribute('id');
+        }
+
+        if ($this->present($provinceName)) {
+            $query = Province::query();
+
+            if ($stateId !== null) {
+                $query->where('state_id', $stateId);
+            } elseif ($countryId !== null) {
+                $query->where('country_id', $countryId);
+            }
+
+            $match = $this->fuzzyMatcher->match($query, $this->localizer->province($provinceName) ?? $provinceName);
+
+            if ($match['model'] === null) {
+                return GeoResolutionResult::ambiguous($countryId, $stateId, null, null, "Province \"{$provinceName}\" not found or ambiguous.", $match['candidates']);
+            }
+
+            /** @var Province $province */
+            $province = $match['model'];
+            $provinceId = $province->id;
+            $stateId ??= $province->state_id;
+            $countryId ??= $province->country_id;
+        }
+
+        if ($this->present($cityName)) {
+            $query = City::query();
+
+            if ($provinceId !== null) {
+                $query->where('province_id', $provinceId);
+            } elseif ($stateId !== null) {
+                $query->where('state_id', $stateId);
+            } elseif ($countryId !== null) {
+                $query->where('country_id', $countryId);
+            }
+
+            $match = $this->fuzzyMatcher->match($query, $this->localizer->city($cityName) ?? $cityName);
+
+            if ($match['model'] === null) {
+                return GeoResolutionResult::ambiguous($countryId, $stateId, $provinceId, null, "City \"{$cityName}\" not found or ambiguous.", $match['candidates']);
+            }
+
+            /** @var City $city */
+            $city = $match['model'];
             $cityId = $city->id;
             $provinceId ??= $city->province_id;
             $stateId ??= $city->state_id;

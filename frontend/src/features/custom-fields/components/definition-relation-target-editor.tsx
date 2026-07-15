@@ -14,8 +14,8 @@ import {
 import type { CustomFieldEntity } from '@/features/custom-fields/api'
 import type { FieldDefinitionFormValues } from '@/features/custom-fields/field-definition-form-values'
 
-interface DefinitionRelationTargetEditorProps {
-  control: Control<FieldDefinitionFormValues>
+interface DefinitionRelationTargetEditorProps<T extends FieldDefinitionFormValues> {
+  control: Control<T>
   entities: CustomFieldEntity[]
 }
 
@@ -27,12 +27,19 @@ interface DefinitionRelationTargetEditorProps {
  * reuses the same custom-fieldable entity catalogue as `entity_type` — in
  * this codebase a for-select resource always coincides with a registered
  * domain/resource key. Shown/hidden purely by the selected `type`.
+ *
+ * Generic over `T` (see `DefinitionTypePicker` for why `Control<T>` cannot be
+ * fixed to `Control<FieldDefinitionFormValues>`).
  */
-export function DefinitionRelationTargetEditor({
+export function DefinitionRelationTargetEditor<T extends FieldDefinitionFormValues>({
   control,
   entities,
-}: DefinitionRelationTargetEditorProps) {
+}: DefinitionRelationTargetEditorProps<T>) {
   const { t } = useTranslation()
+  // See `DefinitionTypePicker`: `T` only ever adds fields on top of
+  // `FieldDefinitionFormValues`, so every `relation_target.*` path here is
+  // guaranteed present.
+  const baseControl = control as unknown as Control<FieldDefinitionFormValues>
 
   return (
     <FormSection
@@ -41,7 +48,7 @@ export function DefinitionRelationTargetEditor({
       description={t('customFields.form.sections.relation.description')}
     >
       <FormField
-        control={control}
+        control={baseControl}
         name="relation_target.entity_type"
         render={({ field }) => (
           <FormItem>
@@ -66,7 +73,7 @@ export function DefinitionRelationTargetEditor({
       />
 
       <FormField
-        control={control}
+        control={baseControl}
         name="relation_target.cardinality"
         render={({ field }) => (
           <FormItem>
@@ -93,7 +100,7 @@ export function DefinitionRelationTargetEditor({
       />
 
       <FormField
-        control={control}
+        control={baseControl}
         name="relation_target.for_select_resource"
         render={({ field }) => (
           <FormItem>

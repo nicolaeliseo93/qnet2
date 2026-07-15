@@ -62,6 +62,7 @@ function address(overrides: Partial<AddressDraft> = {}): AddressDraft {
     province_id: null,
     state_id: null,
     country_id: null,
+    site_type: null,
     is_primary: true,
     ...overrides,
   }
@@ -77,6 +78,7 @@ function draft(overrides: Partial<PersonalDataDraft> = {}): PersonalDataDraft {
     vat_number: null,
     sdi_code: null,
     birth_date: null,
+    gender: null,
     contacts: [contact()],
     addresses: [address()],
     ...overrides,

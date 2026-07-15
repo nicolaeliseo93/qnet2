@@ -10,6 +10,36 @@ export const imports = {
   fields: {
     file: 'File CSV',
   },
+  // Etichette leggibili dei campi mappabili e dei campi globali del wizard di
+  // import lead avanzato (spec 0033): il backend invia questi path come chiavi
+  // (`imports.leads.fields.*` / `imports.leads.global.*`), risolti qui.
+  leads: {
+    fields: {
+      full_name: 'Nome completo',
+      first_name: 'Nome',
+      last_name: 'Cognome',
+      company_name: 'Ragione sociale',
+      tax_code: 'Codice fiscale',
+      vat_number: 'Partita IVA',
+      email: 'Email',
+      phone: 'Telefono',
+      mobile: 'Cellulare',
+      street: 'Indirizzo',
+      postal_code: 'CAP',
+      country: 'Nazione',
+      region: 'Regione',
+      province: 'Provincia',
+      city: 'Comune',
+      notes: 'Note',
+    },
+    global: {
+      campaign_id: 'Campagna',
+      project_id: 'Progetto',
+      source_id: 'Fonte',
+      lead_status_id: 'Stato iniziale',
+      operator_id: 'Operatore assegnato',
+    },
+  },
   buttons: {
     downloadTemplate: 'Scarica il template',
     upload: 'Carica',

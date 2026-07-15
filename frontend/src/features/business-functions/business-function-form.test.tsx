@@ -101,7 +101,7 @@ function businessFunction(
     manager: { id: 5, name: 'Ada Lovelace', avatar_url: null },
     user_ids: [11],
     users: [{ id: 11, name: 'Grace Hopper', avatar_url: null }],
-    created_at: null,
+    created_at: '2026-01-01T00:00:00Z',
     permissions: FULL_ACCESS_PERMISSIONS,
     ...overrides,
   }
