@@ -63,9 +63,14 @@ it('AC-017: editing an error row re-validates it to valid, flags is_edited and r
         ->assertJsonPath('data.counts.valid_rows', 1);
 
     $row->refresh();
+    // The reviser re-validates from the EDITED field values merged onto
+    // mapped_values (spec 0033 delta D-2026-07-15-placeholder-review-fields)
+    // — raw_values (the original file row) is untouched, since an edited
+    // field may have no raw column of its own (e.g. a recognizer-derived
+    // first_name/last_name split from a single full_name column).
     expect($row->status->value)->toBe('valid')
         ->and($row->is_edited)->toBeTrue()
-        ->and($row->raw_values['Email'])->toBe('fixed@example.com')
+        ->and($row->mapped_values['email'])->toBe('fixed@example.com')
         ->and($run->fresh()->invalid_rows)->toBe(0)
         ->and($run->fresh()->valid_rows)->toBe(1);
 });

@@ -25,6 +25,12 @@ use App\Models\ImportRun;
  * `column_mapping`/`suggested_mapping` are BOTH keyed by this same `key`
  * (never the bare name), so two identically-named file columns never
  * collapse onto the same mapping entry.
+ *
+ * `review_fields` (spec 0033 delta D-2026-07-15-placeholder-review-fields)
+ * is the definition's FINAL persisted field catalogue: the review grid
+ * builds its editable columns from this, never from column_mapping's
+ * targets, so an input-only field a recognizer replaces (e.g. leads'
+ * `full_name` -> `first_name`/`last_name`) is never itself a grid column.
  */
 final class ImportRunPayloadBuilder
 {
@@ -45,6 +51,7 @@ final class ImportRunPayloadBuilder
             : null;
         $payload['fields'] = $definition->fields();
         $payload['global_fields'] = $definition->globalConfig();
+        $payload['review_fields'] = $definition->reviewFields();
         $payload['dedup_modes'] = array_map(
             static fn (ImportDedupMode $mode): string => $mode->value,
             $definition->dedupModes(),

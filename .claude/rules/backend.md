@@ -17,7 +17,7 @@
 - Usa `Route::resource` / route model binding per il CRUD: niente file di route gonfio di GET/POST manuali.
 - **Mai restituire un model Eloquent raw**: sempre via API **Resource**. Il giorno che aggiungi un campo `password`/`api_secret` e dimentichi di nasconderlo è un incidente, non un errore.
 - Rispetta l'**envelope di risposta** del progetto (`{ success, message, ... }`). Gli errori non espongono mai nomi di classi/model interni.
-- **Rate limiting** (`throttle:...`) su endpoint pubblici (login, reset password) e costosi (query SSRM).
+- **Rate limiting** (`throttle:...`) SOLO sugli endpoint di credenziali auth (login, forgot/reset password, cambio password): sono i bersagli di brute-force. NON applicarlo agli altri endpoint (CRUD/browse autenticati, SSRM, import/export) — decisione utente 2026-07-15, "Too Many Attempts" bloccava l'uso normale. Non reintrodurre `throttle` altrove senza richiesta esplicita.
 
 ## 3. Eloquent / Database
 

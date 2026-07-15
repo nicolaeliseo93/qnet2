@@ -46,6 +46,22 @@ own+leads, bulk-delete own vs foreign=not_found). Pint --dirty pulito. FE `tsc -
 Vitest adapter+page+wizard 74/74, adapter test nuovo `lead-imports-table.test.tsx`. ESLint pulito. Unici
 rossi FE: i 3 `cell-renderers ContactsCell` baseline pre-esistenti (24 rossi noti), estranei.
 
+## CHANGE — Rate limiting SOLO su auth (2026-07-15) — GREEN, NON COMMITTATO
+
+Decisione utente: "Too Many Attempts" (429) bloccava l'uso normale. Rimosso `throttle` da OGNI endpoint
+tranne quelli di credenziali auth. RESTANO solo: `auth/forgot-password`+`auth/reset-password` e
+`auth/me/password` (tutti `throttle:6,1`, bersagli brute-force). RIMOSSO ovunque il resto: `config`
+pubblico (era 30,1 — UNICO endpoint non-auth che perde protezione anti-abuso anonimo, segnalato), `auth/me`
+updateProfile, tutti i `throttle:60,1/10,1/30,1` su tables/imports/exports/migrations/meta/stats/users/
+roles/CRUD ecc. + i 6 sub-file di route. Il wrapper `super-admin` sulle migrazioni resta (e' authz, non
+throttle). File: `routes/api.php` + `routes/api/{registries,projects,leads,geo,custom-fields,lookups}.php`.
+Test aggiornato (requisito cambiato): `ConfigTest` 'is no longer rate-limited' ora asserisce
+`assertHeaderMissing('X-RateLimit-Limit')`. REGOLE DI PROGETTO RILASSATE di conseguenza:
+`.claude/rules/backend.md` §2 e `.claude/rules/security.md` §4 — throttle ora SOLO su credenziali auth,
+non reintrodurre altrove senza richiesta esplicita. Verificato (eseguito): `route:list` OK (183 rotte),
+`grep throttle routes/` = solo i 2 auth; `pest ConfigTest` 18/18; Pint pulito; suite 2472/2474 (gli unici 2
+rossi preesistenti/esterni, riprodotti identici dopo git stash).
+
 ## FIX — Referent edit crash + outline button bg (2026-07-15) — GREEN, NON COMMITTATO
 
 1) BUG "Cannot read properties of undefined (reading 'resource')" salvando l'anagrafica referent.
@@ -228,6 +244,24 @@ FIX POST-VERIFICA (da test utente reale, tutti verdi):
 - i18n label campi: mapping/config/summary/review mostravano chiavi grezze `imports.leads.fields.*`/
   `imports.leads.global.*` (il FE non passava da `t()` e le chiavi non esistevano). Fix: chiavi definite in
   `en-imports.ts`/`it-imports.ts` (namespace default) + risolte col `t` di default nei 4 step.
+
+DELTA D-2026-07-15 (Nome/Cognome + placeholder SCONOSCIUTO) — VERDE:
+- Output finale = first_name + last_name (split), NON full_name. `ImportDefinition::reviewFields()` (default
+  fields()) + `requiredForCreation()` (default []). Leads: reviewFields = tutti tranne full_name (input-only);
+  requiredForCreation = [first_name,last_name].
+- `StagedRowBuilder`: Step 2.5 placeholder — campi requiredForCreation vuoti -> 'SCONOSCIUTO'
+  (config('imports.placeholder')) + warning + status riga = Warning. Valore in mapped_values (editabile in review).
+- `NameSplitRecognizer` (cambi dichiarati): single-token -> first_name (non last_name); alreadyMapped AND->OR
+  (non ri-splitta se first O last gia' presenti -> preserva gli edit).
+- `StagedRowReviser` (cambio dichiarato): ri-valida dai VALORI EDITATI (field id) fusi sui mapped_values,
+  NON ricostruisce raw_values -> correggere Cognome a mano regge; svuotarlo ri-applica SCONOSCIUTO.
+- `ImportRunPayloadBuilder`: espone `review_fields` [{id, label i18n}]. FE `review-columns.tsx` costruisce le
+  colonne editabili da `review_fields` (mostra Nome/Cognome, non full_name), fallback ai mapped fields se assente.
+- Verificato insieme: backend 266/266, frontend 120/120, tsc 0.
+
+NOTA (modifica utente 2026-07-15): rate-limiting SOLO su auth (login/reset/change-password); rimosso `throttle`
+da import/tables/export/CRUD (dava "Too Many Attempts" in uso normale). Rules aggiornate (backend.md/security.md).
+NON reintrodurre throttle altrove senza richiesta esplicita.
 
 STATO: FEATURE COMPLETA E VERIFICATA. VERIFIER = VERDE su TUTTI i 26 AC (001-026) con test reali. Backend
 full 2466/2468 (1 rosso PRE-ESISTENTE AbstractMigrationSourcePreviewTest + 1 skip). Frontend: vitest mirato

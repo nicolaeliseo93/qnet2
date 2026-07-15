@@ -65,6 +65,21 @@ it('defaults dedupModes() to [create_only]', function (string $class) {
     expect(app($class)->dedupModes())->toBe([ImportDedupMode::CreateOnly]);
 })->with($legacyDefinitions);
 
+it('defaults requiredForCreation() to an empty array (spec 0033 delta D-2026-07-15)', function (string $class) {
+    expect(app($class)->requiredForCreation())->toBe([]);
+})->with($legacyDefinitions);
+
+it('defaults reviewFields() to fields() reduced to {id,label} (spec 0033 delta D-2026-07-15)', function (string $class) {
+    $definition = app($class);
+
+    $expected = array_map(static fn (array $field): array => [
+        'id' => $field['id'],
+        'label' => $field['label'],
+    ], $definition->fields());
+
+    expect($definition->reviewFields())->toBe($expected);
+})->with($legacyDefinitions);
+
 it('persistRow() default delegates to the legacy createRow(), ignoring the dedup strategy', function () {
     $actor = User::factory()->create();
     $importRun = ImportRun::factory()->create(['resource' => 'business-functions']);

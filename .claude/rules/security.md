@@ -32,7 +32,7 @@ Per una SPA **first-party** (frontend e API sullo stesso top-level domain), lo s
 - Query parametrizzate/Eloquent; **mai** interpolazione SQL.
 - `$fillable`/`$guarded` sempre definiti (no escalation `is_admin`/`role` via mass assignment).
 - Password: hashing Laravel (bcrypt/argon); mai algoritmi deboli.
-- **Rate limiting** su login, reset password, endpoint costosi.
+- **Rate limiting** SOLO sugli endpoint di credenziali auth (login, forgot/reset password, cambio password). NON su CRUD/browse autenticati o endpoint costosi (decisione utente 2026-07-15). Non reintrodurre `throttle` altrove senza richiesta esplicita.
 - Eccezioni senza leak di classi/struttura interna (envelope `{ success, message }`).
 
 ## 5. Frontend
