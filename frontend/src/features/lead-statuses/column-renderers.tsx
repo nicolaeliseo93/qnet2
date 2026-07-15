@@ -34,7 +34,7 @@ function ColorCell({ value }: ICellRendererParams) {
  * swatch (the backend column type is plain `text`, a raw palette token);
  * `created_at` reuses the shared domain-agnostic renderer so the datetime
  * formatting is not re-implemented per domain (spec 0029, mirrors
- * `projectStatusColumnRenderers`).
+ * `pipelineStatusColumnRenderers`).
  */
 export const leadStatusColumnRenderers: TableRendererMap = {
   color: (params) => <ColorCell {...params} />,

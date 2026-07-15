@@ -68,7 +68,7 @@ it('200 with the catalogue for users and roles, keys matching each resolver\'s f
     // `operational-sites`, spec 0016 `referent-types` AND `referents`, spec
     // 0017 `attributes`, `product-categories` AND `products`, spec 0018
     // `sources`, `sectors` AND `company-sites`, spec 0019 `tags`, spec 0020
-    // `registries`, spec 0021 `custom-fields`, spec 0023 `project-statuses`,
+    // `registries`, spec 0021 `custom-fields`, spec 0023 `pipeline-statuses`,
     // `projects` AND `campaigns`, spec 0024 `leads`, spec 0029
     // `lead-statuses`, all in the same generic registry
     // (config/authorization.php), so this registry-driven catalogue
@@ -76,7 +76,7 @@ it('200 with the catalogue for users and roles, keys matching each resolver\'s f
     expect($resources->keys()->all())->toEqualCanonicalizing([
         'users', 'roles', 'business-functions', 'companies', 'company-sites', 'operational-sites', 'referent-types',
         'referents', 'attributes', 'custom-fields', 'product-categories', 'products', 'sources', 'sectors', 'tags',
-        'registries', 'project-statuses', 'projects', 'campaigns', 'leads', 'lead-statuses',
+        'registries', 'pipeline-statuses', 'projects', 'campaigns', 'leads', 'lead-statuses',
     ]);
 
     $userFieldKeys = collect($resources['users']['fields'])->pluck('key')->all();

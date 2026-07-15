@@ -2,8 +2,8 @@
 
 use App\Models\Campaign;
 use App\Models\Concerns\LogsModelActivity;
+use App\Models\PipelineStatus;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\Registry;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -25,7 +25,7 @@ uses(TestCase::class, RefreshDatabase::class);
 it('creates the projects table with the expected columns', function () {
     expect(Schema::hasTable('projects'))->toBeTrue();
     expect(Schema::hasColumns('projects', [
-        'id', 'code', 'name', 'description', 'registry_id', 'project_status_id',
+        'id', 'code', 'name', 'description', 'registry_id', 'pipeline_status_id',
         'source_id', 'business_function_id', 'state_id', 'product_category_id',
         'partner_id', 'start_date', 'end_date', 'total_budget', 'target_lead',
         'created_at', 'updated_at',
@@ -39,7 +39,7 @@ it('code is unique at the database level', function () {
         ->toThrow(QueryException::class);
 });
 
-it('project_status_id is required at the database level', function () {
+it('pipeline_status_id is required at the database level', function () {
     expect(fn () => DB::table('projects')->insert([
         'code' => 'PRJ-9999', 'name' => 'No Status', 'created_at' => now(), 'updated_at' => now(),
     ]))->toThrow(QueryException::class);
@@ -61,11 +61,11 @@ it('down() reverses the migration, up() recreates it', function () {
 // model relations and casts
 // ---------------------------------------------------------------------------
 
-it('projectStatus() is a BelongsTo relation to ProjectStatus', function () {
-    $relation = (new Project)->projectStatus();
+it('pipelineStatus() is a BelongsTo relation to PipelineStatus', function () {
+    $relation = (new Project)->pipelineStatus();
 
     expect($relation)->toBeInstanceOf(BelongsTo::class);
-    expect($relation->getRelated())->toBeInstanceOf(ProjectStatus::class);
+    expect($relation->getRelated())->toBeInstanceOf(PipelineStatus::class);
 });
 
 it('campaigns() is a HasMany relation to Campaign', function () {
@@ -83,10 +83,10 @@ it('casts total_budget to decimal:2 and target_lead to int', function () {
 });
 
 it('`code` is deliberately absent from #[Fillable]: mass-assignment cannot set it', function () {
-    $status = ProjectStatus::factory()->create();
+    $status = PipelineStatus::factory()->create();
     $project = new Project([
         'name' => 'Guarded',
-        'project_status_id' => $status->id,
+        'pipeline_status_id' => $status->id,
         'code' => 'SHOULD-NOT-STICK',
     ]);
 

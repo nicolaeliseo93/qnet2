@@ -16,7 +16,7 @@ type CampaignRelationFieldName =
   | 'registry_id'
   | 'source_id'
   | 'partner_id'
-  | 'project_status_id'
+  | 'pipeline_status_id'
   | 'business_function_id'
   | 'product_category_id'
 

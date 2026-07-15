@@ -119,7 +119,7 @@ describe('StatsWidgetView', () => {
   })
 
   it('resolves a distribution color TOKEN (not a literal CSS color) to a theme variable', () => {
-    // "slate"/"amber" are DB color tokens (e.g. `project_statuses.color`),
+    // "slate"/"amber" are DB color tokens (e.g. `pipeline_statuses.color`),
     // not valid standalone CSS colors — the fix under test.
     const widget: DistributionWidget = {
       type: 'distribution',

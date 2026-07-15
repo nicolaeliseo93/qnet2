@@ -5,7 +5,7 @@ const TOKEN_SHADE = 500
 
 /**
  * A `distribution` widget item's `color` is a backend color TOKEN read from a
- * lookup table (e.g. `project_statuses.color`: "teal", "slate", "amber"),
+ * lookup table (e.g. `pipeline_statuses.color`: "teal", "slate", "amber"),
  * NOT a literal CSS color as the frozen contract's example ("#22c55e")
  * suggested: several tokens ("slate", "amber") are not valid standalone CSS
  * color keywords. `color` is DB-controlled content (editable by whoever

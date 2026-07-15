@@ -51,7 +51,7 @@ export type UpdateLeadStatusPayload = Partial<CreateLeadStatusPayload>
 
 /**
  * Discriminated form mode shared by the form hook/meta-resolver and the
- * `LeadStatusForm` component (mirrors `ProjectStatusFormMode`).
+ * `LeadStatusForm` component (mirrors `PipelineStatusFormMode`).
  */
 export type LeadStatusFormMode =
   | { type: 'create' }

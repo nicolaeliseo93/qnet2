@@ -4,7 +4,7 @@ import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { REFERENT_TYPES_FOR_SELECT_RESOURCE } from '@/features/referent-types/for-select-api'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
-import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/project-statuses/for-select-api'
+import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-statuses/for-select-api'
 import { LEAD_STATUSES_FOR_SELECT_RESOURCE } from '@/features/lead-statuses/for-select-api'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-api'
@@ -92,17 +92,17 @@ const businessFunctions: QuickCreateEntry = {
   }),
 }
 
-const projectStatuses: QuickCreateEntry = {
-  titleKey: 'projectStatuses.form.createTitle',
-  descriptionKey: 'projectStatuses.form.createSubtitle',
-  permission: 'project-statuses.create',
+const pipelineStatuses: QuickCreateEntry = {
+  titleKey: 'pipelineStatuses.form.createTitle',
+  descriptionKey: 'pipelineStatuses.form.createSubtitle',
+  permission: 'pipeline-statuses.create',
   form: lazy(async () => {
-    const { ProjectStatusForm } = await import('@/features/project-statuses/project-status-form')
+    const { PipelineStatusForm } = await import('@/features/pipeline-statuses/pipeline-status-form')
     return {
       default: ({ onSuccess, onCancel }: QuickCreateFormProps) => (
-        <ProjectStatusForm
+        <PipelineStatusForm
           mode={{ type: 'create' }}
-          onSuccess={(projectStatus) => onSuccess({ id: projectStatus.id, name: projectStatus.name })}
+          onSuccess={(pipelineStatus) => onSuccess({ id: pipelineStatus.id, name: pipelineStatus.name })}
           onCancel={onCancel}
         />
       ),
@@ -224,7 +224,7 @@ export const moduleEntries: Record<string, QuickCreateEntry> = {
   [REFERENTS_FOR_SELECT_RESOURCE]: referents,
   [REFERENT_TYPES_FOR_SELECT_RESOURCE]: referentTypes,
   [BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE]: businessFunctions,
-  [PROJECT_STATUSES_FOR_SELECT_RESOURCE]: projectStatuses,
+  [PROJECT_STATUSES_FOR_SELECT_RESOURCE]: pipelineStatuses,
   [LEAD_STATUSES_FOR_SELECT_RESOURCE]: leadStatuses,
   [REGISTRIES_FOR_SELECT_RESOURCE]: registries,
   [CAMPAIGNS_FOR_SELECT_RESOURCE]: campaigns,

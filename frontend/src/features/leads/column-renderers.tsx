@@ -68,7 +68,7 @@ function OperationalSiteCell({ value }: ICellRendererParams) {
 /**
  * Renders the `lead_status` column as a colored badge (backend color token,
  * spec 0029 AC-015). Mapped EXPLICITLY as `{id, name, color}` server-side
- * (not via `summarize()`), so unlike `project_status` this cell is never
+ * (not via `summarize()`), so unlike `pipeline_status` this cell is never
  * colorless (context/known_defect_not_ours in the spec).
  */
 function LeadStatusCell({ value }: ICellRendererParams) {

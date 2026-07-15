@@ -21,7 +21,7 @@ function values(overrides: Partial<CampaignFormValues> = {}): CampaignFormValues
     registry_id: null,
     source_id: null,
     partner_id: null,
-    project_status_id: 1,
+    pipeline_status_id: 1,
     business_function_id: 2,
     product_category_id: 4,
     country_id: 10,
@@ -53,8 +53,8 @@ function original(overrides: Partial<CampaignDetail> = {}): CampaignDetail {
     partner_id: null,
     partner: null,
     derived_from_project: false,
-    project_status_id: 1,
-    project_status: { id: 1, name: 'Active', color: 'blue' },
+    pipeline_status_id: 1,
+    pipeline_status: { id: 1, name: 'Active', color: 'blue' },
     business_function_id: 2,
     business_function: { id: 2, name: 'Sales' },
     country_id: 10,
@@ -89,7 +89,7 @@ describe('buildCreatePayload — standalone (BR-2/BR-5)', () => {
       registry_id: null,
       source_id: null,
       partner_id: null,
-      project_status_id: 1,
+      pipeline_status_id: 1,
       business_function_id: 2,
       product_category_id: 4,
       country_id: 10,
@@ -119,7 +119,7 @@ describe('buildCreatePayload — linked (BR-2/AC-020/AC-042)', () => {
   it('omits the 3 classification fields when project_id is set, even if the form still holds values', () => {
     const payload = buildCreatePayload(values({ project_id: 7 }))
 
-    expect(payload).not.toHaveProperty('project_status_id')
+    expect(payload).not.toHaveProperty('pipeline_status_id')
     expect(payload).not.toHaveProperty('business_function_id')
     expect(payload).not.toHaveProperty('product_category_id')
     expect(payload.project_id).toBe(7)
@@ -131,7 +131,7 @@ describe('buildCreatePayload — geo per-level lock (spec 0027 BR-5)', () => {
     const payload = buildCreatePayload(
       values({
         project_id: 7,
-        project_status_id: null,
+        pipeline_status_id: null,
         business_function_id: null,
         product_category_id: null,
         country_id: null,
@@ -152,7 +152,7 @@ describe('buildCreatePayload — geo per-level lock (spec 0027 BR-5)', () => {
     const payload = buildCreatePayload(
       values({
         project_id: 7,
-        project_status_id: null,
+        pipeline_status_id: null,
         business_function_id: null,
         product_category_id: null,
         geo_locked_levels: ['country', 'state', 'province', 'city'],
@@ -187,18 +187,18 @@ describe('buildUpdatePayload', () => {
     const linkedOriginal = original({
       project_id: 5,
       derived_from_project: true,
-      project_status_id: 1,
+      pipeline_status_id: 1,
       business_function_id: 2,
       product_category_id: 4,
     })
     const payload = buildUpdatePayload(
-      values({ project_id: null, project_status_id: 1, business_function_id: 2, product_category_id: 4 }),
+      values({ project_id: null, pipeline_status_id: 1, business_function_id: 2, product_category_id: 4 }),
       linkedOriginal,
     )
 
     expect(payload).toEqual({
       project_id: null,
-      project_status_id: 1,
+      pipeline_status_id: 1,
       business_function_id: 2,
       product_category_id: 4,
     })
@@ -208,20 +208,20 @@ describe('buildUpdatePayload', () => {
     const linkedOriginal = original({
       project_id: 5,
       derived_from_project: true,
-      project_status_id: 9,
+      pipeline_status_id: 9,
       business_function_id: 9,
       product_category_id: 9,
     })
     const payload = buildUpdatePayload(values({ project_id: 5 }), linkedOriginal)
 
-    expect(payload).not.toHaveProperty('project_status_id')
+    expect(payload).not.toHaveProperty('pipeline_status_id')
     expect(payload).not.toHaveProperty('business_function_id')
     expect(payload).not.toHaveProperty('product_category_id')
   })
 
   it('diffs the 3 classification fields normally when the campaign stays standalone', () => {
-    const payload = buildUpdatePayload(values({ project_status_id: 8 }), original())
-    expect(payload).toEqual({ project_status_id: 8 })
+    const payload = buildUpdatePayload(values({ pipeline_status_id: 8 }), original())
+    expect(payload).toEqual({ pipeline_status_id: 8 })
   })
 })
 

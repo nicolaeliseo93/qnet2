@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
  * For-select projection of a LeadStatus (GET /api/lead-statuses/for-select).
  *
  * Minimal by design (ADR 0011): label = name, no subtitle/avatar. Mirrors
- * ProjectStatusForSelectResource.
+ * PipelineStatusForSelectResource.
  *
  * @mixin LeadStatus
  */

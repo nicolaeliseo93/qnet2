@@ -144,7 +144,7 @@ function projectForSelectItem(overrides: {
       registry: { id: 11, label: 'Acme Srl' },
       source: { id: 21, label: 'Referral' },
       partner: { id: 31, label: 'Jane Partner' },
-      project_status: { id: 41, label: 'Active' },
+      pipeline_status: { id: 41, label: 'Active' },
       business_function: { id: 51, label: 'Marketing' },
       state: null,
       product_category: { id: 71, label: 'Hardware' },
@@ -180,8 +180,8 @@ function campaign(
     partner_id: null,
     partner: null,
     derived_from_project: false,
-    project_status_id: 1,
-    project_status: { id: 1, name: 'Active', color: 'blue' },
+    pipeline_status_id: 1,
+    pipeline_status: { id: 1, name: 'Active', color: 'blue' },
     business_function_id: 2,
     business_function: { id: 2, name: 'Sales' },
     country_id: 61,
@@ -260,7 +260,7 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
 
     await waitFor(() => expect(createCampaignMock).toHaveBeenCalledTimes(1))
     const payload = createCampaignMock.mock.calls[0][0] as Record<string, unknown>
-    expect(payload).not.toHaveProperty('project_status_id')
+    expect(payload).not.toHaveProperty('pipeline_status_id')
     expect(payload).not.toHaveProperty('business_function_id')
     expect(payload).not.toHaveProperty('product_category_id')
     expect(payload).not.toHaveProperty('country_id')

@@ -6,7 +6,7 @@ namespace App\Tables\LeadStatuses;
  * Declarative column/filter/action catalogue for the `lead-statuses` domain
  * (spec 0029). Extracted out of LeadStatusesTableDefinition (file-size split,
  * engineering.md §6): pure data (no logic), mirroring
- * ProjectStatusColumnCatalog. All four columns are real DB columns handled
+ * PipelineStatusColumnCatalog. All four columns are real DB columns handled
  * entirely by the generic engine — no derived column. `color` is deliberately
  * not sortable/filterable (a swatch value, not a meaningful ordering/filter
  * axis).

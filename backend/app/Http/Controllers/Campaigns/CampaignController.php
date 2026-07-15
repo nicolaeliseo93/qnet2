@@ -99,7 +99,7 @@ class CampaignController extends BaseApiController
 
     /**
      * DELETE /api/campaigns/{campaign} — delete a campaign (no delete-guard,
-     * unlike Projects/ProjectStatuses).
+     * unlike Projects/PipelineStatuses).
      */
     public function destroy(Campaign $campaign): JsonResponse
     {

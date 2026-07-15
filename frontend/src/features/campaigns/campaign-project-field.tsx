@@ -51,7 +51,7 @@ export function CampaignProjectField({ control, setValue, selected }: CampaignPr
 
   const applyProjectSelection = async (projectId: number | null) => {
     if (projectId === null) {
-      setValue('project_status_id', null, { shouldValidate: true, shouldDirty: true })
+      setValue('pipeline_status_id', null, { shouldValidate: true, shouldDirty: true })
       setValue('business_function_id', null, { shouldValidate: true, shouldDirty: true })
       setValue('product_category_id', null, { shouldValidate: true, shouldDirty: true })
       setValue('country_id', null, { shouldValidate: true, shouldDirty: true })
@@ -69,7 +69,7 @@ export function CampaignProjectField({ control, setValue, selected }: CampaignPr
     setValue('registry_id', meta.registry?.id ?? null, { shouldDirty: true })
     setValue('source_id', meta.source?.id ?? null, { shouldDirty: true })
     setValue('partner_id', meta.partner?.id ?? null, { shouldDirty: true })
-    setValue('project_status_id', meta.project_status.id, { shouldDirty: true, shouldValidate: true })
+    setValue('pipeline_status_id', meta.pipeline_status.id, { shouldDirty: true, shouldValidate: true })
     setValue('business_function_id', meta.business_function?.id ?? null, { shouldDirty: true })
     setValue('product_category_id', meta.product_category?.id ?? null, { shouldDirty: true })
 

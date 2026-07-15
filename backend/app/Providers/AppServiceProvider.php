@@ -21,10 +21,10 @@ use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\OperationalSite;
 use App\Models\PersonalData;
+use App\Models\PipelineStatus;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\Referent;
 use App\Models\ReferentType;
 use App\Models\Registry;
@@ -112,7 +112,7 @@ class AppServiceProvider extends ServiceProvider
             'registry' => Registry::class,
             'custom_field' => CustomFieldDefinition::class,
             'custom_field_option' => CustomFieldOption::class,
-            'project_status' => ProjectStatus::class,
+            'pipeline_status' => PipelineStatus::class,
             'project' => Project::class,
             'campaign' => Campaign::class,
             'lead' => Lead::class,

@@ -4,10 +4,10 @@ use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\Lead;
 use App\Models\OperationalSite;
+use App\Models\PipelineStatus;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
@@ -155,12 +155,12 @@ it('products: the currency averages are null on an empty catalogue (AC-005)', fu
 });
 
 it('campaigns: budget, generated leads and the effective project status split (AC-005)', function () {
-    $running = ProjectStatus::factory()->create(['name' => 'Running', 'color' => '#22c55e']);
-    $project = Project::factory()->create(['project_status_id' => $running->id]);
+    $running = PipelineStatus::factory()->create(['name' => 'Running', 'color' => '#22c55e']);
+    $project = Project::factory()->create(['pipeline_status_id' => $running->id]);
     $linked = Campaign::factory()->forProject($project)->create(['total_budget' => 500]);
 
-    $draft = ProjectStatus::factory()->create(['name' => 'Draft', 'color' => null]);
-    Campaign::factory()->create(['project_status_id' => $draft->id, 'total_budget' => 1000]);
+    $draft = PipelineStatus::factory()->create(['name' => 'Draft', 'color' => null]);
+    Campaign::factory()->create(['pipeline_status_id' => $draft->id, 'total_budget' => 1000]);
 
     Lead::factory()->count(2)->create(['campaign_id' => $linked->id]);
 
@@ -173,7 +173,7 @@ it('campaigns: budget, generated leads and the effective project status split (A
 
     // The project-linked campaign derives its status from the project (its own
     // column is null), so BOTH statuses must appear.
-    $byStatus = collect(statsWidget($widgets, 'by_project_status')['items'])->keyBy('label')->all();
+    $byStatus = collect(statsWidget($widgets, 'by_pipeline_status')['items'])->keyBy('label')->all();
     expect($byStatus)->toHaveCount(2)
         ->and($byStatus['Running'])->toMatchArray(['value' => 1, 'color' => '#22c55e'])
         ->and($byStatus['Draft'])->toMatchArray(['value' => 1, 'color' => null]);
@@ -185,11 +185,11 @@ it('campaigns: budget, generated leads and the effective project status split (A
  * remaining KPIs keep the same semantics.
  */
 it('projects: campaigns, project-reachable leads, allocated budget and status split (AC-005)', function () {
-    $running = ProjectStatus::factory()->create(['name' => 'Running', 'color' => '#22c55e']);
-    $draft = ProjectStatus::factory()->create(['name' => 'Draft', 'color' => null]);
+    $running = PipelineStatus::factory()->create(['name' => 'Running', 'color' => '#22c55e']);
+    $draft = PipelineStatus::factory()->create(['name' => 'Draft', 'color' => null]);
 
-    $project = Project::factory()->create(['project_status_id' => $running->id]);
-    Project::factory()->create(['project_status_id' => $draft->id]);
+    $project = Project::factory()->create(['pipeline_status_id' => $running->id]);
+    Project::factory()->create(['pipeline_status_id' => $draft->id]);
 
     $linked = Campaign::factory()->forProject($project)->create(['total_budget' => 500]);
     Lead::factory()->count(3)->create(['campaign_id' => $linked->id]);

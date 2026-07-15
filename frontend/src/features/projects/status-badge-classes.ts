@@ -1,5 +1,5 @@
 /**
- * Colored badge classes for the `project_status` color token, used by the
+ * Colored badge classes for the `pipeline_status` color token, used by the
  * card grid. Deliberately duplicates the identically-named map in
  * `column-renderers.tsx` (spec 0026 card grid vs. spec 0025 manual-code
  * modules were built concurrently on that file) rather than importing from

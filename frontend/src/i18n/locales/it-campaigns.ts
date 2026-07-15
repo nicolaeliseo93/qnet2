@@ -12,7 +12,7 @@ export const campaigns = {
     project: 'Progetto',
     name: 'Denominazione',
     registry: 'Cliente',
-    project_status: 'Stato',
+    pipeline_status: 'Stato',
     source: 'Fonte',
     country: 'Nazione',
     state: 'Regione',

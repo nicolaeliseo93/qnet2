@@ -49,7 +49,7 @@ it('200: field catalogue matches ProjectsAuthorization::fields(), in order (AC-0
 
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
     expect($keys)->toBe([
-        'code', 'name', 'description', 'registry_id', 'project_status_id', 'source_id',
+        'code', 'name', 'description', 'registry_id', 'pipeline_status_id', 'source_id',
         'business_function_id', 'country_id', 'state_id', 'province_id', 'city_id',
         'product_category_id', 'partner_id', 'start_date', 'end_date', 'total_budget', 'target_lead',
     ]);
@@ -67,7 +67,7 @@ it('200: create-context permissions.fields are editable when the actor may creat
         ->assertOk()
         ->assertJsonPath('permissions.fields.name.editable', true)
         ->assertJsonPath('permissions.fields.name.required', true)
-        ->assertJsonPath('permissions.fields.project_status_id.required', true);
+        ->assertJsonPath('permissions.fields.pipeline_status_id.required', true);
 });
 
 it('permissions.fields are readonly when the actor may not create', function () {

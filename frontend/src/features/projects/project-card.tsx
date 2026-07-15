@@ -32,7 +32,7 @@ function CardStat({ label, value }: { label: string; value: number | string }) {
  */
 export function ProjectCard({ project, onEdit }: ProjectCardProps) {
   const { t } = useTranslation()
-  const colorClass = project.project_status ? statusBadgeClassName(project.project_status.color) : undefined
+  const colorClass = project.pipeline_status ? statusBadgeClassName(project.pipeline_status.color) : undefined
 
   return (
     <Card className="gap-3 py-3">
@@ -40,9 +40,9 @@ export function ProjectCard({ project, onEdit }: ProjectCardProps) {
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-1">
             <span className="truncate font-mono text-xs text-muted-foreground">{project.code}</span>
-            {project.project_status ? (
+            {project.pipeline_status ? (
               <Badge variant="secondary" className={cn('w-fit', colorClass)}>
-                {project.project_status.name}
+                {project.pipeline_status.name}
               </Badge>
             ) : null}
           </div>

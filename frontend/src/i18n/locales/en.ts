@@ -21,7 +21,7 @@ import { customFields } from './en-custom-fields'
 import { sectors } from './en-sectors'
 import { sources } from './en-sources'
 import { tags } from './en-tags'
-import { projectStatuses } from './en-project-statuses'
+import { pipelineStatuses } from './en-pipeline-statuses'
 import { projects } from './en-projects'
 import { campaigns } from './en-campaigns'
 import { leads } from './en-leads'
@@ -84,7 +84,8 @@ export const en = {
     campaigns: 'Campaigns',
     leads: 'Leads',
     leadStatuses: 'Lead Statuses',
-    projectStatuses: 'Project Statuses',
+    pipelineStatuses: 'Project/Campaign Statuses',
+    marketingLeads: 'Marketing & Leads',
     management: 'Management',
     configuration: 'Configuration',
     administration: 'Administration',
@@ -436,7 +437,7 @@ export const en = {
   sources,
   tags,
   projects: { ...projects, stats: moduleStats.projects },
-  projectStatuses,
+  pipelineStatuses,
   campaigns: { ...campaigns, stats: moduleStats.campaigns },
   leadStatuses,
   leads: { ...leads, stats: moduleStats.leads },

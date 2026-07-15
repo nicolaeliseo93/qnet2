@@ -65,14 +65,14 @@ class ProjectsStatsDefinition extends AbstractStatsDefinition
                 format: StatFormat::Currency,
                 icon: 'wallet',
             ),
-            // `project_statuses` is a lookup table, not an enum: group on the
+            // `pipeline_statuses` is a lookup table, not an enum: group on the
             // relation and take its own name/color as the item's presentation.
             $this->distribution(
                 key: 'by_status',
                 items: Aggregates::topRelated(
                     query: DB::table(self::TABLE),
-                    foreignKey: self::TABLE.'.project_status_id',
-                    relatedTable: 'project_statuses',
+                    foreignKey: self::TABLE.'.pipeline_status_id',
+                    relatedTable: 'pipeline_statuses',
                     labelColumn: 'name',
                     limit: self::TOP_LIMIT,
                     colorColumn: 'color',

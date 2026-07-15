@@ -9,15 +9,15 @@ namespace App\Tables\Campaigns;
  *
  * `code`/`name`/`start_date`/`end_date`/`total_budget`/`target_lead`/
  * `created_at` are real DB columns handled entirely by the generic engine.
- * `project`/`registry`/`project_status`/`source` have no real column of
+ * `project`/`registry`/`pipeline_status`/`source` have no real column of
  * their own and are DERIVED, resolved by CampaignsTableDefinition — only
- * `project` is sortable (a correlated subquery); `registry`/`project_status`/
+ * `project` is sortable (a correlated subquery); `registry`/`pipeline_status`/
  * `source` are filterable-only (spec 0023 table_definitions).
  *
  * `country`/`state`/`province`/`city`/`geo_scope` (spec 0027, BR-5/D-2) are
  * DISPLAY-ONLY: neither sortable nor filterable. The MERGED (campaign-or-
  * project) geo value is not a plain join like the other derived columns —
- * the same pragmatic choice already made for `project_status` (AC-032),
+ * the same pragmatic choice already made for `pipeline_status` (AC-032),
  * just without that column's set-filter/sort support.
  */
 final class CampaignColumnCatalog
@@ -50,7 +50,7 @@ final class CampaignColumnCatalog
                 'searchable' => true,
             ],
             self::derivedColumn('registry', 'campaigns.columns.registry'),
-            self::derivedColumn('project_status', 'campaigns.columns.project_status'),
+            self::derivedColumn('pipeline_status', 'campaigns.columns.pipeline_status'),
             self::derivedColumn('source', 'campaigns.columns.source'),
             self::displayOnlyColumn('country', 'campaigns.columns.country'),
             self::displayOnlyColumn('state', 'campaigns.columns.state'),
@@ -128,7 +128,7 @@ final class CampaignColumnCatalog
     /**
      * A COMPUTED, DISPLAY-ONLY column (spec 0027): the merged geo values and
      * `geo_scope` have no real column/relation of their own to sort or
-     * filter on, mirroring ProjectStatusColumnCatalog's `color`.
+     * filter on, mirroring PipelineStatusColumnCatalog's `color`.
      *
      * @return array<string, mixed>
      */

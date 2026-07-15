@@ -8,7 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Validates the query for GET /api/lead-statuses/for-select (ADR 0011),
- * mirroring ProjectStatusForSelectRequest.
+ * mirroring PipelineStatusForSelectRequest.
  *
  * Authorization is intentionally NOT handled here (it stays in the controller
  * via authorize('viewAny', LeadStatus::class)). Pagination bounds mirror

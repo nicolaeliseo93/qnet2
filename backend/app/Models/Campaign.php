@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * Campaign entity (spec 0023): optionally linked to a Project via
  * `project_id`. `registry_id`/`source_id`/`partner_id` are ALWAYS the
- * campaign's own. `project_status_id`/`business_function_id`/
+ * campaign's own. `pipeline_status_id`/`business_function_id`/
  * `product_category_id` are the DERIVED set (BR-2): forced NULL by the
  * service when linked to a project (their effective value is then read
  * through `project`), required when standalone. `code` (CMP-0001...) is
@@ -34,7 +34,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'registry_id',
     'source_id',
     'partner_id',
-    'project_status_id',
+    'pipeline_status_id',
     'business_function_id',
     'country_id',
     'state_id',
@@ -95,9 +95,9 @@ class Campaign extends BaseModel
      * project, never the effective (own-or-derived) one, which is resolved
      * read-side by the service/resource.
      */
-    public function projectStatus(): BelongsTo
+    public function pipelineStatus(): BelongsTo
     {
-        return $this->belongsTo(ProjectStatus::class);
+        return $this->belongsTo(PipelineStatus::class);
     }
 
     public function businessFunction(): BelongsTo

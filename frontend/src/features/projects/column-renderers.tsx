@@ -8,7 +8,7 @@ import { DateTimeCell } from '@/features/table/cell-renderers'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 import { GeoScopeBadge } from '@/features/geo/geo-scope-badge'
 import type { GeoScope } from '@/features/geo/geo-scope'
-import type { ProjectRelationRef, ProjectStatusRef } from '@/features/projects/types'
+import type { ProjectRelationRef, PipelineStatusRef } from '@/features/projects/types'
 
 /** Em-dash placeholder for an empty/unknown cell value. */
 function EmptyCell() {
@@ -23,7 +23,7 @@ function EmptyCell() {
  * Colored badge classes mirroring `BADGE_COLOR_CLASSES` in
  * `features/table/cell-renderers.tsx` — the same "backend color token → badge
  * classes" mapping duplicated per-domain in this codebase (see
- * `features/custom-fields/badge-color-tokens.ts`), since only `project_status`
+ * `features/custom-fields/badge-color-tokens.ts`), since only `pipeline_status`
  * here needs the full pill (every other domain color use is a dot swatch or a
  * grid-owned enum badge).
  */
@@ -53,9 +53,9 @@ function RelationCell({ value }: ICellRendererParams) {
   return <span>{relation.name}</span>
 }
 
-/** Renders the `project_status` column as a colored badge (backend `#[Color]` token). */
-function ProjectStatusCell({ value }: ICellRendererParams) {
-  const status = value as ProjectStatusRef | null | undefined
+/** Renders the `pipeline_status` column as a colored badge (backend `#[Color]` token). */
+function PipelineStatusCell({ value }: ICellRendererParams) {
+  const status = value as PipelineStatusRef | null | undefined
   if (!status) {
     return <EmptyCell />
   }
@@ -114,7 +114,7 @@ function GeoScopeCell({ value }: ICellRendererParams) {
  */
 export const projectColumnRenderers: TableRendererMap = {
   registry: (params) => <RelationCell {...params} />,
-  project_status: (params) => <ProjectStatusCell {...params} />,
+  pipeline_status: (params) => <PipelineStatusCell {...params} />,
   source: (params) => <RelationCell {...params} />,
   business_function: (params) => <RelationCell {...params} />,
   country: (params) => <RelationCell {...params} />,

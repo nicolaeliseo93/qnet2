@@ -28,7 +28,7 @@ final readonly class CreateProjectData
     public function __construct(
         public ?string $code,
         public string $name,
-        public int $projectStatusId,
+        public int $pipelineStatusId,
         public ?string $description,
         public ?int $registryId,
         public ?int $sourceId,
@@ -55,7 +55,7 @@ final readonly class CreateProjectData
         return new self(
             code: self::nullIfEmpty($data['code'] ?? null),
             name: (string) $data['name'],
-            projectStatusId: (int) $data['project_status_id'],
+            pipelineStatusId: (int) $data['pipeline_status_id'],
             description: $data['description'] ?? null,
             registryId: isset($data['registry_id']) ? (int) $data['registry_id'] : null,
             sourceId: isset($data['source_id']) ? (int) $data['source_id'] : null,
@@ -93,7 +93,7 @@ final readonly class CreateProjectData
     {
         return [
             'name' => $this->name,
-            'project_status_id' => $this->projectStatusId,
+            'pipeline_status_id' => $this->pipelineStatusId,
             'description' => $this->description,
             'registry_id' => $this->registryId,
             'source_id' => $this->sourceId,

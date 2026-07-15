@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Gate;
  * page does not need.
  *
  * Relies on the caller (ProjectService::index) having eager-loaded
- * project_status and the campaigns_count/leads_count aggregates via
+ * pipeline_status and the campaigns_count/leads_count aggregates via
  * withCount, so resolving this never N+1s.
  *
  * @mixin Project
@@ -39,8 +39,8 @@ class ProjectCardResource extends JsonResource
             'code' => $this->code,
             'name' => $this->name,
             'description' => $this->description,
-            'project_status' => $this->projectStatus !== null
-                ? ['id' => $this->projectStatus->id, 'name' => $this->projectStatus->name, 'color' => $this->projectStatus->color]
+            'pipeline_status' => $this->pipelineStatus !== null
+                ? ['id' => $this->pipelineStatus->id, 'name' => $this->pipelineStatus->name, 'color' => $this->pipelineStatus->color]
                 : null,
             'geo_scope' => $geoScope?->value,
             'geo_label' => $this->geoLabel($geoScope),

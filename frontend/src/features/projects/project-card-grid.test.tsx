@@ -28,7 +28,7 @@ function buildCard(overrides: Partial<ProjectCard> = {}): ProjectCard {
     code: 'PRJ-0001',
     name: 'Alpha project',
     description: null,
-    project_status: { id: 1, name: 'Active', color: 'green' },
+    pipeline_status: { id: 1, name: 'Active', color: 'green' },
     campaigns_count: 3,
     leads_count: 20,
     geo_scope: 'country',

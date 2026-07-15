@@ -14,7 +14,7 @@ use Throwable;
 /**
  * GET /api/lead-statuses/for-select — minimal, searchable, paginated lead
  * status list feeding entity-backed selects (spec 0029, ADR 0011 the
- * for-select standard), mirroring ProjectStatusForSelectController.
+ * for-select standard), mirroring PipelineStatusForSelectController.
  *
  * Thin invokable controller: validation (LeadStatusForSelectRequest),
  * server-side authorization (lead-statuses.viewAny via LeadStatusPolicy),

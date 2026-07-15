@@ -9,7 +9,7 @@ import { GEO_LEVEL_FIELDS, GEO_LEVELS, type GeoFieldName } from '@/features/camp
 
 /** The 3 BR-2 classification fields, never sent when the campaign is linked to a project. */
 const DERIVED_FIELDS = [
-  'project_status_id',
+  'pipeline_status_id',
   'business_function_id',
   'product_category_id',
 ] as const
@@ -59,7 +59,7 @@ export function buildCreatePayload(values: CampaignFormValues): CreateCampaignPa
       ? {}
       : {
           // Validated non-null by the schema's required-when-standalone superRefine before submit.
-          project_status_id: values.project_status_id as number,
+          pipeline_status_id: values.pipeline_status_id as number,
           business_function_id: values.business_function_id,
           product_category_id: values.product_category_id,
         }),

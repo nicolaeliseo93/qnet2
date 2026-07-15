@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * Lead status lookup entity (spec 0029): a full-CRUD classification
  * (name/color/sort_order) describing a Lead's working state. `name` is
- * unique (BR-2/D-4), unlike ProjectStatus.
+ * unique (BR-2/D-4), unlike PipelineStatus.
  */
 #[Fillable(['name', 'color', 'sort_order'])]
 class LeadStatus extends BaseModel

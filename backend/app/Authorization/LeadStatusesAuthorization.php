@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
  *
  * No contextual rules: every field's ceiling is simply visible+editable when
  * the actor may write (create/update), else visible+readonly, mirroring
- * ProjectStatusesAuthorization.
+ * PipelineStatusesAuthorization.
  */
 class LeadStatusesAuthorization extends AbstractResourceAuthorization
 {

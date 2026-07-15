@@ -22,12 +22,12 @@ class CampaignsStatsDefinition extends AbstractStatsDefinition
 
     /**
      * The campaign's EFFECTIVE project status: a project-linked campaign nulls
-     * its own `project_status_id` and derives it from the project (spec 0023,
+     * its own `pipeline_status_id` and derives it from the project (spec 0023,
      * BR-2), so grouping on the raw column alone would drop every linked
      * campaign from the breakdown. Static SQL built from column names only —
      * no request input reaches it.
      */
-    private const string EFFECTIVE_STATUS_ID = 'COALESCE(campaigns.project_status_id, projects.project_status_id)';
+    private const string EFFECTIVE_STATUS_ID = 'COALESCE(campaigns.pipeline_status_id, projects.pipeline_status_id)';
 
     public function domain(): string
     {
@@ -63,12 +63,12 @@ class CampaignsStatsDefinition extends AbstractStatsDefinition
             // spec 0024 BR-1), so the campaign-generated leads ARE all leads.
             $this->stat('generated_leads', Lead::query()->count(), icon: 'users'),
             $this->distribution(
-                key: 'by_project_status',
+                key: 'by_pipeline_status',
                 items: Aggregates::topRelated(
                     query: DB::table(self::TABLE)
                         ->leftJoin('projects', 'projects.id', '=', self::TABLE.'.project_id'),
                     foreignKey: DB::raw(self::EFFECTIVE_STATUS_ID),
-                    relatedTable: 'project_statuses',
+                    relatedTable: 'pipeline_statuses',
                     labelColumn: 'name',
                     limit: self::TOP_LIMIT,
                     colorColumn: 'color',

@@ -9,10 +9,10 @@ use App\Authorization\CustomFieldsAuthorization;
 use App\Authorization\LeadsAuthorization;
 use App\Authorization\LeadStatusesAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
+use App\Authorization\PipelineStatusesAuthorization;
 use App\Authorization\ProductCategoriesAuthorization;
 use App\Authorization\ProductsAuthorization;
 use App\Authorization\ProjectsAuthorization;
-use App\Authorization\ProjectStatusesAuthorization;
 use App\Authorization\ReferentsAuthorization;
 use App\Authorization\ReferentTypesAuthorization;
 use App\Authorization\RegistriesAuthorization;
@@ -60,7 +60,7 @@ return [
         'products' => ProductsAuthorization::class,
         'sources' => SourcesAuthorization::class,
         'tags' => TagsAuthorization::class,
-        'project-statuses' => ProjectStatusesAuthorization::class,
+        'pipeline-statuses' => PipelineStatusesAuthorization::class,
         'projects' => ProjectsAuthorization::class,
         'campaigns' => CampaignsAuthorization::class,
         'leads' => LeadsAuthorization::class,

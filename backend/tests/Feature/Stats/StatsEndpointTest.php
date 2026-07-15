@@ -115,7 +115,7 @@ it('emits exactly the i18n label keys the frontend translates (AC-001)', functio
     ['products', ['total', 'averagePrice', 'averageCost', 'averageMargin', 'byType', 'byCategory']],
     ['product-categories', ['total', 'rootCategories', 'withProducts', 'inheritsAttributes', 'byProducts']],
     ['projects', ['total', 'campaigns', 'leads', 'allocatedBudget', 'byStatus', 'trend']],
-    ['campaigns', ['total', 'linkedToProject', 'totalBudget', 'generatedLeads', 'byProjectStatus', 'trend']],
+    ['campaigns', ['total', 'linkedToProject', 'totalBudget', 'generatedLeads', 'byPipelineStatus', 'trend']],
     ['leads', ['total', 'assigned', 'withSource', 'withSite', 'bySource', 'byOperator', 'trend']],
     ['business-functions', ['total', 'businessUnits', 'businessServices', 'withManager', 'byUsers']],
     ['users', ['total', 'active', 'inactive', 'managers', 'byRole', 'byBusinessFunction', 'trend']],

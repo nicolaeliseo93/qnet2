@@ -3,12 +3,12 @@
 use App\Http\Controllers\Campaigns\CampaignController;
 use App\Http\Controllers\Campaigns\CampaignForSelectController;
 use App\Http\Controllers\Geo\StateForSelectController;
+use App\Http\Controllers\PipelineStatuses\PipelineStatusController;
+use App\Http\Controllers\PipelineStatuses\PipelineStatusForSelectController;
 use App\Http\Controllers\ProductCategories\ProductCategoryForSelectController;
 use App\Http\Controllers\Projects\ProjectController;
 use App\Http\Controllers\Projects\ProjectForSelectController;
 use App\Http\Controllers\Projects\ProjectSummaryController;
-use App\Http\Controllers\ProjectStatuses\ProjectStatusController;
-use App\Http\Controllers\ProjectStatuses\ProjectStatusForSelectController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,20 +30,20 @@ use Illuminate\Support\Facades\Route;
 | wildcard, exactly as if declared inline.
 */
 
-// Project statuses CRUD (BR-4 delete-guard lives in ProjectStatusService).
-// Authorization (project-statuses.view/create/update/delete) is enforced
-// server-side in ProjectStatusController via ProjectStatusPolicy.
+// Project statuses CRUD (BR-4 delete-guard lives in PipelineStatusService).
+// Authorization (pipeline-statuses.view/create/update/delete) is enforced
+// server-side in PipelineStatusController via PipelineStatusPolicy.
 Route::middleware('throttle:60,1')->group(function () {
     // Minimal searchable/paginated list for entity-backed selects (ADR 0011).
-    // Declared ABOVE project-statuses/{projectStatus} so the literal
+    // Declared ABOVE pipeline-statuses/{pipelineStatus} so the literal
     // `for-select` segment wins over the bound wildcard. Gated by
-    // project-statuses.viewAny server-side in ProjectStatusForSelectController.
-    Route::get('project-statuses/for-select', ProjectStatusForSelectController::class);
+    // pipeline-statuses.viewAny server-side in PipelineStatusForSelectController.
+    Route::get('pipeline-statuses/for-select', PipelineStatusForSelectController::class);
 
-    Route::get('project-statuses/{projectStatus}', [ProjectStatusController::class, 'show']);
-    Route::post('project-statuses', [ProjectStatusController::class, 'store']);
-    Route::match(['put', 'patch'], 'project-statuses/{projectStatus}', [ProjectStatusController::class, 'update']);
-    Route::delete('project-statuses/{projectStatus}', [ProjectStatusController::class, 'destroy']);
+    Route::get('pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'show']);
+    Route::post('pipeline-statuses', [PipelineStatusController::class, 'store']);
+    Route::match(['put', 'patch'], 'pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'update']);
+    Route::delete('pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'destroy']);
 });
 
 // Projects CRUD (BR-1 code generation, BR-5 delete-guard, BR-7 budget

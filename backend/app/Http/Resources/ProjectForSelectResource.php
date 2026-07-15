@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 /**
  * For-select projection of a Project (GET /api/projects/for-select, spec
  * 0023). Label is "{code} — {name}"; `meta` carries the campaign-form
- * defaults (registry/source/partner/project_status/business_function/state/
+ * defaults (registry/source/partner/pipeline_status/business_function/state/
  * product_category, each {id, label} or null) plus the BR-7 budget figures,
  * so selecting a project in the Campaign form precompiles it with no extra
  * request (ADR 0011).
@@ -34,7 +34,7 @@ class ProjectForSelectResource extends ForSelectResource
                 'registry' => $this->summarize($this->registry),
                 'source' => $this->summarize($this->source),
                 'partner' => $this->summarize($this->partner),
-                'project_status' => $this->summarize($this->projectStatus),
+                'pipeline_status' => $this->summarize($this->pipelineStatus),
                 'business_function' => $this->summarize($this->businessFunction),
                 'state' => $this->summarize($this->state),
                 'product_category' => $this->summarize($this->productCategory),

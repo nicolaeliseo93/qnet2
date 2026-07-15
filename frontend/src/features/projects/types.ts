@@ -15,7 +15,7 @@ export interface ProjectRelationRef {
 }
 
 /** Hydrated projection of the project's status, carrying its display color token. */
-export interface ProjectStatusRef {
+export interface PipelineStatusRef {
   id: number
   name: string
   color: string | null
@@ -36,8 +36,8 @@ export interface ProjectDetail {
   description: string | null
   registry_id: number | null
   registry: ProjectRelationRef | null
-  project_status_id: number
-  project_status: ProjectStatusRef
+  pipeline_status_id: number
+  pipeline_status: PipelineStatusRef
   source_id: number | null
   source: ProjectRelationRef | null
   business_function_id: number | null
@@ -89,7 +89,7 @@ export interface ProjectDetailWithPermissions extends ProjectDetail {
 export interface CreateProjectPayload {
   code?: string
   name: string
-  project_status_id: number
+  pipeline_status_id: number
   description?: string | null
   registry_id?: number | null
   source_id?: number | null
@@ -126,14 +126,14 @@ export interface ProjectCardPermissions {
 /**
  * Single project card as returned by `GET /projects` (spec 0026), the plain
  * index endpoint powering the card grid. A different payload than
- * `ProjectDetail`/the AG Grid `TableRow`: no relations besides `project_status`.
+ * `ProjectDetail`/the AG Grid `TableRow`: no relations besides `pipeline_status`.
  */
 export interface ProjectCard {
   id: number
   code: string
   name: string
   description: string | null
-  project_status: ProjectStatusRef | null
+  pipeline_status: PipelineStatusRef | null
   campaigns_count: number
   leads_count: number
   /** Finest non-null geo level, derived server-side (spec 0027 D-2). Never re-derived here. */
@@ -153,5 +153,5 @@ export interface ProjectCardListParams {
   search?: string
   offset?: number
   limit?: number
-  project_status_id?: number
+  pipeline_status_id?: number
 }

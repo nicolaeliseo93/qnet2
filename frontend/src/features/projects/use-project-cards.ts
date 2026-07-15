@@ -14,7 +14,7 @@ import type { ProjectCardListParams } from '@/features/projects/types'
  * returns `undefined` once every row is loaded, which sets `hasNextPage` to
  * `false`.
  */
-export function useProjectCards(filters: Pick<ProjectCardListParams, 'search' | 'project_status_id'> = {}) {
+export function useProjectCards(filters: Pick<ProjectCardListParams, 'search' | 'pipeline_status_id'> = {}) {
   return useInfiniteQuery({
     queryKey: projectCardsQueryKey(filters),
     queryFn: ({ pageParam }) =>

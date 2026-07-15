@@ -26,13 +26,13 @@ it('navigation: the leads node only shows with leads.view', function () {
 
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'marketing-leads'))
         ->not->toContain('leads');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('leads.view');
     Sanctum::actingAs($withView);
-    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'marketing-leads'))
         ->toContain('leads');
 });
 

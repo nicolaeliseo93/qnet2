@@ -26,7 +26,7 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
     'name',
     'description',
     'registry_id',
-    'project_status_id',
+    'pipeline_status_id',
     'source_id',
     'business_function_id',
     'country_id',
@@ -63,9 +63,9 @@ class Project extends BaseModel
         return $this->belongsTo(Registry::class);
     }
 
-    public function projectStatus(): BelongsTo
+    public function pipelineStatus(): BelongsTo
     {
-        return $this->belongsTo(ProjectStatus::class);
+        return $this->belongsTo(PipelineStatus::class);
     }
 
     public function source(): BelongsTo

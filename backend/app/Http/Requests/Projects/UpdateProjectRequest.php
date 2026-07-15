@@ -43,7 +43,7 @@ class UpdateProjectRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'required', 'string', 'max:191'],
-            'project_status_id' => ['sometimes', 'required', 'integer', Rule::exists('project_statuses', 'id')],
+            'pipeline_status_id' => ['sometimes', 'required', 'integer', Rule::exists('pipeline_statuses', 'id')],
             'description' => ['sometimes', 'nullable', 'string'],
             'registry_id' => ['sometimes', 'nullable', 'integer', Rule::exists('registries', 'id')],
             'source_id' => ['sometimes', 'nullable', 'integer', Rule::exists('sources', 'id')],

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Form, FormControl } from '@/components/ui/form'
 import { MetaField } from '@/features/authorization/MetaField'
-import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/project-statuses/for-select-api'
+import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-statuses/for-select-api'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
@@ -156,12 +156,12 @@ export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBody
           >
             <CampaignRelationField
               control={form.control}
-              name="project_status_id"
-              metaKey="project_status_id"
+              name="pipeline_status_id"
+              metaKey="pipeline_status_id"
               label={t('campaigns.form.status')}
               resource={PROJECT_STATUSES_FOR_SELECT_RESOURCE}
               searchPlaceholder={t('campaigns.form.statusSearch')}
-              selected={original?.project_status ?? null}
+              selected={original?.pipeline_status ?? null}
               forceDisabled={isLinked}
             />
 

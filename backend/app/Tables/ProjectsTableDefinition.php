@@ -16,13 +16,13 @@ use Illuminate\Support\Facades\Gate;
  *
  * Real columns (code, name, start_date, end_date, total_budget, target_lead,
  * created_at) are handled entirely by the generic engine. The 10
- * classification/geo FKs (registry, project_status, source,
+ * classification/geo FKs (registry, pipeline_status, source,
  * business_function, country, state, province, city, product_category,
  * partner) have no real column of their own — each is DERIVED against the
  * related row's `name`, resolved here generically via DERIVED_RELATIONS: a
  * `whereHas` set filter (allow-listed columns only, never orderByRaw/
  * whereRaw on raw input — backend.md §8), a correlated subquery sort
- * (registry/project_status only, per the column catalogue) and a
+ * (registry/pipeline_status only, per the column catalogue) and a
  * `SELECT DISTINCT` for the Excel-like filter list, mirroring
  * ReferentsTableDefinition's `referent_type` / ProductsTableDefinition's
  * `category`. `geo_scope` (spec 0027, D-2) is NOT in DERIVED_RELATIONS: it
@@ -47,7 +47,7 @@ class ProjectsTableDefinition extends AbstractTableDefinition
      */
     private const array DERIVED_RELATIONS = [
         'registry' => ['relation' => 'registry', 'table' => 'registries', 'fk' => 'registry_id'],
-        'project_status' => ['relation' => 'projectStatus', 'table' => 'project_statuses', 'fk' => 'project_status_id'],
+        'pipeline_status' => ['relation' => 'pipelineStatus', 'table' => 'pipeline_statuses', 'fk' => 'pipeline_status_id'],
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
         'business_function' => ['relation' => 'businessFunction', 'table' => 'business_functions', 'fk' => 'business_function_id'],
         'country' => ['relation' => 'country', 'table' => 'countries', 'fk' => 'country_id'],
@@ -233,7 +233,7 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     /**
      * ORDER BY a derived column's related-row name via a correlated
      * subquery, so sorting never needs a row-multiplying JOIN on the main
-     * query. Only `registry`/`project_status` are declared sortable (spec
+     * query. Only `registry`/`pipeline_status` are declared sortable (spec
      * 0023 table_definitions); the other 5 derived columns are never asked
      * to sort (not in sortableColumnIds()).
      *

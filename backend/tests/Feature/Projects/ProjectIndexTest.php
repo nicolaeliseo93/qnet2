@@ -2,8 +2,8 @@
 
 use App\Models\Campaign;
 use App\Models\Lead;
+use App\Models\PipelineStatus;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -103,14 +103,14 @@ it('index: search matches code OR name (AC-002)', function () {
     expect($ids->all())->toBe([$matchByCode->id]);
 });
 
-it('index: project_status_id filters by status (AC-002)', function () {
+it('index: pipeline_status_id filters by status (AC-002)', function () {
     $actor = projectUserWith(['viewAny']);
-    $status = ProjectStatus::factory()->create();
-    $matching = Project::factory()->create(['project_status_id' => $status->id]);
+    $status = PipelineStatus::factory()->create();
+    $matching = Project::factory()->create(['pipeline_status_id' => $status->id]);
     Project::factory()->create();
     Sanctum::actingAs($actor);
 
-    $ids = collect($this->getJson("/api/projects?project_status_id={$status->id}")->assertOk()->json('items'))->pluck('id');
+    $ids = collect($this->getJson("/api/projects?pipeline_status_id={$status->id}")->assertOk()->json('items'))->pluck('id');
     expect($ids->all())->toBe([$matching->id]);
 });
 

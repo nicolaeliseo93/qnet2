@@ -16,7 +16,7 @@ use Illuminate\Validation\Rule;
  * via authorize('create', LeadStatus::class)). EnforcesFieldPermissions
  * (spec 0004) additionally rejects any submitted field the actor cannot edit
  * (create-context, model = null). `name` is unique (BR-2/D-4), unlike
- * StoreProjectStatusRequest.
+ * StorePipelineStatusRequest.
  */
 class StoreLeadStatusRequest extends FormRequest
 {

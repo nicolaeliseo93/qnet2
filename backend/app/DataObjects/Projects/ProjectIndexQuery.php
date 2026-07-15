@@ -12,7 +12,7 @@ namespace App\DataObjects\Projects;
  *
  * - `search`: matches project `code` OR `name` (null/empty = no filter).
  * - `offset` / `limit`: pagination (limit capped by the FormRequest at 60).
- * - `projectStatusId`: exact status filter, null = no filter.
+ * - `pipelineStatusId`: exact status filter, null = no filter.
  */
 final readonly class ProjectIndexQuery
 {
@@ -20,7 +20,7 @@ final readonly class ProjectIndexQuery
         public ?string $search,
         public int $offset,
         public int $limit,
-        public ?int $projectStatusId,
+        public ?int $pipelineStatusId,
     ) {}
 
     /**
@@ -36,7 +36,7 @@ final readonly class ProjectIndexQuery
             search: ($search === null || $search === '') ? null : $search,
             offset: (int) ($data['offset'] ?? 0),
             limit: (int) ($data['limit'] ?? 12),
-            projectStatusId: isset($data['project_status_id']) ? (int) $data['project_status_id'] : null,
+            pipelineStatusId: isset($data['pipeline_status_id']) ? (int) $data['pipeline_status_id'] : null,
         );
     }
 

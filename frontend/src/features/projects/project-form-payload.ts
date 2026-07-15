@@ -18,7 +18,7 @@ export function buildCreatePayload(values: ProjectFormValues): CreateProjectPayl
     ...(code ? { code } : {}),
     name: values.name,
     // Validated non-null by the schema's required-value superRefine before submit.
-    project_status_id: values.project_status_id as number,
+    pipeline_status_id: values.pipeline_status_id as number,
     description: values.description,
     registry_id: values.registry_id,
     source_id: values.source_id,
@@ -51,8 +51,8 @@ export function buildUpdatePayload(
   if (values.name !== original.name) {
     payload.name = values.name
   }
-  if (values.project_status_id !== original.project_status_id) {
-    payload.project_status_id = values.project_status_id as number
+  if (values.pipeline_status_id !== original.pipeline_status_id) {
+    payload.pipeline_status_id = values.pipeline_status_id as number
   }
   if (values.description !== original.description) {
     payload.description = values.description

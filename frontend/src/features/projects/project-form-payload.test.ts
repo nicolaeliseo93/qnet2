@@ -14,7 +14,7 @@ function values(overrides: Partial<ProjectFormValues> = {}): ProjectFormValues {
     name: 'Acme rollout',
     description: null,
     registry_id: null,
-    project_status_id: 3,
+    pipeline_status_id: 3,
     source_id: null,
     business_function_id: null,
     country_id: 1,
@@ -40,8 +40,8 @@ function original(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
     description: null,
     registry_id: null,
     registry: null,
-    project_status_id: 3,
-    project_status: { id: 3, name: 'Active', color: 'blue' },
+    pipeline_status_id: 3,
+    pipeline_status: { id: 3, name: 'Active', color: 'blue' },
     source_id: null,
     source: null,
     business_function_id: null,
@@ -77,7 +77,7 @@ describe('buildCreatePayload', () => {
 
     expect(payload).toEqual({
       name: 'Acme rollout',
-      project_status_id: 3,
+      pipeline_status_id: 3,
       description: null,
       registry_id: null,
       source_id: null,
@@ -127,9 +127,9 @@ describe('buildUpdatePayload', () => {
     expect(buildUpdatePayload(values({ name: 'Renamed' }), original())).toEqual({ name: 'Renamed' })
   })
 
-  it('includes only the changed project_status_id', () => {
-    expect(buildUpdatePayload(values({ project_status_id: 9 }), original())).toEqual({
-      project_status_id: 9,
+  it('includes only the changed pipeline_status_id', () => {
+    expect(buildUpdatePayload(values({ pipeline_status_id: 9 }), original())).toEqual({
+      pipeline_status_id: 9,
     })
   })
 

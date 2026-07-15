@@ -5,9 +5,9 @@ namespace Database\Seeders;
 use App\DataObjects\Projects\CreateProjectData;
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
+use App\Models\PipelineStatus;
 use App\Models\ProductCategory;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\Source;
@@ -33,7 +33,7 @@ use Illuminate\Support\Collection;
  * gestionale's demo data is Italian-flavoured (it_IT faker across the other
  * seeders).
  *
- * Depends on DemoProjectStatusSeeder, DemoRegistrySeeder, DemoSourceSeeder,
+ * Depends on DemoPipelineStatusSeeder, DemoRegistrySeeder, DemoSourceSeeder,
  * DemoBusinessFunctionSeeder, DemoProductCatalogSeeder and DemoReferentSeeder
  * — must run after all of them. Idempotent: existing campaigns and projects
  * are cleared first (campaigns before projects — `campaigns.project_id` is
@@ -66,7 +66,7 @@ class DemoProjectSeeder extends Seeder
         $faker = FakerFactory::create('it_IT');
         $faker->seed(20260713);
 
-        $statuses = ProjectStatus::query()->orderBy('sort_order')->get();
+        $statuses = PipelineStatus::query()->orderBy('sort_order')->get();
         $registries = Registry::query()->orderBy('id')->get();
         $sources = Source::query()->orderBy('name')->get();
         $businessFunctions = BusinessFunction::query()->orderBy('name')->get();
@@ -75,7 +75,7 @@ class DemoProjectSeeder extends Seeder
         $states = $this->italianStates();
 
         if ($statuses->isEmpty()) {
-            // No status to satisfy the NOT NULL project_status_id (BR-4/D-5):
+            // No status to satisfy the NOT NULL pipeline_status_id (BR-4/D-5):
             // nothing sensible to seed without it.
             return;
         }
@@ -86,7 +86,7 @@ class DemoProjectSeeder extends Seeder
     }
 
     /**
-     * @param  Collection<int, ProjectStatus>  $statuses
+     * @param  Collection<int, PipelineStatus>  $statuses
      * @param  Collection<int, Registry>  $registries
      * @param  Collection<int, Source>  $sources
      * @param  Collection<int, BusinessFunction>  $businessFunctions
@@ -125,7 +125,7 @@ class DemoProjectSeeder extends Seeder
         $data = new CreateProjectData(
             code: null,
             name: $faker->unique()->catchPhrase(),
-            projectStatusId: $statuses[$index % $statuses->count()]->id,
+            pipelineStatusId: $statuses[$index % $statuses->count()]->id,
             description: $faker->boolean(60) ? $faker->paragraph() : null,
             registryId: $this->pick($registries, $index)?->id,
             sourceId: $this->pick($sources, $index)?->id,

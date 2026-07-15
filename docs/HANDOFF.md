@@ -2,6 +2,48 @@
 
 > Injected at session start. Update at every green state.
 
+## RENAME + NAV — `project-statuses` -> `pipeline-statuses` + gruppo "Marketing e Lead" (2026-07-15) — GREEN (not committed)
+
+Richiesta utente: raggruppare progetti/campagne/lead + tabelle di contorno sotto un item padre
+"Marketing e Lead"; e RINOMINARE `project-statuses` perche' lo stato e' condiviso da PROGETTI E
+CAMPAGNE (`pipeline_status_id` su ENTRAMBE le tabelle), non solo progetti. Decisioni utente:
+rename COMPLETO (DB+model+colonne+route+permessi+FE), identificatore inglese `pipeline-statuses`,
+etichetta UI "Stati progetto/campagna".
+
+RENAME (token-level, compound specifici, nessun falso positivo su `Project` da solo):
+`ProjectStatus`->`PipelineStatus`, `projectStatus`->`pipelineStatus`, `project_status`->`pipeline_status`
+(=> `pipeline_status_id`, `pipeline_statuses`), `project-status`->`pipeline-status` (route/permessi/key/dir).
+`git mv` di ~23 file/dir BE + ~15 FE (feature dir `features/pipeline-statuses/`, basename `pipeline-status-*`,
+locale `*-pipeline-statuses.ts`, page). Model `PipelineStatus` senza `$table` esplicito: la convenzione
+Laravel da' `pipeline_statuses` e la relazione `pipelineStatus()` da' `pipeline_status_id` -> tutto coerente.
+MORPH MAP aggiornata (`'pipeline_status' => PipelineStatus::class` in AppServiceProvider, vedi trappola
+LogsModelActivity sotto).
+
+MIGRATION (le CREATE committate NON si toccano): nuova
+`2026_07_13_150000_rename_project_statuses_to_pipeline_statuses` -> `Schema::rename` + `renameColumn`
+su `projects` E `campaigns`, `down()` reversibile. DATATA 07-13 (subito dopo le CREATE, prima dei
+lead-status del 07-14) DI PROPOSITO: cosi' NON e' l'ultima migration e il test lead-status
+`migrate:rollback --step 1` (che assume il backfill come ultimo) resta valido senza modificarlo.
+FK VERIFICATE via information_schema (ambiente locale e' MySQL/MariaDB, NON SQLite): entrambe
+`projects.pipeline_status_id` e `campaigns.pipeline_status_id` -> `pipeline_statuses.id` on_delete=RESTRICT
+sopravvivono al rename.
+
+NAV (backend-driven, `config/navigation.php`): nuovo item padre collassabile `marketing-leads`
+(type item, route null, icon `megaphone`) SUBITO SOTTO dashboard, con figli projects/campaigns/leads/
+pipeline-statuses/lead-statuses. Questi 5 RIMOSSI dalle sezioni `management`/`configuration` (spostati,
+non duplicati). `NavigationService` tiene il parent route-less finche' ha figli visibili. Aggiunto
+`megaphone->Megaphone` in `icon-map.ts`; label `navigation.marketingLeads` (it "Marketing e Lead" /
+en "Marketing & Leads") + `pipelineStatuses` label -> "Stati progetto/campagna". Helper test
+`navigationSectionKeys($data,'marketing-leads')` funziona anche su item non-section (fa firstWhere+pluck).
+Aggiornati SOLO i 2 nav test che lo richiedevano (Leads: management->marketing-leads; LeadStatuses:
+configuration->marketing-leads). Projects/Campaigns/PipelineStatuses NON hanno nav-section test.
+
+VERIFICATO (eseguito, XDEBUG_MODE=off per evitare SIGSEGV di Xdebug sui run grandi): Pint pulito
+(ha solo riordinato import dopo il rename); Pest 2251/2253 (unico rosso `AbstractMigrationSourcePreviewTest`,
+PREESISTENTE/HANDOFF); `tsc --noEmit` pulito; Vitest 1189/1213 (24 rossi PREESISTENTI in registries +
+cell-renderers, invariati). Zero dipendenze nuove. Test cambiati solo per requisito cambiato (nav
+structure, schema rename), dichiarato.
+
 ## FEATURE — modulo Lead Statuses (spec 0029) — GREEN (committed)
 
 Nuovo modulo lookup `lead-statuses` (name UNIVOCO + color + sort_order) e FK OBBLIGATORIA

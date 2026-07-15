@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Form, FormControl } from '@/components/ui/form'
 import { MetaField } from '@/features/authorization/MetaField'
 import { RelationSelectField } from '@/components/form/relation-select-field'
-import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/project-statuses/for-select-api'
+import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-statuses/for-select-api'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
@@ -115,12 +115,12 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
           >
             <RelationSelectField
               control={form.control}
-              name="project_status_id"
-              metaKey="project_status_id"
+              name="pipeline_status_id"
+              metaKey="pipeline_status_id"
               label={t('projects.form.status')}
               resource={PROJECT_STATUSES_FOR_SELECT_RESOURCE}
               searchPlaceholder={t('projects.form.statusSearch')}
-              selected={original ? { id: original.project_status.id, name: original.project_status.name } : null}
+              selected={original ? { id: original.pipeline_status.id, name: original.pipeline_status.name } : null}
               {...relationLabels}
             />
 

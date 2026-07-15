@@ -24,7 +24,7 @@ export const projects = {
     code: 'Code',
     name: 'Name',
     registry: 'Client',
-    project_status: 'Status',
+    pipeline_status: 'Status',
     source: 'Source',
     business_function: 'Business function',
     state: 'Region',

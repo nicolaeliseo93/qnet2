@@ -3,8 +3,8 @@
 namespace Database\Factories;
 
 use App\Models\Country;
+use App\Models\PipelineStatus;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -27,7 +27,7 @@ class ProjectFactory extends Factory
         return [
             'name' => fake()->unique()->words(3, true),
             'description' => fake()->optional()->paragraph(),
-            'project_status_id' => ProjectStatus::factory(),
+            'pipeline_status_id' => PipelineStatus::factory(),
             'country_id' => Country::factory(),
             'start_date' => null,
             'end_date' => null,

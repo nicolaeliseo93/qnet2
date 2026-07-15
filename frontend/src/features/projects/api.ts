@@ -34,7 +34,7 @@ export function projectCardsQueryKeyPrefix() {
 }
 
 /** Query key of the card grid's infinite list, scoped by its request filters. */
-export function projectCardsQueryKey(filters: Pick<ProjectCardListParams, 'search' | 'project_status_id'>) {
+export function projectCardsQueryKey(filters: Pick<ProjectCardListParams, 'search' | 'pipeline_status_id'>) {
   return [...projectCardsQueryKeyPrefix(), filters] as const
 }
 
@@ -42,13 +42,13 @@ export function projectCardsQueryKey(filters: Pick<ProjectCardListParams, 'searc
 export async function fetchProjectCards(
   params: ProjectCardListParams = {},
 ): Promise<PaginatedResponse<ProjectCard>> {
-  const { search, offset = 0, limit = PROJECT_CARDS_PAGE_SIZE, project_status_id } = params
+  const { search, offset = 0, limit = PROJECT_CARDS_PAGE_SIZE, pipeline_status_id } = params
   const { data } = await apiClient.get<PaginatedResponse<ProjectCard>>('/projects', {
     params: {
       offset,
       limit,
       ...(search ? { search } : {}),
-      ...(project_status_id ? { project_status_id } : {}),
+      ...(pipeline_status_id ? { pipeline_status_id } : {}),
     },
   })
   return data

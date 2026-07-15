@@ -26,7 +26,7 @@ const CODE_MAX_LENGTH = 32
  * geo fields, following BR-5 instead.
  */
 const DERIVED_FIELDS = [
-  'project_status_id',
+  'pipeline_status_id',
   'business_function_id',
   'product_category_id',
 ] as const
@@ -51,7 +51,7 @@ function baseFields(t: TFunction) {
     // Derived (BR-2): required when standalone, forced null/read-only when linked;
     // held nullable so the controlled selects can represent "unset" — the
     // required-when-standalone superRefine below mirrors the backend's rule.
-    project_status_id: z.number().nullable(),
+    pipeline_status_id: z.number().nullable(),
     business_function_id: z.number().nullable(),
     product_category_id: z.number().nullable(),
     // Geo cascade (spec 0027 BR-4/BR-5): EFFECTIVE values (own or inherited),
@@ -106,7 +106,7 @@ function withRequiredDerivedFieldsRule<T extends z.ZodTypeAny>(schema: T, t: TFu
       return
     }
     const messages: Record<(typeof DERIVED_FIELDS)[number], string> = {
-      project_status_id: t('campaigns.form.statusRequired'),
+      pipeline_status_id: t('campaigns.form.statusRequired'),
       business_function_id: t('campaigns.form.businessFunctionRequired'),
       product_category_id: t('campaigns.form.productCategoryRequired'),
     }

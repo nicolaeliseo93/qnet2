@@ -1,8 +1,8 @@
 <?php
 
 use App\Models\Campaign;
+use App\Models\PipelineStatus;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -53,15 +53,15 @@ it('GET /api/tables/campaigns/columns: 200 with the declared columns, 403 withou
 
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
-        'code', 'project', 'name', 'registry', 'project_status', 'source',
+        'code', 'project', 'name', 'registry', 'pipeline_status', 'source',
         'country', 'state', 'province', 'city', 'geo_scope',
         'start_date', 'end_date', 'total_budget', 'target_lead', 'created_at',
     ]);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['project']['sortable'])->toBeTrue()
-        ->and($columns['project_status']['sortable'])->toBeFalse()
-        ->and($columns['project_status']['filterType'])->toBe('set');
+        ->and($columns['pipeline_status']['sortable'])->toBeFalse()
+        ->and($columns['pipeline_status']['filterType'])->toBe('set');
 });
 
 // ---------------------------------------------------------------------------
@@ -112,51 +112,51 @@ it('rows: a linked campaign shows the MERGED geo (own refinement over the projec
 });
 
 // ---------------------------------------------------------------------------
-// AC-032 — a linked campaign's project_status column shows the PROJECT's
+// AC-032 — a linked campaign's pipeline_status column shows the PROJECT's
 // status (COALESCE read-through), and the set filter finds it
 // ---------------------------------------------------------------------------
 
-it('rows: a linked campaign\'s project_status shows the project\'s status (AC-032)', function () {
+it('rows: a linked campaign\'s pipeline_status shows the project\'s status (AC-032)', function () {
     $actor = campaignUserWith(['viewAny']);
-    $status = ProjectStatus::factory()->create(['name' => 'On Track']);
-    $project = Project::factory()->create(['project_status_id' => $status->id]);
+    $status = PipelineStatus::factory()->create(['name' => 'On Track']);
+    $project = Project::factory()->create(['pipeline_status_id' => $status->id]);
     $campaign = Campaign::factory()->forProject($project)->create(['name' => 'Linked Row']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/campaigns/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
     $row = collect($response->json('items'))->firstWhere('id', $campaign->id);
 
-    expect($row['project_status'])->toMatchArray(['id' => $status->id, 'name' => 'On Track']);
+    expect($row['pipeline_status'])->toMatchArray(['id' => $status->id, 'name' => 'On Track']);
 });
 
-it('rows: the project_status set filter finds a linked campaign via the project\'s status (AC-032)', function () {
+it('rows: the pipeline_status set filter finds a linked campaign via the project\'s status (AC-032)', function () {
     $actor = campaignUserWith(['viewAny']);
-    $status = ProjectStatus::factory()->create(['name' => 'Escalated']);
-    $otherStatus = ProjectStatus::factory()->create(['name' => 'Closed']);
-    $project = Project::factory()->create(['project_status_id' => $status->id]);
+    $status = PipelineStatus::factory()->create(['name' => 'Escalated']);
+    $otherStatus = PipelineStatus::factory()->create(['name' => 'Closed']);
+    $project = Project::factory()->create(['pipeline_status_id' => $status->id]);
     $linked = Campaign::factory()->forProject($project)->create(['name' => 'Matches']);
-    $otherProject = Project::factory()->create(['project_status_id' => $otherStatus->id]);
+    $otherProject = Project::factory()->create(['pipeline_status_id' => $otherStatus->id]);
     Campaign::factory()->forProject($otherProject)->create(['name' => 'Does Not Match']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/campaigns/rows', [
         'startRow' => 0,
         'endRow' => 25,
-        'filterModel' => ['project_status' => ['filterType' => 'set', 'values' => ['Escalated']]],
+        'filterModel' => ['pipeline_status' => ['filterType' => 'set', 'values' => ['Escalated']]],
     ])->assertOk();
 
     $ids = collect($response->json('items'))->pluck('id');
     expect($ids->all())->toBe([$linked->id]);
 });
 
-it('rows: a standalone campaign\'s project_status shows its OWN status', function () {
+it('rows: a standalone campaign\'s pipeline_status shows its OWN status', function () {
     $actor = campaignUserWith(['viewAny']);
-    $status = ProjectStatus::factory()->create(['name' => 'Standalone Status']);
-    $campaign = Campaign::factory()->create(['name' => 'Standalone Row', 'project_status_id' => $status->id]);
+    $status = PipelineStatus::factory()->create(['name' => 'Standalone Status']);
+    $campaign = Campaign::factory()->create(['name' => 'Standalone Row', 'pipeline_status_id' => $status->id]);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/campaigns/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
     $row = collect($response->json('items'))->firstWhere('id', $campaign->id);
 
-    expect($row['project_status'])->toMatchArray(['id' => $status->id, 'name' => 'Standalone Status']);
+    expect($row['pipeline_status'])->toMatchArray(['id' => $status->id, 'name' => 'Standalone Status']);
 });

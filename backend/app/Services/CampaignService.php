@@ -52,7 +52,7 @@ class CampaignService
      * @var array<int, string>
      */
     private const array DETAIL_RELATIONS = [
-        'project.projectStatus',
+        'project.pipelineStatus',
         'project.businessFunction',
         'project.country',
         'project.state',
@@ -62,7 +62,7 @@ class CampaignService
         'registry',
         'source',
         'partner',
-        'projectStatus',
+        'pipelineStatus',
         'businessFunction',
         'country',
         'state',
@@ -240,7 +240,7 @@ class CampaignService
     private function resolveUpdateAttributes(array $submitted, ?Project $project): array
     {
         if ($project !== null) {
-            $submitted['project_status_id'] = null;
+            $submitted['pipeline_status_id'] = null;
             $submitted['business_function_id'] = null;
             $submitted['product_category_id'] = null;
         }

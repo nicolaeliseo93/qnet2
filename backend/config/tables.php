@@ -9,10 +9,10 @@ use App\Tables\CustomFieldsTableDefinition;
 use App\Tables\LeadsTableDefinition;
 use App\Tables\LeadStatusesTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
+use App\Tables\PipelineStatusesTableDefinition;
 use App\Tables\ProductCategoriesTableDefinition;
 use App\Tables\ProductsTableDefinition;
 use App\Tables\ProjectsTableDefinition;
-use App\Tables\ProjectStatusesTableDefinition;
 use App\Tables\ReferentsTableDefinition;
 use App\Tables\ReferentTypesTableDefinition;
 use App\Tables\RegistriesTableDefinition;
@@ -61,7 +61,7 @@ return [
         'products' => ProductsTableDefinition::class,
         'sources' => SourcesTableDefinition::class,
         'tags' => TagsTableDefinition::class,
-        'project-statuses' => ProjectStatusesTableDefinition::class,
+        'pipeline-statuses' => PipelineStatusesTableDefinition::class,
         'projects' => ProjectsTableDefinition::class,
         'campaigns' => CampaignsTableDefinition::class,
         'leads' => LeadsTableDefinition::class,

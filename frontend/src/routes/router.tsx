@@ -31,7 +31,7 @@ const ProductDetailPage = lazy(() => import('@/pages/product-detail-page'))
 const ProductFormPage = lazy(() => import('@/pages/product-form-page'))
 const SourcesPage = lazy(() => import('@/pages/sources-page'))
 const TagsPage = lazy(() => import('@/pages/tags-page'))
-const ProjectStatusesPage = lazy(() => import('@/pages/project-statuses-page'))
+const PipelineStatusesPage = lazy(() => import('@/pages/pipeline-statuses-page'))
 const ProjectsPage = lazy(() => import('@/pages/projects-page'))
 const ProjectDetailPage = lazy(() => import('@/pages/project-detail-page'))
 const ProjectFormPage = lazy(() => import('@/pages/project-form-page'))
@@ -171,8 +171,8 @@ export const router = createBrowserRouter([
             element: <TagsPage />,
           },
           {
-            path: 'project-statuses',
-            element: <ProjectStatusesPage />,
+            path: 'pipeline-statuses',
+            element: <PipelineStatusesPage />,
           },
           {
             path: 'projects',

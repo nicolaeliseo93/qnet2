@@ -160,7 +160,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
      * `lead_status_id` is NOT NULL (spec 0029 D-1). Mapped EXPLICITLY with
      * `color`, never via summarize(): reusing it here would reproduce the
      * scolored badge defect ProjectsTableDefinition::mapRow() has via
-     * summarize() on `project_status` (spec 0029 context/known_defect_not_ours,
+     * summarize() on `pipeline_status` (spec 0029 context/known_defect_not_ours,
      * out of scope to fix there).
      *
      * @return array{id: int, name: string, color: ?string}|null

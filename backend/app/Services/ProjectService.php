@@ -44,7 +44,7 @@ class ProjectService
      */
     private const array DETAIL_RELATIONS = [
         'registry',
-        'projectStatus',
+        'pipelineStatus',
         'source',
         'businessFunction',
         'country',
@@ -135,7 +135,7 @@ class ProjectService
     /**
      * Minimal, searchable, paginated project list for the for-select
      * standard (ADR 0011, spec 0023), carrying the campaign-form default
-     * `meta` (registry/source/partner/project_status/business_function/
+     * `meta` (registry/source/partner/pipeline_status/business_function/
      * state/product_category + the BR-7 budget figures) so the Campaign form
      * can precompile its defaults with no extra request.
      */
@@ -184,8 +184,8 @@ class ProjectService
             });
         }
 
-        if ($query->projectStatusId !== null) {
-            $base->where('project_status_id', $query->projectStatusId);
+        if ($query->pipelineStatusId !== null) {
+            $base->where('pipeline_status_id', $query->pipelineStatusId);
         }
 
         $total = (clone $base)->count();
@@ -206,7 +206,7 @@ class ProjectService
     private function indexBaseQuery(): Builder
     {
         return Project::query()
-            ->with(['projectStatus', 'country', 'state', 'province', 'city'])
+            ->with(['pipelineStatus', 'country', 'state', 'province', 'city'])
             ->withCount(['campaigns', 'leads'])
             ->withSum('campaigns as allocated_budget_sum', 'total_budget');
     }
@@ -236,7 +236,7 @@ class ProjectService
     private function forSelectBaseQuery(): Builder
     {
         return Project::query()
-            ->select(['id', 'code', 'name', 'registry_id', 'project_status_id', 'source_id', 'business_function_id', 'country_id', 'state_id', 'province_id', 'city_id', 'product_category_id', 'partner_id', 'total_budget'])
+            ->select(['id', 'code', 'name', 'registry_id', 'pipeline_status_id', 'source_id', 'business_function_id', 'country_id', 'state_id', 'province_id', 'city_id', 'product_category_id', 'partner_id', 'total_budget'])
             ->with(self::DETAIL_RELATIONS)
             ->withSum('campaigns as allocated_budget_sum', 'total_budget');
     }

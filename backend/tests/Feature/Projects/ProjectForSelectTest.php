@@ -2,8 +2,8 @@
 
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
+use App\Models\PipelineStatus;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\Source;
@@ -55,13 +55,13 @@ it('forbids actors without projects.viewAny (403)', function () {
 
 it('maps a project to label "{code} — {name}" with the full campaign-form meta block (AC-017)', function () {
     $actor = projectUserWith(['viewAny']);
-    $status = ProjectStatus::factory()->create(['name' => 'Attivo']);
+    $status = PipelineStatus::factory()->create(['name' => 'Attivo']);
     $registry = Registry::factory()->create(['name' => 'Acme Srl']);
     $source = Source::factory()->create(['name' => 'Fiera']);
     $partner = Referent::factory()->create(['name' => 'Ada Partner']);
     $businessFunction = BusinessFunction::factory()->create(['name' => 'Marketing']);
     $project = Project::factory()->create([
-        'project_status_id' => $status->id,
+        'pipeline_status_id' => $status->id,
         'registry_id' => $registry->id,
         'source_id' => $source->id,
         'partner_id' => $partner->id,
@@ -75,7 +75,7 @@ it('maps a project to label "{code} — {name}" with the full campaign-form meta
     $item = collect($response->json('items'))->firstWhere('id', $project->id);
 
     expect($item['label'])->toBe(sprintf('%s — %s', $project->code, $project->name))
-        ->and($item['meta']['project_status'])->toMatchArray(['id' => $status->id, 'label' => 'Attivo'])
+        ->and($item['meta']['pipeline_status'])->toMatchArray(['id' => $status->id, 'label' => 'Attivo'])
         ->and($item['meta']['registry'])->toMatchArray(['id' => $registry->id, 'label' => 'Acme Srl'])
         ->and($item['meta']['source'])->toMatchArray(['id' => $source->id, 'label' => 'Fiera'])
         ->and($item['meta']['partner'])->toMatchArray(['id' => $partner->id, 'label' => 'Ada Partner'])

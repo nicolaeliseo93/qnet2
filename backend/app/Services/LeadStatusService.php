@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
 /**
  * Business logic for the `lead-statuses` resource (spec 0029): a full-CRUD
  * lookup entity (name/color/sort_order) describing a Lead's working state.
- * Mirrors ProjectStatusService's shape, including the BR-3 delete guard.
+ * Mirrors PipelineStatusService's shape, including the BR-3 delete guard.
  */
 class LeadStatusService
 {
@@ -49,7 +49,7 @@ class LeadStatusService
 
     /**
      * Minimal, searchable, paginated lead status list for the for-select
-     * standard (ADR 0011), mirroring ProjectStatusService::forSelect. Ordered
+     * standard (ADR 0011), mirroring PipelineStatusService::forSelect. Ordered
      * by `sort_order` first so the select mirrors the table's display order
      * (BR-4).
      */

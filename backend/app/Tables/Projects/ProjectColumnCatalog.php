@@ -9,14 +9,14 @@ namespace App\Tables\Projects;
  *
  * `code`/`name`/`start_date`/`end_date`/`total_budget`/`target_lead`/
  * `created_at` are real DB columns handled entirely by the generic engine.
- * `registry`/`project_status`/`source`/`business_function`/`country`/
+ * `registry`/`pipeline_status`/`source`/`business_function`/`country`/
  * `state`/`province`/`city`/`product_category`/`partner` have no real column
  * of their own (each is the related row's name) and are DERIVED, resolved by
- * ProjectsTableDefinition — only `registry`/`project_status` are sortable (a
+ * ProjectsTableDefinition — only `registry`/`pipeline_status` are sortable (a
  * correlated subquery per spec 0023 table_definitions); the rest are
  * filterable-only. `geo_scope` (spec 0027, D-2) is a purely COMPUTED,
  * DISPLAY-ONLY column: neither sortable nor filterable (no real value to
- * join/sort on), mirroring ProjectStatusColumnCatalog's `color`.
+ * join/sort on), mirroring PipelineStatusColumnCatalog's `color`.
  */
 final class ProjectColumnCatalog
 {
@@ -47,7 +47,7 @@ final class ProjectColumnCatalog
                 'searchable' => true,
             ],
             self::derivedColumn('registry', 'projects.columns.registry', sortable: true),
-            self::derivedColumn('project_status', 'projects.columns.project_status', sortable: true),
+            self::derivedColumn('pipeline_status', 'projects.columns.pipeline_status', sortable: true),
             self::derivedColumn('source', 'projects.columns.source'),
             self::derivedColumn('business_function', 'projects.columns.business_function'),
             self::derivedColumn('country', 'projects.columns.country'),
@@ -115,7 +115,7 @@ final class ProjectColumnCatalog
     /**
      * A DERIVED (related-row-name) column declaration: filterable via the
      * `set` widget, only sortable when explicitly requested (spec 0023: just
-     * `registry`/`project_status`).
+     * `registry`/`pipeline_status`).
      *
      * @return array<string, mixed>
      */

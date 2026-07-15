@@ -44,7 +44,7 @@ class StoreProjectRequest extends FormRequest
         return [
             'code' => ['nullable', 'string', 'max:32', Rule::unique('projects', 'code')],
             'name' => ['required', 'string', 'max:191'],
-            'project_status_id' => ['required', 'integer', Rule::exists('project_statuses', 'id')],
+            'pipeline_status_id' => ['required', 'integer', Rule::exists('pipeline_statuses', 'id')],
             'description' => ['nullable', 'string'],
             'registry_id' => ['nullable', 'integer', Rule::exists('registries', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],

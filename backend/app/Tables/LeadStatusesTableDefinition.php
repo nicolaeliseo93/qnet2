@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Gate;
  *
  * All columns (name, color, sort_order, created_at) are real DB columns
  * handled entirely by the generic engine — no derived column, mirroring
- * ProjectStatusesTableDefinition.
+ * PipelineStatusesTableDefinition.
  */
 class LeadStatusesTableDefinition extends AbstractTableDefinition
 {

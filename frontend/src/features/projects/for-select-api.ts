@@ -45,7 +45,7 @@ export interface ProjectForSelectMeta {
   registry: ProjectForSelectRelation | null
   source: ProjectForSelectRelation | null
   partner: ProjectForSelectRelation | null
-  project_status: ProjectForSelectRelation
+  pipeline_status: ProjectForSelectRelation
   business_function: ProjectForSelectRelation | null
   state: ProjectForSelectRelation | null
   product_category: ProjectForSelectRelation | null

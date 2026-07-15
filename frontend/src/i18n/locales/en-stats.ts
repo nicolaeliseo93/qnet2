@@ -82,7 +82,7 @@ export const moduleStats = {
     linkedToProject: 'Linked to a project',
     totalBudget: 'Total budget',
     generatedLeads: 'Generated leads',
-    byProjectStatus: 'By project status',
+    byPipelineStatus: 'By project status',
     trend: 'New campaigns per month',
   },
   leads: {

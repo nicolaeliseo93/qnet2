@@ -40,8 +40,8 @@ final readonly class UpdateCampaignData
         public bool $sourceIdSubmitted = false,
         public ?int $partnerId = null,
         public bool $partnerIdSubmitted = false,
-        public ?int $projectStatusId = null,
-        public bool $projectStatusIdSubmitted = false,
+        public ?int $pipelineStatusId = null,
+        public bool $pipelineStatusIdSubmitted = false,
         public ?int $businessFunctionId = null,
         public bool $businessFunctionIdSubmitted = false,
         public ?int $countryId = null,
@@ -83,8 +83,8 @@ final readonly class UpdateCampaignData
             sourceIdSubmitted: array_key_exists('source_id', $data),
             partnerId: self::nullableInt($data, 'partner_id'),
             partnerIdSubmitted: array_key_exists('partner_id', $data),
-            projectStatusId: self::nullableInt($data, 'project_status_id'),
-            projectStatusIdSubmitted: array_key_exists('project_status_id', $data),
+            pipelineStatusId: self::nullableInt($data, 'pipeline_status_id'),
+            pipelineStatusIdSubmitted: array_key_exists('pipeline_status_id', $data),
             businessFunctionId: self::nullableInt($data, 'business_function_id'),
             businessFunctionIdSubmitted: array_key_exists('business_function_id', $data),
             countryId: self::nullableInt($data, 'country_id'),
@@ -144,8 +144,8 @@ final readonly class UpdateCampaignData
             $attributes['partner_id'] = $this->partnerId;
         }
 
-        if ($this->projectStatusIdSubmitted) {
-            $attributes['project_status_id'] = $this->projectStatusId;
+        if ($this->pipelineStatusIdSubmitted) {
+            $attributes['pipeline_status_id'] = $this->pipelineStatusId;
         }
 
         if ($this->businessFunctionIdSubmitted) {

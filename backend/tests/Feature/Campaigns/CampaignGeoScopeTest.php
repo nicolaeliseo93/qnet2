@@ -3,9 +3,9 @@
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\Country;
+use App\Models\PipelineStatus;
 use App\Models\ProductCategory;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\State;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -51,7 +51,7 @@ if (! function_exists('standaloneClassificationFields')) {
     function standaloneClassificationFields(): array
     {
         return [
-            'project_status_id' => ProjectStatus::factory()->create()->id,
+            'pipeline_status_id' => PipelineStatus::factory()->create()->id,
             'business_function_id' => BusinessFunction::factory()->create()->id,
             'product_category_id' => ProductCategory::factory()->create()->id,
         ];

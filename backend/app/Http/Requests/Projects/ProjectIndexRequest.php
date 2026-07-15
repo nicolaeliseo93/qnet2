@@ -34,7 +34,7 @@ class ProjectIndexRequest extends FormRequest
             'search' => ['nullable', 'string', 'max:100'],
             'offset' => ['sometimes', 'integer', 'min:0'],
             'limit' => ['sometimes', 'integer', 'min:1', 'max:'.self::MAX_LIMIT],
-            'project_status_id' => ['sometimes', 'integer', Rule::exists('project_statuses', 'id')],
+            'pipeline_status_id' => ['sometimes', 'integer', Rule::exists('pipeline_statuses', 'id')],
         ];
     }
 

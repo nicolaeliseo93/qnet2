@@ -1,7 +1,7 @@
 /**
  * Lead statuses domain (spec 0029). Extracted to a sibling file to keep
  * `en.ts` within the engineering size limits (see
- * `.claude/rules/engineering.md` §6); mirrors `project-statuses` (spec 0023)
+ * `.claude/rules/engineering.md` §6); mirrors `pipeline-statuses` (spec 0023)
  * 1:1, with the delete-guard message adjusted to Leads (BR-3).
  */
 

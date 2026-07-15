@@ -5,9 +5,9 @@ namespace Database\Seeders;
 use App\DataObjects\Campaigns\CreateCampaignData;
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
+use App\Models\PipelineStatus;
 use App\Models\ProductCategory;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\Source;
@@ -44,7 +44,7 @@ use Illuminate\Support\Collection;
  *
  * Depends on DemoProjectSeeder (linked campaigns) plus the same
  * classification lookups it uses (standalone campaigns need their own
- * project-status/business-function/state/product-category). Idempotent:
+ * pipeline-status/business-function/state/product-category). Idempotent:
  * existing campaigns are cleared first — harmless if DemoProjectSeeder
  * already did it, and keeps this seeder runnable on its own too.
  */
@@ -66,7 +66,7 @@ class DemoCampaignSeeder extends Seeder
         $faker->seed(20260714);
 
         $projects = Project::query()->orderBy('id')->get();
-        $statuses = ProjectStatus::query()->orderBy('sort_order')->get();
+        $statuses = PipelineStatus::query()->orderBy('sort_order')->get();
         $businessFunctions = BusinessFunction::query()->orderBy('name')->get();
         $productCategories = ProductCategory::query()->orderBy('name')->get();
         $states = $this->italianStates();
@@ -169,7 +169,7 @@ class DemoCampaignSeeder extends Seeder
      * columns are the campaign's own and required (BR-2), drawn round-robin
      * across the same lookups DemoProjectSeeder uses.
      *
-     * @param  Collection<int, ProjectStatus>  $statuses
+     * @param  Collection<int, PipelineStatus>  $statuses
      * @param  Collection<int, BusinessFunction>  $businessFunctions
      * @param  Collection<int, State>  $states
      * @param  Collection<int, ProductCategory>  $productCategories
@@ -196,7 +196,7 @@ class DemoCampaignSeeder extends Seeder
                 'registry_id' => $this->pick($registries, $index)?->id,
                 'source_id' => $this->pick($sources, $index)?->id,
                 'partner_id' => $this->pick($partners, $index)?->id,
-                'project_status_id' => $statuses[$index % $statuses->count()]->id,
+                'pipeline_status_id' => $statuses[$index % $statuses->count()]->id,
                 'business_function_id' => $businessFunctions[$index % $businessFunctions->count()]->id,
                 'country_id' => $geo['country_id'],
                 'state_id' => $geo['state_id'],
@@ -232,7 +232,7 @@ class DemoCampaignSeeder extends Seeder
             registryId: $overrides['registry_id'] ?? null,
             sourceId: $overrides['source_id'] ?? null,
             partnerId: $overrides['partner_id'] ?? null,
-            projectStatusId: $overrides['project_status_id'] ?? null,
+            pipelineStatusId: $overrides['pipeline_status_id'] ?? null,
             businessFunctionId: $overrides['business_function_id'] ?? null,
             stateId: $overrides['state_id'] ?? null,
             productCategoryId: $overrides['product_category_id'] ?? null,

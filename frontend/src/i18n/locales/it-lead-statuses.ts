@@ -1,7 +1,7 @@
 /**
  * Dominio Stati lead (spec 0029). Estratto in un file affiancato per
  * mantenere `it.ts` entro i limiti dimensionali (vedi
- * `.claude/rules/engineering.md` §6); rispecchia `project-statuses` (spec
+ * `.claude/rules/engineering.md` §6); rispecchia `pipeline-statuses` (spec
  * 0023) 1:1, con il messaggio del delete-guard adattato ai Lead (BR-3).
  */
 

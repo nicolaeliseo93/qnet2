@@ -8,7 +8,7 @@ import {
 /**
  * Zod schema for the lead status create/edit form, built as a factory so
  * validation messages are localized via the i18n `t` function (same pattern
- * as `project-statuses`). The shape mirrors the frozen backend contract
+ * as `pipeline-statuses`). The shape mirrors the frozen backend contract
  * (spec 0029) 1:1. `color` stores a palette TOKEN (empty string = unset,
  * mapped to `null` by the payload builder) — see `ColorTokenPicker`.
  */

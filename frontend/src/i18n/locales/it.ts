@@ -14,7 +14,7 @@ import { customFields } from './it-custom-fields'
 import { sectors } from './it-sectors'
 import { sources } from './it-sources'
 import { tags } from './it-tags'
-import { projectStatuses } from './it-project-statuses'
+import { pipelineStatuses } from './it-pipeline-statuses'
 import { projects } from './it-projects'
 import { campaigns } from './it-campaigns'
 import { leads } from './it-leads'
@@ -77,7 +77,8 @@ export const it: TranslationResources = {
     campaigns: 'Campagne',
     leads: 'Lead',
     leadStatuses: 'Stati lead',
-    projectStatuses: 'Stati progetto',
+    pipelineStatuses: 'Stati progetto/campagna',
+    marketingLeads: 'Marketing e Lead',
     management: 'Gestione',
     configuration: 'Configurazione',
     administration: 'Amministrazione',
@@ -419,7 +420,7 @@ export const it: TranslationResources = {
   sources,
   tags,
   projects: { ...projects, stats: moduleStats.projects },
-  projectStatuses,
+  pipelineStatuses,
   campaigns: { ...campaigns, stats: moduleStats.campaigns },
   leadStatuses,
   leads: { ...leads, stats: moduleStats.leads },

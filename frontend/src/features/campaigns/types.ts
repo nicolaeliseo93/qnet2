@@ -6,7 +6,7 @@
 
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
-import type { ProjectRelationRef, ProjectStatusRef } from '@/features/projects/types'
+import type { ProjectRelationRef, PipelineStatusRef } from '@/features/projects/types'
 import type { GeoScope } from '@/features/geo/geo-scope'
 
 /** Hydrated `{id, name}` relation shared by registry/source/partner/business_function/state/product_category (identical shape to a project's, reused rather than redeclared). */
@@ -22,7 +22,7 @@ export interface CampaignProjectRef {
 /**
  * Single campaign detail returned by GET/POST/PATCH /campaigns (envelope
  * `data`). Matches `CampaignResource`. Per BR-2, when `project_id` is set the
- * 3 classification fields (`project_status`/`business_function`/
+ * 3 classification fields (`pipeline_status`/`business_function`/
  * `product_category`) are NULL in DB but this shape always carries the
  * EFFECTIVE values (read through the project) plus `derived_from_project`, so
  * the form/detail never need to special-case a linked campaign's data source.
@@ -45,8 +45,8 @@ export interface CampaignDetail {
   partner_id: number | null
   partner: CampaignRelationRef | null
   derived_from_project: boolean
-  project_status_id: number | null
-  project_status: ProjectStatusRef | null
+  pipeline_status_id: number | null
+  pipeline_status: PipelineStatusRef | null
   business_function_id: number | null
   business_function: CampaignRelationRef | null
   /** Geo cascade (spec 0027 BR-4/BR-5): EFFECTIVE (merged) values, `country_id` required only when standalone or the project has none. */
@@ -101,7 +101,7 @@ export interface CreateCampaignPayload {
   registry_id?: number | null
   source_id?: number | null
   partner_id?: number | null
-  project_status_id?: number | null
+  pipeline_status_id?: number | null
   business_function_id?: number | null
   product_category_id?: number | null
   country_id?: number | null

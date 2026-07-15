@@ -98,7 +98,7 @@ export function CampaignDetailView({ campaign }: CampaignDetailViewProps) {
       <DetailSection title={t('campaigns.form.sections.classification.title')} icon={<Tags />}>
         <DetailGrid>
           <DetailField label={t('campaigns.form.status')}>
-            {campaign.project_status?.name ?? <DetailEmpty />}
+            {campaign.pipeline_status?.name ?? <DetailEmpty />}
           </DetailField>
           <DetailField label={t('campaigns.form.businessFunction')}>
             {campaign.business_function?.name ?? <DetailEmpty />}

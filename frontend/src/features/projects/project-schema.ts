@@ -35,7 +35,7 @@ function baseFields(t: TFunction) {
     // Held nullable so the controlled select can represent "unset"; the
     // required-value superRefine below rejects a null at submit, mirroring
     // the backend's `required` rule (spec D-5).
-    project_status_id: z.number().nullable(),
+    pipeline_status_id: z.number().nullable(),
     source_id: z.number().nullable(),
     business_function_id: z.number().nullable(),
     // Geo cascade (spec 0027 BR-4): `country_id` required (withGeoHierarchyRule
@@ -69,14 +69,14 @@ function withDateOrderRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
   })
 }
 
-/** D-5: `project_status_id` is required (the only relation that is). */
+/** D-5: `pipeline_status_id` is required (the only relation that is). */
 function withRequiredStatusRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
   return schema.superRefine((values, ctx) => {
-    const record = values as { project_status_id: number | null }
-    if (record.project_status_id === null) {
+    const record = values as { pipeline_status_id: number | null }
+    if (record.pipeline_status_id === null) {
       ctx.addIssue({
         code: 'custom',
-        path: ['project_status_id'],
+        path: ['pipeline_status_id'],
         message: t('projects.form.statusRequired'),
       })
     }

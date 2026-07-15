@@ -19,7 +19,7 @@ use Illuminate\Validation\Rule;
  *
  * BR-2 (campaign-derivation) is enforced right here, value-level: when
  * `project_id` is submitted and non-null, the 3 classification fields
- * (project_status_id/business_function_id/product_category_id) are
+ * (pipeline_status_id/business_function_id/product_category_id) are
  * `prohibited` — present-with-a-value fails validation (AC-022); otherwise
  * they are `required` (AC-023). `filled()` treats both "key absent" and
  * "key present but null" as NOT linked, matching the data contract's
@@ -71,9 +71,9 @@ class StoreCampaignRequest extends FormRequest
             'registry_id' => ['nullable', 'integer', Rule::exists('registries', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
             'partner_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
-            'project_status_id' => $linked
+            'pipeline_status_id' => $linked
                 ? ['prohibited']
-                : ['required', 'integer', Rule::exists('project_statuses', 'id')],
+                : ['required', 'integer', Rule::exists('pipeline_statuses', 'id')],
             'business_function_id' => $linked
                 ? ['prohibited']
                 : ['required', 'integer', Rule::exists('business_functions', 'id')],

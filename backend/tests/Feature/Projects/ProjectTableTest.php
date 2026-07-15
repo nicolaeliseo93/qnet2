@@ -1,8 +1,8 @@
 <?php
 
 use App\Models\Country;
+use App\Models\PipelineStatus;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -53,14 +53,14 @@ it('GET /api/tables/projects/columns: 200 with the declared columns, 403 without
 
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
-        'code', 'name', 'registry', 'project_status', 'source', 'business_function',
+        'code', 'name', 'registry', 'pipeline_status', 'source', 'business_function',
         'country', 'state', 'province', 'city', 'geo_scope', 'product_category', 'partner',
         'start_date', 'end_date', 'total_budget', 'target_lead', 'created_at',
     ]);
 
     $columns = collect($data['columns'])->keyBy('id');
-    expect($columns['project_status']['sortable'])->toBeTrue()
-        ->and($columns['project_status']['filterType'])->toBe('set')
+    expect($columns['pipeline_status']['sortable'])->toBeTrue()
+        ->and($columns['pipeline_status']['filterType'])->toBe('set')
         ->and($columns['registry']['sortable'])->toBeTrue()
         ->and($columns['source']['sortable'])->toBeFalse()
         ->and($columns['source']['filterType'])->toBe('set');
@@ -128,21 +128,21 @@ it('rows: geo_scope reflects the finest non-null geo level (AC-013, D-2)', funct
 });
 
 // ---------------------------------------------------------------------------
-// AC-031 — sort on the derived project_status column
+// AC-031 — sort on the derived pipeline_status column
 // ---------------------------------------------------------------------------
 
-it('sorts rows by the derived project_status name via a correlated subquery (AC-031)', function () {
+it('sorts rows by the derived pipeline_status name via a correlated subquery (AC-031)', function () {
     $actor = projectUserWith(['viewAny']);
-    $zed = ProjectStatus::factory()->create(['name' => 'Zed Status']);
-    $amy = ProjectStatus::factory()->create(['name' => 'Amy Status']);
-    Project::factory()->create(['name' => 'Z-project', 'project_status_id' => $zed->id]);
-    Project::factory()->create(['name' => 'A-project', 'project_status_id' => $amy->id]);
+    $zed = PipelineStatus::factory()->create(['name' => 'Zed Status']);
+    $amy = PipelineStatus::factory()->create(['name' => 'Amy Status']);
+    Project::factory()->create(['name' => 'Z-project', 'pipeline_status_id' => $zed->id]);
+    Project::factory()->create(['name' => 'A-project', 'pipeline_status_id' => $amy->id]);
     Sanctum::actingAs($actor);
 
     $names = $this->postJson('/api/tables/projects/rows', [
         'startRow' => 0,
         'endRow' => 25,
-        'sortModel' => [['colId' => 'project_status', 'sort' => 'asc']],
+        'sortModel' => [['colId' => 'pipeline_status', 'sort' => 'asc']],
     ])->assertOk()->json('items.*.name');
 
     expect(array_search('A-project', $names, true))->toBeLessThan(array_search('Z-project', $names, true));
@@ -163,18 +163,18 @@ it('a sort colId outside the allow-list returns 422, never a 500 / raw SQL (AC-0
     expect(Project::count())->toBe(2);
 });
 
-it('the derived project_status set filter matches by the related status name', function () {
+it('the derived pipeline_status set filter matches by the related status name', function () {
     $actor = projectUserWith(['viewAny']);
-    $commercial = ProjectStatus::factory()->create(['name' => 'Commercial']);
-    $technical = ProjectStatus::factory()->create(['name' => 'Technical']);
-    Project::factory()->create(['name' => 'Project A', 'project_status_id' => $commercial->id]);
-    Project::factory()->create(['name' => 'Project B', 'project_status_id' => $technical->id]);
+    $commercial = PipelineStatus::factory()->create(['name' => 'Commercial']);
+    $technical = PipelineStatus::factory()->create(['name' => 'Technical']);
+    Project::factory()->create(['name' => 'Project A', 'pipeline_status_id' => $commercial->id]);
+    Project::factory()->create(['name' => 'Project B', 'pipeline_status_id' => $technical->id]);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/projects/rows', [
         'startRow' => 0,
         'endRow' => 25,
-        'filterModel' => ['project_status' => ['filterType' => 'set', 'values' => ['Commercial']]],
+        'filterModel' => ['pipeline_status' => ['filterType' => 'set', 'values' => ['Commercial']]],
     ])->assertOk();
 
     $names = collect($response->json('items'))->pluck('name');

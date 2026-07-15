@@ -5,9 +5,9 @@ namespace Database\Factories;
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\Country;
+use App\Models\PipelineStatus;
 use App\Models\ProductCategory;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\State;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -46,7 +46,7 @@ class CampaignFactory extends Factory
             'project_id' => null,
             'name' => fake()->unique()->words(3, true),
             'description' => fake()->optional()->paragraph(),
-            'project_status_id' => ProjectStatus::factory(),
+            'pipeline_status_id' => PipelineStatus::factory(),
             'business_function_id' => BusinessFunction::factory(),
             'country_id' => $country->id,
             'state_id' => State::factory()->state(['country_id' => $country->id]),
@@ -86,7 +86,7 @@ class CampaignFactory extends Factory
     {
         return $this->state(fn (): array => [
             'project_id' => $project->id,
-            'project_status_id' => null,
+            'pipeline_status_id' => null,
             'business_function_id' => null,
             'product_category_id' => null,
             'country_id' => null,

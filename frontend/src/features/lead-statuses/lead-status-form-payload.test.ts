@@ -6,7 +6,7 @@ import {
 import type { LeadStatusDetailWithPermissions } from '@/features/lead-statuses/types'
 import type { LeadStatusFormValues } from '@/features/lead-statuses/use-lead-status-form'
 
-/** Spec 0029 (mirrored on project-statuses, spec 0023 AC-014): create shape, update diffs only changes. */
+/** Spec 0029 (mirrored on pipeline-statuses, spec 0023 AC-014): create shape, update diffs only changes. */
 
 const formValues: LeadStatusFormValues = {
   name: 'Draft',

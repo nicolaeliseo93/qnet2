@@ -39,8 +39,8 @@ class DemoDataSeeder extends Seeder
         // Depends on sources/sectors/referents (lookups, seeded above) and
         // users (internal managers, seeded above) — must run after all of them.
         $this->call(DemoRegistrySeeder::class);
-        $this->call(DemoProjectStatusSeeder::class);
-        // Depends on project-statuses/registries/sources/business-functions/
+        $this->call(DemoPipelineStatusSeeder::class);
+        // Depends on pipeline-statuses/registries/sources/business-functions/
         // product-categories/referents (lookups, all seeded above) and
         // `locations:add` (states, run by DatabaseSeeder) — must run after
         // all of them.

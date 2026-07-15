@@ -18,7 +18,7 @@ use Illuminate\Validation\Rule;
  * via authorize('update', $leadStatus)). EnforcesFieldPermissions (spec 0004)
  * additionally rejects any submitted field the actor cannot edit on this
  * specific model. `name` is unique ignoring self (BR-2/D-4), unlike
- * UpdateProjectStatusRequest.
+ * UpdatePipelineStatusRequest.
  */
 class UpdateLeadStatusRequest extends FormRequest
 {

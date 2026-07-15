@@ -3,9 +3,9 @@
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\Country;
+use App\Models\PipelineStatus;
 use App\Models\ProductCategory;
 use App\Models\Project;
-use App\Models\ProjectStatus;
 use App\Models\State;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -46,7 +46,7 @@ if (! function_exists('standaloneClassificationFields')) {
     function standaloneClassificationFields(): array
     {
         return [
-            'project_status_id' => ProjectStatus::factory()->create()->id,
+            'pipeline_status_id' => PipelineStatus::factory()->create()->id,
             'business_function_id' => BusinessFunction::factory()->create()->id,
             'product_category_id' => ProductCategory::factory()->create()->id,
         ];
@@ -84,7 +84,7 @@ it('create: linked to a project, without the 3 derived fields -> 201, DB columns
     $this->assertDatabaseHas('campaigns', [
         'id' => $campaignId,
         'project_id' => $project->id,
-        'project_status_id' => null,
+        'pipeline_status_id' => null,
         'business_function_id' => null,
         'product_category_id' => null,
         // The project fills country_id by default (ProjectFactory) -> prohibited
@@ -96,17 +96,17 @@ it('create: linked to a project, without the 3 derived fields -> 201, DB columns
     ]);
 });
 
-it('create: linked to a project AND an explicit project_status_id -> 422 (AC-022, BR-2)', function () {
+it('create: linked to a project AND an explicit pipeline_status_id -> 422 (AC-022, BR-2)', function () {
     $actor = campaignUserWith(['create']);
     $project = Project::factory()->create();
-    $status = ProjectStatus::factory()->create();
+    $status = PipelineStatus::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/campaigns', [
         'name' => 'Conflicting',
         'project_id' => $project->id,
-        'project_status_id' => $status->id,
-    ])->assertStatus(422)->assertJsonValidationErrors('project_status_id');
+        'pipeline_status_id' => $status->id,
+    ])->assertStatus(422)->assertJsonValidationErrors('pipeline_status_id');
 
     expect(Campaign::count())->toBe(0);
 });
@@ -120,12 +120,12 @@ it('create: linked to a project AND an explicit project_status_id -> 422 (AC-022
 
 it('show: a linked campaign reports derived_from_project=true with the PROJECT\'s values (AC-021)', function () {
     $actor = campaignUserWith(['view']);
-    $status = ProjectStatus::factory()->create(['name' => 'Active', 'color' => '#00ff00']);
+    $status = PipelineStatus::factory()->create(['name' => 'Active', 'color' => '#00ff00']);
     $businessFunction = BusinessFunction::factory()->create(['name' => 'Sales']);
     $state = State::factory()->create(['name' => 'Lazio']);
     $category = ProductCategory::factory()->create(['name' => 'Widgets']);
     $project = Project::factory()->create([
-        'project_status_id' => $status->id,
+        'pipeline_status_id' => $status->id,
         'business_function_id' => $businessFunction->id,
         'state_id' => $state->id,
         'product_category_id' => $category->id,
@@ -136,8 +136,8 @@ it('show: a linked campaign reports derived_from_project=true with the PROJECT\'
     $this->getJson("/api/campaigns/{$campaign->id}")
         ->assertOk()
         ->assertJsonPath('data.derived_from_project', true)
-        ->assertJsonPath('data.project_status_id', $status->id)
-        ->assertJsonPath('data.project_status.name', 'Active')
+        ->assertJsonPath('data.pipeline_status_id', $status->id)
+        ->assertJsonPath('data.pipeline_status.name', 'Active')
         ->assertJsonPath('data.business_function_id', $businessFunction->id)
         ->assertJsonPath('data.state_id', $state->id)
         ->assertJsonPath('data.product_category_id', $category->id);
@@ -193,7 +193,7 @@ it('create: standalone with all 3 BR-2 fields + country_id -> 201, derived_from_
     $this->postJson('/api/campaigns', array_merge(['name' => 'Full Standalone'], $fields))
         ->assertCreated()
         ->assertJsonPath('data.derived_from_project', false)
-        ->assertJsonPath('data.project_status_id', $fields['project_status_id']);
+        ->assertJsonPath('data.pipeline_status_id', $fields['pipeline_status_id']);
 });
 
 it('create: 403 without campaigns.create', function () {
@@ -298,7 +298,7 @@ it('update: setting project_id on a standalone campaign zeroes the 3 BR-2 column
     $this->assertDatabaseHas('campaigns', [
         'id' => $campaign->id,
         'project_id' => $project->id,
-        'project_status_id' => null,
+        'pipeline_status_id' => null,
         'business_function_id' => null,
         'product_category_id' => null,
         // The project fills country_id by default (ProjectFactory) -> nulled

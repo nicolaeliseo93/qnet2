@@ -9,7 +9,7 @@ import { LeadStatusesTable } from '@/features/lead-statuses/lead-statuses-table'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
 
 /**
- * Mirrors `project-statuses-table.test.tsx` (spec 0023): the generic
+ * Mirrors `pipeline-statuses-table.test.tsx` (spec 0023): the generic
  * `<TableView>` (AG Grid + SSRM) and the app chrome (`PageHeader`) are
  * framework pieces outside this microtask's ownership: they are stubbed so
  * the suite stays focused on what THIS adapter is responsible for — wiring

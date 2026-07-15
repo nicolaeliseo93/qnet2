@@ -28,7 +28,7 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     registry_id: null,
     source_id: null,
     partner_id: null,
-    project_status_id: 1,
+    pipeline_status_id: 1,
     business_function_id: 2,
     product_category_id: 4,
     country_id: 10,
@@ -66,7 +66,7 @@ describe('buildCreateCampaignSchema — standalone (project_id null)', () => {
     const schema = buildCreateCampaignSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
     const result = schema.safeParse(
       baseValues({
-        project_status_id: null,
+        pipeline_status_id: null,
         business_function_id: null,
         product_category_id: null,
       }),
@@ -75,7 +75,7 @@ describe('buildCreateCampaignSchema — standalone (project_id null)', () => {
     if (!result.success) {
       const paths = result.error.issues.map((issue) => issue.path.join('.'))
       expect(paths).toEqual(
-        expect.arrayContaining(['project_status_id', 'business_function_id', 'product_category_id']),
+        expect.arrayContaining(['pipeline_status_id', 'business_function_id', 'product_category_id']),
       )
     }
   })
@@ -98,7 +98,7 @@ describe('buildCreateCampaignSchema — linked (project_id set)', () => {
     const result = schema.safeParse(
       baseValues({
         project_id: 7,
-        project_status_id: null,
+        pipeline_status_id: null,
         business_function_id: null,
         product_category_id: null,
       }),
@@ -122,7 +122,7 @@ describe('buildCreateCampaignSchema — geo hierarchy (spec 0027 BR-4/BR-5)', ()
     const result = schema.safeParse(
       baseValues({
         project_id: 7,
-        project_status_id: null,
+        pipeline_status_id: null,
         business_function_id: null,
         product_category_id: null,
         country_id: null,
@@ -137,7 +137,7 @@ describe('buildCreateCampaignSchema — geo hierarchy (spec 0027 BR-4/BR-5)', ()
     const result = schema.safeParse(
       baseValues({
         project_id: 7,
-        project_status_id: null,
+        pipeline_status_id: null,
         business_function_id: null,
         product_category_id: null,
         country_id: null,
@@ -173,7 +173,7 @@ describe('buildCreateCampaignSchema — geo hierarchy (spec 0027 BR-4/BR-5)', ()
     const result = schema.safeParse(
       baseValues({
         project_id: 7,
-        project_status_id: null,
+        pipeline_status_id: null,
         business_function_id: null,
         product_category_id: null,
         country_id: null,

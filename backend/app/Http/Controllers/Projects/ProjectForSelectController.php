@@ -15,7 +15,7 @@ use Throwable;
  * GET /api/projects/for-select — minimal, searchable, paginated project list
  * feeding entity-backed selects (spec 0023, ADR 0011), mirroring
  * ReferentForSelectController. `meta` carries the Campaign form's defaults
- * (registry/source/partner/project_status/business_function/state/
+ * (registry/source/partner/pipeline_status/business_function/state/
  * product_category + budget figures).
  *
  * Thin invokable controller: validation (ProjectForSelectRequest),

@@ -7,7 +7,7 @@ use App\Models\Campaign;
 use App\Models\Project;
 use App\Models\User;
 use App\Tables\Campaigns\CampaignColumnCatalog;
-use App\Tables\Campaigns\CampaignProjectStatusResolver;
+use App\Tables\Campaigns\CampaignPipelineStatusResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -24,9 +24,9 @@ use Illuminate\Support\Facades\Gate;
  * input — backend.md §8) and, for `project` only (the sole sortable one), a
  * correlated subquery sort, mirroring ProjectsTableDefinition.
  *
- * `project_status` is the ONE doubly-derived column (BR-2/AC-032: a linked
- * campaign's OWN project_status_id is NULL, its effective status is read
- * through the project) — delegated to CampaignProjectStatusResolver (file-
+ * `pipeline_status` is the ONE doubly-derived column (BR-2/AC-032: a linked
+ * campaign's OWN pipeline_status_id is NULL, its effective status is read
+ * through the project) — delegated to CampaignPipelineStatusResolver (file-
  * size split) rather than a SQL-level JOIN/COALESCE on the base query (which
  * would risk ambiguous column names: `campaigns` and `projects` share
  * several). It is filterable-only (never sortable — spec 0023
@@ -41,10 +41,10 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     private const int MAX_FILTER_VALUES = 200;
 
     /**
-     * The doubly-derived `project_status` column id (AC-032), delegated to
-     * CampaignProjectStatusResolver rather than the DERIVED_RELATIONS map.
+     * The doubly-derived `pipeline_status` column id (AC-032), delegated to
+     * CampaignPipelineStatusResolver rather than the DERIVED_RELATIONS map.
      */
-    private const string PROJECT_STATUS_COLUMN = 'project_status';
+    private const string PROJECT_STATUS_COLUMN = 'pipeline_status';
 
     /**
      * Simple (single-hop) relation-name derived columns: relation accessor,
@@ -58,7 +58,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
     ];
 
-    public function __construct(private readonly CampaignProjectStatusResolver $projectStatusResolver) {}
+    public function __construct(private readonly CampaignPipelineStatusResolver $pipelineStatusResolver) {}
 
     public function domain(): string
     {
@@ -87,14 +87,14 @@ class CampaignsTableDefinition extends AbstractTableDefinition
         // the campaign's own geo (spec 0027, BR-5) feed the merged display
         // columns below.
         return Campaign::query()->with([
-            'project.projectStatus',
+            'project.pipelineStatus',
             'project.country',
             'project.state',
             'project.province',
             'project.city',
             'registry',
             'source',
-            'projectStatus',
+            'pipelineStatus',
             'country',
             'state',
             'province',
@@ -165,7 +165,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
             'project' => $this->summarizeProject($project),
             'name' => $row->name,
             'registry' => $this->summarize($row->registry),
-            'project_status' => $this->summarize($this->projectStatusResolver->effectiveStatus($row)),
+            'pipeline_status' => $this->summarize($this->pipelineStatusResolver->effectiveStatus($row)),
             'source' => $this->summarize($row->source),
             'country' => $this->summarize($country),
             'state' => $this->summarize($state),
@@ -231,8 +231,8 @@ class CampaignsTableDefinition extends AbstractTableDefinition
 
     /**
      * Handle the `project`/`registry`/`source` set filters via whereHas on
-     * the related row's name; `project_status` is delegated to
-     * CampaignProjectStatusResolver (AC-032). Every real column falls
+     * the related row's name; `pipeline_status` is delegated to
+     * CampaignPipelineStatusResolver (AC-032). Every real column falls
      * through to the generic engine.
      *
      * @param  Builder<Campaign>  $query
@@ -244,7 +244,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
         $names = $this->filterNames($filter);
 
         if ($columnId === self::PROJECT_STATUS_COLUMN) {
-            $this->projectStatusResolver->applyFilter($query, $names);
+            $this->pipelineStatusResolver->applyFilter($query, $names);
 
             return true;
         }
@@ -285,7 +285,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     /**
      * ORDER BY the linked project's name via a correlated subquery — only
      * `project` is declared sortable (spec 0023 table_definitions);
-     * `registry`/`project_status`/`source` are never asked to sort (not in
+     * `registry`/`pipeline_status`/`source` are never asked to sort (not in
      * sortableColumnIds()).
      *
      * @param  Builder<Campaign>  $query
@@ -310,8 +310,8 @@ class CampaignsTableDefinition extends AbstractTableDefinition
 
     /**
      * Excel-like distinct values (spec 0004/0005). `project`/`registry`/
-     * `source` are plain related-row names; `project_status` is delegated to
-     * CampaignProjectStatusResolver (AC-032).
+     * `source` are plain related-row names; `pipeline_status` is delegated to
+     * CampaignPipelineStatusResolver (AC-032).
      *
      * @param  Builder<Campaign>  $query
      * @param  array<string, mixed>  $columnConfig
@@ -320,7 +320,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
     {
         if ($columnId === self::PROJECT_STATUS_COLUMN) {
-            return $this->projectStatusResolver->distinctValues($search, $query, $limit);
+            return $this->pipelineStatusResolver->distinctValues($search, $query, $limit);
         }
 
         $config = self::DERIVED_RELATIONS[$columnId] ?? null;

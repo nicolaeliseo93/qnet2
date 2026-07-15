@@ -23,7 +23,7 @@ interface LeadStatusDetailViewProps {
  * Read-only detail of a single lead status. Purely presentational: the
  * caller (the table's "view" sheet) fetches the fresh detail and passes it
  * down. Composed from the shared detail kit for a consistent CRM look
- * (mirrors `ProjectStatusDetailView`).
+ * (mirrors `PipelineStatusDetailView`).
  */
 export function LeadStatusDetailView({ leadStatus }: LeadStatusDetailViewProps) {
   const { t } = useTranslation()

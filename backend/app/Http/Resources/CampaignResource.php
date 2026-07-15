@@ -42,7 +42,7 @@ class CampaignResource extends JsonResource
         $project = $this->project;
         $derivedFromProject = $project !== null;
 
-        $projectStatus = $derivedFromProject ? $project->projectStatus : $this->projectStatus;
+        $pipelineStatus = $derivedFromProject ? $project->pipelineStatus : $this->pipelineStatus;
         $businessFunction = $derivedFromProject ? $project->businessFunction : $this->businessFunction;
         $productCategory = $derivedFromProject ? $project->productCategory : $this->productCategory;
 
@@ -69,11 +69,11 @@ class CampaignResource extends JsonResource
             'partner_id' => $this->partner_id,
             'partner' => $this->summarize($this->partner),
             'derived_from_project' => $derivedFromProject,
-            'project_status_id' => $projectStatus?->id,
-            'project_status' => $projectStatus === null ? null : [
-                'id' => $projectStatus->id,
-                'name' => $projectStatus->name,
-                'color' => $projectStatus->color,
+            'pipeline_status_id' => $pipelineStatus?->id,
+            'pipeline_status' => $pipelineStatus === null ? null : [
+                'id' => $pipelineStatus->id,
+                'name' => $pipelineStatus->name,
+                'color' => $pipelineStatus->color,
             ],
             'business_function_id' => $businessFunction?->id,
             'business_function' => $this->summarize($businessFunction),

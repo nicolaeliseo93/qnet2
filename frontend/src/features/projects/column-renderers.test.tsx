@@ -29,14 +29,14 @@ describe('projectColumnRenderers.registry (relation cell)', () => {
   })
 })
 
-describe('projectColumnRenderers.project_status', () => {
+describe('projectColumnRenderers.pipeline_status', () => {
   it('renders the status name as a badge', () => {
-    renderCell('project_status', { id: 1, name: 'Active', color: 'green' })
+    renderCell('pipeline_status', { id: 1, name: 'Active', color: 'green' })
     expect(screen.getByText('Active')).toBeInTheDocument()
   })
 
   it('renders an em dash when unset', () => {
-    renderCell('project_status', null)
+    renderCell('pipeline_status', null)
     expect(screen.getByText('—')).toBeInTheDocument()
   })
 })

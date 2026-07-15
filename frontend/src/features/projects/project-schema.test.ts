@@ -20,7 +20,7 @@ function baseValues() {
     name: 'New project',
     description: null,
     registry_id: null,
-    project_status_id: 1,
+    pipeline_status_id: 1,
     source_id: null,
     business_function_id: null,
     country_id: 1,
@@ -54,12 +54,12 @@ describe('buildCreateProjectSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('rejects a null project_status_id (D-5)', () => {
+  it('rejects a null pipeline_status_id (D-5)', () => {
     const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
-    const result = schema.safeParse({ ...baseValues(), project_status_id: null })
+    const result = schema.safeParse({ ...baseValues(), pipeline_status_id: null })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.issues.some((issue) => issue.path.join('.') === 'project_status_id')).toBe(true)
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'pipeline_status_id')).toBe(true)
     }
   })
 

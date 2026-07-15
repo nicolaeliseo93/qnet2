@@ -10,7 +10,7 @@ namespace App\DataObjects\LeadStatuses;
  * LeadStatusService contract is explicit. `color` is a legitimately nullable
  * VALUE (clearing it back to none), so a plain null property cannot
  * distinguish "not submitted" from "submitted as null" — `colorSubmitted`
- * carries that distinction explicitly, mirroring UpdateProjectStatusData's
+ * carries that distinction explicitly, mirroring UpdatePipelineStatusData's
  * same pair. `sort_order` is never legitimately null (schema default 0, not
  * nullable), so a plain null sentinel is enough to mean "not submitted".
  */

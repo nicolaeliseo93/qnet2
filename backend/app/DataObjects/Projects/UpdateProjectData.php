@@ -12,7 +12,7 @@ namespace App\DataObjects\Projects;
  * ProjectService contract is explicit — see standards/architecture.md ->
  * Data Transfer Objects.
  *
- * `name`/`projectStatusId` are mandatory fields (BR-5/D-5): they cannot
+ * `name`/`pipelineStatusId` are mandatory fields (BR-5/D-5): they cannot
  * legitimately be nulled out, so a plain non-null property is enough (mirrors
  * UpdateProductData's `name`). Every other FK/scalar is a legitimately
  * nullable VALUE (clearing the classification), so a plain null property
@@ -25,7 +25,7 @@ final readonly class UpdateProjectData
 {
     public function __construct(
         public ?string $name = null,
-        public ?int $projectStatusId = null,
+        public ?int $pipelineStatusId = null,
         public ?string $description = null,
         public bool $descriptionSubmitted = false,
         public ?int $registryId = null,
@@ -65,7 +65,7 @@ final readonly class UpdateProjectData
     {
         return new self(
             name: array_key_exists('name', $data) ? (string) $data['name'] : null,
-            projectStatusId: array_key_exists('project_status_id', $data) ? (int) $data['project_status_id'] : null,
+            pipelineStatusId: array_key_exists('pipeline_status_id', $data) ? (int) $data['pipeline_status_id'] : null,
             description: array_key_exists('description', $data) ? $data['description'] : null,
             descriptionSubmitted: array_key_exists('description', $data),
             registryId: self::nullableInt($data, 'registry_id'),
@@ -112,8 +112,8 @@ final readonly class UpdateProjectData
             $attributes['name'] = $this->name;
         }
 
-        if ($this->projectStatusId !== null) {
-            $attributes['project_status_id'] = $this->projectStatusId;
+        if ($this->pipelineStatusId !== null) {
+            $attributes['pipeline_status_id'] = $this->pipelineStatusId;
         }
 
         if ($this->descriptionSubmitted) {

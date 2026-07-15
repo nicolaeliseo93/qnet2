@@ -19,8 +19,8 @@ function EmptyCell() {
 
 /**
  * Renders a hydrated `{id, name}` relation column (`project`, `registry`,
- * `project_status`, `source` — none of these carry a color token on the
- * `campaigns` table, unlike `projects.project_status`, since
+ * `pipeline_status`, `source` — none of these carry a color token on the
+ * `campaigns` table, unlike `projects.pipeline_status`, since
  * `CampaignsTableDefinition::mapRow` resolves them all through the same plain
  * name-only `summarize()`): the name, or an em dash.
  */
@@ -81,7 +81,7 @@ function TotalBudgetCell({ value }: ICellRendererParams) {
 export const campaignColumnRenderers: TableRendererMap = {
   project: (params) => <RelationCell {...params} />,
   registry: (params) => <RelationCell {...params} />,
-  project_status: (params) => <RelationCell {...params} />,
+  pipeline_status: (params) => <RelationCell {...params} />,
   source: (params) => <RelationCell {...params} />,
   country: (params) => <RelationCell {...params} />,
   state: (params) => <RelationCell {...params} />,
