@@ -86,6 +86,15 @@ export interface ImportRunDetail extends ImportRunSummary {
   fields: ImportFieldDescriptor[]
   global_fields: ImportGlobalFieldDescriptor[]
   dedup_modes: string[]
+  /**
+   * The FINAL persisted fields the review grid shows/edits (spec 0033 delta
+   * D-2026-07-15-placeholder-review-fields), e.g. `first_name`/`last_name`
+   * instead of the input-only `full_name`. `label` is a default-namespace
+   * i18n key, mirroring `ImportFieldDescriptor.label`. Optional/possibly
+   * empty for backward compatibility with runs/fixtures predating the
+   * delta — callers fall back to the mapped-fields derivation.
+   */
+  review_fields?: Array<{ id: string; label: string }>
 }
 
 /** Body of `PUT /imports/{domain}/{importRun}/configure`. */
@@ -155,16 +164,3 @@ export interface ImportRunSummaryReport {
   warnings: string[]
 }
 
-/** Pagination metadata of `GET /imports/{domain}` (history). */
-export interface ImportRunHistoryPagination {
-  total: number
-  offset: number
-  limit: number
-  total_pages: number
-}
-
-/** Response shape of `GET /imports/{domain}` (envelope `data`). */
-export interface ImportRunHistoryPage {
-  items: ImportRunSummary[]
-  pagination: ImportRunHistoryPagination
-}

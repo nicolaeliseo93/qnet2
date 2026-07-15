@@ -65,6 +65,17 @@ final class LeadImportFieldCatalog
     private const string DEFAULT_LEAD_STATUS_NAME = 'New';
 
     /**
+     * Fields StagedRowBuilder defaults to `config('imports.placeholder')`
+     * when still blank after recognizers ran (spec 0033 delta
+     * D-2026-07-15-placeholder-review-fields): a Referent's identity card
+     * needs a first/last name — NameSplitRecognizer supplies these from
+     * `full_name` when possible, the placeholder covers what it cannot.
+     *
+     * @var array<int, string>
+     */
+    private const array REQUIRED_FOR_CREATION = ['first_name', 'last_name'];
+
+    /**
      * @return array<int, array{id: string, required: bool}>
      */
     public function columns(): array
@@ -118,5 +129,32 @@ final class LeadImportFieldCatalog
         $id = LeadStatus::query()->where('name', self::DEFAULT_LEAD_STATUS_NAME)->value('id');
 
         return $id;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function requiredForCreation(): array
+    {
+        return self::REQUIRED_FOR_CREATION;
+    }
+
+    /**
+     * The review grid's FINAL persisted fields: every mappable field EXCEPT
+     * `full_name` — an input-only column, replaced by NameSplitRecognizer's
+     * `first_name`/`last_name` output (+ the placeholder), never itself
+     * persisted.
+     *
+     * @return array<int, array{id: string, label: string}>
+     */
+    public function reviewFields(): array
+    {
+        return array_values(array_filter(
+            array_map(
+                static fn (array $field): array => ['id' => $field['id'], 'label' => $field['label']],
+                $this->fields(),
+            ),
+            static fn (array $field): bool => $field['id'] !== 'full_name',
+        ));
     }
 }

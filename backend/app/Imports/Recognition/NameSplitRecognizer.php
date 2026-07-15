@@ -13,8 +13,13 @@ use Illuminate\Support\Str;
  *
  * Heuristic (compact by design — no first-name/surname database, per
  * engineering.md anti-abstraction-bloat):
- *   - first_name/last_name already mapped (non-blank) -> left untouched.
- *   - 1 token   -> cannot split reliably: best-effort, flagged for review.
+ *   - first_name OR last_name already mapped (non-blank) -> left untouched
+ *     entirely, so a value the user (or a prior recognizer run, on revise)
+ *     already set is never overwritten by a fresh full_name split.
+ *   - 1 token   -> treated as the first name (the common case: a single word
+ *     is far more often a given name than a surname-only entry); last_name
+ *     is left blank for StagedRowBuilder's placeholder step to flag for
+ *     review, rather than guessing a surname here.
  *   - 2 tokens  -> `[first, last]` order (the common CSV export convention;
  *     "Mario Rossi" and "Rossi Mario" both split token0/token1 — telling
  *     first-name-first from surname-first apart needs a name dictionary,
@@ -72,8 +77,15 @@ final class NameSplitRecognizer implements RowRecognizer
      */
     private function alreadyMapped(array $mapped): bool
     {
-        return trim((string) ($mapped[self::FIRST_NAME_FIELD] ?? '')) !== ''
-            && trim((string) ($mapped[self::LAST_NAME_FIELD] ?? '')) !== '';
+        return $this->present($mapped, self::FIRST_NAME_FIELD) || $this->present($mapped, self::LAST_NAME_FIELD);
+    }
+
+    /**
+     * @param  array<string, mixed>  $mapped
+     */
+    private function present(array $mapped, string $field): bool
+    {
+        return trim((string) ($mapped[$field] ?? '')) !== '';
     }
 
     /**
@@ -89,11 +101,14 @@ final class NameSplitRecognizer implements RowRecognizer
 
     private function splitSingleToken(string $token): RecognitionResult
     {
-        return RecognitionResult::resolved(
-            [self::FIRST_NAME_FIELD => null, self::LAST_NAME_FIELD => $token],
-            needsReview: true,
-            messages: ["Full name \"{$token}\" is a single word: cannot reliably split first/last name."],
-        );
+        // The token is assigned to first_name; last_name is left blank for
+        // StagedRowBuilder's placeholder step to flag (spec 0033 delta
+        // D-2026-07-15-placeholder-review-fields) — a single actionable
+        // warning there, instead of a redundant one here.
+        return RecognitionResult::resolved([
+            self::FIRST_NAME_FIELD => $token,
+            self::LAST_NAME_FIELD => null,
+        ]);
     }
 
     /**

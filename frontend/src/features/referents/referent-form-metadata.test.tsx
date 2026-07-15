@@ -26,6 +26,7 @@ const updateReferentMock = vi.fn()
 vi.mock('@/features/referents/api', () => ({
   createReferent: (...args: unknown[]) => createReferentMock(...args),
   updateReferent: (...args: unknown[]) => updateReferentMock(...args),
+  referentDetailQueryKey: (id: number | null) => ['referents', 'detail', id],
 }))
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -221,6 +222,32 @@ describe('ReferentForm — metadata-driven authorization (spec 0004)', () => {
     expect(updateReferentMock).toHaveBeenCalledTimes(1)
 
     vi.restoreAllMocks()
+  })
+
+  it('seeds the detail cache with the permissions envelope after a successful edit', async () => {
+    // `updateReferent` resolves with a bare ReferentDetail (no `permissions`),
+    // exactly like the real API client. The cache the detail page reads must
+    // still carry `permissions`, or its `referent.permissions.resource` access
+    // crashes on the next render.
+    const { permissions: _omit, ...bareSaved } = referent({ name: 'Ada Byron' })
+    updateReferentMock.mockResolvedValue(bareSaved)
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <ConfirmDialogProvider>
+          <ReferentForm mode={{ type: 'edit', referent: referent() }} onSuccess={vi.fn()} onCancel={vi.fn()} />
+        </ConfirmDialogProvider>
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(updateReferentMock).toHaveBeenCalledTimes(1))
+
+    const cached = client.getQueryData<ReferentDetailWithPermissions>(['referents', 'detail', 7])
+    expect(cached?.permissions.resource.update).toBe(true)
+    expect(cached?.name).toBe('Ada Byron')
   })
 
   it('surfaces a personal_data.* 422 error as a banner (buffer lives outside RHF)', async () => {

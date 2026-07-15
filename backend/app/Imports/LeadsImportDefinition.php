@@ -71,6 +71,22 @@ class LeadsImportDefinition extends AbstractImportDefinition
     }
 
     /**
+     * @return array<int, string>
+     */
+    public function requiredForCreation(): array
+    {
+        return $this->catalog->requiredForCreation();
+    }
+
+    /**
+     * @return array<int, array{id: string, label: string}>
+     */
+    public function reviewFields(): array
+    {
+        return $this->catalog->reviewFields();
+    }
+
+    /**
      * @return array<int, class-string>
      */
     public function recognizers(): array

@@ -48,6 +48,7 @@ function baseRun(overrides: Partial<ImportRunDetail> = {}): ImportRunDetail {
     ],
     global_fields: [],
     dedup_modes: ['create_new'],
+    review_fields: [{ id: 'email', label: 'Email' }],
     ...overrides,
   }
 }
@@ -92,6 +93,35 @@ describe('buildReviewColumnDefs', () => {
     expect(colDefs.find((col) => col.colId === 'field:email')?.sortable).toBe(true)
     expect(colDefs.find((col) => col.colId === 'extra:Notes column')?.sortable).toBe(false)
     expect(colDefs.find((col) => col.colId === 'messages')?.sortable).toBe(false)
+  })
+
+  it('builds editable columns from review_fields (the final persisted fields), not from the mapped input columns', () => {
+    // delta D-2026-07-15-placeholder-review-fields: the input `full_name`
+    // column mapping must not surface as an editable column; only the
+    // final persisted `first_name`/`last_name` review fields do.
+    const run = baseRun({
+      column_mapping: { 'Full name': 'full_name' },
+      fields: [{ id: 'full_name', label: 'Full name', required: false, group: 'contact', type: 'string' }],
+      review_fields: [
+        { id: 'first_name', label: 'First name' },
+        { id: 'last_name', label: 'Last name' },
+      ],
+    })
+    const colDefs = buildReviewColumnDefs(run, i18n.t.bind(i18n))
+    const colIds = colDefs.map((col) => col.colId)
+
+    expect(colIds).toEqual(['row_number', 'status', 'field:first_name', 'field:last_name', 'messages'])
+    expect(colIds).not.toContain('field:full_name')
+  })
+
+  it('falls back to the legacy mapped-fields derivation when review_fields is absent or empty', () => {
+    const withoutReviewFields = baseRun({ review_fields: undefined })
+    const withEmptyReviewFields = baseRun({ review_fields: [] })
+
+    for (const run of [withoutReviewFields, withEmptyReviewFields]) {
+      const colIds = buildReviewColumnDefs(run, i18n.t.bind(i18n)).map((col) => col.colId)
+      expect(colIds).toEqual(['row_number', 'status', 'field:email', 'extra:Notes column', 'messages'])
+    }
   })
 
   it("the mapped field column's valueGetter/valueSetter read and write `values` by field id", () => {

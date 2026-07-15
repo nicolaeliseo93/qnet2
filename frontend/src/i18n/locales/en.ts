@@ -26,6 +26,7 @@ import { projects } from './en-projects'
 import { campaigns } from './en-campaigns'
 import { leads } from './en-leads'
 import { leadStatuses } from './en-lead-statuses'
+import { leadImports } from './en-lead-imports'
 import { businessFunctions } from './en-business-functions'
 import { moduleStats, statsPanel } from './en-stats'
 import {
@@ -440,6 +441,7 @@ export const en = {
   pipelineStatuses,
   campaigns: { ...campaigns, stats: moduleStats.campaigns },
   leadStatuses,
+  leadImports,
   leads: { ...leads, stats: moduleStats.leads },
 }
 

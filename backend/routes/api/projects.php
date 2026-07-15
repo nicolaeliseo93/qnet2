@@ -33,69 +33,61 @@ use Illuminate\Support\Facades\Route;
 // Project statuses CRUD (BR-4 delete-guard lives in PipelineStatusService).
 // Authorization (pipeline-statuses.view/create/update/delete) is enforced
 // server-side in PipelineStatusController via PipelineStatusPolicy.
-Route::middleware('throttle:60,1')->group(function () {
-    // Minimal searchable/paginated list for entity-backed selects (ADR 0011).
-    // Declared ABOVE pipeline-statuses/{pipelineStatus} so the literal
-    // `for-select` segment wins over the bound wildcard. Gated by
-    // pipeline-statuses.viewAny server-side in PipelineStatusForSelectController.
-    Route::get('pipeline-statuses/for-select', PipelineStatusForSelectController::class);
+// Minimal searchable/paginated list for entity-backed selects (ADR 0011).
+// Declared ABOVE pipeline-statuses/{pipelineStatus} so the literal
+// `for-select` segment wins over the bound wildcard. Gated by
+// pipeline-statuses.viewAny server-side in PipelineStatusForSelectController.
+Route::get('pipeline-statuses/for-select', PipelineStatusForSelectController::class);
 
-    Route::get('pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'show']);
-    Route::post('pipeline-statuses', [PipelineStatusController::class, 'store']);
-    Route::match(['put', 'patch'], 'pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'update']);
-    Route::delete('pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'destroy']);
-});
+Route::get('pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'show']);
+Route::post('pipeline-statuses', [PipelineStatusController::class, 'store']);
+Route::match(['put', 'patch'], 'pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'update']);
+Route::delete('pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'destroy']);
 
 // Projects CRUD (BR-1 code generation, BR-5 delete-guard, BR-7 budget
 // aggregates all live in ProjectService). Authorization (projects.view/
 // create/update/delete) is enforced server-side in ProjectController via
 // ProjectPolicy.
-Route::middleware('throttle:60,1')->group(function () {
-    // Minimal searchable/paginated list for entity-backed selects (ADR 0011),
-    // carrying the Campaign form's default `meta`. Declared ABOVE
-    // projects/{project} so the literal `for-select` segment wins over the
-    // bound wildcard. Gated by projects.viewAny server-side in
-    // ProjectForSelectController.
-    Route::get('projects/for-select', ProjectForSelectController::class);
+// Minimal searchable/paginated list for entity-backed selects (ADR 0011),
+// carrying the Campaign form's default `meta`. Declared ABOVE
+// projects/{project} so the literal `for-select` segment wins over the
+// bound wildcard. Gated by projects.viewAny server-side in
+// ProjectForSelectController.
+Route::get('projects/for-select', ProjectForSelectController::class);
 
-    // KPI tiles for the card grid (spec 0025, D-3). Declared ABOVE
-    // projects/{project} so the literal `summary` segment wins over the
-    // bound wildcard. Gated by projects.viewAny server-side in
-    // ProjectSummaryController.
-    Route::get('projects/summary', ProjectSummaryController::class);
+// KPI tiles for the card grid (spec 0025, D-3). Declared ABOVE
+// projects/{project} so the literal `summary` segment wins over the
+// bound wildcard. Gated by projects.viewAny server-side in
+// ProjectSummaryController.
+Route::get('projects/summary', ProjectSummaryController::class);
 
-    // Card-grid list (spec 0025, D-3): a plain index, distinct from the
-    // table framework — the card payload differs from the table row
-    // payload. Gated by projects.viewAny server-side in ProjectController.
-    Route::get('projects', [ProjectController::class, 'index']);
+// Card-grid list (spec 0025, D-3): a plain index, distinct from the
+// table framework — the card payload differs from the table row
+// payload. Gated by projects.viewAny server-side in ProjectController.
+Route::get('projects', [ProjectController::class, 'index']);
 
-    Route::get('projects/{project}', [ProjectController::class, 'show']);
-    Route::post('projects', [ProjectController::class, 'store']);
-    Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update']);
-    Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
-});
+Route::get('projects/{project}', [ProjectController::class, 'show']);
+Route::post('projects', [ProjectController::class, 'store']);
+Route::match(['put', 'patch'], 'projects/{project}', [ProjectController::class, 'update']);
+Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
 
 // Campaigns CRUD (BR-1 code generation, BR-2 classification derivation, BR-3
 // budget guard all live in CampaignService). Authorization (campaigns.view/
 // create/update/delete) is enforced server-side in CampaignController via
 // CampaignPolicy.
-Route::middleware('throttle:60,1')->group(function () {
-    // Minimal searchable/paginated list for entity-backed selects (ADR 0011,
-    // spec 0024 — feeds the Lead form's campaign field). Declared ABOVE
-    // campaigns/{campaign} so the literal `for-select` segment wins over the
-    // bound wildcard. Gated by campaigns.viewAny server-side in
-    // CampaignForSelectController.
-    Route::get('campaigns/for-select', CampaignForSelectController::class);
+// Minimal searchable/paginated list for entity-backed selects (ADR 0011,
+// spec 0024 — feeds the Lead form's campaign field). Declared ABOVE
+// campaigns/{campaign} so the literal `for-select` segment wins over the
+// bound wildcard. Gated by campaigns.viewAny server-side in
+// CampaignForSelectController.
+Route::get('campaigns/for-select', CampaignForSelectController::class);
 
-    Route::get('campaigns/{campaign}', [CampaignController::class, 'show']);
-    Route::post('campaigns', [CampaignController::class, 'store']);
-    Route::match(['put', 'patch'], 'campaigns/{campaign}', [CampaignController::class, 'update']);
-    Route::delete('campaigns/{campaign}', [CampaignController::class, 'destroy']);
-});
+Route::get('campaigns/{campaign}', [CampaignController::class, 'show']);
+Route::post('campaigns', [CampaignController::class, 'store']);
+Route::match(['put', 'patch'], 'campaigns/{campaign}', [CampaignController::class, 'update']);
+Route::delete('campaigns/{campaign}', [CampaignController::class, 'destroy']);
 
 // Product categories / states for-select (spec 0023) — see file docblock for
 // why they are declared here instead of inline in their own blocks.
-Route::middleware('throttle:60,1')->group(function () {
-    Route::get('product-categories/for-select', ProductCategoryForSelectController::class);
-    Route::get('states/for-select', StateForSelectController::class);
-});
+Route::get('product-categories/for-select', ProductCategoryForSelectController::class);
+Route::get('states/for-select', StateForSelectController::class);

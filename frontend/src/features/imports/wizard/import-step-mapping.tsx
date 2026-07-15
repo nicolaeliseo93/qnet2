@@ -54,16 +54,19 @@ export function ImportStepMapping({
   const columns = run?.detected_columns ?? EMPTY_COLUMNS
   const dedupModes = run?.dedup_modes ?? []
 
-  // Every detected column MUST have a string form value: a column the
-  // auto-mapping did not cover is absent from `initialMapping`, and without a
-  // default its RHF value stays `undefined` — which `z.record(z.string(),
-  // z.string())` rejects, blocking submit with an error that has no visible
-  // FormMessage (the "dead button"). Default an unmapped column to
-  // IGNORE_TARGET, matching what its Select already displays.
+  // The form's `mapping` is keyed by column INDEX (a path-safe string), NOT by
+  // the column key: a column name can contain a `.` (e.g. a survey-question
+  // header ending in a period), and react-hook-form/lodash treat a `.` in a
+  // field NAME as a nested path — so `mapping.<key with a dot>` would silently
+  // drop/split the real key and submit a mismatched `column_mapping` the
+  // backend rejects ("not part of this run's detected columns"). We map by
+  // index here and translate back to the real column key on submit. Every
+  // column also gets an explicit default (unmapped → IGNORE), so no value ever
+  // stays `undefined` and blocks the (invisible) `z.record(z.string())` rule.
   const completeMapping = useMemo(() => {
     const result: Record<string, string> = {}
     for (const column of columns) {
-      result[column.key] = initialMapping[column.key] ?? IGNORE_TARGET
+      result[String(column.index)] = initialMapping[column.key] ?? IGNORE_TARGET
     }
     return result
   }, [columns, initialMapping])
@@ -77,9 +80,23 @@ export function ImportStepMapping({
   })
 
   const mappingValues = form.watch('mapping')
-  const signals = computeMappingSignals(columns, fields, mappingValues)
+  // Re-key the index-based form values back to the real column keys for the
+  // signals (which reason per column key). Computed inline every render (not
+  // memoized): `form.watch` may hand back a stable reference on a change, and
+  // a memo keyed on it would show stale conflict/required badges.
+  const keyedMapping: Record<string, string> = {}
+  for (const column of columns) {
+    keyedMapping[column.key] = mappingValues[String(column.index)] ?? IGNORE_TARGET
+  }
+  const signals = computeMappingSignals(columns, fields, keyedMapping)
 
-  const handleSubmit = form.handleSubmit((values) => onSubmit(values.mapping, values.dedup_strategy))
+  const handleSubmit = form.handleSubmit((values) => {
+    const realMapping: Record<string, string> = {}
+    for (const column of columns) {
+      realMapping[column.key] = values.mapping[String(column.index)] ?? IGNORE_TARGET
+    }
+    onSubmit(realMapping, values.dedup_strategy)
+  })
 
   return (
     <Card>
@@ -88,8 +105,8 @@ export function ImportStepMapping({
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
             <div className="flex flex-col gap-3">
               {columns.map((column) => {
-                const fieldName = `mapping.${column.key}` as FieldPath<ImportMappingFormValues>
-                const currentTarget = mappingValues[column.key] ?? IGNORE_TARGET
+                const fieldName = `mapping.${column.index}` as FieldPath<ImportMappingFormValues>
+                const currentTarget = mappingValues[String(column.index)] ?? IGNORE_TARGET
                 const isConflict = signals.conflictFieldIds.has(currentTarget)
 
                 return (

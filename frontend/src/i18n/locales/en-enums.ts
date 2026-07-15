@@ -71,4 +71,16 @@ export const enums = {
     medium: 'Medium',
     large: 'Large',
   },
+  // Import run status (import history badge).
+  import_status: {
+    validating: 'Validating',
+    awaiting_confirmation: 'Awaiting confirmation',
+    analyzing: 'Analyzing',
+    configuring: 'Configuring',
+    staging: 'Staging',
+    reviewing: 'Reviewing',
+    processing: 'Processing',
+    completed: 'Completed',
+    failed: 'Failed',
+  },
 }

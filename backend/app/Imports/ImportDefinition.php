@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Model;
  * @phpstan-type ImportColumn array{id: string, required: bool}
  * @phpstan-type ImportField array{id: string, label: string, required: bool, group: ?string, type: string}
  * @phpstan-type ImportGlobalField array{id: string, label: string, required: bool, for_select_resource: ?string, default: mixed}
+ * @phpstan-type ImportReviewField array{id: string, label: string}
  */
 interface ImportDefinition
 {
@@ -193,4 +194,32 @@ interface ImportDefinition
      * @param  array<string, mixed>  $mapped  field id => resolved value (after recognizers)
      */
     public function resolveDuplicate(array $mapped): ?int;
+
+    /**
+     * Field ids without which the domain record cannot be created at all
+     * (e.g. for leads: `first_name`/`last_name`, since a Referent's identity
+     * card needs one). Any of these still blank after recognizers() ran is
+     * defaulted by StagedRowBuilder to `config('imports.placeholder')` and
+     * flags the row for review, rather than rejecting it outright (spec 0033
+     * delta D-2026-07-15-placeholder-review-fields) — the placeholder stays
+     * editable in the review grid. Defaults (in AbstractImportDefinition) to
+     * none: the 5 legacy domains keep rejecting a blank required column as a
+     * validateRow() error, unaffected by this.
+     *
+     * @return array<int, string>
+     */
+    public function requiredForCreation(): array;
+
+    /**
+     * Catalogue of the FINAL persisted fields the wizard's review grid
+     * shows/edits — never the raw input columns. Defaults (in
+     * AbstractImportDefinition) to fields() reduced to {id,label}. A
+     * definition whose recognizers() replace an input-only field with
+     * derived ones (e.g. leads' `full_name` -> `first_name`/`last_name`)
+     * overrides this to drop the input-only field, so the review UI edits
+     * what actually gets persisted, not what was uploaded.
+     *
+     * @return array<int, ImportReviewField>
+     */
+    public function reviewFields(): array;
 }

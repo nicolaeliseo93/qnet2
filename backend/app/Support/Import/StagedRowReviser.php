@@ -11,16 +11,20 @@ use App\Models\User;
 
 /**
  * Re-validates ONE staged row after an inline edit (PATCH .../rows/{row},
- * spec 0033, AC-017) by re-running it through the SAME StagedRowBuilder
- * pipeline (mapping/recognizers/validateRow/resolveDuplicate) StageImportJob
- * used to stage it originally — never a parallel/duplicated validation path.
+ * spec 0033 AC-017; extended by delta D-2026-07-15-placeholder-review-fields)
+ * by re-running it through the SAME StagedRowBuilder pipeline (recognizers ->
+ * placeholder -> validateRow -> resolveDuplicate) StageImportJob used to
+ * stage it originally — never a parallel/duplicated validation path.
  *
- * StagedRowBuilder::build() takes RAW file-column-keyed values, not the
- * field-id-keyed `values` the wizard's edit form sends. mergeEditedIntoRaw()
- * bridges the two: it overlays each edited value onto the SAME raw column
- * key the run's `column_mapping` already resolves it from (inverting the
- * mapping), so build() replays identically to staging, just with the user's
- * correction substituted in.
+ * Unlike the original B5 implementation, this does NOT rebuild raw file
+ * values by inverting column_mapping: the edited `values` are field-id-keyed
+ * (the review grid edits the FINAL persisted fields, e.g. `first_name`/
+ * `last_name`, not the raw `full_name` column they were split from — a
+ * recognizer-derived field has no raw column of its own to reconstruct). It
+ * merges the edited values directly onto the row's existing `mapped_values`/
+ * `extra_values` and replays StagedRowBuilder::resolve() from there, so
+ * recognizers skip fields the edit (or the original staging) already
+ * populated and the placeholder only re-applies to a field still blank.
  */
 final class StagedRowReviser
 {
@@ -32,13 +36,12 @@ final class StagedRowReviser
         $columnMapping = $run->column_mapping ?? [];
         $dedupMode = ImportDedupMode::from($run->dedup_strategy ?? ImportDedupMode::CreateOnly->value);
 
-        $rawValues = $this->mergeEditedIntoRaw($row->raw_values ?? [], $columnMapping, $editedValues);
+        [$mappedValues, $extraValues] = $this->mergeEditedValues($row, $columnMapping, $editedValues);
 
         $builder = new StagedRowBuilder($definition, $actor, $columnMapping, $dedupMode);
-        $outcome = $builder->build($row->row_number, $rawValues);
+        $outcome = $builder->resolve($row->row_number, $mappedValues, $extraValues);
 
         $row->update([
-            'raw_values' => $rawValues,
             'mapped_values' => $outcome->mappedValues,
             'extra_values' => $outcome->extraValues,
             'resolved' => $outcome->resolved,
@@ -52,31 +55,36 @@ final class StagedRowReviser
     }
 
     /**
-     * @param  array<string, string>  $rawValues
+     * Overlays `editedValues` onto the row's current mapped/extra values: a
+     * key naming a file column mapped to `__extra__` on this run goes to
+     * extraValues (keyed by that same original column name, mirroring
+     * StagedRowBuilder::applyMapping()); every other key is a field id and
+     * goes to mappedValues.
+     *
      * @param  array<string, string>  $columnMapping
      * @param  array<string, string>  $editedValues
-     * @return array<string, string>
+     * @return array{0: array<string, mixed>, 1: array<string, string>|null}
      */
-    private function mergeEditedIntoRaw(array $rawValues, array $columnMapping, array $editedValues): array
+    private function mergeEditedValues(ImportRunRow $row, array $columnMapping, array $editedValues): array
     {
-        foreach ($columnMapping as $columnKey => $target) {
-            if ($target === StagedRowBuilder::EXTRA_TARGET) {
-                if (array_key_exists($columnKey, $editedValues)) {
-                    $rawValues[$columnKey] = $editedValues[$columnKey];
-                }
+        $mappedValues = $row->mapped_values ?? [];
+        $extraValues = $row->extra_values ?? [];
+
+        $extraColumnKeys = array_keys(array_filter(
+            $columnMapping,
+            static fn (string $target): bool => $target === StagedRowBuilder::EXTRA_TARGET,
+        ));
+
+        foreach ($editedValues as $key => $value) {
+            if (in_array($key, $extraColumnKeys, true)) {
+                $extraValues[$key] = $value;
 
                 continue;
             }
 
-            if ($target === StagedRowBuilder::IGNORE_TARGET) {
-                continue;
-            }
-
-            if (array_key_exists($target, $editedValues)) {
-                $rawValues[$columnKey] = $editedValues[$target];
-            }
+            $mappedValues[$key] = $value;
         }
 
-        return $rawValues;
+        return [$mappedValues, $extraValues === [] ? null : $extraValues];
     }
 }

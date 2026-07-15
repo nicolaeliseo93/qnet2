@@ -167,6 +167,41 @@ describe('ImportStepMapping', () => {
     expect(screen.getAllByText('Mapped more than once')).toHaveLength(2)
   })
 
+  it('submits column keys verbatim even when a key contains a dot/comma/question mark (regression: RHF path mangling)', async () => {
+    // Real-world survey headers end in a period and contain commas/question
+    // marks; used as an RHF field-name path, a `.` splits/strips the key and
+    // the backend rejects the mismatched column_mapping. Keying the form by
+    // column index must preserve the exact key on submit.
+    const trickyKey = 'hai_un_contratto_di_lavoro?_i_corsi_sono_rivolti_a_disoccupati_e_percettori_di_adi,_naspi_o_sfl.'
+    const onSubmit = vi.fn()
+    render(
+      <ImportStepMapping
+        run={baseRun({
+          detected_columns: [
+            { key: 'Email', name: 'Email', index: 0, duplicate: false },
+            { key: trickyKey, name: trickyKey, index: 1, duplicate: false },
+          ],
+          fields: [{ id: 'email', label: 'Email', required: false, group: 'contact', type: 'string' }],
+        })}
+        initialMapping={{ Email: 'email' }}
+        initialDedupStrategy="create_new"
+        onBack={vi.fn()}
+        onSubmit={onSubmit}
+        isSubmitting={false}
+        submitError={null}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save mapping and continue' }))
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { Email: 'email', [trickyKey]: IGNORE_TARGET },
+        'create_new',
+      ),
+    )
+  })
+
   it('calls onBack from the back action', () => {
     const onBack = vi.fn()
     render(

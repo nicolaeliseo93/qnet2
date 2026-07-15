@@ -61,18 +61,28 @@ it('splits a double surname started by the "lo" particle', function () {
         ->and($result->resolved)->toBe(['first_name' => 'Giulia', 'last_name' => 'Lo Russo']);
 });
 
-it('flags a single-word name as needing review with a best-effort split', function () {
-    $result = (new NameSplitRecognizer)->recognize(nameSplitContext(), ['full_name' => 'Rossi']);
+it('assigns a single-word name to first_name, leaving last_name for the placeholder step to flag (spec 0033 delta)', function () {
+    $result = (new NameSplitRecognizer)->recognize(nameSplitContext(), ['full_name' => 'Mario']);
 
-    expect($result->needsReview)->toBeTrue()
-        ->and($result->resolved)->toBe(['first_name' => null, 'last_name' => 'Rossi'])
-        ->and($result->messages)->not->toBeEmpty();
+    expect($result->needsReview)->toBeFalse()
+        ->and($result->resolved)->toBe(['first_name' => 'Mario', 'last_name' => null])
+        ->and($result->messages)->toBe([]);
 });
 
 it('never overwrites already-mapped first_name/last_name', function () {
     $result = (new NameSplitRecognizer)->recognize(nameSplitContext(), [
         'full_name' => 'Mario Rossi',
         'first_name' => 'Giovanni',
+        'last_name' => 'Bianchi',
+    ]);
+
+    expect($result->resolved)->toBe([])
+        ->and($result->needsReview)->toBeFalse();
+});
+
+it('never overwrites a single already-mapped first_name/last_name field either (spec 0033 delta)', function () {
+    $result = (new NameSplitRecognizer)->recognize(nameSplitContext(), [
+        'full_name' => 'Mario Rossi',
         'last_name' => 'Bianchi',
     ]);
 

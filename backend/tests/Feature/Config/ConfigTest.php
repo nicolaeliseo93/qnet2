@@ -181,10 +181,10 @@ it('falls back to the app locale on an unsupported or malicious Accept-Language'
     expect(App::getLocale())->toBe('en');
 });
 
-it('is rate-limited (throttle headers present)', function () {
+it('is no longer rate-limited', function () {
     $this->getJson('/api/config')
         ->assertOk()
-        ->assertHeader('X-RateLimit-Limit', 30);
+        ->assertHeaderMissing('X-RateLimit-Limit');
 });
 
 it('no longer exposes the removed per-enum endpoint', function () {

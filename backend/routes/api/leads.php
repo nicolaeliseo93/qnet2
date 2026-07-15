@@ -19,9 +19,7 @@ use Illuminate\Support\Facades\Route;
 
 // Leads CRUD. Authorization (leads.view/create/update/delete) is enforced
 // server-side in LeadController via LeadPolicy on every endpoint.
-Route::middleware('throttle:60,1')->group(function () {
-    Route::get('leads/{lead}', [LeadController::class, 'show']);
-    Route::post('leads', [LeadController::class, 'store']);
-    Route::match(['put', 'patch'], 'leads/{lead}', [LeadController::class, 'update']);
-    Route::delete('leads/{lead}', [LeadController::class, 'destroy']);
-});
+Route::get('leads/{lead}', [LeadController::class, 'show']);
+Route::post('leads', [LeadController::class, 'store']);
+Route::match(['put', 'patch'], 'leads/{lead}', [LeadController::class, 'update']);
+Route::delete('leads/{lead}', [LeadController::class, 'destroy']);

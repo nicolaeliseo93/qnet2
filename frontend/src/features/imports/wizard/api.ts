@@ -6,7 +6,6 @@ import type {
   ImportRunRowsPage,
   ImportRunRowsQuery,
   ImportRunRowUpdateResult,
-  ImportRunHistoryPage,
   ImportRunSummary,
   ImportRunSummaryReport,
 } from '@/features/imports/wizard/types'
@@ -64,26 +63,6 @@ export async function confirmImportRun(domain: string, importRunId: number): Pro
     `/imports/${domain}/${importRunId}/confirm`,
   )
   return data.data.import_run
-}
-
-/**
- * Lists the actor's own runs for a domain, paginated (`GET /imports/{domain}`).
- * Owned by F5 (history); exposed here so the endpoint signature is defined
- * exactly once.
- */
-export async function getImportRunHistory(
-  domain: string,
-  page: number,
-  perPage: number,
-): Promise<ImportRunHistoryPage> {
-  // Paginated list endpoints use the shared FLAT envelope ({ items, pagination,
-  // export_link }) of BaseApiController::paginatedResponse — mirroring the
-  // tables SSRM datasource (features/table/api.ts::fetchTableRows) — NOT the
-  // { data } wrapper. Read the body directly.
-  const { data } = await apiClient.get<ImportRunHistoryPage>(`/imports/${domain}`, {
-    params: { page, per_page: perPage },
-  })
-  return data
 }
 
 /**

@@ -108,22 +108,37 @@ function buildValueColumn(colId: string, valueKey: string, headerName: string, s
 }
 
 /**
- * Builds the review grid's column definitions from the run's frozen mapping
- * (AC-023): `row_number`/`status` are read-only service columns, one
- * editable column per mapped field and per `__extra__` column, and a
- * trailing read-only `messages` column. Sorting is only wired on the columns
- * the backend allow-lists (`row_number`, `status`, mapped field ids) —
- * extra columns and `messages` stay unsortable, matching the SSRM contract.
+ * The review grid's editable "field" columns: the FINAL persisted fields
+ * (`run.review_fields`, spec 0033 delta D-2026-07-15-placeholder-review-fields)
+ * — e.g. `first_name`/`last_name` — not the input-only mapped columns
+ * (`full_name`). Falls back to the legacy mapped-fields derivation when
+ * `review_fields` is absent/empty (retro-compat with runs/fixtures that
+ * predate the delta).
+ */
+function resolveEditableFields(run: ImportRunDetail): Array<{ id: string; label: string }> {
+  if (run.review_fields && run.review_fields.length > 0) {
+    return run.review_fields
+  }
+  const mappedFieldIds = new Set(
+    Object.values(run.column_mapping ?? {}).filter((target) => target !== IGNORE_TARGET && target !== EXTRA_TARGET),
+  )
+  return run.fields.filter((field) => mappedFieldIds.has(field.id))
+}
+
+/**
+ * Builds the review grid's column definitions: `row_number`/`status` are
+ * read-only service columns, one editable column per review field (AC-023,
+ * delta D-2026-07-15-placeholder-review-fields) and per `__extra__` column,
+ * and a trailing read-only `messages` column. Sorting is only wired on the
+ * columns the backend allow-lists (`row_number`, `status`, review field ids)
+ * — extra columns and `messages` stay unsortable, matching the SSRM contract.
  */
 export function buildReviewColumnDefs(run: ImportRunDetail, t: TFunction): ColDef<ImportRunRowItem>[] {
   const mapping = run.column_mapping ?? {}
-  const mappedFieldIds = new Set(
-    Object.values(mapping).filter((target) => target !== IGNORE_TARGET && target !== EXTRA_TARGET),
-  )
   const extraColumnNames = Object.entries(mapping)
     .filter(([, target]) => target === EXTRA_TARGET)
     .map(([columnName]) => columnName)
-  const mappedFields = run.fields.filter((field) => mappedFieldIds.has(field.id))
+  const editableFields = resolveEditableFields(run)
 
   return [
     {
@@ -151,7 +166,7 @@ export function buildReviewColumnDefs(run: ImportRunDetail, t: TFunction): ColDe
     // `field.label` is a backend default-namespace i18n key
     // (`imports.leads.fields.*`); resolve it via the default namespace, not the
     // `importWizard`-scoped `t` used for the grid's own chrome.
-    ...mappedFields.map((field) =>
+    ...editableFields.map((field) =>
       buildValueColumn(FIELD_COLUMN_PREFIX + field.id, field.id, i18n.t(field.label), true),
     ),
     ...extraColumnNames.map((columnName) =>

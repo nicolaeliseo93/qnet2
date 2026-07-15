@@ -71,4 +71,16 @@ export const enums = {
     medium: 'Media',
     large: 'Grande',
   },
+  // Stato di una import run (badge dello storico import).
+  import_status: {
+    validating: 'In validazione',
+    awaiting_confirmation: 'In attesa di conferma',
+    analyzing: 'Analisi',
+    configuring: 'Configurazione',
+    staging: 'Preparazione',
+    reviewing: 'Revisione',
+    processing: 'Elaborazione',
+    completed: 'Completato',
+    failed: 'Fallito',
+  },
 }

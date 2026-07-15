@@ -65,6 +65,12 @@ return [
     // isolation unit — see ProcessImportJob).
     'batch_size' => (int) env('IMPORT_BATCH_SIZE', 200),
 
+    // Value StagedRowBuilder defaults a still-blank `requiredForCreation()`
+    // field to, after recognizers ran, instead of rejecting the row outright
+    // (spec 0033 delta D-2026-07-15-placeholder-review-fields): the row is
+    // flagged warning and the placeholder stays editable in the review grid.
+    'placeholder' => env('IMPORT_PLACEHOLDER', 'SCONOSCIUTO'),
+
     /*
     |--------------------------------------------------------------------------
     | Column mapping aliases (spec 0033 — App\Imports\Support\ColumnMapper)

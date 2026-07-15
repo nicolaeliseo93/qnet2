@@ -21,11 +21,9 @@ use Illuminate\Support\Facades\Route;
 | that same middleware/prefix context.
 */
 
-Route::middleware('throttle:60,1')->group(function () {
-    Route::get('custom-fields/entities', CustomFieldEntitiesController::class);
+Route::get('custom-fields/entities', CustomFieldEntitiesController::class);
 
-    Route::get('custom-fields/{customField}', [CustomFieldController::class, 'show']);
-    Route::post('custom-fields', [CustomFieldController::class, 'store']);
-    Route::match(['put', 'patch'], 'custom-fields/{customField}', [CustomFieldController::class, 'update']);
-    Route::delete('custom-fields/{customField}', [CustomFieldController::class, 'destroy']);
-});
+Route::get('custom-fields/{customField}', [CustomFieldController::class, 'show']);
+Route::post('custom-fields', [CustomFieldController::class, 'store']);
+Route::match(['put', 'patch'], 'custom-fields/{customField}', [CustomFieldController::class, 'update']);
+Route::delete('custom-fields/{customField}', [CustomFieldController::class, 'destroy']);

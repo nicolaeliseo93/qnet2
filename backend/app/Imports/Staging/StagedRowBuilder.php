@@ -43,6 +43,23 @@ final class StagedRowBuilder
         // Step 1: split the raw row into mapped field values and extra values.
         [$mappedValues, $extraValues] = $this->applyMapping($rawValues);
 
+        return $this->resolve($rowNumber, $mappedValues, $extraValues === [] ? null : $extraValues);
+    }
+
+    /**
+     * Runs recognizers -> placeholder -> validateRow -> resolveDuplicate on
+     * an ALREADY mapped value set (spec 0033 delta
+     * D-2026-07-15-placeholder-review-fields): build() calls this right
+     * after applying a fresh row's column_mapping; StagedRowReviser calls it
+     * directly on an edited row's merged mapped values, with no raw file
+     * columns to reconstruct — a recognizer-derived field (e.g.
+     * first_name/last_name) has no raw column of its own.
+     *
+     * @param  array<string, mixed>  $mappedValues
+     * @param  array<string, string>|null  $extraValues
+     */
+    public function resolve(int $rowNumber, array $mappedValues, ?array $extraValues): StageOutcome
+    {
         // Step 2: run the definition's recognizers, merging resolved values
         // into BOTH the mapped values (so validateRow/persistRow see them
         // directly) and the row's own `resolved` record (for the review UI).
@@ -50,13 +67,21 @@ final class StagedRowBuilder
         [$resolved, $messages, $needsReview] = $this->runRecognizers($context, $mappedValues);
         $mappedValues = [...$mappedValues, ...$resolved];
 
+        // Step 2.5: any field still blank but required for creation defaults
+        // to the configured placeholder, flagging the row for review instead
+        // of rejecting it outright — the placeholder lands in mappedValues,
+        // so it is persisted and editable in the review grid.
+        [$mappedValues, $placeholderMessages, $placeholderApplied] = $this->applyPlaceholders($mappedValues);
+        $messages = [...$messages, ...$placeholderMessages];
+        $needsReview = $needsReview || $placeholderApplied;
+
         // Step 3: field-level validation rejects the row regardless of dedup.
         $errors = $this->definition->validateRow($mappedValues, $context);
 
         if ($errors !== []) {
             return new StageOutcome(
                 mappedValues: $mappedValues,
-                extraValues: $extraValues === [] ? null : $extraValues,
+                extraValues: $extraValues,
                 resolved: $resolved === [] ? null : $resolved,
                 status: ImportRowStatus::Error,
                 messages: [...$messages, ...$errors],
@@ -69,7 +94,7 @@ final class StagedRowBuilder
 
         return new StageOutcome(
             mappedValues: $mappedValues,
-            extraValues: $extraValues === [] ? null : $extraValues,
+            extraValues: $extraValues,
             resolved: $resolved === [] ? null : $resolved,
             status: $this->resolveStatus($duplicateOfId, $needsReview),
             messages: $messages === [] ? null : $messages,
@@ -124,6 +149,35 @@ final class StagedRowBuilder
         }
 
         return [$resolved, $messages, $needsReview];
+    }
+
+    /**
+     * Defaults every still-blank `requiredForCreation()` field to
+     * `config('imports.placeholder')` (spec 0033 delta
+     * D-2026-07-15-placeholder-review-fields), so a row is never silently
+     * rejected for a missing identity field — it surfaces as an editable
+     * warning instead.
+     *
+     * @param  array<string, mixed>  $mapped
+     * @return array{0: array<string, mixed>, 1: array<int, string>, 2: bool}
+     */
+    private function applyPlaceholders(array $mapped): array
+    {
+        $messages = [];
+        $applied = false;
+        $placeholder = (string) config('imports.placeholder');
+
+        foreach ($this->definition->requiredForCreation() as $fieldId) {
+            if (trim((string) ($mapped[$fieldId] ?? '')) !== '') {
+                continue;
+            }
+
+            $mapped[$fieldId] = $placeholder;
+            $messages[] = "{$fieldId} was empty and defaulted to {$placeholder}; review it.";
+            $applied = true;
+        }
+
+        return [$mapped, $messages, $applied];
     }
 
     private function resolveStatus(?int $duplicateOfId, bool $needsReview): ImportRowStatus

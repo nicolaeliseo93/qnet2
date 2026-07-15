@@ -171,4 +171,30 @@ abstract class AbstractImportDefinition implements ImportDefinition
     {
         return null;
     }
+
+    /**
+     * Retro-compatible default: no field is required for creation — the 5
+     * legacy domains keep rejecting a blank required column as a
+     * validateRow() error, never through the placeholder mechanism.
+     *
+     * @return array<int, string>
+     */
+    public function requiredForCreation(): array
+    {
+        return [];
+    }
+
+    /**
+     * Retro-compatible default: the review grid shows/edits the same fields
+     * the mapping step offers, reduced to {id,label}.
+     *
+     * @return array<int, array{id: string, label: string}>
+     */
+    public function reviewFields(): array
+    {
+        return array_map(static fn (array $field): array => [
+            'id' => $field['id'],
+            'label' => $field['label'],
+        ], $this->fields());
+    }
 }

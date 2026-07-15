@@ -341,6 +341,19 @@
     </endpoint>
   </data_contract>
 
+  <!-- DELTA 2026-07-15 (richiesta utente): output finale = Nome + Cognome (dallo
+       split di full_name), NON full_name; i campi OBBLIGATORI-PER-LA-CREAZIONE
+       vuoti ricevono il placeholder "SCONOSCIUTO" + riga a WARNING, editabili in
+       revisione. La griglia di revisione mostra/edita i CAMPI FINALI PERSISTITI
+       (review_fields), non le colonne di input. -->
+  <delta id="D-2026-07-15-placeholder-review-fields">
+    <item>Costante `placeholder` = 'SCONOSCIUTO' in `config/imports.php`.</item>
+    <item>Contratto ImportDefinition esteso (default retro-compat in Abstract): `requiredForCreation(): array<string>` (field id senza i quali il record non e' creabile; default []) e `reviewFields(): array<array{id,label}>` (i campi FINALI mostrati/editati nella griglia di revisione; default = fields()). LeadsImportDefinition: `requiredForCreation()` = ['first_name','last_name']; `reviewFields()` = tutti i fields() ANAGRAFICI/lead ESCLUSO `full_name` (input-only, sostituito da first_name/last_name dallo split) — include first_name,last_name,company_name,tax_code,vat_number,email,phone,mobile,street,postal_code,country,region,province,city,notes.</item>
+    <item>StagedRowBuilder: DOPO i recognizer, per ogni campo in `requiredForCreation()` con valore vuoto in mapped_values -> imposta il placeholder 'SCONOSCIUTO', aggiunge un messaggio di warning e forza needsReview (status riga = warning). Il valore finisce in mapped_values (quindi visibile/editabile nella review).</item>
+    <item>Edit in revisione preserva le modifiche: lo StagedRowReviser ri-valida partendo dai VALORI EDITATI (field id -> valore) fondendoli sui mapped_values della riga; i recognizer NON sovrascrivono i campi gia' valorizzati (NameSplitRecognizer skippa first/last se presenti); il placeholder si ri-applica solo se il campo required e' ANCORA vuoto. Cosi' correggere il Cognome=SCONOSCIUTO a mano regge la re-validazione.</item>
+    <item>`ImportRunPayloadBuilder` (show) espone `review_fields` (id+label risolti). La griglia di revisione (FE) costruisce le colonne editabili da `review_fields` (non dai target di column_mapping); le colonne '__extra__' restano; status/messages read-only. Il PATCH row invia i valori keyed per field id.</item>
+  </delta>
+
   <acceptance_criteria>
     <!-- SCHEMA + ENGINE -->
     <criterion id="AC-001">Data la migrazione additiva, quando la eseguo, allora `import_runs` ha le nuove colonne (detected_columns/column_mapping/global_config/dedup_strategy/modified_rows/notified_at/error_count) e `down()` le rimuove; le colonne esistenti e i 5 domini legacy restano intatti. (test: migrazione up/down + assenza regressioni schema)</criterion>

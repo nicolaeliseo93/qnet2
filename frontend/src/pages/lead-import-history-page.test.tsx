@@ -4,19 +4,19 @@ import i18n from '@/i18n'
 import LeadImportHistoryPage from '@/pages/lead-import-history-page'
 
 /**
- * Spec 0033 AC-018/AC-026: the history page gates the list behind
+ * Spec 0033 AC-018/AC-026: the history page gates the table behind
  * `leads.import` (`<Can>`, UI-only — the backend re-checks the same ability
- * fail-closed on `GET /imports/{domain}`). `PageHeader` (needs router/query
- * context for its breadcrumb) and `ImportHistory` (its own suite already
- * covers the data-fetching) are stubbed, mirroring `pages/lead-import-page.test.tsx`.
+ * fail-closed on the generic table endpoints). `PageHeader` (needs router/query
+ * context for its breadcrumb) and `LeadImportsTable` (the generic table, its own
+ * suite covers the grid) are stubbed, mirroring `pages/lead-import-page.test.tsx`.
  */
 
 vi.mock('@/components/page-header', () => ({
   PageHeader: ({ title }: { title?: string }) => <div>{title}</div>,
 }))
 
-vi.mock('@/features/imports/wizard/import-history', () => ({
-  ImportHistory: ({ domain }: { domain: string }) => <div data-testid="import-history">{domain}</div>,
+vi.mock('@/features/imports/lead-imports-table', () => ({
+  LeadImportsTable: () => <div data-testid="import-history">lead-imports</div>,
 }))
 
 const canMock = vi.fn()
@@ -38,12 +38,12 @@ describe('LeadImportHistoryPage', () => {
     expect(screen.queryByTestId('import-history')).not.toBeInTheDocument()
   })
 
-  it('mounts the history for the leads domain when leads.import is granted', () => {
+  it('mounts the generic lead-imports table when leads.import is granted', () => {
     canMock.mockReturnValue(true)
 
     render(<LeadImportHistoryPage />)
 
-    expect(screen.getByTestId('import-history')).toHaveTextContent('leads')
+    expect(screen.getByTestId('import-history')).toHaveTextContent('lead-imports')
     expect(screen.queryByText("You don't have permission to import leads.")).not.toBeInTheDocument()
   })
 })

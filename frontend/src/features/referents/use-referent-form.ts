@@ -21,7 +21,11 @@ import type {
 } from '@/features/personal-data/types'
 import type { ForSelectItem } from '@/features/for-select/types'
 import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
-import { createReferent, updateReferent } from '@/features/referents/api'
+import {
+  createReferent,
+  referentDetailQueryKey,
+  updateReferent,
+} from '@/features/referents/api'
 import { buildCreatePayload, buildUpdatePayload } from '@/features/referents/referent-form-payload'
 import {
   buildCreateReferentSchema,
@@ -29,7 +33,11 @@ import {
   type CreateReferentFormValues,
   type UpdateReferentFormValues,
 } from '@/features/referents/referent-schema'
-import type { ReferentDetail, ReferentFormMode } from '@/features/referents/types'
+import type {
+  ReferentDetail,
+  ReferentDetailWithPermissions,
+  ReferentFormMode,
+} from '@/features/referents/types'
 
 /**
  * Server-side field names mapped onto the form for 422 handling. The nested
@@ -205,7 +213,16 @@ export function useReferentForm({ mode, onSuccess }: UseReferentFormArgs) {
           mode.referent.id,
           buildUpdatePayload(values, mode.referent, profileDraft, personalDataFieldPermission),
         )
-        queryClient.setQueryData(['referents', 'detail', mode.referent.id], saved)
+        // Seed the detail cache with the FULL `ReferentDetailWithPermissions`
+        // shape: `updateReferent` returns a bare `ReferentDetail` (no
+        // `permissions` envelope), so writing it verbatim would leave the
+        // detail page reading `referent.permissions.resource` off `undefined`
+        // and crash. Carry the permissions from the edited instance; the
+        // page's own invalidate-on-success refetches the authoritative set.
+        queryClient.setQueryData<ReferentDetailWithPermissions>(
+          referentDetailQueryKey(mode.referent.id),
+          { ...saved, permissions: mode.referent.permissions },
+        )
         toast.success(t('referents.form.updated'))
         invalidateStats()
         onSuccess(saved)

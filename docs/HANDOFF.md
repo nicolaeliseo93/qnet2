@@ -2,6 +2,66 @@
 
 > Injected at session start. Update at every green state.
 
+## FEATURE — Storico import lead su tabella generica AG Grid (2026-07-15) — GREEN, NON COMMITTATO
+
+La pagina "Storico import" lead NON e' piu' una `<table>` HTML fatta a mano: ora e' la stessa tabella
+backend-driven (AG Grid + SSRM) di ogni altro modulo. Scope: SOLO leads (deciso con l'utente); framework
+pronto a estendersi ad altri moduli import con una riga di config. Permessi/scope dati COMPLETAMENTE
+backend-driven, riusando `leads.import` (nessun nuovo permesso/seeder).
+
+NUOVO DOMINIO TABELLARE `lead-imports`:
+- `App\Tables\LeadImportsTableDefinition` (model `ImportRun`). `authorizeViewAny` OVERRIDE -> riusa
+  `Gate::allows('import', Lead::class)` (fail-safe default cercherebbe `import-runs.viewAny` inesistente).
+  `baseQuery()` scopa alle run PROPRIE (`Auth::id()`) del resource `leads` -> il framework non ha scoping
+  per-attore, vive qui (replica esatta del vecchio `GET /imports/leads`). Colonne (tutte reali):
+  created_at, original_filename (searchable), total_rows, imported_rows, invalid_rows (label "Errori"),
+  status (badge). Catalog: `App\Tables\LeadImports\LeadImportColumnCatalog`.
+- `status` e' un badge backend-driven: `ImportStatus` ora usa `HasMeta` con `#[Label]`/`#[Color]` per case
+  (completed=green, failed=red, processing/awaiting=amber, reviewing=violet, resto=blue); `badgesFor`/
+  `enumKeyFor('import_status')` nella definition. FE localizza da `enums.import_status.*` (it/en-enums.ts).
+  Nessuna registrazione in form_enums (enumKey e' solo path i18n FE, non validato lato BE).
+- Azioni di riga `view` + `delete` (come gli altri moduli). `view` -> FE naviga a `/leads/import?runId={id}`.
+  `delete` -> endpoint GENERICO `POST /tables/lead-imports/bulk-delete` (nessun nuovo endpoint import).
+  Autorizzazione per-riga: nuova `App\Policies\ImportRunPolicy` (auto-discovered) view/delete = ownership
+  (`user_id === actor`) AND `{resource}.import`; NON estende BasePolicy (niente set CRUD permessi dedicato).
+  `actionsFor` espone `delete` solo se `Gate::allows('delete', $row)`.
+- Registrato in `config/tables.php` (`'lead-imports' => LeadImportsTableDefinition::class`).
+
+FRONTEND:
+- Adapter `features/imports/lead-imports-table.tsx` (monta `<TableView domain="lead-imports">`, onAction
+  view->navigate, delete->`bulkDeleteTableRows` + refresh; conferma gia' gestita da row-actions). NESSUN
+  renderer custom: badge/date/number resi dai default del framework (BadgeCell da `badges`+`enumKey`).
+- Pagina `pages/lead-import-history-page.tsx` riscritta: gate `<Can leads.import>` + PageHeader + adapter.
+  i18n nuovo namespace `leadImports` (it/en-lead-imports.ts, agganciati in it.ts/en.ts).
+- RIMOSSO codice morto: `features/imports/wizard/import-history.tsx`, `use-import-history.ts`,
+  `import-history.test.tsx`; `getImportRunHistory` + tipi `ImportRunHistoryPage/Pagination` da wizard/api.ts
+  e types.ts; `import-history-i18n.ts` sfoltito a soli `menu.*` (usati da leads-table toolbar).
+- NB: il vecchio endpoint BE `GET /imports/{domain}` (index) + il suo test `LeadsImportWizardHistoryTest`
+  restano IN PIEDI (API valida, non piu' consumata dal FE) -> non e' stato rimosso per non allargare il
+  blast radius; eventuale cleanup e' un follow-up.
+
+VERIFICATO (eseguito): BE `tests/Feature/Imports`+`tests/Feature/Tables` 98/98 (incl. nuovo
+`tests/Feature/Tables/LeadImportsTableTest.php` 5/5: 403 senza leads.import, columns/badge, rows scoping
+own+leads, bulk-delete own vs foreign=not_found). Pint --dirty pulito. FE `tsc -b --force` 0 errori;
+Vitest adapter+page+wizard 74/74, adapter test nuovo `lead-imports-table.test.tsx`. ESLint pulito. Unici
+rossi FE: i 3 `cell-renderers ContactsCell` baseline pre-esistenti (24 rossi noti), estranei.
+
+## FIX — Referent edit crash + outline button bg (2026-07-15) — GREEN, NON COMMITTATO
+
+1) BUG "Cannot read properties of undefined (reading 'resource')" salvando l'anagrafica referent.
+   Root cause: `use-referent-form.ts` scriveva nel detail cache il bare `ReferentDetail` restituito da
+   `updateReferent` (SENZA envelope `permissions`); `referent-detail-page.tsx` legge
+   `referent.permissions.resource.update` -> crash al render successivo. Identico bug gia' risolto in
+   `registries`. FIX: `setQueryData<ReferentDetailWithPermissions>(referentDetailQueryKey(id), {...saved,
+   permissions: mode.referent.permissions})` (porta i permessi dall'istanza in edit; la pagina rifa
+   comunque il fetch autoritativo on-success). Regression test aggiunto in
+   `referent-form-metadata.test.tsx` (mock esteso con `referentDetailQueryKey`). Verificato: referents
+   36+1=37 test verdi, tsc pulito.
+2) UI: variante `outline` del Button (usata da Annulla/Cancel e riusata da `alert-dialog` Cancel) aveva
+   `bg-background` (+`dark:bg-input/30`) -> spariva su container dello stesso colore. FIX unico nel design
+   system `components/ui/button.tsx`: `bg-transparent`, rimosso `dark:bg-input/30` (border + hover
+   invariati). Propaga a tutti i 115 call-site. Verificato: ui+referents 125 test verdi.
+
 ## FEATURE — Filtri avanzati backend-driven (spec 0032) — GREEN, scope Marketing e Lead (2026-07-15)
 
 Secondo livello di filtri "avanzati" sopra la griglia, COMPLETAMENTE backend-driven, distinto dai
@@ -152,6 +212,22 @@ STATO LANE (verde = test eseguiti reali):
   il reader OLE ma usa `IOFactory::createReaderForFile` (auto-detect per CONTENUTO): un `.xls` che in realta'
   e' HTML/XML SpreadsheetML/xlsx-rinominato/csv (export legacy) viene letto dal reader giusto invece di
   "not recognised as an OLE file". Test mislabeled-.xls aggiunto.
+
+FIX POST-VERIFICA (da test utente reale, tutti verdi):
+- Upload validation: `UploadImportRequest` usa SOLO `extensions:csv,txt,xlsx,xls` + file + max (niente
+  mimes/mimetypes: finfo inaffidabile su CSV/Office -> falsi 422; il parser e' il gate di contenuto).
+- `.xls` non-OLE: `XlsRowReader` usa `IOFactory::createReaderForFile` (auto-detect per CONTENUTO) — molti
+  `.xls` legacy sono HTML/XML SpreadsheetML/xlsx-rinominato/csv. Test mislabeled aggiunto.
+- Mapping "dead button": le colonne NON auto-mappate restavano `undefined` nel form -> `z.record(z.string())`
+  falliva in modo INVISIBILE (nessun FormMessage per colonna). Fix: default esplicito IGNORE per ogni colonna.
+- Mapping chiave con `.` (LEZIONE): usare il NOME colonna come field-name path di react-hook-form e' rotto —
+  lodash tratta `.` come path annidato (un header survey che finisce con `.` perdeva il punto -> 422
+  "column not part of detected columns"). Fix: il form di mappatura e' chiavettato per INDICE colonna
+  (path-safe), ricostruendo il `column_mapping` reale (per column.key) al submit. Test regressione con
+  chiave `?`/`,`/`.` aggiunto.
+- i18n label campi: mapping/config/summary/review mostravano chiavi grezze `imports.leads.fields.*`/
+  `imports.leads.global.*` (il FE non passava da `t()` e le chiavi non esistevano). Fix: chiavi definite in
+  `en-imports.ts`/`it-imports.ts` (namespace default) + risolte col `t` di default nei 4 step.
 
 STATO: FEATURE COMPLETA E VERIFICATA. VERIFIER = VERDE su TUTTI i 26 AC (001-026) con test reali. Backend
 full 2466/2468 (1 rosso PRE-ESISTENTE AbstractMigrationSourcePreviewTest + 1 skip). Frontend: vitest mirato

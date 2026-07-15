@@ -19,15 +19,13 @@ use Illuminate\Support\Facades\Route;
 | group, so every route below inherits that same middleware/prefix context.
 */
 
-Route::middleware('throttle:60,1')->group(function () {
-    // Minimal searchable/paginated registry list for entity-backed selects
-    // (for-select standard, ADR 0011). Declared ABOVE registries/{registry}
-    // so the literal `for-select` segment wins over the bound wildcard.
-    // Gated by registries.viewAny server-side in RegistryForSelectController.
-    Route::get('registries/for-select', RegistryForSelectController::class);
+// Minimal searchable/paginated registry list for entity-backed selects
+// (for-select standard, ADR 0011). Declared ABOVE registries/{registry}
+// so the literal `for-select` segment wins over the bound wildcard.
+// Gated by registries.viewAny server-side in RegistryForSelectController.
+Route::get('registries/for-select', RegistryForSelectController::class);
 
-    Route::get('registries/{registry}', [RegistryController::class, 'show']);
-    Route::post('registries', [RegistryController::class, 'store']);
-    Route::match(['put', 'patch'], 'registries/{registry}', [RegistryController::class, 'update']);
-    Route::delete('registries/{registry}', [RegistryController::class, 'destroy']);
-});
+Route::get('registries/{registry}', [RegistryController::class, 'show']);
+Route::post('registries', [RegistryController::class, 'store']);
+Route::match(['put', 'patch'], 'registries/{registry}', [RegistryController::class, 'update']);
+Route::delete('registries/{registry}', [RegistryController::class, 'destroy']);
