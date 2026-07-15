@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tables\CustomFields;
 
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -68,5 +69,34 @@ trait DelegatesUnaugmentedTableMethods
     public function deleteModel(Model $model): void
     {
         $this->inner->deleteModel($model);
+    }
+
+    /**
+     * Advanced filters (spec 0032) are a native-column/relation concern the
+     * wrapped $inner definition owns entirely — a custom field is not (yet)
+     * eligible for the advanced-filter panel, so this is pure passthrough.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function advancedFilters(): array
+    {
+        return $this->inner->advancedFilters();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function advancedFilterableIds(): array
+    {
+        return $this->inner->advancedFilterableIds();
+    }
+
+    /**
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $descriptor
+     */
+    public function applyAdvancedFilter(Builder $query, string $name, array $descriptor, mixed $value): bool
+    {
+        return $this->inner->applyAdvancedFilter($query, $name, $descriptor, $value);
     }
 }

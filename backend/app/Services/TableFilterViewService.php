@@ -52,6 +52,7 @@ class TableFilterViewService
      * Create a new view owned by $actor.
      *
      * @param  array<string, mixed>  $filters
+     * @param  array<string, mixed>  $advancedFilters
      */
     public function create(
         TableDefinition $definition,
@@ -59,6 +60,7 @@ class TableFilterViewService
         string $name,
         array $filters,
         FilterViewVisibility $visibility,
+        array $advancedFilters = [],
     ): TableFilterView {
         $view = TableFilterView::query()->create([
             'user_id' => $actor->id,
@@ -66,15 +68,18 @@ class TableFilterViewService
             'name' => $name,
             'filters' => $this->allowlist($definition, $filters),
             'visibility' => $visibility,
+            'advanced_filters' => $this->allowlistAdvanced($definition, $advancedFilters),
         ]);
 
         return $this->reFilter($definition, $view);
     }
 
     /**
-     * Update an existing view (full replace of name/filters/visibility).
+     * Update an existing view (full replace of name/filters/visibility/
+     * advanced filters).
      *
      * @param  array<string, mixed>  $filters
+     * @param  array<string, mixed>  $advancedFilters
      */
     public function update(
         TableDefinition $definition,
@@ -82,11 +87,13 @@ class TableFilterViewService
         string $name,
         array $filters,
         FilterViewVisibility $visibility,
+        array $advancedFilters = [],
     ): TableFilterView {
         $view->update([
             'name' => $name,
             'filters' => $this->allowlist($definition, $filters),
             'visibility' => $visibility,
+            'advanced_filters' => $this->allowlistAdvanced($definition, $advancedFilters),
         ]);
 
         return $this->reFilter($definition, $view->refresh());
@@ -105,6 +112,7 @@ class TableFilterViewService
     private function reFilter(TableDefinition $definition, TableFilterView $view): TableFilterView
     {
         $view->filters = $this->allowlist($definition, $view->filters ?? []);
+        $view->advanced_filters = $this->allowlistAdvanced($definition, $view->advanced_filters ?? []);
 
         return $view;
     }
@@ -121,5 +129,19 @@ class TableFilterViewService
         $allowed = array_flip($definition->filterableColumnIds());
 
         return array_intersect_key($filters, $allowed);
+    }
+
+    /**
+     * Keep only the entries whose name is whitelisted in the definition's
+     * advanced-filter catalogue (spec 0032) — mirrors allowlist().
+     *
+     * @param  array<string, mixed>  $advancedFilters
+     * @return array<string, mixed>
+     */
+    private function allowlistAdvanced(TableDefinition $definition, array $advancedFilters): array
+    {
+        $allowed = array_flip($definition->advancedFilterableIds());
+
+        return array_intersect_key($advancedFilters, $allowed);
     }
 }

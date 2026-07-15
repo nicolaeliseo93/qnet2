@@ -121,6 +121,66 @@ class TableQueryBuilder
     }
 
     /**
+     * Apply the `advancedFilters` payload (spec 0032, second-level backend-
+     * driven panel) to the query, combined in AND with every other active
+     * filter. A `required` descriptor whose value is OMITTED from the request
+     * falls back to its `defaultValue` — defence in depth so a required
+     * advanced filter can never leave the table effectively unfiltered
+     * (AC-006). Each entry is delegated to `$definition->applyAdvancedFilter()`
+     * against its own catalog descriptor.
+     *
+     * SECURITY: only names present in the definition's advanced-filter
+     * catalogue are honoured (allow-list; the FormRequest already 422s
+     * anything else — this is defence in depth), and `target` is resolved
+     * server-side from that same catalogue, never from the request.
+     *
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $advancedFilters
+     */
+    public function applyAdvancedFilters(TableDefinition $definition, Builder $query, array $advancedFilters): void
+    {
+        $catalog = array_column($definition->advancedFilters(), null, 'name');
+
+        if ($catalog === []) {
+            return;
+        }
+
+        $resolved = $this->withRequiredDefaults($catalog, $advancedFilters);
+
+        foreach ($resolved as $name => $value) {
+            if (! is_string($name) || ! array_key_exists($name, $catalog)) {
+                continue; // not whitelisted — ignore defensively (FormRequest already 422s)
+            }
+
+            $definition->applyAdvancedFilter($query, $name, $catalog[$name], $value);
+        }
+    }
+
+    /**
+     * A `required` descriptor whose value is absent from the request falls
+     * back to its declared `defaultValue` (AC-006).
+     *
+     * @param  array<string, array<string, mixed>>  $catalog  keyed by descriptor `name`
+     * @param  array<string, mixed>  $advancedFilters
+     * @return array<string, mixed>
+     */
+    private function withRequiredDefaults(array $catalog, array $advancedFilters): array
+    {
+        foreach ($catalog as $name => $descriptor) {
+            if (
+                ($descriptor['required'] ?? false) === true
+                && ! array_key_exists($name, $advancedFilters)
+                && array_key_exists('defaultValue', $descriptor)
+                && $descriptor['defaultValue'] !== null
+            ) {
+                $advancedFilters[$name] = $descriptor['defaultValue'];
+            }
+        }
+
+        return $advancedFilters;
+    }
+
+    /**
      * Apply whitelisted sorting. Only columns flagged `sortable` in the
      * definition are accepted; direction is constrained to asc/desc. Both are
      * validated upstream by the FormRequest — this is defence in depth.

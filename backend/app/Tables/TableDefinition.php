@@ -220,6 +220,46 @@ interface TableDefinition
     public function applyDerivedSearch(Builder $query, string $columnId, string $pattern): bool;
 
     /**
+     * Advanced-filter catalogue (raw declarative descriptors, spec 0032): the
+     * second-level, backend-driven filter panel above the grid. Each entry
+     * additionally carries the INTERNAL `target` (real DB column, or relation
+     * method name for `type: relation`) and an optional `operator` — neither is
+     * ever emitted to the frontend (stripped in resolveConfig(), see
+     * AdvancedFilterApplier). Default (in AbstractTableDefinition): `[]` — a
+     * domain opts in by overriding.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function advancedFilters(): array;
+
+    /**
+     * Advanced-filter ids whitelisted for the `advancedFilters` key of
+     * `POST /tables/{domain}/rows` (and its persistence twins) — the `name` of
+     * every descriptor declared in advancedFilters().
+     *
+     * @return array<int, string>
+     */
+    public function advancedFilterableIds(): array;
+
+    /**
+     * Apply one advanced filter's already-validated value to the query.
+     *
+     * Default (AbstractTableDefinition) delegates to AdvancedFilterApplier for
+     * a `target` that is either a real DB column (any type) or — for
+     * `type: relation` — a plain Eloquent relation method name, matched
+     * generically via `whereHas()` on the related model's own primary key. A
+     * concrete definition overrides this method ONLY for genuinely derived
+     * logic a relation name + id-match cannot express (e.g. searching a related
+     * model by a non-id field): it checks its own filter name(s) first, then
+     * falls back to `parent::applyAdvancedFilter()` for everything else. Return
+     * true when handled.
+     *
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $descriptor
+     */
+    public function applyAdvancedFilter(Builder $query, string $name, array $descriptor, mixed $value): bool;
+
+    /**
      * Delete a single row already authorized (the 'delete' ability) for the
      * generic bulk-delete endpoint (POST /api/tables/{domain}/bulk-delete).
      *

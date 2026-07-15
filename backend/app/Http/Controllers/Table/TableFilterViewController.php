@@ -79,6 +79,7 @@ class TableFilterViewController extends BaseApiController
                 $request->nameInput(),
                 $request->filtersInput(),
                 $request->visibilityInput(),
+                $request->advancedFiltersInput(),
             );
 
             return $this->created(new TableFilterViewResource($view));
@@ -105,6 +106,7 @@ class TableFilterViewController extends BaseApiController
                 $request->nameInput(),
                 $request->filtersInput(),
                 $request->visibilityInput(),
+                $request->advancedFiltersInput(),
             );
 
             return $this->ok(new TableFilterViewResource($view));

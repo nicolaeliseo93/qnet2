@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Table;
 
 use App\Enums\FilterViewVisibility;
+use App\Services\Table\AdvancedFilterApplier;
 use App\Tables\TableDefinition;
 use App\Tables\TableRegistry;
 use Illuminate\Foundation\Http\FormRequest;
@@ -55,6 +56,11 @@ class TableFilterViewRequest extends FormRequest
             // `present` (not `required`): an empty {} is a valid, empty view.
             'filters' => ['present', 'array'],
             'filters.*' => ['array'],
+
+            // Advanced filters (spec 0032) are OPTIONAL for backward compat with
+            // a view saved/updated before this field existed; absent defaults to
+            // `{}` (advancedFiltersInput()).
+            'advancedFilters' => ['sometimes', 'nullable', 'array'],
         ];
     }
 
@@ -81,6 +87,17 @@ class TableFilterViewRequest extends FormRequest
                     );
                 }
             }
+
+            $advancedFilters = $this->input('advancedFilters');
+
+            if (is_array($advancedFilters)) {
+                $catalog = array_column($this->definition()->advancedFilters(), null, 'name');
+                $errors = app(AdvancedFilterApplier::class)->validate($catalog, $advancedFilters);
+
+                foreach ($errors as $name => $message) {
+                    $validator->errors()->add("advancedFilters.{$name}", $message);
+                }
+            }
         });
     }
 
@@ -103,6 +120,17 @@ class TableFilterViewRequest extends FormRequest
         $filters = $this->validated('filters', []);
 
         return $filters;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function advancedFiltersInput(): array
+    {
+        /** @var array<string, mixed>|null $advancedFilters */
+        $advancedFilters = $this->validated('advancedFilters');
+
+        return $advancedFilters ?? [];
     }
 
     /**

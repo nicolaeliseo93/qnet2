@@ -58,7 +58,7 @@ class TableService
     /**
      * Execute the SSRM query and return the rows + total for the envelope.
      *
-     * @param  array{startRow: int, endRow: int, sortModel?: array<int, array<string, mixed>>, filterModel?: array<string, array<string, mixed>>, search?: string|null}  $payload
+     * @param  array{startRow: int, endRow: int, sortModel?: array<int, array<string, mixed>>, filterModel?: array<string, array<string, mixed>>, search?: string|null, advancedFilters?: array<string, mixed>}  $payload
      */
     public function rows(TableDefinition $definition, User $actor, array $payload): RowsResult
     {
@@ -68,6 +68,9 @@ class TableService
         $query = $definition->baseQuery();
 
         $this->queryBuilder->applyFilters($definition, $query, $payload['filterModel'] ?? []);
+        // Second-level, backend-driven advanced filters (spec 0032) — AND-combined
+        // with the column filters above and the quick-search below.
+        $this->queryBuilder->applyAdvancedFilters($definition, $query, $payload['advancedFilters'] ?? []);
         $this->queryBuilder->applySearch($definition, $query, $payload['search'] ?? null);
 
         $total = (clone $query)->count();

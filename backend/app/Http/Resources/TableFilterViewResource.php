@@ -23,6 +23,8 @@ class TableFilterViewResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'filters' => (object) $this->filters,
+            // Advanced filters (spec 0032) captured by this saved view.
+            'advanced_filters' => (object) ($this->advanced_filters ?? []),
             'visibility' => $this->visibility->value,
             'owned' => $owned,
             // Only surfaced for a shared view NOT owned by the actor ("shared by

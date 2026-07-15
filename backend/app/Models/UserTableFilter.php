@@ -14,6 +14,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * being persisted, and re-validated again at query time (TableRowsRequest), so it
  * is never a SQL sink — it is only replayed into the grid to survive a reload.
  *
+ * `advanced_filters` (spec 0032) is its sibling for the second-level,
+ * backend-driven advanced-filter panel: keyed by advanced-filter name,
+ * restricted to the definition's advancedFilterableIds() the same way.
+ *
  * Intentionally NOT activity-logged and NOT backed by a Policy — see ADR-0004:
  *  - Activity log: high-churn per-user UI state with no audit value.
  *  - Policy: self-scoped by construction (the endpoints always key on
@@ -25,7 +29,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class UserTableFilter extends BaseModel
 {
     /** @var list<string> */
-    protected $fillable = ['user_id', 'domain', 'filters'];
+    protected $fillable = ['user_id', 'domain', 'filters', 'advanced_filters'];
 
     /**
      * @return BelongsTo<User, $this>
@@ -42,6 +46,7 @@ class UserTableFilter extends BaseModel
     {
         return [
             'filters' => 'array',
+            'advanced_filters' => 'array',
         ];
     }
 }

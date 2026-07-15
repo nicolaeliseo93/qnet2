@@ -26,38 +26,55 @@ class TableFilterStateService
 {
     /**
      * Merge the actor's saved filter state into a resolved config so the frontend
-     * can re-apply it on mount. Adds two keys mirroring the preferences merge:
+     * can re-apply it on mount. Adds keys mirroring the preferences merge:
      *  - `filterState`: the saved filterModel (object; `{}` when none);
-     *  - `filtersCustomized`: whether there is a saved filter to reset.
+     *  - `filtersCustomized`: whether there is a saved filter to reset;
+     *  - `appliedAdvancedFilters` (spec 0032): the saved advanced filters
+     *    (object) or null when none — OVERWRITES the `null` placeholder
+     *    AbstractTableDefinition::resolveConfig() emits.
      *
      * @param  array<string, mixed>  $config  the definition's resolveConfig() output
      * @return array<string, mixed>
      */
     public function applyTo(array $config, TableDefinition $definition, User $actor): array
     {
-        $saved = $this->savedFor($definition, $actor);
+        $row = $this->rowFor($definition, $actor);
+
+        $saved = $this->allowlistFilters($definition, $row?->filters ?? []);
+        $savedAdvanced = $this->allowlistAdvanced($definition, $row?->advanced_filters ?? []);
 
         // Emit as an object so an empty state serializes to `{}` (a valid empty
         // AG Grid filterModel), never `[]`.
         $config['filterState'] = (object) $saved;
         $config['filtersCustomized'] = $saved !== [];
+        $config['appliedAdvancedFilters'] = $savedAdvanced !== [] ? (object) $savedAdvanced : null;
 
         return $config;
     }
 
     /**
-     * Persist the actor's applied filterModel for this domain (idempotent upsert
-     * on (user_id, domain)). Keys outside the definition's filterable allow-list
-     * are dropped defensively (the FormRequest already 422s them). An empty model
-     * clears the saved state entirely, so there is never an orphan row.
+     * Persist the actor's applied filterModel (and, optionally, advanced
+     * filters) for this domain (idempotent upsert on (user_id, domain)). Keys
+     * outside the respective allow-list are dropped defensively (the
+     * FormRequest already 422s them).
+     *
+     * `$advancedFilters` is independently optional: null (the key was ABSENT
+     * from the request) leaves the persisted advanced filters untouched; an
+     * array (even empty) replaces them. Both empty after allow-listing clears
+     * the saved state entirely, so there is never an orphan row.
      *
      * @param  array<string, mixed>  $filterModel
+     * @param  array<string, mixed>|null  $advancedFilters
      */
-    public function save(TableDefinition $definition, User $actor, array $filterModel): void
+    public function save(TableDefinition $definition, User $actor, array $filterModel, ?array $advancedFilters = null): void
     {
-        $filtered = $this->allowlist($definition, $filterModel);
+        $filtered = $this->allowlistFilters($definition, $filterModel);
 
-        if ($filtered === []) {
+        $filteredAdvanced = $advancedFilters === null
+            ? $this->allowlistAdvanced($definition, $this->rowFor($definition, $actor)?->advanced_filters ?? [])
+            : $this->allowlistAdvanced($definition, $advancedFilters);
+
+        if ($filtered === [] && $filteredAdvanced === []) {
             $this->reset($definition, $actor);
 
             return;
@@ -65,7 +82,7 @@ class TableFilterStateService
 
         UserTableFilter::query()->updateOrCreate(
             ['user_id' => $actor->id, 'domain' => $definition->domain()],
-            ['filters' => $filtered],
+            ['filters' => $filtered, 'advanced_filters' => $filteredAdvanced],
         );
     }
 
@@ -82,34 +99,41 @@ class TableFilterStateService
     }
 
     /**
-     * The actor's stored filterModel for this domain, restricted to columns still
-     * filterable in the definition (empty when none).
-     *
-     * @return array<string, mixed>
+     * The actor's stored row for this domain, if any.
      */
-    private function savedFor(TableDefinition $definition, User $actor): array
+    private function rowFor(TableDefinition $definition, User $actor): ?UserTableFilter
     {
-        $filter = UserTableFilter::query()
+        return UserTableFilter::query()
             ->where('user_id', $actor->id)
             ->where('domain', $definition->domain())
             ->first();
-
-        $model = $filter?->filters ?? [];
-
-        return is_array($model) ? $this->allowlist($definition, $model) : [];
     }
 
     /**
      * Keep only the entries whose column id is whitelisted for filtering by the
      * definition — the same allow-list the SSRM query engine enforces.
      *
-     * @param  array<string, mixed>  $filterModel
+     * @param  array<string, mixed>|null  $filterModel
      * @return array<string, mixed>
      */
-    private function allowlist(TableDefinition $definition, array $filterModel): array
+    private function allowlistFilters(TableDefinition $definition, ?array $filterModel): array
     {
         $allowed = array_flip($definition->filterableColumnIds());
 
-        return array_intersect_key($filterModel, $allowed);
+        return array_intersect_key($filterModel ?? [], $allowed);
+    }
+
+    /**
+     * Keep only the entries whose name is whitelisted in the definition's
+     * advanced-filter catalogue (spec 0032) — mirrors allowlistFilters().
+     *
+     * @param  array<string, mixed>|null  $advancedFilters
+     * @return array<string, mixed>
+     */
+    private function allowlistAdvanced(TableDefinition $definition, ?array $advancedFilters): array
+    {
+        $allowed = array_flip($definition->advancedFilterableIds());
+
+        return array_intersect_key($advancedFilters ?? [], $allowed);
     }
 }

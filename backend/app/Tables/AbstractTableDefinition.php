@@ -2,7 +2,9 @@
 
 namespace App\Tables;
 
+use App\Enums\AdvancedFilterType;
 use App\Models\User;
+use App\Services\Table\AdvancedFilterApplier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -109,6 +111,12 @@ abstract class AbstractTableDefinition implements TableDefinition
             // shows the search box only when non-empty and builds its placeholder
             // from these columns' labels.
             'searchable' => $this->searchableColumnIds(),
+            // Advanced-filter catalogue (spec 0032), ordered, internal fields
+            // stripped. `appliedAdvancedFilters` defaults to null here; the
+            // per-user persisted state (TableFilterStateService) overwrites it,
+            // exactly like `filterState`/`filtersCustomized`.
+            'advancedFilters' => $this->resolveAdvancedFilters(),
+            'appliedAdvancedFilters' => null,
         ];
     }
 
@@ -211,6 +219,34 @@ abstract class AbstractTableDefinition implements TableDefinition
         }
 
         return $layout;
+    }
+
+    /**
+     * Resolve the advanced-filter catalogue (spec 0032) into its FE-facing
+     * shape: ordered by `order`, stripped of the INTERNAL `target`/`operator`
+     * fields the definition uses to apply the filter server-side
+     * (AdvancedFilterApplier) — mirrors resolveFilters()'s stripping of
+     * `optionsSource`.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function resolveAdvancedFilters(): array
+    {
+        $descriptors = $this->advancedFilters();
+
+        usort(
+            $descriptors,
+            static fn (array $a, array $b): int => ($a['order'] ?? 0) <=> ($b['order'] ?? 0),
+        );
+
+        return array_map(
+            static function (array $descriptor): array {
+                unset($descriptor['target'], $descriptor['operator']);
+
+                return $descriptor;
+            },
+            $descriptors,
+        );
     }
 
     /**
@@ -332,6 +368,55 @@ abstract class AbstractTableDefinition implements TableDefinition
         }
 
         return $columns;
+    }
+
+    /**
+     * Default: no advanced filters (spec 0032). A domain opts in by
+     * overriding with its own catalogue.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function advancedFilters(): array
+    {
+        return [];
+    }
+
+    /**
+     * Advanced-filter ids whitelisted for the `advancedFilters` request key —
+     * the `name` of every descriptor declared in advancedFilters().
+     *
+     * @return array<int, string>
+     */
+    public function advancedFilterableIds(): array
+    {
+        return array_column($this->advancedFilters(), 'name');
+    }
+
+    /**
+     * Default: delegate to AdvancedFilterApplier. `target` (falling back to
+     * `$name` when the descriptor omits it) is resolved server-side ONLY from
+     * this definition's own catalogue — never client input — so it is trusted
+     * as either a real DB column or, for `type: relation`, a plain Eloquent
+     * relation method name. Always returns true for a well-formed descriptor;
+     * false only when the descriptor carries no valid `type` (defence in
+     * depth against a malformed catalogue entry).
+     *
+     * @param  Builder<Model>  $query
+     * @param  array<string, mixed>  $descriptor
+     */
+    public function applyAdvancedFilter(Builder $query, string $name, array $descriptor, mixed $value): bool
+    {
+        $type = $descriptor['type'] ?? null;
+
+        if (! $type instanceof AdvancedFilterType) {
+            return false;
+        }
+
+        $target = is_string($descriptor['target'] ?? null) ? $descriptor['target'] : $name;
+
+        app(AdvancedFilterApplier::class)->apply($query, $type, $target, $value, $descriptor);
+
+        return true;
     }
 
     /**

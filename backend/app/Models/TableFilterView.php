@@ -18,12 +18,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * `filters` is restricted to the definition's filterable columns on every
  * write (TableFilterViewRequest) and re-filtered on every read
  * (TableFilterViewService), so it is never a SQL sink and can never widen the
- * SSRM filter allow-list.
+ * SSRM filter allow-list. `advanced_filters` (spec 0032) is its sibling for
+ * the second-level, backend-driven advanced-filter panel, restricted to
+ * advancedFilterableIds() the same way.
  */
 class TableFilterView extends BaseModel
 {
     /** @var list<string> */
-    protected $fillable = ['user_id', 'domain', 'name', 'filters', 'visibility'];
+    protected $fillable = ['user_id', 'domain', 'name', 'filters', 'visibility', 'advanced_filters'];
 
     /**
      * @return BelongsTo<User, $this>
@@ -41,6 +43,7 @@ class TableFilterView extends BaseModel
         return [
             'filters' => 'array',
             'visibility' => FilterViewVisibility::class,
+            'advanced_filters' => 'array',
         ];
     }
 }

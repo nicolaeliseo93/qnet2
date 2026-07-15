@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Table;
 
+use App\Services\Table\AdvancedFilterApplier;
 use App\Tables\TableDefinition;
 use App\Tables\TableRegistry;
 use Illuminate\Foundation\Http\FormRequest;
@@ -40,6 +41,11 @@ class TableFilterStateRequest extends FormRequest
             // saved filters, mirroring an explicit reset.
             'filterModel' => ['present', 'array'],
             'filterModel.*' => ['array'],
+
+            // Advanced filters (spec 0032) are independently OPTIONAL: absent
+            // means "leave the persisted advanced filters untouched" (see
+            // advancedFilters()); present (even `{}`) replaces them.
+            'advancedFilters' => ['sometimes', 'nullable', 'array'],
         ];
     }
 
@@ -66,6 +72,17 @@ class TableFilterStateRequest extends FormRequest
                     );
                 }
             }
+
+            $advancedFilters = $this->input('advancedFilters');
+
+            if (is_array($advancedFilters)) {
+                $catalog = array_column($this->definition()->advancedFilters(), null, 'name');
+                $errors = app(AdvancedFilterApplier::class)->validate($catalog, $advancedFilters);
+
+                foreach ($errors as $name => $message) {
+                    $validator->errors()->add("advancedFilters.{$name}", $message);
+                }
+            }
         });
     }
 
@@ -80,6 +97,26 @@ class TableFilterStateRequest extends FormRequest
         $model = $this->validated('filterModel', []);
 
         return $model;
+    }
+
+    /**
+     * The validated `advancedFilters` payload, or null when the key is ABSENT
+     * from the request — the caller (TableFilterStateService::save()) reads
+     * null as "leave the persisted advanced filters untouched", distinct from
+     * an explicit empty `{}` (which clears them).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function advancedFilters(): ?array
+    {
+        if (! $this->has('advancedFilters')) {
+            return null;
+        }
+
+        /** @var array<string, mixed>|null $advancedFilters */
+        $advancedFilters = $this->validated('advancedFilters');
+
+        return $advancedFilters ?? [];
     }
 
     /**

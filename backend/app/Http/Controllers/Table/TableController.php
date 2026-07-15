@@ -119,7 +119,7 @@ class TableController extends BaseApiController
             $actor = $request->user();
             $this->authorizeViewAny($definition->authorizeViewAny($actor));
 
-            $this->filters->save($definition, $actor, $request->filterModel());
+            $this->filters->save($definition, $actor, $request->filterModel(), $request->advancedFilters());
 
             return $this->ok($this->resolvedConfig($definition, $actor), 'Filters saved');
         } catch (Throwable $exception) {

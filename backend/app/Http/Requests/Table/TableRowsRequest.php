@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Table;
 
 use App\Http\Controllers\Abstract\BaseApiController;
+use App\Services\Table\AdvancedFilterApplier;
 use App\Tables\TableDefinition;
 use App\Tables\TableRegistry;
 use Illuminate\Foundation\Http\FormRequest;
@@ -62,6 +63,11 @@ class TableRowsRequest extends FormRequest
             // Global quick-search term (spec 0009). The columns it spans are the
             // server-side allow-list (searchableColumnIds), never the raw input.
             'search' => ['sometimes', 'nullable', 'string', 'max:'.self::SEARCH_MAX_LENGTH],
+
+            // Second-level, backend-driven advanced filters (spec 0032). Keys
+            // and value shapes are whitelisted against the definition's
+            // advancedFilters() catalogue in withValidator() below.
+            'advancedFilters' => ['sometimes', 'nullable', 'array'],
         ];
     }
 
@@ -100,6 +106,17 @@ class TableRowsRequest extends FormRequest
                             "Filtering is not allowed on column [{$columnId}]."
                         );
                     }
+                }
+            }
+
+            $advancedFilters = $this->input('advancedFilters');
+
+            if (is_array($advancedFilters)) {
+                $catalog = array_column($this->definition()->advancedFilters(), null, 'name');
+                $errors = app(AdvancedFilterApplier::class)->validate($catalog, $advancedFilters);
+
+                foreach ($errors as $name => $message) {
+                    $validator->errors()->add("advancedFilters.{$name}", $message);
                 }
             }
         });
