@@ -6,6 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { FilterViewsControl } from '@/features/table/filter-views-control'
 import type { TableFilterView } from '@/features/table/types'
+import type { AdvancedFilterValues } from '@/features/table/advanced-filters/types'
 
 const listFilterViews = vi.fn()
 const createFilterView = vi.fn()
@@ -24,6 +25,7 @@ const OWNED_VIEW: TableFilterView = {
   id: 1,
   name: 'My admins',
   filters: { roles: { filterType: 'set', values: ['admin'] } },
+  advanced_filters: {},
   visibility: 'private',
   owned: true,
   owner_name: null,
@@ -33,12 +35,25 @@ const SHARED_VIEW: TableFilterView = {
   id: 2,
   name: 'Team overview',
   filters: { status: { filterType: 'set', values: ['active'] } },
+  advanced_filters: {},
   visibility: 'shared',
   owned: false,
   owner_name: 'Jane Doe',
 }
 
+/** A saved view that also captured an advanced filter (spec 0032 AC-009). */
+const VIEW_WITH_ADVANCED: TableFilterView = {
+  id: 3,
+  name: 'Won this quarter',
+  filters: {},
+  advanced_filters: { status: 'won' },
+  visibility: 'private',
+  owned: true,
+  owner_name: null,
+}
+
 const CURRENT_FILTERS = { email: { filterType: 'text' } }
+const EMPTY_ADVANCED: AdvancedFilterValues = {}
 
 /**
  * Radix' DropdownMenu trigger opens on `pointerdown`, not `click`, so a plain
@@ -54,6 +69,7 @@ function openMenu() {
 function renderControl(
   views: TableFilterView[],
   currentFilters: Record<string, unknown> = CURRENT_FILTERS,
+  currentAdvancedFilters: AdvancedFilterValues = EMPTY_ADVANCED,
   onApply = vi.fn(),
 ) {
   listFilterViews.mockResolvedValue(views)
@@ -62,7 +78,12 @@ function renderControl(
     <QueryClientProvider client={client}>
       <TooltipProvider>
         <ConfirmDialogProvider>
-          <FilterViewsControl domain="users" currentFilters={currentFilters} onApply={onApply} />
+          <FilterViewsControl
+            domain="users"
+            currentFilters={currentFilters}
+            currentAdvancedFilters={currentAdvancedFilters}
+            onApply={onApply}
+          />
         </ConfirmDialogProvider>
       </TooltipProvider>
     </QueryClientProvider>,
@@ -91,7 +112,19 @@ describe('FilterViewsControl', () => {
     expect(screen.getByText(/Shared by Jane Doe/)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('menuitem', { name: /My admins/ }))
-    expect(onApply).toHaveBeenCalledWith(OWNED_VIEW.filters)
+    expect(onApply).toHaveBeenCalledWith(OWNED_VIEW.filters, OWNED_VIEW.advanced_filters)
+  })
+
+  it("applies a view's advanced filters alongside its column filterModel (spec 0032 AC-009)", async () => {
+    const { onApply } = renderControl([VIEW_WITH_ADVANCED])
+
+    openMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Won this quarter/ }))
+
+    expect(onApply).toHaveBeenCalledWith(
+      VIEW_WITH_ADVANCED.filters,
+      VIEW_WITH_ADVANCED.advanced_filters,
+    )
   })
 
   it('shows the empty state when there are no saved views', async () => {
@@ -150,13 +183,35 @@ describe('FilterViewsControl', () => {
       expect(createFilterView).toHaveBeenCalledWith('users', {
         name: 'Weekly',
         filters: CURRENT_FILTERS,
+        advancedFilters: EMPTY_ADVANCED,
         visibility: 'shared',
       }),
     )
   })
 
+  it('saves the current advanced filters alongside the column filterModel (spec 0032 AC-009)', async () => {
+    createFilterView.mockResolvedValue(VIEW_WITH_ADVANCED)
+    const currentAdvanced: AdvancedFilterValues = { status: 'won' }
+    renderControl([], {}, currentAdvanced)
+
+    openMenu()
+    fireEvent.change(screen.getByRole('textbox', { name: 'View name' }), {
+      target: { value: 'Won this quarter' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save view' }))
+
+    await waitFor(() =>
+      expect(createFilterView).toHaveBeenCalledWith('users', {
+        name: 'Won this quarter',
+        filters: {},
+        advancedFilters: currentAdvanced,
+        visibility: 'private',
+      }),
+    )
+  })
+
   it('offers a hint instead of the form when there are no filters to save', async () => {
-    renderControl([], {})
+    renderControl([], {}, {})
 
     openMenu()
 
@@ -164,5 +219,13 @@ describe('FilterViewsControl', () => {
       await screen.findByText('Apply a filter first to save it as a view.'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save view' })).not.toBeInTheDocument()
+  })
+
+  it('offers the save form when only an advanced filter is active (no column filterModel)', async () => {
+    renderControl([], {}, { status: 'won' })
+
+    openMenu()
+
+    expect(await screen.findByRole('button', { name: 'Save view' })).toBeInTheDocument()
   })
 })

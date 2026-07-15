@@ -4,6 +4,7 @@ namespace App\Tables;
 
 use App\Models\PipelineStatus;
 use App\Models\User;
+use App\Tables\PipelineStatuses\PipelineStatusAdvancedFilterCatalog;
 use App\Tables\PipelineStatuses\PipelineStatusColumnCatalog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -65,6 +66,14 @@ class PipelineStatusesTableDefinition extends AbstractTableDefinition
     public function actions(): array
     {
         return PipelineStatusColumnCatalog::actions();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function advancedFilters(): array
+    {
+        return PipelineStatusAdvancedFilterCatalog::advancedFilters();
     }
 
     /**

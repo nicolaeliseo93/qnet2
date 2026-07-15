@@ -12,6 +12,12 @@ interface UseForSelectOptions {
   ids?: number[]
   /** Gates the query so it only runs when the consumer needs the data. */
   enabled?: boolean
+  /**
+   * Extra, resource-specific query parameters (spec 0032 `dependency.param`),
+   * sent on every page and included in the query key so a parent value change
+   * starts a fresh paginated query.
+   */
+  params?: Record<string, string | number>
 }
 
 /**
@@ -27,9 +33,10 @@ export function useForSelect({
   search,
   ids,
   enabled = true,
+  params,
 }: UseForSelectOptions) {
   return useInfiniteQuery({
-    queryKey: forSelectKeys.list(resource, search),
+    queryKey: forSelectKeys.list(resource, search, params),
     queryFn: ({ pageParam }) =>
       fetchForSelect(resource, {
         search,
@@ -38,6 +45,7 @@ export function useForSelect({
         // Hydrate selected values only on the first page to label current
         // selections that fall outside the searched window.
         ids: pageParam === 0 ? ids : undefined,
+        params,
       }),
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {

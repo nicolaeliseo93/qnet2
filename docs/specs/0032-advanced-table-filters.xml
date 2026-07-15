@@ -87,8 +87,11 @@
         estensione di `TableFilterStateService`/`TableFilterStateRequest`,
         `POST/DELETE /tables/{domain}/filters`, e del ciclo viste salvate (0007) per includere gli
         advanced filters; ripristino nello stato al `GET /columns`.</item>
-      <item>Cataloghi di filtri avanzati per tutti i 21 domini registrati in `config/tables.php`,
-        curati dalle colonne/relazioni gia' filtrabili di ciascun modulo.</item>
+      <item>Cataloghi di filtri avanzati per il gruppo "Marketing e Lead" (5 domini):
+        leads, campaigns, projects, pipeline-statuses, lead-statuses — curati dalle
+        colonne/relazioni gia' filtrabili di ciascun modulo. Il framework resta generico
+        per tutti i 21 domini (gli altri 16 ritornano advancedFilters()=[] => nessun pannello),
+        i loro cataloghi sono DIFFERITI a un intervento successivo (fuori da questa iterazione).</item>
       <item>Frontend: componente generico `AdvancedFilterPanel` (a scomparsa) + registry
         di field per-tipo (riuso `components/ui/`) + hook `useAdvancedFilters(domain)`
         (draft/applied, default, dipendenze, persistenza) + integrazione in `TableView`,
@@ -145,7 +148,7 @@
 
     <!-- Valori inviati dal FE, keyed per descriptor.name. Shape per tipo: -->
     <type name="AdvancedFilterValue">
-      text|textarea|async_search(single): string
+      text|textarea: string
       number: number
       number_range: { from?: number, to?: number }
       date|datetime: string (ISO)
@@ -154,7 +157,10 @@
       checkbox|switch: boolean
       multiselect|autocomplete_multi: (string|number)[]
       autocomplete(single): string | number
-      relation: (number) | (number)[]              // secondo `multiple`
+      relation|async_search: (number) | (number)[]  // id-based, secondo `multiple`
+      // NOTA: async_search === autocomplete lato valore (id). Differisce SOLO nella UX
+      // FE (combobox che richiede la digitazione per dataset molto grandi); lato server
+      // si applica come filtro per id (eq/whereIn o whereHas), MAI come LIKE su stringa.
     </type>
 
     <endpoint method="GET" path="/api/tables/{domain}/columns">

@@ -5,6 +5,7 @@ namespace App\Tables;
 use App\Enums\GeoScopeLevel;
 use App\Models\Project;
 use App\Models\User;
+use App\Tables\Projects\ProjectAdvancedFilterCatalog;
 use App\Tables\Projects\ProjectColumnCatalog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -107,6 +108,14 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     public function actions(): array
     {
         return ProjectColumnCatalog::actions();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function advancedFilters(): array
+    {
+        return ProjectAdvancedFilterCatalog::advancedFilters();
     }
 
     /**

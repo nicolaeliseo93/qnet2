@@ -15,6 +15,11 @@ export const pipelineStatuses = {
     sort_order: 'Order',
     created_at: 'Created at',
   },
+  advancedFilters: {
+    name: 'Name',
+    sortOrderRange: 'Order',
+    createdRange: 'Created at',
+  },
   detail: {
     title: 'Project status details',
     subtitle: 'Read-only view of the selected project status.',

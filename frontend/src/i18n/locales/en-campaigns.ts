@@ -25,6 +25,15 @@ export const campaigns = {
     target_lead: 'Target leads',
     created_at: 'Created at',
   },
+  advancedFilters: {
+    project: 'Project',
+    pipelineStatus: 'Status',
+    registry: 'Client',
+    source: 'Source',
+    partner: 'Partner',
+    budgetRange: 'Budget',
+    createdRange: 'Created at',
+  },
   detail: {
     title: 'Campaign details',
     subtitle: 'Read-only view of the selected campaign.',

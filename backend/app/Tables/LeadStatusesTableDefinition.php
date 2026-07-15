@@ -4,6 +4,7 @@ namespace App\Tables;
 
 use App\Models\LeadStatus;
 use App\Models\User;
+use App\Tables\LeadStatuses\LeadStatusAdvancedFilterCatalog;
 use App\Tables\LeadStatuses\LeadStatusColumnCatalog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -65,6 +66,14 @@ class LeadStatusesTableDefinition extends AbstractTableDefinition
     public function actions(): array
     {
         return LeadStatusColumnCatalog::actions();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function advancedFilters(): array
+    {
+        return LeadStatusAdvancedFilterCatalog::advancedFilters();
     }
 
     /**

@@ -19,7 +19,7 @@ export async function fetchForSelect(
   resource: string,
   params: ForSelectParams = {},
 ): Promise<PaginatedResponse<ForSelectItem>> {
-  const { search, offset = 0, limit = FOR_SELECT_PAGE_SIZE, ids } = params
+  const { search, offset = 0, limit = FOR_SELECT_PAGE_SIZE, ids, params: extraParams } = params
 
   const { data } = await apiClient.get<PaginatedResponse<ForSelectItem>>(
     `/${resource}/for-select`,
@@ -29,6 +29,7 @@ export async function fetchForSelect(
         limit,
         ...(search ? { search } : {}),
         ...(ids && ids.length > 0 ? { ids } : {}),
+        ...extraParams,
       },
       // Serialize `ids` as repeated `ids[]=1&ids[]=2` (Laravel array convention).
       paramsSerializer: { indexes: true },

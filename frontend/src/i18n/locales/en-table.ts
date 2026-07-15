@@ -67,4 +67,21 @@ export const table = {
   bulkDeletePartial:
     '{{deleted}} rows deleted, {{failed}} could not be deleted.',
   bulkDeleteError: 'Unable to delete the selected rows. Please try again.',
+  advancedFilters: {
+    toggle: 'Advanced filters',
+    activeCount_one: '{{count}} active filter',
+    activeCount_other: '{{count}} active filters',
+    apply: 'Apply',
+    reset: 'Reset',
+    requiredError: 'This field is required.',
+    rangeFrom: 'From',
+    rangeTo: 'To',
+    rangeSeparator: '–',
+    selectPlaceholder: 'Select…',
+    searchPlaceholder: 'Search…',
+    empty: 'No results.',
+    loadError: 'Unable to load the options.',
+    clearLabel: 'Clear',
+    removeLabel: 'Remove',
+  },
 }

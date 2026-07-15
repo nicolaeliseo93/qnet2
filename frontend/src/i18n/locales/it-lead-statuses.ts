@@ -15,6 +15,11 @@ export const leadStatuses = {
     sort_order: 'Ordine',
     created_at: 'Creato il',
   },
+  advancedFilters: {
+    name: 'Nome',
+    sortOrderRange: 'Ordine',
+    createdRange: 'Creato il',
+  },
   detail: {
     title: 'Dettaglio stato lead',
     subtitle: 'Visualizzazione in sola lettura dello stato selezionato.',

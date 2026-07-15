@@ -5,6 +5,7 @@ namespace App\Tables;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\User;
+use App\Tables\Leads\LeadAdvancedFilterCatalog;
 use App\Tables\Leads\LeadColumnCatalog;
 use App\Tables\Leads\LeadOperationalSiteColumn;
 use Illuminate\Database\Eloquent\Builder;
@@ -103,6 +104,14 @@ class LeadsTableDefinition extends AbstractTableDefinition
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function advancedFilters(): array
+    {
+        return LeadAdvancedFilterCatalog::advancedFilters();
+    }
+
+    /**
      * @return array<int, array{columnId: string, direction: string}>
      */
     public function defaultSort(): array
@@ -197,6 +206,29 @@ class LeadsTableDefinition extends AbstractTableDefinition
         }
 
         return $allowed;
+    }
+
+    /**
+     * `operational_site` (BR-3, spec 0032) has no relation-by-id equivalent —
+     * the site carries no own name — so the generic default (which delegates
+     * a `relation` type to a plain whereHas-by-id) cannot express it. Every
+     * other advanced filter declared in LeadAdvancedFilterCatalog is a
+     * standard relation-by-id, handled by the generic default.
+     *
+     * @param  Builder<Lead>  $query
+     * @param  array<string, mixed>  $descriptor
+     */
+    public function applyAdvancedFilter(Builder $query, string $name, array $descriptor, mixed $value): bool
+    {
+        if ($name === self::OPERATIONAL_SITE_COLUMN) {
+            if (is_string($value) && $value !== '') {
+                $this->operationalSiteColumn->applyAdvancedFilter($query, $value);
+            }
+
+            return true;
+        }
+
+        return parent::applyAdvancedFilter($query, $name, $descriptor, $value);
     }
 
     /**

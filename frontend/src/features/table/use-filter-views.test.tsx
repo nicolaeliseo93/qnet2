@@ -26,6 +26,7 @@ const VIEW: TableFilterView = {
   id: 1,
   name: 'Active admins',
   filters: { roles: { filterType: 'set', values: ['admin'] } },
+  advanced_filters: {},
   visibility: 'shared',
   owned: true,
   owner_name: null,

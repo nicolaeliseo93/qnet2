@@ -6,6 +6,7 @@ use App\Enums\GeoScopeLevel;
 use App\Models\Campaign;
 use App\Models\Project;
 use App\Models\User;
+use App\Tables\Campaigns\CampaignAdvancedFilterCatalog;
 use App\Tables\Campaigns\CampaignColumnCatalog;
 use App\Tables\Campaigns\CampaignPipelineStatusResolver;
 use Illuminate\Database\Eloquent\Builder;
@@ -127,6 +128,14 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function advancedFilters(): array
+    {
+        return CampaignAdvancedFilterCatalog::advancedFilters();
+    }
+
+    /**
      * @return array<int, array{columnId: string, direction: string}>
      */
     public function defaultSort(): array
@@ -227,6 +236,33 @@ class CampaignsTableDefinition extends AbstractTableDefinition
         }
 
         return $allowed;
+    }
+
+    /**
+     * `pipeline_status` (BR-2/AC-032) has no relation-by-id equivalent through
+     * the generic default: a linked campaign's OWN status is NULL, so it must
+     * match the campaign's own status OR its linked project's — delegated to
+     * CampaignPipelineStatusResolver::applyIdFilter(). Every other advanced
+     * filter declared in CampaignAdvancedFilterCatalog (`project`/`registry`/
+     * `source`/`partner` relation-by-id, `budget_range`/`created_range`
+     * direct-column) is handled by the generic default.
+     *
+     * @param  Builder<Campaign>  $query
+     * @param  array<string, mixed>  $descriptor
+     */
+    public function applyAdvancedFilter(Builder $query, string $name, array $descriptor, mixed $value): bool
+    {
+        if ($name === self::PROJECT_STATUS_COLUMN) {
+            if (is_array($value)) {
+                $this->pipelineStatusResolver->applyIdFilter($query, $value);
+            } elseif (is_scalar($value) && $value !== '') {
+                $this->pipelineStatusResolver->applyIdFilter($query, [$value]);
+            }
+
+            return true;
+        }
+
+        return parent::applyAdvancedFilter($query, $name, $descriptor, $value);
     }
 
     /**

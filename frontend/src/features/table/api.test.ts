@@ -46,10 +46,23 @@ describe('saveTableFilters', () => {
     })
     const filterModel = { email: { filterType: 'text', type: 'contains', filter: 'a' } }
 
-    const result = await saveTableFilters('users', filterModel)
+    const result = await saveTableFilters('users', { filterModel })
 
     expect(result).toBe(config)
     expect(postMock).toHaveBeenCalledWith('/tables/users/filters', { filterModel })
+  })
+
+  it('posts advanced filters independently of the column filterModel (spec 0032)', async () => {
+    const config = { resource: 'users', filtersCustomized: true }
+    postMock.mockResolvedValue({
+      data: { success: true, message: 'ok', data: config },
+    })
+    const advancedFilters = { status: 'active' }
+
+    const result = await saveTableFilters('users', { advancedFilters })
+
+    expect(result).toBe(config)
+    expect(postMock).toHaveBeenCalledWith('/tables/users/filters', { advancedFilters })
   })
 })
 

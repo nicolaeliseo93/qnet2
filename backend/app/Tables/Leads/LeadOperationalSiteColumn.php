@@ -67,6 +67,23 @@ final class LeadOperationalSiteColumn
     }
 
     /**
+     * Advanced-filter (spec 0032) free-text search on the site's primary
+     * address `line1` — a bound, escaped LIKE. Distinct from the exact-match
+     * Set filter above (applyFilter()): the advanced panel's `text` widget
+     * searches a substring, not a closed value list.
+     *
+     * @param  Builder<Lead>  $query
+     */
+    public function applyAdvancedFilter(Builder $query, string $needle): void
+    {
+        $pattern = '%'.$this->escapeLike($needle).'%';
+
+        $query->whereHas('operationalSite.addresses', static function (Builder $addressQuery) use ($pattern): void {
+            $addressQuery->where('is_primary', true)->where('line1', 'like', $pattern);
+        });
+    }
+
+    /**
      * ORDER BY the site's primary address `line1` via a correlated subquery.
      *
      * @param  Builder<Lead>  $query

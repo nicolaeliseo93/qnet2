@@ -22,9 +22,11 @@ import {
 } from '@/components/data-table/data-table'
 import { useAbilities } from '@/features/auth/use-abilities'
 import { createSsrmDatasource } from '@/features/table/ssrm-datasource'
-import { FilterViewsControl } from '@/features/table/filter-views-control'
+import { SavedViewsSlot } from '@/features/table/saved-views-slot'
 import { TableToolbar } from '@/features/table/table-toolbar'
 import { useTableToolbarState } from '@/features/table/use-table-toolbar-state'
+import { AdvancedFilterPanel } from '@/features/table/advanced-filters/advanced-filter-panel'
+import { useTableAdvancedFilters } from '@/features/table/advanced-filters/use-table-advanced-filters'
 import { useBulkDelete } from '@/features/table/use-bulk-delete'
 import { ExportDialog } from '@/features/exports/export-dialog'
 import {
@@ -184,12 +186,24 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
     // orchestrator (engineering.md §6).
     const toolbar = useTableToolbarState({ gridApi, searchEnabled })
 
+    // The domain's advanced filter catalog (spec 0032); empty ⇒ the toolbar
+    // hides the toggle entirely and the panel never mounts. Draft/applied
+    // state, dependencies and persistence are owned by the dedicated hook;
+    // Apply/Reset purge-reload the grid exactly once via `refreshGrid`.
+    const { descriptors: advancedFilterDescriptors, filters: advancedFilters } =
+      useTableAdvancedFilters({
+        domain,
+        descriptors: config?.advancedFilters,
+        applied: config?.appliedAdvancedFilters,
+        onApplied: refreshGrid,
+      })
+
     // One datasource instance per domain; stable across re-renders. The current
-    // search term is read lazily via the toolbar getter, so typing never rebuilds
-    // it (the grid is purge-reloaded on the debounced change instead).
+    // search term and applied advanced filters are read lazily via getters, so
+    // typing/toggling never rebuilds it (the grid is purge-reloaded instead).
     const datasource = useMemo(
-      () => createSsrmDatasource(domain, toolbar.getSearchTerm),
-      [domain, toolbar.getSearchTerm],
+      () => createSsrmDatasource(domain, toolbar.getSearchTerm, advancedFilters.getApplied),
+      [domain, toolbar.getSearchTerm, advancedFilters.getApplied],
     )
 
     useImperativeHandle(ref, () => ({ refresh: refreshGrid }), [refreshGrid])
@@ -249,7 +263,7 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
         clearTimeout(filterDebounceRef.current)
       }
       filterDebounceRef.current = setTimeout(() => {
-        saveFilters.mutate(model)
+        saveFilters.mutate({ filterModel: model })
       }, PERSIST_DEBOUNCE_MS)
     }, [gridApi, saveFilters])
 
@@ -369,17 +383,15 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       )
     }
 
-    const savedViewsSlot =
-      gridApi && config ? (
-        <FilterViewsControl
-          domain={domain}
-          currentFilters={gridApi.getFilterModel() ?? EMPTY_FILTER_MODEL}
-          onApply={(filters) => {
-            gridApi.setFilterModel(filters)
-            setFiltersCustomizedLocally(Object.keys(filters).length > 0)
-          }}
-        />
-      ) : null
+    const savedViewsSlot = (
+      <SavedViewsSlot
+        domain={domain}
+        gridApi={gridApi}
+        config={config}
+        advancedFilters={advancedFilters}
+        onFilterModelApplied={setFiltersCustomizedLocally}
+      />
+    )
 
     const bulkActionsSlot =
       canBulkDelete && selectedIds.length > 0 ? (
@@ -439,10 +451,21 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
               resettingLayout={resetPreferences.isPending}
               fullscreen={toolbar.fullscreen}
               onToggleFullscreen={toolbar.toggleFullscreen}
+              advancedFiltersEnabled={advancedFilterDescriptors.length > 0}
+              advancedFiltersOpen={toolbar.advancedFiltersOpen}
+              onToggleAdvancedFilters={toolbar.toggleAdvancedFilters}
+              advancedFiltersActiveCount={advancedFilters.activeCount}
               savedViewsSlot={savedViewsSlot}
               importSlot={importSlot}
               exportSlot={exportSlot}
             />
+
+            {toolbar.advancedFiltersOpen && advancedFilterDescriptors.length > 0 ? (
+              <AdvancedFilterPanel
+                descriptors={advancedFilterDescriptors}
+                filters={advancedFilters}
+              />
+            ) : null}
 
             <div
               className={cn(

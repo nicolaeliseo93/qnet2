@@ -78,6 +78,12 @@ interface AsyncPaginatedMultiSelectProps {
    * renders exactly as before (no extra wrapper node).
    */
   action?: ReactNode
+  /**
+   * Extra, resource-specific query parameters forwarded to the for-select
+   * request (spec 0032 `dependency.param`: a parent filter's current value).
+   * Changing it starts a fresh paginated query.
+   */
+  params?: Record<string, string | number>
 }
 
 /**
@@ -105,6 +111,7 @@ export function AsyncPaginatedMultiSelect({
   'aria-describedby': ariaDescribedBy,
   'aria-invalid': ariaInvalid,
   action,
+  params,
 }: AsyncPaginatedMultiSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -128,6 +135,7 @@ export function AsyncPaginatedMultiSelect({
     // Fetch while open, and also on mount when edit-mode selections need their
     // labels hydrated; otherwise selected badges would fall back to `#id`.
     enabled: open || missingSelectedItems,
+    params,
   })
 
   const {
@@ -239,7 +247,7 @@ export function AsyncPaginatedMultiSelect({
         aria-describedby={ariaDescribedBy}
         aria-invalid={ariaInvalid}
         className={cn(
-          'flex min-h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
+          'flex min-h-9 w-full items-center justify-between gap-2 rounded-md border border-field-border bg-field px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
           action ? 'min-w-0 flex-1' : null,
           className,
         )}

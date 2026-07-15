@@ -34,21 +34,29 @@ export function projectCardsQueryKeyPrefix() {
 }
 
 /** Query key of the card grid's infinite list, scoped by its request filters. */
-export function projectCardsQueryKey(filters: Pick<ProjectCardListParams, 'search' | 'pipeline_status_id'>) {
+export function projectCardsQueryKey(
+  filters: Pick<ProjectCardListParams, 'search' | 'pipeline_status_id' | 'advancedFilters'>,
+) {
   return [...projectCardsQueryKeyPrefix(), filters] as const
 }
 
-/** Fetches a page of project cards for the card grid (spec 0026 AC-001/002). */
+/**
+ * Fetches a page of project cards for the card grid (spec 0026 AC-001/002).
+ * `advancedFilters` (spec 0032 AC-018) is forwarded as a nested query param
+ * the same way the AG Grid view sends it in the `POST /rows` body, so both
+ * views apply identical filtering off the same applied state.
+ */
 export async function fetchProjectCards(
   params: ProjectCardListParams = {},
 ): Promise<PaginatedResponse<ProjectCard>> {
-  const { search, offset = 0, limit = PROJECT_CARDS_PAGE_SIZE, pipeline_status_id } = params
+  const { search, offset = 0, limit = PROJECT_CARDS_PAGE_SIZE, pipeline_status_id, advancedFilters } = params
   const { data } = await apiClient.get<PaginatedResponse<ProjectCard>>('/projects', {
     params: {
       offset,
       limit,
       ...(search ? { search } : {}),
       ...(pipeline_status_id ? { pipeline_status_id } : {}),
+      ...(advancedFilters && Object.keys(advancedFilters).length > 0 ? { advancedFilters } : {}),
     },
   })
   return data

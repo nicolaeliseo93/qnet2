@@ -13,11 +13,15 @@ use Illuminate\Database\Eloquent\Model;
  *
  * `AbstractTableDefinition::applyAdvancedFilter()` delegates here for every
  * DIRECT target: a real DB column for the scalar/range/list types, or a plain
- * Eloquent relation method name for `type: relation` (matched generically via
- * `whereHas()` on the related model's own primary key — no domain knowledge
- * required). A concrete definition overrides the hook only for genuinely
- * derived logic a relation name + id-match cannot express (e.g. searching a
- * related model by a non-id field) — see `TableDefinition::applyAdvancedFilter()`.
+ * Eloquent relation method name for `type: relation`/`type: async_search`
+ * (matched generically via `whereHas()` on the related model's own primary
+ * key — no domain knowledge required). `async_search` is ID-based exactly
+ * like `relation` (the frontend's AsyncPaginatedSelect submits an id or ids,
+ * never free text): the two differ only in which widget renders them, never
+ * in the value shape or how they are applied. A concrete definition overrides
+ * the hook only for genuinely derived logic a relation name + id-match cannot
+ * express (e.g. searching a related model by a non-id field) — see
+ * `TableDefinition::applyAdvancedFilter()`.
  *
  * Every value stays a bound query-builder parameter; LIKE wildcards are
  * escaped (delegated to FilterApplier, DRY with the column-filter engine);
@@ -66,8 +70,8 @@ class AdvancedFilterApplier
 
     /**
      * Apply one advanced filter's already-validated value to the query, against
-     * `$target` (a real DB column for every type except `relation`, where it is
-     * the Eloquent relation method name).
+     * `$target` (a real DB column for every type except `relation`/
+     * `async_search`, where it is the Eloquent relation method name).
      *
      * @param  Builder<Model>  $query
      * @param  array<string, mixed>  $descriptor
@@ -77,7 +81,7 @@ class AdvancedFilterApplier
         $operator = is_string($descriptor['operator'] ?? null) ? $descriptor['operator'] : null;
 
         match ($type) {
-            AdvancedFilterType::Text, AdvancedFilterType::Textarea, AdvancedFilterType::AsyncSearch => $this->applyLike($query, $target, $value, $operator ?? 'contains'),
+            AdvancedFilterType::Text, AdvancedFilterType::Textarea => $this->applyLike($query, $target, $value, $operator ?? 'contains'),
             AdvancedFilterType::Number => $this->applyNumber($query, $target, $value, $operator ?? 'equals'),
             AdvancedFilterType::NumberRange => $this->applyRange($query, $target, $value, static fn (mixed $bound): int|float|null => is_numeric($bound) ? $bound + 0 : null),
             AdvancedFilterType::Date, AdvancedFilterType::Datetime => $this->applyDate($query, $target, $value, $operator ?? 'equals'),
@@ -85,7 +89,7 @@ class AdvancedFilterApplier
             AdvancedFilterType::Select, AdvancedFilterType::Enum, AdvancedFilterType::Radio, AdvancedFilterType::Autocomplete => $this->applyEquals($query, $target, $value),
             AdvancedFilterType::Checkbox, AdvancedFilterType::Switch => $this->applyEquals($query, $target, (bool) $value),
             AdvancedFilterType::Multiselect, AdvancedFilterType::AutocompleteMulti => $this->applyWhereIn($query, $target, $value),
-            AdvancedFilterType::Relation => $this->applyRelation($query, $target, $value, ($descriptor['multiple'] ?? false) === true),
+            AdvancedFilterType::Relation, AdvancedFilterType::AsyncSearch => $this->applyRelation($query, $target, $value, ($descriptor['multiple'] ?? false) === true),
         };
     }
 
@@ -97,7 +101,7 @@ class AdvancedFilterApplier
     private function isValidValue(AdvancedFilterType $type, mixed $value, array $descriptor): bool
     {
         return match ($type) {
-            AdvancedFilterType::Text, AdvancedFilterType::Textarea, AdvancedFilterType::AsyncSearch => is_string($value) && $value !== '',
+            AdvancedFilterType::Text, AdvancedFilterType::Textarea => is_string($value) && $value !== '',
             AdvancedFilterType::Number => is_numeric($value),
             AdvancedFilterType::NumberRange => $this->isValidRange($value, 'is_numeric'),
             AdvancedFilterType::Date, AdvancedFilterType::Datetime => is_string($value) && $value !== '',
@@ -105,7 +109,7 @@ class AdvancedFilterApplier
             AdvancedFilterType::Select, AdvancedFilterType::Enum, AdvancedFilterType::Radio, AdvancedFilterType::Autocomplete => is_scalar($value),
             AdvancedFilterType::Checkbox, AdvancedFilterType::Switch => is_bool($value),
             AdvancedFilterType::Multiselect, AdvancedFilterType::AutocompleteMulti => $this->isValidScalarList($value),
-            AdvancedFilterType::Relation => ($descriptor['multiple'] ?? false) === true ? $this->isValidScalarList($value) : is_scalar($value),
+            AdvancedFilterType::Relation, AdvancedFilterType::AsyncSearch => ($descriptor['multiple'] ?? false) === true ? $this->isValidScalarList($value) : is_scalar($value),
         };
     }
 
@@ -149,7 +153,7 @@ class AdvancedFilterApplier
     }
 
     /**
-     * Text/textarea/async_search: bound LIKE (or equals), value never inlined.
+     * Text/textarea: bound LIKE (or equals), value never inlined.
      */
     private function applyLike(Builder $query, string $column, mixed $value, string $operator): void
     {
@@ -273,10 +277,10 @@ class AdvancedFilterApplier
     }
 
     /**
-     * relation: `whereHas($target, ...)` matched on the related model's own
-     * primary key — generic for any BelongsTo/BelongsToMany/HasMany relation,
-     * no domain knowledge required. Single value → `where`; multiple → bound
-     * `whereIn`, capped.
+     * relation/async_search: `whereHas($target, ...)` matched on the related
+     * model's own primary key — generic for any BelongsTo/BelongsToMany/
+     * HasMany relation, no domain knowledge required. Single value → `where`;
+     * multiple → bound `whereIn`, capped.
      */
     private function applyRelation(Builder $query, string $relation, mixed $value, bool $multiple): void
     {

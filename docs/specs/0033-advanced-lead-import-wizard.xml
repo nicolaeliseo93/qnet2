@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0033 — Advanced Lead Import Wizard (Modulo Import Lead avanzato).
+  Contract-first. EVOLVE in place the existing generic import engine
+  (App\Imports\*, spec 0012) into a multi-step, mapping-driven, staged,
+  upsert-capable wizard, and migrate the 5 legacy domains to the unified flow
+  WITHOUT regressions. First target: `leads`. The engine must become the
+  single reusable import engine (future: registries/referents/companies/
+  products/opportunities) by adding only a new ImportDefinition, never a new
+  flow.
+
+  Decisioni prodotto (approvate dall'utente, 2026-07-15):
+  - Campi Extra: UNICO store JSON grezzo su `leads` (`extra_fields`), mostrato
+    nella scheda E modificabile come coppie chiave/valore libere nel form
+    create/edit. NIENTE Universal Custom Fields (spec 0021) su leads.
+  - Duplicati: match su un Referent esistente per email/telefono/cellulare
+    (+ chiavi configurabili). Strategie: create-new / update-existing (aggiorna
+    l'anagrafica del Referent + i campi Lead) / ignore / decide-in-review.
+  - Consegna: UNA spec completa (tutto incluso, anche la griglia di revisione
+    editabile). NESSUN commit git in questa iterazione.
+  - Motore: EVOLVERE App\Imports in place; migrare i 5 domini esistenti al
+    flusso unificato senza regressioni.
+
+  Verificato sul repo (nomi reali, non ipotizzati) — vedi <context>.
+-->
+<spec id="0033-advanced-lead-import-wizard" status="draft" owner="tu" date="2026-07-15">
+
+  <goal>
+    Fornire a un utente autorizzato (`{resource}.import`) un wizard di importazione
+    massiva guidato (upload → configurazione → mappatura colonne → revisione dati
+    editabile → riepilogo → import in background) che analizza file Excel/CSV, mappa
+    le colonne ai campi del dominio (con auto-mapping, colonne ignorate e campi
+    extra), interpreta automaticamente Nome/Cognome e la geografia, gestisce i
+    duplicati con strategia configurabile, esegue l'import via Job con notifica e
+    storico. Primo dominio: `leads` (una riga = un Referent anagrafico + un Lead
+    nella campagna scelta). Il motore evolve quello esistente (spec 0012) e resta
+    generico: nuovi domini = una nuova ImportDefinition, stesso flusso.
+  </goal>
+
+  <context>
+    Tutti i nomi sono VERIFICATI sul codice reale.
+
+    MOTORE ESISTENTE da evolvere (spec 0012, PIENAMENTE implementato, non draft):
+    - `App\Imports\{ImportDefinition (interface), AbstractImportDefinition,
+      ImportRegistry, ImportRowProcessor, ImportRowContext, RowOutcome,
+      ImportPreview}` + `App\Imports\Support\{CsvReader, CsvReaderException,
+      GeoResolver, GeoResolutionResult}`. Registry via `config/imports.php`
+      (`definitions` map + tunables max_file_kb/max_rows/preview_*/batch_size).
+    - Contratto attuale `ImportDefinition`: domain(), resource(), modelClass(),
+      authorizeImport(User), columns():array{id,required}, validateRow(),
+      dedupKey(), existsInDatabase(), createRow(User,row) [CREATE-ONLY].
+    - Flusso attuale a 2 fasi: `App\Jobs\ValidateImportJob` (dry-run → preview,
+      status AwaitingConfirmation) → `App\Jobs\ProcessImportJob` (crea solo righe
+      valide, per-row DB::transaction). `App\Services\ImportService` (start/confirm/
+      writeErrorReport, disk `local`, dir `imports`, file uuid).
+    - `App\Http\Controllers\Import\ImportController extends BaseApiController`
+      (thin, try/catch→handleControllerException): template/upload/show/confirm/
+      errors. `App\Http\Requests\Import\UploadImportRequest` (file required|mimes:
+      csv,txt|extensions:csv,txt|max). `App\Http\Resources\ImportRunResource`.
+      Nessuna Policy dedicata: authz via ability `import` (Gate::forUser->allows(
+      'import', modelClass) in AbstractImportDefinition::authorizeImport, fail-closed)
+      + ownership (user_id + resource) → 404, mai 403.
+    - Model `App\Models\ImportRun` (table `import_runs`): id, resource(string),
+      user_id(FK users cascade), status(cast ImportStatus), original_filename,
+      stored_path, total_rows, valid_rows, invalid_rows, imported_rows(nullable),
+      error_report_path(nullable), preview(json nullable), timestamps. Enum
+      `App\Enums\ImportStatus` (validating, awaiting_confirmation, processing,
+      completed, failed). Factory presente.
+    - Domini registrati oggi: business-functions, companies, operational-sites,
+      roles, users (le rispettive *ImportDefinition). `CompaniesImportDefinition` è
+      il template di riferimento (delega a CompanyService, indirizzo via GeoResolver).
+    - Rotte `routes/api.php` sotto auth:sanctum: GET imports/{domain}/template,
+      GET imports/{domain}/{importRun}, GET imports/{domain}/{importRun}/errors
+      (throttle:60,1); POST imports/{domain}, POST imports/{domain}/{importRun}/
+      confirm (throttle:10,1).
+    - Frontend `features/imports/`: api.ts, types.ts, query-keys.ts (importKeys),
+      use-import.ts (upload + polling refetchInterval 1500ms + confirm),
+      use-import-upload-form.ts, import-upload-schema.ts, import-dialog.tsx
+      (stepper dentro `Sheet` resizable, routing per status), import-preview.tsx,
+      import-progress.tsx, import-error-report-link.tsx. i18n en-imports.ts/
+      it-imports.ts. Azione import iniettata come `importSlot` (DropdownMenuItem
+      gated `<Can permission="{resource}.import">`) nelle *-table.tsx.
+
+    LEAD = REFERENT + LEAD (fatto strutturale chiave):
+    - `App\Models\Lead` (#[Fillable] referent_id, campaign_id, operational_site_id,
+      source_id, operator_id, lead_status_id, notes). NON ha campi di contatto
+      propri. referent_id/campaign_id/lead_status_id OBBLIGATORI (restrictOnDelete).
+      Nessun `code`, nessuna colonna geo su `leads`.
+    - I dati di contatto (nome/cognome/email/telefono/cellulare/indirizzo/geo)
+      vivono sul `App\Models\Referent` via `HasPersonalData` (morph personable):
+      Referent → PersonalData (first_name/last_name/company_name/…) → Contact[]
+      (ContactTypeEnum: phone|mobile|fax|email|pec|website; value+is_primary) +
+      Address[] (line1/postal_code/city_id/province_id/state_id/country_id).
+      `referents.name` è denormalizzato, derivato dalla card da `ReferentProfileWriter`.
+    - Creazione anagrafica: `App\Services\ReferentService::create(User, CreateReferentData,
+      ?ProfileData)`. `App\DataObjects\Users\ProfileData{ CreatePersonalData card,
+      ContactInput[]|null contacts, AddressInput[]|null addresses }`;
+      `ContactInput{ ?id, CreateContact }`, `AddressInput{ ?id, CreateAddress }`.
+      `App\DataObjects\PersonalData\{CreatePersonalData, CreateContact, CreateAddress}`.
+      `App\Enums\PersonalDataTypeEnum` (individual|company). Lo split Nome/Cognome
+      alimenta CreatePersonalData.firstName/lastName.
+    - `App\Services\LeadService::{create,update,delete}`; DTO `App\DataObjects\Leads\
+      {CreateLeadData, UpdateLeadData}`. `App\Http\Resources\LeadResource`.
+      `App\Tables\LeadsTableDefinition` (+ Leads\LeadColumnCatalog). Policy
+      `App\Policies\LeadPolicy`. Authz campi `App\Authorization\LeadsAuthorization`.
+    - Entità collegate + for-select: campaigns (GET /api/campaigns/for-select),
+      projects, sources (/sources/for-select), lead-statuses (/lead-statuses/for-select),
+      operational-sites (/operational-sites/for-select), users (/users/for-select),
+      referents (/referents/for-select). LeadStatus: name unique, color token,
+      sort_order; default "New"/slate già seminato (spec 0029).
+    - Geo: `App\Models\{Country,State,Province,City}` (State=regione, Province=
+      provincia, City=comune). `GeoResolver` (exact, case-insensitive, gerarchico,
+      via `App\Support\Geo\ItalianGeoLocalizer` per abbreviazioni/targhe/accenti).
+
+    UNIVERSAL CUSTOM FIELDS (spec 0021) — usato da 19 moduli via `HasCustomFields`
+    su BaseModel; NON montato su leads e per decisione utente NON si usa qui (i
+    Campi Extra sono JSON grezzo, vedi <scope>).
+
+    FRONTEND infra da RIUSARE (verificata):
+    - AG Grid ENTERPRISE + SSRM: wrapper `components/data-table/data-table.tsx`
+      (DataTable, rowModelType 'serverSide', suppressFieldDotNotation),
+      `ag-grid-setup.ts` (AllEnterpriseModule + license). Orchestratore dominio
+      `features/table/table-view.tsx` (TableView, TableViewHandle.refresh()).
+      Config da `useTableConfig(domain)` → GET /tables/{domain}/columns; righe da
+      `ssrm-datasource.ts` → POST /tables/{domain}/rows (startRow/endRow/sortModel/
+      filterModel/search/advancedFilters → { items, pagination }). L'EDITING INLINE
+      NON esiste oggi in nessuna griglia (grids read-only): è capacità NUOVA.
+    - `components/ui/`: card, dialog, alert-dialog, sheet (resizable, storageKey),
+      select, searchable-select, multi-select, async-paginated-select, badge,
+      breadcrumb, form, input (type file), textarea, button, tabs, tooltip,
+      separator, dropdown-menu, skeleton, sonner, stat-*. NON esistono: Stepper/
+      Wizard, Progress bar, Dropzone, EmptyState/PageHeader-in-ui (PageHeader è
+      `components/page-header.tsx`).
+    - Pagina modulo: `pages/<x>-page.tsx` (Can gate) → adapter
+      `features/<x>/<x>-table.tsx` (PageHeader actions + TableView). Precedente
+      multi-step full-page: `features/migrations/migrations-page.tsx`.
+    - Router 7 in `routes/router.tsx` (lazy pages sotto AppLayout). Form RHF+Zod
+      (`components/ui/form.tsx`, schema factory `build*(t)`). i18n pattern a
+      namespace separato via `addResourceBundle` (features/migrations/i18n.ts) per
+      NON gonfiare en.ts/it.ts. TanStack Query (query-client.ts), axios
+      `api/client.ts` (no forced Content-Type → multipart ok), `<Can>` +
+      `useAbilities` in `features/auth/`.
+
+    CODA/STORAGE: QUEUE_CONNECTION=database (jobs/job_batches/failed_jobs migrati).
+    Disk `local` privato. Notifiche generiche già presenti: `App\Notifications\
+    GenericNotification`, table `notifications`, frontend `features/notifications`
+    (oggi NON agganciate agli import).
+
+    XLSX SENZA NUOVE DIPENDENZE: `openspout/openspout ^5.7` è GIÀ in composer.json
+    (usato da `App\Exports`) e legge xlsx+csv → si riusa per il parsing multi-formato.
+    NESSUNA nuova dipendenza composer/npm (vincolo §0).
+  </context>
+
+  <scope>
+    <in>
+      <!-- ENGINE: schema/staging evolution -->
+      <item>Evoluzione schema `import_runs` (migration additiva, nullable, `down()` reversibile): aggiunge `detected_columns` (json nullable — nome+indice+conteggio duplicati rilevati all'analisi), `column_mapping` (json nullable — per colonna: target field id | '__ignore__' | '__extra__'), `global_config` (json nullable — valori globali dello step 2), `dedup_strategy` (string nullable), `modified_rows` (uint default 0), `notified_at` (timestamp nullable), `error_count` (uint default 0). Le colonne esistenti restano invariate.</item>
+      <item>Nuova tabella `import_run_rows` + Model `App\Models\ImportRunRow` (+ factory): id, import_run_id (FK import_runs cascadeOnDelete, indexed), row_number (uint), raw_values (json — colonna file→valore grezzo), mapped_values (json — field id→valore risolto), extra_values (json nullable — campi extra), resolved (json nullable — riferimenti risolti: geo ids, referent match id, name split), status (string, cast `App\Enums\ImportRowStatus`), messages (json nullable — errori/avvisi motivati), duplicate_of_id (uint nullable — id Referent matchato), is_edited (bool default false), timestamps. Indici (import_run_id,status), (import_run_id,row_number).</item>
+      <item>Nuovo enum `App\Enums\ImportRowStatus` (valid, warning, error, duplicate, skipped). Estensione enum `App\Enums\ImportStatus` con: analyzing, configuring, staging, reviewing (i valori attuali validating/awaiting_confirmation restano per retro-compat legacy finché non migrati).</item>
+
+      <!-- ENGINE: contract extension (backward compatible) -->
+      <item>Estensione contratto `App\Imports\ImportDefinition` (con default in `AbstractImportDefinition` così le 5 definizioni esistenti NON si rompono): `fields(): array<FieldDescriptor{id,label_key,required,group,type}>` (catalogo dei campi MAPPABILI; default derivato da `columns()`), `globalConfig(): array<GlobalFieldDescriptor{id,label_key,required,for_select_resource,default}>` (default []), `recognizers(): array<class-string<RowRecognizer>>` (default []), `supportsExtraFields(): bool` (default false), `dedupModes(): array<DedupMode>` (default [create_only]), `persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy): void` (default = delega a createRow() ignorando strategy → retro-compat). `createRow()` resta per le legacy.</item>
+      <item>Auto-mapping: `App\Imports\Support\ColumnMapper` — confronta i nomi colonna del file coi `fields()` della definizione (normalizzazione: lower/trim/accenti/underscore, alias per campo) e propone una mappa; rileva required mancanti, colonne duplicate, colonne non usate, conflitti (due colonne → stesso field). Nessuna scrittura: pura funzione di suggerimento verificata dallo StageJob.</item>
+      <item>Riconoscimento intelligente estensibile: interface `App\Imports\Recognition\RowRecognizer{ recognize(ImportRowContext, array $mapped): RecognitionResult }` + `RecognitionResult` (valori risolti + confidenza + flag "needs review"). Implementazioni v1: `NameSplitRecognizer` (full name → first/last: "Mario Rossi", "Rossi Mario", nomi/cognomi composti, doppi cognomi; bassa confidenza → riga warning) e `GeoRecognizer` (usa GeoResolver esteso). Registrazione per-definizione via `recognizers()`. Architettura pronta per nuove regole senza toccare il flusso.</item>
+      <item>Estensione `GeoResolver` (retro-compat): modalità fuzzy opzionale (normalizzazione accenti/case già presente via ItalianGeoLocalizer + fallback similarità con soglia su `similar_text`/Levenshtein e allow-list colonne). 1 sola corrispondenza → assegnata; 0 o >1 → `GeoResolutionResult` con candidati e flag ambiguo → riga warning per revisione (NON errore bloccante). Il comportamento exact esistente resta il default per le legacy.</item>
+      <item>Parsing multi-formato: `App\Imports\Support\SpreadsheetReader` (riusa openspout, già in composer) per xlsx/xls/csv con header, cap righe/size, rilevamento colonne duplicate, encoding/BOM. `CsvReader` resta o viene assorbito dietro un'interface `RowReader` (il refactor non cambia il contratto delle definizioni). Analisi preliminare (num colonne, num righe, errori formato, colonne duplicate) senza importare.</item>
+
+      <!-- ENGINE: jobs + service (unified flow) -->
+      <item>Refactor flusso a step in `App\Services\ImportService` + jobs: `AnalyzeImportJob` (fase A: legge header+conteggi, salva detected_columns + auto-mapping suggerito, status→configuring), `StageImportJob` (fase B: applica mapping+recognizers+dedup, scrive TUTTE le righe in `import_run_rows` con status/messages/resolved/duplicate_of_id, calcola total/valid/warning/error/duplicate, status→reviewing), `ProcessImportJob` (fase C: RILEGGE le righe staged — non il file — e per ogni riga non-skipped esegue `persistRow()` in DB::transaction per-riga secondo la strategia duplicati; aggiorna imported_rows/error_count; status→completed; invia notifica; su Throwable→failed). Retro-compat: le 5 legacy passano da AnalyzeImportJob (globalConfig vuoto, mapping auto esatto) al medesimo StageImportJob/ProcessImportJob (persistRow→createRow, dedup create_only).</item>
+      <item>Salvataggio stato wizard: lo stato vive interamente su `import_runs` (detected_columns/column_mapping/global_config/dedup_strategy/status). Riprendere = GET del run; niente stato client volatile perso al reload.</item>
+      <item>Notifica di completamento: `App\Notifications\ImportCompletedNotification` (canale database, riusa il sistema notifiche esistente) con importati/errori/link report/link run; inviata da ProcessImportJob; `notified_at` valorizzato.</item>
+      <item>Storico import: endpoint lista paginata degli `import_runs` dell'utente (per dominio), esposto in UI come pagina Storico. Ownership: solo i run dell'actor.</item>
+
+      <!-- CONTROLLER + ROUTES + REQUESTS -->
+      <item>Estensione `App\Http\Controllers\Import\ImportController` con azioni: `analyze` (POST upload → analyzing, dispatch AnalyzeImportJob), `configure` (PUT config: global_config + column_mapping + dedup_strategy, validati → dispatch StageImportJob → staging), `index` (GET storico paginato), `rows` (POST SSRM righe staged della revisione), `updateRow` (PATCH edit inline di una riga staged → ri-valida quella riga), `summary` (GET riepilogo). `confirm` resta (reviewing→processing). Requests dedicate: `ConfigureImportRequest` (valida mapping/config/strategy contro la definizione, allow-list di field id/target — mai input grezzo su colonne/ordinamenti), `UpdateImportRowRequest`. Rotte in `routes/api.php` (auth:sanctum, throttle coerenti; SSRM rows throttle come le altre tabelle). Ownership run (user_id+resource)→404.</item>
+
+      <!-- LEADS DEFINITION + EXTRA FIELDS -->
+      <item>`App\Imports\LeadsImportDefinition` (registrata `config/imports.php` come `leads`): fields() = campi anagrafici del Referent (full_name OPPURE first_name/last_name, email, phone, mobile, company_name, tax_code, vat_number, indirizzo street/postal_code/country/region/province/city) + campi Lead mappabili (notes); globalConfig() = campaign_id (required), project_id, source_id, lead_status_id (default New), operator_id, + eventuali globali; recognizers() = [NameSplitRecognizer, GeoRecognizer]; supportsExtraFields()=true; dedupModes() = [create_new, update_existing, ignore, manual] con chiavi match email/phone/mobile (+configurabili). persistRow(): risolve/crea il Referent (ReferentService + ProfileData con card individual, contacts email/phone/mobile, address geo-risolto) applicando la strategia duplicati sul match Referent, poi crea/aggiorna il Lead (LeadService) con i valori globali + notes + extra_fields. CREATE-ONLY per il Lead in create_new; update_existing aggiorna anagrafica Referent + campi Lead nella campagna.</item>
+      <item>Campi Extra su Lead: migration additiva `add_extra_fields_to_leads_table` (colonna `extra_fields` json nullable). `Lead`: aggiunge 'extra_fields' a #[Fillable] + cast `'extra_fields' => 'array'`. `LeadsImportDefinition` salva le colonne mappate a '__extra__' in `extra_fields` mantenendo il nome originale della colonna file. `LeadResource` espone `extra_fields`. `StoreLeadRequest`/`UpdateLeadRequest`: regola `extra_fields` nullable|array + `extra_fields.*` string (coppie chiave/valore libere). `LeadsAuthorization.fields()`: aggiunge `extra_fields`. Nessuna influenza su altri form/CRM.</item>
+
+      <!-- FRONTEND: shared wizard UI -->
+      <item>Componenti condivisi nuovi in `components/ui/`: `stepper.tsx` (barra avanzamento step, compatto per default §ui-design) e `progress.tsx` (barra di avanzamento) — riusabili, varianti via cva. Nessuna duplicazione: se un pattern esiste già si riusa.</item>
+      <item>Evoluzione `features/imports/` a wizard multi-step full-page: nuova pagina `pages/lead-import-page.tsx` (o generica `import-wizard-page.tsx`) montata su rotta lazy `/leads/import` (+ storico `/leads/import/history`) in `routes/router.tsx`, gated `<Can permission="leads.import">`. Componenti step: `import-step-upload.tsx` (dropzone xlsx/csv + analisi preliminare: colonne/righe/errori/duplicati), `import-step-config.tsx` (form globali: campagna required, progetto, fonte, stato, operatore via relation-select), `import-step-mapping.tsx` (per colonna: select target field | ignora | campo extra, con auto-mapping, badge required-mancante/duplicata/non-usata/conflitto), `import-step-review.tsx` (TableView SSRM su dominio revisione con editing inline che PATCH-a la riga; evidenzia errori/avvisi/mancanti/duplicati/dati interpretati), `import-step-summary.tsx` (riepilogo: totali/validi/errori/modificati + campagna/progetto/fonte/stato + colonne mappate + campi extra + avvisi), conferma esplicita → import. `import-wizard.tsx` orchestratore stato-macchina per status del run (riprende da GET run). Loading/empty/error states completi.</item>
+      <item>Editing inline AG Grid SSRM (capacità nuova, isolata): abilitazione `editable`/`cellEditor`/`onCellValueChanged` SOLO per la griglia di revisione import (non tocca le griglie read-only esistenti), con `stopEditing`→PATCH updateRow→refresh mirato. Contratto SSRM riusato (columns via config, rows via POST rows) sul dominio revisione.</item>
+      <item>Storico UI: `import-history.tsx` (lista paginata run: utente/data/file/campagna/progetto/record/importati/errori/stato/link log). Riusa TableView o lista dedicata.</item>
+      <item>Form Lead: `features/leads/lead-form-body.tsx` aggiunge una `FormSection` "Campi Extra / Dati Importati" con editor di coppie chiave/valore (aggiungi/rimuovi riga), integrato in `lead-schema.ts` (extra_fields record string→string nullable) + `lead-form-payload.ts` (create/update). `features/leads/lead-detail.tsx` aggiunge la sezione read-only "Dati Importati" quando `extra_fields` non è vuoto. types.ts aggiornato.</item>
+      <item>Wiring azione: la voce "Import Lead" (gated `<Can permission="leads.import">`) porta alla nuova pagina wizard (non più solo il dialog dentro Sheet); il dialog generico resta per i domini legacy o viene assorbito nel wizard (retro-compat UI verificata). Notifica di completamento consumata da `features/notifications`.</item>
+      <item>i18n: modulo dedicato a namespace separato (`features/imports/i18n.ts` + `i18n/locales/{en,it}-import-wizard.ts`) via addResourceBundle per non gonfiare en.ts/it.ts: step, label campi, stati riga, messaggi errore/avviso, storico, campi extra.</item>
+
+      <!-- TEST -->
+      <item>Test Pest backend: enum/migrazioni/relazioni (ImportRunRow, extra_fields); ColumnMapper (auto-map, required-missing, duplicate, conflict); NameSplitRecognizer (tutti i casi del brief); GeoRecognizer/GeoResolver fuzzy (single→assign, 0/multi→warning); SpreadsheetReader (xlsx+csv, header, duplicati, cap righe); ImportService/AnalyzeJob/StageJob/ProcessJob (conteggi, staging, upsert Referent per strategia, isolamento per-riga, failed su exception, notifica); LeadsImportDefinition (crea Referent+Lead, extra_fields, dedup 4 strategie); ImportController (analyze/configure/rows/updateRow/summary/confirm/index: authz 403, ownership 404, validazione 422); retro-compat 5 domini legacy (suite esistente verde). Coverage per-layer (Model/Policy 95%, FormRequest 90%, Service/Definition/Recognizer 90%, Controller/Jobs 85%).</item>
+      <item>Test Vitest frontend: stepper/progress; ogni step (upload analisi, config form, mapping auto+conflitti, review editing inline+PATCH, summary); wizard state-machine + ripresa; lead form extra fields (add/remove, payload) + detail Dati Importati; storico; gating `<Can>`; i18n. Query per ruolo accessibile.</item>
+    </in>
+    <out>
+      <item>NIENTE Universal Custom Fields (spec 0021) su leads: i Campi Extra sono JSON grezzo `leads.extra_fields`, non definizioni tipizzate/permessi per-campo.</item>
+      <item>NESSUN nuovo pacchetto composer/npm: xlsx via openspout (già presente); niente maddhatter/laravel-excel, phpspreadsheet, ecc.</item>
+      <item>NESSUNA modifica ai 19 moduli che usano CustomFields, né al sistema CustomFields, né alle griglie read-only esistenti (l'editing inline è abilitato SOLO sulla griglia di revisione import).</item>
+      <item>NIENTE import di altri domini (registries/referents/companies/products/opportunities) in questa spec: solo l'architettura pronta + il wiring `leads`. I 5 domini legacy sono solo MIGRATI al flusso unificato senza cambiare i loro campi/regole.</item>
+      <item>NESSUN merge multi-indirizzo o multi-contatto avanzato sul Referent: un indirizzo primario + i contatti email/phone/mobile dichiarati; il resto resta out.</item>
+      <item>NESSUNA importazione schedulata/ricorrente, nessun mapping salvato come template riusabile tra import (il mapping vive sul singolo run); nessun rollback post-import.</item>
+      <item>NESSUN commit git in questa iterazione (decisione utente): si arriva a stato verde e si aggiorna HANDOFF, senza committare.</item>
+      <item>NESSUN campo `code` sul Lead; nessuna colonna geo diretta su `leads` (la geo resta sul Referent/campagna).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Dominio {domain} = resource key (leads | business-functions | companies |
+         operational-sites | roles | users). Authz su OGNI endpoint via ability
+         `import` (definizione::authorizeImport → Gate 'import' su modelClass,
+         fail-closed) + ownership run (user_id==actor AND resource==domain → 404).
+         Envelope { success, message, data }. Mapping/config validati contro la
+         definizione (allow-list field id), MAI input grezzo su colonne/ordinamenti
+         (anti-SQLi SSRM). -->
+
+    <endpoint method="POST" path="/api/imports/{domain}">
+      <request>
+        multipart/form-data: `file` (required; mimes csv,txt,xlsx,xls; extensions
+        idem; max IMPORT_MAX_FILE_KB). Crea ImportRun(status=analyzing), memorizza
+        file su disk `local` (uuid), dispatcha AnalyzeImportJob. throttle:10,1.
+      </request>
+      <response status="201">
+        { success, message, data: { import_run: {
+          id, resource, status:'analyzing', original_filename,
+          total_rows:0, valid_rows:0, warning_rows:0, error_rows:0,
+          duplicate_rows:0, imported_rows:null, modified_rows:0,
+          has_error_report:false, created_at
+        } } }
+      </response>
+      <errors>403 senza {domain}.import; 404 domain ignoto; 422 file mancante/tipo/size.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/imports/{domain}/{importRun}">
+      <request>Polling stato/wizard. throttle:60,1.</request>
+      <response status="200">
+        { success, message, data: { import_run: {
+          id, resource,
+          status:'analyzing'|'configuring'|'staging'|'reviewing'|'processing'|'completed'|'failed',
+          original_filename, total_rows, valid_rows, warning_rows, error_rows,
+          duplicate_rows, imported_rows|null, modified_rows, error_count,
+          has_error_report, created_at,
+          detected_columns: Array<{ name:string, index:number, duplicate:boolean }> | null,
+          column_mapping: Record<string, string> | null,   <!-- colonna file → field id | '__ignore__' | '__extra__' -->
+          global_config: Record<string, string|number|null> | null,
+          dedup_strategy: string | null,
+          suggested_mapping: Record<string,string> | null,  <!-- auto-map (solo da configuring) -->
+          fields: Array<{ id, label, required, group, type }>,       <!-- catalogo mappabile della definizione -->
+          global_fields: Array<{ id, label, required, for_select_resource, default }>,
+          dedup_modes: string[]
+        } } }
+      </response>
+      <errors>403 senza permesso; 404 ownership/domain.</errors>
+    </endpoint>
+
+    <endpoint method="PUT" path="/api/imports/{domain}/{importRun}/configure">
+      <request>
+        Valido solo se status==configuring. Body:
+        { column_mapping: Record<string,string>, global_config: Record<string,mixed>,
+          dedup_strategy: string }. Validati da ConfigureImportRequest contro la
+        definizione (field id ∈ fields()∪{__ignore__,__extra__}; required coperti;
+        global required presenti; strategy ∈ dedup_modes). Salva su import_run,
+        status→staging, dispatcha StageImportJob. throttle:10,1.
+      </request>
+      <response status="200">{ success, message, data: { import_run: { ...status:'staging' } } }</response>
+      <errors>403; 404 ownership/domain; 422 mapping/config/strategy non validi o stato != configuring.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/imports/{domain}/{importRun}/rows">
+      <request>
+        SSRM datasource della revisione (solo status==reviewing). Body come le altre
+        tabelle: { startRow, endRow, sortModel:[{colId,sort}], filterModel, search? }.
+        Ordinamento/filtri da allow-list (colonne staged: row_number,status + field
+        id mappati). throttle come tabelle.
+      </request>
+      <response status="200">
+        { success, message, data: {
+          items: Array<{ id, row_number, status, is_edited, duplicate_of_id|null,
+                         values: Record<string,string>, messages: string[] }>,
+          pagination: { total, offset, limit, total_pages }
+        } }
+      </response>
+      <errors>403; 404 ownership/domain; 422 stato != reviewing.</errors>
+    </endpoint>
+
+    <endpoint method="PATCH" path="/api/imports/{domain}/{importRun}/rows/{row}">
+      <request>
+        Edit inline (solo reviewing). Body: { values: Record<string,string> } (solo
+        field id mappati/extra ammessi). Ri-valida la riga (recognizers+dedup),
+        aggiorna status/messages/resolved, is_edited=true, ricalcola i contatori del
+        run. UpdateImportRowRequest. throttle coerente.
+      </request>
+      <response status="200">
+        { success, message, data: { row: { id, row_number, status, is_edited,
+          duplicate_of_id|null, values, messages }, counts: { total, valid_rows,
+          warning_rows, error_rows, duplicate_rows, modified_rows } } }
+      </response>
+      <errors>403; 404 ownership/domain o row non del run; 422 stato != reviewing o valori non ammessi.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/imports/{domain}/{importRun}/summary">
+      <request>Riepilogo pre-conferma (reviewing). throttle:60,1.</request>
+      <response status="200">
+        { success, message, data: { summary: {
+          total_rows, valid_rows, warning_rows, error_rows, duplicate_rows,
+          modified_rows, mapped_fields: Array<{ column:string, field:string }>,
+          extra_fields: string[], global_config: Record<string,mixed>,
+          dedup_strategy, warnings: string[]
+        } } }
+      </response>
+      <errors>403; 404 ownership/domain; 422 stato != reviewing.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/imports/{domain}/{importRun}/confirm">
+      <request>
+        Valido solo se status==reviewing. status→processing, dispatcha
+        ProcessImportJob (importa dalle righe staged non-skipped secondo strategy).
+        throttle:10,1.
+      </request>
+      <response status="200">{ success, message, data: { import_run: { ...status:'processing', imported_rows:null } } }</response>
+      <errors>403; 404 ownership/domain; 422 stato != reviewing.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/imports/{domain}">
+      <request>Storico paginato dei run dell'actor per dominio: { page, per_page }. throttle:60,1.</request>
+      <response status="200">
+        { success, message, data: { items: Array<ImportRun (come GET show, senza detected/fields)>,
+          pagination: { total, offset, limit, total_pages } } }
+      </response>
+      <errors>403 senza {domain}.import; 404 domain ignoto.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/imports/{domain}/{importRun}/errors">
+      <request>Download CSV righe scartate (invariato dal 0012). throttle:60,1.</request>
+      <response status="200">Download text/csv: header originali + row_number + errors (tutte le righe error/skipped).</response>
+      <errors>403; 404 ownership/domain o report assente.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- SCHEMA + ENGINE -->
+    <criterion id="AC-001">Data la migrazione additiva, quando la eseguo, allora `import_runs` ha le nuove colonne (detected_columns/column_mapping/global_config/dedup_strategy/modified_rows/notified_at/error_count) e `down()` le rimuove; le colonne esistenti e i 5 domini legacy restano intatti. (test: migrazione up/down + assenza regressioni schema)</criterion>
+    <criterion id="AC-002">Data la tabella `import_run_rows`, quando creo un ImportRunRow, allora appartiene a un ImportRun (belongsTo, cascadeOnDelete), casta status a `ImportRowStatus` e raw/mapped/extra/resolved/messages ad array; `down()` la rimuove. (test: relazione + cast + cascade)</criterion>
+    <criterion id="AC-003">Dato `ColumnMapper` con header file e i `fields()` della definizione, quando auto-mappo, allora colonne con nome equivalente (normalizzato accenti/case/underscore/alias) sono mappate, e sono segnalati required mancanti, colonne duplicate, non usate e conflitti (due colonne→stesso field). (test: auto-map + tutti i segnali)</criterion>
+    <criterion id="AC-004">Dato `NameSplitRecognizer`, quando ricevo "Mario Rossi", "Rossi Mario", un nome composto, un cognome composto e un doppio cognome, allora produce first_name/last_name coerenti; un input ambiguo/non separabile con sicurezza → RecognitionResult needs-review (riga warning). (test: casi del brief + low-confidence)</criterion>
+    <criterion id="AC-005">Dato `GeoResolver` in modalità fuzzy, quando risolvo un nome geo con abbreviazione/accento/case/piccola differenza con UNA sola corrispondenza, allora assegna l'id; con 0 o >1 corrispondenze → risultato con candidati e flag ambiguo (riga warning, non errore). Il comportamento exact resta il default per le legacy. (test: single-assign + 0/multi-warning + retro-compat exact)</criterion>
+    <criterion id="AC-006">Dato `SpreadsheetReader`, quando leggo un xlsx e un csv con lo stesso contenuto, allora ottengo le stesse righe associate all'header; header con colonne duplicate è rilevato; oltre IMPORT_MAX_ROWS → errore; BOM/encoding gestiti. NESSUNA nuova dipendenza (openspout già presente). (test: xlsx+csv parity + duplicati + cap)</criterion>
+
+    <!-- FLOW: jobs -->
+    <criterion id="AC-007">Dato un upload, quando gira AnalyzeImportJob, allora detected_columns e suggested_mapping sono salvati, status→configuring, NESSUNA riga importata né staged. (test: analyze + no writes)</criterion>
+    <criterion id="AC-008">Dato un run configuring con mapping/config/strategy validi, quando PUT configure e gira StageImportJob, allora ogni riga file diventa un `import_run_rows` con status/messages/resolved/duplicate_of_id corretti, i contatori (valid/warning/error/duplicate) sono esatti, status→reviewing; NESSUN record di dominio creato. (test: staging counts + no domain writes)</criterion>
+    <criterion id="AC-009">Dato un run reviewing confermato, quando gira ProcessImportJob, allora importa SOLO dalle righe staged non-skipped secondo la strategia, ogni riga in DB::transaction isolata, imported_rows/error_count aggiornati, status→completed, ed è inviata `ImportCompletedNotification` (notified_at valorizzato); una riga che fallisce a commit-time non blocca le altre ed entra nel report. (test: commit da staged + isolamento + notifica)</criterion>
+    <criterion id="AC-010">Dato un job che solleva eccezione non gestita in qualunque fase, quando fallisce, allora il run va a status=failed (mai bloccato in analyzing/staging/processing). (test: failed su exception per ogni job)</criterion>
+
+    <!-- LEADS definition + extra fields -->
+    <criterion id="AC-011">Dato un file lead con full_name/email/phone/geo e config campagna+stato, quando importo con strategia create_new, allora per ogni riga valida è creato un Referent (card individual con first/last da NameSplit, contatti email/phone/mobile, indirizzo geo-risolto) e un Lead che lo lega alla campagna con stato/fonte/operatore globali. (test: create Referent+Lead end-to-end)</criterion>
+    <criterion id="AC-012">Dato un file con email/telefono che matcha un Referent esistente, quando la strategia è update_existing, allora aggiorna l'anagrafica del Referent e crea/aggiorna il Lead nella campagna; con ignore la riga è skipped; con create_new crea comunque nuovo; con manual la riga è duplicate in revisione per decisione. (test: 4 strategie duplicati)</criterion>
+    <criterion id="AC-013">Date colonne mappate a '__extra__', quando importo, allora finiscono in `leads.extra_fields` col NOME ORIGINALE della colonna file, sono esposte da LeadResource, non compaiono in nessun altro form/CRM. (test: extra_fields persistiti + resource + isolamento)</criterion>
+    <criterion id="AC-014">Dato il form Lead manuale, quando aggiungo/rimuovo coppie chiave/valore in "Campi Extra" e salvo, allora `extra_fields` è persistito (create e update) e mostrato read-only nella scheda quando non vuoto; StoreLeadRequest/UpdateLeadRequest validano extra_fields nullable|array. (test BE+FE: extra fields form + detail)</criterion>
+
+    <!-- CONTROLLER + AUTHZ -->
+    <criterion id="AC-015">Dato un utente con `leads.import`, quando percorro analyze→configure→rows→updateRow→summary→confirm, allora ogni endpoint risponde con l'envelope e lo stato atteso; senza il permesso → 403; run altrui o resource!=domain → 404; stato errato → 422; mapping/config non validi → 422. (test: happy path completo + authz + ownership + validazione)</criterion>
+    <criterion id="AC-016">Dato POST rows in revisione, quando invio sortModel/filterModel, allora ordinamento e filtri passano da allow-list di colonne staged (nessun input grezzo in whereRaw/orderByRaw). (test: allow-list + injection negativo)</criterion>
+    <criterion id="AC-017">Dato PATCH rows/{row}, quando modifico valori di una riga error, allora la riga è ri-validata (status può passare a valid/warning), is_edited=true, i contatori del run sono ricalcolati e restituiti. (test: edit → re-validate → counts)</criterion>
+    <criterion id="AC-018">Dato GET /imports/{domain} storico, quando l'utente ha run, allora riceve la lista paginata dei SOLI propri run del dominio con i campi dichiarati. (test: history + ownership + paginazione)</criterion>
+
+    <!-- RETRO-COMPAT -->
+    <criterion id="AC-019">Dopo l'evoluzione, quando eseguo la suite dei 5 domini legacy (business-functions/companies/operational-sites/roles/users), allora restano verdi: passano dal flusso unificato (globalConfig vuoto, auto-map esatto, dedup create_only, persistRow→createRow) senza cambiare campi/regole; ogni cambiamento di test è solo per un requisito realmente cambiato e dichiarato. (test: suite legacy verde)</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-020">Dato lo step Upload, quando carico un xlsx/csv, allora vedo num colonne/righe, errori formato e colonne duplicate prima di procedere; il file è inviato a POST /imports/leads e il wizard entra in configuring. (test: upload + analisi + transizione)</criterion>
+    <criterion id="AC-021">Dato lo step Configurazione, quando compilo i globali (campagna required via relation-select, progetto/fonte/stato/operatore), allora non posso procedere senza i required e i valori sono inviati a PUT configure. (test: config form + validazione + submit)</criterion>
+    <criterion id="AC-022">Dato lo step Mappatura, quando apro il run, allora vedo l'auto-mapping proposto e per ogni colonna posso scegliere field | ignora | campo extra; required mancanti, colonne duplicate, non usate e conflitti sono evidenziati; la modifica è persistita nel run. (test: mapping UI + segnali + persistenza)</criterion>
+    <criterion id="AC-023">Dato lo step Revisione, quando la griglia SSRM carica le righe staged, allora vedo status/errori/avvisi/duplicati/dati interpretati per riga, modifico una cella inline, e al termine dell'edit la modifica è PATCH-ata e la riga aggiornata (senza correggere il file). (test: review grid + inline edit + PATCH + refresh)</criterion>
+    <criterion id="AC-024">Dato lo step Riepilogo, quando arrivo alla fine, allora vedo totali/validi/errori/modificati, campagna/progetto/fonte/stato, colonne mappate, campi extra e avvisi; solo dopo conferma esplicita parte l'import (POST confirm) e il wizard mostra progresso fino a completed/failed con notifica. (test: summary + confirm + esito)</criterion>
+    <criterion id="AC-025">Dato il wizard, quando ricarico la pagina a metà (dopo configuring/reviewing), allora lo stato è ripreso da GET run senza perdere mapping/config/modifiche; posso tornare agli step precedenti; loading/empty/error states presenti. (test: ripresa stato + navigazione step)</criterion>
+    <criterion id="AC-026">Dato l'utente senza `leads.import`, quando visito la pagina/azione import, allora è nascosta/negata via `<Can>` (l'UI nasconde, il backend autorizza). (test: gating)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>NESSUNA nuova dipendenza composer/npm. xlsx via `openspout/openspout` già presente; FE solo librerie già installate (AG Grid Enterprise/SSRM, RHF+Zod, TanStack Query, i18next).</item>
+    <item>EVOLVERE in place `App\Imports`: il contratto `ImportDefinition` è ESTESO con default retro-compatibili in `AbstractImportDefinition` così le 5 definizioni legacy non si rompono; la suite legacy resta verde (AC-019).</item>
+    <item>Authz server-side su OGNI endpoint via ability `import` (fail-closed) + ownership run (user_id+resource→404, mai 403). L'UI nasconde, il backend autorizza. FormRequest su ogni input; mapping/config/edit validati contro la definizione (allow-list field id).</item>
+    <item>Anti-SQLi SSRM: ordinamento/filtri della revisione da ALLOW-LIST di colonne staged, mai da whereRaw/orderByRaw su input. `$request->safe()->only()` mai `->only()` nudo.</item>
+    <item>Identificatori in INGLESE (tabelle/colonne/rotte/chiavi/costanti): `import_run_rows`, `extra_fields`, `ImportRunRow`, `ImportRowStatus`, endpoint `imports/{domain}/...`. Stringhe UI via i18n (namespace separato, non gonfiare en.ts/it.ts).</item>
+    <item>Envelope { success, message, data } rispettato; mai Model Eloquent raw in JSON (Resource per import_run/row/lead). Errori senza leak di classi interne (handleControllerException).</item>
+    <item>Riuso OBBLIGATORIO dei Service esistenti per la scrittura: ReferentService (+ProfileData/PersonalData/Contact/Address) e LeadService per il dominio leads; GeoResolver per la geo. Nessuna duplicazione di logica di creazione. Nessuna modifica ai 19 moduli CustomFields né alle griglie read-only (editing inline SOLO nella revisione import).</item>
+    <item>Sicurezza file: mimes+extensions (csv,txt,xlsx,xls) + size; parsing difensivo (cap righe/size, nessuna esecuzione formule); file su disk `local` PRIVATO; path da uuid, mai dall'input.</item>
+    <item>Job idempotenti rispetto allo stato: un job che fallisce porta il run a `failed`; ProcessImportJob importa dalle righe staged in transazione per-riga (nessuno stato parziale sporco). Notifica una sola volta (notified_at guard).</item>
+    <item>Magic values → `config/imports.php`/costanti (max_file_kb, max_rows, preview_*, batch_size, soglia fuzzy geo, alias mapping). Nessun hard-coding sparso.</item>
+    <item>File entro 300/500 righe (split coerente: reader/mapper/recognizer/definition/job separati; step FE separati); dead code zero; nessuna emoticon. Pint + ESLint + `tsc --noEmit` puliti. Test ESEGUITI, non solo scritti.</item>
+    <item>Ownership file disgiunta tra teammate. Il contratto qui congelato è il punto di sincronizzazione: i file generici toccati (`config/imports.php`, `routes/api.php`, `ImportController`, indice i18n, `routes/router.tsx`, `components/ui/{stepper,progress}.tsx`) sono microtask GATE da chiudere prima delle lane parallele che vi dipendono.</item>
+    <item>NESSUN commit git in questa iterazione (decisione utente): stato verde + HANDOFF aggiornato, senza commit.</item>
+  </constraints>
+
+</spec>

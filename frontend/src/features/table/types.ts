@@ -6,6 +6,10 @@
  * server-side definition. These types are domain-agnostic: the frontend renders
  * whatever schema the backend returns for a given domain.
  */
+import type {
+  AdvancedFilterDescriptor,
+  AdvancedFilterValues,
+} from '@/features/table/advanced-filters/types'
 
 /** Field type that drives the default cell rendering/formatting. */
 export type ColumnType = 'text' | 'number' | 'datetime' | 'enum' | 'tags' | 'badge' | 'boolean'
@@ -182,6 +186,18 @@ export interface TableConfig {
    * box. The frontend builds the search placeholder from these columns' labels.
    */
   searchable?: string[]
+  /**
+   * Advanced filter catalog for this domain (spec 0032), ordered by `order`.
+   * Empty (or absent) ⇒ the domain has no advanced filters, so the toolbar
+   * hides the toggle affordance entirely.
+   */
+  advancedFilters?: AdvancedFilterDescriptor[]
+  /**
+   * The user's saved advanced filter values, replayed on mount so they survive
+   * a reload — mirrors `filterState` for the AG Grid column filters. `null` (or
+   * absent) when none.
+   */
+  appliedAdvancedFilters?: AdvancedFilterValues | null
 }
 
 /**
@@ -213,6 +229,11 @@ export interface TableRowsPayload {
    * OR-LIKE over the domain's `searchable` columns; omitted/empty ⇒ no search.
    */
   search?: string
+  /**
+   * Applied advanced filters (spec 0032), combined in AND with `filterModel`
+   * and `search`. Omitted/empty ⇒ no advanced filter restricts the query.
+   */
+  advancedFilters?: AdvancedFilterValues
 }
 
 /** Pagination metadata from the `paginatedResponse()` envelope. */
@@ -282,6 +303,13 @@ export interface TableFilterView {
   id: number
   name: string
   filters: Record<string, unknown>
+  /**
+   * Advanced filters (spec 0032) captured by this view, keyed like
+   * `TableConfig.appliedAdvancedFilters`. Always present (`{}` when the view
+   * predates this field or was saved with none) — mirrors the backend
+   * resource, which never omits the key.
+   */
+  advanced_filters: AdvancedFilterValues
   visibility: FilterViewVisibility
   owned: boolean
   owner_name: string | null
@@ -291,5 +319,7 @@ export interface TableFilterView {
 export interface FilterViewInput {
   name: string
   filters: Record<string, unknown>
+  /** Advanced filters (spec 0032) applied at save time; omitted ⇒ none. */
+  advancedFilters?: AdvancedFilterValues
   visibility: FilterViewVisibility
 }

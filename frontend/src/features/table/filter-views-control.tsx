@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useCreateFilterView, useDeleteFilterView, useFilterViews } from '@/features/table/use-filter-views'
 import type { FilterViewVisibility, TableFilterView } from '@/features/table/types'
+import type { AdvancedFilterValues } from '@/features/table/advanced-filters/types'
 
 /** Server-side max length for a saved filter view's name (spec 0007). */
 const VIEW_NAME_MAX_LENGTH = 80
@@ -31,8 +32,16 @@ interface FilterViewsControlProps {
   domain: string
   /** Current AG Grid filterModel, saved verbatim as a new view's filters. */
   currentFilters: Record<string, unknown>
-  /** Applies a saved view's filters to the grid (the caller wires `setFilterModel`). */
-  onApply: (filters: Record<string, unknown>) => void
+  /**
+   * Current active advanced filters (spec 0032 AC-009), saved alongside
+   * `currentFilters` as a new view's `advancedFilters`.
+   */
+  currentAdvancedFilters: AdvancedFilterValues
+  /**
+   * Applies a saved view's filters to the grid AND its advanced filters to
+   * `useAdvancedFilters` (the caller wires `setFilterModel`/`applyValues`).
+   */
+  onApply: (filters: Record<string, unknown>, advancedFilters: AdvancedFilterValues) => void
 }
 
 /**
@@ -50,7 +59,7 @@ function sameFilters(a: Record<string, unknown>, b: Record<string, unknown>): bo
 interface FilterViewRowProps {
   view: TableFilterView
   active: boolean
-  onApply: (filters: Record<string, unknown>) => void
+  onApply: (view: TableFilterView) => void
   onDelete: (view: TableFilterView) => void
 }
 
@@ -69,7 +78,7 @@ function FilterViewRow({ view, active, onApply, onDelete }: FilterViewRowProps) 
       <DropdownMenuItem
         className={cn('min-w-0 flex-1 gap-2', active && 'bg-accent/60')}
         title={t('table.applyView')}
-        onSelect={() => onApply(view.filters)}
+        onSelect={() => onApply(view)}
       >
         <VisibilityIcon aria-hidden="true" className="text-muted-foreground" />
         <span className="truncate">{view.name}</span>
@@ -132,7 +141,12 @@ function VisibilityOption({ value, active, icon: Icon, label, onSelect }: Visibi
  * no modal. Applying/deleting are pure wiring (the grid mutation lives in the
  * caller via `onApply`); saving posts the caller-supplied `currentFilters`.
  */
-export function FilterViewsControl({ domain, currentFilters, onApply }: FilterViewsControlProps) {
+export function FilterViewsControl({
+  domain,
+  currentFilters,
+  currentAdvancedFilters,
+  onApply,
+}: FilterViewsControlProps) {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const { data: views } = useFilterViews(domain)
@@ -148,7 +162,10 @@ export function FilterViewsControl({ domain, currentFilters, onApply }: FilterVi
   const hasViews = ownedViews.length > 0 || sharedViews.length > 0
   const count = ownedViews.length + sharedViews.length
 
-  const hasFilters = Object.keys(currentFilters).length > 0
+  // Either a column filter or an advanced filter is enough to offer saving a
+  // view (spec 0032 AC-009: a view can be advanced-filters-only).
+  const hasFilters =
+    Object.keys(currentFilters).length > 0 || Object.keys(currentAdvancedFilters).length > 0
   const canSave = name.trim().length > 0 && hasFilters && !createView.isPending
 
   const resetForm = () => {
@@ -162,6 +179,12 @@ export function FilterViewsControl({ domain, currentFilters, onApply }: FilterVi
       resetForm()
     }
   }
+
+  const handleApply = (view: TableFilterView) => onApply(view.filters, view.advanced_filters)
+
+  const isActiveView = (view: TableFilterView) =>
+    sameFilters(view.filters, currentFilters) &&
+    sameFilters(view.advanced_filters, currentAdvancedFilters)
 
   const handleDelete = async (view: TableFilterView) => {
     const confirmed = await confirm({
@@ -185,7 +208,12 @@ export function FilterViewsControl({ domain, currentFilters, onApply }: FilterVi
       return
     }
     try {
-      await createView.mutateAsync({ name: name.trim(), filters: currentFilters, visibility })
+      await createView.mutateAsync({
+        name: name.trim(),
+        filters: currentFilters,
+        advancedFilters: currentAdvancedFilters,
+        visibility,
+      })
       toast.success(t('table.viewSaved'))
       resetForm()
       setOpen(false)
@@ -251,8 +279,8 @@ export function FilterViewsControl({ domain, currentFilters, onApply }: FilterVi
                 <FilterViewRow
                   key={view.id}
                   view={view}
-                  active={sameFilters(view.filters, currentFilters)}
-                  onApply={onApply}
+                  active={isActiveView(view)}
+                  onApply={handleApply}
                   onDelete={(target) => void handleDelete(target)}
                 />
               ))}
@@ -269,8 +297,8 @@ export function FilterViewsControl({ domain, currentFilters, onApply }: FilterVi
                 <FilterViewRow
                   key={view.id}
                   view={view}
-                  active={sameFilters(view.filters, currentFilters)}
-                  onApply={onApply}
+                  active={isActiveView(view)}
+                  onApply={handleApply}
                   onDelete={(target) => void handleDelete(target)}
                 />
               ))}

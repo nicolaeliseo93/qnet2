@@ -7,8 +7,10 @@ import {
   MoreHorizontal,
   RotateCcw,
   Search,
+  SlidersHorizontal,
   X,
 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
@@ -25,8 +27,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 
-interface TableToolbarProps {
+export interface TableToolbarProps {
   /** Whether the domain exposes a global quick-search (config `searchable`). */
   searchEnabled: boolean
   /** Placeholder built from the searchable columns' labels. */
@@ -50,6 +53,15 @@ interface TableToolbarProps {
   /** Fullscreen state + its toggle. */
   fullscreen: boolean
   onToggleFullscreen: () => void
+  /**
+   * Advanced-filters panel (spec 0032): the toggle icon is hidden entirely
+   * when the domain declares no advanced filters. The active-filter count
+   * shows as a badge even while the panel is closed (AC-012).
+   */
+  advancedFiltersEnabled?: boolean
+  advancedFiltersOpen?: boolean
+  onToggleAdvancedFilters?: () => void
+  advancedFiltersActiveCount?: number
   /** Saved-views control (rendered by the caller, which owns the grid API). */
   savedViewsSlot?: ReactNode
   /**
@@ -80,10 +92,14 @@ interface IconButtonProps {
   label: string
   onClick: () => void
   disabled?: boolean
+  /** Toggle affordances (e.g. the advanced-filters icon) report their open state. */
+  pressed?: boolean
+  /** Small count badge overlaid on the icon; omitted (or 0) renders no badge. */
+  badgeCount?: number
 }
 
 /** A ghost, icon-only toolbar button with a tooltip (the toolbar's base unit). */
-function IconButton({ icon, label, onClick, disabled }: IconButtonProps) {
+function IconButton({ icon, label, onClick, disabled, pressed, badgeCount }: IconButtonProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -92,11 +108,23 @@ function IconButton({ icon, label, onClick, disabled }: IconButtonProps) {
           variant="ghost"
           size="icon-sm"
           aria-label={label}
+          aria-pressed={pressed}
           disabled={disabled}
           onClick={onClick}
-          className="text-muted-foreground hover:text-foreground"
+          className={cn(
+            'relative text-muted-foreground hover:text-foreground',
+            pressed && 'bg-accent text-foreground',
+          )}
         >
           {icon}
+          {badgeCount !== undefined && badgeCount > 0 ? (
+            <Badge
+              variant="destructive"
+              className="absolute -right-1 -top-1 h-4 min-w-4 justify-center rounded-full px-1 text-[10px] tabular-nums"
+            >
+              {badgeCount}
+            </Badge>
+          ) : null}
         </Button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
@@ -127,6 +155,10 @@ export function TableToolbar({
   resettingLayout,
   fullscreen,
   onToggleFullscreen,
+  advancedFiltersEnabled,
+  advancedFiltersOpen,
+  onToggleAdvancedFilters,
+  advancedFiltersActiveCount,
   savedViewsSlot,
   importSlot,
   exportSlot,
@@ -182,6 +214,16 @@ export function TableToolbar({
 
       {/* Right: icon controls */}
       <div className="flex shrink-0 items-center gap-0.5">
+        {advancedFiltersEnabled ? (
+          <IconButton
+            icon={<SlidersHorizontal aria-hidden="true" />}
+            label={t('table.advancedFilters.toggle')}
+            onClick={() => onToggleAdvancedFilters?.()}
+            pressed={advancedFiltersOpen}
+            badgeCount={advancedFiltersActiveCount}
+          />
+        ) : null}
+
         {filtersActive ? (
           <IconButton
             icon={<FilterX aria-hidden="true" />}

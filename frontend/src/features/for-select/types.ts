@@ -40,4 +40,11 @@ export interface ForSelectParams {
    * to the searched page, deduplicated, and NOT counted in `pagination.total`.
    */
   ids?: number[]
+  /**
+   * Extra, resource-specific query parameters (spec 0032 `dependency.param`):
+   * a parent filter's value forwarded to a dependent field's for-select
+   * request (e.g. `{ project_id: 12 }` to scope a campaign picker). Omitted
+   * for plain for-selects with no dependency.
+   */
+  params?: Record<string, string | number>
 }

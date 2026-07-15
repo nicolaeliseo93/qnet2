@@ -145,6 +145,38 @@ describe('createSsrmDatasource', () => {
     }
   })
 
+  it('includes the applied advanced filters from the getter when non-empty (spec 0032)', async () => {
+    fetchRowsMock.mockResolvedValue({
+      items: [],
+      export_link: null,
+      pagination: { total: 0, offset: 0, limit: 25, total_pages: 0 },
+    })
+    const params = stubParams({})
+
+    await createSsrmDatasource('users', undefined, () => ({ status: 'active' })).getRows(params)
+
+    expect(fetchRowsMock).toHaveBeenCalledWith(
+      'users',
+      expect.objectContaining({ advancedFilters: { status: 'active' } }),
+    )
+  })
+
+  it('omits `advancedFilters` entirely when the getter returns an empty map', async () => {
+    fetchRowsMock.mockResolvedValue({
+      items: [],
+      export_link: null,
+      pagination: { total: 0, offset: 0, limit: 25, total_pages: 0 },
+    })
+
+    await createSsrmDatasource('users', undefined, () => ({})).getRows(stubParams({}))
+    // No getter at all behaves the same.
+    await createSsrmDatasource('users').getRows(stubParams({}))
+
+    for (const call of fetchRowsMock.mock.calls) {
+      expect(call[1]).not.toHaveProperty('advancedFilters')
+    }
+  })
+
   it('calls params.fail() when the request rejects', async () => {
     fetchRowsMock.mockRejectedValue(new Error('network error'))
     const params = stubParams({})

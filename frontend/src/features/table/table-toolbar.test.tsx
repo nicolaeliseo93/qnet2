@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import i18n from '@/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { TableToolbar } from '@/features/table/table-toolbar'
+import { TableToolbar, type TableToolbarProps } from '@/features/table/table-toolbar'
 
 // Assert against the English catalogue (the app default locale is Italian).
 beforeAll(async () => {
@@ -29,10 +29,14 @@ function baseProps() {
     resettingLayout: false,
     fullscreen: false,
     onToggleFullscreen: vi.fn(),
+    advancedFiltersEnabled: false,
+    advancedFiltersOpen: false,
+    onToggleAdvancedFilters: vi.fn(),
+    advancedFiltersActiveCount: 0,
   }
 }
 
-function renderToolbar(overrides: Partial<ReturnType<typeof baseProps>> = {}) {
+function renderToolbar(overrides: Partial<TableToolbarProps> = {}) {
   const props = { ...baseProps(), ...overrides }
   render(
     <I18nextProvider i18n={i18n}>
@@ -120,5 +124,45 @@ describe('TableToolbar', () => {
     expect(
       screen.queryByRole('button', { name: /delete selected/i }),
     ).not.toBeInTheDocument()
+  })
+
+  it('hides the advanced-filters toggle when the domain declares none', () => {
+    renderToolbar({ advancedFiltersEnabled: false })
+
+    expect(
+      screen.queryByRole('button', { name: 'Advanced filters' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('toggles the advanced-filters panel and reflects its open state (AC-012)', () => {
+    const { onToggleAdvancedFilters } = renderToolbar({
+      advancedFiltersEnabled: true,
+      advancedFiltersOpen: true,
+    })
+
+    const toggle = screen.getByRole('button', { name: 'Advanced filters' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(toggle)
+    expect(onToggleAdvancedFilters).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the active advanced-filters count as a badge even while the panel is closed (AC-012)', () => {
+    renderToolbar({
+      advancedFiltersEnabled: true,
+      advancedFiltersOpen: false,
+      advancedFiltersActiveCount: 3,
+    })
+
+    const toggle = screen.getByRole('button', { name: 'Advanced filters' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(toggle).toHaveTextContent('3')
+  })
+
+  it('renders no badge when there are no active advanced filters', () => {
+    renderToolbar({ advancedFiltersEnabled: true, advancedFiltersActiveCount: 0 })
+
+    expect(screen.getByRole('button', { name: 'Advanced filters' })).toBeInTheDocument()
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
   })
 })

@@ -4,6 +4,7 @@ import type {
 } from 'ag-grid-community'
 import { fetchTableRows } from '@/features/table/api'
 import type { SsrmSortModelItem, TableRow } from '@/features/table/types'
+import type { AdvancedFilterValues } from '@/features/table/advanced-filters/types'
 
 /** Page size fallback when the grid does not provide an explicit block range. */
 const DEFAULT_BLOCK_SIZE = 25
@@ -17,10 +18,11 @@ const DEFAULT_BLOCK_SIZE = 25
  * to `params.success({ rowData, rowCount })`, and signals failures with
  * `params.fail()` so the grid can recover its state.
  *
- * The global quick-search term (spec 0009) is NOT part of the AG Grid SSRM
- * request, so the caller supplies it through the `getSearch` getter, read at
- * request time. The datasource instance stays stable across renders; the caller
- * calls `refreshServerSide({ purge: true })` when the debounced term changes.
+ * The global quick-search term (spec 0009) and the applied advanced filters
+ * (spec 0032) are NOT part of the AG Grid SSRM request, so the caller supplies
+ * them through the `getSearch`/`getAdvancedFilters` getters, read at request
+ * time. The datasource instance stays stable across renders; the caller calls
+ * `refreshServerSide({ purge: true })` when either changes.
  *
  * Domain-agnostic: the only domain-specific input is the `domain` key. The same
  * datasource powers every table.
@@ -28,6 +30,7 @@ const DEFAULT_BLOCK_SIZE = 25
 export function createSsrmDatasource(
   domain: string,
   getSearch?: () => string,
+  getAdvancedFilters?: () => AdvancedFilterValues,
 ): IServerSideDatasource<TableRow> {
   return {
     async getRows(params: IServerSideGetRowsParams<TableRow>): Promise<void> {
@@ -51,6 +54,10 @@ export function createSsrmDatasource(
       // clean and lets the backend skip the OR-LIKE entirely otherwise).
       const search = getSearch?.().trim() ?? ''
 
+      // Same treatment for the applied advanced filters (spec 0032): omitted
+      // entirely when there is none applied.
+      const advancedFilters = getAdvancedFilters?.() ?? {}
+
       try {
         const response = await fetchTableRows(domain, {
           startRow,
@@ -58,6 +65,7 @@ export function createSsrmDatasource(
           sortModel,
           filterModel,
           ...(search !== '' ? { search } : {}),
+          ...(Object.keys(advancedFilters).length > 0 ? { advancedFilters } : {}),
         })
 
         params.success({

@@ -8,6 +8,13 @@
 export const forSelectKeys = {
   all: ['for-select'] as const,
   resource: (resource: string) => ['for-select', resource] as const,
-  list: (resource: string, search: string) =>
-    ['for-select', resource, { search }] as const,
+  /**
+   * `params` (spec 0032 `dependency.param`) only joins the key when actually
+   * supplied, so the common, param-less for-select keeps its original,
+   * unchanged key shape.
+   */
+  list: (resource: string, search: string, params?: Record<string, string | number>) =>
+    params && Object.keys(params).length > 0
+      ? (['for-select', resource, { search, params }] as const)
+      : (['for-select', resource, { search }] as const),
 }

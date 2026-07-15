@@ -67,4 +67,21 @@ export const table = {
   bulkDeletePartial:
     '{{deleted}} righe eliminate, {{failed}} non eliminabili.',
   bulkDeleteError: 'Impossibile eliminare le righe selezionate. Riprova.',
+  advancedFilters: {
+    toggle: 'Filtri avanzati',
+    activeCount_one: '{{count}} filtro attivo',
+    activeCount_other: '{{count}} filtri attivi',
+    apply: 'Applica',
+    reset: 'Azzera',
+    requiredError: 'Campo obbligatorio.',
+    rangeFrom: 'Da',
+    rangeTo: 'A',
+    rangeSeparator: '–',
+    selectPlaceholder: 'Seleziona…',
+    searchPlaceholder: 'Cerca…',
+    empty: 'Nessun risultato.',
+    loadError: 'Impossibile caricare le opzioni.',
+    clearLabel: 'Rimuovi',
+    removeLabel: 'Rimuovi',
+  },
 }

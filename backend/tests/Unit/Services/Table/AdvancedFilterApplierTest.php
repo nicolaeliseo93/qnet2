@@ -148,6 +148,55 @@ it('applies a multi relation filter as whereHas + whereIn on the related key', f
     expect($query->pluck('name')->all())->toBe(['WithA', 'WithB']);
 });
 
+it('applies a single async_search filter as whereHas matched on the related key, id-based like relation', function () {
+    $managerA = User::factory()->create();
+    $managerB = User::factory()->create();
+    BusinessFunction::factory()->withManager($managerA)->create(['name' => 'Under A']);
+    BusinessFunction::factory()->withManager($managerB)->create(['name' => 'Under B']);
+
+    $query = BusinessFunction::query();
+    app(AdvancedFilterApplier::class)->apply(
+        $query, AdvancedFilterType::AsyncSearch, 'manager', $managerA->id, ['multiple' => false],
+    );
+
+    expect($query->pluck('name')->all())->toBe(['Under A']);
+});
+
+it('applies a multi async_search filter as whereHas + whereIn on the related key', function () {
+    $userA = User::factory()->create();
+    $userB = User::factory()->create();
+    $userC = User::factory()->create();
+    BusinessFunction::factory()->withUsers(users: [$userA])->create(['name' => 'WithA']);
+    BusinessFunction::factory()->withUsers(users: [$userB])->create(['name' => 'WithB']);
+    BusinessFunction::factory()->withUsers(users: [$userC])->create(['name' => 'WithC']);
+
+    $query = BusinessFunction::query();
+    app(AdvancedFilterApplier::class)->apply(
+        $query, AdvancedFilterType::AsyncSearch, 'users', [$userA->id, $userB->id], ['multiple' => true],
+    );
+
+    expect($query->pluck('name')->all())->toBe(['WithA', 'WithB']);
+});
+
+it('validates: async_search accepts an id (single) and an array of ids (multiple), like relation', function () {
+    $catalog = [
+        'manager' => advancedFilterDescriptor(['name' => 'manager', 'type' => AdvancedFilterType::AsyncSearch]),
+        'users' => advancedFilterDescriptor(['name' => 'users', 'type' => AdvancedFilterType::AsyncSearch, 'multiple' => true]),
+    ];
+
+    $errors = app(AdvancedFilterApplier::class)->validate($catalog, ['manager' => 1, 'users' => [1, 2]]);
+
+    expect($errors)->toBe([]);
+});
+
+it('validates: async_search (multiple) rejects a bare scalar, requiring an array of ids', function () {
+    $catalog = ['users' => advancedFilterDescriptor(['name' => 'users', 'type' => AdvancedFilterType::AsyncSearch, 'multiple' => true])];
+
+    $errors = app(AdvancedFilterApplier::class)->validate($catalog, ['users' => 1]);
+
+    expect($errors)->toHaveKey('users');
+});
+
 it('validates: rejects a key outside the catalog allow-list', function () {
     $errors = app(AdvancedFilterApplier::class)->validate(
         ['name' => advancedFilterDescriptor()],

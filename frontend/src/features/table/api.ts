@@ -9,6 +9,7 @@ import type {
   TableRowsPayload,
   TableRowsResponse,
 } from '@/features/table/types'
+import type { AdvancedFilterValues } from '@/features/table/advanced-filters/types'
 
 /**
  * Fetches a domain's table schema (columns, filters, action catalog, defaults).
@@ -64,19 +65,26 @@ export async function resetTablePreferences(domain: string): Promise<void> {
   await apiClient.delete(`/tables/${domain}/preferences`)
 }
 
+/** Body accepted by `POST /tables/{domain}/filters` (spec 0032: either key, or both). */
+export interface SaveTableFiltersPayload {
+  filterModel?: Record<string, unknown>
+  advancedFilters?: AdvancedFilterValues
+}
+
 /**
- * Persists the current user's applied AG Grid filterModel for a domain, so
- * filters survive a reload. Self-scoped server-side (the user_id is never sent);
- * an empty model clears the saved filters. Returns the freshly merged config so
- * the cache can stay in sync.
+ * Persists the current user's applied AG Grid filterModel and/or advanced
+ * filters for a domain, so they survive a reload. Self-scoped server-side
+ * (the user_id is never sent); each key is upserted independently — omitting
+ * one leaves it unchanged. Returns the freshly merged config so the cache can
+ * stay in sync.
  */
 export async function saveTableFilters(
   domain: string,
-  filterModel: Record<string, unknown>,
+  payload: SaveTableFiltersPayload,
 ): Promise<TableConfig> {
   const { data } = await apiClient.post<ApiResponse<TableConfig>>(
     `/tables/${domain}/filters`,
-    { filterModel },
+    payload,
   )
   return data.data
 }

@@ -17,6 +17,15 @@ export const leads = {
     notes: 'Note',
     createdAt: 'Creato il',
   },
+  advancedFilters: {
+    leadStatus: 'Stato lead',
+    campaign: 'Campagna',
+    referent: 'Contatto',
+    source: 'Fonte',
+    operator: 'Operatore',
+    operationalSite: 'Sede',
+    createdRange: 'Creato il',
+  },
   detail: {
     title: 'Dettagli lead',
     subtitle: 'Visualizzazione in sola lettura del lead selezionato.',

@@ -19,6 +19,13 @@ use Illuminate\Support\Facades\DB;
 final class CampaignPipelineStatusResolver
 {
     /**
+     * Maximum values honoured in the advanced-filter id set. Mirrors
+     * AdvancedFilterApplier::MAX_VALUES — this bypasses that generic
+     * relation-by-id path (BR-2), so it caps the WHERE IN cardinality itself.
+     */
+    private const int MAX_ADVANCED_FILTER_VALUES = 500;
+
+    /**
      * The campaign's EFFECTIVE pipeline_status: its own when standalone, else
      * read through the linked project's (relations must already be
      * eager-loaded by the caller's baseQuery()).
@@ -47,6 +54,36 @@ final class CampaignPipelineStatusResolver
                 $relatedQuery->whereIn('name', $names);
             })->orWhereHas('project.pipelineStatus', static function (Builder $relatedQuery) use ($names): void {
                 $relatedQuery->whereIn('name', $names);
+            });
+        });
+    }
+
+    /**
+     * Match campaigns whose EFFECTIVE pipeline_status id is among $ids — own
+     * status (standalone) OR the linked project's, same own-or-through-project
+     * (BR-2) semantics as applyFilter() above. Advanced-filter (spec 0032)
+     * sibling: the panel's `relation` widget submits ids, not names.
+     *
+     * @param  Builder<Campaign>  $query
+     * @param  array<int, mixed>  $ids
+     */
+    public function applyIdFilter(Builder $query, array $ids): void
+    {
+        $ids = array_slice(
+            array_values(array_filter($ids, static fn (mixed $id): bool => is_scalar($id))),
+            0,
+            self::MAX_ADVANCED_FILTER_VALUES,
+        );
+
+        if ($ids === []) {
+            return;
+        }
+
+        $query->where(function (Builder $group) use ($ids): void {
+            $group->whereHas('pipelineStatus', static function (Builder $relatedQuery) use ($ids): void {
+                $relatedQuery->whereIn('id', $ids);
+            })->orWhereHas('project.pipelineStatus', static function (Builder $relatedQuery) use ($ids): void {
+                $relatedQuery->whereIn('id', $ids);
             });
         });
     }

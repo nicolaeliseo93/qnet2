@@ -7,6 +7,7 @@
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
 import type { GeoScope } from '@/features/geo/geo-scope'
+import type { AdvancedFilterValues } from '@/features/table/advanced-filters/types'
 
 /** Hydrated projection of a plain `{id, name}` relation (registry/source/business_function/state/product_category/partner). */
 export interface ProjectRelationRef {
@@ -154,4 +155,11 @@ export interface ProjectCardListParams {
   offset?: number
   limit?: number
   pipeline_status_id?: number
+  /**
+   * Active advanced filters (spec 0032 AC-018), keyed like
+   * `TableConfig.appliedAdvancedFilters` for the `projects` domain — the same
+   * shape sent to `POST /tables/projects/rows` by the AG Grid view, so both
+   * views filter identically off one shared, backend-persisted state.
+   */
+  advancedFilters?: AdvancedFilterValues
 }

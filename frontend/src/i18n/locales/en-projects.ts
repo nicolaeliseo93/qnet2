@@ -40,6 +40,16 @@ export const projects = {
     target_lead: 'Target leads',
     created_at: 'Created at',
   },
+  advancedFilters: {
+    registry: 'Client',
+    pipelineStatus: 'Status',
+    source: 'Source',
+    businessFunction: 'Business function',
+    productCategory: 'Product category',
+    partner: 'Partner',
+    budgetRange: 'Budget',
+    createdRange: 'Created at',
+  },
   detail: {
     title: 'Project details',
     subtitle: 'Read-only view of the selected project.',

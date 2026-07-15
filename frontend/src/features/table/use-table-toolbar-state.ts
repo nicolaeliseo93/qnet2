@@ -34,6 +34,9 @@ interface TableToolbarState {
   searchShortcut: string
   /** Reads the applied (debounced, trimmed) term — passed to the datasource. */
   getSearchTerm: () => string
+  /** Whether the advanced-filters panel (spec 0032) is shown/hidden. */
+  advancedFiltersOpen: boolean
+  toggleAdvancedFilters: () => void
 }
 
 /**
@@ -54,6 +57,7 @@ export function useTableToolbarState({
   const [fullscreen, setFullscreen] = useState(false)
   const [rowCount, setRowCount] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
 
   const searchTermRef = useRef('')
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -119,6 +123,10 @@ export function useTableToolbarState({
 
   const toggleFullscreen = useCallback(() => setFullscreen((value) => !value), [])
   const getSearchTerm = useCallback(() => searchTermRef.current, [])
+  const toggleAdvancedFilters = useCallback(
+    () => setAdvancedFiltersOpen((value) => !value),
+    [],
+  )
 
   return {
     fullscreen,
@@ -130,5 +138,7 @@ export function useTableToolbarState({
     searchInputRef,
     searchShortcut,
     getSearchTerm,
+    advancedFiltersOpen,
+    toggleAdvancedFilters,
   }
 }
