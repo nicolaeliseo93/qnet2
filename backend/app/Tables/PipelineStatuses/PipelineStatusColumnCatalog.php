@@ -2,17 +2,18 @@
 
 namespace App\Tables\PipelineStatuses;
 
+use App\Enums\StatusGroup;
+
 /**
  * Declarative column/filter/action catalogue for the `pipeline-statuses`
  * domain (spec 0023). Extracted out of PipelineStatusesTableDefinition
  * (file-size split, engineering.md §6): pure data (no logic), mirroring
- * SourceColumnCatalog. `name`/`color`/`sort_order`/`created_at` are real DB
- * columns handled entirely by the generic engine. `color` is deliberately
- * not sortable/filterable (a swatch value, not a meaningful ordering/filter
- * axis). `status_group` (spec 0039, D-6/D-7) is DERIVED (no real column,
- * PipelineStatusesTableDefinition delegates to StatusGroupColumn): neither
- * sortable nor basic-filterable — reachable only via the advanced Text
- * filter on the group's name.
+ * SourceColumnCatalog. Every column (name/color/sort_order/group/created_at)
+ * is a real DB column handled entirely by the generic engine. `color` is
+ * deliberately not sortable/filterable (a swatch value, not a meaningful
+ * ordering/filter axis). `group` (spec 0039 pivot, App\Enums\StatusGroup) is
+ * a `set` filter with a static options catalogue — mirrors
+ * LeadImportColumnCatalog's `status`.
  */
 final class PipelineStatusColumnCatalog
 {
@@ -51,12 +52,14 @@ final class PipelineStatusColumnCatalog
                 'filterType' => 'number',
             ],
             [
-                'id' => 'status_group',
-                'label' => 'pipelineStatuses.columns.statusGroup',
-                'type' => 'text',
+                'id' => 'group',
+                'label' => 'pipelineStatuses.columns.group',
+                'type' => 'badge',
                 'visible' => true,
-                'sortable' => false,
-                'filterable' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+                'options' => StatusGroup::values(),
             ],
             [
                 'id' => 'created_at',
@@ -78,6 +81,7 @@ final class PipelineStatusColumnCatalog
         return [
             ['columnId' => 'name', 'type' => 'text'],
             ['columnId' => 'sort_order', 'type' => 'number'],
+            ['columnId' => 'group', 'type' => 'set', 'options' => StatusGroup::values()],
             ['columnId' => 'created_at', 'type' => 'date'],
         ];
     }

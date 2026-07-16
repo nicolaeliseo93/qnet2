@@ -39,20 +39,37 @@ it('create: 201 + persists, submitted sort_order ignored (AC-001, spec 0039 D-5)
 
     // requirement changed (spec 0039, D-5): sort_order is server-managed —
     // a submitted value is silently ignored (placement is automatic, AC-006).
-    $this->postJson('/api/lead-statuses', ['name' => 'Qualified', 'color' => 'green', 'sort_order' => 2])
+    $this->postJson('/api/lead-statuses', ['name' => 'Qualified', 'color' => 'green', 'group' => 'open', 'sort_order' => 2])
         ->assertCreated()
         ->assertJsonPath('data.name', 'Qualified')
-        ->assertJsonPath('data.color', 'green');
+        ->assertJsonPath('data.color', 'green')
+        ->assertJsonPath('data.group', 'open');
 
-    $this->assertDatabaseHas('lead_statuses', ['name' => 'Qualified', 'color' => 'green']);
+    $this->assertDatabaseHas('lead_statuses', ['name' => 'Qualified', 'color' => 'green', 'group' => 'open']);
 });
 
 it('create: 422 when name is missing', function () {
     $actor = leadStatusUserWith(['create']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/lead-statuses', [])
+    $this->postJson('/api/lead-statuses', ['group' => 'open'])
         ->assertStatus(422)->assertJsonValidationErrors('name');
+});
+
+it('create: 422 when group is missing (spec 0039 pivot)', function () {
+    $actor = leadStatusUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/lead-statuses', ['name' => 'Qualified'])
+        ->assertStatus(422)->assertJsonValidationErrors('group');
+});
+
+it('create: 422 when group is not one of open/pending/closed (spec 0039 pivot)', function () {
+    $actor = leadStatusUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/lead-statuses', ['name' => 'Qualified', 'group' => 'bogus'])
+        ->assertStatus(422)->assertJsonValidationErrors('group');
 });
 
 // ---------------------------------------------------------------------------
@@ -64,7 +81,7 @@ it('create: 422 when name duplicates an existing status, no row created (AC-002)
     LeadStatus::factory()->create(['name' => 'Qualified']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/lead-statuses', ['name' => 'Qualified'])
+    $this->postJson('/api/lead-statuses', ['name' => 'Qualified', 'group' => 'open'])
         ->assertStatus(422)->assertJsonValidationErrors('name');
 
     expect(LeadStatus::where('name', 'Qualified')->count())->toBe(1);
@@ -149,12 +166,12 @@ it('POST create: 403 without lead-statuses.create, no row created (AC-006)', fun
     $actor = leadStatusUserWith([]);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/lead-statuses', ['name' => 'Nope'])->assertForbidden();
+    $this->postJson('/api/lead-statuses', ['name' => 'Nope', 'group' => 'open'])->assertForbidden();
 
-    // spec 0039 (D-2): the migration seeds the 2 mandatory system rows
-    // ("Nuovo"/"Chiuso") unconditionally, so the post-403 baseline is 2, not
-    // 0 — requirement change, not a regression.
-    expect(LeadStatus::count())->toBe(2);
+    // spec 0039 pivot (D-2): the migration seeds the 3 mandatory system rows
+    // ("Nuovo"/"Chiuso con successo"/"Scartato") unconditionally, so the
+    // post-403 baseline is 3, not 0 — requirement change, not a regression.
+    expect(LeadStatus::count())->toBe(3);
 });
 
 it('PATCH update: 403 without lead-statuses.update, no change persisted (AC-006)', function () {

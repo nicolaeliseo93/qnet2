@@ -28,7 +28,7 @@ describe('buildCreatePipelineStatusSchema', () => {
     const result = schema.safeParse({
       name: 'Draft',
       color: 'blue',
-      status_group_id: 1,
+      group: 'open',
       custom_fields: {},
     })
     expect(result.success).toBe(true)
@@ -36,7 +36,7 @@ describe('buildCreatePipelineStatusSchema', () => {
 
   it('rejects an empty name', () => {
     const schema = buildCreatePipelineStatusSchema(i18n.t, emptyCustomFieldsSchema())
-    const result = schema.safeParse({ name: '', color: '', status_group_id: null, custom_fields: {} })
+    const result = schema.safeParse({ name: '', color: '', group: 'open', custom_fields: {} })
     expect(result.success).toBe(false)
   })
 
@@ -45,7 +45,7 @@ describe('buildCreatePipelineStatusSchema', () => {
     const result = schema.safeParse({
       name: 'a'.repeat(192),
       color: '',
-      status_group_id: null,
+      group: 'open',
       custom_fields: {},
     })
     expect(result.success).toBe(false)
@@ -53,14 +53,26 @@ describe('buildCreatePipelineStatusSchema', () => {
 
   it('accepts an empty color (unset)', () => {
     const schema = buildCreatePipelineStatusSchema(i18n.t, emptyCustomFieldsSchema())
-    const result = schema.safeParse({ name: 'Draft', color: '', status_group_id: null, custom_fields: {} })
+    const result = schema.safeParse({ name: 'Draft', color: '', group: 'open', custom_fields: {} })
     expect(result.success).toBe(true)
   })
 
-  it('accepts a null status_group_id (spec 0039 D-6: optional)', () => {
+  it.each(['open', 'pending', 'closed'] as const)('accepts the group value "%s"', (group) => {
     const schema = buildCreatePipelineStatusSchema(i18n.t, emptyCustomFieldsSchema())
-    const result = schema.safeParse({ name: 'Draft', color: '', status_group_id: null, custom_fields: {} })
+    const result = schema.safeParse({ name: 'Draft', color: '', group, custom_fields: {} })
     expect(result.success).toBe(true)
+  })
+
+  it('rejects a group value outside the fixed enum', () => {
+    const schema = buildCreatePipelineStatusSchema(i18n.t, emptyCustomFieldsSchema())
+    const result = schema.safeParse({ name: 'Draft', color: '', group: 'archived', custom_fields: {} })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects a missing group (required on create)', () => {
+    const schema = buildCreatePipelineStatusSchema(i18n.t, emptyCustomFieldsSchema())
+    const result = schema.safeParse({ name: 'Draft', color: '', custom_fields: {} })
+    expect(result.success).toBe(false)
   })
 })
 
@@ -70,7 +82,7 @@ describe('buildUpdatePipelineStatusSchema', () => {
     const result = schema.safeParse({
       name: 'Active',
       color: 'green',
-      status_group_id: 2,
+      group: 'closed',
       custom_fields: {},
     })
     expect(result.success).toBe(true)

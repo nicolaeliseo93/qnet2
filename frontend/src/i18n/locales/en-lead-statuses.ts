@@ -3,8 +3,9 @@
  * `en.ts` within the engineering size limits (see
  * `.claude/rules/engineering.md` §6); mirrors `pipeline-statuses` (spec 0023)
  * 1:1, with the delete-guard message adjusted to Leads (BR-3). Spec 0039
- * extends it with system statuses ("Nuovo"/"Chiuso"), a `status_group`
- * classification and a drag & drop reorder sheet for the custom rows.
+ * extends it with system statuses ("Nuovo"/"Chiuso con successo"/"Scartato")
+ * and a fixed 3-value `group` enum (open/pending/closed), plus a drag & drop
+ * reorder sheet for the custom rows.
  */
 
 export const leadStatuses = {
@@ -15,13 +16,12 @@ export const leadStatuses = {
     name: 'Name',
     color: 'Color',
     sort_order: 'Order',
-    status_group: 'Group',
+    group: 'Group',
     created_at: 'Created at',
   },
   advancedFilters: {
     name: 'Name',
     sortOrderRange: 'Order',
-    statusGroup: 'Group',
     createdRange: 'Created at',
   },
   detail: {
@@ -30,7 +30,7 @@ export const leadStatuses = {
     loadError: 'Unable to load the lead status. Please try again.',
     color: 'Color',
     sort_order: 'Order',
-    status_group: 'Group',
+    group: 'Group',
     created_at: 'Created at',
   },
   form: {
@@ -41,11 +41,12 @@ export const leadStatuses = {
     editSubtitle: 'Update the selected lead status.',
     name: 'Name',
     color: 'Color',
-    statusGroup: 'Group',
-    statusGroupSearch: 'Search groups…',
-    selectPlaceholder: 'Select…',
-    selectEmpty: 'No results found.',
-    selectError: 'Unable to load the options.',
+    group: {
+      label: 'Group',
+      open: 'Open',
+      pending: 'Pending',
+      closed: 'Closed',
+    },
     save: 'Save',
     saving: 'Saving…',
     cancel: 'Cancel',
@@ -66,7 +67,7 @@ export const leadStatuses = {
       },
     },
     hints: {
-      systemStatusGroup: 'System statuses have a fixed group and cannot be reclassified.',
+      systemStatusGroup: "A system status's group is fixed and cannot be changed.",
     },
   },
   reorder: {

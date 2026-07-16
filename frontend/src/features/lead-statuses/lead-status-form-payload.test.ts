@@ -8,14 +8,14 @@ import type { LeadStatusFormValues } from '@/features/lead-statuses/use-lead-sta
 
 /**
  * Spec 0029 (mirrored on pipeline-statuses, spec 0023 AC-014): create shape,
- * update diffs only changes. Spec 0039 D-5/D-6: `sort_order` dropped
- * (server-managed), `status_group_id` added.
+ * update diffs only changes. Spec 0039 D-5: `sort_order` dropped
+ * (server-managed); pivot: `group` is a fixed 3-value enum (open/pending/closed).
  */
 
 const formValues: LeadStatusFormValues = {
   name: 'Draft',
   color: 'blue',
-  status_group_id: 2,
+  group: 'open',
   custom_fields: {},
 }
 
@@ -28,8 +28,7 @@ function original(
     color: 'blue',
     sort_order: 10,
     system_key: null,
-    status_group_id: 2,
-    status_group: { id: 2, name: 'Open', color: 'blue' },
+    group: 'open',
     created_at: '2026-01-01T00:00:00Z',
     permissions: {
       resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
@@ -45,7 +44,7 @@ describe('buildCreatePayload', () => {
     expect(buildCreatePayload(formValues)).toEqual({
       name: 'Draft',
       color: 'blue',
-      status_group_id: 2,
+      group: 'open',
     })
   })
 
@@ -53,7 +52,7 @@ describe('buildCreatePayload', () => {
     expect(buildCreatePayload({ ...formValues, color: '' })).toEqual({
       name: 'Draft',
       color: null,
-      status_group_id: 2,
+      group: 'open',
     })
   })
 
@@ -79,9 +78,9 @@ describe('buildUpdatePayload', () => {
     })
   })
 
-  it('includes only the changed status_group_id', () => {
-    expect(buildUpdatePayload({ ...formValues, status_group_id: 5 }, original())).toEqual({
-      status_group_id: 5,
+  it('includes only the changed group', () => {
+    expect(buildUpdatePayload({ ...formValues, group: 'pending' }, original())).toEqual({
+      group: 'pending',
     })
   })
 })

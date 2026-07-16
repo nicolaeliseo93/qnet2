@@ -39,9 +39,6 @@ class DemoDataSeeder extends Seeder
         // Depends on sources/sectors/referents (lookups, seeded above) and
         // users (internal managers, seeded above) — must run after all of them.
         $this->call(DemoRegistrySeeder::class);
-        // Status groups (spec 0039) are referenced by both status seeders
-        // below via status_group_id — must run before them.
-        $this->call(DemoStatusGroupSeeder::class);
         $this->call(DemoPipelineStatusSeeder::class);
         // Depends on pipeline-statuses/registries/sources/business-functions/
         // product-categories/referents (lookups, all seeded above) and

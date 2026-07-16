@@ -7,7 +7,6 @@ use App\Models\User;
 use App\Services\LeadStatusService;
 use App\Tables\LeadStatuses\LeadStatusAdvancedFilterCatalog;
 use App\Tables\LeadStatuses\LeadStatusColumnCatalog;
-use App\Tables\Statuses\StatusGroupColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -15,22 +14,14 @@ use Illuminate\Support\Facades\Gate;
 /**
  * Table definition for the `lead-statuses` domain (spec 0029).
  *
- * Real columns (name, color, sort_order, created_at) are handled entirely by
- * the generic engine. `status_group` (spec 0039, D-6/D-7) has no real DB
- * column of its own (the related group's {id, name, color}) and is DERIVED,
- * delegated to StatusGroupColumn — its only filter path is the advanced Text
- * match on the group's name (applyAdvancedFilter override below), mirroring
- * PipelineStatusesTableDefinition.
+ * Every column (name, color, sort_order, group, created_at) is a real DB
+ * column handled entirely by the generic engine — `group` (spec 0039 pivot,
+ * App\Enums\StatusGroup) replaced the earlier derived `status_group` column
+ * (a lookup FK), so it needs no eager-load/derived-column plumbing anymore.
  */
 class LeadStatusesTableDefinition extends AbstractTableDefinition
 {
-    /** Advanced-filter descriptor name for the derived `status_group` column. */
-    private const string STATUS_GROUP_FILTER = 'status_group';
-
-    public function __construct(
-        private readonly LeadStatusService $service,
-        private readonly StatusGroupColumn $statusGroupColumn,
-    ) {}
+    public function __construct(private readonly LeadStatusService $service) {}
 
     public function domain(): string
     {
@@ -54,9 +45,7 @@ class LeadStatusesTableDefinition extends AbstractTableDefinition
      */
     public function baseQuery(): Builder
     {
-        // Eager-load statusGroup (spec 0039) to avoid N+1 on the derived
-        // `status_group` column.
-        return LeadStatus::query()->with('statusGroup');
+        return LeadStatus::query();
     }
 
     /**
@@ -123,10 +112,10 @@ class LeadStatusesTableDefinition extends AbstractTableDefinition
             'name' => $row->name,
             'color' => $row->color,
             'sort_order' => $row->sort_order,
-            // spec 0039: the two mandatory system rows (D-2) and their
-            // optional classification (D-6).
+            // spec 0039: the mandatory system rows (D-2) and the fixed
+            // 3-value classification (`group`).
             'system_key' => $row->system_key,
-            'status_group' => $this->statusGroupColumn->summarize($row),
+            'group' => $row->group->value,
             'created_at' => $row->created_at,
         ];
     }
@@ -160,27 +149,6 @@ class LeadStatusesTableDefinition extends AbstractTableDefinition
         }
 
         return $allowed;
-    }
-
-    /**
-     * Handle the derived `status_group` advanced filter (Text match on the
-     * group's name); every other name (a real column) falls through to the
-     * generic engine.
-     *
-     * @param  Builder<LeadStatus>  $query
-     * @param  array<string, mixed>  $descriptor
-     */
-    public function applyAdvancedFilter(Builder $query, string $name, array $descriptor, mixed $value): bool
-    {
-        if ($name === self::STATUS_GROUP_FILTER) {
-            if (is_string($value) && $value !== '') {
-                $this->statusGroupColumn->applyAdvancedFilter($query, $value);
-            }
-
-            return true;
-        }
-
-        return parent::applyAdvancedFilter($query, $name, $descriptor, $value);
     }
 
     /**

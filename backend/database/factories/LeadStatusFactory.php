@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\StatusGroup;
 use App\Models\LeadStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -36,27 +37,27 @@ class LeadStatusFactory extends Factory
             'name' => fake()->unique()->words(2, true),
             'color' => fake()->randomElement(self::COLOR_TOKENS),
             'sort_order' => self::$nextSortOrder++,
+            'group' => StatusGroup::Open,
         ];
     }
 
     /**
-     * Marks the row as a system status ('new' or 'closed'). Takes the
-     * literal system_key string rather than the App\Enums\StatusSystemKey
-     * case (backend ownership, not yet landed) so this factory has no
-     * dependency on that class.
+     * Marks the row as one of the three mandatory system statuses ('new',
+     * 'won' or 'discarded' — spec 0039 pivot, D-2). Takes the literal
+     * system_key string rather than the App\Enums\StatusSystemKey case, for
+     * symmetry with PipelineStatusFactory::system().
      */
     public function system(string $key): static
     {
-        return $this->state(fn () => [
-            'system_key' => $key,
-            'name' => $key === 'new' ? 'Nuovo' : 'Chiuso',
-            'color' => $key === 'new' ? 'slate' : 'green',
-            'sort_order' => $key === 'new' ? 0 : 999,
-        ]);
+        return $this->state(fn () => match ($key) {
+            'won' => ['system_key' => 'won', 'name' => 'Chiuso con successo', 'color' => 'green', 'sort_order' => 998, 'group' => StatusGroup::Closed],
+            'discarded' => ['system_key' => 'discarded', 'name' => 'Scartato', 'color' => 'red', 'sort_order' => 999, 'group' => StatusGroup::Closed],
+            default => ['system_key' => 'new', 'name' => 'Nuovo', 'color' => 'slate', 'sort_order' => 0, 'group' => StatusGroup::Open],
+        });
     }
 
-    public function withGroup(int $statusGroupId): static
+    public function group(StatusGroup $group): static
     {
-        return $this->state(fn () => ['status_group_id' => $statusGroupId]);
+        return $this->state(fn () => ['group' => $group]);
     }
 }

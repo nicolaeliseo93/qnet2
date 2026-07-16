@@ -3,7 +3,6 @@
 namespace App\Http\Resources;
 
 use App\Models\PipelineStatus;
-use App\Models\StatusGroup;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,29 +21,11 @@ class PipelineStatusResource extends JsonResource
             'name' => $this->name,
             'color' => $this->color,
             'sort_order' => $this->sort_order,
-            // spec 0039: system_key/status_group expose the two mandatory
-            // system rows (D-2) and the optional classification (D-6). The
-            // controller/TableDefinition eager-load `statusGroup` so this
-            // never N+1s.
+            // spec 0039: the mandatory system rows (D-2) and the fixed
+            // 3-value classification (`group`, App\Enums\StatusGroup).
             'system_key' => $this->system_key,
-            'status_group_id' => $this->status_group_id,
-            'status_group' => $this->statusGroupSummary(),
+            'group' => $this->group->value,
             'created_at' => $this->created_at,
         ];
-    }
-
-    /**
-     * @return array{id: int, name: string, color: string|null}|null
-     */
-    private function statusGroupSummary(): ?array
-    {
-        /** @var StatusGroup|null $statusGroup */
-        $statusGroup = $this->statusGroup;
-
-        if ($statusGroup === null) {
-            return null;
-        }
-
-        return ['id' => $statusGroup->id, 'name' => $statusGroup->name, 'color' => $statusGroup->color];
     }
 }

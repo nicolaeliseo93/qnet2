@@ -5,14 +5,13 @@
  */
 
 /** Marks a system-managed status row; `null` on an ordinary custom row. */
-export type SystemStatusKey = 'new' | 'closed' | null
+export type SystemStatusKey = 'new' | 'won' | 'discarded' | 'closed' | null
 
-/** Embedded status group reference exposed by the status resources (spec 0039 D-6). */
-export interface StatusGroupRef {
-  id: number
-  name: string
-  color: string | null
-}
+/** Fixed enum of status groups, replacing the former "status groups" lookup module. */
+export const STATUS_GROUPS = ['open', 'pending', 'closed'] as const
+
+/** One of the three fixed status group values. */
+export type StatusGroupValue = (typeof STATUS_GROUPS)[number]
 
 /** One row as reordered in the sheet: id, display name and its pin state. */
 export interface StatusReorderItem {

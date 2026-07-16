@@ -27,7 +27,6 @@ import { projects } from './en-projects'
 import { campaigns } from './en-campaigns'
 import { leads } from './en-leads'
 import { leadStatuses } from './en-lead-statuses'
-import { statusGroups } from './en-status-groups'
 import { leadImports } from './en-lead-imports'
 import { businessFunctions } from './en-business-functions'
 import { moduleStats, statsPanel } from './en-stats'
@@ -87,7 +86,6 @@ export const en = {
     campaigns: 'Campaigns',
     leads: 'Leads',
     leadStatuses: 'Lead Statuses',
-    statusGroups: 'Status Groups',
     imports: 'Import Lead',
     pipelineStatuses: 'Project/Campaign Statuses',
     marketingLeads: 'Marketing & Leads',
@@ -448,7 +446,6 @@ export const en = {
   pipelineStatuses,
   campaigns: { ...campaigns, stats: moduleStats.campaigns },
   leadStatuses,
-  statusGroups,
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
   importRuns: { stats: moduleStats.importRuns },

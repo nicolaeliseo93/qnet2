@@ -38,19 +38,36 @@ it('create: 201 + persists (AC-001)', function () {
     $actor = pipelineStatusUserWith(['create']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/pipeline-statuses', ['name' => 'Bozza'])
+    $this->postJson('/api/pipeline-statuses', ['name' => 'Bozza', 'group' => 'open'])
         ->assertCreated()
-        ->assertJsonPath('data.name', 'Bozza');
+        ->assertJsonPath('data.name', 'Bozza')
+        ->assertJsonPath('data.group', 'open');
 
-    $this->assertDatabaseHas('pipeline_statuses', ['name' => 'Bozza']);
+    $this->assertDatabaseHas('pipeline_statuses', ['name' => 'Bozza', 'group' => 'open']);
 });
 
 it('create: 422 when name is missing', function () {
     $actor = pipelineStatusUserWith(['create']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/pipeline-statuses', [])
+    $this->postJson('/api/pipeline-statuses', ['group' => 'open'])
         ->assertStatus(422)->assertJsonValidationErrors('name');
+});
+
+it('create: 422 when group is missing (spec 0039 pivot)', function () {
+    $actor = pipelineStatusUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/pipeline-statuses', ['name' => 'Bozza'])
+        ->assertStatus(422)->assertJsonValidationErrors('group');
+});
+
+it('create: 422 when group is not one of open/pending/closed (spec 0039 pivot)', function () {
+    $actor = pipelineStatusUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/pipeline-statuses', ['name' => 'Bozza', 'group' => 'bogus'])
+        ->assertStatus(422)->assertJsonValidationErrors('group');
 });
 
 // ---------------------------------------------------------------------------
@@ -109,7 +126,7 @@ it('POST create: 403 without pipeline-statuses.create, no row created (AC-002)',
     $actor = pipelineStatusUserWith([]);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/pipeline-statuses', ['name' => 'Nope'])->assertForbidden();
+    $this->postJson('/api/pipeline-statuses', ['name' => 'Nope', 'group' => 'open'])->assertForbidden();
 
     // spec 0039 (D-2): the migration seeds the 2 mandatory system rows
     // ("Nuovo"/"Chiuso") unconditionally, so the post-403 baseline is 2, not

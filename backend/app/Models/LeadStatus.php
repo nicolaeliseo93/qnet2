@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\StatusGroup;
+use App\Enums\StatusSystemKey;
 use App\Models\Abstracts\BaseModel;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\LeadStatusFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -15,19 +16,30 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * (name/color/sort_order) describing a Lead's working state. `name` is
  * unique (BR-2/D-4), unlike PipelineStatus.
  *
- * spec 0039: `system_key` (nullable, the two mandatory "Nuovo"/"Chiuso" rows)
- * is DELIBERATELY absent from #[Fillable] — never mass-assignable, written
- * only by the system-status migration and App\Services\Statuses\
- * SystemStatusGuard/StatusOrderManager. `sort_order` stays fillable (D-5):
- * it becomes server-managed (StatusOrderManager places/reorders it), not
- * user-fillable at the FormRequest layer, but the Service still assigns it
- * via mass-assignment internally.
+ * spec 0039: `system_key` (nullable, the THREE mandatory "Nuovo"/"Chiuso con
+ * successo"/"Scartato" rows — pivot, D-2) is DELIBERATELY absent from
+ * #[Fillable] — never mass-assignable, written only by the system-status
+ * migration and App\Services\Statuses\SystemStatusGuard/StatusOrderManager.
+ * `sort_order` stays fillable (D-5): it becomes server-managed
+ * (StatusOrderManager places/reorders it), not user-fillable at the
+ * FormRequest layer, but the Service still assigns it via mass-assignment
+ * internally. `group` (pivot) is the fixed 3-value classification
+ * (App\Enums\StatusGroup) — replaces the earlier "status groups" lookup FK.
  */
-#[Fillable(['name', 'color', 'sort_order', 'status_group_id'])]
+#[Fillable(['name', 'color', 'sort_order', 'group'])]
 class LeadStatus extends BaseModel
 {
     /** @use HasFactory<LeadStatusFactory> */
     use HasFactory, LogsModelActivity;
+
+    /**
+     * The system rows that pin to the tail of the sort_order sequence
+     * (StatusOrderManager, spec 0039 D-5), in the order they must appear:
+     * "Chiuso con successo" then "Scartato" — the latter is ALWAYS last.
+     *
+     * @var array<int, StatusSystemKey>
+     */
+    public const array SYSTEM_TAIL_KEYS = [StatusSystemKey::Won, StatusSystemKey::Discarded];
 
     /**
      * @return array<string, string>
@@ -36,7 +48,7 @@ class LeadStatus extends BaseModel
     {
         return [
             'sort_order' => 'int',
-            'status_group_id' => 'int',
+            'group' => StatusGroup::class,
         ];
     }
 
@@ -51,18 +63,9 @@ class LeadStatus extends BaseModel
     }
 
     /**
-     * The optional classification group (spec 0039, D-6) — nullable, custom
-     * rows only in practice (a system row's group is fixed at migration
-     * time, D-2, and never reassigned).
-     */
-    public function statusGroup(): BelongsTo
-    {
-        return $this->belongsTo(StatusGroup::class);
-    }
-
-    /**
-     * Whether this is one of the two mandatory system rows ("Nuovo"/
-     * "Chiuso", spec 0039 D-2) rather than a custom, user-created status.
+     * Whether this is one of the three mandatory system rows ("Nuovo"/
+     * "Chiuso con successo"/"Scartato", spec 0039 D-2) rather than a
+     * custom, user-created status.
      */
     public function isSystem(): bool
     {

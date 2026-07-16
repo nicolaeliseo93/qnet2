@@ -34,7 +34,7 @@ if (! function_exists('leadStatusReorderUserWith')) {
     }
 }
 
-it('reorder: a valid permutation resequences the customs, Nuovo stays 0, Chiuso stays last (AC-005)', function () {
+it('reorder: a valid permutation resequences the customs, Nuovo stays 0, won then discarded stay last (AC-005, spec 0039 pivot)', function () {
     $actor = leadStatusReorderUserWith(['update']);
     $first = LeadStatus::factory()->create(['name' => 'Alpha']);
     $second = LeadStatus::factory()->create(['name' => 'Beta']);
@@ -51,9 +51,11 @@ it('reorder: a valid permutation resequences the customs, Nuovo stays 0, Chiuso 
         ->and($rows[$second->id]['sort_order'])->toBe(30);
 
     $newRow = $rows->firstWhere('system_key', 'new');
-    $closedRow = $rows->firstWhere('system_key', 'closed');
+    $wonRow = $rows->firstWhere('system_key', 'won');
+    $discardedRow = $rows->firstWhere('system_key', 'discarded');
     expect($newRow['sort_order'])->toBe(0)
-        ->and($closedRow['sort_order'])->toBe(40);
+        ->and($wonRow['sort_order'])->toBe(40)
+        ->and($discardedRow['sort_order'])->toBe(50);
 });
 
 it('reorder: 422 when ordered_ids includes a system status id (AC-005)', function () {

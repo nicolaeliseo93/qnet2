@@ -14,13 +14,13 @@ function colorValue(color: string): string | null {
   return color === '' ? null : color
 }
 
-/** Builds the create payload: `name`, `color` and `status_group_id` (`sort_order` is server-managed, spec 0039 D-5). */
+/** Builds the create payload: `name`, `color` and `group` (`sort_order` is server-managed, spec 0039 D-5). */
 export function buildCreatePayload(values: PipelineStatusFormValues): CreatePipelineStatusPayload {
   const customFields = buildCustomFieldsCreate(values.custom_fields)
   return {
     name: values.name,
     color: colorValue(values.color),
-    status_group_id: values.status_group_id,
+    group: values.group,
     ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
@@ -41,8 +41,8 @@ export function buildUpdatePayload(
   if (colorValue(values.color) !== original.color) {
     payload.color = colorValue(values.color)
   }
-  if (values.status_group_id !== original.status_group_id) {
-    payload.status_group_id = values.status_group_id
+  if (values.group !== original.group) {
+    payload.group = values.group
   }
 
   const customFields = buildCustomFieldsUpdate(

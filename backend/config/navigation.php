@@ -115,16 +115,6 @@ return [
                     'route' => '/lead-statuses',
                     'permission' => 'lead-statuses.view',
                 ],
-                [
-                    // Status groups (spec 0039, D-6): the GLOBAL
-                    // classification lookup shared by both status
-                    // configurators, delete-guarded (referenced by either).
-                    'key' => 'status-groups',
-                    'label' => 'navigation.statusGroups',
-                    'icon' => 'shapes',
-                    'route' => '/status-groups',
-                    'permission' => 'status-groups.view',
-                ],
             ],
         ],
 

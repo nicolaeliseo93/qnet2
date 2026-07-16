@@ -3,6 +3,7 @@
 namespace App\Http\Requests\LeadStatuses;
 
 use App\DataObjects\LeadStatuses\CreateLeadStatusData;
+use App\Enums\StatusGroup;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
@@ -19,8 +20,8 @@ use Illuminate\Validation\Rule;
  * StorePipelineStatusRequest. spec 0039, D-5: `sort_order` is no longer
  * accepted here (absent from rules() -> validated() silently drops it,
  * "unknown field ignorato") — server-managed, see
- * App\Services\Statuses\StatusOrderManager. `status_group_id` (D-6) is the
- * new optional classification FK.
+ * App\Services\Statuses\StatusOrderManager. `group` (pivot,
+ * App\Enums\StatusGroup) is REQUIRED — every row carries a classification.
  */
 class StoreLeadStatusRequest extends FormRequest
 {
@@ -40,7 +41,7 @@ class StoreLeadStatusRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:191', Rule::unique('lead_statuses', 'name')],
             'color' => ['nullable', 'string', 'max:32'],
-            'status_group_id' => ['nullable', 'integer', Rule::exists('status_groups', 'id')],
+            'group' => ['required', 'string', Rule::enum(StatusGroup::class)],
         ];
     }
 

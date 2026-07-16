@@ -30,12 +30,13 @@ class LeadStatusService
     ) {}
 
     /**
-     * Eager-loads `statusGroup` (spec 0039, D-6) so LeadStatusResource never
-     * N+1s. Shared by show (controller)/create/update.
+     * Shared by show (controller)/create/update — a hook point kept for
+     * symmetry with PipelineStatusService even though `group` (spec 0039
+     * pivot) is a plain column, needing no eager-load.
      */
     public function loadDetail(LeadStatus $leadStatus): LeadStatus
     {
-        return $leadStatus->loadMissing('statusGroup');
+        return $leadStatus;
     }
 
     public function create(CreateLeadStatusData $data): LeadStatus

@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\StatusGroup;
+use App\Enums\StatusSystemKey;
 use App\Models\Abstracts\BaseModel;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\PipelineStatusFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -22,13 +23,24 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * SystemStatusGuard/StatusOrderManager. `sort_order` stays fillable (D-5):
  * it becomes server-managed (StatusOrderManager places/reorders it), not
  * user-fillable at the FormRequest layer, but the Service still assigns it
- * via mass-assignment internally.
+ * via mass-assignment internally. `group` (pivot) is the fixed 3-value
+ * classification (App\Enums\StatusGroup) — replaces the earlier "status
+ * groups" lookup FK.
  */
-#[Fillable(['name', 'color', 'sort_order', 'status_group_id'])]
+#[Fillable(['name', 'color', 'sort_order', 'group'])]
 class PipelineStatus extends BaseModel
 {
     /** @use HasFactory<PipelineStatusFactory> */
     use HasFactory, LogsModelActivity;
+
+    /**
+     * The system rows that pin to the tail of the sort_order sequence
+     * (StatusOrderManager, spec 0039 D-5): just "Chiuso" here, unlike
+     * LeadStatus's two-row tail.
+     *
+     * @var array<int, StatusSystemKey>
+     */
+    public const array SYSTEM_TAIL_KEYS = [StatusSystemKey::Closed];
 
     /**
      * @return array<string, string>
@@ -37,7 +49,7 @@ class PipelineStatus extends BaseModel
     {
         return [
             'sort_order' => 'int',
-            'status_group_id' => 'int',
+            'group' => StatusGroup::class,
         ];
     }
 
@@ -58,16 +70,6 @@ class PipelineStatus extends BaseModel
     public function campaigns(): HasMany
     {
         return $this->hasMany(Campaign::class);
-    }
-
-    /**
-     * The optional classification group (spec 0039, D-6) — nullable, custom
-     * rows only in practice (a system row's group is fixed at migration
-     * time, D-2, and never reassigned).
-     */
-    public function statusGroup(): BelongsTo
-    {
-        return $this->belongsTo(StatusGroup::class);
     }
 
     /**

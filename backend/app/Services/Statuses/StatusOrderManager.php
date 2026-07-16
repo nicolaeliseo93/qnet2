@@ -14,10 +14,14 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * 0039, D-5): server-managed since the field left store/update. Generic on
  * the two sibling status models via a class-string (no speculative
  * interface — engineering.md §1.3): both share the exact same
- * name/system_key/sort_order shape.
+ * name/system_key/sort_order shape, differing only in which system rows
+ * pin to the tail (`$modelClass::SYSTEM_TAIL_KEYS` — PipelineStatus:
+ * `[Closed]`; LeadStatus: `[Won, Discarded]`).
  *
  * Sequence invariant, maintained by every method here: Nuovo=0,
- * custom=10,20,..., Chiuso=max(custom)+10.
+ * custom=10,20,..., then each SYSTEM_TAIL_KEYS row in declared order,
+ * +STEP apart (e.g. lead: Chiuso con successo=max(custom)+10,
+ * Scartato=max(custom)+20 — always last).
  */
 class StatusOrderManager
 {
@@ -25,9 +29,10 @@ class StatusOrderManager
 
     /**
      * The `sort_order` a brand-new custom row should be created with: the
-     * last custom's order + STEP (or STEP, i.e. Chiuso's current slot, when
-     * there is no custom yet). Chiuso is bumped past it in the same
-     * transaction so it always stays last.
+     * last custom's order + STEP (or STEP, i.e. the tail's current first
+     * slot, when there is no custom yet). The tail rows are bumped past it
+     * in the same transaction so they always stay last, in their declared
+     * order.
      *
      * @param  class-string<PipelineStatus>|class-string<LeadStatus>  $modelClass
      */
@@ -37,9 +42,7 @@ class StatusOrderManager
             $lastCustomOrder = $modelClass::query()->whereNull('system_key')->max('sort_order');
             $newOrder = $lastCustomOrder !== null ? $lastCustomOrder + self::STEP : self::STEP;
 
-            $modelClass::query()
-                ->where('system_key', StatusSystemKey::Closed->value)
-                ->update(['sort_order' => $newOrder + self::STEP]);
+            $this->bumpTail($modelClass, $newOrder);
 
             return $newOrder;
         });
@@ -47,11 +50,11 @@ class StatusOrderManager
 
     /**
      * Resequences every custom row to $orderedIds' order (10, 20, ...),
-     * renormalizes Nuovo=0/Chiuso=max+10, and returns the fresh, complete,
-     * ordered list. $orderedIds must be EXACTLY the set of custom ids (no
-     * system row, no duplicate, none missing) — validated here so the
-     * guard holds regardless of caller (defense in depth beyond the
-     * FormRequest's own `distinct` rule).
+     * renormalizes Nuovo=0 and the tail rows past the last custom, and
+     * returns the fresh, complete, ordered list. $orderedIds must be
+     * EXACTLY the set of custom ids (no system row, no duplicate, none
+     * missing) — validated here so the guard holds regardless of caller
+     * (defense in depth beyond the FormRequest's own `distinct` rule).
      *
      * @param  class-string<PipelineStatus>|class-string<LeadStatus>  $modelClass
      * @param  array<int, int>  $orderedIds
@@ -72,10 +75,28 @@ class StatusOrderManager
             }
 
             $modelClass::query()->where('system_key', StatusSystemKey::New->value)->update(['sort_order' => 0]);
-            $modelClass::query()->where('system_key', StatusSystemKey::Closed->value)->update(['sort_order' => $sortOrder]);
+            $this->bumpTail($modelClass, $sortOrder - self::STEP);
 
             return $modelClass::query()->orderBy('sort_order')->orderBy('name')->orderBy('id')->get();
         });
+    }
+
+    /**
+     * Places every `$modelClass::SYSTEM_TAIL_KEYS` row, in declared order,
+     * STEP apart, starting right after $lastCustomOrder (the last custom
+     * row's sort_order, or 0 when there is none).
+     *
+     * @param  class-string<PipelineStatus>|class-string<LeadStatus>  $modelClass
+     */
+    private function bumpTail(string $modelClass, int $lastCustomOrder): void
+    {
+        $sortOrder = $lastCustomOrder;
+
+        foreach ($modelClass::SYSTEM_TAIL_KEYS as $tailKey) {
+            $sortOrder += self::STEP;
+
+            $modelClass::query()->where('system_key', $tailKey->value)->update(['sort_order' => $sortOrder]);
+        }
     }
 
     /**

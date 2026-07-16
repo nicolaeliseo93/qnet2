@@ -2,17 +2,18 @@
 
 namespace App\Tables\LeadStatuses;
 
+use App\Enums\StatusGroup;
+
 /**
  * Declarative column/filter/action catalogue for the `lead-statuses` domain
  * (spec 0029). Extracted out of LeadStatusesTableDefinition (file-size split,
  * engineering.md §6): pure data (no logic), mirroring
- * PipelineStatusColumnCatalog. `name`/`color`/`sort_order`/`created_at` are
- * real DB columns handled entirely by the generic engine. `color` is
- * deliberately not sortable/filterable (a swatch value, not a meaningful
- * ordering/filter axis). `status_group` (spec 0039, D-6/D-7) is DERIVED (no
- * real column, LeadStatusesTableDefinition delegates to StatusGroupColumn):
- * neither sortable nor basic-filterable — reachable only via the advanced
- * Text filter on the group's name.
+ * PipelineStatusColumnCatalog. Every column (name/color/sort_order/group/
+ * created_at) is a real DB column handled entirely by the generic engine.
+ * `color` is deliberately not sortable/filterable (a swatch value, not a
+ * meaningful ordering/filter axis). `group` (spec 0039 pivot,
+ * App\Enums\StatusGroup) is a `set` filter with a static options catalogue —
+ * mirrors LeadImportColumnCatalog's `status`.
  */
 final class LeadStatusColumnCatalog
 {
@@ -51,12 +52,14 @@ final class LeadStatusColumnCatalog
                 'filterType' => 'number',
             ],
             [
-                'id' => 'status_group',
-                'label' => 'leadStatuses.columns.statusGroup',
-                'type' => 'text',
+                'id' => 'group',
+                'label' => 'leadStatuses.columns.group',
+                'type' => 'badge',
                 'visible' => true,
-                'sortable' => false,
-                'filterable' => false,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+                'options' => StatusGroup::values(),
             ],
             [
                 'id' => 'created_at',
@@ -78,6 +81,7 @@ final class LeadStatusColumnCatalog
         return [
             ['columnId' => 'name', 'type' => 'text'],
             ['columnId' => 'sort_order', 'type' => 'number'],
+            ['columnId' => 'group', 'type' => 'set', 'options' => StatusGroup::values()],
             ['columnId' => 'created_at', 'type' => 'date'],
         ];
     }

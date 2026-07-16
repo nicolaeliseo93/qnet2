@@ -8,14 +8,15 @@
 
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
-import type { StatusGroupRef, SystemStatusKey } from '@/features/status-reorder/types'
+import type { StatusGroupValue, SystemStatusKey } from '@/features/status-reorder/types'
 
 /**
  * Single lead status detail returned by GET/POST/PATCH /lead-statuses
  * (envelope `data`). Matches `LeadStatusResource`. `sort_order` is
  * server-managed (spec 0039 D-5): read-only, never accepted on write.
- * `system_key` marks the two system rows ("Nuovo"/"Chiuso"), whose
- * `status_group` is fixed and whose delete/reorder are server-blocked.
+ * `system_key` marks the three system rows ("Nuovo"/"Chiuso con
+ * successo"/"Scartato"), whose `group` is fixed and whose delete/reorder are
+ * server-blocked.
  */
 export interface LeadStatusDetail {
   id: number
@@ -24,8 +25,7 @@ export interface LeadStatusDetail {
   color: string | null
   sort_order: number
   system_key: SystemStatusKey
-  status_group_id: number | null
-  status_group: StatusGroupRef | null
+  group: StatusGroupValue
   created_at: string
   /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
   custom_fields?: Record<string, CustomFieldValue>
@@ -48,7 +48,7 @@ export interface LeadStatusDetailWithPermissions extends LeadStatusDetail {
 export interface CreateLeadStatusPayload {
   name: string
   color?: string | null
-  status_group_id?: number | null
+  group: StatusGroupValue
   /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
   custom_fields?: Record<string, CustomFieldValue>
 }

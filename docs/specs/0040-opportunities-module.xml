@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0040-opportunities-module" status="approved" owner="nicola" date="2026-07-16">
+
+  <goal>
+    Introdurre il modulo Opportunita': la trattativa commerciale verso un cliente (Anagrafica).
+    Un'Opportunita' nasce in due modi: creazione manuale, oppure generata da un Lead ereditando
+    automaticamente i dati gia' noti (read-only, coerenza Lead-Opportunita' garantita anche server-side).
+    Il modulo espone CRUD REST, permessi CRUD e per campo, tabella backend-driven (filtri,
+    ordinamenti, ricerca, export), form create/edit/view, Activity Log e statistiche, riusando
+    integralmente i pattern dei moduli Leads (0024) e Registries (0020). Nessun pattern nuovo.
+  </goal>
+
+  <context>
+    Tutti i nomi sotto sono VERIFICATI sul codice reale (ricognizione 2026-07-16), non ipotizzati.
+
+    MAPPATURA DEI CONCETTI DI DOMINIO:
+    - "Societa' Aziendale"   -> `Company` / `companies`. For-select esistente (api.php:288).
+    - "Societa' / Sede"      -> `CompanySite` / `company_sites` (FK `company_id` nullable).
+      NON ha for-select: va creato (ADR 0011).
+    - "Sede Operativa"       -> `OperationalSite` / `operational_sites` (identita' = indirizzo,
+      label composta). For-select esistente. Collegata alle funzioni via pivot
+      `business_function_operational_site`.
+    - "Funzione Aziendale"   -> `BusinessFunction` / `business_functions` (parent/child).
+      For-select esistente (api.php:272).
+    - "Cliente / Anagrafica" -> `Registry` / `registries`. For-select esistente
+      (routes/api/registries.php:26). Ha gia' `commercial_id` e `reporter_id` (FK `referents`,
+      i "default" naturali di Commerciale/Segnalatore) e `supervisor_id` (FK `users`).
+    - "Referente/Commerciale/Segnalatore" -> `Referent` / `referents`, collegati all'anagrafica
+      via pivot `referent_registry`. NON esiste un "referente predefinito" sul pivot: il prefill
+      possibile e' SOLO commercial/reporter dai default dell'anagrafica.
+    - "Supervisore"          -> `User` / `users`. For-select esistente (api.php:232).
+    - "Fonte"                -> `Source` / `sources`. For-select esistente (lookups.php:35).
+    - "Categoria Prodotto"   -> `ProductCategory` / `product_categories`
+      (`business_function_id` proprio o EREDITATO dal parent, risolto read-side da `CategoryHierarchy`).
+    - "Gestori Account"      -> pivot con `position` come `registry_user`
+      (docblock 2026_07_13_130000: ranking "inherited by future modules like Opportunities").
+      Trait `ValidatesManagerSlots` (payload `manager_slots`, MAX_MANAGERS=4, MAX_MANAGER_SLOTS=12),
+      sync `[user_id => ['position' => index+1]]`, FE `ManagerSlotsField`.
+    - "Lead" -> `Lead` / `leads`: ha SOLO referent_id, campaign_id, operational_site_id, source_id,
+      operator_id, lead_status_id, notes, extra_fields. Anagrafica, funzione e categoria prodotto
+      vivono sulla sua `Campaign` (registry_id/source_id SEMPRE propri; business_function_id e
+      product_category_id derivati dal Project quando collegata, risolti read-side).
+
+    INFRASTRUTTURA RIUSATA (zero framework nuovo): BasePolicy + permissions:sync (permessi
+    auto-creati), AbstractResourceAuthorization + config/authorization.php (meta, blocco
+    permissions, EnforcesFieldPermissions), AbstractTableDefinition + config/tables.php
+    (columns/rows/values + export 0014 + advanced filters 0032), AbstractStatsDefinition +
+    config/stats.php (0026), LogsModelActivity + config/activity-log.php (0034),
+    config/navigation.php, envelope BaseApiController. FE: TableView, MetaField +
+    ResourcePermissionsProvider, RelationSelectField/AsyncPaginatedSelect (+prop `params`),
+    useForSelect, useEntityDetail, DetailPanel, ModuleStatsPanel, ActivityLogSection,
+    quick-create 0028 sui select relazionali.
+
+    DECISIONI PRESE DALL'UTENTE (2026-07-16):
+    - D-1: eredita' da Lead + Campagna: referente, fonte, sede operativa dal Lead; anagrafica,
+      funzione aziendale, categoria prodotto dai valori EFFETTIVI della Campagna del lead
+      (propri o derivati dal Project col meccanismo read-side esistente).
+    - D-2: massimo UNA opportunita' per lead (`lead_id` UNIQUE) e campi ereditati immutabili
+      anche server-side (non solo read-only nel form).
+    - D-3: stati dell'opportunita' RIMANDATI (si decideranno dopo): nessun opportunity-status
+      in questa iterazione; lo schema resta estendibile (nuova FK nullable in una migration futura).
+    - D-4: obbligatori `name` + `registry_id`; tutto il resto nullable.
+    - D-5 (precedente vincolante, HANDOFF 2026-07-14): NESSUN flag `is_converted` sul Lead.
+      Il legame e' SOLO `opportunities.lead_id`; il Lead non viene modificato.
+
+    REGOLE DI BUSINESS:
+    - BR-1 (eredita'): con `lead_id` nel POST il server DERIVA: referent_id = lead.referent_id;
+      source_id = lead.source_id ?? source effettiva della campagna; operational_site_id =
+      lead.operational_site_id; registry_id = campaign.registry_id; business_function_id e
+      product_category_id = valori effettivi della campagna. I valori inviati dal client per i
+      campi la cui derivazione e' NON-NULL sono `prohibited` (422).
+    - BR-2 (lock): un campo ereditato e' BLOCCATO se la sua derivazione e' non-null; se la
+      derivazione e' null il campo resta libero (es. lead senza sede operativa -> compilabile).
+      In UPDATE: campo bloccato inviato con valore DIVERSO dal derivato corrente -> 422;
+      valore identico (no-op) -> 200. `lead_id` e' immutabile in update (prohibited).
+    - BR-3 (cancellazioni bloccanti, come 0024 D-4): `restrictOnDelete` su TUTTE le FK +
+      guardia `abort(409)` nel `delete()` di ogni modulo referenziato: RegistryService,
+      CompanyService, CompanySiteService, OperationalSiteService, BusinessFunctionService,
+      ReferentService (copre referent/commercial/reporter), UserService (supervisor),
+      SourceService, ProductCategoryService, LeadService. I gestori account NON bloccano:
+      pivot `opportunity_user` cascade (come `registry_user`).
+    - BR-4 (relazioni coerenti nel form): referente/commerciale/segnalatore = SOLO referenti
+      dell'anagrafica selezionata (param `registry_id` sul for-select referents), disabilitati
+      finche' l'anagrafica non e' scelta; al cambio anagrafica i valori non piu' pertinenti si
+      azzerano e commerciale/segnalatore si precompilano dai default (meta del for-select
+      registries), sempre modificabili. `company_site` filtrata per `company_id` quando la
+      societa' e' scelta; `operational_site` filtrata per `business_function_id` (pivot) quando
+      la funzione e' scelta; la categoria prodotto scelta precompila (se vuota) la funzione
+      aziendale con la propria effettiva (meta del for-select product-categories).
+    - BR-5: `success_probability` intero 0..100; `estimated_value` decimal(15,2) come
+      `projects.total_budget`; `start_date` / `expected_close_date` date (nessun vincolo di
+      ordine tra le due: sono stime).
+    - BR-6: nessun codice sequenziale OPP-xxxx (non richiesto; aggiungibile dopo come Project).
+  </context>
+
+  <scope>
+    <in>
+      <item>Backend: migration `opportunities` + pivot `opportunity_user` (position), model `Opportunity` (BaseModel, #[Fillable], LogsModelActivity), DTO Create/Update, `OpportunityService` (managerSyncMap come RegistryService), `StoreOpportunityRequest`/`UpdateOpportunityRequest` (+ValidatesManagerSlots, EnforcesFieldPermissions), `OpportunityPolicy`, `OpportunityResource`, `OpportunityController`, `routes/api/opportunities.php` + require in api.php.</item>
+      <item>Backend: creazione da Lead: `GET /api/leads/{lead}/opportunity-defaults` (resolver eredita' BR-1) + enforcement lock BR-2 in store/update; campo `opportunity {id,name}|null` aggiunto a `LeadResource`.</item>
+      <item>Backend: `OpportunitiesAuthorization` + config/authorization.php; `OpportunitiesTableDefinition` + `Opportunities/OpportunityColumnCatalog` + `OpportunityAdvancedFilterCatalog` + config/tables.php; `OpportunitiesStatsDefinition` + config/stats.php; entry config/activity-log.php; voce `opportunities` in config/navigation.php (gruppo marketing-leads); `OpportunityFactory` + `DemoOpportunitySeeder` in DemoDataSeeder.</item>
+      <item>Backend: guardie 409 nei delete() dei 10 servizi referenziati (BR-3) + test.</item>
+      <item>Backend for-select: NUOVO `GET /api/company-sites/for-select` (param opzionale `company_id`); param additivo `registry_id` su referents/for-select; param additivo `business_function_id` su operational-sites/for-select; `meta {commercial,reporter}` sugli item di registries/for-select; `meta {business_function}` (effettiva) sugli item di product-categories/for-select.</item>
+      <item>Frontend: feature `features/opportunities/` (types, api, schema Zod, payload sparse-diff, use-opportunity-form, form body con select filtrati/prefill BR-4, detail, tabella adapter con Sheet, renderer); pagine `/opportunities`, `/opportunities/new`, `/opportunities/:id`, `/opportunities/:id/edit` in router.tsx; breadcrumb; i18n `it-opportunities.ts`/`en-opportunities.ts` + navigation + stats keys.</item>
+      <item>Frontend: creazione da Lead: `/opportunities/new?lead_id=N` (defaults + campi bloccati via forceDisabled + banner origine); bottone "Crea opportunita'" / "Vai all'opportunita'" nel dettaglio Lead (gated `opportunities.create`, usa `lead.opportunity`).</item>
+      <item>Frontend: estrazione di `ManagerSlotsField` in componente condiviso riusato da Registries e Opportunities (suite registries invariata).</item>
+      <item>Test: Pest (model, CRUD+authz, eredita'/lock, guardie 409, meta/field-permissions, tabella/export, for-select, stats) e Vitest (schema, payload, form + lock + prefill, detail, defaults hook).</item>
+    </in>
+    <out>
+      <item>Stati/pipeline dell'opportunita' (D-3: decisione rimandata; niente lookup, niente dipendenza dalla 0039 in corso).</item>
+      <item>Import massivo opportunita' (il permesso `opportunities.import` esiste per uniformita' BasePolicy; nessuna ImportDefinition registrata).</item>
+      <item>Codice sequenziale OPP-xxxx (BR-6), custom fields (0021), allegati, notifiche, kanban/pipeline view.</item>
+      <item>Endpoint `opportunities/for-select` (nessun modulo consuma le opportunita' come select).</item>
+      <item>Row action "crea opportunita'" nella TABELLA leads (entry point = solo dettaglio Lead; follow-up possibile).</item>
+      <item>Modifiche al Lead oltre a `LeadResource.opportunity` (D-5: nessun flag, nessuna colonna).</item>
+      <item>Qualsiasi file del lavoro non committato in corso su questo branch (0036/0037/0038/0039): non toccarli.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <!-- ==== SCHEMA ==== -->
+    <endpoint method="SCHEMA" path="opportunities">
+      <request>
+        opportunities: id; name string NOT NULL index; registry_id FK registries NOT NULL restrict;
+        company_id FK companies NULL restrict; company_site_id FK company_sites NULL restrict;
+        operational_site_id FK operational_sites NULL restrict; business_function_id FK
+        business_functions NULL restrict; referent_id / commercial_id / reporter_id FK referents
+        NULL restrict; supervisor_id FK users NULL restrict; source_id FK sources NULL restrict;
+        product_category_id FK product_categories NULL restrict; lead_id FK leads NULL UNIQUE
+        restrict; start_date date NULL; estimated_value decimal(15,2) NULL;
+        expected_close_date date NULL; success_probability unsignedTinyInteger NULL; timestamps.
+        opportunity_user: opportunity_id + user_id (cascade), position unsigned;
+        unique(opportunity_id,user_id), unique(opportunity_id,position).
+      </request>
+      <response status="200">Migrazioni reversibili (down + up).</response>
+      <errors>-</errors>
+    </endpoint>
+
+    <!-- ==== CRUD ==== -->
+    <endpoint method="GET" path="/api/opportunities/{opportunity}">
+      <request>Route model binding.</request>
+      <response status="200">
+        { success: true, message: "OK",
+          data: {
+            id, name: string,
+            registry_id: number, registry: {id,name} | null,
+            company_id: number|null, company: {id,name /* denomination */} | null,
+            company_site_id: number|null, company_site: {id,name} | null,
+            operational_site_id: number|null, operational_site: {id,label} | null,
+            business_function_id: number|null, business_function: {id,name} | null,
+            referent_id: number|null, referent: {id,name} | null,
+            commercial_id: number|null, commercial: {id,name} | null,
+            reporter_id: number|null, reporter: {id,name} | null,
+            supervisor_id: number|null, supervisor: {id,name} | null,
+            source_id: number|null, source: {id,name} | null,
+            product_category_id: number|null, product_category: {id,name} | null,
+            lead_id: number|null, lead: {id, label /* referent name del lead */} | null,
+            managers: [ {id, name, position} ],
+            start_date: string 'Y-m-d' | null,
+            estimated_value: string|number | null  /* come projects.total_budget */,
+            expected_close_date: string 'Y-m-d' | null,
+            success_probability: number 0..100 | null,
+            locked_fields: string[]  /* [] se lead_id null; altrimenti chiavi bloccate BR-2 */,
+            created_at, updated_at
+          },
+          permissions: { resource, fields, actions } }
+      </response>
+      <errors>403 senza `opportunities.view`; 404.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/opportunities">
+      <request>
+        { name: string (required, max 255),
+          registry_id: number (required se derivazione null, exists),
+          company_id/company_site_id/operational_site_id/business_function_id/referent_id/
+          commercial_id/reporter_id/supervisor_id/source_id/product_category_id:
+            number|null (nullable, exists sulla rispettiva tabella),
+          lead_id: number|null (nullable, exists:leads,id, unique:opportunities,lead_id),
+          manager_slots: (number|null)[] (ValidatesManagerSlots, come Registry),
+          start_date/expected_close_date: string 'Y-m-d' | null,
+          estimated_value: numeric|null (min 0, max 9999999999999.99),
+          success_probability: integer|null (0..100) }
+        Con lead_id: i campi la cui derivazione BR-1 e' non-null sono `prohibited` (422 se inviati);
+        il server li scrive dai valori derivati.
+      </request>
+      <response status="201">Identica alla GET (data + permissions), message "Created".</response>
+      <errors>403 senza `opportunities.create`; 422 validazione / lead gia' collegato (unique) /
+        prohibited BR-1 / field-permission.</errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/opportunities/{opportunity}">
+      <request>Shape della POST, tutto `sometimes` (PATCH sparse, DTO con flag submitted).
+        `lead_id` prohibited. Campi bloccati (BR-2): valore diverso dal derivato corrente -> 422,
+        identico -> no-op 200.</request>
+      <response status="200">Identica alla GET, message "Updated".</response>
+      <errors>403 senza `opportunities.update`; 404; 422.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/opportunities/{opportunity}">
+      <request>Nessun body.</request>
+      <response status="204">Nessun contenuto. Pivot opportunity_user cascade.</response>
+      <errors>403 senza `opportunities.delete`; 404.</errors>
+    </endpoint>
+
+    <!-- ==== CREAZIONE DA LEAD ==== -->
+    <endpoint method="GET" path="/api/leads/{lead}/opportunity-defaults">
+      <request>Route model binding su {lead}.</request>
+      <response status="200">
+        { success, message, data: {
+            lead_id: number,
+            existing_opportunity_id: number | null,
+            values: { referent_id, source_id, operational_site_id, registry_id,
+                      business_function_id, product_category_id: number|null },
+            references: { referent/source/operational_site/registry/business_function/
+                          product_category: {id, name|label} | null },
+            locked_fields: string[]  /* chiavi con derivazione non-null */ } }
+      </response>
+      <errors>403 senza `opportunities.create` O senza `leads.view`; 404 lead inesistente.</errors>
+    </endpoint>
+
+    <!-- ==== FOR-SELECT (nuovo + estensioni additive) ==== -->
+    <endpoint method="GET" path="/api/company-sites/for-select">
+      <request>?search&amp;offset&amp;limit&amp;ids[]&amp;company_id=number (opzionale: filtra per societa')</request>
+      <response status="200">{ items: [{id, label /* name */, subtitle /* company denomination */}], export_link: null, pagination } (ADR 0011)</response>
+      <errors>403 senza `company-sites.viewAny` (permesso reale della CompanySitePolicy, verificare il resource esatto).</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/referents/for-select">
+      <request>+ param opzionale `registry_id=number`: solo referenti collegati via referent_registry. Senza param: comportamento invariato.</request>
+      <response status="200">Envelope invariato.</response>
+      <errors>Invariati.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/operational-sites/for-select">
+      <request>+ param opzionale `business_function_id=number`: solo sedi collegate via business_function_operational_site. Senza param: invariato.</request>
+      <response status="200">Envelope invariato.</response>
+      <errors>Invariati.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/registries/for-select">
+      <request>Invariata.</request>
+      <response status="200">Item arricchito: meta: { commercial: {id,name}|null, reporter: {id,name}|null }. Retrocompatibile.</response>
+      <errors>Invariati.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/product-categories/for-select">
+      <request>Invariata.</request>
+      <response status="200">Item arricchito: meta: { business_function: {id,name}|null /* effettiva own-or-inherited */ }. Retrocompatibile.</response>
+      <errors>Invariati.</errors>
+    </endpoint>
+
+    <!-- ==== EREDITATI DAL FRAMEWORK (nessun endpoint nuovo) ==== -->
+    <endpoint method="GET" path="/api/meta/opportunities">
+      <request>Nessuno.</request>
+      <response status="200">Generato da OpportunitiesAuthorization: 17 campi permissionabili
+        (name, registry_id, company_id, company_site_id, operational_site_id,
+        business_function_id, referent_id, commercial_id, reporter_id, supervisor_id, source_id,
+        product_category_id, manager_slots, start_date, estimated_value, expected_close_date,
+        success_probability). `lead_id` NON e' permissionabile (strutturale). Mandatory: name, registry_id.</response>
+      <errors>403 senza `opportunities.viewAny`.</errors>
+    </endpoint>
+    <endpoint method="GET|POST" path="/api/tables/opportunities/{columns|rows|values}">
+      <request>Contratto SSRM generico.</request>
+      <response status="200">Colonne almeno: name, registry, referent, commercial, supervisor,
+        source, product_category, estimated_value, success_probability, start_date,
+        expected_close_date, created_at. Row actions view/edit/delete/activity gated.</response>
+      <errors>403 senza `opportunities.viewAny`.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/exports/opportunities">
+      <request>Contratto export generico (0014).</request>
+      <response status="200">ExportRun; rispetta filtri/sort/colonne visibili su intero dataset.</response>
+      <errors>403 senza `opportunities.export`.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/stats/opportunities">
+      <request>Nessuno.</request>
+      <response status="200">{ widgets }: totale opportunita', somma estimated_value,
+        probabilita' media, distribuzione per anagrafica (top), trend mensile creazioni
+        (helper AbstractStatsDefinition esistenti).</response>
+      <errors>403 senza `opportunities.viewAny`.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/activity-log/opportunities/{id}">
+      <request>Cursor pagination generica (0034).</request>
+      <response status="200">{ items, next_cursor } via entry config/activity-log.php.</response>
+      <errors>403 senza `opportunities.viewActivity` + `opportunities.view`.</errors>
+    </endpoint>
+
+  </data_contract>
+
+  <acceptance_criteria>
+
+    <!-- Schema e model -->
+    <criterion id="AC-001">La tabella `opportunities` esiste con le colonne del contratto; name e registry_id NOT NULL, lead_id UNIQUE, tutte le FK restrictOnDelete; `opportunity_user` con unique(opportunity_id,user_id) e unique(opportunity_id,position). [Pest: Unit/Models/OpportunityTest]</criterion>
+    <criterion id="AC-002">Le relazioni del model (registry, company, companySite, operationalSite, businessFunction, referent, commercial, reporter, supervisor, source, productCategory, lead, managers con pivot position ordinato) risolvono correttamente. [Pest]</criterion>
+    <criterion id="AC-003">Le migrazioni sono reversibili: down() + up() senza errori. [Pest]</criterion>
+
+    <!-- CRUD + authz -->
+    <criterion id="AC-010">Con `opportunities.create`, POST con name + registry_id validi -> 201, persistito, gli altri campi null. [Pest: Feature/Opportunities/OpportunityCrudTest]</criterion>
+    <criterion id="AC-011">POST senza name o senza registry_id -> 422 sul campo mancante, nessuna riga. [Pest]</criterion>
+    <criterion id="AC-012">Senza `opportunities.create` -> 403; senza view/update/delete i rispettivi endpoint -> 403. [Pest]</criterion>
+    <criterion id="AC-013">PATCH col solo estimated_value -> 200 e SOLO quel campo cambia. [Pest]</criterion>
+    <criterion id="AC-014">success_probability 101 o -1 -> 422; 0 e 100 -> accettati. estimated_value negativo -> 422. [Pest]</criterion>
+    <criterion id="AC-015">POST con manager_slots [u1, null, u2] -> pivot con position 1 e 3 (gap preservato); utente duplicato o piu' di 4 manager -> 422 (regole ValidatesManagerSlots identiche a Registry). [Pest]</criterion>
+    <criterion id="AC-016">DELETE -> 204, riga e pivot opportunity_user rimossi; il Lead eventualmente collegato NON viene toccato. [Pest]</criterion>
+    <criterion id="AC-017">FK inesistente in un campo relazione -> 422 exists, non 500. [Pest]</criterion>
+
+    <!-- Guardie delete (BR-3) -->
+    <criterion id="AC-020">Cancellare un'Anagrafica referenziata da un'opportunita' -> 409, non cancellata. [Pest: Feature/Opportunities/OpportunityRelationDeleteGuardTest]</criterion>
+    <criterion id="AC-021">Idem per Company, CompanySite, OperationalSite, BusinessFunction. [Pest]</criterion>
+    <criterion id="AC-022">Idem per Referent quando e' referent, commercial O reporter di un'opportunita'. [Pest]</criterion>
+    <criterion id="AC-023">Idem per User supervisore e per Source e ProductCategory. [Pest]</criterion>
+    <criterion id="AC-024">Cancellare un Lead con opportunita' collegata -> 409; un utente presente SOLO come gestore account NON blocca (cascade pivot). [Pest]</criterion>
+    <criterion id="AC-025">Senza opportunita' referenzianti, i delete dei 10 moduli restano 204: nessun falso positivo, suite esistenti verdi. [Pest]</criterion>
+
+    <!-- Permessi CRUD e per campo -->
+    <criterion id="AC-030">Dopo permissions:sync esistono gli 8 permessi `opportunities.{viewAny,view,create,update,delete,export,import,viewActivity}` senza righe di seeder. [Pest: OpportunitySecurityTest]</criterion>
+    <criterion id="AC-031">GET /api/meta/opportunities elenca i 17 campi del contratto con mandatory name+registry_id; lead_id assente. [Pest: OpportunityMetaTest]</criterion>
+    <criterion id="AC-032">Ruolo con `estimated_value` non editabile in matrice: inviare un valore DIVERSO -> 422; identico (no-op) -> 200 (enforcement CHANGE-based, 0008). [Pest]</criterion>
+    <criterion id="AC-033">La matrice del form Ruolo (GET /api/authorization/fields) include `opportunities` senza modifiche al controller. [Pest]</criterion>
+
+    <!-- Tabella, export, stats, activity -->
+    <criterion id="AC-040">GET tables/opportunities/columns con viewAny -> 200 col catalogo del contratto; senza -> 403. [Pest: OpportunityTableTest]</criterion>
+    <criterion id="AC-041">rows con filtro sull'Anagrafica -> solo le opportunita' di quell'anagrafica, filtro su intero dataset; sort su colonna derivata via subquery da allow-list (zero raw su input). [Pest]</criterion>
+    <criterion id="AC-042">Export con filtri attivi -> righe filtrate dell'intero dataset, solo colonne visibili; senza `opportunities.export` -> 403. [Pest]</criterion>
+    <criterion id="AC-043">GET /api/stats/opportunities -> 200 con i widget del contratto; senza viewAny -> 403. [Pest: OpportunityStatsTest]</criterion>
+    <criterion id="AC-044">Create/update di un'opportunita' scrive activity log (log name `opportunities`, solo dirty); GET /api/activity-log/opportunities/{id} li restituisce con l'authz del contratto. [Pest]</criterion>
+
+    <!-- For-select -->
+    <criterion id="AC-050">GET /api/company-sites/for-select -> envelope ADR 0011; con company_id filtra le sedi di quella societa'; ids[] idrata; senza permesso -> 403. [Pest: CompanySiteForSelectTest]</criterion>
+    <criterion id="AC-051">referents/for-select con registry_id -> SOLO referenti del pivot referent_registry di quell'anagrafica; senza param comportamento invariato (suite esistente verde). [Pest]</criterion>
+    <criterion id="AC-052">operational-sites/for-select con business_function_id -> solo sedi del pivot; senza param invariato. [Pest]</criterion>
+    <criterion id="AC-053">registries/for-select espone meta.commercial/meta.reporter {id,name}|null; product-categories/for-select espone meta.business_function effettiva (own-or-inherited). Envelope esistenti invariati altrove. [Pest]</criterion>
+
+    <!-- Creazione da Lead -->
+    <criterion id="AC-060">GET /api/leads/{lead}/opportunity-defaults con opportunities.create+leads.view -> 200 con values/references/locked_fields coerenti a BR-1 (lead completo: 6 campi valorizzati e bloccati). [Pest: OpportunityFromLeadTest]</criterion>
+    <criterion id="AC-061">Lead con campagna collegata a un Project: business_function/product_category derivate dai valori EFFETTIVI (del project); lead senza sede operativa -> operational_site_id null e NON in locked_fields. [Pest]</criterion>
+    <criterion id="AC-062">Senza `opportunities.create` O senza `leads.view` -> 403; lead gia' collegato -> existing_opportunity_id valorizzato. [Pest]</criterion>
+    <criterion id="AC-063">POST con lead_id: i campi derivati vengono scritti dal server; inviare un campo con derivazione non-null -> 422 prohibited; secondo POST con lo stesso lead_id -> 422 unique. [Pest]</criterion>
+    <criterion id="AC-064">UPDATE di un campo bloccato con valore diverso -> 422; stesso valore -> 200; lead_id in update -> 422; i campi con derivazione null restano modificabili. [Pest]</criterion>
+    <criterion id="AC-065">Il detail di un'opportunita' da lead espone lead {id,label} e locked_fields; LeadResource espone opportunity {id,name}|null. [Pest]</criterion>
+
+    <!-- Frontend -->
+    <criterion id="AC-070">Schema Zod: name/registry mancanti -> errore localizzato; gli altri campi vuoti passano; probability fuori 0..100 -> errore. [Vitest: opportunity-schema.test.ts]</criterion>
+    <criterion id="AC-071">Form create: tutti i campi del contratto renderizzati; select relazionali via RelationSelectField/AsyncPaginatedSelect col rispettivo for-select; gestori account con ManagerSlotsField condiviso. [Vitest: opportunity-form-body.test.tsx]</criterion>
+    <criterion id="AC-072">Referente/commerciale/segnalatore disabilitati senza anagrafica; con anagrafica il for-select riceve params {registry_id}; al cambio anagrafica i tre campi si azzerano e commerciale/segnalatore si precompilano dai meta default (modificabili). [Vitest]</criterion>
+    <criterion id="AC-073">company_site riceve params {company_id} quando company scelta; operational_site riceve params {business_function_id} quando funzione scelta; scelta una categoria prodotto con funzione effettiva e campo funzione vuoto -> prefill. [Vitest]</criterion>
+    <criterion id="AC-074">Permesso di campo visible:false -> campo assente dal DOM; editable:false -> disabilitato (MetaField). [Vitest]</criterion>
+    <criterion id="AC-075">/opportunities/new?lead_id=N: defaults caricati, campi locked precompilati e forceDisabled, banner origine lead; il payload inviato NON contiene i campi locked. [Vitest: use-opportunity-defaults.test / opportunity-form]</criterion>
+    <criterion id="AC-076">PATCH da edit -> payload sparse (solo campi modificati); 422 server mappato sui campi con triade a11y. [Vitest: opportunity-form-payload.test.ts]</criterion>
+    <criterion id="AC-077">Pagina /opportunities/:id read-only via DetailPanel + ActivityLogSection; ModuleStatsPanel col domain opportunities nella pagina lista. [Vitest: opportunity-detail.test.tsx]</criterion>
+    <criterion id="AC-078">Dettaglio Lead: bottone "Crea opportunita'" (gated opportunities.create) naviga a /opportunities/new?lead_id=N; se lead.opportunity esiste -> link "Vai all'opportunita'". Suite leads resta verde. [Vitest]</criterion>
+    <criterion id="AC-079">ManagerSlotsField estratto in componente condiviso: suite registries invariata e verde. [Vitest]</criterion>
+    <criterion id="AC-080">Voce "Opportunita'" in navigazione solo con `opportunities.view` (config/navigation.php, nav backend-driven). [Pest + Vitest]</criterion>
+
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm).</item>
+    <item>Identificatori in INGLESE: tabella `opportunities`, colonne come da contratto, rotte `/api/opportunities`. Italiano solo nelle stringhe i18n.</item>
+    <item>Authz server-side su OGNI endpoint (Policy); l'UI nasconde, il backend autorizza. Mai model raw: sempre OpportunityResource. Mai `$request->only()` nudo: `safe()`/DTO.</item>
+    <item>Zero whereRaw/orderByRaw su input: sort/filtri da allow-list (pattern colonne derivate di LeadsTableDefinition).</item>
+    <item>Nessun endpoint ad-hoc per lista/filtri/export/stats/activity: solo framework generici (tables/exports/stats/activity-log).</item>
+    <item>Estensioni for-select ADDITIVE e retrocompatibili: senza i nuovi param/meta il comportamento resta identico (suite esistenti verdi).</item>
+    <item>Riuso senza duplicazione: ValidatesManagerSlots e ManagerSlotsField condivisi con Registries, non ricopiati; il resolver dei valori effettivi di Campaign riusa il meccanismo read-side esistente (nessuna seconda implementazione).</item>
+    <item>File GATE condiviso: backend/routes/api.php e' toccato da due microtask -> le modifiche vanno serializzate (vedi piano); tutti gli altri owner hanno write surface disgiunte.</item>
+    <item>NON toccare i file del lavoro non committato 0036/0037/0038/0039 presente sul branch.</item>
+    <item>File entro 300/500 righe: catalogo colonne in `Opportunities/OpportunityColumnCatalog`, filtri avanzati in file separato, form FE splittato in sezioni/tab se necessario.</item>
+    <item>Seeder demo `DemoOpportunitySeeder` idempotente, SOLO in DemoDataSeeder.</item>
+    <item>Definition of Done: Pest + Vitest ESEGUITI e verdi, `npx tsc -b` pulito, Pint/ESLint puliti sul diff.</item>
+  </constraints>
+
+</spec>

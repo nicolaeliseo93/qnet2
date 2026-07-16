@@ -4,11 +4,17 @@ import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Form, FormControl } from '@/components/ui/form'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { ColorTokenPicker } from '@/features/custom-fields/components/color-token-picker'
-import { RelationSelectField } from '@/components/form/relation-select-field'
-import { STATUS_GROUPS_FOR_SELECT_RESOURCE } from '@/features/status-groups/for-select-api'
+import { STATUS_GROUPS, type StatusGroupValue } from '@/features/status-reorder/types'
 import { usePipelineStatusForm } from '@/features/pipeline-statuses/use-pipeline-status-form'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { PipelineStatusDetail, PipelineStatusFormMode } from '@/features/pipeline-statuses/types'
@@ -19,18 +25,24 @@ interface PipelineStatusFormBodyProps {
   onCancel: () => void
 }
 
+/** i18n key per fixed group value, kept out of the JSX so the option list stays a plain map. */
+const GROUP_LABEL_KEYS: Record<StatusGroupValue, string> = {
+  open: 'pipelineStatuses.form.group.open',
+  pending: 'pipelineStatuses.form.group.pending',
+  closed: 'pipelineStatuses.form.group.closed',
+}
+
 /**
- * The project status create/edit form UI. `name`, `color` and `status_group_id`
- * are each wrapped in `MetaField` (spec 0004): hidden means absent,
- * non-editable means disabled, `required` comes from the resolved
- * `ResourcePermissions` — no hardcoded permission logic lives here. A system
- * row ("Nuovo"/"Chiuso", spec 0039 D-2) forces the group picker disabled
- * regardless of field permissions: its group is fixed in migration and only
- * `name`/`color` are editable. `sort_order` has no form field (D-5,
- * server-managed). All non-render logic lives in `usePipelineStatusForm`.
- * `<CustomFieldsSection>` (spec 0021) mounts the resource's admin-defined
- * custom fields with zero pipeline-statuses-specific rendering/validation
- * logic.
+ * The project status create/edit form UI. `name`, `color` and `group` are
+ * each wrapped in `MetaField` (spec 0004): hidden means absent, non-editable
+ * means disabled, `required` comes from the resolved `ResourcePermissions` —
+ * no hardcoded permission logic lives here. A system row ("Nuovo"/"Chiuso",
+ * spec 0039 D-2) forces the group picker disabled regardless of field
+ * permissions: its group is fixed in migration and only `name`/`color` are
+ * editable. `sort_order` has no form field (D-5, server-managed). All
+ * non-render logic lives in `usePipelineStatusForm`. `<CustomFieldsSection>`
+ * (spec 0021) mounts the resource's admin-defined custom fields with zero
+ * pipeline-statuses-specific rendering/validation logic.
  */
 export function PipelineStatusFormBody({ mode, onSuccess, onCancel }: PipelineStatusFormBodyProps) {
   const { t } = useTranslation()
@@ -42,7 +54,7 @@ export function PipelineStatusFormBody({ mode, onSuccess, onCancel }: PipelineSt
   const identityVisible =
     fieldPermission('name').visible ||
     fieldPermission('color').visible ||
-    fieldPermission('status_group_id').visible
+    fieldPermission('group').visible
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -88,26 +100,34 @@ export function PipelineStatusFormBody({ mode, onSuccess, onCancel }: PipelineSt
                 )}
               </MetaField>
 
-              <RelationSelectField
+              <MetaField
                 control={form.control}
-                name="status_group_id"
-                metaKey="status_group_id"
-                label={t('pipelineStatuses.form.statusGroup')}
+                name="group"
+                metaKey="group"
+                label={t('pipelineStatuses.form.group.label')}
                 hint={isSystemRow ? t('pipelineStatuses.form.hints.systemStatusGroup') : undefined}
-                resource={STATUS_GROUPS_FOR_SELECT_RESOURCE}
-                searchPlaceholder={t('pipelineStatuses.form.statusGroupSearch')}
-                selected={
-                  mode.type === 'edit' && mode.pipelineStatus.status_group
-                    ? { id: mode.pipelineStatus.status_group.id, name: mode.pipelineStatus.status_group.name }
-                    : null
-                }
-                forceDisabled={isSystemRow}
-                placeholder={t('pipelineStatuses.form.selectPlaceholder')}
-                emptyLabel={t('pipelineStatuses.form.selectEmpty')}
-                errorLabel={t('pipelineStatuses.form.selectError')}
-                clearLabel={t('common.clear')}
-                retryLabel={t('common.retry')}
-              />
+              >
+                {({ field, disabled }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={(next) => field.onChange(next as StatusGroupValue)}
+                    disabled={disabled || isSystemRow}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {STATUS_GROUPS.map((group) => (
+                        <SelectItem key={group} value={group}>
+                          {t(GROUP_LABEL_KEYS[group])}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </MetaField>
             </FormSection>
           )}
 

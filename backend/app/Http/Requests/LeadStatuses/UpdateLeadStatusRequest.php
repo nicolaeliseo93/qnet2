@@ -3,6 +3,7 @@
 namespace App\Http\Requests\LeadStatuses;
 
 use App\DataObjects\LeadStatuses\UpdateLeadStatusData;
+use App\Enums\StatusGroup;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Models\LeadStatus;
 use Illuminate\Contracts\Validation\Validator;
@@ -19,10 +20,10 @@ use Illuminate\Validation\Rule;
  * additionally rejects any submitted field the actor cannot edit on this
  * specific model. `name` is unique ignoring self (BR-2/D-4), unlike
  * UpdatePipelineStatusRequest. spec 0039, D-5: `sort_order` is no longer
- * accepted here (see App\Services\Statuses\StatusOrderManager);
- * `status_group_id` (D-6) is the new field — App\Services\Statuses\
- * SystemStatusGuard rejects it outright, at the Service layer, when the
- * target row is a system status.
+ * accepted here (see App\Services\Statuses\StatusOrderManager); `group`
+ * (pivot, App\Enums\StatusGroup) — App\Services\Statuses\SystemStatusGuard
+ * rejects it outright, at the Service layer, when the target row is a
+ * system status.
  */
 class UpdateLeadStatusRequest extends FormRequest
 {
@@ -45,7 +46,7 @@ class UpdateLeadStatusRequest extends FormRequest
         return [
             'name' => ['sometimes', 'required', 'string', 'max:191', Rule::unique('lead_statuses', 'name')->ignore($leadStatus->id)],
             'color' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'status_group_id' => ['sometimes', 'nullable', 'integer', Rule::exists('status_groups', 'id')],
+            'group' => ['sometimes', 'string', Rule::enum(StatusGroup::class)],
         ];
     }
 

@@ -6,20 +6,37 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Introduces the two mandatory system statuses ("Nuovo"/"Chiuso") on
- * `lead_statuses` (spec 0039, D-2/D-5) plus the optional classification
- * link to `status_groups` (D-6). Sibling of
- * 2026_07_16_130100_add_system_status_columns_to_pipeline_statuses_table.php
- * — same data-migration logic (duplicated: anonymous migration classes
- * cannot share a trait without a new app/ file, out of this migration's
- * ownership), applied to `lead_statuses` instead. `ensureGroup()` still
- * matches "Aperto"/"Chiuso" by name against the global `status_groups`
- * table, so running after the pipeline_statuses sibling reuses the same two
- * group rows rather than duplicating them.
+ * Introduces the THREE mandatory system statuses on `lead_statuses` (spec
+ * 0039 pivot, D-2): "Nuovo" starts the workflow, "Chiuso con successo"
+ * (`won`) and "Scartato" (`discarded`) both end it — unlike the
+ * pipeline_statuses sibling, which keeps a single "Chiuso" terminal row.
+ * Also adds the fixed 3-value classification `group` (open/pending/closed —
+ * App\Enums\StatusGroup; replaces the earlier "status groups" lookup
+ * entity).
  *
- * See the pipeline_statuses sibling for the full (1)/(2)/(3) data-migration
- * rationale and the down()-reversibility note (schema-only: rows/groups
- * created by up() are intentionally left in place).
+ * Data migration:
+ * (1) promote/create "Nuovo" -> `new`, group open, sort 0;
+ * (2) promote/rename "Scartato" (`discarded`, group closed): a pre-existing
+ *     row already named "Scartato" is preferred (collision guard — its name
+ *     is already unique, renaming a different row into it would violate
+ *     the constraint); otherwise the pre-existing "Chiuso" row is renamed
+ *     "Scartato" and promoted (D-2: this IS the old terminal row, carried
+ *     forward under its new name/key); otherwise create it (red);
+ * (3) promote/create "Chiuso con successo" (`won`, group closed, green) —
+ *     always a fresh/matched-by-name row, never the renamed one;
+ * (4) resequence: Nuovo=0, every other (custom) row 10,20,... preserving
+ *     its current (sort_order, name, id) order, won=max(custom)+10,
+ *     discarded=max(custom)+20 — Scartato is ALWAYS last.
+ *
+ * On an empty table this produces exactly the 3 system rows (AC-001). On a
+ * populated table it promotes/renames/resequences in place, never
+ * duplicating rows (AC-002).
+ *
+ * down() only drops `group` and the two system-key columns (schema-only
+ * reversibility, same precedent as 2026_07_14_160100): the system rows
+ * created by up() are intentionally left in place, not deleted, so a
+ * rollback never destroys data a later migration/seeder may already depend
+ * on.
  */
 return new class extends Migration
 {
@@ -29,8 +46,7 @@ return new class extends Migration
     {
         Schema::table(self::TABLE, function (Blueprint $table) {
             $table->string('system_key', 16)->nullable()->unique()->after('sort_order');
-            $table->foreignId('status_group_id')->nullable()->after('system_key')
-                ->constrained('status_groups')->restrictOnDelete();
+            $table->string('group', 16)->default('open')->after('system_key');
         });
 
         $this->migrateSystemStatuses();
@@ -39,7 +55,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table(self::TABLE, function (Blueprint $table) {
-            $table->dropConstrainedForeignId('status_group_id');
+            $table->dropColumn('group');
             $table->dropUnique(['system_key']);
             $table->dropColumn('system_key');
         });
@@ -47,24 +63,25 @@ return new class extends Migration
 
     private function migrateSystemStatuses(): void
     {
-        // Step 1: ensure the two system-status groups exist.
-        $openGroupId = $this->ensureGroup('Aperto', 'blue', 0);
-        $closedGroupId = $this->ensureGroup('Chiuso', 'green', 10);
+        // Step 1: promote/create "Nuovo".
+        $newId = $this->promoteOrCreateSystemRow('Nuovo', 'new', 'slate', 'open');
 
-        // Step 2: promote the pre-existing row (if any) or create it.
-        $newId = $this->promoteOrCreateSystemRow('Nuovo', 'new', 'slate');
-        $closedId = $this->promoteOrCreateSystemRow('Chiuso', 'closed', 'green');
+        // Step 2: promote/rename "Scartato" (the old "Chiuso" terminal row).
+        $discardedId = $this->promoteOrRenameDiscardedRow();
 
-        // Step 3: resequence — Nuovo=0, customs 10,20,..., Chiuso=max+10.
+        // Step 3: promote/create "Chiuso con successo".
+        $wonId = $this->promoteOrCreateSystemRow('Chiuso con successo', 'won', 'green', 'closed');
+
+        // Step 4: resequence — Nuovo=0, customs 10,20,..., won=max+10,
+        // discarded=max+20 (Scartato ALWAYS last).
         DB::table(self::TABLE)->where('id', $newId)->update([
             'sort_order' => 0,
-            'status_group_id' => $openGroupId,
             'updated_at' => now(),
         ]);
 
         $sortOrder = 10;
         $customRows = DB::table(self::TABLE)
-            ->whereNotIn('id', [$newId, $closedId])
+            ->whereNotIn('id', [$newId, $wonId, $discardedId])
             ->orderBy('sort_order')->orderBy('name')->orderBy('id')
             ->get(['id']);
 
@@ -76,37 +93,71 @@ return new class extends Migration
             $sortOrder += 10;
         }
 
-        DB::table(self::TABLE)->where('id', $closedId)->update([
+        DB::table(self::TABLE)->where('id', $wonId)->update([
             'sort_order' => $sortOrder,
-            'status_group_id' => $closedGroupId,
+            'updated_at' => now(),
+        ]);
+
+        DB::table(self::TABLE)->where('id', $discardedId)->update([
+            'sort_order' => $sortOrder + 10,
             'updated_at' => now(),
         ]);
     }
 
-    private function ensureGroup(string $name, string $color, int $sortOrder): int
+    /**
+     * A pre-existing row already named "Scartato" is preferred over renaming
+     * "Chiuso" into it (collision guard: `name` is UNIQUE, so renaming a
+     * DIFFERENT row into an already-taken name would fail). Otherwise the
+     * pre-existing "Chiuso" row (if any) is renamed/promoted; otherwise the
+     * row is created fresh.
+     */
+    private function promoteOrRenameDiscardedRow(): int
     {
-        $existing = DB::table('status_groups')->where('name', $name)->first();
+        $existingScartato = DB::table(self::TABLE)->where('name', 'Scartato')->orderBy('id')->first();
 
-        if ($existing !== null) {
-            return $existing->id;
+        if ($existingScartato !== null) {
+            DB::table(self::TABLE)->where('id', $existingScartato->id)->update([
+                'system_key' => 'discarded',
+                'group' => 'closed',
+                'updated_at' => now(),
+            ]);
+
+            return $existingScartato->id;
         }
 
-        return DB::table('status_groups')->insertGetId([
-            'name' => $name,
-            'color' => $color,
-            'sort_order' => $sortOrder,
+        $existingChiuso = DB::table(self::TABLE)->where('name', 'Chiuso')->orderBy('id')->first();
+
+        if ($existingChiuso !== null) {
+            DB::table(self::TABLE)->where('id', $existingChiuso->id)->update([
+                'name' => 'Scartato',
+                'color' => $existingChiuso->color ?? 'red',
+                'system_key' => 'discarded',
+                'group' => 'closed',
+                'updated_at' => now(),
+            ]);
+
+            return $existingChiuso->id;
+        }
+
+        return DB::table(self::TABLE)->insertGetId([
+            'name' => 'Scartato',
+            'color' => 'red',
+            'sort_order' => 0,
+            'system_key' => 'discarded',
+            'group' => 'closed',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
     }
 
-    private function promoteOrCreateSystemRow(string $name, string $systemKey, string $color): int
+    private function promoteOrCreateSystemRow(string $name, string $systemKey, string $color, string $group): int
     {
         $existing = DB::table(self::TABLE)->where('name', $name)->orderBy('id')->first();
 
         if ($existing !== null) {
             DB::table(self::TABLE)->where('id', $existing->id)->update([
                 'system_key' => $systemKey,
+                'group' => $group,
                 'updated_at' => now(),
             ]);
 
@@ -118,6 +169,7 @@ return new class extends Migration
             'color' => $color,
             'sort_order' => 0,
             'system_key' => $systemKey,
+            'group' => $group,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

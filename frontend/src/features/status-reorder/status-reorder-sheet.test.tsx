@@ -36,6 +36,15 @@ const ITEMS: StatusReorderItem[] = [
   { id: 4, name: 'Closed', systemKey: 'closed' },
 ]
 
+/** Lead statuses (spec 0039 pivot): 3 system rows — "Nuovo" leads, "Chiuso con successo"/"Scartato" pinned in the tail, in that order. */
+const LEAD_ITEMS: StatusReorderItem[] = [
+  { id: 1, name: 'New', systemKey: 'new' },
+  { id: 2, name: 'Alpha', systemKey: null },
+  { id: 3, name: 'Bravo', systemKey: null },
+  { id: 4, name: 'Won', systemKey: 'won' },
+  { id: 5, name: 'Discarded', systemKey: 'discarded' },
+]
+
 const LABELS = {
   title: 'Reorder statuses',
   subtitle: 'Drag to reorder.',
@@ -171,5 +180,18 @@ describe('StatusReorderSheet (spec 0039 AC-011)', () => {
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(LABELS.genericError))
     const rows = screen.getAllByRole('listitem')
     expect(rows.map((row) => row.textContent)).toEqual(['New', 'Alpha', 'Bravo', 'Closed'])
+  })
+})
+
+describe('StatusReorderSheet — lead statuses, 3 system rows (spec 0039 pivot)', () => {
+  it('pins New first and Won/Discarded last in that order, leaving only the custom rows draggable', async () => {
+    fetchStatusesForReorderMock.mockResolvedValue(LEAD_ITEMS)
+
+    renderSheet()
+
+    await screen.findByText('New')
+    expect(screen.getAllByRole('button', { name: LABELS.dragHandleLabel })).toHaveLength(2)
+    const rows = screen.getAllByRole('listitem')
+    expect(rows.map((row) => row.textContent)).toEqual(['New', 'Alpha', 'Bravo', 'Won', 'Discarded'])
   })
 })

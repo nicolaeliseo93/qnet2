@@ -56,8 +56,8 @@ export function LeadStatusDetailView({ leadStatus }: LeadStatusDetailViewProps) 
           <DetailField label={t('leadStatuses.detail.sort_order')}>
             {leadStatus.sort_order}
           </DetailField>
-          <DetailField label={t('leadStatuses.detail.status_group')}>
-            {leadStatus.status_group ? leadStatus.status_group.name : <DetailEmpty />}
+          <DetailField label={t('leadStatuses.detail.group')}>
+            {t(`leadStatuses.form.group.${leadStatus.group}`)}
           </DetailField>
         </DetailGrid>
       </DetailSection>

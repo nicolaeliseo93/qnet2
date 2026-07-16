@@ -24,7 +24,7 @@ import type {
 import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
-const SERVER_ERROR_FIELDS = ['name', 'color', 'status_group_id'] as const
+const SERVER_ERROR_FIELDS = ['name', 'color', 'group'] as const
 
 export type PipelineStatusFormValues = CreatePipelineStatusFormValues & UpdatePipelineStatusFormValues
 
@@ -68,11 +68,11 @@ export function usePipelineStatusForm({ mode, onSuccess }: UsePipelineStatusForm
       return {
         name: mode.pipelineStatus.name,
         color: mode.pipelineStatus.color ?? '',
-        status_group_id: mode.pipelineStatus.status_group_id,
+        group: mode.pipelineStatus.group,
         custom_fields: customFields.defaultValues,
       }
     }
-    return { name: '', color: '', status_group_id: null, custom_fields: customFields.defaultValues }
+    return { name: '', color: '', group: 'open', custom_fields: customFields.defaultValues }
   }, [mode, customFields.defaultValues])
 
   const form = useForm<PipelineStatusFormValues>({

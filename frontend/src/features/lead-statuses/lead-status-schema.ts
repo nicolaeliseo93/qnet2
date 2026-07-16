@@ -4,6 +4,7 @@ import {
   asCustomFieldsField,
   type CustomFieldsSchema,
 } from '@/features/custom-fields/build-custom-fields-schema'
+import { STATUS_GROUPS } from '@/features/status-reorder/types'
 
 /**
  * Zod schema for the lead status create/edit form, built as a factory so
@@ -29,10 +30,10 @@ function baseFields(t: TFunction) {
       .min(1, t('leadStatuses.form.nameRequired'))
       .max(NAME_MAX_LENGTH, t('leadStatuses.form.nameMax')),
     color: z.string().max(COLOR_MAX_LENGTH, t('leadStatuses.form.colorMax')),
-    // Optional relation (spec 0039 D-6): `null` = unset. System rows only
-    // ever accept `name`/`color` — the group control is disabled for them in
-    // the form body, so this field never diverges from its hydrated value.
-    status_group_id: z.number().nullable(),
+    // Fixed 3-value enum (spec 0039 pivot). System rows only ever accept
+    // `name`/`color` — the group control is disabled for them in the form
+    // body, so this field never diverges from its hydrated value.
+    group: z.enum(STATUS_GROUPS),
   }
 }
 

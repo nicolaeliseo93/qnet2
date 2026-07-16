@@ -3,8 +3,9 @@
  * mantenere `it.ts` entro i limiti dimensionali (vedi
  * `.claude/rules/engineering.md` §6); rispecchia `pipeline-statuses` (spec
  * 0023) 1:1, con il messaggio del delete-guard adattato ai Lead (BR-3). La
- * spec 0039 aggiunge gli stati di sistema ("Nuovo"/"Chiuso"), la
- * classificazione `status_group` e lo sheet di riordino drag & drop per le
+ * spec 0039 aggiunge gli stati di sistema ("Nuovo"/"Chiuso con
+ * successo"/"Scartato") e un enum `group` fisso a 3 valori
+ * (open/pending/closed), oltre allo sheet di riordino drag & drop per le
  * righe personalizzate.
  */
 
@@ -16,13 +17,12 @@ export const leadStatuses = {
     name: 'Nome',
     color: 'Colore',
     sort_order: 'Ordine',
-    status_group: 'Gruppo',
+    group: 'Gruppo',
     created_at: 'Creato il',
   },
   advancedFilters: {
     name: 'Nome',
     sortOrderRange: 'Ordine',
-    statusGroup: 'Gruppo',
     createdRange: 'Creato il',
   },
   detail: {
@@ -31,7 +31,7 @@ export const leadStatuses = {
     loadError: 'Impossibile caricare lo stato lead. Riprova.',
     color: 'Colore',
     sort_order: 'Ordine',
-    status_group: 'Gruppo',
+    group: 'Gruppo',
     created_at: 'Creato il',
   },
   form: {
@@ -42,11 +42,12 @@ export const leadStatuses = {
     editSubtitle: 'Aggiorna lo stato lead selezionato.',
     name: 'Nome',
     color: 'Colore',
-    statusGroup: 'Gruppo',
-    statusGroupSearch: 'Cerca gruppi…',
-    selectPlaceholder: 'Seleziona…',
-    selectEmpty: 'Nessun risultato trovato.',
-    selectError: 'Impossibile caricare le opzioni.',
+    group: {
+      label: 'Gruppo',
+      open: 'Aperto',
+      pending: 'In pending',
+      closed: 'Chiuso',
+    },
     save: 'Salva',
     saving: 'Salvataggio…',
     cancel: 'Annulla',

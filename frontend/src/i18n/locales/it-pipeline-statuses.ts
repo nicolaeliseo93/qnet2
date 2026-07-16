@@ -3,8 +3,9 @@
  * mantenere `it.ts` entro i limiti dimensionali (vedi
  * `.claude/rules/engineering.md` §6); rispecchia `sources` (spec 0018) 1:1,
  * con l'aggiunta dei campi `color`/`sort_order`. La spec 0039 aggiunge gli
- * stati di sistema ("Nuovo"/"Chiuso"), la classificazione `status_group` e
- * lo sheet di riordino drag & drop per le righe personalizzate.
+ * stati di sistema ("Nuovo"/"Chiuso") e un enum `group` fisso a 3 valori
+ * (open/pending/closed), oltre allo sheet di riordino drag & drop per le
+ * righe personalizzate.
  */
 
 export const pipelineStatuses = {
@@ -15,13 +16,12 @@ export const pipelineStatuses = {
     name: 'Nome',
     color: 'Colore',
     sort_order: 'Ordine',
-    status_group: 'Gruppo',
+    group: 'Gruppo',
     created_at: 'Creato il',
   },
   advancedFilters: {
     name: 'Nome',
     sortOrderRange: 'Ordine',
-    statusGroup: 'Gruppo',
     createdRange: 'Creato il',
   },
   detail: {
@@ -30,7 +30,7 @@ export const pipelineStatuses = {
     loadError: 'Impossibile caricare lo stato progetto. Riprova.',
     color: 'Colore',
     sort_order: 'Ordine',
-    status_group: 'Gruppo',
+    group: 'Gruppo',
     created_at: 'Creato il',
   },
   form: {
@@ -41,11 +41,12 @@ export const pipelineStatuses = {
     editSubtitle: 'Aggiorna lo stato progetto selezionato.',
     name: 'Nome',
     color: 'Colore',
-    statusGroup: 'Gruppo',
-    statusGroupSearch: 'Cerca gruppi…',
-    selectPlaceholder: 'Seleziona…',
-    selectEmpty: 'Nessun risultato trovato.',
-    selectError: 'Impossibile caricare le opzioni.',
+    group: {
+      label: 'Gruppo',
+      open: 'Aperto',
+      pending: 'In pending',
+      closed: 'Chiuso',
+    },
     save: 'Salva',
     saving: 'Salvataggio…',
     cancel: 'Annulla',

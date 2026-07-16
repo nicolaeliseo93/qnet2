@@ -3,8 +3,9 @@
  * `en.ts` within the engineering size limits (see
  * `.claude/rules/engineering.md` §6); mirrors `sources` (spec 0018) 1:1,
  * with the `color`/`sort_order` fields added. Spec 0039 extends it with
- * system statuses ("Nuovo"/"Chiuso"), a `status_group` classification and a
- * drag & drop reorder sheet for the custom rows.
+ * system statuses ("Nuovo"/"Chiuso") and a fixed 3-value `group` enum
+ * (open/pending/closed), plus a drag & drop reorder sheet for the custom
+ * rows.
  */
 
 export const pipelineStatuses = {
@@ -15,13 +16,12 @@ export const pipelineStatuses = {
     name: 'Name',
     color: 'Color',
     sort_order: 'Order',
-    status_group: 'Group',
+    group: 'Group',
     created_at: 'Created at',
   },
   advancedFilters: {
     name: 'Name',
     sortOrderRange: 'Order',
-    statusGroup: 'Group',
     createdRange: 'Created at',
   },
   detail: {
@@ -30,7 +30,7 @@ export const pipelineStatuses = {
     loadError: 'Unable to load the project status. Please try again.',
     color: 'Color',
     sort_order: 'Order',
-    status_group: 'Group',
+    group: 'Group',
     created_at: 'Created at',
   },
   form: {
@@ -41,11 +41,12 @@ export const pipelineStatuses = {
     editSubtitle: 'Update the selected project status.',
     name: 'Name',
     color: 'Color',
-    statusGroup: 'Group',
-    statusGroupSearch: 'Search groups…',
-    selectPlaceholder: 'Select…',
-    selectEmpty: 'No results found.',
-    selectError: 'Unable to load the options.',
+    group: {
+      label: 'Group',
+      open: 'Open',
+      pending: 'Pending',
+      closed: 'Closed',
+    },
     save: 'Save',
     saving: 'Saving…',
     cancel: 'Cancel',

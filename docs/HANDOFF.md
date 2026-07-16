@@ -2,39 +2,48 @@
 
 > Injected at session start. Update at every green state.
 
-## SYSTEM STATUSES + STATUS GROUPS — spec 0039 (2026-07-16) — IN CORSO (agent team), NON COMMITTATO
+## SYSTEM STATUSES — spec 0039 r3 (PIVOT: status-groups ELIMINATO) — GREEN (verifier), NON COMMITTATO
 
-Spec `docs/specs/0039-system-statuses-and-status-groups.xml` (APPROVATA, contratto congelato): stati di
-sistema "Nuovo" (system_key `new`, sort 0, gruppo fisso Aperto) e "Chiuso" (`closed`, sempre ultimo,
-gruppo fisso Chiuso) su ENTRAMBI i configuratori (pipeline-statuses condiviso Progetti+Campagne,
-lead-statuses); nuovo modulo lookup globale `status-groups` (name unique + color token + sort_order
-manuale); sort_order degli STATI diventa server-managed (placement in create + POST {resource}/reorder
-con ordered_ids = permutazione esatta dei soli custom); fallback stato "Nuovo" in store di
-Lead/Project/Campaign (FK ora nullable); dnd via @dnd-kit (UNICA nuova dipendenza autorizzata).
-Sui sistema: delete/bulk-delete 422, update solo name+color (status_group_id → 422), esclusi dal reorder.
+PIVOT UTENTE 2026-07-16 ("too much"): il modulo lookup status-groups (gia' costruito) e' stato
+ELIMINATO in toto (BE: model/CRUD/tabella/policy/authorization/factory/seeder/morph-map/permessi;
+FE: feature/pagina/route/quick-create/i18n; migration create_status_groups cancellata). Al suo posto:
+colonna enum `group` string(16) NOT NULL default 'open' su lead_statuses e pipeline_statuses —
+valori open/pending/closed (`App\Enums\StatusGroup`, cast nei Model; UI it: Aperto/In pending/Chiuso).
+Spec `docs/specs/0039-system-statuses-and-status-groups.xml` AGGIORNATA (revision r3, contratto
+post-pivot). Le 2 migration `add_system_status_columns` riscritte in place (mai committate).
 
-MICROTASK VERDI (test ESEGUITI dai teammate, verifier finale ancora da lanciare):
-- MT-1 (database): 3 migration `2026_07_16_1300xx` (status_groups; system_key string(16) unique +
-  status_group_id FK restrictOnDelete su entrambe le tabelle stati; promozione by-name "Nuovo"/"Chiuso"
-  + resequence 10,20,... con closed=max+10; down schema-only documentata); StatusGroupFactory; state
-  factory system()/withGroup(); DemoStatusGroupSeeder (Aperto/Chiuso creati in MIGRATION, demo groups:
-  In lavorazione/Pending/Sospeso) + demo seeder stati aggiornati; test
-  tests/Feature/Statuses/SystemStatusMigrationTest.php 3 passed/48 assertions (AC-001/AC-002).
-- MT-4 (ui-design): @dnd-kit/{core,sortable,utilities} installati; components/ui/sortable-list.tsx —
-  `SortableList<T extends {id: string}>` props {items, renderItem, onReorder(orderedIds), isPinned?,
-  dragHandleLabel, className?}; pinned FUORI dal DndContext (non attraversabili); keyboard dnd; 4/4 test.
-  NOTA: id string → i chiamanti mappano gli id numerici.
-- MT-5 (frontend): modulo FE status-groups completo mirror di lead-statuses (feature 13+ file, pagina,
-  route, breadcrumb, quick-create entry, i18n en/it namespace `statusGroups`, icon-map `shapes`);
-  22/22 Vitest feature; tsc/ESLint puliti. La voce nav sta in backend/config/navigation.php → in MT-2.
+Stati di sistema: pipeline = 2 ("Nuovo" `new`/open/0, "Chiuso" `closed`/closed/ultimo);
+lead = 3 ("Nuovo" `new`/open/0, "Chiuso con successo" `won`/closed/penultimo, "Scartato"
+`discarded`/closed/SEMPRE ultimo — e' la vecchia "Chiuso" rinominata, promote+rename in migration
+con guardia collisione unique name). `StatusSystemKey` esteso: new|won|discarded|closed.
+Coda pinnata per-model: const `SYSTEM_TAIL_KEYS` (LeadStatus [Won,Discarded]; PipelineStatus
+[Closed]) — StatusOrderManager generalizzato (loop sulla coda in placeNew/reorder).
+Regole sistema invariate: delete/bulk 422; update solo name+color (`group` nel payload → 422,
+SystemStatusGuard); esclusi dal reorder. Fallback `new` in store Lead/Project/Campaign invariato.
 
-IN CORSO: MT-2+MT-3 (teammate backend `be-mt23`): stack BE status-groups (template lead-statuses) +
-nav entry + StatusSystemKey enum + SystemStatusGuard/StatusOrderManager (Services/Statuses/) + reorder
-endpoints + Resource/mapRow/actionsFor/deleteModel + fallback Nuovo + fix 5 regressioni test ATTESE
-segnalate da MT-1 (baseline: tabelle stati mai piu' vuote). POI: MT-6 (frontend `fe-mt5`: configuratori
-+ StatusReorderSheet features/status-reorder/ + preselezione Nuovo via for-select meta.system_key) e
-MT-7 verifier su tutti gli AC. Rossi preesistenti noti NON nostri: AbstractMigrationSourcePreviewTest
-(BE), 3 test cell-renderers.test.tsx leak i18n (FE).
+Contratto (implementato e verificato): Resource stati {id,name,color,sort_order,system_key,group,
+created_at}; POST `group` required Rule::enum; PATCH sometimes; mapRow espone `group` stringa;
+colonna reale sortable + filtro base `set` con options enum (pattern LeadImportColumnCatalog);
+NESSUN descriptor advanced-filter per group (nessun widget Select/Enum a options statiche
+end-to-end nel framework — fallback deliberato). FE: Select fisso 3 opzioni nei form dei due
+configuratori (pattern business-functions type, disabled su righe sistema), badge dot
+(open→blue, pending→amber, closed→green), label i18n `{ns}.form.group.*` + `columns.group` +
+`detail.group` (columns.group e' CONSUMATA a runtime: il BE manda la chiave label). Demo seeder:
+custom "Won"/"Lost" rimossi (duplicavano i sistema chiusi). @dnd-kit + sortable-list +
+status-reorder RESTANO (pinning invariato: systemKey !== null).
+
+VERIFICATO (verifier indipendente, eseguito): migrate:fresh --seed pulito + righe sistema ispezionate
+a DB; Pest 2688/2690 (unico rosso pre-esistente AbstractMigrationSourcePreviewTest, 1 skipped);
+Pint ok (2 file non conformi PRE-esistenti fuori scope: tests/Unit/Models/PipelineStatusTest.php,
+tests/Feature/CompanySites/CompanySiteUpdateTest.php); tsc 0 errori; ESLint solo 2 errori
+pre-esistenti (referent/registry form-metadata `_omit`); Vitest 1494/1497 (3 rossi pre-esistenti
+cell-renderers.test.tsx leak i18n); grep `status_group` residuo pulito. Nota: `php artisan test`
+locale richiede XDEBUG_MODE=off (segfault xdebug, non nostro). NIENTE COMMIT (in attesa utente).
+
+SEGNALAZIONI FUORI SCOPE (non toccate): (1) DemoDataSeeder NON idempotente al secondo run completo —
+DemoReferentSeeder tenta delete di un referent ancora referenziato da un lead del run precedente
+(ordine seeder, pre-esistente; i due seeder stati sono idempotenti singolarmente); (2) rossi
+pre-esistenti sopra elencati.
 
 ## REFERENT DUPLICATE WARNING — spec 0037 (2026-07-16) — GREEN (verifier), NON COMMITTATO
 

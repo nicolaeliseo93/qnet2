@@ -56,8 +56,8 @@ export function PipelineStatusDetailView({ pipelineStatus }: PipelineStatusDetai
           <DetailField label={t('pipelineStatuses.detail.sort_order')}>
             {pipelineStatus.sort_order}
           </DetailField>
-          <DetailField label={t('pipelineStatuses.detail.status_group')}>
-            {pipelineStatus.status_group ? pipelineStatus.status_group.name : <DetailEmpty />}
+          <DetailField label={t('pipelineStatuses.detail.group')}>
+            {t(`pipelineStatuses.form.group.${pipelineStatus.group}`)}
           </DetailField>
         </DetailGrid>
       </DetailSection>

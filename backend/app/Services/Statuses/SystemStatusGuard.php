@@ -9,9 +9,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * The system-status protection rules (spec 0039, D-2), shared verbatim by
- * both status configurators (pipeline_statuses, lead_statuses): the two
- * mandatory rows ("Nuovo"/"Chiuso") cannot be deleted, and only their
- * `name`/`color` may ever change — `status_group_id` is fixed at migration
+ * both status configurators (pipeline_statuses, lead_statuses): every
+ * mandatory row cannot be deleted, and only its `name`/`color` may ever
+ * change — `group` (pivot, App\Enums\StatusGroup) is fixed at migration
  * time and never reassigned. Mirrors the precedent guard for a single
  * protected system row, RoleService::guardSystemRoleMutation (the
  * `super-admin` role).
@@ -34,8 +34,8 @@ class SystemStatusGuard
      * @param  array<string, mixed>  $submittedAttributes  the attributes the
      *                                                     client actually submitted (UpdatePipelineStatusData/
      *                                                     UpdateLeadStatusData::submittedAttributes()) — checked by KEY, so an
-     *                                                     update that never touches `status_group_id` (e.g. name/color only)
-     *                                                     is always allowed on a system row.
+     *                                                     update that never touches `group` (e.g. name/color only) is always
+     *                                                     allowed on a system row.
      *
      * @throws HttpException 422
      */
@@ -45,7 +45,7 @@ class SystemStatusGuard
             return;
         }
 
-        if (array_key_exists('status_group_id', $submittedAttributes)) {
+        if (array_key_exists('group', $submittedAttributes)) {
             abort(422, 'System statuses accept only name and color changes.');
         }
     }

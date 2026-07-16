@@ -4,11 +4,17 @@ import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Form, FormControl } from '@/components/ui/form'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { ColorTokenPicker } from '@/features/custom-fields/components/color-token-picker'
-import { RelationSelectField } from '@/components/form/relation-select-field'
-import { STATUS_GROUPS_FOR_SELECT_RESOURCE } from '@/features/status-groups/for-select-api'
+import { STATUS_GROUPS, type StatusGroupValue } from '@/features/status-reorder/types'
 import { useLeadStatusForm } from '@/features/lead-statuses/use-lead-status-form'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { LeadStatusDetail, LeadStatusFormMode } from '@/features/lead-statuses/types'
@@ -19,12 +25,19 @@ interface LeadStatusFormBodyProps {
   onCancel: () => void
 }
 
+/** i18n key per fixed group value, kept out of the JSX so the option list stays a plain map. */
+const GROUP_LABEL_KEYS: Record<StatusGroupValue, string> = {
+  open: 'leadStatuses.form.group.open',
+  pending: 'leadStatuses.form.group.pending',
+  closed: 'leadStatuses.form.group.closed',
+}
+
 /**
- * The lead status create/edit form UI. `name`, `color` and `status_group_id`
- * are each wrapped in `MetaField` (spec 0004): hidden means absent,
- * non-editable means disabled, `required` comes from the resolved
- * `ResourcePermissions` — no hardcoded permission logic lives here. A system
- * row ("Nuovo"/"Chiuso", spec 0039 D-2) forces the group picker disabled
+ * The lead status create/edit form UI. `name`, `color` and `group` are each
+ * wrapped in `MetaField` (spec 0004): hidden means absent, non-editable means
+ * disabled, `required` comes from the resolved `ResourcePermissions` — no
+ * hardcoded permission logic lives here. A system row ("Nuovo"/"Chiuso con
+ * successo"/"Scartato", spec 0039 D-2) forces the group picker disabled
  * regardless of field permissions: its group is fixed in migration and only
  * `name`/`color` are editable. `sort_order` has no form field (D-5,
  * server-managed). All non-render logic lives in `useLeadStatusForm`.
@@ -41,7 +54,7 @@ export function LeadStatusFormBody({ mode, onSuccess, onCancel }: LeadStatusForm
   const identityVisible =
     fieldPermission('name').visible ||
     fieldPermission('color').visible ||
-    fieldPermission('status_group_id').visible
+    fieldPermission('group').visible
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -87,26 +100,34 @@ export function LeadStatusFormBody({ mode, onSuccess, onCancel }: LeadStatusForm
                 )}
               </MetaField>
 
-              <RelationSelectField
+              <MetaField
                 control={form.control}
-                name="status_group_id"
-                metaKey="status_group_id"
-                label={t('leadStatuses.form.statusGroup')}
+                name="group"
+                metaKey="group"
+                label={t('leadStatuses.form.group.label')}
                 hint={isSystemRow ? t('leadStatuses.form.hints.systemStatusGroup') : undefined}
-                resource={STATUS_GROUPS_FOR_SELECT_RESOURCE}
-                searchPlaceholder={t('leadStatuses.form.statusGroupSearch')}
-                selected={
-                  mode.type === 'edit' && mode.leadStatus.status_group
-                    ? { id: mode.leadStatus.status_group.id, name: mode.leadStatus.status_group.name }
-                    : null
-                }
-                forceDisabled={isSystemRow}
-                placeholder={t('leadStatuses.form.selectPlaceholder')}
-                emptyLabel={t('leadStatuses.form.selectEmpty')}
-                errorLabel={t('leadStatuses.form.selectError')}
-                clearLabel={t('common.clear')}
-                retryLabel={t('common.retry')}
-              />
+              >
+                {({ field, disabled }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={(next) => field.onChange(next as StatusGroupValue)}
+                    disabled={disabled || isSystemRow}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {STATUS_GROUPS.map((group) => (
+                        <SelectItem key={group} value={group}>
+                          {t(GROUP_LABEL_KEYS[group])}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </MetaField>
             </FormSection>
           )}
 

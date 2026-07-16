@@ -1,7 +1,7 @@
 <?php
 
+use App\Enums\StatusGroup;
 use App\Models\PipelineStatus;
-use App\Models\StatusGroup;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -11,7 +11,7 @@ uses(RefreshDatabase::class);
 
 /*
 |--------------------------------------------------------------------------
-| System-status rules for `pipeline-statuses` (spec 0039, D-2/D-5/D-6)
+| System-status rules for `pipeline-statuses` (spec 0039, D-2/D-5, pivot)
 |--------------------------------------------------------------------------
 |
 | The 2 mandatory rows ("Nuovo"/"Chiuso") are seeded unconditionally by the
@@ -93,7 +93,7 @@ it('bulk-delete: a system row is rejected, a custom unreferenced row succeeds (A
 });
 
 // ---------------------------------------------------------------------------
-// AC-004 — update guard: name/color allowed, status_group_id rejected
+// AC-004 — update guard: name/color allowed, group rejected
 // ---------------------------------------------------------------------------
 
 it('update: 200 when a system row changes ONLY name/color (AC-004)', function () {
@@ -110,62 +110,55 @@ it('update: 200 when a system row changes ONLY name/color (AC-004)', function ()
     $this->assertDatabaseHas('pipeline_statuses', ['id' => $newStatus->id, 'name' => 'Nuovissimo', 'color' => 'teal']);
 });
 
-it('update: 422 when a system row payload includes status_group_id, nothing persists (AC-004)', function () {
+it('update: 422 when a system row payload includes group, nothing persists (AC-004)', function () {
     $actor = pipelineStatusSystemUserWith(['update']);
     $newStatus = PipelineStatus::where('system_key', 'new')->firstOrFail();
-    // "Nuovo" already carries its D-2 FIXED group ("Aperto", assigned at
-    // migration time) — the assertion below checks it stays untouched, not
-    // that it is null.
-    $originalGroupId = $newStatus->status_group_id;
-    $group = StatusGroup::factory()->create();
+    // "Nuovo" already carries its D-2 FIXED group ("open", assigned at
+    // migration time) — the assertion below checks it stays untouched.
+    $originalGroup = $newStatus->group->value;
     Sanctum::actingAs($actor);
 
-    $this->patchJson("/api/pipeline-statuses/{$newStatus->id}", ['status_group_id' => $group->id])
+    $this->patchJson("/api/pipeline-statuses/{$newStatus->id}", ['group' => 'closed'])
         ->assertStatus(422)
         ->assertJsonPath('message', 'System statuses accept only name and color changes.');
 
-    $this->assertDatabaseHas('pipeline_statuses', ['id' => $newStatus->id, 'status_group_id' => $originalGroupId]);
+    $this->assertDatabaseHas('pipeline_statuses', ['id' => $newStatus->id, 'group' => $originalGroup]);
 });
 
-it('update: a custom row accepts status_group_id (AC-008)', function () {
+it('update: a custom row accepts group (AC-008)', function () {
     $actor = pipelineStatusSystemUserWith(['update']);
     $custom = PipelineStatus::factory()->create();
-    $group = StatusGroup::factory()->create();
     Sanctum::actingAs($actor);
 
-    $this->patchJson("/api/pipeline-statuses/{$custom->id}", ['status_group_id' => $group->id])
+    $this->patchJson("/api/pipeline-statuses/{$custom->id}", ['group' => 'pending'])
         ->assertOk()
-        ->assertJsonPath('data.status_group.id', $group->id)
-        ->assertJsonPath('data.status_group.name', $group->name);
+        ->assertJsonPath('data.group', 'pending');
 });
 
 // ---------------------------------------------------------------------------
-// AC-008 — status_group_id on create + invalid id + mapRow exposure
+// AC-008 — group on create + invalid value + mapRow exposure
 // ---------------------------------------------------------------------------
 
-it('create: a custom row with a valid status_group_id returns status_group {id, name, color} (AC-008)', function () {
+it('create: a custom row with a valid group returns it (AC-008)', function () {
     $actor = pipelineStatusSystemUserWith(['create']);
-    $group = StatusGroup::factory()->create(['color' => 'purple']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/pipeline-statuses', ['name' => 'Attesa', 'status_group_id' => $group->id])
+    $this->postJson('/api/pipeline-statuses', ['name' => 'Attesa', 'group' => 'pending'])
         ->assertCreated()
-        ->assertJsonPath('data.status_group_id', $group->id)
-        ->assertJsonPath('data.status_group.color', 'purple');
+        ->assertJsonPath('data.group', 'pending');
 });
 
-it('create: 422 when status_group_id does not exist (AC-008)', function () {
+it('create: 422 when group is not one of open/pending/closed (AC-008)', function () {
     $actor = pipelineStatusSystemUserWith(['create']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/pipeline-statuses', ['name' => 'Attesa', 'status_group_id' => 999999])
-        ->assertStatus(422)->assertJsonValidationErrors('status_group_id');
+    $this->postJson('/api/pipeline-statuses', ['name' => 'Attesa', 'group' => 'bogus'])
+        ->assertStatus(422)->assertJsonValidationErrors('group');
 });
 
-it('table rows: mapRow exposes system_key and status_group (AC-008)', function () {
+it('table rows: mapRow exposes system_key and group (AC-008)', function () {
     $actor = pipelineStatusSystemUserWith(['viewAny']);
-    $group = StatusGroup::factory()->create();
-    PipelineStatus::factory()->withGroup($group->id)->create(['name' => 'Con Gruppo']);
+    PipelineStatus::factory()->group(StatusGroup::Pending)->create(['name' => 'Con Gruppo']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/pipeline-statuses/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
@@ -175,7 +168,7 @@ it('table rows: mapRow exposes system_key and status_group (AC-008)', function (
         ->and($newRow['actions'])->not->toContain('delete');
 
     $groupedRow = collect($response->json('items'))->firstWhere('name', 'Con Gruppo');
-    expect($groupedRow['status_group']['id'])->toBe($group->id);
+    expect($groupedRow['group'])->toBe('pending');
 });
 
 // ---------------------------------------------------------------------------
@@ -186,7 +179,7 @@ it('create: a new custom row is placed last among customs, before "Chiuso" (AC-0
     $actor = pipelineStatusSystemUserWith(['create']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/pipeline-statuses', ['name' => 'Primo Custom'])->assertCreated();
+    $this->postJson('/api/pipeline-statuses', ['name' => 'Primo Custom', 'group' => 'open'])->assertCreated();
 
     $ordered = PipelineStatus::query()->orderBy('sort_order')->pluck('system_key', 'name');
 
