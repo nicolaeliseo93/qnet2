@@ -13,6 +13,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { FieldHint } from '@/components/field-hint'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 
 interface MetaFieldRenderArgs<
@@ -37,6 +38,17 @@ interface MetaFieldProps<
   label: ReactNode
   /** Overrides the automatic "not editable" hint shown under a locked field. */
   description?: ReactNode
+  /** Explanatory tooltip rendered as a sibling info glyph next to the label (never nested inside `<label>`). */
+  hint?: string
+  /** Accessible name of the hint trigger; defaults to `t('authorization.moreInfo')`. */
+  hintLabel?: string
+  /**
+   * Overrides the required marker when requiredness depends on live form
+   * state the static field permission cannot express (e.g. a campaign's
+   * classification fields, required only while standalone). Omit to follow
+   * `permission.required`, the default for every other field.
+   */
+  required?: boolean
   /**
    * Renders the actual control, exactly as an inline `FormField` render prop
    * would (own `<FormControl>` placement included) — this keeps composition
@@ -62,6 +74,9 @@ export function MetaField<
   metaKey,
   label,
   description,
+  hint,
+  hintLabel,
+  required,
   children,
 }: MetaFieldProps<TFieldValues, TName>) {
   const { t } = useTranslation()
@@ -77,6 +92,7 @@ export function MetaField<
   // necessarily `disabled: true` (see the spec's derivation rules).
   const disabled = permission.disabled || !permission.editable
   const readOnly = permission.readonly
+  const requiredMark = required ?? permission.required
 
   return (
     <FormField
@@ -84,7 +100,14 @@ export function MetaField<
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel required={permission.required}>{label}</FormLabel>
+          {hint ? (
+            <div className="flex items-center gap-1.5">
+              <FormLabel required={requiredMark}>{label}</FormLabel>
+              <FieldHint text={hint} label={hintLabel ?? t('authorization.moreInfo')} />
+            </div>
+          ) : (
+            <FormLabel required={requiredMark}>{label}</FormLabel>
+          )}
           {children({ field, disabled, readOnly })}
           {description ??
             (disabled ? (

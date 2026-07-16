@@ -61,6 +61,12 @@ Route::get('projects/for-select', ProjectForSelectController::class);
 // ProjectSummaryController.
 Route::get('projects/summary', ProjectSummaryController::class);
 
+// Next sequential code suggestion for the create form's auto-fill (spec
+// 0025). Declared ABOVE projects/{project} so the literal `next-code`
+// segment wins over the bound wildcard. Gated by projects.create
+// server-side in ProjectController.
+Route::get('projects/next-code', [ProjectController::class, 'nextCode']);
+
 // Card-grid list (spec 0025, D-3): a plain index, distinct from the
 // table framework — the card payload differs from the table row
 // payload. Gated by projects.viewAny server-side in ProjectController.
@@ -81,6 +87,12 @@ Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
 // bound wildcard. Gated by campaigns.viewAny server-side in
 // CampaignForSelectController.
 Route::get('campaigns/for-select', CampaignForSelectController::class);
+
+// Next sequential code suggestion for the create form's auto-fill (spec
+// 0025). Declared ABOVE campaigns/{campaign} so the literal `next-code`
+// segment wins over the bound wildcard. Gated by campaigns.create
+// server-side in CampaignController.
+Route::get('campaigns/next-code', [CampaignController::class, 'nextCode']);
 
 Route::get('campaigns/{campaign}', [CampaignController::class, 'show']);
 Route::post('campaigns', [CampaignController::class, 'store']);

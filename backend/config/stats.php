@@ -4,6 +4,7 @@ use App\Stats\BusinessFunctions\BusinessFunctionsStatsDefinition;
 use App\Stats\Campaigns\CampaignsStatsDefinition;
 use App\Stats\Companies\CompaniesStatsDefinition;
 use App\Stats\CompanySites\CompanySitesStatsDefinition;
+use App\Stats\LeadImports\LeadImportsStatsDefinition;
 use App\Stats\Leads\LeadsStatsDefinition;
 use App\Stats\OperationalSites\OperationalSitesStatsDefinition;
 use App\Stats\ProductCategories\ProductCategoriesStatsDefinition;
@@ -52,6 +53,7 @@ return [
         'leads' => LeadsStatsDefinition::class,
         'business-functions' => BusinessFunctionsStatsDefinition::class,
         'users' => UsersStatsDefinition::class,
+        'import-runs' => LeadImportsStatsDefinition::class,
     ],
 
 ];

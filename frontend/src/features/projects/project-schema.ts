@@ -21,10 +21,15 @@ const CODE_MAX_LENGTH = 32
 
 function baseFields(t: TFunction) {
   return {
-    // Optional manual code (spec 0025): trimmed, max 32; empty/unset falls
-    // back to server-side sequential generation. Read-only in edit (enforced
-    // by the field-permission ceiling, not by the schema).
-    code: z.string().trim().max(CODE_MAX_LENGTH, t('projects.form.codeMax')).optional(),
+    // Manual code (spec 0025): trimmed, required (the create form auto-fills
+    // the next sequential suggestion, editable), max 32. Read-only in edit
+    // (enforced by the field-permission ceiling); the server still generates
+    // one as a fallback when absent.
+    code: z
+      .string()
+      .trim()
+      .min(1, t('projects.form.codeRequired'))
+      .max(CODE_MAX_LENGTH, t('projects.form.codeMax')),
     name: z
       .string()
       .min(1, t('projects.form.nameRequired'))
@@ -46,10 +51,10 @@ function baseFields(t: TFunction) {
     city_id: z.number().nullable(),
     product_category_id: z.number().nullable(),
     partner_id: z.number().nullable(),
-    // Date inputs hold `''` for "empty" (never `null`), converted to `null` at
-    // the payload boundary (mirrors the `users` employment dates convention).
-    start_date: z.string(),
-    end_date: z.string(),
+    // Date inputs hold `''` for "empty" (never `null`); both required now
+    // (BR-6 unchanged for ordering). Converted at the payload boundary.
+    start_date: z.string().min(1, t('projects.form.startDateRequired')),
+    end_date: z.string().min(1, t('projects.form.endDateRequired')),
     total_budget: z.number().nonnegative(t('projects.form.totalBudgetInvalid')).nullable(),
     target_lead: z.number().int().nonnegative(t('projects.form.targetLeadInvalid')).nullable(),
   }
@@ -69,16 +74,26 @@ function withDateOrderRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
   })
 }
 
-/** D-5: `pipeline_status_id` is required (the only relation that is). */
-function withRequiredStatusRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
+/**
+ * The single-select relations that must be set: `pipeline_status_id` (D-5),
+ * plus `business_function_id` and `product_category_id` (now mandatory,
+ * mirroring the backend's `required` rules). Held nullable in `baseFields` so
+ * the controlled selects can represent "unset"; this rule rejects a null at
+ * submit.
+ */
+const REQUIRED_RELATIONS = [
+  { field: 'pipeline_status_id', message: 'projects.form.statusRequired' },
+  { field: 'business_function_id', message: 'projects.form.businessFunctionRequired' },
+  { field: 'product_category_id', message: 'projects.form.productCategoryRequired' },
+] as const
+
+function withRequiredRelationsRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
   return schema.superRefine((values, ctx) => {
-    const record = values as { pipeline_status_id: number | null }
-    if (record.pipeline_status_id === null) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['pipeline_status_id'],
-        message: t('projects.form.statusRequired'),
-      })
+    const record = values as Record<(typeof REQUIRED_RELATIONS)[number]['field'], number | null>
+    for (const { field, message } of REQUIRED_RELATIONS) {
+      if (record[field] === null) {
+        ctx.addIssue({ code: 'custom', path: [field], message: t(message) })
+      }
     }
   })
 }
@@ -124,7 +139,7 @@ function withGeoHierarchyRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
 /** Create schema. `customFieldsSchema` is the toolbox-built schema for `custom_fields` (spec 0021 AC-023). */
 export function buildCreateProjectSchema(t: TFunction, customFieldsSchema: CustomFieldsSchema) {
   const object = z.object({ ...baseFields(t), custom_fields: asCustomFieldsField(customFieldsSchema) })
-  return withGeoHierarchyRule(withRequiredStatusRule(withDateOrderRule(object, t), t), t)
+  return withGeoHierarchyRule(withRequiredRelationsRule(withDateOrderRule(object, t), t), t)
 }
 
 /** Edit schema (same shape; partial PATCH is computed by the caller). */

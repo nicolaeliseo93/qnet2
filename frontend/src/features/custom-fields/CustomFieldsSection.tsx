@@ -28,6 +28,11 @@ interface CustomFieldsSectionProps<TFieldValues extends CustomFieldsFormShape> {
    * tests/previews that would rather not stand up a query mock.
    */
   fields?: CustomFieldDescriptor[]
+  /** Forwarded to the internal `<FormSection>` — see `components/form-section.tsx`. */
+  collapsible?: boolean
+  defaultOpen?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /** Sort key: tab, then group, then the admin-defined `sort_order` — `tab` only affects ordering here (no tabs UI in this generic engine). */
@@ -64,6 +69,10 @@ export function CustomFieldsSection<TFieldValues extends CustomFieldsFormShape>(
   resource,
   control,
   fields: providedFields,
+  collapsible,
+  defaultOpen,
+  open,
+  onOpenChange,
 }: CustomFieldsSectionProps<TFieldValues>) {
   const { t } = useTranslation()
   const { field: fieldPermission } = useResourcePermissions()
@@ -92,13 +101,25 @@ export function CustomFieldsSection<TFieldValues extends CustomFieldsFormShape>(
             key="ungrouped"
             icon={SlidersHorizontal}
             title={t('customFields.section.title')}
+            collapsible={collapsible}
+            defaultOpen={defaultOpen}
+            open={open}
+            onOpenChange={onOpenChange}
           >
             {descriptors.map((descriptor) => (
               <CustomFieldItem key={descriptor.key} control={control} descriptor={descriptor} />
             ))}
           </FormSection>
         ) : (
-          <FormSection key={group} icon={SlidersHorizontal} title={group}>
+          <FormSection
+            key={group}
+            icon={SlidersHorizontal}
+            title={group}
+            collapsible={collapsible}
+            defaultOpen={defaultOpen}
+            open={open}
+            onOpenChange={onOpenChange}
+          >
             {descriptors.map((descriptor) => (
               <CustomFieldItem key={descriptor.key} control={control} descriptor={descriptor} />
             ))}

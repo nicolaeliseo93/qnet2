@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -99,9 +98,7 @@ export function ImportStepMapping({
   })
 
   return (
-    <Card>
-      <CardContent className="pt-4">
-        <Form {...form}>
+    <Form {...form}>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
             <div className="flex flex-col gap-3">
               {columns.map((column) => {
@@ -203,7 +200,5 @@ export function ImportStepMapping({
             </div>
           </form>
         </Form>
-      </CardContent>
-    </Card>
   )
 }

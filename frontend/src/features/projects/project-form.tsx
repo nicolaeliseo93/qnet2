@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ResourcePermissionsProvider } from '@/features/authorization/permissions'
+import { fetchProjectNextCode } from '@/features/projects/api'
 import { useProjectFormMeta } from '@/features/projects/use-project-form-meta'
 import { ProjectFormBody } from '@/features/projects/project-form-body'
 import type { ProjectDetail, ProjectFormMode } from '@/features/projects/types'
@@ -24,7 +26,20 @@ export function ProjectForm(props: ProjectFormProps) {
   const { t } = useTranslation()
   const meta = useProjectFormMeta(props.mode)
 
-  if (meta.status === 'loading') {
+  // Create-only: fetch the next sequential code to auto-fill the (required,
+  // editable) `code` field. Kept uncached (staleTime/gcTime 0) so each new
+  // form gets a fresh suggestion; an error degrades gracefully to an empty
+  // field the user fills manually.
+  const isCreate = props.mode.type === 'create'
+  const nextCode = useQuery({
+    queryKey: ['projects', 'next-code'],
+    queryFn: fetchProjectNextCode,
+    enabled: isCreate,
+    staleTime: 0,
+    gcTime: 0,
+  })
+
+  if (meta.status === 'loading' || (isCreate && nextCode.isLoading)) {
     return (
       <div className="flex flex-col gap-4 p-4" aria-hidden="true">
         <Skeleton className="h-9 w-full" />
@@ -49,7 +64,7 @@ export function ProjectForm(props: ProjectFormProps) {
 
   return (
     <ResourcePermissionsProvider permissions={meta.permissions}>
-      <ProjectFormBody {...props} />
+      <ProjectFormBody {...props} initialCode={isCreate ? (nextCode.data ?? '') : undefined} />
     </ResourcePermissionsProvider>
   )
 }

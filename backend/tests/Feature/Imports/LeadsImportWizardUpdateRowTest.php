@@ -26,6 +26,12 @@ function updateRowLeadsActorWith(array $abilities): User
         $user->givePermissionTo("leads.{$ability}");
     }
 
+    // The MODULE gate (spec 0034): updateRow() is now governed by
+    // `import-runs.update` in addition to `leads.import`.
+    if (in_array('import', $abilities, true)) {
+        grantImportRunsPermissions($user, ['update']);
+    }
+
     return $user;
 }
 

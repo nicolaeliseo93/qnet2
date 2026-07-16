@@ -1,11 +1,6 @@
 <?php
 
-use App\Imports\BusinessFunctionsImportDefinition;
-use App\Imports\CompaniesImportDefinition;
 use App\Imports\LeadsImportDefinition;
-use App\Imports\OperationalSitesImportDefinition;
-use App\Imports\RolesImportDefinition;
-use App\Imports\UsersImportDefinition;
 
 return [
 
@@ -30,12 +25,7 @@ return [
     */
 
     'definitions' => [
-        'business-functions' => BusinessFunctionsImportDefinition::class,
-        'companies' => CompaniesImportDefinition::class,
         'leads' => LeadsImportDefinition::class,
-        'operational-sites' => OperationalSitesImportDefinition::class,
-        'roles' => RolesImportDefinition::class,
-        'users' => UsersImportDefinition::class,
     ],
 
     /*

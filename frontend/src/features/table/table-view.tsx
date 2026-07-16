@@ -32,6 +32,7 @@ import { useBulkDelete } from '@/features/table/use-bulk-delete'
 import { ExportDialog } from '@/features/exports/export-dialog'
 import {
   createRowActionsRenderer,
+  INLINE_ACTION_LIMIT,
   type RowActionHandler,
   type RowActionsOptions,
 } from '@/features/table/row-actions'
@@ -373,6 +374,7 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
           cellRenderers={renderers}
           renderRowActions={renderRowActions}
           actionsHeaderLabel="table.actionsHeader"
+          actionsColumnHasOverflow={config.actions.length > INLINE_ACTION_LIMIT}
           onGridReady={handleGridReady}
           onColumnStateChanged={handleColumnStateChanged}
           initialFilterModel={initialFilterModel}

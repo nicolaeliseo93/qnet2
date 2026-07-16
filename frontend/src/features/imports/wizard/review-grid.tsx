@@ -39,20 +39,32 @@ const reviewGridTheme = themeQuartz.withParams({
   wrapperBorderRadius: 6,
 })
 
+/** No-op counters callback for the read-only mode, which never edits a row. */
+function noopRowUpdated(): void {}
+
 export interface ReviewGridProps {
   domain: string
   run: ImportRunDetail
   /** Bubbled up from an inline edit so the caller (review step) can refresh its counters. */
-  onRowUpdated: (row: ImportRunRowItem, counts: ImportRunRowCounts) => void
+  onRowUpdated?: (row: ImportRunRowItem, counts: ImportRunRowCounts) => void
+  /**
+   * Renders the same staged rows with every value column non-editable and no
+   * `onCellValueChanged` wiring (spec 0034 AC-013): the concluded-run detail
+   * page reuses this grid purely as a read-only viewer, on top of the
+   * backend's own `PATCH .../rows/{row}` 422 outside `reviewing`.
+   */
+  readOnly?: boolean
 }
 
 /**
- * AG Grid SSRM datasource over the staged rows of a reviewing run (AC-023),
- * with inline editing on the mapped/extra value columns: `stopEditing` (AG
- * Grid's own commit-on-blur/Enter) fires `onCellValueChanged`, which PATCHes
- * just the edited field and swaps the row for the server's re-validated copy.
+ * AG Grid SSRM datasource over the staged rows of a run (AC-023), with
+ * inline editing on the mapped/extra value columns while `reviewing`:
+ * `stopEditing` (AG Grid's own commit-on-blur/Enter) fires
+ * `onCellValueChanged`, which PATCHes just the edited field and swaps the row
+ * for the server's re-validated copy. `readOnly` renders the same rows
+ * without any edit affordance (spec 0034).
  */
-export function ReviewGrid({ domain, run, onRowUpdated }: ReviewGridProps) {
+export function ReviewGrid({ domain, run, onRowUpdated = noopRowUpdated, readOnly = false }: ReviewGridProps) {
   const { t } = useTranslation('importWizard')
   const { i18n } = useTranslation()
 
@@ -61,7 +73,7 @@ export function ReviewGrid({ domain, run, onRowUpdated }: ReviewGridProps) {
     [i18n.language],
   )
 
-  const columnDefs = useMemo(() => buildReviewColumnDefs(run, t), [run, t])
+  const columnDefs = useMemo(() => buildReviewColumnDefs(run, t, readOnly), [run, t, readOnly])
 
   const { datasource, handleCellValueChanged } = useReviewRows({
     domain,
@@ -82,11 +94,11 @@ export function ReviewGrid({ domain, run, onRowUpdated }: ReviewGridProps) {
       paginationPageSizeSelector: [REVIEW_BLOCK_SIZE, REVIEW_BLOCK_SIZE * 2],
       defaultColDef: { resizable: true, minWidth: 120 },
       getRowId,
-      singleClickEdit: true,
-      stopEditingWhenCellsLoseFocus: true,
-      onCellValueChanged: handleCellValueChanged,
+      singleClickEdit: !readOnly,
+      stopEditingWhenCellsLoseFocus: !readOnly,
+      onCellValueChanged: readOnly ? undefined : handleCellValueChanged,
     }),
-    [datasource, getRowId, handleCellValueChanged],
+    [datasource, getRowId, handleCellValueChanged, readOnly],
   )
 
   return (

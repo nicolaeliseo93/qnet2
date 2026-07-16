@@ -13,8 +13,11 @@ uses(RefreshDatabase::class);
 if (! function_exists('stubImportActorWith')) {
     /**
      * @param  array<int, string>  $abilities
+     * @param  array<int, string>  $importRunAbilities  the `import-runs.*` MODULE
+     *                                                  abilities (spec 0034), independent of the
+     *                                                  domain `business-functions.*` ones above
      */
-    function stubImportActorWith(array $abilities): User
+    function stubImportActorWith(array $abilities, array $importRunAbilities = []): User
     {
         foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import'] as $ability) {
             Permission::findOrCreate("business-functions.{$ability}");
@@ -25,6 +28,8 @@ if (! function_exists('stubImportActorWith')) {
         foreach ($abilities as $ability) {
             $user->givePermissionTo("business-functions.{$ability}");
         }
+
+        grantImportRunsPermissions($user, $importRunAbilities);
 
         return $user;
     }
@@ -43,7 +48,7 @@ if (! function_exists('registerStubImportDomain')) {
 
 it('200 with status and preview=null before awaiting_confirmation', function () {
     registerStubImportDomain();
-    $actor = stubImportActorWith(['import']);
+    $actor = stubImportActorWith(['import'], ['view']);
     $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'stub-widgets', 'status' => ImportStatus::Validating]);
     Sanctum::actingAs($actor);
 
@@ -57,7 +62,7 @@ it('200 with status and preview=null before awaiting_confirmation', function () 
 
 it('200 with the preview block once awaiting_confirmation', function () {
     registerStubImportDomain();
-    $actor = stubImportActorWith(['import']);
+    $actor = stubImportActorWith(['import'], ['view']);
     $run = ImportRun::factory()->awaitingConfirmation()->create(['user_id' => $actor->id, 'resource' => 'stub-widgets']);
     Sanctum::actingAs($actor);
 
@@ -69,9 +74,9 @@ it('200 with the preview block once awaiting_confirmation', function () {
         ->assertJsonPath('data.preview.invalid_sample.0.row_number', 2);
 });
 
-it('403 without {resource}.import', function () {
+it('403 without import-runs.view (spec 0034: reads no longer require {resource}.import)', function () {
     registerStubImportDomain();
-    $actor = stubImportActorWith([]);
+    $actor = stubImportActorWith(['import']);
     $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'stub-widgets']);
     Sanctum::actingAs($actor);
 
@@ -80,7 +85,7 @@ it('403 without {resource}.import', function () {
 
 it('404 for a run belonging to another user (ownership)', function () {
     registerStubImportDomain();
-    $actor = stubImportActorWith(['import']);
+    $actor = stubImportActorWith(['import'], ['view']);
     $otherUser = User::factory()->create();
     $run = ImportRun::factory()->create(['user_id' => $otherUser->id, 'resource' => 'stub-widgets']);
     Sanctum::actingAs($actor);
@@ -90,7 +95,7 @@ it('404 for a run belonging to another user (ownership)', function () {
 
 it('404 for a run whose resource does not match the route domain', function () {
     registerStubImportDomain();
-    $actor = stubImportActorWith(['import']);
+    $actor = stubImportActorWith(['import'], ['view']);
     $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'some-other-domain']);
     Sanctum::actingAs($actor);
 

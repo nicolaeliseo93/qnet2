@@ -2,9 +2,14 @@ import { useTranslation } from 'react-i18next'
 import { useFormState, useWatch, type Control, type UseFormSetValue } from 'react-hook-form'
 import { Globe } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
+import { FieldHint } from '@/components/field-hint'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import { GeoSelect, type GeoValue } from '@/features/geo/geo-select'
 import type { ProjectFormValues } from '@/features/projects/use-project-form'
+
+/** Staggered mount reveal (motion-safe), second of the four cascading sections. */
+const SECTION_REVEAL_GEOGRAPHY =
+  'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-both motion-safe:duration-300 motion-safe:delay-150'
 
 /**
  * Field-permission keys backing the geo cascade (spec 0004/0027 BR-6):
@@ -15,6 +20,9 @@ import type { ProjectFormValues } from '@/features/projects/use-project-form'
  * `CampaignGeoSection`).
  */
 const GEO_META_KEYS = ['country_id', 'state_id', 'province_id', 'city_id'] as const
+
+/** Geo cascade levels, positionally aligned with `GEO_META_KEYS`, for the required-marker mapping. */
+const GEO_LEVELS = ['country', 'state', 'province', 'city'] as const
 
 interface ProjectGeographySectionProps {
   control: Control<ProjectFormValues>
@@ -39,6 +47,9 @@ export function ProjectGeographySection({ control, setValue }: ProjectGeographyS
   const geoDisabled = geoPermissions.some(
     (permission) => permission.disabled || !permission.editable,
   )
+  // The geo cascade is not a MetaField, so its required markers are surfaced
+  // via GeoSelect from the same field permissions (country_id is required).
+  const geoRequiredLevels = GEO_LEVELS.filter((_, index) => geoPermissions[index].required)
 
   const geoValue: GeoValue = {
     country_id: useWatch({ control, name: 'country_id' }) ?? null,
@@ -71,8 +82,20 @@ export function ProjectGeographySection({ control, setValue }: ProjectGeographyS
       icon={Globe}
       title={t('projects.form.sections.geography.title')}
       description={t('projects.form.sections.geography.description')}
+      aside={
+        <FieldHint
+          text={t('projects.form.hints.geography')}
+          label={t('projects.form.sections.geography.title')}
+        />
+      }
+      className={SECTION_REVEAL_GEOGRAPHY}
     >
-      <GeoSelect value={geoValue} onChange={handleGeoChange} disabled={geoDisabled} />
+      <GeoSelect
+        value={geoValue}
+        onChange={handleGeoChange}
+        disabled={geoDisabled}
+        requiredLevels={geoRequiredLevels}
+      />
       {hierarchyError && (
         <p className="text-sm font-medium text-destructive" role="alert">
           {hierarchyError}

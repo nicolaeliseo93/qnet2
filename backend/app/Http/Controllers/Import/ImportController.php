@@ -22,6 +22,7 @@ use App\Support\Import\ReviewRowsQuery;
 use App\Support\Import\StagedRowReviser;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,12 +32,21 @@ use Throwable;
 
 /**
  * Generic, domain-driven import endpoints (spec 0012, extended by the
- * unified wizard flow spec 0033). One controller serves every domain;
- * {domain} resolves through the registry (unknown → 404), mirroring
- * App\Http\Controllers\Table\TableController. Every action re-authorizes via
- * the definition's authorizeImport() (deny → 403); a bound {importRun} that
- * does not belong to the actor OR whose resource does not match {domain}
- * 404s (never 403), mirroring TableFilterViewController::assertBelongsToDomain.
+ * unified wizard flow spec 0033, DOUBLE-GATED by spec 0034). One controller
+ * serves every domain; {domain} resolves through the registry (unknown →
+ * 404), mirroring App\Http\Controllers\Table\TableController.
+ *
+ * Every action now enforces TWO independent gates (spec 0034):
+ *  - the MODULE gate — `$this->authorize()` against ImportRun's own
+ *    `import-runs.{viewAny,view,create,update}` ability (ImportRunPolicy).
+ *    Reads (index/show/rows/summary/errors) stop here.
+ *  - the DOMAIN gate — `authorizeImport()`, the definition's
+ *    `{resource}.import` ability, kept ONLY on writes (template/upload/
+ *    configure/updateRow/confirm).
+ * A bound {importRun} that does not belong to the actor OR whose resource
+ * does not match {domain} 404s (never 403) — assertOwnedRun() always runs
+ * BEFORE any gate, so ownership/domain mismatch never leaks as a 403,
+ * mirroring TableFilterViewController::assertBelongsToDomain.
  *
  * upload()/show()/confirm() are BRANCH-AWARE: a "wizard" definition
  * (isWizardDefinition() — non-empty globalConfig(), supportsExtraFields(), or
@@ -50,6 +60,8 @@ use Throwable;
  */
 class ImportController extends BaseApiController
 {
+    use AuthorizesRequests;
+
     public function __construct(
         private readonly ImportRegistry $registry,
         private readonly ImportService $service,
@@ -67,6 +79,7 @@ class ImportController extends BaseApiController
     {
         try {
             $definition = $this->registry->resolve($domain); // 404 if unknown
+            $this->authorize('create', ImportRun::class);
             $this->authorizeImport($definition, $request->user());
 
             $columns = $definition->columnIds();
@@ -88,10 +101,10 @@ class ImportController extends BaseApiController
     public function index(Request $request, string $domain): JsonResponse
     {
         try {
-            $definition = $this->registry->resolve($domain); // 404 if unknown
+            $this->registry->resolve($domain); // 404 if unknown
             /** @var User $actor */
             $actor = $request->user();
-            $this->authorizeImport($definition, $actor);
+            $this->authorize('viewAny', ImportRun::class);
 
             $page = max(1, (int) $request->query('page', 1));
             $perPage = min(self::MAX_LIMIT, max(1, (int) $request->query('per_page', 15)));
@@ -125,6 +138,7 @@ class ImportController extends BaseApiController
             $definition = $this->registry->resolve($domain); // 404 if unknown
             /** @var User $actor */
             $actor = $request->user();
+            $this->authorize('create', ImportRun::class);
             $this->authorizeImport($definition, $actor);
 
             $run = $this->isWizardDefinition($definition)
@@ -149,8 +163,8 @@ class ImportController extends BaseApiController
     {
         try {
             $definition = $this->registry->resolve($domain); // 404 if unknown
-            $this->authorizeImport($definition, $request->user());
             $this->assertOwnedRun($importRun, $request->user(), $domain);
+            $this->authorize('view', $importRun);
 
             return $this->ok([
                 'import_run' => $this->payloadBuilder->build($definition, $importRun),
@@ -171,8 +185,9 @@ class ImportController extends BaseApiController
     {
         try {
             $definition = $this->registry->resolve($domain); // 404 if unknown
-            $this->authorizeImport($definition, $request->user());
             $this->assertOwnedRun($importRun, $request->user(), $domain);
+            $this->authorize('update', $importRun);
+            $this->authorizeImport($definition, $request->user());
 
             $data = $request->safe()->only(['column_mapping', 'global_config', 'dedup_strategy']);
 
@@ -199,9 +214,9 @@ class ImportController extends BaseApiController
     {
         try {
             $definition = $this->registry->resolve($domain); // 404 if unknown
-            $this->authorizeImport($definition, $request->user());
             $this->assertOwnedRun($importRun, $request->user(), $domain);
-            $this->assertReviewing($importRun);
+            $this->authorize('view', $importRun);
+            $this->assertReadableStatus($importRun);
 
             $params = $request->validate([
                 'startRow' => ['sometimes', 'integer', 'min:0'],
@@ -238,9 +253,10 @@ class ImportController extends BaseApiController
             $definition = $this->registry->resolve($domain); // 404 if unknown
             /** @var User $actor */
             $actor = $request->user();
-            $this->authorizeImport($definition, $actor);
             $this->assertOwnedRun($importRun, $actor, $domain);
             $this->assertRowBelongsToRun($row, $importRun);
+            $this->authorize('update', $importRun);
+            $this->authorizeImport($definition, $actor);
             $this->assertReviewing($importRun);
 
             $values = $request->safe()->only(['values'])['values'];
@@ -264,10 +280,10 @@ class ImportController extends BaseApiController
     public function summary(Request $request, string $domain, ImportRun $importRun): JsonResponse
     {
         try {
-            $definition = $this->registry->resolve($domain); // 404 if unknown
-            $this->authorizeImport($definition, $request->user());
+            $this->registry->resolve($domain); // 404 if unknown
             $this->assertOwnedRun($importRun, $request->user(), $domain);
-            $this->assertReviewing($importRun);
+            $this->authorize('view', $importRun);
+            $this->assertReadableStatus($importRun);
 
             return $this->ok(['summary' => $this->summaryBuilder->summary($importRun)]);
         } catch (Throwable $exception) {
@@ -285,8 +301,9 @@ class ImportController extends BaseApiController
     {
         try {
             $definition = $this->registry->resolve($domain); // 404 if unknown
-            $this->authorizeImport($definition, $request->user());
             $this->assertOwnedRun($importRun, $request->user(), $domain);
+            $this->authorize('update', $importRun);
+            $this->authorizeImport($definition, $request->user());
 
             $run = $this->isWizardDefinition($definition)
                 ? $this->service->confirmStaged($importRun)
@@ -305,9 +322,9 @@ class ImportController extends BaseApiController
     public function errors(Request $request, string $domain, ImportRun $importRun): StreamedResponse|JsonResponse
     {
         try {
-            $definition = $this->registry->resolve($domain); // 404 if unknown
-            $this->authorizeImport($definition, $request->user());
+            $this->registry->resolve($domain); // 404 if unknown
             $this->assertOwnedRun($importRun, $request->user(), $domain);
+            $this->authorize('view', $importRun);
             $this->assertHasErrorReport($importRun);
 
             return Storage::disk('local')->download(
@@ -346,6 +363,23 @@ class ImportController extends BaseApiController
     {
         if ($importRun->status !== ImportStatus::Reviewing) {
             abort(422, 'The import is not in review.');
+        }
+    }
+
+    /**
+     * `rows`/`summary` serve the read-only DETAIL view in addition to the
+     * wizard's own review step (spec 0034): a `completed`/`failed` run may be
+     * inspected the same way a `reviewing` one is, just without the edit
+     * ability (`updateRow` keeps the strict assertReviewing() above).
+     *
+     * @throws HttpResponseException via abort() when outside these statuses.
+     */
+    private function assertReadableStatus(ImportRun $importRun): void
+    {
+        $readable = [ImportStatus::Reviewing, ImportStatus::Completed, ImportStatus::Failed];
+
+        if (! in_array($importRun->status, $readable, true)) {
+            abort(422, 'The import is not in a state that supports viewing rows/summary.');
         }
     }
 

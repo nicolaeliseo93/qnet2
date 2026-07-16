@@ -17,20 +17,21 @@ const EMPTY_CUSTOM_FIELDS_SCHEMA = buildCustomFieldsSchema(
 
 function baseValues() {
   return {
+    code: 'PRJ-0001',
     name: 'New project',
     description: null,
     registry_id: null,
     pipeline_status_id: 1,
     source_id: null,
-    business_function_id: null,
+    business_function_id: 5,
     country_id: 1,
     state_id: null,
     province_id: null,
     city_id: null,
-    product_category_id: null,
+    product_category_id: 6,
     partner_id: null,
-    start_date: '',
-    end_date: '',
+    start_date: '2026-01-01',
+    end_date: '2026-12-31',
     total_budget: null,
     target_lead: null,
     custom_fields: {},
@@ -86,18 +87,51 @@ describe('buildCreateProjectSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('accepts an end_date with no start_date set', () => {
+  it('rejects a missing start_date (now required)', () => {
     const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
-    const result = schema.safeParse({ ...baseValues(), end_date: '2026-02-01' })
-    expect(result.success).toBe(true)
+    const result = schema.safeParse({ ...baseValues(), start_date: '' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'start_date')).toBe(true)
+    }
+  })
+
+  it('rejects a missing end_date (now required)', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({ ...baseValues(), end_date: '' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'end_date')).toBe(true)
+    }
+  })
+
+  it('rejects a null business_function_id (now required)', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({ ...baseValues(), business_function_id: null })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'business_function_id')).toBe(true)
+    }
+  })
+
+  it('rejects a null product_category_id (now required)', () => {
+    const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse({ ...baseValues(), product_category_id: null })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'product_category_id')).toBe(true)
+    }
   })
 })
 
 describe('buildCreateProjectSchema — manual code (spec 0025 AC-010)', () => {
-  it('accepts a payload with no code (falls back to server generation)', () => {
+  it('rejects an empty code (now required, auto-filled by the form)', () => {
     const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
-    const result = schema.safeParse(baseValues())
-    expect(result.success).toBe(true)
+    const result = schema.safeParse({ ...baseValues(), code: '' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'code')).toBe(true)
+    }
   })
 
   it('accepts a valid manual code and trims it', () => {

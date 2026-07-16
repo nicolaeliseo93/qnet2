@@ -67,7 +67,7 @@ return [
         'campaigns' => CampaignsTableDefinition::class,
         'leads' => LeadsTableDefinition::class,
         'lead-statuses' => LeadStatusesTableDefinition::class,
-        'lead-imports' => LeadImportsTableDefinition::class,
+        'import-runs' => LeadImportsTableDefinition::class,
     ],
 
 ];

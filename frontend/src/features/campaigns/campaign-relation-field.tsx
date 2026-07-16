@@ -31,6 +31,10 @@ interface CampaignRelationFieldProps {
   selected: CampaignRelationRef | null
   /** Forces the field read-only regardless of field permissions: true for the 3 classification fields while `project_id` is set (BR-2). */
   forceDisabled?: boolean
+  /** Required-marker override for the 3 classification fields (required only while standalone, BR-2); forwarded to `RelationSelectField`. */
+  required?: boolean
+  /** Optional explanatory tooltip rendered next to the label, forwarded to `RelationSelectField`'s `hint`. */
+  hint?: string
 }
 
 /**
@@ -48,6 +52,8 @@ export function CampaignRelationField({
   searchPlaceholder,
   selected,
   forceDisabled = false,
+  required,
+  hint,
 }: CampaignRelationFieldProps) {
   const { t } = useTranslation()
 
@@ -57,10 +63,12 @@ export function CampaignRelationField({
       name={name}
       metaKey={metaKey}
       label={label}
+      hint={hint}
       resource={resource}
       searchPlaceholder={searchPlaceholder}
       selected={selected}
       forceDisabled={forceDisabled}
+      required={required}
       placeholder={t('campaigns.form.selectPlaceholder')}
       emptyLabel={t('campaigns.form.selectEmpty')}
       errorLabel={t('campaigns.form.selectError')}

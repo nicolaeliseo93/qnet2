@@ -24,6 +24,12 @@ function historyLeadsActorWith(array $abilities): User
         $user->givePermissionTo("leads.{$ability}");
     }
 
+    // The MODULE gate (spec 0034): index() is now governed by
+    // `import-runs.viewAny` instead of `{resource}.import`.
+    if (in_array('import', $abilities, true)) {
+        grantImportRunsPermissions($user, ['viewAny']);
+    }
+
     return $user;
 }
 

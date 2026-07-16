@@ -5,6 +5,7 @@ import {
   CalendarClock,
   Coffee,
   Globe,
+  History,
   MapPin,
   Shield,
   Timer,
@@ -26,6 +27,7 @@ import {
 import { useEnumOptions } from '@/features/config/use-config'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchUser } from '@/features/users/api'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 
 interface UserDetailProps {
   userId: number
@@ -144,6 +146,12 @@ export function UserDetailView({ userId }: UserDetailProps) {
               {employment.job_description || <DetailEmpty />}
             </DetailField>
           </DetailGrid>
+        </DetailSection>
+      ) : null}
+
+      {user.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="users" id={userId} />
         </DetailSection>
       ) : null}
 

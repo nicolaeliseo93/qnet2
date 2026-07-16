@@ -18,6 +18,11 @@ uses(RefreshDatabase::class);
  * whose <scope> excluded it): it has a definition like any other module and its
  * legacy GET /projects/summary keeps working unchanged.
  *
+ * `import-runs` joined the panel with spec 0034 (dedicated lead-import
+ * module): its StatsDefinition is scoped to the actor's OWN runs (unlike
+ * every other domain's global counts), verified separately in
+ * ImportRunsStatsTest.
+ *
  * @return array<int, string>
  */
 function statsDomains(): array
@@ -35,6 +40,7 @@ function statsDomains(): array
         'leads',
         'business-functions',
         'users',
+        'import-runs',
     ];
 }
 
@@ -119,6 +125,7 @@ it('emits exactly the i18n label keys the frontend translates (AC-001)', functio
     ['leads', ['total', 'assigned', 'withSource', 'withSite', 'bySource', 'byOperator', 'trend']],
     ['business-functions', ['total', 'businessUnits', 'businessServices', 'withManager', 'byUsers']],
     ['users', ['total', 'active', 'inactive', 'managers', 'byRole', 'byBusinessFunction', 'trend']],
+    ['import-runs', ['total', 'completed', 'failed', 'rowsImported', 'byStatus', 'trend']],
 ]);
 
 /**

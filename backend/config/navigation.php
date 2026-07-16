@@ -86,6 +86,18 @@ return [
                     'permission' => 'leads.view',
                 ],
                 [
+                    // Import (spec 0034): dedicated, standalone import module —
+                    // the history table of every import run plus the multi-step
+                    // wizard. Lives under Marketing e Lead (it only imports the
+                    // lead domain), gated by the module's own permission set
+                    // (import-runs.*).
+                    'key' => 'imports',
+                    'label' => 'navigation.imports',
+                    'icon' => 'file-up',
+                    'route' => '/imports',
+                    'permission' => 'import-runs.viewAny',
+                ],
+                [
                     // Pipeline statuses (spec 0023): the Project/Campaign
                     // classification pick-list, delete-guarded (BR-4).
                     'key' => 'pipeline-statuses',

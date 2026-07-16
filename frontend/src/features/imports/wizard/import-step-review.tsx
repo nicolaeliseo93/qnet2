@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { ReviewGrid } from '@/features/imports/wizard/review-grid'
 import type { ImportRunDetail, ImportRunRowCounts } from '@/features/imports/wizard/types'
 
@@ -67,23 +66,19 @@ export function ImportStepReview({ domain, run, onContinue }: ImportStepReviewPr
 
   if (run === null) {
     return (
-      <Card>
-        <CardContent className="flex items-center gap-2 pt-4 text-sm text-muted-foreground" role="status">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          {t('review.loading')}
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        {t('review.loading')}
+      </div>
     )
   }
 
   if (run.status === 'staging') {
     return (
-      <Card>
-        <CardContent className="flex items-center gap-2 pt-4 text-sm text-muted-foreground" role="status">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          {t('status.staging')}
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        {t('status.staging')}
+      </div>
     )
   }
 
@@ -91,9 +86,8 @@ export function ImportStepReview({ domain, run, onContinue }: ImportStepReviewPr
   const needsAttention = activeCounts.error_rows + activeCounts.warning_rows + activeCounts.duplicate_rows > 0
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4 pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-semibold">{t('review.title')}</h3>
           {needsAttention ? (
             <span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" role="alert">
@@ -129,7 +123,6 @@ export function ImportStepReview({ domain, run, onContinue }: ImportStepReviewPr
             {t('review.continue')}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   )
 }

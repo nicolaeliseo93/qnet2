@@ -25,6 +25,8 @@ interface RelationSelectFieldProps<
   /** Authorization metadata key for this field (may differ from the RHF path). */
   metaKey: string
   label: string
+  /** Optional explanatory tooltip rendered next to the label via `FieldHint`. */
+  hint?: string
   /** Resource segment of the for-select endpoint, e.g. `campaigns` -> `/campaigns/for-select`. */
   resource: string
   searchPlaceholder: string
@@ -32,6 +34,8 @@ interface RelationSelectFieldProps<
   selected: RelationFieldRef | null
   /** Forces the field read-only regardless of field permissions (e.g. a derived/linked value). */
   forceDisabled?: boolean
+  /** Overrides the required marker when requiredness is form-state-dependent; forwarded to `MetaField.required`. */
+  required?: boolean
   placeholder: string
   emptyLabel: string
   errorLabel: string
@@ -63,10 +67,12 @@ export function RelationSelectField<
   name,
   metaKey,
   label,
+  hint,
   resource,
   searchPlaceholder,
   selected,
   forceDisabled = false,
+  required,
   placeholder,
   emptyLabel,
   errorLabel,
@@ -77,7 +83,14 @@ export function RelationSelectField<
   const { quickCreated, renderAction } = useQuickCreateAction(resource)
 
   return (
-    <MetaField control={control} name={name} metaKey={metaKey} label={label}>
+    <MetaField
+      control={control}
+      name={name}
+      metaKey={metaKey}
+      label={label}
+      hint={hint}
+      required={required}
+    >
       {({ field, disabled }) => {
         const isDisabled = disabled || forceDisabled
         // The just-created ref wins over the caller's `selected` prop so the

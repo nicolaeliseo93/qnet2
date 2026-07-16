@@ -1,11 +1,14 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWatch } from 'react-hook-form'
-import { FolderKanban, Megaphone, Tags } from 'lucide-react'
+import { FolderKanban, Loader2, Megaphone, Tags } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
+import { FieldHint } from '@/components/field-hint'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Form, FormControl } from '@/components/ui/form'
+import { cn } from '@/lib/utils'
 import { MetaField } from '@/features/authorization/MetaField'
 import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-statuses/for-select-api'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
@@ -25,10 +28,21 @@ interface CampaignFormBodyProps {
   mode: CampaignFormMode
   onSuccess: (campaign: CampaignDetail) => void
   onCancel: () => void
+  /** Create-only: the sequential code suggestion prefilled into the `code` field (spec 0025). */
+  initialCode?: string
 }
 
 /** Placeholder shown for the manual `code` field in create, declaring the server-generation fallback (spec 0025 AC-010). */
 const CODE_PLACEHOLDER_KEY = 'campaigns.form.codePlaceholder'
+
+/** Motion-safe staggered entrance shared by every top-level section. */
+const SECTION_REVEAL_CLASS =
+  'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-300'
+
+/** Staggers a section's entrance by 50ms per index via an arbitrary Tailwind property, so no `style` prop is needed on `FormSection`. */
+function sectionRevealClassName(index: number): string {
+  return cn(SECTION_REVEAL_CLASS, `[animation-delay:${index * 50}ms]`)
+}
 
 /**
  * The campaign create/edit form UI: the manual/read-only `code` (spec 0025,
@@ -41,13 +55,19 @@ const CODE_PLACEHOLDER_KEY = 'campaigns.form.codePlaceholder'
  * wrapped in `MetaField` (spec 0004). All non-render logic lives in
  * `useCampaignForm`.
  */
-export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBodyProps) {
+export function CampaignFormBody({ mode, onSuccess, onCancel, initialCode }: CampaignFormBodyProps) {
   const { t } = useTranslation()
-  const { form, serverError, onSubmit } = useCampaignForm({ mode, onSuccess })
+  const { form, serverError, onSubmit } = useCampaignForm({ mode, onSuccess, initialCode })
   const original = mode.type === 'edit' ? mode.campaign : null
 
   const projectId = useWatch({ control: form.control, name: 'project_id' })
   const isLinked = projectId !== null
+
+  const { errors, isSubmitting } = form.formState
+  const [planningOpen, setPlanningOpen] = useState(false)
+  const planningHasError = Boolean(errors.start_date || errors.end_date || errors.total_budget || errors.target_lead)
+  const [customOpen, setCustomOpen] = useState(false)
+  const customHasError = Boolean(errors.custom_fields)
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -57,8 +77,16 @@ export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBody
             icon={Megaphone}
             title={t('campaigns.form.sections.identity.title')}
             description={t('campaigns.form.sections.identity.description')}
+            className={sectionRevealClassName(0)}
           >
-            <MetaField control={form.control} name="code" metaKey="code" label={t('campaigns.form.code')}>
+            <MetaField
+              control={form.control}
+              name="code"
+              metaKey="code"
+              label={t('campaigns.form.code')}
+              hint={t('campaigns.form.hints.code')}
+              hintLabel={t('campaigns.form.hints.moreInfoLabel', { field: t('campaigns.form.code') })}
+            >
               {({ field, disabled, readOnly }) => (
                 <FormControl>
                   <Input
@@ -107,6 +135,15 @@ export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBody
             icon={FolderKanban}
             title={t('campaigns.form.sections.project.title')}
             description={t('campaigns.form.sections.project.description')}
+            aside={
+              <FieldHint
+                text={t('campaigns.form.hints.project')}
+                label={t('campaigns.form.hints.moreInfoLabel', {
+                  field: t('campaigns.form.sections.project.title'),
+                })}
+              />
+            }
+            className={sectionRevealClassName(1)}
           >
             <CampaignProjectField
               control={form.control}
@@ -114,35 +151,38 @@ export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBody
               selected={original?.project ?? null}
             />
 
-            <CampaignRelationField
-              control={form.control}
-              name="registry_id"
-              metaKey="registry_id"
-              label={t('campaigns.form.registry')}
-              resource={REGISTRIES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('campaigns.form.registrySearch')}
-              selected={original?.registry ?? null}
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <CampaignRelationField
+                control={form.control}
+                name="registry_id"
+                metaKey="registry_id"
+                label={t('campaigns.form.registry')}
+                resource={REGISTRIES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('campaigns.form.registrySearch')}
+                selected={original?.registry ?? null}
+              />
 
-            <CampaignRelationField
-              control={form.control}
-              name="source_id"
-              metaKey="source_id"
-              label={t('campaigns.form.source')}
-              resource={SOURCES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('campaigns.form.sourceSearch')}
-              selected={original?.source ?? null}
-            />
+              <CampaignRelationField
+                control={form.control}
+                name="source_id"
+                metaKey="source_id"
+                label={t('campaigns.form.source')}
+                resource={SOURCES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('campaigns.form.sourceSearch')}
+                selected={original?.source ?? null}
+              />
 
-            <CampaignRelationField
-              control={form.control}
-              name="partner_id"
-              metaKey="partner_id"
-              label={t('campaigns.form.partner')}
-              resource={REFERENTS_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('campaigns.form.partnerSearch')}
-              selected={original?.partner ?? null}
-            />
+              <CampaignRelationField
+                control={form.control}
+                name="partner_id"
+                metaKey="partner_id"
+                label={t('campaigns.form.partner')}
+                hint={t('campaigns.form.hints.partner')}
+                resource={REFERENTS_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('campaigns.form.partnerSearch')}
+                selected={original?.partner ?? null}
+              />
+            </div>
           </FormSection>
 
           <FormSection
@@ -153,46 +193,81 @@ export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBody
                 ? 'campaigns.form.sections.classification.descriptionLinked'
                 : 'campaigns.form.sections.classification.description',
             )}
+            aside={
+              isLinked ? (
+                <FieldHint
+                  text={t('campaigns.form.hints.classification')}
+                  label={t('campaigns.form.hints.moreInfoLabel', {
+                    field: t('campaigns.form.sections.classification.title'),
+                  })}
+                />
+              ) : undefined
+            }
+            className={sectionRevealClassName(2)}
           >
-            <CampaignRelationField
-              control={form.control}
-              name="pipeline_status_id"
-              metaKey="pipeline_status_id"
-              label={t('campaigns.form.status')}
-              resource={PROJECT_STATUSES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('campaigns.form.statusSearch')}
-              selected={original?.pipeline_status ?? null}
-              forceDisabled={isLinked}
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <CampaignRelationField
+                control={form.control}
+                name="pipeline_status_id"
+                metaKey="pipeline_status_id"
+                label={t('campaigns.form.status')}
+                resource={PROJECT_STATUSES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('campaigns.form.statusSearch')}
+                selected={original?.pipeline_status ?? null}
+                forceDisabled={isLinked}
+                required={!isLinked}
+              />
 
-            <CampaignRelationField
-              control={form.control}
-              name="business_function_id"
-              metaKey="business_function_id"
-              label={t('campaigns.form.businessFunction')}
-              resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('campaigns.form.businessFunctionSearch')}
-              selected={original?.business_function ?? null}
-              forceDisabled={isLinked}
-            />
+              <CampaignRelationField
+                control={form.control}
+                name="business_function_id"
+                metaKey="business_function_id"
+                label={t('campaigns.form.businessFunction')}
+                resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('campaigns.form.businessFunctionSearch')}
+                selected={original?.business_function ?? null}
+                forceDisabled={isLinked}
+                required={!isLinked}
+              />
 
-            <CampaignRelationField
-              control={form.control}
-              name="product_category_id"
-              metaKey="product_category_id"
-              label={t('campaigns.form.productCategory')}
-              resource={PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('campaigns.form.productCategorySearch')}
-              selected={original?.product_category ?? null}
-              forceDisabled={isLinked}
-            />
+              <CampaignRelationField
+                control={form.control}
+                name="product_category_id"
+                metaKey="product_category_id"
+                label={t('campaigns.form.productCategory')}
+                resource={PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('campaigns.form.productCategorySearch')}
+                selected={original?.product_category ?? null}
+                forceDisabled={isLinked}
+                required={!isLinked}
+              />
+            </div>
           </FormSection>
 
-          <CampaignGeoSection control={form.control} setValue={form.setValue} />
+          <CampaignGeoSection
+            control={form.control}
+            setValue={form.setValue}
+            className={sectionRevealClassName(3)}
+          />
 
-          <CampaignPlanningSection control={form.control} projectId={projectId} />
+          <CampaignPlanningSection
+            control={form.control}
+            projectId={projectId}
+            collapsible
+            open={planningOpen || planningHasError}
+            onOpenChange={setPlanningOpen}
+            className={sectionRevealClassName(4)}
+          />
 
-          <CustomFieldsSection resource="campaigns" control={form.control} />
+          <div className={sectionRevealClassName(5)}>
+            <CustomFieldsSection
+              resource="campaigns"
+              control={form.control}
+              collapsible
+              open={customOpen || customHasError}
+              onOpenChange={setCustomOpen}
+            />
+          </div>
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">
@@ -200,12 +275,13 @@ export function CampaignFormBody({ mode, onSuccess, onCancel }: CampaignFormBody
             </p>
           )}
 
-          <div className="mt-auto flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}>
+          <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
               {t('campaigns.form.cancel')}
             </Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? t('campaigns.form.saving') : t('campaigns.form.save')}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />}
+              {isSubmitting ? t('campaigns.form.saving') : t('campaigns.form.save')}
             </Button>
           </div>
         </form>

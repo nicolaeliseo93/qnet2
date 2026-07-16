@@ -7,6 +7,7 @@
 export const table = {
   actionsHeader: 'Actions',
   rowActions: 'Row actions',
+  moreActions: 'More actions',
   search: 'Search…',
   searchPlaceholder: 'Search {{columns}}…',
   rowCount_one: '{{count}} row',

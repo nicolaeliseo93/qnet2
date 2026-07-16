@@ -83,6 +83,14 @@ describe('buildReviewColumnDefs', () => {
     expect(colDefs.find((col) => col.colId === 'messages')?.editable).toBe(false)
   })
 
+  it('forces every value column non-editable in readOnly mode (spec 0034 AC-013)', () => {
+    const colDefs = buildReviewColumnDefs(baseRun(), i18n.t.bind(i18n), true)
+
+    expect(colDefs.find((col) => col.colId === 'field:email')?.editable).toBe(false)
+    expect(colDefs.find((col) => col.colId === 'extra:Notes column')?.editable).toBe(false)
+    expect(colDefs.find((col) => col.colId === 'field:email')?.cellEditor).toBeUndefined()
+  })
+
   it('leaves the ignored column (Phone) out of the grid entirely', () => {
     const colDefs = buildReviewColumnDefs(baseRun(), i18n.t.bind(i18n))
     expect(colDefs.some((col) => col.colId === 'field:phone')).toBe(false)

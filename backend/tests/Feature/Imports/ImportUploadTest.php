@@ -16,8 +16,11 @@ uses(RefreshDatabase::class);
 if (! function_exists('stubImportActorWith')) {
     /**
      * @param  array<int, string>  $abilities
+     * @param  array<int, string>  $importRunAbilities  the `import-runs.*` MODULE
+     *                                                  abilities (spec 0034), independent of the
+     *                                                  domain `business-functions.*` ones above
      */
-    function stubImportActorWith(array $abilities): User
+    function stubImportActorWith(array $abilities, array $importRunAbilities = []): User
     {
         foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import'] as $ability) {
             Permission::findOrCreate("business-functions.{$ability}");
@@ -28,6 +31,8 @@ if (! function_exists('stubImportActorWith')) {
         foreach ($abilities as $ability) {
             $user->givePermissionTo("business-functions.{$ability}");
         }
+
+        grantImportRunsPermissions($user, $importRunAbilities);
 
         return $user;
     }
@@ -48,7 +53,7 @@ it('201 + creates the ImportRun(status=validating) + stores the file on disk loc
     registerStubImportDomain();
     Storage::fake('local');
     Queue::fake();
-    $actor = stubImportActorWith(['import']);
+    $actor = stubImportActorWith(['import'], ['create']);
     Sanctum::actingAs($actor);
 
     $file = UploadedFile::fake()->create('widgets.csv', 10, 'text/csv');

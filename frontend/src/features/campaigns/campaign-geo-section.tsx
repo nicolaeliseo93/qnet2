@@ -2,13 +2,17 @@ import { Globe } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useFormState, useWatch, type Control, type UseFormSetValue } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
+import { FieldHint } from '@/components/field-hint'
 import { GeoSelect, type GeoValue } from '@/features/geo/geo-select'
+import type { GeoScope } from '@/features/geo/geo-scope'
 import { useResourcePermissions } from '@/features/authorization/permissions'
 import type { CampaignFormValues } from '@/features/campaigns/use-campaign-form'
 
 interface CampaignGeoSectionProps {
   control: Control<CampaignFormValues>
   setValue: UseFormSetValue<CampaignFormValues>
+  /** Forwarded to the internal `<FormSection>` for the caller's staggered entrance animation. */
+  className?: string
 }
 
 /** Field-permission keys backing the geo cascade (spec 0004/0027 meta contract). */
@@ -26,7 +30,7 @@ const GEO_META_KEYS = ['country_id', 'state_id', 'province_id', 'city_id'] as co
  * `CampaignFormBody` for the engineering size limits (mirrors why
  * `CampaignPlanningSection` was split out).
  */
-export function CampaignGeoSection({ control, setValue }: CampaignGeoSectionProps) {
+export function CampaignGeoSection({ control, setValue, className }: CampaignGeoSectionProps) {
   const { t } = useTranslation()
   const { field: fieldPermission } = useResourcePermissions()
   const { errors } = useFormState({ control })
@@ -38,6 +42,12 @@ export function CampaignGeoSection({ control, setValue }: CampaignGeoSectionProp
   )
 
   const lockedLevels = useWatch({ control, name: 'geo_locked_levels' })
+  // `country_id` is required unless the linked project already provides it
+  // (locked): mirrors the schema's `withGeoHierarchyRule`. The cascade is not
+  // a MetaField, so the marker is surfaced here.
+  const geoRequiredLevels: ReadonlyArray<GeoScope> = lockedLevels.includes('country')
+    ? []
+    : ['country']
   const geoValue: GeoValue = {
     country_id: useWatch({ control, name: 'country_id' }) ?? null,
     state_id: useWatch({ control, name: 'state_id' }) ?? null,
@@ -69,6 +79,15 @@ export function CampaignGeoSection({ control, setValue }: CampaignGeoSectionProp
       icon={Globe}
       title={t('campaigns.form.sections.geography.title')}
       description={t('campaigns.form.sections.geography.description')}
+      aside={
+        <FieldHint
+          text={t('campaigns.form.hints.geography')}
+          label={t('campaigns.form.hints.moreInfoLabel', {
+            field: t('campaigns.form.sections.geography.title'),
+          })}
+        />
+      }
+      className={className}
     >
       {lockedLevels.length > 0 && (
         <p className="text-xs text-muted-foreground">{t('campaigns.form.geoInheritedFromProject')}</p>
@@ -78,6 +97,7 @@ export function CampaignGeoSection({ control, setValue }: CampaignGeoSectionProp
         onChange={handleGeoChange}
         disabled={geoDisabled}
         lockedLevels={lockedLevels}
+        requiredLevels={geoRequiredLevels}
       />
       {hierarchyError && (
         <p className="text-sm font-medium text-destructive" role="alert">

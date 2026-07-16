@@ -99,6 +99,7 @@ it('create: linked to a country-only project, refining state+city -> 201, merged
         'project_id' => $project->id,
         'state_id' => $geo['state']->id,
         'city_id' => $geo['city']->id,
+        ...campaignStoreDates(),
     ])->assertCreated()
         ->assertJsonPath('data.country_id', $geo['country']->id)
         ->assertJsonPath('data.state_id', $geo['state']->id)
@@ -204,7 +205,7 @@ it('create: a standalone campaign with a full consistent geo chain -> 201, geo_s
     $geo = geoChain();
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/campaigns', array_merge(standaloneClassificationFields(), [
+    $this->postJson('/api/campaigns', array_merge(standaloneClassificationFields(), campaignStoreDates(), [
         'name' => 'Standalone City Scoped',
         'country_id' => $geo['country']->id,
         'state_id' => $geo['state']->id,

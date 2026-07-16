@@ -114,4 +114,14 @@ export const moduleStats = {
     byBusinessFunction: 'Per funzione aziendale',
     trend: 'Assunzioni per mese',
   },
+  importRuns: {
+    total: 'Import',
+    completed: 'Completati',
+    failed: 'Falliti',
+    rowsImported: 'Record importati',
+    rowsModified: 'Record aggiornati',
+    rowsSkipped: 'Record scartati',
+    byStatus: 'Per stato',
+    trend: 'Import per mese',
+  },
 }

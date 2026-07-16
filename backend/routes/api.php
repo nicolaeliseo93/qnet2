@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivityLog\ActivityLogController;
 use App\Http\Controllers\Addresses\AddressController;
 use App\Http\Controllers\Attachments\AttachmentController;
 use App\Http\Controllers\Attributes\AttributeController;
@@ -198,6 +199,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Authorization (roles.create OR roles.update) is enforced server-side in
     // FieldCatalogueController.
     Route::get('authorization/fields', [FieldCatalogueController::class, 'index']);
+
+    // Generic, resource-driven aggregated Activity Log (spec 0034): one route
+    // serves every resource registered in config/activity-log.php (v1:
+    // `users`). Unknown {resource} or missing {id} → 404 (ActivityLogRegistry
+    // / findOrFail); authorization ({resource}.viewActivity AND the model's
+    // own Policy `view`) is enforced server-side in ActivityLogController. No
+    // throttle (decision 2026-07-15: only auth endpoints are rate-limited).
+    Route::get('activity-log/{resource}/{id}', [ActivityLogController::class, 'index']);
 
     // Users CRUD backing the table row-actions (view/edit/delete) + create.
     // Authorization (users.view/create/update/delete) is enforced server-side

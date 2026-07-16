@@ -1,12 +1,7 @@
 <?php
 
-use App\Imports\BusinessFunctionsImportDefinition;
-use App\Imports\CompaniesImportDefinition;
 use App\Imports\ImportRegistry;
 use App\Imports\LeadsImportDefinition;
-use App\Imports\OperationalSitesImportDefinition;
-use App\Imports\RolesImportDefinition;
-use App\Imports\UsersImportDefinition;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Stubs\StubImportDefinition;
@@ -35,17 +30,11 @@ it('throws ModelNotFoundException for an unregistered domain (404 via BaseApiCon
         ->toThrow(ModelNotFoundException::class);
 });
 
-// Requirement changed across Lane A + the roles/users follow-up: config/
-// imports.php now registers the 5 real definitions instead of shipping empty.
-// Requirement changed again by spec 0033 (leads adopts the unified wizard):
-// config/imports.php now registers a 6th real definition, `leads`.
-it('config/imports.php registers the 6 real definitions', function () {
+// Requirement changed 2026-07-16: the 5 legacy domains (business-functions,
+// companies, operational-sites, roles, users) are removed — they will be
+// rebuilt later on the unified wizard flow. Only `leads` stays registered.
+it('config/imports.php registers the single leads definition', function () {
     expect(config('imports.definitions'))->toBe([
-        'business-functions' => BusinessFunctionsImportDefinition::class,
-        'companies' => CompaniesImportDefinition::class,
         'leads' => LeadsImportDefinition::class,
-        'operational-sites' => OperationalSitesImportDefinition::class,
-        'roles' => RolesImportDefinition::class,
-        'users' => UsersImportDefinition::class,
     ]);
 });

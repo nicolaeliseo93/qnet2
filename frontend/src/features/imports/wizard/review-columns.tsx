@@ -89,15 +89,21 @@ export function reviewValueKeyOf(colId: string): string | null {
  * `Record<string, string>` keyed by field id (mapped) or original column
  * name (extra), not a per-column top-level row property.
  */
-function buildValueColumn(colId: string, valueKey: string, headerName: string, sortable: boolean): ColDef<ImportRunRowItem> {
+function buildValueColumn(
+  colId: string,
+  valueKey: string,
+  headerName: string,
+  sortable: boolean,
+  editable: boolean,
+): ColDef<ImportRunRowItem> {
   return {
     colId,
     headerName,
-    editable: true,
+    editable,
     sortable,
     filter: false,
     minWidth: 160,
-    cellEditor: 'agTextCellEditor',
+    cellEditor: editable ? 'agTextCellEditor' : undefined,
     valueGetter: (params: ValueGetterParams<ImportRunRowItem>) => params.data?.values[valueKey] ?? '',
     valueSetter: (params: ValueSetterParams<ImportRunRowItem>) => {
       if (!params.data || params.newValue === params.oldValue) return false
@@ -127,13 +133,22 @@ function resolveEditableFields(run: ImportRunDetail): Array<{ id: string; label:
 
 /**
  * Builds the review grid's column definitions: `row_number`/`status` are
- * read-only service columns, one editable column per review field (AC-023,
- * delta D-2026-07-15-placeholder-review-fields) and per `__extra__` column,
- * and a trailing read-only `messages` column. Sorting is only wired on the
- * columns the backend allow-lists (`row_number`, `status`, review field ids)
- * — extra columns and `messages` stay unsortable, matching the SSRM contract.
+ * read-only service columns, one column per review field (AC-023, delta
+ * D-2026-07-15-placeholder-review-fields) and per `__extra__` column, and a
+ * trailing read-only `messages` column. Sorting is only wired on the columns
+ * the backend allow-lists (`row_number`, `status`, review field ids) — extra
+ * columns and `messages` stay unsortable, matching the SSRM contract.
+ *
+ * `readOnly` (spec 0034 AC-013) forces every value column to `editable:
+ * false`: the concluded-run detail page reuses this exact builder to render
+ * the same staged rows without ever offering an edit affordance, on top of
+ * the backend's own `PATCH .../rows/{row}` 422 outside `reviewing`.
  */
-export function buildReviewColumnDefs(run: ImportRunDetail, t: TFunction): ColDef<ImportRunRowItem>[] {
+export function buildReviewColumnDefs(
+  run: ImportRunDetail,
+  t: TFunction,
+  readOnly = false,
+): ColDef<ImportRunRowItem>[] {
   const mapping = run.column_mapping ?? {}
   const extraColumnNames = Object.entries(mapping)
     .filter(([, target]) => target === EXTRA_TARGET)
@@ -167,7 +182,7 @@ export function buildReviewColumnDefs(run: ImportRunDetail, t: TFunction): ColDe
     // (`imports.leads.fields.*`); resolve it via the default namespace, not the
     // `importWizard`-scoped `t` used for the grid's own chrome.
     ...editableFields.map((field) =>
-      buildValueColumn(FIELD_COLUMN_PREFIX + field.id, field.id, i18n.t(field.label), true),
+      buildValueColumn(FIELD_COLUMN_PREFIX + field.id, field.id, i18n.t(field.label), true, !readOnly),
     ),
     ...extraColumnNames.map((columnName) =>
       buildValueColumn(
@@ -175,6 +190,7 @@ export function buildReviewColumnDefs(run: ImportRunDetail, t: TFunction): ColDe
         columnName,
         `${columnName} (${t('review.columns.extraSuffix')})`,
         false,
+        !readOnly,
       ),
     ),
     {

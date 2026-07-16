@@ -103,6 +103,14 @@ describe('GeoSelect', () => {
     expect(useCitiesMock).toHaveBeenCalledWith(null, null, '')
   })
 
+  it('renders a required marker only on the levels passed in requiredLevels', () => {
+    const { rerender } = render(<GeoSelect value={empty} onChange={() => {}} />)
+    expect(screen.queryByText('*')).not.toBeInTheDocument()
+
+    rerender(<GeoSelect value={empty} onChange={() => {}} requiredLevels={['country']} />)
+    expect(screen.getAllByText('*')).toHaveLength(1)
+  })
+
   it('disables the state/province/city selects until a country is chosen', () => {
     render(<GeoSelect value={empty} onChange={() => {}} />)
 

@@ -4,7 +4,6 @@ namespace App\Tables;
 
 use App\Enums\ImportStatus;
 use App\Models\ImportRun;
-use App\Models\Lead;
 use App\Models\User;
 use App\Tables\LeadImports\LeadImportColumnCatalog;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,18 +12,22 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Table definition for the `lead-imports` domain: the actor's own lead import
- * runs, served through the generic backend-driven table engine (SSRM) so the
- * history renders as the same AG Grid table as every other module — replacing
- * the former bespoke HTML table.
+ * Table definition for the `import-runs` domain (spec 0034 — renamed from
+ * `lead-imports`, module extraction): the actor's own lead import runs,
+ * served through the generic backend-driven table engine (SSRM) so the
+ * history renders as the same AG Grid table as every other module.
  *
- * Two deviations from a plain CRUD definition, both backend-driven:
- *  - Authorization reuses the existing `leads.import` ability (there is no
- *    dedicated ImportRun permission): `authorizeViewAny` is overridden because
- *    the fail-safe default would look up a non-existent `import-runs.viewAny`.
+ * One deviation from a plain CRUD definition, backend-driven:
  *  - `baseQuery` scopes to the current actor's OWN runs for the `leads`
  *    resource — the generic engine has no built-in per-actor scoping, so it
- *    lives here, exactly reproducing the old endpoint's WHERE clause.
+ *    lives here, exactly reproducing the old endpoint's WHERE clause. The
+ *    module now shows only lead runs; other domains may join later without
+ *    touching this class's scoping contract.
+ *
+ * `authorizeViewAny` is no longer overridden: ImportRunPolicy now extends
+ * BasePolicy (`import-runs.*`), so AbstractTableDefinition's default
+ * (`Gate::allows('viewAny', ImportRun::class)`) resolves the real
+ * `import-runs.viewAny` permission instead of a non-existent one.
  */
 class LeadImportsTableDefinition extends AbstractTableDefinition
 {
@@ -33,7 +36,7 @@ class LeadImportsTableDefinition extends AbstractTableDefinition
 
     public function domain(): string
     {
-        return 'lead-imports';
+        return 'import-runs';
     }
 
     /**
@@ -42,16 +45,6 @@ class LeadImportsTableDefinition extends AbstractTableDefinition
     public function modelClass(): string
     {
         return ImportRun::class;
-    }
-
-    /**
-     * Reuse the `leads.import` ability (via LeadPolicy::import) that already
-     * guards the import flow — the history is part of that flow. Fail-closed:
-     * Gate::allows() returns false when the permission is absent.
-     */
-    public function authorizeViewAny(User $actor): bool
-    {
-        return Gate::forUser($actor)->allows('import', Lead::class);
     }
 
     /**

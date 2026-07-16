@@ -113,9 +113,10 @@ final class LeadImportColumnCatalog
      * Row actions, mirroring the CRUD tables' flow: `view` reopens the run in
      * the import wizard (the frontend adapter navigates to
      * `/leads/import?runId={id}`), `delete` removes the run through the generic
-     * bulk-delete engine. Both ride the same `leads.import` ability that guards
-     * the whole table; `delete` is additionally per-row gated by ImportRunPolicy
-     * (ownership) in actionsFor().
+     * bulk-delete engine. Gated by the `import-runs.*` module permissions
+     * (spec 0034) rather than the domain's `leads.import` ability; `delete` is
+     * additionally per-row gated by ImportRunPolicy (ownership) in
+     * actionsFor().
      *
      * @return array<int, array<string, mixed>>
      */
@@ -128,7 +129,7 @@ final class LeadImportColumnCatalog
                 'icon' => 'eye',
                 'type' => 'link',
                 'confirm' => false,
-                'permission' => 'leads.import',
+                'permission' => 'import-runs.view',
             ],
             [
                 'key' => 'delete',
@@ -136,7 +137,7 @@ final class LeadImportColumnCatalog
                 'icon' => 'trash',
                 'type' => 'danger',
                 'confirm' => true,
-                'permission' => 'leads.import',
+                'permission' => 'import-runs.delete',
             ],
         ];
     }

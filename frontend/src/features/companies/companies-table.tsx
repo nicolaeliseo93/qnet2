@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
-import { Plus, Upload } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,7 +13,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Can } from '@/features/auth/can'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
@@ -27,7 +26,6 @@ import { companyColumnRenderers } from '@/features/companies/column-renderers'
 import { deleteCompany, fetchCompany } from '@/features/companies/api'
 import { CompanyForm } from '@/features/companies/company-form'
 import { CompanyDetailView } from '@/features/companies/company-detail'
-import { ImportDialog } from '@/features/imports/import-dialog'
 
 /** Domain key used to mount the generic table for companies. */
 const COMPANIES_DOMAIN = 'companies'
@@ -58,7 +56,6 @@ export function CompaniesTable() {
 
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
 
   const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
 
@@ -151,26 +148,6 @@ export function CompaniesTable() {
         renderers={companyColumnRenderers}
         onAction={handleAction}
         isBusy={isBusy}
-        importSlot={
-          <Can permission="companies.import">
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                setImportOpen(true)
-              }}
-            >
-              <Upload aria-hidden="true" />
-              {t('imports.action')}
-            </DropdownMenuItem>
-          </Can>
-        }
-      />
-
-      <ImportDialog
-        domain={COMPANIES_DOMAIN}
-        resource={COMPANIES_DOMAIN}
-        open={importOpen}
-        onOpenChange={setImportOpen}
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>

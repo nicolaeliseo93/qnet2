@@ -19,6 +19,15 @@ use Spatie\Permission\Models\Permission;
 uses(RefreshDatabase::class);
 
 /**
+ * Grants the domain `leads.*` abilities requested, PLUS (spec 0034) the full
+ * `import-runs.*` MODULE set whenever `import` is requested — this single
+ * actor drives the ENTIRE wizard flow test below (upload/show/configure/rows/
+ * updateRow/summary/confirm/index), each now gated by a DIFFERENT
+ * `import-runs.*` ability, so granting the full set once is simpler and just
+ * as fail-closed as granting each action's ability individually (a
+ * fine-grained module-gate/domain-gate split is exercised separately, see the
+ * dedicated read/write gate tests).
+ *
  * @param  array<int, string>  $abilities
  */
 function leadsImportActorWith(array $abilities): User
@@ -31,6 +40,10 @@ function leadsImportActorWith(array $abilities): User
 
     foreach ($abilities as $ability) {
         $user->givePermissionTo("leads.{$ability}");
+    }
+
+    if (in_array('import', $abilities, true)) {
+        grantImportRunsPermissions($user, ['viewAny', 'view', 'create', 'update']);
     }
 
     return $user;

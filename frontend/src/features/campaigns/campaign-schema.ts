@@ -33,10 +33,15 @@ const DERIVED_FIELDS = [
 
 function baseFields(t: TFunction) {
   return {
-    // Optional manual code (spec 0025): trimmed, max 32; empty/unset falls
-    // back to server-side sequential generation. Read-only in edit (enforced
-    // by the field-permission ceiling, not by the schema).
-    code: z.string().trim().max(CODE_MAX_LENGTH, t('campaigns.form.codeMax')).optional(),
+    // Manual code (spec 0025): trimmed, required (the create form auto-fills
+    // the next sequential suggestion, editable), max 32. Read-only in edit
+    // (enforced by the field-permission ceiling); the server still generates
+    // one as a fallback when absent.
+    code: z
+      .string()
+      .trim()
+      .min(1, t('campaigns.form.codeRequired'))
+      .max(CODE_MAX_LENGTH, t('campaigns.form.codeMax')),
     // `null` = unset/standalone (for-select standard).
     project_id: z.number().nullable(),
     name: z
@@ -67,10 +72,10 @@ function baseFields(t: TFunction) {
     // from `CampaignDetail.geo_locked_levels` (edit). Drives both
     // `<GeoSelect lockedLevels>` and this schema's hierarchy rule.
     geo_locked_levels: z.array(z.enum(GEO_LEVELS)),
-    // Date inputs hold `''` for "empty" (never `null`), converted to `null` at
-    // the payload boundary (mirrors the `projects` dates convention).
-    start_date: z.string(),
-    end_date: z.string(),
+    // Date inputs hold `''` for "empty" (never `null`); both required now
+    // (dates are the campaign's own, never inherited from the project).
+    start_date: z.string().min(1, t('campaigns.form.startDateRequired')),
+    end_date: z.string().min(1, t('campaigns.form.endDateRequired')),
     total_budget: z.number().nonnegative(t('campaigns.form.totalBudgetInvalid')).nullable(),
     target_lead: z.number().int().nonnegative(t('campaigns.form.targetLeadInvalid')).nullable(),
   }

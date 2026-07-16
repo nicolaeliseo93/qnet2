@@ -5,6 +5,7 @@ import { companies } from './it-companies'
 import { companySites } from './it-company-sites'
 import { operationalSites } from './it-operational-sites'
 import { imports } from './it-imports'
+import { activityLog } from './it-activity-log'
 import { exports } from './it-exports'
 import { table } from './it-table'
 import { referents, referentTypes } from './it-referents'
@@ -78,6 +79,7 @@ export const it: TranslationResources = {
     campaigns: 'Campagne',
     leads: 'Lead',
     leadStatuses: 'Stati lead',
+    imports: 'Importa lead',
     pipelineStatuses: 'Stati progetto/campagna',
     marketingLeads: 'Marketing e Lead',
     management: 'Gestione',
@@ -96,6 +98,7 @@ export const it: TranslationResources = {
     view: 'Visualizza',
     edit: 'Modifica',
     delete: 'Elimina',
+    activity: 'Attività',
   },
   table,
   statsPanel,
@@ -387,6 +390,7 @@ export const it: TranslationResources = {
   authorization: {
     loadError: 'Impossibile caricare i permessi. Riprova.',
     fieldNotEditable: 'Questo campo non può essere modificato.',
+    moreInfo: 'Maggiori informazioni',
   },
   permissions: {
     abilities: {
@@ -409,6 +413,7 @@ export const it: TranslationResources = {
   businessFunctions,
   operationalSites: { ...operationalSites, stats: moduleStats.operationalSites },
   imports,
+  activityLog,
   exports,
   referents: { ...referents, stats: moduleStats.referents },
   referentTypes,
@@ -426,4 +431,5 @@ export const it: TranslationResources = {
   leadStatuses,
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
+  importRuns: { stats: moduleStats.importRuns },
 }

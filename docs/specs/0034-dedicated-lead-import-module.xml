@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0034 — Modulo Import Lead dedicato.
+  Estrazione del sistema di import/storico lead (spec 0012 + 0033) in un MODULO
+  autonomo con trattamento da modulo standard: set di permessi CRUD dedicato
+  (import-runs.*), permessi sui campi (Authorization), pannello statistiche,
+  export, pagina dettaglio. SCOPE: solo i lead. Il motore di import resta il
+  motore generico esistente: NON si duplica nulla, si estrae/riusa.
+
+  Decisioni utente (2026-07-16, vincolanti):
+   1. PERMESSI = set CRUD dedicato import-runs.* (via BasePolicy) + permessi sui
+      campi (Authorization). Gate del modulo GENERICO su tutti i domini di import
+      (import_runs e' l'entita' condivisa). Doppio gate: import-runs.* (modulo)
+      + {resource}.import (scrittura nel dominio target) sulle azioni che scrivono.
+   2. ROUTING = le rotte restano sotto /leads/import (nessuna nuova voce sidebar).
+      La separazione e' di codice/permessi/ownership, non di URL.
+   3. SOFT DELETE + AUDIT = NON aggiunti (ImportRun resta com'e').
+   4. FORM/VIEW = wizard (esistente) + pagina dettaglio (stats/log/errori/record)
+      + pannello statistiche standard. Nessun form CRUD manuale.
+
+  Nomi VERIFICATI sul repo (due Explore backend+frontend + letture dirette).
+  NESSUN commit git (§3.6): stato verde + HANDOFF, ci si ferma e si chiede.
+-->
+<spec id="0034-dedicated-lead-import-module" status="draft" owner="tu" date="2026-07-16">
+
+  <goal>
+    Trasformare il sistema di import/storico lead in un MODULO autonomo con lo
+    stesso trattamento degli altri moduli del gestionale: permessi CRUD dedicati
+    (import-runs.*), permessi sui campi, pannello statistiche standard, export
+    della tabella storico e una pagina di dettaglio del singolo import (stats,
+    log/messaggi, errori, record importati/aggiornati/scartati). Il modulo Lead
+    non contiene piu' logica di import ne' lo storico: espone solo un collegamento
+    al modulo Import (gia' filtrato sui lead). Il wizard, il motore, le rotte e la
+    shape dati esistenti restano invariati salvo dove indicato: si RIUSA tutto,
+    non si duplica.
+  </goal>
+
+  <context>
+    Tutti i nomi sono verificati sul codice reale.
+
+    MOTORE GIA' ESISTENTE (spec 0012 + 0033, non draft) — da riusare, non ricreare:
+    - Model `App\Models\ImportRun` (table `import_runs`, colonna `resource` = dominio,
+      `user_id`, `status` cast `App\Enums\ImportStatus`) e `App\Models\ImportRunRow`
+      (`import_run_rows`, `status` cast `App\Enums\ImportRowStatus`, `messages` json,
+      `duplicate_of_id`, `is_edited`). ImportRun NON ha SoftDeletes ne' activitylog.
+    - Controller generico `App\Http\Controllers\Import\ImportController` (azioni:
+      template, index, upload, show, configure, rows, updateRow, summary, confirm,
+      errors) condiviso da TUTTI i domini import (leads + 5 legacy: business-functions,
+      companies, operational-sites, roles, users). Estende `BaseApiController`
+      (envelope { success, message, data } via ok()/handleControllerException()).
+    - `App\Services\ImportService`, jobs (Analyze/Stage/ProcessStaged + legacy),
+      `App\Imports\{ImportRegistry, ImportDefinition, AbstractImportDefinition, ...}`,
+      `App\Imports\LeadsImportDefinition` (+ `App\Imports\Leads\*`, recognizers, support).
+      Authz import odierna: `$definition->authorizeImport($actor)` →
+      `Gate::allows('import', modelClass())` → `{resource}.import` (per leads: `leads.import`).
+    - Resource `App\Http\Resources\{ImportRunResource, ImportRunRowResource}`.
+    - FormRequest `App\Http\Requests\Import\{UploadImportRequest, ConfigureImportRequest,
+      UpdateImportRowRequest}`.
+    - Rotte in `routes/api.php` (auth:sanctum): `imports/{domain}/...` (NON annidate
+      sotto /leads a livello API).
+    - Tabella storico backend-driven: `App\Tables\LeadImportsTableDefinition`
+      (domain `lead-imports`, model ImportRun) + `App\Tables\LeadImports\LeadImportColumnCatalog`;
+      registrata `config/tables.php` (`'lead-imports' => LeadImportsTableDefinition::class`).
+      Oggi: `authorizeViewAny` override → `Gate::allows('import', Lead::class)`;
+      `baseQuery` scope `resource='leads' AND user_id=Auth::id()`; action `view`/`delete`
+      con permission hardcoded `'leads.import'`.
+    - Policy `App\Policies\ImportRunPolicy` (NON estende BasePolicy): view/delete =
+      ownership + `{resource}.import`.
+    - Enum `App\Enums\ImportStatus` (analyzing, configuring, staging, reviewing,
+      processing, completed, failed, + legacy validating/awaiting_confirmation) con
+      `HasMeta` (#[Label]/#[Color]); `ImportRowStatus` (valid/warning/error/duplicate/skipped).
+
+    PATTERN MODULO STANDARD (verificati) — da seguire:
+    - Permessi CRUD: `App\Policies\Abstracts\BasePolicy` (astratta) — abilities
+      `viewAny,view,create,update,delete,export,import`, `resource()` guida il nome
+      `{resource}.{ability}`, `permissions()`/`abilities()` statici. `permissions:sync`
+      (`App\Console\Commands\SyncPermissions`) globba `Policies/*.php`, filtra
+      `is_subclass_of(BasePolicy)`, crea i permessi. Super-admin bypassa via
+      `Gate::before` (AppServiceProvider). Nessuna registrazione manuale della policy
+      (auto-discovery da naming `ImportRun` → `ImportRunPolicy`).
+    - Permessi sui campi: `App\Authorization\AbstractResourceAuthorization` (implements
+      `ResourceAuthorization`), metodi `resource()`, `fields(): FieldDefinition[]`,
+      `actions(): string[]`, `fieldPermissionCeiling(User,?Model)`, `actionPermissions(User,?Model)`.
+      Registrazione in `config/authorization.php` (`'<resource>' => XxxAuthorization::class`).
+      Esposto da `GET /api/meta/{resource}` (`MetaController` + `AuthorizationRegistry` +
+      `ResourcePermissionsBuilder`, shape { resource, fields, actions }). I permessi
+      per-campo NON sono permessi Spatie: sono calcolati a runtime (ceiling ∩ matrice
+      DB `role_field_permissions`, spec 0006). `FieldDefinition`/`FieldPermission` in
+      `app/Authorization/`.
+    - Stats (spec 0026): `App\Stats\AbstractStatsDefinition` (implements `StatsDefinition`:
+      `domain()`, `modelClass()`, `authorizeViewAny(User)`, `widgets()`), helper
+      `stat()/percentStat()/distribution()/trend()` + `App\Stats\Support\Aggregates`.
+      `authorizeViewAny` default = `Gate::allows('viewAny', modelClass())`. Registrazione
+      `config/stats.php` (`'<domain>' => XxxStatsDefinition::class`). Rotta generica
+      `GET /api/stats/{domain}` (`StatsController` invokable). Widget serializzati in
+      `App\Stats\Widgets\*` (StatWidget shape { type, key, label, value, format, subtitle, icon }).
+      FE: `features/stats/` (`ModuleStatsPanel`, `StatsToggleButton`, `useStatsPanel`,
+      `useModuleStats`, api `GET /stats/{domain}`, key `['stats', domain]`,
+      `useInvalidateModuleStats`).
+    - Export (spec 0014): automatico per ogni `TableDefinition` registrata; nessun
+      opt-in sulla definition. `App\Http\Controllers\Export\ExportController`
+      (`store`/`show`/`download`), rotte `exports/{domain}`; `authorizeExport` =
+      `Gate::allows('export', modelClass())` → `{resource}.export`. FE: interamente
+      dentro `features/table/table-view.tsx` (`canExport = can('${domain}.export')` →
+      `exportSlot` → `ExportDialog domain=...`).
+    - Pagina modulo: `pages/<x>-page.tsx` (solo `<Can permission="...">` + adapter);
+      adapter `features/<x>/<x>-table.tsx` (`PageHeader` actions con `StatsToggleButton`
+      + Button "Nuovo", `ModuleStatsPanel`, `TableView`). Dettaglio: `pages/<x>-detail-page.tsx`
+      (`useEntityDetail(queryKey, fetch, id!==null)`, `PageHeader` Back/Edit, kit
+      `components/detail/detail-panel` — DetailPanel/DetailSection/DetailGrid/DetailField).
+      Rotte in `routes/router.tsx` (lazy). `parseEntityId` → NotFound se invalido.
+
+    FRONTEND IMPORT ESISTENTE (spec 0033):
+    - `features/imports/wizard/*` (wizard generico parametrizzato su `domain`), pagine
+      `pages/lead-import-page.tsx` (gate `leads.import`, `<ImportWizard domain="leads">`)
+      e `pages/lead-import-history-page.tsx` (gate `leads.import`, `<LeadImportsTable>`),
+      adapter `features/imports/lead-imports-table.tsx` (domain `'lead-imports'`, `view`
+      → navigate `/leads/import?runId=`, `delete` → bulk-delete generico).
+    - Rotte `routes/router.tsx`: `leads/import` e `leads/import/history` (dichiarate
+      PRIMA di `leads/:id`).
+    - Voci "Import lead"/"Storico import" nel dropdown toolbar di
+      `features/leads/leads-table.tsx` (importa `features/imports/wizard/import-history-i18n`,
+      gate `<Can permission="leads.import">`, naviga a `/leads/import` e `/leads/import/history`).
+      Test dedicato `features/leads/leads-table-import.test.tsx`.
+    - i18n: namespace separato `importWizard` (it/en-import-wizard.ts via `wizard/i18n.ts`);
+      namespace `leadImports` (it/en-lead-imports.ts, merged in it.ts/en.ts) per la pagina
+      storico; label campi lead sotto `imports.leads.*` (it/en-imports.ts).
+  </context>
+
+  <scope>
+    <in>
+      <!-- PERMESSI CRUD DEDICATI (import-runs.*) -->
+      <item>Riscrivere `App\Policies\ImportRunPolicy` per ESTENDERE `App\Policies\Abstracts\BasePolicy` con `resource()='import-runs'`, cosi' che `permissions:sync` generi il set CRUD. Override `abilities()` per ESCLUDERE l'ability priva di senso `import` (non si "importano" gli import-run) mantenendo `viewAny,view,create,update,delete,export`. Override `view()`/`delete()` a `parent::...() && $importRun->user_id === $user->id` per preservare l'ownership come difesa in profondita' (lo scoping dati vive gia' in baseQuery/assertOwnedRun→404). Il set generato: `import-runs.{viewAny,view,create,update,delete,export}`.</item>
+      <item>Nuova `App\Authorization\ImportRunsAuthorization extends AbstractResourceAuthorization` (`resource()='import-runs'`): `fields()` = i campi VISIBILI del run (original_filename, status, total_rows, imported_rows, invalid_rows, warning_rows, duplicate_rows, modified_rows, created_at) come `FieldDefinition` sola-lettura; `actions()` = ['delete','export']; `fieldPermissionCeiling()` = tutti i campi visible+readonly (l'import-run non e' editabile a mano); `actionPermissions()` = delete → `import-runs.delete`, export → `import-runs.export`. Registrata in `config/authorization.php` (`'import-runs' => ImportRunsAuthorization::class`). Esposta da `GET /api/meta/import-runs`.</item>
+
+      <!-- GATE DEL MODULO (generico su tutti i domini import) -->
+      <item>`ImportController`: aggiungere il gate del MODULO su ogni azione via ability sul model ImportRun (import-runs.*), MANTENENDO il gate di scrittura sul dominio target (`$definition->authorizeImport()` → `{resource}.import`) SOLO sulle azioni che scrivono/preparano la scrittura. Mappatura: index → `viewAny`; show/rows/summary/errors → `view` (+ ownership 404 gia' presente); template/upload → `create` + authorizeImport; configure/updateRow/confirm → `update` + authorizeImport. Vale per TUTTI i domini import (l'entita' governata e' import_runs). Le read (index/show/rows/summary/errors) NON richiedono piu' `{resource}.import`: sono governate da import-runs.view(Any). Il fallimento del gate modulo → 403; ownership/dominio → 404; stato errato/validazione → 422. Envelope invariato.</item>
+      <item>Estendere `rows` e `summary` per servire il DETTAGLIO oltre alla revisione: consentire gli stati `reviewing`, `completed`, `failed` (oggi solo `reviewing` → 422). L'edit inline (`updateRow`) resta ammesso SOLO in `reviewing`. Nessuna nuova rotta: si riusano gli endpoint esistenti in sola lettura per i run conclusi.</item>
+
+      <!-- TABELLA/STATS: dominio 'import-runs' (rinomina interna, NON URL) -->
+      <item>Rinominare il dominio della tabella storico da `lead-imports` a `import-runs`: `LeadImportsTableDefinition::domain()` ritorna `'import-runs'`; aggiornare `config/tables.php` (`'import-runs' => LeadImportsTableDefinition::class`). RIMUOVERE l'override `authorizeViewAny` (il default `Gate::allows('viewAny', ImportRun::class)` ora risolve `import-runs.viewAny`). `baseQuery` resta scope `resource='leads' AND user_id=Auth::id()` (il modulo, per ora, mostra solo i run lead). Le action nel column catalog passano da permission `'leads.import'` a `view`→`'import-runs.view'`, `delete`→`'import-runs.delete'`. L'allineamento dominio↔model↔permessi abilita l'export generico (FE `can('import-runs.export')`, BE `export` su ImportRun) senza casi speciali.</item>
+      <item>Nuova `App\Stats\LeadImportsStatsDefinition extends AbstractStatsDefinition` (`domain()='import-runs'`, `modelClass()=ImportRun::class`), registrata `config/stats.php` (`'import-runs' => LeadImportsStatsDefinition::class`). `authorizeViewAny` = default (`viewAny` ImportRun → `import-runs.viewAny`). `widgets()` costruiti su una query SCOPED ai run propri del dominio leads (`where resource='leads' AND user_id=actor`): tile `total` (run totali), `completed`, `failed`, `rows_imported` (somma imported_rows), `rows_modified` (somma modified_rows), `rows_skipped`/`rows_error` (somma invalid_rows); distribution `by_status`; trend mensile dei run. Etichette via i18n del pattern stats (`importRuns.stats.*`). Nessuna nuova rotta (StatsController generico).</item>
+
+      <!-- FRONTEND: modulo autonomo -->
+      <item>Pagina storico `pages/lead-import-history-page.tsx` diventa la LANDING del modulo: `PageHeader` con azioni `StatsToggleButton` (domain `import-runs`) + Button "Nuovo import" (gate `<Can permission="import-runs.create">` → naviga `/leads/import`), `ModuleStatsPanel domain="import-runs"`, poi l'adapter tabella. Gate pagina `<Can permission="import-runs.viewAny">`. Export automatico via `TableView` (gia' incluso). `useInvalidateModuleStats('import-runs')` dopo delete.</item>
+      <item>Adapter `features/imports/lead-imports-table.tsx`: cambiare la costante dominio da `'lead-imports'` a `'import-runs'`; `view` action decide per stato: run concluso (`completed`/`failed`) → naviga alla nuova pagina dettaglio `/leads/import/history/{id}`; run ripristinabile (analyzing/configuring/staging/reviewing/processing) → riprende il wizard `/leads/import?runId={id}`. `delete` invariato (bulk-delete generico) + invalidate stats.</item>
+      <item>Nuova pagina dettaglio `pages/lead-import-detail-page.tsx` su rotta lazy `leads/import/history/:runId` in `routes/router.tsx` (dichiarata prima di `leads/:id`), gate `<Can permission="import-runs.view">`. Usa `useEntityDetail` su `GET /imports/leads/{run}` (show) per i metadati/contatori; `PageHeader` con Back a `/leads/import/history` e (se run ripristinabile) un Button "Riprendi import" → `/leads/import?runId={id}`. Corpo dal kit `components/detail/detail-panel`: sezione statistiche (tile totali/importati/aggiornati/scartati/errori dai contatori del run), sezione metadati (file, campagna/config globali, strategia duplicati, colonne mappate da summary), sezione errori (link report CSV esistente `import-error-report-link`), e una griglia SOLA LETTURA dei record (`TableView`/griglia SSRM sui `import_run_rows` via `POST /imports/leads/{run}/rows`, con status/messaggi per riga, filtrabile per esito). Loading/empty/error states. Nuovo componente `features/imports/lead-import-detail.tsx` (view presentazionale) + hook dati.</item>
+      <item>Wizard: `pages/lead-import-page.tsx` cambia gate da `leads.import` a `<Can permission="import-runs.create">` (il backend impone comunque anche `leads.import` a upload/confirm). Nessun'altra modifica al wizard (resta generico su `domain`).</item>
+      <item>Modulo Lead ripulito: in `features/leads/leads-table.tsx` RIMUOVERE le due voci import/storico e la dipendenza da `features/imports/wizard/import-history-i18n`; sostituirle con UN SOLO collegamento "Import lead" (gate `<Can permission="import-runs.viewAny">`) che naviga alla landing del modulo `/leads/import/history`. Aggiornare/rinominare il test `features/leads/leads-table-import.test.tsx` di conseguenza. Le label del link vivono nel namespace del modulo import, non in leads.</item>
+      <item>i18n: estendere il namespace `leadImports` (it/en-lead-imports.ts) con le chiavi di stats (`importRuns.stats.*` o `leadImports.stats.*`, coerente col pattern stats), dettaglio (sezioni/etichette/esiti riga) e il link del menu Lead; label meta del modulo `import-runs` (nomi campo) per `GET /meta/import-runs`. Nessuna stringa hardcoded nei componenti.</item>
+
+      <!-- TEST -->
+      <item>Test Pest backend: `ImportRunPolicy`/`permissions:sync` generano `import-runs.{viewAny,view,create,update,delete,export}` e NON `import-runs.import`; ownership su view/delete. `ImportRunsAuthorization` esposta da `GET /meta/import-runs` (fields sola-lettura, actions delete/export). Gate controller per azione (403 senza il permesso modulo giusto; upload/configure/confirm richiedono ANCHE `leads.import`; read non lo richiedono; ownership/dominio 404; stato 422). `rows`/`summary` ammessi in reviewing/completed/failed, `updateRow` solo reviewing. Tabella dominio `import-runs` (columns/rows/authz `import-runs.viewAny`, actions con nuovi permessi). Export `import-runs` (POST exports/import-runs → 403 senza `import-runs.export`, ok con). Stats `GET /stats/import-runs` (widget attesi, scope own+leads, 403 senza viewAny). AGGIORNARE le user-setup dei 5 test suite import legacy (companies/users/roles/business-functions/operational-sites) e leads per aggiungere `import-runs.*` dove ora richiesto. Coverage per-layer (Policy 95%, Authorization/FormRequest 90%, Controller/Stats 85%).</item>
+      <item>Test Vitest frontend: landing storico (PageHeader con "Nuovo import" gated `import-runs.create`, StatsToggleButton, ModuleStatsPanel domain import-runs, export presente con `import-runs.export`); adapter (dominio `import-runs`; view → dettaglio se concluso, wizard se ripristinabile; delete → invalidate stats); pagina dettaglio (fetch show, tile contatori, sezione errori con link report, griglia record sola-lettura, "Riprendi" se ripristinabile, NotFound su id invalido); wizard page gate `import-runs.create`; leads-table con UN link "Import lead" gated `import-runs.viewAny` che naviga a `/leads/import/history` e SENZA le vecchie voci; gating `<Can>`. Query per ruolo accessibile.</item>
+    </in>
+    <out>
+      <item>NESSUNA modifica al motore di import, al wizard (step, state-machine), ai jobs, alla logica di staging/dedup/recognizer, alla shape di ImportRun/ImportRunRow o degli endpoint del wizard (salvo l'ampliamento degli stati ammessi da rows/summary e il layer di autorizzazione).</item>
+      <item>NIENTE soft delete, NIENTE activitylog su ImportRun (decisione utente): l'"audit log"/"log" del dettaglio e' costituito dai messaggi per-riga (`import_run_rows.messages`) e dal report errori CSV esistenti, non da activitylog.</item>
+      <item>NESSUN form CRUD manuale di create/edit dei metadati del run: "create" = avviare il wizard, "edit/riprendi" = riaprire il wizard su una bozza, "view" = pagina dettaglio. L'import non e' CRUD-shaped.</item>
+      <item>NESSUNA nuova voce di sidebar; le rotte restano sotto `/leads/import` (decisione utente). Nessuno spostamento di URL.</item>
+      <item>NIENTE import di altri domini (registries/referents/companies/products/opportunities): il modulo resta scoped ai lead (`baseQuery` resource='leads'). L'architettura resta pronta ad estendersi.</item>
+      <item>NESSUNA nuova dipendenza composer/npm. Solo librerie gia' presenti.</item>
+      <item>NESSUN nuovo per-row commit-outcome sullo schema: gli esiti "importati/aggiornati/scartati" del dettaglio derivano dai contatori del run (imported_rows/modified_rows/invalid_rows) e dallo status+duplicate_of_id gia' presenti su import_run_rows, non da nuove colonne.</item>
+      <item>NESSUN commit git in questa iterazione (§3.6): stato verde + HANDOFF, ci si ferma e si chiede.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Envelope { success, message, data } su tutto. Authz: gate MODULO import-runs.*
+         su ImportRun (403 se assente) + ownership run (user_id==actor AND
+         resource==domain → 404) + doppio gate {resource}.import sulle azioni che
+         scrivono. Anti-SQLi SSRM: sort/filtri da allow-list colonne (invariato). -->
+
+    <!-- STATS (rotta generica esistente, nuova definition) -->
+    <endpoint method="GET" path="/api/stats/import-runs">
+      <request>Nessun parametro. Auth richiesta.</request>
+      <response status="200">
+        { success, message, data: { widgets: Array&lt;
+          { type:'stat', key, label, value:number, format, subtitle?, icon? }
+          | { type:'distribution', key, label, items:Array&lt;{label,value}&gt; }
+          | { type:'trend', key, label, points:Array&lt;{label,value}&gt; }
+        &gt; } }
+        Widget attesi: stat total/completed/failed/rows_imported/rows_modified/
+        rows_skipped; distribution by_status; trend mensile. Aggregati SOLO sui run
+        propri (user_id=actor) del dominio leads (resource='leads').
+      </response>
+      <errors>403 senza `import-runs.viewAny`.</errors>
+    </endpoint>
+
+    <!-- META campi/azioni del modulo (rotta generica esistente, nuova Authorization) -->
+    <endpoint method="GET" path="/api/meta/import-runs">
+      <request>Auth richiesta.</request>
+      <response status="200">
+        { success, message, data: {
+          resource: Record&lt;string,bool&gt;,            <!-- import-runs.{viewAny,view,create,update,delete,export} -->
+          fields: Record&lt;string,{ visible, editable, readonly, hidden, disabled, required }&gt;,
+          actions: Record&lt;string,bool&gt;              <!-- delete, export -->
+        } }
+        Tutti i campi sono visible+readonly (run non editabile a mano).
+      </response>
+      <errors>404 se il resource non e' registrato.</errors>
+    </endpoint>
+
+    <!-- TABELLA STORICO (dominio rinominato lead-imports → import-runs) -->
+    <endpoint method="GET" path="/api/tables/import-runs/columns">
+      <request>Config colonne (generico). Auth.</request>
+      <response status="200">{ success, message, data: { columns, filters, defaultSort, defaultPagination } } (invariato, dominio import-runs).</response>
+      <errors>403 senza `import-runs.viewAny`.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/tables/import-runs/rows">
+      <request>SSRM generico { startRow, endRow, sortModel, filterModel, search, advancedFilters }. Allow-list colonne invariata (created_at, original_filename, total_rows, imported_rows, invalid_rows, status).</request>
+      <response status="200">{ success, message, data: { items, pagination } } — SOLO i run propri del dominio leads.</response>
+      <errors>403 senza `import-runs.viewAny`.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/tables/import-runs/bulk-delete">
+      <request>{ ids:number[] } (generico). Per-riga gate `delete` (ImportRunPolicy: ownership + `import-runs.delete`).</request>
+      <response status="200">{ success, message, data: { deleted:number } }.</response>
+      <errors>403 senza `import-runs.delete`; run altrui → non conteggiato/not_found (baseQuery scope).</errors>
+    </endpoint>
+
+    <!-- EXPORT (rotta generica esistente, ora risolve import-runs.export) -->
+    <endpoint method="POST" path="/api/exports/import-runs">
+      <request>{ format:'csv'|'xlsx', columns, sortModel, filterModel, search } (generico). authorizeExport → `export` su ImportRun.</request>
+      <response status="201">{ success, message, data: { export_run: {...} } }.</response>
+      <errors>403 senza `import-runs.export`.</errors>
+    </endpoint>
+
+    <!-- WIZARD/IMPORT: shape INVARIATA, cambia solo il layer di autorizzazione + stati ammessi rows/summary. Dominio {domain}=leads. -->
+    <endpoint method="POST" path="/api/imports/leads">
+      <request>multipart file (invariato). Gate: `import-runs.create` + `leads.import`.</request>
+      <response status="201">{ success, message, data: { import_run: {...status:'analyzing'} } } (invariato).</response>
+      <errors>403 senza `import-runs.create` O senza `leads.import`; 404 dominio ignoto; 422 file.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/imports/leads/{importRun}">
+      <request>Show/polling (invariato). Gate: `import-runs.view` + ownership.</request>
+      <response status="200">{ success, message, data: { import_run: {...} } } (invariato, incl. contatori/detected/fields).</response>
+      <errors>403 senza `import-runs.view`; 404 ownership/dominio.</errors>
+    </endpoint>
+    <endpoint method="PUT" path="/api/imports/leads/{importRun}/configure">
+      <request>Body invariato (column_mapping/global_config/dedup_strategy). Gate: `import-runs.update` + `leads.import`. Stato==configuring.</request>
+      <response status="200">{ success, message, data: { import_run: {...status:'staging'} } }.</response>
+      <errors>403 senza `import-runs.update` O `leads.import`; 404; 422 stato/validazione.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/imports/leads/{importRun}/rows">
+      <request>SSRM staged rows (invariato). Gate: `import-runs.view`. Stato ∈ { reviewing, completed, failed } (AMPLIATO: prima solo reviewing).</request>
+      <response status="200">{ success, message, data: { items:Array&lt;{id,row_number,status,is_edited,duplicate_of_id,values,messages}&gt;, pagination } }.</response>
+      <errors>403 senza `import-runs.view`; 404 ownership/dominio; 422 stato non ∈ {reviewing,completed,failed}.</errors>
+    </endpoint>
+    <endpoint method="PATCH" path="/api/imports/leads/{importRun}/rows/{row}">
+      <request>Edit inline (invariato). Gate: `import-runs.update` + `leads.import`. Stato==reviewing SOLTANTO.</request>
+      <response status="200">{ success, message, data: { row:{...}, counts:{...} } }.</response>
+      <errors>403 senza `import-runs.update` O `leads.import`; 404; 422 stato != reviewing o valori non ammessi.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/imports/leads/{importRun}/summary">
+      <request>Riepilogo (invariato). Gate: `import-runs.view`. Stato ∈ { reviewing, completed, failed } (AMPLIATO).</request>
+      <response status="200">{ success, message, data: { summary: {...} } }.</response>
+      <errors>403 senza `import-runs.view`; 404; 422 stato non ∈ {reviewing,completed,failed}.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/imports/leads/{importRun}/confirm">
+      <request>Invariato. Gate: `import-runs.update` + `leads.import`. Stato==reviewing.</request>
+      <response status="200">{ success, message, data: { import_run: {...status:'processing'} } }.</response>
+      <errors>403 senza `import-runs.update` O `leads.import`; 404; 422 stato != reviewing.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/imports/leads/{importRun}/errors">
+      <request>Download CSV scartati (invariato). Gate: `import-runs.view` + ownership.</request>
+      <response status="200">Download text/csv.</response>
+      <errors>403 senza `import-runs.view`; 404 ownership/report assente.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/imports/leads/template">
+      <request>Template CSV (invariato). Gate: `import-runs.create` + `leads.import`.</request>
+      <response status="200">Download text/csv.</response>
+      <errors>403 senza `import-runs.create` O `leads.import`.</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/imports/leads">
+      <request>Storico JSON legacy (invariato; il FE usa la tabella). Gate: `import-runs.viewAny`.</request>
+      <response status="200">{ success, message, data: { items, pagination } }.</response>
+      <errors>403 senza `import-runs.viewAny`.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- PERMESSI + AUTHZ -->
+    <criterion id="AC-001">Dato `permissions:sync`, quando gira, allora esistono i permessi `import-runs.viewAny/view/create/update/delete/export` e NON `import-runs.import`; super-admin li possiede via bypass. (test: sync + catalogo permessi)</criterion>
+    <criterion id="AC-002">Data `ImportRunPolicy extends BasePolicy`, quando valuto view/delete su un run, allora richiede il permesso `import-runs.view`/`import-runs.delete` E l'ownership (user_id==actor); un run altrui → deny anche col permesso. (test: policy ownership)</criterion>
+    <criterion id="AC-003">Dato `GET /api/meta/import-runs`, quando l'utente autenticato lo chiama, allora riceve { resource, fields, actions } con i campi del run visibili+readonly e le azioni delete/export; resource non registrato → 404. (test: meta shape)</criterion>
+    <criterion id="AC-004">Dato l'ImportController, quando chiamo index/show/rows/summary/errors con `import-runs.viewAny`/`view` ma SENZA `leads.import`, allora ho successo (le read non richiedono piu' il permesso di dominio); senza il permesso modulo → 403; run altrui/dominio errato → 404. (test: read gate + ownership)</criterion>
+    <criterion id="AC-005">Dato upload/configure/confirm/updateRow/template, quando manca `import-runs.{create|update}` OPPURE `leads.import`, allora 403 (doppio gate); con entrambi → successo secondo lo stato. Vale per il dominio leads; i 5 domini legacy richiedono `import-runs.*` + il proprio `{domain}.import`. (test: doppio gate leads + legacy)</criterion>
+    <criterion id="AC-006">Dato `POST /imports/leads/{run}/rows` e `GET .../summary`, quando lo stato del run e' `completed` o `failed` (oltre a `reviewing`), allora rispondono 200 (dettaglio in sola lettura); `PATCH .../rows/{row}` resta 422 fuori da `reviewing`. (test: stati ampliati read + edit solo reviewing)</criterion>
+
+    <!-- TABELLA/STATS/EXPORT -->
+    <criterion id="AC-007">Dato il dominio tabella `import-runs`, quando GET columns / POST rows, allora sono governati da `import-runs.viewAny`, restituiscono solo i run propri del dominio leads, e le azioni di riga espongono view sempre e delete solo con `import-runs.delete`+ownership; senza `import-runs.viewAny` → 403. (test: tabella dominio import-runs)</criterion>
+    <criterion id="AC-008">Dato `POST /api/exports/import-runs`, quando l'utente ha `import-runs.export`, allora avvia l'export; senza → 403. (test: export gate)</criterion>
+    <criterion id="AC-009">Dato `GET /api/stats/import-runs`, quando l'utente ha `import-runs.viewAny`, allora riceve i widget (total/completed/failed/rows_imported/rows_modified/rows_skipped + distribution by_status + trend) aggregati SOLO sui propri run del dominio leads; senza `import-runs.viewAny` → 403; un run di un altro utente non influenza i conteggi. (test: stats scope + gate)</criterion>
+    <criterion id="AC-010">Dopo la rinomina del dominio, quando eseguo la suite import (leads + 5 legacy) con le user-setup aggiornate, allora e' verde: i domini legacy passano richiedendo `import-runs.*` + il proprio `{domain}.import` senza cambiare campi/regole di import; ogni cambio di test e' solo per il nuovo requisito di permesso ed e' dichiarato. (test: suite import verde)</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-011">Data la landing storico, quando la apro con `import-runs.viewAny`, allora vedo PageHeader con "Nuovo import" (visibile solo con `import-runs.create`, naviga a /leads/import), il toggle statistiche e il pannello `ModuleStatsPanel` (domain import-runs), l'export in toolbar (con `import-runs.export`) e la tabella; senza `import-runs.viewAny` la pagina e' negata. (test: landing + gating)</criterion>
+    <criterion id="AC-012">Dato l'adapter tabella (domain `import-runs`), quando eseguo `view` su un run `completed`/`failed`, allora navigo a `/leads/import/history/{id}` (dettaglio); su un run ripristinabile navigo a `/leads/import?runId={id}` (wizard); `delete` esegue il bulk-delete e invalida le stats. (test: routing per stato + delete)</criterion>
+    <criterion id="AC-013">Data la pagina dettaglio `/leads/import/history/:runId`, quando la apro su un run esistente, allora vedo i tile dei contatori (totali/importati/aggiornati/scartati/errori), la sezione errori con il link al report, la griglia dei record in sola lettura (status/messaggi per riga) e — se il run e' ripristinabile — il pulsante "Riprendi import"; id invalido → NotFound; gate `import-runs.view`. (test: dettaglio + NotFound + gating)</criterion>
+    <criterion id="AC-014">Dato il modulo Lead, quando apro la toolbar dei lead, allora vedo UN SOLO collegamento "Import lead" (gate `import-runs.viewAny`) che naviga a `/leads/import/history`, e NON le vecchie voci import/storico; nessuna dipendenza da import-history-i18n resta in features/leads. (test: leads-table link singolo)</criterion>
+    <criterion id="AC-015">Dato il wizard `/leads/import`, quando l'utente non ha `import-runs.create`, allora la pagina e' negata via `<Can>` (il backend impone comunque anche `leads.import`). (test: wizard gate)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>RIUSO OBBLIGATORIO: nessuna duplicazione del motore/wizard/jobs/service. Si estrae/riconfigura, non si riscrive. I pattern standard (BasePolicy, AbstractResourceAuthorization, AbstractStatsDefinition, TableDefinition generica, ModuleStatsPanel, detail-panel kit, useEntityDetail) si RIUSANO 1:1.</item>
+    <item>Authz server-side su OGNI endpoint (gate modulo import-runs.* + doppio gate {resource}.import sulle scritture + ownership run → 404). L'UI nasconde, il backend autorizza. FormRequest invariati; SSRM da allow-list colonne (anti-SQLi), mai input grezzo in whereRaw/orderByRaw.</item>
+    <item>Identificatori in INGLESE (import-runs, ImportRunsAuthorization, LeadImportsStatsDefinition); stringhe UI via i18n a namespace, senza gonfiare en.ts/it.ts.</item>
+    <item>Envelope { success, message, data } rispettato; mai Model raw in JSON (Resource). Errori senza leak di classi interne.</item>
+    <item>NESSUNA nuova dipendenza composer/npm. File entro 300/500 righe (dettaglio FE split in view + hook + griglia); dead code zero; nessuna emoticon. Pint + ESLint + `tsc --noEmit` puliti. Test ESEGUITI, non solo scritti.</item>
+    <item>Ownership file disgiunta tra teammate. Il contratto qui congelato e' il punto di sincronizzazione. File GATE condivisi (config/authorization.php, config/tables.php, config/stats.php, ImportController, routes/router.tsx, i18n it/en-lead-imports.ts) sono microtask da chiudere PRIMA delle lane parallele che vi dipendono.</item>
+    <item>NESSUN commit git (§3.6): allo stato verde aggiorna docs/HANDOFF.md e fermati chiedendo se committare.</item>
+  </constraints>
+
+</spec>

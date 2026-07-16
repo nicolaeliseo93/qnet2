@@ -13,7 +13,6 @@ export const importWizard = {
   },
   page: {
     title: 'Import leads',
-    subtitle: 'Upload a file to bulk-import leads through a guided, staged wizard.',
     forbidden: "You don't have permission to import leads.",
     loadError: 'Unable to load this import. Please try again.',
   },

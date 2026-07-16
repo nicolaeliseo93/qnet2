@@ -13,7 +13,7 @@ import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/cus
  */
 export function buildCreatePayload(values: ProjectFormValues): CreateProjectPayload {
   const customFields = buildCustomFieldsCreate(values.custom_fields)
-  const code = values.code?.trim()
+  const code = values.code.trim()
   return {
     ...(code ? { code } : {}),
     name: values.name,

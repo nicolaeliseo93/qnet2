@@ -29,6 +29,16 @@ export async function fetchCampaign(id: number): Promise<CampaignDetailWithPermi
   return { ...data.data, permissions: data.permissions }
 }
 
+/**
+ * The next sequential code (CMP-0001...) suggested for the create form's
+ * `code` auto-fill (spec 0025). Non-binding: the user may edit it, and the
+ * server resolves the definitive value atomically on store.
+ */
+export async function fetchCampaignNextCode(): Promise<string> {
+  const { data } = await apiClient.get<ApiResponse<{ code: string }>>('/campaigns/next-code')
+  return data.data.code
+}
+
 /** Creates a campaign. `code` is server-generated (BR-1); returns the created resource. */
 export async function createCampaign(payload: CreateCampaignPayload): Promise<CampaignDetail> {
   const { data } = await apiClient.post<ApiResponse<CampaignDetail>>('/campaigns', payload)

@@ -59,10 +59,28 @@ if (! function_exists('standaloneClassificationFields')) {
  *
  * @return array<string, int>
  */
+/**
+ * The start/end planning dates, now required on every campaign (linked or
+ * standalone — dates are the campaign's own, never inherited). Spread into a
+ * store payload to satisfy the required rules.
+ *
+ * @return array<string, string>
+ */
+if (! function_exists('campaignStoreDates')) {
+    function campaignStoreDates(): array
+    {
+        return ['start_date' => '2026-01-01', 'end_date' => '2026-12-31'];
+    }
+}
+
 if (! function_exists('standaloneCampaignFields')) {
     function standaloneCampaignFields(): array
     {
-        return array_merge(standaloneClassificationFields(), ['country_id' => Country::factory()->create()->id]);
+        return array_merge(
+            standaloneClassificationFields(),
+            ['country_id' => Country::factory()->create()->id],
+            campaignStoreDates(),
+        );
     }
 }
 
@@ -78,6 +96,7 @@ it('create: linked to a project, without the 3 derived fields -> 201, DB columns
     $response = $this->postJson('/api/campaigns', [
         'name' => 'Linked Campaign',
         'project_id' => $project->id,
+        ...campaignStoreDates(),
     ])->assertCreated();
 
     $campaignId = $response->json('data.id');
@@ -220,6 +239,7 @@ it('create: 422 with an explanatory message when the requested budget exceeds th
         'name' => 'Over Budget',
         'project_id' => $project->id,
         'total_budget' => 500,
+        ...campaignStoreDates(),
     ])->assertStatus(422)->assertJsonValidationErrors('total_budget');
 
     $message = collect($response->json('errors.total_budget'))->first();
@@ -243,6 +263,7 @@ it('create: 201 when the requested budget fits the residual exactly (AC-025)', f
         'name' => 'Within Budget',
         'project_id' => $project->id,
         'total_budget' => 400,
+        ...campaignStoreDates(),
     ])->assertCreated();
 });
 
@@ -255,6 +276,7 @@ it('create: any total_budget is accepted when project.total_budget is NULL (AC-0
         'name' => 'Unbounded',
         'project_id' => $project->id,
         'total_budget' => 999999,
+        ...campaignStoreDates(),
     ])->assertCreated();
 });
 
@@ -406,6 +428,46 @@ it('update: a `code` different from the persisted one -> 422, code unchanged (AC
         ->assertStatus(422)->assertJsonValidationErrors('code');
 
     $this->assertDatabaseHas('campaigns', ['id' => $campaign->id, 'code' => 'CMP-0001']);
+});
+
+// ---------------------------------------------------------------------------
+// start_date/end_date — now required on every campaign (linked or standalone)
+// ---------------------------------------------------------------------------
+
+it('create: 422 when start_date/end_date is missing, even for a linked campaign', function (string $missing) {
+    $actor = campaignUserWith(['create']);
+    $project = Project::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $payload = ['name' => 'Linked No Date', 'project_id' => $project->id, ...campaignStoreDates()];
+    unset($payload[$missing]);
+
+    $this->postJson('/api/campaigns', $payload)
+        ->assertStatus(422)->assertJsonValidationErrors($missing);
+
+    expect(Campaign::count())->toBe(0);
+})->with(['start_date', 'end_date']);
+
+// ---------------------------------------------------------------------------
+// next-code — GET /api/campaigns/next-code (spec 0025, auto-fill suggestion)
+// ---------------------------------------------------------------------------
+
+it('next-code: suggests CMP-0001 on an empty table, then the following sequence', function () {
+    Sanctum::actingAs(campaignUserWith(['create']));
+
+    $this->getJson('/api/campaigns/next-code')
+        ->assertOk()->assertJsonPath('data.code', 'CMP-0001');
+
+    Campaign::factory()->create(['code' => 'CMP-0004']);
+
+    $this->getJson('/api/campaigns/next-code')
+        ->assertOk()->assertJsonPath('data.code', 'CMP-0005');
+});
+
+it('next-code: 403 without campaigns.create', function () {
+    Sanctum::actingAs(campaignUserWith(['viewAny']));
+
+    $this->getJson('/api/campaigns/next-code')->assertForbidden();
 });
 
 // ---------------------------------------------------------------------------

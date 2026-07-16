@@ -13,6 +13,12 @@ interface CampaignPlanningSectionProps {
   control: Control<CampaignFormValues>
   /** The currently linked project's id (watched from the form), or `null` when standalone. */
   projectId: number | null
+  /** Forwarded to the internal `<FormSection>` — see `components/form-section.tsx`. */
+  collapsible?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** Forwarded to the internal `<FormSection>` for the caller's staggered entrance animation. */
+  className?: string
 }
 
 function numberInputValue(value: number | null): string {
@@ -44,7 +50,14 @@ function RemainingBudgetHint({ projectId }: { projectId: number | null }) {
  * `CampaignFormBody` stays within the engineering size limits (spec 0023,
  * mirrors why `ProjectRelationField` was split out of `ProjectFormBody`).
  */
-export function CampaignPlanningSection({ control, projectId }: CampaignPlanningSectionProps) {
+export function CampaignPlanningSection({
+  control,
+  projectId,
+  collapsible,
+  open,
+  onOpenChange,
+  className,
+}: CampaignPlanningSectionProps) {
   const { t } = useTranslation()
 
   return (
@@ -52,6 +65,10 @@ export function CampaignPlanningSection({ control, projectId }: CampaignPlanning
       icon={CalendarRange}
       title={t('campaigns.form.sections.planning.title')}
       description={t('campaigns.form.sections.planning.description')}
+      collapsible={collapsible}
+      open={open}
+      onOpenChange={onOpenChange}
+      className={className}
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <MetaField control={control} name="start_date" metaKey="start_date" label={t('campaigns.form.startDate')}>

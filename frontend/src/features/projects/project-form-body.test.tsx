@@ -19,6 +19,7 @@ import type { FieldPermission, ResourceMeta } from '@/features/authorization/typ
 
 const createProjectMock = vi.fn()
 const updateProjectMock = vi.fn()
+const fetchProjectNextCodeMock = vi.fn<() => Promise<string>>()
 
 vi.mock('@/features/projects/api', async () => {
   const actual = await vi.importActual<typeof import('@/features/projects/api')>(
@@ -28,6 +29,7 @@ vi.mock('@/features/projects/api', async () => {
     ...actual,
     createProject: (...args: unknown[]) => createProjectMock(...args),
     updateProject: (...args: unknown[]) => updateProjectMock(...args),
+    fetchProjectNextCode: () => fetchProjectNextCodeMock(),
   }
 })
 
@@ -135,8 +137,8 @@ function project(
     pipeline_status: { id: 3, name: 'Active', color: 'blue' },
     source_id: null,
     source: null,
-    business_function_id: null,
-    business_function: null,
+    business_function_id: 2,
+    business_function: { id: 2, name: 'Sales' },
     country_id: 1,
     country: { id: 1, name: 'Italy' },
     state_id: null,
@@ -146,12 +148,12 @@ function project(
     city_id: null,
     city: null,
     geo_scope: 'country',
-    product_category_id: null,
-    product_category: null,
+    product_category_id: 4,
+    product_category: { id: 4, name: 'Widgets' },
     partner_id: null,
     partner: null,
-    start_date: null,
-    end_date: null,
+    start_date: '2026-01-01',
+    end_date: '2026-12-31',
     total_budget: null,
     target_lead: null,
     allocated_budget: '0.00',
@@ -173,12 +175,29 @@ beforeAll(async () => {
 beforeEach(() => {
   createProjectMock.mockReset()
   updateProjectMock.mockReset()
+  fetchProjectNextCodeMock.mockReset()
+  fetchProjectNextCodeMock.mockResolvedValue('PRJ-0100')
   fetchResourceMetaMock.mockReset()
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
 })
 
+/**
+ * Fills the create-form fields made mandatory alongside name/status/country:
+ * business_function + product_category (stubbed selects) and the planning
+ * dates (in the collapsed Planning & budget section, opened first). `code` is
+ * auto-filled by the form from `fetchProjectNextCode`.
+ */
+function completeRequiredCreateFields() {
+  fireEvent.click(screen.getByTestId('select-Business function'))
+  fireEvent.click(screen.getByTestId('select-Product category'))
+  fireEvent.click(screen.getByRole('button', { name: /Planning & budget/ }))
+  fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-01-01' } })
+  fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-12-31' } })
+}
+
 describe('ProjectForm — manual code (spec 0025 AC-010/AC-011)', () => {
-  it('shows an enabled, empty code field with the fallback-declaring placeholder on create (AC-010)', async () => {
+  it('auto-fills the enabled, required code field with the next sequential suggestion on create (AC-010)', async () => {
+    fetchProjectNextCodeMock.mockResolvedValue('PRJ-0042')
     fetchResourceMetaMock.mockResolvedValue({
       fields: [],
       permissions: { ...FULL_PERMISSIONS, fields: { code: CODE_EDITABLE_PERMISSION } },
@@ -188,11 +207,10 @@ describe('ProjectForm — manual code (spec 0025 AC-010/AC-011)', () => {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByLabelText('Code')).toBeInTheDocument())
-    const code = screen.getByLabelText('Code') as HTMLInputElement
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Code' })).toBeInTheDocument())
+    const code = screen.getByRole('textbox', { name: 'Code' }) as HTMLInputElement
     expect(code).not.toBeDisabled()
-    expect(code.value).toBe('')
-    expect(code.placeholder).toBe('Leave empty to generate it automatically')
+    expect(code.value).toBe('PRJ-0042')
   })
 
   it('sends the trimmed manual code on create submit when the user fills it (AC-010)', async () => {
@@ -206,11 +224,12 @@ describe('ProjectForm — manual code (spec 0025 AC-010/AC-011)', () => {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByLabelText('Code')).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText('Code'), { target: { value: '  ACME-2026  ' } })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Code' })).toBeInTheDocument())
+    fireEvent.change(screen.getByRole('textbox', { name: 'Code' }), { target: { value: '  ACME-2026  ' } })
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Acme rollout' } })
     fireEvent.click(screen.getByTestId('select-Status'))
     fireEvent.click(screen.getByTestId('geo-select'))
+    completeRequiredCreateFields()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createProjectMock).toHaveBeenCalledTimes(1))
@@ -228,7 +247,7 @@ describe('ProjectForm — manual code (spec 0025 AC-010/AC-011)', () => {
       { wrapper: wrapper() },
     )
 
-    const code = screen.getByLabelText('Code') as HTMLInputElement
+    const code = screen.getByRole('textbox', { name: 'Code' }) as HTMLInputElement
     expect(code).toBeDisabled()
     expect(code).toHaveAttribute('readonly')
     expect(code.value).toBe('PRJ-0007')
@@ -280,11 +299,12 @@ describe('ProjectForm — 422 duplicate code (spec 0025 AC-012)', () => {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByLabelText('Code')).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'ACME-2026' } })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Code' })).toBeInTheDocument())
+    fireEvent.change(screen.getByRole('textbox', { name: 'Code' }), { target: { value: 'ACME-2026' } })
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Acme rollout' } })
     fireEvent.click(screen.getByTestId('select-Status'))
     fireEvent.click(screen.getByTestId('geo-select'))
+    completeRequiredCreateFields()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>
@@ -322,6 +342,7 @@ describe('ProjectForm — geo hierarchy (spec 0027 BR-4/AC-010)', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Acme rollout' } })
     fireEvent.click(screen.getByTestId('select-Status'))
     fireEvent.click(screen.getByTestId('geo-select'))
+    completeRequiredCreateFields()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createProjectMock).toHaveBeenCalledTimes(1))
@@ -336,6 +357,9 @@ describe('ProjectForm — end_date validation (BR-6)', () => {
       <ProjectForm mode={{ type: 'edit', project: project() }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
       { wrapper: wrapper() },
     )
+
+    // Planning & budget is a secondary section, collapsed by default (graphical refactor): open it first.
+    fireEvent.click(screen.getByRole('button', { name: /Planning & budget/ }))
 
     fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-06-01' } })
     fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-01-01' } })

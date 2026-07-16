@@ -12,6 +12,7 @@ import { companies } from './en-companies'
 import { companySites } from './en-company-sites'
 import { operationalSites } from './en-operational-sites'
 import { imports } from './en-imports'
+import { activityLog } from './en-activity-log'
 import { exports } from './en-exports'
 import { table } from './en-table'
 import { referents, referentTypes } from './en-referents'
@@ -85,6 +86,7 @@ export const en = {
     campaigns: 'Campaigns',
     leads: 'Leads',
     leadStatuses: 'Lead Statuses',
+    imports: 'Import Lead',
     pipelineStatuses: 'Project/Campaign Statuses',
     marketingLeads: 'Marketing & Leads',
     management: 'Management',
@@ -103,6 +105,7 @@ export const en = {
     view: 'View',
     edit: 'Edit',
     delete: 'Delete',
+    activity: 'Activity',
   },
   table,
   // Strings of the generic statistics panel (spec 0026). The per-module widget
@@ -400,6 +403,7 @@ export const en = {
   authorization: {
     loadError: 'Unable to load permissions. Please try again.',
     fieldNotEditable: 'This field cannot be edited.',
+    moreInfo: 'More information',
   },
   permissions: {
     // Standard CRUD abilities exposed by every resource policy (BasePolicy).
@@ -426,6 +430,7 @@ export const en = {
   businessFunctions,
   operationalSites: { ...operationalSites, stats: moduleStats.operationalSites },
   imports,
+  activityLog,
   exports,
   referents: { ...referents, stats: moduleStats.referents },
   referentTypes,
@@ -443,6 +448,7 @@ export const en = {
   leadStatuses,
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
+  importRuns: { stats: moduleStats.importRuns },
 }
 
 export type TranslationResources = typeof en

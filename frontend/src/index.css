@@ -162,3 +162,34 @@
 .ag-header-cell.ag-header-active .ag-header-cell-resize::after {
   opacity: 1;
 }
+
+/* FormSection `collapsible` body: Radix Collapsible exposes the measured
+   height as --radix-collapsible-content-height; animate to/from it so the
+   section expands/collapses instead of popping. Respects prefers-reduced-motion. */
+@keyframes form-section-collapsible-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+  }
+}
+@keyframes form-section-collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+.form-section-collapsible-content {
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .form-section-collapsible-content[data-state='open'] {
+    animation: form-section-collapsible-down 200ms ease-out;
+  }
+  .form-section-collapsible-content[data-state='closed'] {
+    animation: form-section-collapsible-up 200ms ease-out;
+  }
+}

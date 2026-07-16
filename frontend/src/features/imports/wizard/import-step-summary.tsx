@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { getImportRunSummary } from '@/features/imports/wizard/api'
 import { importWizardKeys } from '@/features/imports/wizard/query-keys'
 import { ImportRunProgress } from '@/features/imports/wizard/import-run-progress'
+import { resolveFieldLabel, resolveGlobalConfigEntries } from '@/features/imports/wizard/summary-helpers'
 // Side effect: registers this lane's `summary.*`/`progress.*` i18n keys (see
 // the module doc comment there).
 import '@/features/imports/wizard/import-wizard-i18n-summary'
@@ -34,35 +34,6 @@ function SummaryStat({ label, value }: SummaryStatProps) {
       <dd className="font-medium">{value}</dd>
     </div>
   )
-}
-
-/**
- * Resolves each selected global-config value (campaign/project/source/status)
- * into a display label + value: the field's own catalog label (`run.global_fields`)
- * pairs with the raw configured value (an id) — the frozen `summary` contract
- * only exposes `global_config` as raw values, so there is no resolved
- * for-select label to show, and this falls back to the value itself (AC-024:
- * "risolvi le label se disponibili o mostra i valori").
- */
-function resolveGlobalConfigEntries(
-  run: ImportRunDetail | null,
-  globalConfig: Record<string, unknown>,
-  translate: (key: string) => string,
-): Array<{ label: string; value: string }> {
-  if (!run) return []
-  const entries: Array<{ label: string; value: string }> = []
-  for (const field of run.global_fields) {
-    const value = globalConfig[field.id]
-    if (value === null || value === undefined || value === '') continue
-    entries.push({ label: translate(field.label), value: String(value) })
-  }
-  return entries
-}
-
-/** Resolves a mapped target field id to its catalog label (a backend i18n key), falling back to the id when the run's field catalog is unavailable. */
-function resolveFieldLabel(run: ImportRunDetail | null, fieldId: string, translate: (key: string) => string): string {
-  const field = run?.fields.find((candidate) => candidate.id === fieldId)
-  return field ? translate(field.label) : fieldId
 }
 
 /**
@@ -96,26 +67,22 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
 
   if (summaryQuery.isLoading) {
     return (
-      <Card>
-        <CardContent className="pt-4 text-sm text-muted-foreground" role="status">
-          {t('summary.loading')}
-        </CardContent>
-      </Card>
+      <p className="text-sm text-muted-foreground" role="status">
+        {t('summary.loading')}
+      </p>
     )
   }
 
   if (summaryQuery.isError || !summaryQuery.data) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-start gap-3 pt-4">
-          <p className="text-sm text-destructive" role="alert">
-            {t('summary.loadError')}
-          </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void summaryQuery.refetch()}>
-            {t('config.select.retry')}
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-sm text-destructive" role="alert">
+          {t('summary.loadError')}
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={() => void summaryQuery.refetch()}>
+          {t('config.select.retry')}
+        </Button>
+      </div>
     )
   }
 
@@ -123,9 +90,8 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
   const configEntries = resolveGlobalConfigEntries(run, summary.global_config, tLabel)
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4 pt-4">
-        <h3 className="text-base font-semibold">{t('summary.title')}</h3>
+    <div className="flex flex-col gap-4">
+      <h3 className="text-base font-semibold">{t('summary.title')}</h3>
 
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <SummaryStat label={t('summary.totals.total')} value={summary.total_rows} />
@@ -207,7 +173,6 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
             {isConfirming ? t('summary.confirming') : t('summary.confirm')}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   )
 }

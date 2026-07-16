@@ -78,15 +78,22 @@ final class Aggregates
      * excluded from the items — they are still part of the widget's `total`
      * denominator, which the caller passes in. Item labels/colors come from
      * the enum's presentation metadata (App\Enums\Concerns\HasMeta), falling
-     * back to the raw stored value.
+     * back to the raw stored value. The optional `$constrain` narrows the
+     * query to a caller-owned scope (e.g. an actor's own rows for one
+     * `resource` value) — definition constants only, never request input.
      *
      * @param  class-string<BackedEnum>  $enum
      * @return array<int, DistributionItem>
      */
-    public static function byEnumColumn(string $table, string $column, string $enum): array
+    public static function byEnumColumn(string $table, string $column, string $enum, ?Closure $constrain = null): array
     {
-        $rows = DB::table($table)
-            ->whereNotNull($column)
+        $query = DB::table($table)->whereNotNull($column);
+
+        if ($constrain !== null) {
+            $constrain($query);
+        }
+
+        $rows = $query
             ->select($column)
             ->selectRaw('COUNT(*) as '.self::COUNT_ALIAS)
             ->groupBy($column)
@@ -146,17 +153,24 @@ final class Aggregates
 
     /**
      * Dense month-by-month row count over the last `$months` buckets (empty
-     * months included with 0), keyed `YYYY-MM`.
+     * months included with 0), keyed `YYYY-MM`. The optional `$constrain`
+     * narrows the query to a caller-owned scope (e.g. an actor's own rows for
+     * one `resource` value) — definition constants only, never request input.
      *
      * @return array<int, TrendPoint>
      */
-    public static function monthlyTrend(string $table, string $column, int $months): array
+    public static function monthlyTrend(string $table, string $column, int $months, ?Closure $constrain = null): array
     {
         $start = Carbon::now()->startOfMonth()->subMonths($months - 1);
         $expression = self::monthExpression("{$table}.{$column}");
 
-        $counts = DB::table($table)
-            ->where("{$table}.{$column}", '>=', $start->toDateString())
+        $query = DB::table($table)->where("{$table}.{$column}", '>=', $start->toDateString());
+
+        if ($constrain !== null) {
+            $constrain($query);
+        }
+
+        $counts = $query
             ->selectRaw("{$expression} as ".self::BUCKET_ALIAS)
             ->selectRaw('COUNT(*) as '.self::COUNT_ALIAS)
             ->groupBy(DB::raw($expression))

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
-import { Plus, Upload } from 'lucide-react'
+import { History, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,8 +13,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Can } from '@/features/auth/can'
+import { UserActivityDialog } from '@/features/users/user-activity-dialog'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
 import { useStatsPanel } from '@/features/stats/use-stats-panel'
@@ -31,10 +31,18 @@ import { userColumnRenderers } from '@/features/users/column-renderers'
 import { deleteUser, fetchUser } from '@/features/users/api'
 import { UserForm } from '@/features/users/user-form'
 import { UserDetailView } from '@/features/users/user-detail'
-import { ImportDialog } from '@/features/imports/import-dialog'
 
 /** Domain key used to mount the generic table for users. */
 const USERS_DOMAIN = 'users'
+
+/**
+ * Domain icon override for the 'activity' row-action (spec 0034): the
+ * catalog's `icon: 'history'` (`UserColumnCatalog::actions()`) has no shared
+ * default, so it is injected here. Hoisted to module scope — `iconMap` feeds
+ * a `useMemo` dependency in `TableView`, so a fresh object per render would
+ * defeat the memoization.
+ */
+const USERS_ICON_MAP = { history: History }
 
 /** Which sheet (if any) is currently open and for which row. */
 type SheetState =
@@ -62,7 +70,7 @@ export function UsersTable() {
 
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
+  const [activityRow, setActivityRow] = useState<TableRow | null>(null)
 
   const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
 
@@ -101,6 +109,9 @@ export function UsersTable() {
           break
         case 'delete':
           void runDelete(row)
+          break
+        case 'activity':
+          setActivityRow(row)
           break
         default:
           break
@@ -170,26 +181,7 @@ export function UsersTable() {
         onAction={handleAction}
         isBusy={isBusy}
         decorateRow={decorateRow}
-        importSlot={
-          <Can permission="users.import">
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                setImportOpen(true)
-              }}
-            >
-              <Upload aria-hidden="true" />
-              {t('imports.action')}
-            </DropdownMenuItem>
-          </Can>
-        }
-      />
-
-      <ImportDialog
-        domain={USERS_DOMAIN}
-        resource={USERS_DOMAIN}
-        open={importOpen}
-        onOpenChange={setImportOpen}
+        iconMap={USERS_ICON_MAP}
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>
@@ -238,6 +230,15 @@ export function UsersTable() {
           )}
         </SheetContent>
       </Sheet>
+
+      <UserActivityDialog
+        row={activityRow}
+        onOpenChange={(open) => {
+          if (!open) {
+            setActivityRow(null)
+          }
+        }}
+      />
     </div>
   )
 }

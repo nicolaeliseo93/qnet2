@@ -4,8 +4,10 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\Province;
 use App\Models\State;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 /*
@@ -85,4 +87,24 @@ function geoChain(): array
     $city = City::factory()->create(['name' => 'Milano', 'province_id' => $province->id, 'state_id' => $state->id, 'country_id' => $country->id]);
 
     return compact('country', 'state', 'province', 'city');
+}
+
+/**
+ * Grant the given `import-runs.*` MODULE abilities (spec 0034) to $user,
+ * creating every standard permission on demand. The module gate
+ * (ImportRunPolicy/BasePolicy) is independent of each import domain's own
+ * `{resource}.import` write gate, so every import test suite composes the
+ * two separately: this helper only ever touches the `import-runs.*` side.
+ *
+ * @param  array<int, string>  $abilities
+ */
+function grantImportRunsPermissions(User $user, array $abilities): void
+{
+    foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export'] as $ability) {
+        Permission::findOrCreate("import-runs.{$ability}");
+    }
+
+    foreach ($abilities as $ability) {
+        $user->givePermissionTo("import-runs.{$ability}");
+    }
 }

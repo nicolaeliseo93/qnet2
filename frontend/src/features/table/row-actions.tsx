@@ -24,11 +24,12 @@ import {
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
 
 /**
- * Up to this many actions render as inline icon buttons; more than this and they
- * all collapse into the overflow (three-dots) menu, keeping the actions column
- * narrow regardless of how many actions a row exposes.
+ * How many actions render as inline icon buttons. With up to this many actions
+ * they all show inline; beyond it, the first `INLINE_ACTION_LIMIT` stay inline
+ * and every remaining action moves into the overflow (three-dots) menu, keeping
+ * the actions column narrow while the most frequent actions stay one click away.
  */
-const INLINE_ACTION_LIMIT = 3
+export const INLINE_ACTION_LIMIT = 3
 
 /** Fired when the user triggers an action on a row. */
 export type RowActionHandler = (
@@ -86,6 +87,18 @@ function RowActions({
     return catalog.filter((action) => allowed.has(action.key))
   }, [catalog, effectiveRow.actions])
 
+  // Split into always-visible inline icons and the overflow remainder. With few
+  // enough actions the overflow stays empty and everything renders inline.
+  const { visible, overflow } = useMemo(() => {
+    if (available.length <= INLINE_ACTION_LIMIT) {
+      return { visible: available, overflow: [] as TableActionDefinition[] }
+    }
+    return {
+      visible: available.slice(0, INLINE_ACTION_LIMIT),
+      overflow: available.slice(INLINE_ACTION_LIMIT),
+    }
+  }, [available])
+
   if (available.length === 0) {
     return null
   }
@@ -104,71 +117,67 @@ function RowActions({
     onAction(action, effectiveRow)
   }
 
-  // Few actions: render them inline as compact icon buttons (label in tooltip).
-  if (available.length <= INLINE_ACTION_LIMIT) {
-    return (
-      <div className="flex h-full items-center justify-end gap-0.5">
-        <TooltipProvider>
-          {available.map((action) => {
-            const Icon = resolveActionIcon(action.icon, iconMap)
-            const label = t(action.label)
-            return (
-              <Tooltip key={action.key}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={label}
-                    disabled={busy}
-                    onClick={() => handleSelect(action)}
-                    className={
-                      action.type === 'danger'
-                        ? 'text-destructive hover:text-destructive'
-                        : undefined
-                    }
-                  >
-                    <Icon aria-hidden="true" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{label}</TooltipContent>
-              </Tooltip>
-            )
-          })}
-        </TooltipProvider>
-      </div>
-    )
-  }
-
-  // Many actions: collapse everything into the overflow (three-dots) menu.
+  // Always-visible actions render inline as compact icon buttons (label in
+  // tooltip); the overflow remainder, if any, folds into the three-dots menu.
   return (
-    <div className="flex h-full items-center justify-end">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t('table.rowActions')}
-            disabled={busy}
-          >
-            <MoreHorizontal aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {available.map((action) => {
-            const Icon = resolveActionIcon(action.icon, iconMap)
-            return (
-              <DropdownMenuItem
-                key={action.key}
-                variant={action.type === 'danger' ? 'destructive' : 'default'}
-                onSelect={() => handleSelect(action)}
-              >
-                <Icon aria-hidden="true" />
-                {t(action.label)}
-              </DropdownMenuItem>
-            )
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+    <div className="flex h-full items-center justify-end gap-0.5">
+      <TooltipProvider>
+        {visible.map((action) => {
+          const Icon = resolveActionIcon(action.icon, iconMap)
+          const label = t(action.label)
+          return (
+            <Tooltip key={action.key}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={label}
+                  disabled={busy}
+                  onClick={() => handleSelect(action)}
+                  className={
+                    action.type === 'danger'
+                      ? 'text-destructive hover:text-destructive'
+                      : undefined
+                  }
+                >
+                  <Icon aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{label}</TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </TooltipProvider>
+
+      {overflow.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('table.moreActions')}
+              disabled={busy}
+            >
+              <MoreHorizontal aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {overflow.map((action) => {
+              const Icon = resolveActionIcon(action.icon, iconMap)
+              return (
+                <DropdownMenuItem
+                  key={action.key}
+                  variant={action.type === 'danger' ? 'destructive' : 'default'}
+                  onSelect={() => handleSelect(action)}
+                >
+                  <Icon aria-hidden="true" />
+                  {t(action.label)}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 }

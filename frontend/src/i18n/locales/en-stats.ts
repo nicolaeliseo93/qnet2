@@ -117,4 +117,14 @@ export const moduleStats = {
     byBusinessFunction: 'By business function',
     trend: 'Hires per month',
   },
+  importRuns: {
+    total: 'Import runs',
+    completed: 'Completed',
+    failed: 'Failed',
+    rowsImported: 'Rows imported',
+    rowsModified: 'Rows modified',
+    rowsSkipped: 'Rows skipped',
+    byStatus: 'By status',
+    trend: 'Import runs per month',
+  },
 }

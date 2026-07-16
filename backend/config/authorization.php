@@ -6,6 +6,7 @@ use App\Authorization\CampaignsAuthorization;
 use App\Authorization\CompaniesAuthorization;
 use App\Authorization\CompanySitesAuthorization;
 use App\Authorization\CustomFieldsAuthorization;
+use App\Authorization\ImportRunsAuthorization;
 use App\Authorization\LeadsAuthorization;
 use App\Authorization\LeadStatusesAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
@@ -65,6 +66,7 @@ return [
         'campaigns' => CampaignsAuthorization::class,
         'leads' => LeadsAuthorization::class,
         'lead-statuses' => LeadStatusesAuthorization::class,
+        'import-runs' => ImportRunsAuthorization::class,
     ],
 
 ];

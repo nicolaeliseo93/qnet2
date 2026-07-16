@@ -82,6 +82,22 @@ class ProjectController extends BaseApiController
     }
 
     /**
+     * GET /api/projects/next-code — the next sequential code (PRJ-0001...) as
+     * a non-binding suggestion for the create form's auto-fill (spec 0025).
+     * Gated by projects.create: only an actor who may create needs it.
+     */
+    public function nextCode(): JsonResponse
+    {
+        try {
+            $this->authorize('create', Project::class);
+
+            return $this->ok(['code' => $this->service->previewNextCode()]);
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
      * POST /api/projects — create a new project.
      */
     public function store(StoreProjectRequest $request): JsonResponse

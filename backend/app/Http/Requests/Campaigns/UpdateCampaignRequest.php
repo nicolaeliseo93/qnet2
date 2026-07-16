@@ -86,8 +86,8 @@ class UpdateCampaignRequest extends FormRequest
             'province_id' => $this->geoLevelRules('province_id', 'provinces'),
             'city_id' => $this->geoLevelRules('city_id', 'cities'),
             'product_category_id' => $this->derivedFieldRules('product_categories'),
-            'start_date' => ['sometimes', 'nullable', 'date'],
-            'end_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:start_date'],
+            'start_date' => ['sometimes', 'required', 'date'],
+            'end_date' => ['sometimes', 'required', 'date', 'after_or_equal:start_date'],
             'total_budget' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'target_lead' => ['sometimes', 'nullable', 'integer', 'min:0'],
         ];

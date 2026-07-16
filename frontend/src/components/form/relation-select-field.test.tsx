@@ -73,10 +73,12 @@ function Harness({
   defaultValues = { source_id: null, name: '' },
   onSubmit = vi.fn(),
   depth,
+  hint,
 }: {
   defaultValues?: FormValues
   onSubmit?: (values: FormValues) => void
   depth?: number
+  hint?: string
 }) {
   const form = useForm<FormValues>({ defaultValues })
   const field = (
@@ -85,6 +87,7 @@ function Harness({
       name="source_id"
       metaKey="source_id"
       label="Source"
+      hint={hint}
       resource="sources"
       searchPlaceholder="Search sources…"
       selected={null}
@@ -190,5 +193,26 @@ describe('RelationSelectField quick-create wiring', () => {
       screen.queryByRole('button', { name: i18n.t('sources.form.createTitle') }),
     ).not.toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Source' })).toBeInTheDocument()
+  })
+
+  it('renders the FieldHint info button as a sibling of the label when `hint` is set', () => {
+    renderHarness({ hint: 'Pick the source that generated this record.' })
+
+    // The default hint trigger name is `authorization.moreInfo` (MetaField's
+    // default `hintLabel`) — it must NOT be nested inside the `<label>`
+    // (would pollute the label's accessible name / steal focus to the field).
+    const hintButton = screen.getByRole('button', { name: i18n.t('authorization.moreInfo') })
+    expect(hintButton).toBeInTheDocument()
+    const label = screen.getByText('Source').closest('label')
+    expect(label).not.toBeNull()
+    expect(label).not.toContainElement(hintButton)
+  })
+
+  it('renders no FieldHint info button when `hint` is absent', () => {
+    renderHarness()
+
+    expect(
+      screen.queryByRole('button', { name: i18n.t('authorization.moreInfo') }),
+    ).not.toBeInTheDocument()
   })
 })

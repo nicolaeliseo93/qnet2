@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
-import { Plus, Upload } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,7 +13,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Can } from '@/features/auth/can'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
@@ -27,7 +26,6 @@ import { companySiteColumnRenderers } from '@/features/company-sites/column-rend
 import { deleteCompanySite, fetchCompanySite } from '@/features/company-sites/api'
 import { CompanySiteForm } from '@/features/company-sites/company-site-form'
 import { CompanySiteDetailView } from '@/features/company-sites/company-site-detail'
-import { ImportDialog } from '@/features/imports/import-dialog'
 
 /** Domain key used to mount the generic table for company sites. */
 const COMPANY_SITES_DOMAIN = 'company-sites'
@@ -59,7 +57,6 @@ export function CompanySitesTable() {
 
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
 
   const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
 
@@ -149,26 +146,6 @@ export function CompanySitesTable() {
         renderers={companySiteColumnRenderers}
         onAction={handleAction}
         isBusy={isBusy}
-        importSlot={
-          <Can permission="company-sites.import">
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                setImportOpen(true)
-              }}
-            >
-              <Upload aria-hidden="true" />
-              {t('imports.action')}
-            </DropdownMenuItem>
-          </Can>
-        }
-      />
-
-      <ImportDialog
-        domain={COMPANY_SITES_DOMAIN}
-        resource={COMPANY_SITES_DOMAIN}
-        open={importOpen}
-        onOpenChange={setImportOpen}
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>

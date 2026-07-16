@@ -65,24 +65,39 @@ abstract class BasePolicy
     }
 
     /**
-     * The standard CRUD (+export/import) abilities every resource policy
-     * exposes.
+     * View this resource's aggregated activity log (spec 0034 —
+     * `resource.viewActivity`). Resource-level, like viewAny/create: the
+     * per-record visibility boundary is the model's own `view` ability,
+     * checked separately by the endpoint.
+     */
+    public function viewActivity(User $user): bool
+    {
+        return $user->can($this->permission('viewActivity'));
+    }
+
+    /**
+     * The standard CRUD (+export/import/viewActivity) abilities every
+     * resource policy exposes.
      *
      * @return array<int, string>
      */
     public static function abilities(): array
     {
-        return ['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import'];
+        return ['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import', 'viewActivity'];
     }
 
     /**
      * The full list of standard permissions for this resource.
      *
+     * Late-static-bound (`static::abilities()`, not `self::`): a concrete
+     * policy overriding `abilities()` (e.g. to drop a nonsensical ability)
+     * must see its OWN override reflected here, not BasePolicy's default.
+     *
      * @return array<int, string>
      */
     public function permissions(): array
     {
-        return array_map(fn (string $ability) => $this->permission($ability), self::abilities());
+        return array_map(fn (string $ability) => $this->permission($ability), static::abilities());
     }
 
     protected function permission(string $ability): string

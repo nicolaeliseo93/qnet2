@@ -21,6 +21,7 @@ import type { FieldPermission, ResourceMeta } from '@/features/authorization/typ
 
 const createCampaignMock = vi.fn()
 const updateCampaignMock = vi.fn()
+const fetchCampaignNextCodeMock = vi.fn<() => Promise<string>>()
 
 vi.mock('@/features/campaigns/api', async () => {
   const actual = await vi.importActual<typeof import('@/features/campaigns/api')>(
@@ -30,6 +31,7 @@ vi.mock('@/features/campaigns/api', async () => {
     ...actual,
     createCampaign: (...args: unknown[]) => createCampaignMock(...args),
     updateCampaign: (...args: unknown[]) => updateCampaignMock(...args),
+    fetchCampaignNextCode: () => fetchCampaignNextCodeMock(),
   }
 })
 
@@ -155,8 +157,8 @@ function campaign(
     geo_locked_levels: [],
     product_category_id: 4,
     product_category: { id: 4, name: 'Hardware' },
-    start_date: null,
-    end_date: null,
+    start_date: '2026-01-01',
+    end_date: '2026-12-31',
     total_budget: null,
     target_lead: null,
     created_at: '2026-01-01T00:00:00Z',
@@ -175,12 +177,26 @@ beforeAll(async () => {
 beforeEach(() => {
   createCampaignMock.mockReset()
   updateCampaignMock.mockReset()
+  fetchCampaignNextCodeMock.mockReset()
+  fetchCampaignNextCodeMock.mockResolvedValue('CMP-0100')
   fetchResourceMetaMock.mockReset()
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
 })
 
+/**
+ * Fills the now-required planning dates on the create form (collapsed
+ * Planning & budget section, opened first). `code` is auto-filled from
+ * `fetchCampaignNextCode`; classification selects are clicked per-test.
+ */
+function fillRequiredDates() {
+  fireEvent.click(screen.getByRole('button', { name: /Planning & budget/ }))
+  fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-01-01' } })
+  fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-12-31' } })
+}
+
 describe('CampaignForm — manual code (spec 0025 AC-010/AC-011)', () => {
-  it('shows an enabled, empty code field with the fallback-declaring placeholder on create (AC-010)', async () => {
+  it('auto-fills the enabled, required code field with the next sequential suggestion on create (AC-010)', async () => {
+    fetchCampaignNextCodeMock.mockResolvedValue('CMP-0042')
     fetchResourceMetaMock.mockResolvedValue({
       fields: [],
       permissions: { ...FULL_PERMISSIONS, fields: { code: CODE_EDITABLE_PERMISSION } },
@@ -193,8 +209,7 @@ describe('CampaignForm — manual code (spec 0025 AC-010/AC-011)', () => {
     await waitFor(() => expect(screen.getByLabelText('Code')).toBeInTheDocument())
     const code = screen.getByLabelText('Code') as HTMLInputElement
     expect(code).not.toBeDisabled()
-    expect(code.value).toBe('')
-    expect(code.placeholder).toBe('Leave empty to generate it automatically')
+    expect(code.value).toBe('CMP-0042')
   })
 
   it('sends the trimmed manual code on create submit when the user fills it (AC-010)', async () => {
@@ -215,6 +230,7 @@ describe('CampaignForm — manual code (spec 0025 AC-010/AC-011)', () => {
     fireEvent.click(screen.getByTestId('select-Business function'))
     fireEvent.click(screen.getByTestId('select-Product category'))
     fireEvent.click(screen.getByTestId('geo-select'))
+    fillRequiredDates()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createCampaignMock).toHaveBeenCalledTimes(1))
@@ -297,6 +313,7 @@ describe('CampaignForm — 422 duplicate code (spec 0025 AC-012)', () => {
     fireEvent.click(screen.getByTestId('select-Business function'))
     fireEvent.click(screen.getByTestId('select-Product category'))
     fireEvent.click(screen.getByTestId('geo-select'))
+    fillRequiredDates()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>

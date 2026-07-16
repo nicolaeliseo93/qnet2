@@ -2,35 +2,52 @@
 
 namespace App\Policies;
 
-use App\Models\ImportRun;
 use App\Models\User;
+use App\Policies\Abstracts\BasePolicy;
+use Illuminate\Database\Eloquent\Model;
 
 /**
- * Authorization for a single import run.
+ * Standard CRUD policy for the `import-runs` module (spec 0034): the import
+ * engine is shared by every domain (leads + 5 legacy), but the RUN itself is
+ * now a first-class resource with its own permission set
+ * (`import-runs.{viewAny,view,create,update,delete,export}`), independent of
+ * each domain's own `{resource}.import` write ability that ImportController
+ * still enforces on top (the "double gate": module + domain).
  *
- * An import run is not a CRUD resource with its own permission set: it belongs
- * to the module it was started against. So `view`/`delete` reuse that module's
- * `import` ability ({resource}.import, e.g. `leads.import`) AND require the
- * actor to OWN the run — the same two conditions the history table's
- * baseQuery/authorizeViewAny already enforce, restated here so the generic
- * bulk-delete engine (which Gate-checks `delete` per row) stays fail-closed.
- * Super-admin is handled globally by AppServiceProvider's Gate::before bypass.
+ * `import` is dropped from the generated set (BasePolicy::abilities()
+ * override): "importing an import-run" is meaningless — the module has no
+ * such ability. `viewActivity` is dropped too: ImportRun carries no
+ * activitylog (spec 0034 explicitly excludes it).
+ *
+ * `view`/`delete` additionally require OWNERSHIP (defense in depth): the
+ * history table's baseQuery and ImportController's assertOwnedRun() already
+ * scope every read/write to the actor's own runs, so this restates the same
+ * invariant at the Policy layer for callers that gate through Gate/`can()`
+ * directly (e.g. the generic bulk-delete engine). Super-admin bypasses
+ * globally via AppServiceProvider's Gate::before.
  */
-class ImportRunPolicy
+class ImportRunPolicy extends BasePolicy
 {
-    public function view(User $user, ImportRun $importRun): bool
+    protected function resource(): string
     {
-        return $this->ownsAndCanImport($user, $importRun);
+        return 'import-runs';
     }
 
-    public function delete(User $user, ImportRun $importRun): bool
+    public function view(User $user, Model $model): bool
     {
-        return $this->ownsAndCanImport($user, $importRun);
+        return parent::view($user, $model) && $model->user_id === $user->id;
     }
 
-    private function ownsAndCanImport(User $user, ImportRun $importRun): bool
+    public function delete(User $user, Model $model): bool
     {
-        return $importRun->user_id === $user->id
-            && $user->can("{$importRun->resource}.import");
+        return parent::delete($user, $model) && $model->user_id === $user->id;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function abilities(): array
+    {
+        return ['viewAny', 'view', 'create', 'update', 'delete', 'export'];
     }
 }

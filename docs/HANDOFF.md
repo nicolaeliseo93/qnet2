@@ -2,6 +2,278 @@
 
 > Injected at session start. Update at every green state.
 
+## IMPORT LEAD — menu, sottotitoli, card wizard, dettaglio "a schede" (2026-07-16) — GREEN, NON COMMITTATO
+
+Ritocchi UX al modulo Import (solo FE, nessun cambio contratto/BE oltre navigation.php):
+- MENU: voce `imports` spostata da top-level DENTRO il gruppo `marketing-leads` (dopo `leads`) in
+  `config/navigation.php`; label `navigation.imports` rinominata: it **"Importa lead"** (fix 2026-07-16, prima
+  "Import Lead" bocciato dall'utente), en "Import Lead".
+  `php -l` ok, NavigationTest 7/7 (usa config isolata per-test, lo spostamento non la tocca).
+- SOTTOTITOLI RIMOSSI: pagina Storico (`leadImports.subtitle` "I tuoi import di lead passati." -> tolto prop +
+  chiave it/en) e pagina wizard (`importWizard.page.subtitle` -> tolto prop + chiave it/en). Titoli invariati
+  ("Storico import" / "Importa lead").
+- WIZARD = CARD UNICA: `import-wizard.tsx` ora rende UN solo `<Card>` con `CardHeader` (titolo "Importa lead" +
+  `Stepper`) e `CardContent` col corpo dello step. Rimosse le `<Card>` per-step (evita card-in-card) da
+  import-step-{upload,config,mapping,review,summary}.tsx e da import-run-progress.tsx (i loro corpi sono ora
+  `<div>`/frammenti). Titolo pagina wizard nella card (niente title/subtitle di `PageHeader`).
+- TITOLO STORICO RIMOSSO (2026-07-16): tolto il titolo "Storico import" da /imports — rimosso prop `title` di
+  `PageHeader` in `lead-import-history-page.tsx` + chiave `leadImports.title` da it/en-lead-imports.ts (unico
+  uso). Resta breadcrumb + azioni (stats toggle, "Nuovo import"). Test aggiornato (requisito cambiato: ora
+  asserisce ASSENZA del titolo) 4/4 verdi; tsc + ESLint puliti.
+- BREADCRUMB WIZARD RIPRISTINATO (fix 2026-07-16): rimuovere `<PageHeader>` da `lead-import-page.tsx` aveva
+  tolto anche il breadcrumb (e' `PageHeader` a rendere `<AppBreadcrumbs>`). Ripristinato `<PageHeader />` senza
+  title/subtitle sopra `ImportWizard` -> breadcrumb "Import Lead > Nuovo" su /imports/new (anche ?runId=N,
+  stessa route). Verificato: vitest 12/12 (3 pagine import), tsc e ESLint puliti.
+- DETTAGLIO "a schede" (/imports/:runId): scelta utente "sfondo grigio + card bianche". `LeadImportDetailView`
+  riscritto: NON usa piu' DetailPanel/DetailHero/DetailSection (pannello bianco monolitico); ora header
+  (monogram+filename+badge) + riga StatCard counter + metadati/errori/record ciascuno in un `<Card>` bianco, su
+  sfondo pagina grigio. Pagina: wrapper `bg-card` -> `flex min-h-0 flex-1 flex-col overflow-y-auto` (grigio);
+  bottone "Back" reso bianco (`className="bg-card"`); "Riprendi" lasciato primary (CTA). Test dettaglio
+  invariati (asseriscono contenuti, non struttura card): heading filename, badge stato, valori counter,
+  "Email"/"->", messaggi metadata, link errori.
+
+VERIFICATO (eseguito): FE 109/109 (features/imports + leads-table-import + 3 pagine import) verdi; `tsc --noEmit`
+pulito; ESLint pulito (solo warning preesistente react-hooks/incompatible-library su mapping form.watch). BE
+`php -l config/navigation.php` ok, NavigationTest 7/7. NIENTE COMMIT.
+
+## CAMPI OBBLIGATORI Progetti & Campagne + auto-fill codice (2026-07-16) — GREEN, NON COMMITTATO
+
+Resi obbligatori su Progetti e Campagne: codice, denominazione, stato, funzione aziendale, categoria
+prodotto, geografia (paese, cima cascata — gia' required), data inizio, data fine. Il `code` e' "obbligatorio
+con auto-fill" (decisione utente): campo required nel form, precompilato col prossimo codice sequenziale
+(nuovo endpoint), modificabile; il server mantiene la generazione atomica come fallback (rule `nullable`
+invariata: la requiredness del code e' FE/UX, non server).
+
+REQUIREDNESS SU 4 LIVELLI COERENTI (per ogni campo): `*Authorization` (ceiling `required:true` + FieldDefinition
+`mandatory:true` -> asterisco UI + non-narrowable per ruolo) + `Store*Request`/`Update*Request` (rule `required`/
+`sometimes|required`) + Zod schema (`min(1)` per date/code, superRefine per relazioni).
+
+PROGETTI (incondizionati): business_function_id, product_category_id, start_date, end_date -> required a tutti
+i livelli. country_id/pipeline_status_id gia' required. CAMPAGNE: start_date/end_date -> required (le date NON
+sono ereditate dal progetto, sempre proprie). Le classificazioni campaign (status/business_function/
+product_category) + country restano CONDIZIONALI al link (required se standalone, prohibited/ereditate se
+collegata): gia' cosi' in Store/UpdateCampaignRequest + Zod, NON toccate; niente asterisco statico perche' il
+ceiling non conosce project_id (valore di form). Enforcement gia' presente.
+
+BACKEND: `GeneratesSequentialCode::peekNextSequentialCode()` (lock-free, per la preview) + `formatNextCode()`
+(dedup). `ProjectService/CampaignService::previewNextCode()`. Controller `nextCode()` (gate `create`). Route
+`GET /projects/next-code` e `GET /campaigns/next-code` (letterali PRIMA dei wildcard {project}/{campaign}).
+Envelope `{ success, data: { code } }`. Nessuna migration (colonne gia' nullable in DB: la requiredness e'
+solo di validazione; righe legacy / campaign collegate restano legittimamente null).
+
+FRONTEND auto-fill: `fetchProjectNextCode`/`fetchCampaignNextCode` in api.ts; i wrapper `ProjectForm`/
+`CampaignForm` fanno `useQuery` (enabled solo in create, staleTime/gcTime 0, degrada a '' su errore) e passano
+`initialCode` -> body -> `use*Form` default. Nessun effetto/setValue: il form monta solo a next-code risolto
+(gating `isCreate && nextCode.isLoading`). i18n: nuovi `codeRequired`/`startDateRequired`/`endDateRequired`
+(+`businessFunctionRequired`/`productCategoryRequired` per projects); placeholder/hint `code` aggiornati.
+
+TEST: helper `projectStoreExtras()` (BE) e `campaignStoreDates()`/`standaloneCampaignFields()` esteso con le
+date; payload di successo aggiornati (requisito cambiato, dichiarato). Nuovi test: requiredness per campo +
+`next-code` (200/sequenza/403). Nei form-body test mock di `fetch*NextCode` + fixture con campi valorizzati +
+compilazione dei nuovi required (apertura sezione Planning per le date).
+
+VERIFICATO (eseguito): BE `php artisan test` 2500 pass / 1 rosso PRE-ESISTENTE ed estraneo
+(`AbstractMigrationSourcePreviewTest`, colonna `description` ruoli — confermato fallire su HEAD con stash);
+Pint clean. FE `tsc -b` 0 errori; vitest 224/225 file verdi, unico rosso `table/cell-renderers.test.tsx` (3)
+gia' noto PRE-ESISTENTE (HANDOFF); ESLint clean.
+
+ASTERISCHI UI: i campi via `MetaField`/`RelationSelectField` (code, name, stato, funzione, categoria, date)
+mostrano gia' l'asterisco perche' `MetaField` inoltra `permission.required` a `FormLabel` (verificato: BE emette
+`required=1` per quei campi via dump `ResourcePermissionsBuilder`; FE lo rende, test `MetaField.test.tsx:113`).
+La GEOGRAFIA no: usa `GeoSelect` (non MetaField). Aggiunto prop ADDITIVO `requiredLevels?` a `GeoSelect`
+(default vuoto = comportamento invariato) che rende l'asterisco sui livelli indicati. Projects: `requiredLevels`
+derivato dai field-permission (country_id required). Campaigns: `country` required se NON in `geo_locked_levels`
+(rispecchia `withGeoHierarchyRule` — niente asterisco quando ereditato dal progetto). NB: se in UI mancano gli
+asterischi sui campi non-geo, e' la cache meta di React Query (`useResourceMeta` staleTime 5min): un reload
+rifa' la fetch e riflette i nuovi `required`. Test nuovo `geo-select.test.tsx` (marker solo sui requiredLevels).
+
+ASTERISCHI CAMPAGNE (classificazione dinamica): stato/funzione/categoria sono required SOLO se standalone ->
+il ceiling statico non basta. Aggiunto prop ADDITIVO `required?: boolean` a `MetaField` (override: `required ??
+permission.required`, default = comportamento invariato per tutti gli altri moduli), inoltrato da
+`RelationSelectField.required` e `CampaignRelationField.required`; `campaign-form-body` passa
+`required={!isLinked}` ai 3 campi classificazione (asterisco se standalone, niente se ereditati+disabled).
+Test: `MetaField.test.tsx` copre l'override in entrambe le direzioni.
+
+FILE (owner disgiunti dal resto del tree concorrente): BE Authorization x2, Store/Update Request x4,
+GeneratesSequentialCode, ProjectService/CampaignService, ProjectController/CampaignController, routes/api/
+projects.php; FE project-schema/campaign-schema, *-form.tsx x2, *-form-body.tsx x2, use-*-form.ts x2, api.ts x2,
+*-form-payload.ts x2 (solo `code.trim()`); i18n {en,it}-{projects,campaigns}.ts; + i test elencati.
+
+## MODULO IMPORT AUTONOMO + rimozione domini legacy (spec 0034, 2026-07-16) — GREEN, NON COMMITTATO
+
+Estrazione dell'import lead in un MODULO A SE' con permessi/menu propri, e riduzione dell'import al SOLO
+dominio `leads` (gli altri 5 domini rimossi su richiesta utente; si rifaranno poi sul flusso wizard).
+Spec: `docs/specs/0034-dedicated-lead-import-module.xml`. NB: collisione numero spec con
+`0034-aggregated-activity-log.xml` (ALTRA sessione concorrente — da rinumerare). Working tree CONDIVISO con
+piu' sessioni (activity-log, campaigns/projects): committare NON e' banale, coordinare prima.
+
+PERMESSI (set CRUD dedicato `import-runs.*`):
+- `ImportRunPolicy` ora estende `App\Policies\Abstracts\BasePolicy` (`resource()='import-runs'`); override
+  `abilities()` ESCLUDE `import` (tiene viewAny/view/create/update/delete/export); override `view()/delete()`
+  = `parent && ownership`. Fix latente in `BasePolicy`: `permissions()` usa `static::abilities()` (era `self::`).
+- Nuova `App\Authorization\ImportRunsAuthorization` (campi run visible+readonly; actions delete/export),
+  registrata `config/authorization.php` -> esposta da `GET /meta/import-runs`.
+- Gate MODULO su TUTTI i domini import in `ImportController` (index->viewAny; show/rows/summary/errors->view;
+  template/upload->create; configure/updateRow/confirm->update). Le READ non richiedono piu' `{resource}.import`.
+  DOPPIO GATE sulle scritture: `import-runs.{create|update}` + `{resource}.import` (leads.import).
+- `rows`/`summary` ora ammessi in reviewing|completed|failed (dettaglio read-only); `updateRow` solo reviewing.
+
+TABELLA/STATS/EXPORT: dominio tabella rinominato `lead-imports` -> `import-runs`
+(`LeadImportsTableDefinition::domain()`, `config/tables.php`); rimosso override `authorizeViewAny` (usa il
+default viewAny -> import-runs.viewAny); baseQuery scope resta `resource='leads' AND user_id=actor`. Nuova
+`App\Stats\LeadImports\LeadImportsStatsDefinition` (`config/stats.php`, domain `import-runs`): 4 stat-tile
+(total/completed/failed/rows_imported — invariante StatsEndpointTest a 4 colonne, NON 6) + distribution
+by_status + trend, scoped own+leads. `Aggregates::byEnumColumn()/monthlyTrend()` estesi con `?Closure $constrain`.
+Export generico ora risolve `import-runs.export`.
+
+RIMOZIONE 5 DOMINI LEGACY: `config/imports.php` -> solo `['leads' => LeadsImportDefinition::class]`; cancellate
+le 5 `*ImportDefinition` (BusinessFunctions/Companies/OperationalSites/Roles/Users) + 5 feature test + 
+`LegacyWizardContractDefaultsTest`. `ImportRegistryTest` a 1 def; `ImportRunsModuleGateTest` doppio-gate ora su
+leads. FE: rimosso il pulsante import da business-functions/companies/company-sites/operational-sites/roles/
+users tables. MOTORE two-phase legacy (ValidateImportJob/ProcessImportJob/ImportRowProcessor/ImportPreview)
+LASCIATO DORMIENTE (follow-up dead-code cleanup). Migrations (spec 0013) e i file condivisi
+`features/imports/{import-dialog,use-import,...}` INTATTI (li usa migrations).
+
+MODULO AUTONOMO (rotte top-level, staccato da Lead):
+- FE rotte in `routes/router.tsx`: `/imports` (landing storico + "Nuovo import"), `/imports/new` (wizard,
+  ripresa `?runId=`), `/imports/:runId` (dettaglio). RIMOSSE le vecchie `leads/import*`.
+- Voce di menu backend-driven `config/navigation.php`: `key='imports'`, route `/imports`, icona `file-up`
+  (aggiunta a `frontend/src/features/navigation/icon-map.ts`), gate `import-runs.viewAny`. i18n
+  `navigation.imports` (it/en). `permissions:sync` OK, NavigationTest 12/12.
+- `features/leads/leads-table.tsx`: RIMOSSO ogni aggancio import (distacco totale). `leads-table-import.test.tsx`
+  riscritto a regressione (nessun importSlot). Pagine FE tenute coi filename `lead-import-*` (solo rotte cambiate).
+- Pagina dettaglio `/imports/:runId`: tile contatori (importati/aggiornati/scartati/errori) + summary + link
+  report errori + griglia record read-only (riuso review-grid con opt-in `readOnly`) + "Riprendi import".
+- NOTA UX aperta: il wizard non ha un pulsante "torna allo storico / annulla" (solo breadcrumb) — se serve,
+  chiedere esplicitamente (non implementato per non fare scope creep).
+
+VERIFICATO (eseguito): BE 270/270 mirati (Imports/Tables/Stats/Policies/Navigation/Unit) + rimozione 251/251;
+`permissions:sync` pulito; Pint pulito. FE 26 file/161 test verdi; `tsc --noEmit` pulito; ESLint pulito. Rossi
+ESTRANEI noti nella suite completa: campaigns/projects (altro workstream) + 3 ContactsCell baseline. NIENTE
+COMMIT.
+
+## UX — Colonna Azioni tabelle: 3 icone + overflow (2026-07-16) — GREEN, NON COMMITTATO
+
+Cambiato il comportamento overflow della colonna Azioni AG Grid (generico, tutte le tabelle). PRIMA: >3 azioni
+=> TUTTE collassavano nel menu tre-puntini. ORA: fino a 3 azioni tutte inline; oltre 3, le PRIME 3 restano
+inline come icone e la 4a e' il pulsante tre-puntini, il cui menu contiene SOLO le azioni rimanenti
+(`available.slice(3)`). Ordine del catalogo preservato.
+
+- UNICO file di logica: `frontend/src/features/table/row-actions.tsx`. Rimossi i due branch (inline vs
+  collapse-tutto); ora un solo render: `visible`=slice(0,3) inline + overflow `DropdownMenu` opzionale reso solo
+  se `overflow.length > 0`. `INLINE_ACTION_LIMIT = 3` invariato. Split calcolato in `useMemo`.
+- i18n: nuova chiave `table.moreActions` (en 'More actions' / it 'Altre azioni') per l'aria-label del trigger
+  overflow. La vecchia chiave `table.rowActions` resta definita ma ora e' orfana (nessun call-site) — lasciata
+  intatta, non e' codice morto ma una label generica riutilizzabile.
+- TEST nuovo: `frontend/src/features/table/row-actions.test.tsx` (4 test): <=3 tutte inline senza menu; >3 =>
+  3 inline + trigger 'More actions'; menu contiene SOLO le rimanenti in ordine (a3,a4) e non le inline; handler
+  invocato sia da azione inline sia da voce del menu. Radix apre su `pointerDown` (non click) come da pattern
+  esistente in `table-toolbar.test.tsx`.
+- LARGHEZZA colonna Azioni CONDIZIONALE (`data-table.tsx`): default `ACTIONS_COLUMN_WIDTH = 100` (come prima);
+  `ACTIONS_COLUMN_WIDTH_WITH_OVERFLOW = 120` quando il tre-puntini puo' comparire. Nuovo prop `DataTable`
+  `actionsColumnHasOverflow?: boolean`; `table-view.tsx` lo passa come `config.actions.length >
+  INLINE_ACTION_LIMIT` (limite ora ESPORTATO da `row-actions.tsx`, no magic-number). NB: `table-view.tsx` a 499
+  righe, vicino all'hard limit 500 del code-guard: prossima aggiunta non banale => splittare.
+
+VERIFICATO: vitest `row-actions.test.tsx` 4/4; suite `src/features/table` + leads/campaigns tables verdi TRANNE
+3 fallimenti PRE-ESISTENTI e NON correlati in `cell-renderers.test.tsx > ContactsCell` (verificato via stash:
+falliscono anche senza queste modifiche). `tsc --noEmit` 0 errori. ESLint pulito sui file toccati. PROSSIMO:
+attende decisione commit; i 3 test ContactsCell rotti restano da indagare a parte.
+
+## FEATURE — Activity Log aggregato generico (spec 0034, v1 solo Utenti) (2026-07-16) — GREEN, NON COMMITTATO
+
+Storico attivita' (spatie/laravel-activitylog, gia' scritto da `LogsModelActivity`, mai letto prima) esposto
+in una sezione riusabile: nel dettaglio Utente + da row-action tabella. Log AGGREGATO = eventi del record
+principale PIU' quelli delle entita' correlate dichiarate, mantenendo la provenienza. GENERICO: un modulo si
+abilita con 1 voce in `config/activity-log.php`. v1 copre SOLO users (deciso con l'utente).
+
+DECISIONI UTENTE CONGELATE (spec `docs/specs/0034-aggregated-activity-log.xml`, contract-first):
+- Endpoint GENERICO (non annidato): `GET /api/activity-log/{resource}/{id}` (no throttle).
+- Permesso via ability GENERICA in `BasePolicy`: `viewActivity` -> `{resource}.viewActivity` per OGNI resource
+  con Policy (auto-sync). Additivo (non assegnato di default). Authz endpoint = `{resource}.viewActivity` AND
+  Policy `view` sul record.
+- Una voce per operazione con `changes[] {field, old_value, new_value}` (non 1 riga per campo).
+- Row-action apre un Dialog/Sheet dedicato che monta lo STESSO componente del detail.
+
+BACKEND (tutti nuovi salvo indicati):
+- `config/activity-log.php` (registry per-resource {model, relations[]}, v1 'users' ->
+  ['personalData','personalData.contacts','personalData.addresses']) + `App\ActivityLog\ActivityLogRegistry`.
+- `App\Services\ActivityLog\AggregatedActivityService` + DTO `App\DataObjects\ActivityLog\{ActivityLogDefinition,
+  ActivityLogCursor,ActivityLogPage}`. Raccoglie (morph_alias, id) di root+relazioni da ALLOW-LIST (no whereRaw),
+  query unica su `activity_log` con causer eager-load (no N+1), keyset `created_at desc,id desc`, per_page 1..100.
+  `module` = alias morph di subject_type (user/personal_data/contact/address). Campi `$hidden` mai esposti.
+- `App\Http\Controllers\ActivityLog\ActivityLogController` + route in `routes/api.php`; FormRequest
+  `ActivityLogIndexRequest` (per_page/cursor -> 422); `ActivityLogEntryResource` (mai model raw).
+- MOD `BasePolicy`: + ability `viewActivity` in `abilities()` e metodo; `permissions()` ora usa
+  `static::abilities()` (late static binding, cosi' una policy che overrida abilities() vede il proprio set).
+- MOD `UsersAuthorization`: action `view_activity` in actions()/actionPermissions() -> envelope detail
+  `permissions.actions.view_activity`. MOD `UsersTableDefinition::actionsFor` + `UserColumnCatalog::actions()`:
+  row-action 'activity' (icon 'history', permission 'users.viewActivity') gated da Gate `viewActivity` per-riga.
+
+FRONTEND (feature riusabile cross-modulo):
+- `features/activity-log/`: `types.ts`, `api.ts` (`fetchActivityLog`), `query-keys.ts`, `use-activity-log.ts`
+  (`useInfiniteQuery`, getNextPageParam da next_cursor), `activity-log-section.tsx` (timeline compatta;
+  data/autore/evento/modulo/changes; load-more). i18n namespace `activityLog` (en/it-activity-log.ts).
+- MOD `features/users/user-detail.tsx`: nuova DetailSection montata se `permissions.actions.view_activity`.
+- MOD `features/users/users-table.tsx`: case 'activity' -> `user-activity-dialog.tsx` (NUOVO) monta lo stesso
+  `ActivityLogSection` (DRY). `USERS_ICON_MAP={ history: History }` a module-scope (no rottura memoization).
+
+BLOCCO CROSS-LANE RISOLTO (autorizzato utente): `app/Policies/ImportRunPolicy.php` (della lane parallela
+"modulo lead import dedicato" — spec `0034-dedicated-lead-import-module.xml`, COLLISIONE DI NUMERO con questa,
+da risanare) era stato riscritto estendendo `BasePolicy` ma NARROWANDO `view(User, ImportRun)` contro
+`BasePolicy::view(User, Model)` -> Fatal LSP che faceva fatalare `permissions:sync` (glob su tutte le Policy) e
+con esso `SyncPermissionsTest`. FIX: firme riportate a `Model $model` (specchia `UserPolicy`), ownership check
+`$model->user_id === $user->id` invariato. Nota: `pint --dirty` (usato una volta) ha riformattato anche 7 file
+di test dell'altra lane (solo formattazione) -> da qui in poi Pint SOLO con path espliciti.
+
+VERIFICATO (verifier indipendente + esecuzione diretta): 15/15 AC PASS. BE `tests/Feature/ActivityLog` 17/17
+(8/8 run consecutive, no flakiness dopo fix determinismo AC-010: locale iniziale fisso 'en' + alternanza
+en/it), + `SyncPermissionsTest` 5/5, sanity Users/Table/Tables 297/297 (zero regressioni). `permissions:sync`
+exit 0 (+6 permessi viewActivity). FE vitest activity-log+users 50/50, `tsc -b` 0 errori, ESLint pulito. Pint
+pulito (path espliciti). PROSSIMI PASSI: (1) attende decisione commit; (2) estensione ad altri moduli = 1 voce
+in config/activity-log.php + relazioni; (3) risanare collisione spec 0034 (rinumerare una delle due).
+
+## REFACTOR — UX/grafico form Progetti & Campagne (2026-07-16) — GREEN, NON COMMITTATO
+
+Refactoring SOLO grafico/UX dei form create/edit di Progetti e Campagne. ZERO modifiche a logica, flussi,
+validazioni, permessi, API, payload, struttura campi: cambiati solo JSX/stile/tooltip/animazioni/stringhe
+i18n. Verificato al livello di diff (form-body puramente presentazionali; `*-schema.ts`/`*-form-payload.ts`/
+`use-*-form.ts`/`api.ts`/`types.ts` INTATTI) e a suite completa.
+
+PRIMITIVI CONDIVISI estesi in modo ADDITIVO e retrocompatibile (default = comportamento odierno byte-identico,
+gli altri 6+ moduli che li usano restano invariati — verificato con i loro test):
+- `components/form-section.tsx`: nuovi prop opzionali `collapsible?`/`defaultOpen?`/`open?`/`onOpenChange?`
+  (chevron + collasso animato via classe `form-section-collapsible-content` in `index.css`, keyframe
+  `motion-safe`). `collapsible=false` (default) rende identico a prima.
+- `features/custom-fields/CustomFieldsSection.tsx`: stessi 4 prop, forwardati alla FormSection interna.
+- `features/authorization/MetaField.tsx`: nuovi `hint?`/`hintLabel?` -> rendono `FieldHint` come SIBLING
+  della label (MAI dentro `<label>`: fix a11y/HTML-validity; default `authorization.moreInfo`).
+- `components/form/relation-select-field.tsx`: nuovo `hint?` che instrada su `MetaField.hint` (non piu'
+  composizione della label).
+
+FORM (owner disgiunti): `features/projects/{project-form-body,project-geography-section}.tsx` + NUOVO
+`project-planning-section.tsx`; `features/campaigns/{campaign-form-body,campaign-geo-section,
+campaign-planning-section,campaign-relation-field}.tsx`. i18n: `{en,it}-projects.ts` + `{en,it}-campaigns.ts`
+(nuovo sottoalbero `*.form.hints.*`), + una riga `authorization.moreInfo` in `{en,it}.ts`.
+
+DESIGN: sezioni primarie sempre aperte ed enfatizzate (Identita', Classificazione, Geografia; +Collegamento
+progetto per campagne); secondarie tutte-opzionali (Pianificazione&budget, Campi custom) collassabili
+default-chiuse con AUTO-APERTURA on-error (open controllato = localOpen || hasError su `form.formState.errors`,
+niente effetti). Geografia resta APERTA perche' `country_id` e' required (verificato negli schema). Relazioni
+in griglia 2-col responsive. Tooltip contestuali (FieldHint). Motion bilanciato `motion-safe`: reveal a
+cascata, collasso animato, spinner `Loader2` in Salva, footer azioni STICKY. Nessuna altezza/larghezza fissa.
+
+VERIFICATO (eseguito): `tsc -b --force` 0 errori; suite impattate 19 file/180 test verdi
+(projects+campaigns+form-section+relation-select-field+MetaField+CustomFieldsSection); suite completa 226
+file pass, unico rosso `table/cell-renderers.test.tsx` (3) PROVATO pre-esistente via `git stash` (estraneo);
+ESLint pulito. Fix a11y confermato (FieldHint sibling, mai annidato).
+
+ATTENZIONE TREE CONDIVISO: al momento della verifica il working tree conteneva anche lavoro CONCORRENTE non
+di questa sessione (modulo ActivityLog, rilavorazione LeadImports/ImportRuns, tabelle Users — backend+FE),
+NON toccato qui. I 2 barrel `en.ts`/`it.ts` sono co-editati: i miei hunk `authorization.moreInfo` sono
+separati ma nello stesso file. Su decisione utente: NON committato, tree lasciato invariato (l'utente separa
+il tree). I soli file di QUESTO refactoring sono i 19 dedicati + la riga moreInfo nei 2 barrel.
+
 ## FEATURE — Storico import lead su tabella generica AG Grid (2026-07-15) — GREEN, NON COMMITTATO
 
 La pagina "Storico import" lead NON e' piu' una `<table>` HTML fatta a mano: ora e' la stessa tabella
@@ -3957,3 +4229,109 @@ verified green). Not yet done anywhere: `PromoteCustomFieldIndexJob` (AC-021, op
 text/number/boolean/enum, `filterType` ∈ text/number/boolean/set, `options`/`badges` for enum) and
 `POST /tables/{domain}/rows`' `custom.<key>` row values (relation → already a display-label STRING, ready
 to render, no id lookup needed client-side) as-is; no further backend change expected for the FE grid slice.
+
+## Spec 0034 — Dedicated Lead Import Module — frontend lane FE-0..FE-3 GREEN (first-hand)
+
+Spec `docs/specs/0034-dedicated-lead-import-module.xml`. Frontend lane only (backend lane —
+`import-runs.*` permissions/policy/authorization/table-rename/stats — running in parallel, not verified
+here; this note covers only what the frontend teammate built against the frozen `data_contract`).
+
+FE-0 [i18n, gate]:
+- `i18n/locales/it-stats.ts`/`en-stats.ts`: added `moduleStats.importRuns` (keys `total/completed/failed/
+  rowsImported/rowsModified/rowsSkipped/byStatus/trend`), following the EXACT existing per-module
+  convention (not a new pattern) — `AbstractStatsDefinition::labelKey()` mechanically derives
+  `Str::camel(domain()).'.stats.'.Str::camel(key)`, so domain `import-runs` → label key
+  `importRuns.stats.<keyCamel>`.
+- `i18n/locales/it.ts`/`en.ts`: added a NEW top-level key `importRuns: { stats: moduleStats.importRuns }`
+  (mirrors `leads: {...leads, stats: moduleStats.leads}` but `import-runs` has no other own top-level
+  namespace besides stats).
+- `i18n/locales/it-lead-imports.ts`/`en-lead-imports.ts` (namespace `leadImports`, unchanged file
+  ownership): added `newImport`, `menu.link` (the single Lead-module link label — "Import lead"/"Importa
+  lead"), and a `detail.*` subtree (resume button, sections stats/metadata/errors/records, per-counter
+  tile labels, metadata labels, `noMetadata`/`loadError`, `gridLabel`). Row-level outcome badges are NOT
+  duplicated here: the read-only grid reuses `ReviewStatusCell`/`ReviewMessagesCell` (`importWizard`
+  namespace) unchanged. `forbidden` copy updated ("permission to VIEW imports", was "...import leads") to
+  match the gate moving from `leads.import` to `import-runs.viewAny`.
+- DRY refactor (no behavior change): extracted `resolveGlobalConfigEntries`/`resolveFieldLabel` out of
+  `import-step-summary.tsx` into new `features/imports/wizard/summary-helpers.ts`, reused by both the
+  wizard's summary step AND the new detail page's metadata section — same contract fields
+  (`run.global_fields`/`summary.global_config`/`summary.mapped_fields`/`run.fields`), one implementation.
+
+FE-1 [landing + adapter]:
+- `features/imports/lead-imports-table.tsx`: domain constant `'lead-imports'` → `'import-runs'`; `view`
+  now branches via new `features/imports/lead-import-status.ts` (`isConcludedImportRun`/
+  `isResumableImportRun`, complement-of-{completed,failed} so a future status defaults resumable) —
+  concluded run → `/leads/import/history/{id}`, resumable → `/leads/import?runId={id}` (unchanged); added
+  `useInvalidateModuleStats('import-runs')` after a successful delete.
+- `pages/lead-import-history-page.tsx` is now the module LANDING: `PageHeader` title/subtitle +
+  `StatsToggleButton`/`ModuleStatsPanel` (domain `import-runs`) + "New import" `Button` gated
+  `<Can permission="import-runs.create">` navigating to `/leads/import`; page gate
+  `<Can permission="import-runs.viewAny">`. Export stays automatic inside `<TableView>` (no FE code).
+- Tests rewritten: `lead-imports-table.test.tsx` (domain rename, status-based routing, delete→
+  refresh+invalidate via a real `QueryClient` + `invalidateQueries` spy), `lead-import-history-page.test.tsx`
+  (gate, stats toggle/panel mount args, "New import" gating + navigation).
+
+FE-2 [detail page]:
+- New `features/imports/use-lead-import-detail.ts`: `useEntityDetail` on
+  `getImportWizardRun('leads', runId)` (reused 1:1 from the wizard — same `GET /imports/leads/{run}`
+  contract, includes counters/mapping/dedup/review_fields), plus a SECOND dependent `useEntityDetail` on
+  `getImportRunSummary('leads', runId)` enabled ONLY once the run is loaded and its status ∈
+  `{reviewing, completed, failed}` (mirrors the backend's own AC-006 read-window for `summary`, avoids an
+  avoidable 422 for an in-progress run reached by direct URL). Returns `isResumable` from the same status
+  helper as FE-1.
+- New `features/imports/lead-import-detail.tsx` (presentational, `detail-panel` kit): `DetailHero`
+  (filename/created_at/status badge via `enumLabelOf('import_status', ...)` — reused existing enum, no new
+  key), stats tiles (`StatCard` × 6: total/imported/modified/invalid/warning/duplicate, straight off the
+  run's own counters — NOT the `/stats/import-runs` endpoint, which is the module-wide KPI panel, a
+  different concern), metadata section (file/dedup strategy/global config/mapped columns, via the shared
+  `summary-helpers`, with loading/error/empty sub-states), errors section (`ImportErrorReportLink` reused
+  unchanged, gated on `run.has_error_report`), and a RECORDS section mounting the wizard's own `ReviewGrid`
+  in a new `readOnly` mode.
+- `features/imports/wizard/review-columns.tsx`/`review-grid.tsx`: added an OPT-IN `readOnly` parameter
+  (default `false`, so every existing 2-arg `buildReviewColumnDefs(run, t)` call and the wizard's own
+  `<ReviewGrid domain run onRowUpdated>` usage are byte-identical). `readOnly` forces every value column's
+  `editable:false` + drops `cellEditor`, and `ReviewGrid` skips wiring `onCellValueChanged`/`singleClickEdit`
+  entirely — no PATCH is even reachable from the UI in this mode, on top of the backend's own `PATCH
+  .../rows/{row}` 422 outside `reviewing`. `onRowUpdated` is now optional (no-op default) since the
+  read-only mount never edits a row.
+- New `pages/lead-import-detail-page.tsx` on route `leads/import/history/:runId`, registered in
+  `routes/router.tsx` BEFORE `leads/:id` (react-router matches literal segments first regardless of
+  declaration order, but kept the ordering convention anyway per the pattern used by every other
+  `:id`-vs-literal pair in this file). Gate `<Can permission="import-runs.view">`; `parseEntityId` →
+  `NotFoundPage` on a non-numeric `:runId` (hook is still called with `null`, mirrors `RegistryDetailPage`/
+  `ReferentDetailPage` — `useEntityDetail`'s own `enabled` flag is what actually suppresses the fetch, not
+  a conditional hook call). `PageHeader` actions: Back to `/leads/import/history`, and "Resume import"
+  (only when `isResumable`) navigating to `/leads/import?runId={id}` — reuses the exact same URL the F1
+  adapter already produces for a resumable run.
+- Tests: `lead-import-status.test.ts` (unit), `use-lead-import-detail.test.tsx` (dependent-query gating +
+  refetch), `lead-import-detail.test.tsx` (presentational composition — `ReviewGrid`/`ImportErrorReportLink`
+  stubbed, own suites cover them), `lead-import-detail-page.test.tsx` (gate/NotFound/loading-error/resume
+  wiring — hook + view stubbed), `review-columns.test.tsx` (+1 case: `readOnly=true` forces
+  `editable:false`/no `cellEditor`).
+
+FE-3 [wizard gate + Lead module cleanup]:
+- `pages/lead-import-page.tsx`: gate `leads.import` → `import-runs.create` (backend still additionally
+  requires `leads.import` on every write endpoint, unchanged wizard behavior).
+- `features/leads/leads-table.tsx`: removed the two-item import/history dropdown pair and the
+  `features/imports/wizard/import-history-i18n` side-effect import; replaced with ONE
+  `<Can permission="import-runs.viewAny">` `DropdownMenuItem` ("Import lead", label in `leadImports.menu.link`,
+  not in the `leads` namespace) navigating straight to `/leads/import/history`. Deleted the now-dead
+  `features/imports/wizard/import-history-i18n.ts` (zero remaining importers, confirmed by grep).
+- Tests: `lead-import-page.test.tsx` (gate rename), `leads-table-import.test.tsx` (rewritten: single link,
+  `import-runs.viewAny` gating, navigation target, explicit assertion that "Import history" no longer
+  exists).
+
+Verified (first-hand): `npx vitest run` on every touched/adjacent file — 25 files / 159 tests green
+(`src/features/imports/**`, `src/features/leads/**`, `lead-import-{history,detail}-page.test.tsx`,
+`lead-import-page.test.tsx`). Full repo `npx vitest run`: 226/227 files, 1394/1397 tests green — the only
+red is the PRE-EXISTING `src/features/table/cell-renderers.test.tsx` (ContactsCell, 3 tests, it/en locale
+leak across test files), reproduced in isolation (fails alone too, before any of my changes touch that
+file) — not owned by this lane. `npx tsc --noEmit`: clean. `npx eslint` on every touched file: clean.
+
+Contract consumed as frozen in the spec — no field invented: `ImportRunDetail.error_rows` (not
+`invalid_rows`, confirmed against `ImportRunResource::toArray()`), `imported_rows: number | null`,
+`ImportRunSummaryReport.{mapped_fields,extra_fields,global_config,dedup_strategy,warnings}`.
+
+Not committed (§3.6) — stopping here per protocol; ask before committing. Backend lane (permissions/
+policy/authorization/table+stats rename/ImportController gate) is a separate, parallel in-flight change in
+the same working tree (see `git status`) — this note only certifies the frontend files listed above.

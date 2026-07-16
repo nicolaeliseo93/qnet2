@@ -1,8 +1,10 @@
 <?php
 
+use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\Country;
 use App\Models\PipelineStatus;
+use App\Models\ProductCategory;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,6 +33,26 @@ if (! function_exists('projectUserWith')) {
     }
 }
 
+if (! function_exists('projectStoreExtras')) {
+    /**
+     * The create-only fields made required alongside name/pipeline_status/
+     * country: business_function/product_category (now mandatory) and the
+     * start/end planning dates. Spread into a store payload to satisfy the
+     * required rules without repeating the fixture setup in every test.
+     *
+     * @return array<string, mixed>
+     */
+    function projectStoreExtras(): array
+    {
+        return [
+            'business_function_id' => BusinessFunction::factory()->create()->id,
+            'product_category_id' => ProductCategory::factory()->create()->id,
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+        ];
+    }
+}
+
 // ---------------------------------------------------------------------------
 // create — POST /api/projects (AC-010/AC-011/AC-012/AC-013)
 // ---------------------------------------------------------------------------
@@ -41,11 +63,11 @@ it('create: code is server-generated PRJ-0001, then PRJ-0002 (AC-010)', function
     $countryId = Country::factory()->create()->id;
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/projects', ['name' => 'First', 'pipeline_status_id' => $status->id, 'country_id' => $countryId])
+    $this->postJson('/api/projects', ['name' => 'First', 'pipeline_status_id' => $status->id, 'country_id' => $countryId, ...projectStoreExtras()])
         ->assertCreated()
         ->assertJsonPath('data.code', 'PRJ-0001');
 
-    $this->postJson('/api/projects', ['name' => 'Second', 'pipeline_status_id' => $status->id, 'country_id' => $countryId])
+    $this->postJson('/api/projects', ['name' => 'Second', 'pipeline_status_id' => $status->id, 'country_id' => $countryId, ...projectStoreExtras()])
         ->assertCreated()
         ->assertJsonPath('data.code', 'PRJ-0002');
 });
@@ -71,7 +93,7 @@ it('create: with country_id only -> 201, geo_scope=country (AC-001, D-2)', funct
     $country = Country::factory()->create();
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/projects', ['name' => 'Country Scoped', 'pipeline_status_id' => $status->id, 'country_id' => $country->id])
+    $this->postJson('/api/projects', ['name' => 'Country Scoped', 'pipeline_status_id' => $status->id, 'country_id' => $country->id, ...projectStoreExtras()])
         ->assertCreated()
         ->assertJsonPath('data.geo_scope', 'country')
         ->assertJsonPath('data.country_id', $country->id);
@@ -107,6 +129,7 @@ it('create: a full consistent geo chain -> 201, geo_scope=city (AC-003, D-2)', f
         'state_id' => $geo['state']->id,
         'province_id' => $geo['province']->id,
         'city_id' => $geo['city']->id,
+        ...projectStoreExtras(),
     ])->assertCreated()
         ->assertJsonPath('data.geo_scope', 'city')
         ->assertJsonPath('data.city.name', 'Milano');
@@ -122,7 +145,7 @@ it('create: no `code` in the payload -> code is server-generated PRJ-0001 (AC-00
     $countryId = Country::factory()->create()->id;
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/projects', ['name' => 'No Code', 'pipeline_status_id' => $status->id, 'country_id' => $countryId])
+    $this->postJson('/api/projects', ['name' => 'No Code', 'pipeline_status_id' => $status->id, 'country_id' => $countryId, ...projectStoreExtras()])
         ->assertCreated()
         ->assertJsonPath('data.code', 'PRJ-0001');
 });
@@ -138,6 +161,7 @@ it('create: an explicit `code` in the payload is persisted as-is (AC-002)', func
         'pipeline_status_id' => $status->id,
         'country_id' => $countryId,
         'code' => 'ACME-2026',
+        ...projectStoreExtras(),
     ])->assertCreated()->assertJsonPath('data.code', 'ACME-2026');
 
     $this->assertDatabaseHas('projects', ['code' => 'ACME-2026']);
@@ -154,6 +178,7 @@ it('create: `code` as an empty string -> code is server-generated (AC-003)', fun
         'pipeline_status_id' => $status->id,
         'country_id' => $countryId,
         'code' => '',
+        ...projectStoreExtras(),
     ])->assertCreated()->assertJsonPath('data.code', 'PRJ-0001');
 });
 
@@ -197,9 +222,10 @@ it('create: a manual non-PRJ code does not break the sequential generator (AC-00
         'pipeline_status_id' => $status->id,
         'country_id' => $countryId,
         'code' => 'ACME-2026',
+        ...projectStoreExtras(),
     ])->assertCreated()->assertJsonPath('data.code', 'ACME-2026');
 
-    $this->postJson('/api/projects', ['name' => 'Generated Second', 'pipeline_status_id' => $status->id, 'country_id' => $countryId])
+    $this->postJson('/api/projects', ['name' => 'Generated Second', 'pipeline_status_id' => $status->id, 'country_id' => $countryId, ...projectStoreExtras()])
         ->assertCreated()
         ->assertJsonPath('data.code', 'PRJ-0001');
 });
@@ -274,13 +300,56 @@ it('create: 422 when end_date < start_date (AC-013)', function () {
     expect(Project::count())->toBe(0);
 });
 
+it('create: 422 when a newly-mandatory field is missing (business_function/product_category/start_date/end_date)', function (string $missing) {
+    $actor = projectUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $payload = [
+        'name' => 'Missing '.$missing,
+        'pipeline_status_id' => PipelineStatus::factory()->create()->id,
+        'country_id' => Country::factory()->create()->id,
+        ...projectStoreExtras(),
+    ];
+    unset($payload[$missing]);
+
+    $this->postJson('/api/projects', $payload)
+        ->assertStatus(422)->assertJsonValidationErrors($missing);
+
+    expect(Project::count())->toBe(0);
+})->with(['business_function_id', 'product_category_id', 'start_date', 'end_date']);
+
+// ---------------------------------------------------------------------------
+// next-code — GET /api/projects/next-code (spec 0025, auto-fill suggestion)
+// ---------------------------------------------------------------------------
+
+it('next-code: suggests PRJ-0001 on an empty table, then the following sequence', function () {
+    $actor = projectUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/projects/next-code')
+        ->assertOk()->assertJsonPath('data.code', 'PRJ-0001');
+
+    Project::factory()->create(['code' => 'PRJ-0007']);
+
+    $this->getJson('/api/projects/next-code')
+        ->assertOk()->assertJsonPath('data.code', 'PRJ-0008');
+});
+
+it('next-code: 403 without projects.create', function () {
+    Sanctum::actingAs(projectUserWith(['viewAny']));
+
+    $this->getJson('/api/projects/next-code')->assertForbidden();
+});
+
 it('create: 403 without projects.create, no row persisted', function () {
     $actor = projectUserWith([]);
     $status = PipelineStatus::factory()->create();
     $countryId = Country::factory()->create()->id;
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/projects', ['name' => 'Nope', 'pipeline_status_id' => $status->id, 'country_id' => $countryId])->assertForbidden();
+    // Payload is otherwise valid so validation passes and the request reaches
+    // the controller's authorize('create') — which is what returns 403.
+    $this->postJson('/api/projects', ['name' => 'Nope', 'pipeline_status_id' => $status->id, 'country_id' => $countryId, ...projectStoreExtras()])->assertForbidden();
 
     expect(Project::count())->toBe(0);
 });

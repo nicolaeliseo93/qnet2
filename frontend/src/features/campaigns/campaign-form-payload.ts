@@ -45,7 +45,7 @@ function geoCreateFields(values: CampaignFormValues): Partial<Record<GeoFieldNam
 export function buildCreatePayload(values: CampaignFormValues): CreateCampaignPayload {
   const customFields = buildCustomFieldsCreate(values.custom_fields)
   const linked = values.project_id !== null
-  const code = values.code?.trim()
+  const code = values.code.trim()
 
   return {
     ...(code ? { code } : {}),

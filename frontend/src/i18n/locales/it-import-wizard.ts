@@ -10,7 +10,6 @@ export const importWizard = {
   },
   page: {
     title: 'Importa lead',
-    subtitle: 'Carica un file per importare lead in massa con un wizard guidato a fasi.',
     forbidden: 'Non hai i permessi per importare lead.',
     loadError: 'Impossibile caricare questo import. Riprova.',
   },

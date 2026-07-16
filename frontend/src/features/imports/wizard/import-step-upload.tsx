@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { Loader2, Upload } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import {
@@ -38,9 +37,7 @@ export function ImportStepUpload({ run, isUploading, uploadError, onUpload, onCo
 
   if (run === null) {
     return (
-      <Card>
-        <CardContent className="pt-4">
-          <Form {...form}>
+      <Form {...form}>
             <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
               <FormField
                 control={form.control}
@@ -77,19 +74,15 @@ export function ImportStepUpload({ run, isUploading, uploadError, onUpload, onCo
               </div>
             </form>
           </Form>
-        </CardContent>
-      </Card>
     )
   }
 
   if (run.status === 'analyzing') {
     return (
-      <Card>
-        <CardContent className="flex items-center gap-2 pt-4 text-sm text-muted-foreground" role="status">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          {t('upload.analyzing')}
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        {t('upload.analyzing')}
+      </div>
     )
   }
 
@@ -97,9 +90,8 @@ export function ImportStepUpload({ run, isUploading, uploadError, onUpload, onCo
   const duplicateCount = run.detected_columns?.filter((column) => column.duplicate).length ?? 0
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4 pt-4">
-        <h3 className="text-base font-semibold">{t('upload.summaryTitle')}</h3>
+    <div className="flex flex-col gap-4">
+      <h3 className="text-base font-semibold">{t('upload.summaryTitle')}</h3>
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted-foreground">{t('upload.columnsLabel')}</dt>
@@ -126,7 +118,6 @@ export function ImportStepUpload({ run, isUploading, uploadError, onUpload, onCo
             {t('upload.continue')}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   )
 }

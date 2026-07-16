@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Columns3, FileCheck2, FileUp, ListChecks, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Stepper, type StepperStep } from '@/components/ui/stepper'
 // Side effect: registers the `importWizard` i18next namespace (see the
@@ -38,6 +39,7 @@ function parseRunId(value: string | null): number | null {
  */
 export function ImportWizard({ domain }: ImportWizardProps) {
   const { t } = useTranslation('importWizard')
+  const title = t('page.title')
   const [searchParams, setSearchParams] = useSearchParams()
   const initialRunId = parseRunId(searchParams.get(RUN_ID_PARAM))
 
@@ -85,10 +87,13 @@ export function ImportWizard({ domain }: ImportWizardProps) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Stepper steps={steps} currentStep={wizard.currentStep} onStepClick={wizard.goToStep} />
-
-      {wizard.currentStep === 0 ? (
+    <Card>
+      <CardHeader className="gap-4">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <Stepper steps={steps} currentStep={wizard.currentStep} onStepClick={wizard.goToStep} />
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {wizard.currentStep === 0 ? (
         <ImportStepUpload
           run={wizard.run}
           isUploading={wizard.isUploading}
@@ -131,6 +136,7 @@ export function ImportWizard({ domain }: ImportWizardProps) {
           confirmError={wizard.confirmError}
         />
       ) : null}
-    </div>
+      </CardContent>
+    </Card>
   )
 }

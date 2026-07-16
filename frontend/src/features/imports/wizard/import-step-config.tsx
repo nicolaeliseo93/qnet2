@@ -3,7 +3,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import {
@@ -55,9 +54,7 @@ export function ImportStepConfig({ globalFields, initialValues, onNext }: Import
   const onSubmit = form.handleSubmit((values) => onNext(values))
 
   return (
-    <Card>
-      <CardContent className="pt-4">
-        <Form {...form}>
+    <Form {...form}>
           <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
             {globalFields.map((globalField) => (
               <FormField
@@ -104,7 +101,5 @@ export function ImportStepConfig({ globalFields, initialValues, onNext }: Import
             </div>
           </form>
         </Form>
-      </CardContent>
-    </Card>
   )
 }

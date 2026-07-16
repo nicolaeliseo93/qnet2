@@ -7,6 +7,7 @@
 export const table = {
   actionsHeader: 'Azioni',
   rowActions: 'Azioni riga',
+  moreActions: 'Altre azioni',
   search: 'Cerca…',
   searchPlaceholder: 'Cerca {{columns}}…',
   rowCount_one: '{{count}} riga',

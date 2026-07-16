@@ -4,12 +4,12 @@ import i18n from '@/i18n'
 import LeadImportPage from '@/pages/lead-import-page'
 
 /**
- * Spec 0033 AC-026: the page gates the wizard behind `leads.import` via
- * `<Can>` — UI-only, the backend re-checks the same ability fail-closed on
- * every endpoint. `PageHeader` (needs router/query context for its
- * breadcrumb) and `ImportWizard` (its own suite already covers the
- * orchestration) are stubbed, mirroring `pages/registries-page.test.tsx`
- * and `features/projects/projects-view.test.tsx`.
+ * Spec 0034 AC-015: the page gates the wizard behind `import-runs.create` via
+ * `<Can>` — UI-only, the backend still additionally requires `leads.import`
+ * fail-closed on every write endpoint. `PageHeader` (needs router/query
+ * context for its breadcrumb) and `ImportWizard` (its own suite already
+ * covers the orchestration) are stubbed, mirroring
+ * `pages/registries-page.test.tsx` and `features/projects/projects-view.test.tsx`.
  */
 
 vi.mock('@/components/page-header', () => ({
@@ -30,7 +30,7 @@ beforeAll(async () => {
 })
 
 describe('LeadImportPage', () => {
-  it('shows the forbidden fallback and does not mount the wizard without leads.import', () => {
+  it('shows the forbidden fallback and does not mount the wizard without import-runs.create', () => {
     canMock.mockReturnValue(false)
 
     render(<LeadImportPage />)
@@ -39,7 +39,7 @@ describe('LeadImportPage', () => {
     expect(screen.queryByTestId('import-wizard')).not.toBeInTheDocument()
   })
 
-  it('mounts the wizard for the leads domain when leads.import is granted', () => {
+  it('mounts the wizard for the leads domain when import-runs.create is granted', () => {
     canMock.mockReturnValue(true)
 
     render(<LeadImportPage />)

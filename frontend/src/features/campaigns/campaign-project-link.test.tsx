@@ -30,6 +30,7 @@ const TEST_PROJECT_ID = 42
 
 const createCampaignMock = vi.fn()
 const updateCampaignMock = vi.fn()
+const fetchCampaignNextCodeMock = vi.fn<() => Promise<string>>()
 
 vi.mock('@/features/campaigns/api', async () => {
   const actual = await vi.importActual<typeof import('@/features/campaigns/api')>(
@@ -39,6 +40,7 @@ vi.mock('@/features/campaigns/api', async () => {
     ...actual,
     createCampaign: (...args: unknown[]) => createCampaignMock(...args),
     updateCampaign: (...args: unknown[]) => updateCampaignMock(...args),
+    fetchCampaignNextCode: () => fetchCampaignNextCodeMock(),
   }
 })
 
@@ -196,8 +198,8 @@ function campaign(
     geo_locked_levels: [],
     product_category_id: 4,
     product_category: { id: 4, name: 'Hardware' },
-    start_date: null,
-    end_date: null,
+    start_date: '2026-01-01',
+    end_date: '2026-12-31',
     total_budget: null,
     target_lead: null,
     created_at: '2026-01-01T00:00:00Z',
@@ -214,6 +216,8 @@ beforeAll(async () => {
 beforeEach(() => {
   createCampaignMock.mockReset()
   updateCampaignMock.mockReset()
+  fetchCampaignNextCodeMock.mockReset()
+  fetchCampaignNextCodeMock.mockResolvedValue('CMP-0100')
   fetchResourceMetaMock.mockReset()
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
   fetchProjectsForSelectMock.mockReset()
@@ -256,6 +260,11 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
     expect(screen.getByTestId('geo-select')).toHaveAttribute('data-locked', 'country')
     expect(screen.getByTestId('geo-select')).toHaveAttribute('data-state', '')
 
+    // Dates are required even for a linked campaign (not inherited): fill them
+    // in the collapsed Planning & budget section before submitting.
+    fireEvent.click(screen.getByRole('button', { name: /Planning & budget/ }))
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-01-01' } })
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-12-31' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createCampaignMock).toHaveBeenCalledTimes(1))
@@ -335,6 +344,9 @@ describe('CampaignForm — BR-3 budget 422', () => {
       { wrapper: wrapper() },
     )
 
+    // "Planning & budget" is now a collapsible, default-closed section
+    // (UX-only refactor): open it before reaching the "Total budget" field.
+    fireEvent.click(screen.getByRole('button', { name: /Planning & budget/ }))
     fireEvent.change(screen.getByLabelText('Total budget'), { target: { value: '1000' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 

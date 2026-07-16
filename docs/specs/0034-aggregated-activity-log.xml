@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0034 — Activity Log aggregato per modulo (v1: solo Utenti).
+  Contract-first. Congelato PRIMA del dispatch: backend implementa, frontend consuma.
+  Naming identificatori in INGLESE (engineering.md §1.2); label = chiavi i18n.
+  Decisioni utente congelate (2026-07-16):
+    - Endpoint GENERICO (non annidato).
+    - Permesso via ability generica in BasePolicy: {resource}.viewActivity.
+    - Una voce per operazione, con changes[] {field, old_value, new_value}.
+    - Row-action tabella apre un Dialog/Sheet dedicato che monta lo stesso componente riusabile.
+    - Ambito v1: SOLO users; il framework resta generico e si estende con 1 riga di config per modulo.
+-->
+<spec id="0034-aggregated-activity-log" status="draft" owner="tu" date="2026-07-16">
+
+  <goal>
+    Esporre lo storico attivita' gia' registrato da spatie/laravel-activitylog in una sezione
+    "Activity Log" riutilizzabile, mostrata nel dettaglio di un record e da una row-action della
+    sua tabella. Il log e' AGGREGATO: raccoglie gli eventi dell'entita' principale piu' quelli
+    delle entita' correlate che il modulo dichiara, mantenendo la provenienza di ogni evento.
+    Interamente generico: ogni modulo si abilita con una sola voce di config. v1 copre solo Utenti.
+  </goal>
+
+  <context>
+    Fatti reali verificati (file:line) — NON reimplementare il tracking, esiste gia':
+    - Concern `App\Models\Concerns\LogsModelActivity` (backend/app/Models/Concerns/LogsModelActivity.php:22-30):
+      Spatie `LogsActivity` con `logFillable()->logExcept($hidden)->logOnlyDirty()->dontSubmitEmptyLogs()`,
+      `useLogName($this->getTable())`. Eventi Spatie default: created/updated/deleted/restored.
+      Usato da 31 model, inclusi User, PersonalData, Contact, Address (tutti loggano; campi sensibili
+      esclusi via `$hidden`).
+    - Tabella `activity_log` (migrazioni 2026_06_12_0635xx): colonne
+      id, log_name, description, subject_type, subject_id, event, causer_type, causer_id,
+      properties(json), batch_uuid, created_at, updated_at. Indici morph su subject/causer.
+    - `properties` = `{ attributes: {...new}, old: {...prev} }` (solo campi dirty; created ha solo
+      attributes; deleted ha solo attributes = stato finale).
+    - `Relation::enforceMorphMap([...])` in AppServiceProvider.php:91 -> `subject_type`/`causer_type`
+      contengono ALIAS brevi (es. 'user','personal_data','contact','address'), non FQCN. L'alias e'
+      il "modulo" della voce.
+    - Model Activity: stock `Spatie\Activitylog\Models\Activity` (config/activitylog.php:40, nessun override).
+    - NESSUNA API legge/espone i log oggi (verificato su routes + controllers): read-side da costruire.
+
+    Relazioni aggregate per User (annidate, verificate):
+    - `User::personalData` = morphOne(PersonalData, 'personable') [HasPersonalData.php:52].
+    - `PersonalData::contacts` = morphMany(Contact, 'contactable') [HasContacts.php:51].
+    - `PersonalData::addresses` = morphMany(Address, 'addressable') [HasAddresses.php:47].
+    -> relazioni aggregate users: ['personalData', 'personalData.contacts', 'personalData.addresses'].
+
+    Permessi (derivati, non lista statica):
+    - `permissions:sync` (SyncPermissions.php:30-63) unisce navigation.php + `BasePolicy::permissions()`.
+    - `BasePolicy::abilities()` (Policies/Abstracts/BasePolicy.php:73-76) = viewAny,view,create,update,
+      delete,export,import. Aggiungere `viewActivity` qui + metodo `viewActivity()` genera
+      `{resource}.viewActivity` per OGNI resource con Policy (meccanismo generico nativo).
+      `permission()` = "{resource}.{ability}".
+    - Envelope permessi detail = `{ resource, fields, actions }` da `ResourcePermissionsBuilder`
+      + `<Domain>Authorization` (`actions()` + `actionPermissions()`). Per far comparire
+      `permissions.actions.view_activity` su User detail: estendere `UsersAuthorization`.
+    - Row-action tabella: `UsersTableDefinition::actionsFor` (Tables/UsersTableDefinition.php:235-252)
+      via `Gate::allows`; catalogo azioni filtrato da permesso in AbstractTableDefinition::resolveActions.
+
+    Frontend:
+    - Detail Utente = Sheet `UserDetailView` (frontend/src/features/users/user-detail.tsx), stack di
+      `DetailSection` dal kit `@/components/detail/detail-panel`. Query key ['users','detail',userId].
+    - API detail: `fetchUser` appiattisce `permissions` su UserDetail (features/users/api.ts).
+    - Row-action gia' gestite in `users-table.tsx` (onAction), conferma via row-actions.
+    - i18n per-dominio in i18n/locales; label = chiavi i18n. Client HTTP: axios configurato.
+    - Stato server SEMPRE TanStack Query (frontend.md §2-3).
+  </context>
+
+  <scope>
+    <in>
+      <item>Servizio backend generico che aggrega activity_log di root + relazioni dichiarate, con provenienza.</item>
+      <item>Registry config `config/activity-log.php`: per-resource { model, relations[] }. v1: solo 'users'.</item>
+      <item>Endpoint generico `GET /api/activity-log/{resource}/{id}` paginato (keyset), envelope di progetto.</item>
+      <item>Nuova ability `viewActivity` in BasePolicy -> permesso `{resource}.viewActivity` generico (auto-sync).</item>
+      <item>Authz endpoint: `{resource}.viewActivity` AND Policy `view` sul record (no log di cio' che non vedi).</item>
+      <item>`UsersAuthorization`: espone `view_activity` in actions()/actionPermissions() per l'envelope detail.</item>
+      <item>Row-action `activity` in `UsersTableDefinition::actionsFor` gated da Gate `viewActivity`.</item>
+      <item>Componente FE riusabile `ActivityLogSection` (timeline compatta) + hook infinite query.</item>
+      <item>Montaggio in `UserDetailView` (nuova DetailSection gated) e apertura da Dialog/Sheet via row-action tabella.</item>
+      <item>i18n: label eventi (creazione/modifica/eliminazione/ripristino), moduli, campi (namespace dedicato).</item>
+      <item>Test Pest (endpoint: authz 403/404, aggregazione, shape, paginazione) e Vitest (componente/hook).</item>
+    </in>
+    <out>
+      <item>Qualsiasi modulo diverso da Utenti (estensione futura = 1 riga in config/activity-log.php).</item>
+      <item>Modifiche al tracking/scrittura dei log (LogsModelActivity, elenco $hidden, eventi loggati).</item>
+      <item>Custom Activity model, ritenzione/purge, batch grouping, diff semantico avanzato (enum/relazioni risolte).</item>
+      <item>Export dei log, filtri avanzati sul log, ricerca full-text nel log.</item>
+      <item>Reintroduzione di throttle (decisione 2026-07-15: solo su auth).</item>
+      <item>Rendering delle sezioni anagrafica/contatti/indirizzi nel detail (assenti oggi; fuori scope).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <endpoint method="GET" path="/api/activity-log/{resource}/{id}">
+      <request>
+        <!-- resource: chiave risorsa registrata (v1 solo 'users'). id: id del record root. -->
+        <!-- cursor: opaco (base64 di created_at,id), opzionale; per_page: int 1..100 default 25. -->
+        <param name="resource" in="path" type="string" note="registrata in config/activity-log.php; altrimenti 404"/>
+        <param name="id" in="path" type="integer"/>
+        <param name="cursor" in="query" type="string|null" note="keyset opaco; assente = prima pagina"/>
+        <param name="per_page" in="query" type="integer" note="1..100, default 25"/>
+      </request>
+      <response status="200">
+        <!-- Envelope di progetto BaseApiController::ok() -> { success, message, data } -->
+        {
+          success: true,
+          message: string,
+          data: {
+            items: Array&lt;{
+              id: number,                 // activity_log.id
+              logged_at: string,          // ISO 8601 (created_at)
+              event: 'created'|'updated'|'deleted'|'restored',
+              module: string,             // alias morph subject_type: 'user'|'personal_data'|'contact'|'address'
+              subject_id: number,
+              causer: { id: number|null, name: string|null },
+              changes: Array&lt;{ field: string, old_value: unknown|null, new_value: unknown|null }&gt;
+            }&gt;,
+            next_cursor: string|null       // null = ultima pagina
+          }
+        }
+      </response>
+      <errors>
+        <error status="401" note="non autenticato"/>
+        <error status="403" note="manca {resource}.viewActivity OR Policy view sul record"/>
+        <error status="404" note="resource non registrata in config/activity-log.php, oppure record inesistente"/>
+        <error status="422" note="per_page fuori range / cursor malformato"/>
+      </errors>
+    </endpoint>
+
+    <detail_envelope note="aggiunta su GET /api/users/{user} (permissions.actions)">
+      permissions.actions.view_activity: boolean   <!-- gate FE per mostrare la sezione nel detail -->
+    </detail_envelope>
+
+    <table_row_action note="GET /tables/users/columns -> actions[]; POST /tables/users/rows -> row.actions[]">
+      'activity'   <!-- presente nella riga solo se Gate::allows('viewActivity', $userModel) -->
+    </table_row_action>
+  </data_contract>
+
+  <acceptance_criteria>
+    <criterion id="AC-001">Dato un utente autenticato con `users.viewActivity` e `users.view`, quando GET /api/activity-log/users/{id}, allora 200 con envelope { success, data:{ items, next_cursor } }.</criterion>
+    <criterion id="AC-002">Dato un utente SENZA `users.viewActivity`, quando GET /api/activity-log/users/{id}, allora 403.</criterion>
+    <criterion id="AC-003">Dato un utente con `users.viewActivity` ma SENZA `users.view` sul record, quando GET, allora 403.</criterion>
+    <criterion id="AC-004">Dato resource non registrata (es. 'foo'), quando GET /api/activity-log/foo/1, allora 404 senza leak di classi interne.</criterion>
+    <criterion id="AC-005">Data una modifica alla PersonalData di un utente, quando GET del suo activity log, allora l'evento compare con module='personal_data' e subject_id corretto (provenienza mantenuta).</criterion>
+    <criterion id="AC-006">Data una modifica a un Contact/Address collegato via personalData, quando GET, allora l'evento compare aggregato con module='contact'/'address'.</criterion>
+    <criterion id="AC-007">Dato un update che cambia 2 campi, quando GET, allora UNA voce con event='updated' e changes[] di lunghezza 2, ciascuna { field, old_value, new_value } coerente con properties.</criterion>
+    <criterion id="AC-008">Dato un created, quando GET, allora la voce ha event='created' e changes[] con old_value=null per ogni campo.</criterion>
+    <criterion id="AC-009">Dati N&gt;per_page eventi, quando GET con per_page, allora items.length&lt;=per_page, ordine created_at desc,id desc, e next_cursor valorizzato; la pagina successiva col cursor non ripete/salta righe.</criterion>
+    <criterion id="AC-010">Il causer e' risolto a { id, name } (name null se causer assente) senza query N+1 (causer eager-loaded).</criterion>
+    <criterion id="AC-011">Nessun campo `$hidden` (es. password, tax_code, birth_date, contact value, address line1) compare mai in changes[].</criterion>
+    <criterion id="AC-012">`permissions:sync` genera `users.viewActivity`; GET /api/users/{user} espone permissions.actions.view_activity coerente col permesso dell'attore.</criterion>
+    <criterion id="AC-013">Row-action 'activity' presente sulla riga users solo se l'attore ha viewActivity; assente altrimenti.</criterion>
+    <criterion id="AC-014">FE: `ActivityLogSection` mostra data/ora, autore, tipo operazione (i18n), modulo (i18n), e per ogni change field/old/new; gated da `<Can>`; usa TanStack Query (no useEffect+fetch).</criterion>
+    <criterion id="AC-015">FE: la row-action 'activity' apre un Dialog/Sheet che monta lo stesso `ActivityLogSection`; il detail lo monta come DetailSection quando permissions.actions.view_activity=true.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie gia' presenti (Spatie activitylog/permission, TanStack Query, shadcn/ui, axios). Nessuna nuova dipendenza.</item>
+    <item>Query attivita' SOLO da allow-list di (subject_type alias, subject_id) raccolti dalle relazioni dichiarate; nessun whereRaw/orderByRaw da input (security.md §8). per_page clampato a 1..100.</item>
+    <item>Authz server-side su OGNI richiesta: viewActivity AND Policy view. Nessun Eloquent raw restituito: sempre via Resource. Envelope errori senza nomi di classi interne.</item>
+    <item>Nessun throttle (decisione 2026-07-15). Layering: Controller thin -> Service -> DTO -> Resource; DI in costruttore.</item>
+    <item>Paginazione keyset (created_at desc, id desc), non OFFSET (backend.md §8). Eager-load del causer (no N+1).</item>
+    <item>Generico: nessuna logica per-modulo hardcoded nel service/controller; l'unico punto per-modulo e' config/activity-log.php + (se serve) la relazione dichiarata. Estendere = 1 voce di config.</item>
+    <item>FE: componente riusabile in `features/activity-log/`, stato server via TanStack Query, `<Can>` per il gate (UI nasconde, BE autorizza). i18n, niente stringhe hardcoded. UI compatta (ui-design.md §2).</item>
+    <item>File entro 300/500 righe; zero dead code; identificatori in inglese; Pint/ESLint/tsc puliti; test eseguiti.</item>
+  </constraints>
+
+</spec>

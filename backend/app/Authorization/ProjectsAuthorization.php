@@ -42,15 +42,15 @@ class ProjectsAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('registry_id', 'select'),
             new FieldDefinition('pipeline_status_id', 'select', mandatory: true),
             new FieldDefinition('source_id', 'select'),
-            new FieldDefinition('business_function_id', 'select'),
+            new FieldDefinition('business_function_id', 'select', mandatory: true),
             new FieldDefinition('country_id', 'select', mandatory: true),
             new FieldDefinition('state_id', 'select'),
             new FieldDefinition('province_id', 'select'),
             new FieldDefinition('city_id', 'select'),
-            new FieldDefinition('product_category_id', 'select'),
+            new FieldDefinition('product_category_id', 'select', mandatory: true),
             new FieldDefinition('partner_id', 'select'),
-            new FieldDefinition('start_date', 'date'),
-            new FieldDefinition('end_date', 'date'),
+            new FieldDefinition('start_date', 'date', mandatory: true),
+            new FieldDefinition('end_date', 'date', mandatory: true),
             new FieldDefinition('total_budget', 'number'),
             new FieldDefinition('target_lead', 'number'),
         ];
@@ -73,22 +73,25 @@ class ProjectsAuthorization extends AbstractResourceAuthorization
 
         return [
             // code is writable only in create (spec 0025, BR-1): permanently
-            // readonly once a $model exists, regardless of write ability.
-            'code' => $mayWrite && $model === null ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            // readonly once a $model exists, regardless of write ability. It is
+            // required-on-create at the form level (manual entry with a
+            // sequential auto-fill suggestion), so the create ceiling flags it
+            // required; the Service still generates one when absent (fallback).
+            'code' => $mayWrite && $model === null ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'name' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'description' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'registry_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'pipeline_status_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'business_function_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'business_function_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'country_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'state_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'province_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'city_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'product_category_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'product_category_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'partner_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'start_date' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'end_date' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'start_date' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
+            'end_date' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'total_budget' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'target_lead' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];

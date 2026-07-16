@@ -44,6 +44,8 @@ interface UseCampaignFormArgs {
   mode: CampaignFormMode
   /** Called after a successful create/update so the caller can navigate to the detail page. */
   onSuccess: (campaign: CampaignDetail) => void
+  /** Create-only: sequential code suggestion prefilled into the `code` default (spec 0025). */
+  initialCode?: string
 }
 
 /**
@@ -52,7 +54,7 @@ interface UseCampaignFormArgs {
  * the create/update submit. The component stays UI-only; this hook is the
  * orchestration point (`onSubmit`).
  */
-export function useCampaignForm({ mode, onSuccess }: UseCampaignFormArgs) {
+export function useCampaignForm({ mode, onSuccess, initialCode }: UseCampaignFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [serverError, setServerError] = useState<string | null>(null)
@@ -103,7 +105,7 @@ export function useCampaignForm({ mode, onSuccess }: UseCampaignFormArgs) {
       }
     }
     return {
-      code: '',
+      code: initialCode ?? '',
       project_id: null,
       name: '',
       description: null,
@@ -124,7 +126,7 @@ export function useCampaignForm({ mode, onSuccess }: UseCampaignFormArgs) {
       target_lead: null,
       custom_fields: customFields.defaultValues,
     }
-  }, [mode, customFields.defaultValues])
+  }, [mode, customFields.defaultValues, initialCode])
 
   const form = useForm<CampaignFormValues>({
     resolver: zodResolver(schema),

@@ -35,9 +35,34 @@ trait GeneratesSequentialCode
             ->lockForUpdate()
             ->max($column);
 
+        return $this->formatNextCode(is_string($lastCode) ? $lastCode : null, $prefix);
+    }
+
+    /**
+     * The next "{prefix}-0001" code as a NON-binding suggestion for the create
+     * form's auto-fill: a plain, lock-free read (no transaction, no
+     * FOR UPDATE) since it never persists anything. Two concurrent previews
+     * may propose the same code; the real, serialized assignment still happens
+     * in nextSequentialCode()/the unique constraint at store time.
+     */
+    protected function peekNextSequentialCode(string $table, string $column, string $prefix): string
+    {
+        $lastCode = DB::table($table)
+            ->where($column, 'like', $prefix.'-%')
+            ->max($column);
+
+        return $this->formatNextCode(is_string($lastCode) ? $lastCode : null, $prefix);
+    }
+
+    /**
+     * Formats the sequence following $lastCode (null = first ever) as
+     * "{prefix}-{seq:4}".
+     */
+    private function formatNextCode(?string $lastCode, string $prefix): string
+    {
         $nextSequence = $lastCode === null
             ? 1
-            : ((int) substr((string) $lastCode, strlen($prefix) + 1)) + 1;
+            : ((int) substr($lastCode, strlen($prefix) + 1)) + 1;
 
         return sprintf('%s-%0'.self::CODE_PAD_LENGTH.'d', $prefix, $nextSequence);
     }

@@ -58,6 +58,22 @@ class CampaignController extends BaseApiController
     }
 
     /**
+     * GET /api/campaigns/next-code — the next sequential code (CMP-0001...) as
+     * a non-binding suggestion for the create form's auto-fill (spec 0025).
+     * Gated by campaigns.create: only an actor who may create needs it.
+     */
+    public function nextCode(): JsonResponse
+    {
+        try {
+            $this->authorize('create', Campaign::class);
+
+            return $this->ok(['code' => $this->service->previewNextCode()]);
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
      * POST /api/campaigns — create a new campaign.
      */
     public function store(StoreCampaignRequest $request): JsonResponse

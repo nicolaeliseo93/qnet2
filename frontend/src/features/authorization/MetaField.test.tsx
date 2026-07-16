@@ -58,7 +58,17 @@ function permissions(): ResourcePermissions {
   }
 }
 
-function Harness({ perms }: { perms: ResourcePermissions }) {
+function Harness({
+  perms,
+  emailHint,
+  emailHintLabel,
+  emailRequired,
+}: {
+  perms: ResourcePermissions
+  emailHint?: string
+  emailHintLabel?: string
+  emailRequired?: boolean
+}) {
   const form = useForm<Values>({
     defaultValues: { email: 'ada@example.com', roles: 'admin', bonus: 'x' },
   })
@@ -67,7 +77,15 @@ function Harness({ perms }: { perms: ResourcePermissions }) {
     <ResourcePermissionsProvider permissions={perms}>
       <Form {...form}>
         <form>
-          <MetaField control={form.control} name="email" metaKey="email" label="Email">
+          <MetaField
+            control={form.control}
+            name="email"
+            metaKey="email"
+            label="Email"
+            hint={emailHint}
+            hintLabel={emailHintLabel}
+            required={emailRequired}
+          >
             {({ field, disabled, readOnly }) => (
               <FormControl>
                 <Input {...field} disabled={disabled} readOnly={readOnly} />
@@ -102,6 +120,20 @@ describe('MetaField', () => {
     expect(screen.getByText('*')).toBeInTheDocument()
   })
 
+  it('lets the required prop override the permission-driven marker in both directions', () => {
+    // Override off: the email permission says required, the caller says not.
+    const { unmount } = render(<Harness perms={permissions()} emailRequired={false} />)
+    expect(screen.queryByText('*')).not.toBeInTheDocument()
+    unmount()
+
+    // Override on: the permission says not required, the caller says required
+    // (the campaigns standalone-classification case).
+    const perms = permissions()
+    perms.fields.email.required = false
+    render(<Harness perms={perms} emailRequired />)
+    expect(screen.getByText('*')).toBeInTheDocument()
+  })
+
   it('renders a readonly/non-editable field disabled and un-editable', () => {
     render(<Harness perms={permissions()} />)
     const roles = screen.getByLabelText('Roles')
@@ -120,5 +152,36 @@ describe('MetaField', () => {
     delete (perms.fields as Record<string, unknown>).email
     render(<Harness perms={perms} />)
     expect(screen.getByLabelText(/Email/)).toBeEnabled()
+  })
+
+  it('renders no hint trigger when `hint` is not provided (default, byte-identical today)', () => {
+    render(<Harness perms={permissions()} />)
+    expect(
+      screen.queryByRole('button', { name: i18n.t('authorization.moreInfo') }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders the hint trigger as a sibling of the label, not nested inside it', () => {
+    render(<Harness perms={permissions()} emailHint="Used for account recovery." />)
+
+    const hintButton = screen.getByRole('button', { name: i18n.t('authorization.moreInfo') })
+    expect(hintButton).toBeInTheDocument()
+    const label = screen.getByText('Email').closest('label')
+    expect(label).not.toBeNull()
+    expect(label).not.toContainElement(hintButton)
+  })
+
+  it('uses `hintLabel` as the hint trigger accessible name when provided', () => {
+    render(
+      <Harness
+        perms={permissions()}
+        emailHint="Used for account recovery."
+        emailHintLabel="More info about Email"
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'More info about Email' }),
+    ).toBeInTheDocument()
   })
 })

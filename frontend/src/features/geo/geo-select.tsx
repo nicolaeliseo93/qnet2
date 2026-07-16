@@ -30,6 +30,12 @@ interface GeoSelectProps {
    * level is chosen. Defaults to none, the pre-existing behaviour.
    */
   lockedLevels?: ReadonlyArray<GeoScope>
+  /**
+   * Levels whose label shows a required marker (asterisk). Defaults to none,
+   * the pre-existing behaviour; the geo cascade is not rendered via
+   * `MetaField`, so its requiredness is surfaced here instead.
+   */
+  requiredLevels?: ReadonlyArray<GeoScope>
 }
 
 interface GeoOption {
@@ -39,6 +45,8 @@ interface GeoOption {
 
 interface GeoFieldProps {
   label: string
+  /** Renders a required marker (asterisk) next to the label, mirroring `FormLabel required`. */
+  required?: boolean
   placeholder: string
   value: number | null
   options: GeoOption[]
@@ -68,6 +76,7 @@ interface GeoFieldProps {
  */
 function GeoField({
   label,
+  required = false,
   placeholder,
   value,
   options,
@@ -89,7 +98,14 @@ function GeoField({
 }: GeoFieldProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium">{label}</span>
+      <span className="text-sm font-medium">
+        {label}
+        {required && (
+          <span className="ml-1 text-destructive" aria-hidden="true">
+            *
+          </span>
+        )}
+      </span>
       <SearchableSelect
         value={value}
         onChange={onChange}
@@ -136,6 +152,7 @@ export function GeoSelect({
   onChange,
   disabled = false,
   lockedLevels = NO_LOCKED_LEVELS,
+  requiredLevels = NO_LOCKED_LEVELS,
 }: GeoSelectProps) {
   const { t } = useTranslation()
   const countryLocked = lockedLevels.includes('country')
@@ -186,6 +203,7 @@ export function GeoSelect({
     <div className="flex flex-col gap-3">
       <GeoField
         label={t('geo.country')}
+        required={requiredLevels.includes('country')}
         placeholder={t('geo.countryPlaceholder')}
         value={value.country_id}
         options={countries.data ?? []}
@@ -203,6 +221,7 @@ export function GeoSelect({
 
       <GeoField
         label={t('geo.state')}
+        required={requiredLevels.includes('state')}
         placeholder={t('geo.statePlaceholder')}
         value={value.state_id}
         options={states.data ?? []}
@@ -220,6 +239,7 @@ export function GeoSelect({
 
       <GeoField
         label={t('geo.province')}
+        required={requiredLevels.includes('province')}
         placeholder={t('geo.provincePlaceholder')}
         value={value.province_id}
         options={provinces.data ?? []}
@@ -237,6 +257,7 @@ export function GeoSelect({
 
       <GeoField
         label={t('geo.city')}
+        required={requiredLevels.includes('city')}
         placeholder={t('geo.cityPlaceholder')}
         value={value.city_id}
         options={cityOptions}

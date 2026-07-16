@@ -15,6 +15,7 @@ import type { CampaignFormValues } from '@/features/campaigns/use-campaign-form'
 
 function values(overrides: Partial<CampaignFormValues> = {}): CampaignFormValues {
   return {
+    code: '',
     project_id: null,
     name: 'Spring push',
     description: null,

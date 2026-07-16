@@ -114,11 +114,13 @@ const ROW_SELECTION: RowSelectionOptions<TableRow> = {
 }
 
 /**
- * Fixed width of the row-actions column. Sized to hold up to three compact icon
- * buttons; beyond that the actions collapse into a single overflow menu, so the
- * column never needs to grow. Kept narrow because it only carries controls.
+ * Fixed width of the row-actions column. The default holds up to three compact
+ * icon buttons; when the domain exposes more actions a fourth (overflow) button
+ * appears, so the column gets a bit wider to fit it. Kept narrow either way
+ * because it only holds those controls.
  */
 const ACTIONS_COLUMN_WIDTH = 100
+const ACTIONS_COLUMN_WIDTH_WITH_OVERFLOW = 120
 
 /**
  * Per-cell loading placeholder shown while an SSRM block streams in. Because AG
@@ -158,6 +160,13 @@ interface DataTableProps {
   renderRowActions?: RowActionsRenderer
   /** i18n key for the action column header. */
   actionsHeaderLabel?: string
+  /**
+   * Whether the domain can show the overflow (three-dots) button — i.e. its
+   * action catalog exceeds the inline limit. Widens the actions column just
+   * enough to fit the extra control; otherwise the column keeps its default
+   * narrow width.
+   */
+  actionsColumnHasOverflow?: boolean
   /**
    * Fired once the grid is ready. Exposes the AG Grid event so callers can keep
    * a reference to the grid API (e.g. to refresh SSRM blocks after a mutation).
@@ -218,6 +227,7 @@ export function DataTable({
   cellRenderers,
   renderRowActions,
   actionsHeaderLabel,
+  actionsColumnHasOverflow,
   onGridReady,
   onColumnStateChanged,
   initialFilterModel,
@@ -281,6 +291,9 @@ export function DataTable({
     })
 
     if (renderRowActions) {
+      const actionsWidth = actionsColumnHasOverflow
+        ? ACTIONS_COLUMN_WIDTH_WITH_OVERFLOW
+        : ACTIONS_COLUMN_WIDTH
       mapped.push({
         colId: ACTIONS_COLUMN_ID,
         headerName: actionsHeaderLabel ? t(actionsHeaderLabel) : '',
@@ -288,15 +301,23 @@ export function DataTable({
         filter: false,
         resizable: false,
         pinned: 'right',
-        width: ACTIONS_COLUMN_WIDTH,
-        minWidth: ACTIONS_COLUMN_WIDTH,
+        width: actionsWidth,
+        minWidth: actionsWidth,
         flex: 0,
         cellRenderer: (params: ICellRendererParams) => renderRowActions(params),
       })
     }
 
     return mapped
-  }, [domain, columns, cellRenderers, renderRowActions, actionsHeaderLabel, t])
+  }, [
+    domain,
+    columns,
+    cellRenderers,
+    renderRowActions,
+    actionsHeaderLabel,
+    actionsColumnHasOverflow,
+    t,
+  ])
 
   // Persist only USER-driven layout changes. AG Grid also emits these events for
   // its own programmatic updates (`api`, e.g. when we apply new columnDefs) and

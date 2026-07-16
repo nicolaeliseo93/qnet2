@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { Plus, Upload } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -14,7 +14,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Can } from '@/features/auth/can'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
@@ -33,7 +32,6 @@ import { OperationalSiteForm } from '@/features/operational-sites/operational-si
 import { OperationalSiteDetailView } from '@/features/operational-sites/operational-site-detail'
 import { DetailError, DetailLoading } from '@/components/detail/detail-panel'
 import type { OperationalSiteDetail } from '@/features/operational-sites/types'
-import { ImportDialog } from '@/features/imports/import-dialog'
 
 /** Domain key used to mount the generic table for operational sites. */
 const OPERATIONAL_SITES_DOMAIN = 'operational-sites'
@@ -70,7 +68,6 @@ export function OperationalSitesTable() {
 
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
 
   const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
 
@@ -164,26 +161,6 @@ export function OperationalSitesTable() {
         renderers={operationalSiteColumnRenderers}
         onAction={handleAction}
         isBusy={isBusy}
-        importSlot={
-          <Can permission="operational-sites.import">
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                setImportOpen(true)
-              }}
-            >
-              <Upload aria-hidden="true" />
-              {t('imports.action')}
-            </DropdownMenuItem>
-          </Can>
-        }
-      />
-
-      <ImportDialog
-        domain={OPERATIONAL_SITES_DOMAIN}
-        resource={OPERATIONAL_SITES_DOMAIN}
-        open={importOpen}
-        onOpenChange={setImportOpen}
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>

@@ -47,6 +47,8 @@ interface UseProjectFormArgs {
   mode: ProjectFormMode
   /** Called after a successful create/update so the caller can navigate to the detail page. */
   onSuccess: (project: ProjectDetail) => void
+  /** Create-only: sequential code suggestion prefilled into the `code` default (spec 0025). */
+  initialCode?: string
 }
 
 /**
@@ -54,7 +56,7 @@ interface UseProjectFormArgs {
  * values, server 422 mapping and the create/update submit. The component
  * stays UI-only; this hook is the orchestration point (`onSubmit`).
  */
-export function useProjectForm({ mode, onSuccess }: UseProjectFormArgs) {
+export function useProjectForm({ mode, onSuccess, initialCode }: UseProjectFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const invalidateStats = useInvalidateModuleStats(PROJECTS_DOMAIN)
@@ -104,7 +106,7 @@ export function useProjectForm({ mode, onSuccess }: UseProjectFormArgs) {
       }
     }
     return {
-      code: '',
+      code: initialCode ?? '',
       name: '',
       description: null,
       registry_id: null,
@@ -123,7 +125,7 @@ export function useProjectForm({ mode, onSuccess }: UseProjectFormArgs) {
       target_lead: null,
       custom_fields: customFields.defaultValues,
     }
-  }, [mode, customFields.defaultValues])
+  }, [mode, customFields.defaultValues, initialCode])
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(schema),

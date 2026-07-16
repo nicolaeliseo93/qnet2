@@ -81,7 +81,7 @@ class UsersAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import', 'upload_avatar', 'delete_avatar'];
+        return ['delete', 'export', 'import', 'upload_avatar', 'delete_avatar', 'view_activity'];
     }
 
     /**
@@ -192,6 +192,10 @@ class UsersAuthorization extends AbstractResourceAuthorization
             'import' => $actor->can('users.import'),
             'upload_avatar' => $model !== null && $actor->can('users.update'),
             'delete_avatar' => $model !== null && $actor->can('users.update'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `users.view` boundary is enforced separately by
+            // GET /api/activity-log/users/{id} itself.
+            'view_activity' => $model !== null && $actor->can('users.viewActivity'),
         ];
     }
 }

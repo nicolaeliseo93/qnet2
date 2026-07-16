@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CalendarRange, FolderKanban, Tags } from 'lucide-react'
+import { FolderKanban, Loader2, Tags } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,7 @@ import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select
 import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
 import { useProjectForm } from '@/features/projects/use-project-form'
 import { ProjectGeographySection } from '@/features/projects/project-geography-section'
+import { ProjectPlanningSection } from '@/features/projects/project-planning-section'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import type { ProjectDetail, ProjectFormMode } from '@/features/projects/types'
 
@@ -22,14 +24,18 @@ interface ProjectFormBodyProps {
   mode: ProjectFormMode
   onSuccess: (project: ProjectDetail) => void
   onCancel: () => void
+  /** Create-only: the sequential code suggestion prefilled into the `code` field (spec 0025). */
+  initialCode?: string
 }
 
 /** Placeholder shown for the manual `code` field in create, declaring the server-generation fallback (spec 0025 AC-010). */
 const CODE_PLACEHOLDER_KEY = 'projects.form.codePlaceholder'
 
-function numberInputValue(value: number | null): string {
-  return value === null ? '' : String(value)
-}
+/** Staggered mount reveal (motion-safe) for the two primary sections owned by this file; Geography/Planning carry their own. */
+const SECTION_REVEAL_IDENTITY =
+  'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-both motion-safe:duration-300 motion-safe:delay-0'
+const SECTION_REVEAL_CLASSIFICATION =
+  'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-both motion-safe:duration-300 motion-safe:delay-75'
 
 /**
  * The project create/edit form UI: the manual/read-only `code` (spec 0025,
@@ -37,13 +43,15 @@ function numberInputValue(value: number | null): string {
  * in create and read-only in update), identity (name, description), the
  * required Stato relation (D-5) plus the 5 optional relation pickers
  * (`ProjectRelationField`), the geo cascade (spec 0027 BR-4,
- * `ProjectGeographySection`), planning dates (BR-6) and budget/target — all
- * wrapped in `MetaField` (spec 0004). All non-render logic lives in
- * `useProjectForm`.
+ * `ProjectGeographySection`), planning dates (BR-6) and budget/target
+ * (`ProjectPlanningSection`) — all wrapped in `MetaField` (spec 0004). All
+ * non-render logic lives in `useProjectForm`. Planning and custom fields are
+ * secondary/optional groups, collapsed by default and force-opened on a
+ * validation error so the message stays reachable.
  */
-export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyProps) {
+export function ProjectFormBody({ mode, onSuccess, onCancel, initialCode }: ProjectFormBodyProps) {
   const { t } = useTranslation()
-  const { form, serverError, onSubmit } = useProjectForm({ mode, onSuccess })
+  const { form, serverError, onSubmit } = useProjectForm({ mode, onSuccess, initialCode })
   const original = mode.type === 'edit' ? mode.project : null
 
   const relationLabels = {
@@ -54,6 +62,9 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
     retryLabel: t('common.retry'),
   }
 
+  const [customOpen, setCustomOpen] = useState(false)
+  const customHasError = Boolean(form.formState.errors.custom_fields)
+
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <Form {...form}>
@@ -62,8 +73,16 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
             icon={FolderKanban}
             title={t('projects.form.sections.identity.title')}
             description={t('projects.form.sections.identity.description')}
+            className={SECTION_REVEAL_IDENTITY}
           >
-            <MetaField control={form.control} name="code" metaKey="code" label={t('projects.form.code')}>
+            <MetaField
+              control={form.control}
+              name="code"
+              metaKey="code"
+              label={t('projects.form.code')}
+              hint={t('projects.form.hints.code')}
+              hintLabel={t('projects.form.code')}
+            >
               {({ field, disabled, readOnly }) => (
                 <FormControl>
                   <Input
@@ -112,163 +131,90 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
             icon={Tags}
             title={t('projects.form.sections.classification.title')}
             description={t('projects.form.sections.classification.description')}
+            className={SECTION_REVEAL_CLASSIFICATION}
           >
-            <RelationSelectField
-              control={form.control}
-              name="pipeline_status_id"
-              metaKey="pipeline_status_id"
-              label={t('projects.form.status')}
-              resource={PROJECT_STATUSES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('projects.form.statusSearch')}
-              selected={original ? { id: original.pipeline_status.id, name: original.pipeline_status.name } : null}
-              {...relationLabels}
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <RelationSelectField
+                control={form.control}
+                name="pipeline_status_id"
+                metaKey="pipeline_status_id"
+                label={t('projects.form.status')}
+                resource={PROJECT_STATUSES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('projects.form.statusSearch')}
+                selected={original ? { id: original.pipeline_status.id, name: original.pipeline_status.name } : null}
+                {...relationLabels}
+              />
 
-            <RelationSelectField
-              control={form.control}
-              name="registry_id"
-              metaKey="registry_id"
-              label={t('projects.form.registry')}
-              resource={REGISTRIES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('projects.form.registrySearch')}
-              selected={original?.registry ?? null}
-              {...relationLabels}
-            />
+              <RelationSelectField
+                control={form.control}
+                name="registry_id"
+                metaKey="registry_id"
+                label={t('projects.form.registry')}
+                resource={REGISTRIES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('projects.form.registrySearch')}
+                selected={original?.registry ?? null}
+                {...relationLabels}
+              />
 
-            <RelationSelectField
-              control={form.control}
-              name="source_id"
-              metaKey="source_id"
-              label={t('projects.form.source')}
-              resource={SOURCES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('projects.form.sourceSearch')}
-              selected={original?.source ?? null}
-              {...relationLabels}
-            />
+              <RelationSelectField
+                control={form.control}
+                name="source_id"
+                metaKey="source_id"
+                label={t('projects.form.source')}
+                resource={SOURCES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('projects.form.sourceSearch')}
+                selected={original?.source ?? null}
+                {...relationLabels}
+              />
 
-            <RelationSelectField
-              control={form.control}
-              name="business_function_id"
-              metaKey="business_function_id"
-              label={t('projects.form.businessFunction')}
-              resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('projects.form.businessFunctionSearch')}
-              selected={original?.business_function ?? null}
-              {...relationLabels}
-            />
+              <RelationSelectField
+                control={form.control}
+                name="business_function_id"
+                metaKey="business_function_id"
+                label={t('projects.form.businessFunction')}
+                resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('projects.form.businessFunctionSearch')}
+                selected={original?.business_function ?? null}
+                {...relationLabels}
+              />
 
-            <RelationSelectField
-              control={form.control}
-              name="product_category_id"
-              metaKey="product_category_id"
-              label={t('projects.form.productCategory')}
-              resource={PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('projects.form.productCategorySearch')}
-              selected={original?.product_category ?? null}
-              {...relationLabels}
-            />
+              <RelationSelectField
+                control={form.control}
+                name="product_category_id"
+                metaKey="product_category_id"
+                label={t('projects.form.productCategory')}
+                resource={PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('projects.form.productCategorySearch')}
+                selected={original?.product_category ?? null}
+                {...relationLabels}
+              />
 
-            <RelationSelectField
-              control={form.control}
-              name="partner_id"
-              metaKey="partner_id"
-              label={t('projects.form.partner')}
-              resource={REFERENTS_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('projects.form.partnerSearch')}
-              selected={original?.partner ?? null}
-              {...relationLabels}
-            />
+              <RelationSelectField
+                control={form.control}
+                name="partner_id"
+                metaKey="partner_id"
+                label={t('projects.form.partner')}
+                hint={t('projects.form.hints.partner')}
+                resource={REFERENTS_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('projects.form.partnerSearch')}
+                selected={original?.partner ?? null}
+                {...relationLabels}
+              />
+            </div>
           </FormSection>
 
           <ProjectGeographySection control={form.control} setValue={form.setValue} />
 
-          <FormSection
-            icon={CalendarRange}
-            title={t('projects.form.sections.planning.title')}
-            description={t('projects.form.sections.planning.description')}
-          >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <MetaField
-                control={form.control}
-                name="start_date"
-                metaKey="start_date"
-                label={t('projects.form.startDate')}
-              >
-                {({ field, disabled, readOnly }) => (
-                  <FormControl>
-                    <Input type="date" disabled={disabled} readOnly={readOnly} {...field} />
-                  </FormControl>
-                )}
-              </MetaField>
+          <ProjectPlanningSection control={form.control} />
 
-              <MetaField
-                control={form.control}
-                name="end_date"
-                metaKey="end_date"
-                label={t('projects.form.endDate')}
-              >
-                {({ field, disabled, readOnly }) => (
-                  <FormControl>
-                    <Input type="date" disabled={disabled} readOnly={readOnly} {...field} />
-                  </FormControl>
-                )}
-              </MetaField>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <MetaField
-                control={form.control}
-                name="total_budget"
-                metaKey="total_budget"
-                label={t('projects.form.totalBudget')}
-              >
-                {({ field, disabled, readOnly }) => (
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      disabled={disabled}
-                      readOnly={readOnly}
-                      value={numberInputValue(field.value)}
-                      onChange={(event) =>
-                        field.onChange(event.target.value === '' ? null : Number(event.target.value))
-                      }
-                      onBlur={field.onBlur}
-                      name={field.name}
-                      ref={field.ref}
-                    />
-                  </FormControl>
-                )}
-              </MetaField>
-
-              <MetaField
-                control={form.control}
-                name="target_lead"
-                metaKey="target_lead"
-                label={t('projects.form.targetLead')}
-              >
-                {({ field, disabled, readOnly }) => (
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="1"
-                      disabled={disabled}
-                      readOnly={readOnly}
-                      value={numberInputValue(field.value)}
-                      onChange={(event) =>
-                        field.onChange(event.target.value === '' ? null : Number(event.target.value))
-                      }
-                      onBlur={field.onBlur}
-                      name={field.name}
-                      ref={field.ref}
-                    />
-                  </FormControl>
-                )}
-              </MetaField>
-            </div>
-          </FormSection>
-
-          <CustomFieldsSection resource="projects" control={form.control} />
+          <CustomFieldsSection
+            resource="projects"
+            control={form.control}
+            collapsible
+            defaultOpen={false}
+            open={customOpen || customHasError}
+            onOpenChange={setCustomOpen}
+          />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">
@@ -276,11 +222,12 @@ export function ProjectFormBody({ mode, onSuccess, onCancel }: ProjectFormBodyPr
             </p>
           )}
 
-          <div className="mt-auto flex justify-end gap-2 pt-2">
+          <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}>
               {t('projects.form.cancel')}
             </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />}
               {form.formState.isSubmitting ? t('projects.form.saving') : t('projects.form.save')}
             </Button>
           </div>

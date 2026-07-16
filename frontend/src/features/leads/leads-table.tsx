@@ -1,9 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { History, Plus, Upload } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -15,11 +14,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Can } from '@/features/auth/can'
-// Side effect: registers the `importWizard.menu.*` i18n keys used by the
-// import/history menu items below (spec 0033, F5 lane).
-import '@/features/imports/wizard/import-history-i18n'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
 import { useStatsPanel } from '@/features/stats/use-stats-panel'
@@ -57,8 +52,6 @@ type SheetState =
  */
 export function LeadsTable() {
   const { t } = useTranslation()
-  const { t: tImport } = useTranslation('importWizard')
-  const navigate = useNavigate()
   const stats = useStatsPanel(LEADS_DOMAIN)
   const invalidateStats = useInvalidateModuleStats(LEADS_DOMAIN)
   const queryClient = useQueryClient()
@@ -161,28 +154,6 @@ export function LeadsTable() {
         renderers={leadColumnRenderers}
         onAction={handleAction}
         isBusy={isBusy}
-        importSlot={
-          <Can permission="leads.import">
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                void navigate('/leads/import')
-              }}
-            >
-              <Upload aria-hidden="true" />
-              {tImport('menu.import')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                void navigate('/leads/import/history')
-              }}
-            >
-              <History aria-hidden="true" />
-              {tImport('menu.history')}
-            </DropdownMenuItem>
-          </Can>
-        }
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>

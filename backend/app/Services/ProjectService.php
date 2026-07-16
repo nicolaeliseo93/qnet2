@@ -98,6 +98,16 @@ class ProjectService
     }
 
     /**
+     * The next sequential code (PRJ-0001...) as a non-binding suggestion for
+     * the create form's auto-fill (spec 0025). Lock-free: the binding value is
+     * still resolved atomically in create().
+     */
+    public function previewNextCode(): string
+    {
+        return $this->peekNextSequentialCode(self::CODE_TABLE, self::CODE_COLUMN, self::CODE_PREFIX);
+    }
+
+    /**
      * Update an existing project. Only keys present in $data are touched, so
      * partial (PATCH) updates leave untouched fields as-is. Lowering
      * `total_budget` below the campaigns' already-allocated sum is allowed

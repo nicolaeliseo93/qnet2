@@ -11,6 +11,7 @@ import type { ProjectFormValues } from '@/features/projects/use-project-form'
 
 function values(overrides: Partial<ProjectFormValues> = {}): ProjectFormValues {
   return {
+    code: '',
     name: 'Acme rollout',
     description: null,
     registry_id: null,

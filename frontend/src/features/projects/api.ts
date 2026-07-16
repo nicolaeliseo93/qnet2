@@ -73,6 +73,16 @@ export async function fetchProject(id: number): Promise<ProjectDetailWithPermiss
   return { ...data.data, permissions: data.permissions }
 }
 
+/**
+ * The next sequential code (PRJ-0001...) suggested for the create form's
+ * `code` auto-fill (spec 0025). Non-binding: the user may edit it, and the
+ * server resolves the definitive value atomically on store.
+ */
+export async function fetchProjectNextCode(): Promise<string> {
+  const { data } = await apiClient.get<ApiResponse<{ code: string }>>('/projects/next-code')
+  return data.data.code
+}
+
 /** Creates a project. `code` is server-generated (BR-1); returns the created resource. */
 export async function createProject(payload: CreateProjectPayload): Promise<ProjectDetail> {
   const { data } = await apiClient.post<ApiResponse<ProjectDetail>>('/projects', payload)
