@@ -2,6 +2,56 @@
 
 > Injected at session start. Update at every green state.
 
+## OPPORTUNITY FORM — RETTIFICHE (spec 0040 amendment rev.2) (2026-07-16) — GREEN, NON COMMITTATO
+
+Quattro rettifiche al form Opportunita' chieste dall'utente. Solo estensioni ADDITIVE al
+contratto for-select + comportamento del form FE + nuovo primitive UI; nessuna migrazione,
+nessun endpoint nuovo, nessun tocco al CRUD/schema opportunities. Contratto in
+`docs/specs/0040-opportunities-module.xml` amendment rev.2, AC-091..AC-096.
+
+- A-3 COMMERCIALE/SEGNALATORE LIBERI: nel form NON piu' vincolati all'anagrafica (referents/
+  for-select SENZA registry_id, sempre abilitati). SOLO referent_id resta scoped (BR-4 invariato
+  per il referente). Il prefill commerciale/segnalatore dai default anagrafica resta.
+  SOSTITUISCE la clausola commerciale/segnalatore di BR-4/AC-072.
+- A-4 RECAP CONTATTI: scelto referente/commerciale/segnalatore, recap grafico compatto dei
+  contatti PRIMARI. Fonte: NUOVO `meta.contacts` su referents/for-select (solo is_primary,
+  {type,label,value,is_primary}). FE: `use-referent-contacts.ts` (useQuery ids:[id]) +
+  `opportunity-contact-recap.tsx` riusato dai 3 select.
+- A-5 GESTORI ACCOUNT EREDITATI: al cambio anagrafica manager_slots SOVRASCRITTO coi gestori
+  dell'anagrafica (gap-aware per position), editabile. Fonte: NUOVO `meta.managers`
+  ({id,name,position}) su registries/for-select. In edit nessuna sovrascrittura al caricamento.
+- A-6 PROBABILITA' COME SLIDER: `success_probability` reso slider 0..100 (nuovo
+  `components/ui/slider.tsx` su primitive radix-ui gia' in dep). Scelta utente "sempre a valore"
+  -> default 0, il form invia SEMPRE un numero (0% ≡ non impostato); schema FE da nullable a
+  number; buildUpdatePayload confronta `?? 0` per non scrivere 0 su untouched. Schema server
+  resta nullable (nessuna modifica BE).
+
+FILE TOCCATI:
+- BE: `ReferentForSelectResource` (+meta.contacts, value re-esposto via property access),
+  `ReferentService::forSelect`+`appendHydratedIds` (eager-load personalData.contacts is_primary,
+  metodo `forSelectContactEagerLoad`), `RegistryForSelectResource` (+meta.managers),
+  `RegistryService::forSelectBaseQuery` (+managers:id,name eager-load).
+- FE: `slider.tsx` (nuovo), `opportunity-form-body.tsx`, `opportunity-relation-meta.ts`
+  (RegistryMeta con managers), `opportunity-registry-field.tsx` (prefill manager_slots),
+  `opportunity-planning-section.tsx` (slider), `opportunity-schema.ts`+`use-opportunity-form.ts`+
+  `opportunity-form-payload.ts` (success_probability number/default 0), nuovi
+  `use-referent-contacts.ts`+`opportunity-contact-recap.tsx`, i18n it/en opportunities
+  (contactsRecap).
+
+VERIFICATO (eseguito): Pest `--filter='Referent|Registry'` 305/305 (incl. AC-091/092 nuovi:
+ReferentForSelectTest meta.contacts, RegistryForSelectTest meta.managers); Pint pulito. Vitest
+opportunities+referents 108/108 (nuovi: form-body AC-093/095, opportunity-contact-recap AC-094,
+opportunity-planning-section AC-096; schema/payload success_probability 0). `tsc -b` pulito,
+ESLint pulito. NIENTE COMMIT (in attesa).
+
+NOTA: 1 test file PRE-ESISTENTE rosso e FUORI SCOPE: `features/table/cell-renderers.test.tsx`
+(ContactsCell, 3 test) — file committato-pulito, non importa nulla del mio diff (rottura dal
+lavoro import non committato sul branch, non da queste rettifiche).
+
+RIMANDATO (altra spec, richiesta utente 2026-07-16): "un Lead ha un'Anagrafica, non un
+Referente" -> correzione a cascata lead + importazione + opportunita' (scegliendo un lead si
+auto-seleziona l'anagrafica). NON iniziata: l'utente la gestira' in una spec separata.
+
 ## NAVIGAZIONE — OPPORTUNITA' IN GESTIONE + LEAD PADRE DI IMPORT (2026-07-16) — GREEN, NON COMMITTATO
 
 Riorganizzazione menu (decisioni utente 2026-07-16). Solo navigazione/UX; authz resta
