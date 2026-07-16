@@ -164,6 +164,14 @@ final class OperationalSiteColumnCatalog
                 'confirm' => true,
                 'permission' => 'operational-sites.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'operational-sites.viewActivity',
+            ],
         ];
     }
 }

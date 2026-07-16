@@ -1,13 +1,22 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import i18n from '@/i18n'
 import { projects as projectsEn } from '@/i18n/locales/en-projects'
 import { ProjectDetailView } from '@/features/projects/project-detail'
-import type { ProjectDetail } from '@/features/projects/types'
+import type { ProjectDetailWithPermissions } from '@/features/projects/types'
 
 /** AC-044: the over-allocation warning shows only when `remaining_budget` is a negative amount. */
 
-function project(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
+const activityLogSectionMock = vi.fn()
+
+vi.mock('@/features/activity-log/activity-log-section', () => ({
+  ActivityLogSection: (props: { resource: string; id: number }) => {
+    activityLogSectionMock(props)
+    return <div>activity-log-section</div>
+  },
+}))
+
+function project(overrides: Partial<ProjectDetailWithPermissions> = {}): ProjectDetailWithPermissions {
   return {
     id: 1,
     code: 'PRJ-0001',
@@ -42,6 +51,11 @@ function project(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
     remaining_budget: '-300.00',
     campaigns_count: 2,
     created_at: '2026-01-01T00:00:00Z',
+    permissions: {
+      resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+      fields: {},
+      actions: {},
+    },
     ...overrides,
   }
 }
@@ -51,6 +65,10 @@ beforeAll(async () => {
   // `projects` is not yet wired into `en.ts` (pending the wiring lane, see
   // handoff): registered here so the feature's own copy renders for real.
   i18n.addResourceBundle('en', 'translation', { projects: projectsEn }, true, true)
+})
+
+beforeEach(() => {
+  activityLogSectionMock.mockReset()
 })
 
 describe('ProjectDetailView — budget over-allocation warning (AC-044)', () => {
@@ -115,5 +133,30 @@ describe('ProjectDetailView — derived geo scope (spec 0027 AC-012)', () => {
     render(<ProjectDetailView project={project({ country_id: null, country: null, geo_scope: null })} />)
 
     expect(screen.queryByText('National')).not.toBeInTheDocument()
+  })
+})
+
+/** Spec 0034, AC-015: representative module for the activity log rollout beyond Users. */
+describe('ProjectDetailView — activity log section', () => {
+  it('mounts the section for the viewed project when view_activity is granted', () => {
+    render(
+      <ProjectDetailView
+        project={project({ permissions: { ...project().permissions, actions: { view_activity: true } } })}
+      />,
+    )
+
+    expect(screen.getByText('Activity log')).toBeInTheDocument()
+    expect(activityLogSectionMock).toHaveBeenCalledWith({ resource: 'projects', id: 1 })
+  })
+
+  it('hides the section when view_activity is not granted', () => {
+    render(
+      <ProjectDetailView
+        project={project({ permissions: { ...project().permissions, actions: { view_activity: false } } })}
+      />,
+    )
+
+    expect(screen.queryByText('Activity log')).not.toBeInTheDocument()
+    expect(activityLogSectionMock).not.toHaveBeenCalled()
   })
 })

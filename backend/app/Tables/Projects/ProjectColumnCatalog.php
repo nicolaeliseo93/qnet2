@@ -184,6 +184,14 @@ final class ProjectColumnCatalog
                 'confirm' => true,
                 'permission' => 'projects.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'projects.viewActivity',
+            ],
         ];
     }
 }

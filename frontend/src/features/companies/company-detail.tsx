@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Building2, MapPin, Receipt } from 'lucide-react'
+import { Building2, History, MapPin, Receipt } from 'lucide-react'
 import {
   DetailEmpty,
   DetailError,
@@ -13,6 +13,7 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchCompany } from '@/features/companies/api'
 import type { CompanyAddress } from '@/features/companies/types'
@@ -69,6 +70,12 @@ export function CompanyDetailView({ companyId }: CompanyDetailProps) {
       <DetailSection title={t('companies.form.sections.address.title')} icon={<MapPin />}>
         <AddressBlock address={company.address} />
       </DetailSection>
+
+      {company.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="companies" id={company.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('companies.columns.created_at')}>{createdAt}</DetailMeta>

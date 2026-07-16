@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { Can } from '@/features/auth/can'
+import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
 import { useStatsPanel } from '@/features/stats/use-stats-panel'
@@ -38,6 +39,7 @@ export function ProductsTable() {
   const refreshGrid = useCallback(() => tableRef.current?.refresh(), [])
 
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [activityRow, setActivityRow] = useState<TableRow | null>(null)
 
   const runDelete = useCallback(
     async (row: TableRow) => {
@@ -70,6 +72,9 @@ export function ProductsTable() {
           break
         case 'delete':
           void runDelete(row)
+          break
+        case 'activity':
+          setActivityRow(row)
           break
         default:
           break
@@ -108,6 +113,16 @@ export function ProductsTable() {
         renderers={productColumnRenderers}
         onAction={handleAction}
         isBusy={isBusy}
+      />
+
+      <ResourceActivityDialog
+        resource={PRODUCTS_DOMAIN}
+        row={activityRow}
+        onOpenChange={(open) => {
+          if (!open) {
+            setActivityRow(null)
+          }
+        }}
       />
     </div>
   )

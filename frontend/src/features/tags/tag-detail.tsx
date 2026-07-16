@@ -1,16 +1,18 @@
 import { useTranslation } from 'react-i18next'
-import { Tag as TagIcon } from 'lucide-react'
+import { History, Tag as TagIcon } from 'lucide-react'
 import {
   DetailHero,
   DetailMeta,
   DetailMonogram,
   DetailPanel,
+  DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import type { TagDetail } from '@/features/tags/types'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
+import type { TagDetailWithPermissions } from '@/features/tags/types'
 
 interface TagDetailViewProps {
-  tag: TagDetail
+  tag: TagDetailWithPermissions
 }
 
 /**
@@ -26,6 +28,12 @@ export function TagDetailView({ tag }: TagDetailViewProps) {
   return (
     <DetailPanel>
       <DetailHero media={<DetailMonogram name={tag.name} icon={<TagIcon />} />} title={tag.name} />
+
+      {tag.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="tags" id={tag.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? <DetailMeta label={t('tags.detail.created_at')}>{createdAt}</DetailMeta> : null}
     </DetailPanel>

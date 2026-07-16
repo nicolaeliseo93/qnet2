@@ -18,7 +18,10 @@ use Illuminate\Database\Eloquent\Model;
  * mandatory. No contextual rules (no protected system row): every field's
  * ceiling is simply visible+editable when the actor may write, else
  * visible+readonly, mirroring BusinessFunctionsAuthorization/
- * CompaniesAuthorization.
+ * CompaniesAuthorization. actionPermissions() IS overridden (spec 0034):
+ * `view_activity` maps to `operational-sites.viewActivity` (camelCase
+ * ability), which the default "{resource}.{action}" mapping cannot express
+ * for an underscored action key.
  */
 class OperationalSitesAuthorization extends AbstractResourceAuthorization
 {
@@ -53,7 +56,7 @@ class OperationalSitesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -71,6 +74,22 @@ class OperationalSitesAuthorization extends AbstractResourceAuthorization
             'city_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'line1' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'postal_code' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+        ];
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    public function actionPermissions(User $actor, ?Model $model): array
+    {
+        return [
+            'delete' => $model !== null && $actor->can('operational-sites.delete'),
+            'export' => $actor->can('operational-sites.export'),
+            'import' => $actor->can('operational-sites.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `operational-sites.view` boundary is enforced
+            // separately by GET /api/activity-log/operational-sites/{id}.
+            'view_activity' => $model !== null && $actor->can('operational-sites.viewActivity'),
         ];
     }
 }

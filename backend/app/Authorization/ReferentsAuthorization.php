@@ -59,7 +59,7 @@ class ReferentsAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -117,6 +117,10 @@ class ReferentsAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('referents.delete'),
             'export' => $actor->can('referents.export'),
             'import' => $actor->can('referents.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `referents.view` boundary is enforced separately by
+            // GET /api/activity-log/referents/{id} itself.
+            'view_activity' => $model !== null && $actor->can('referents.viewActivity'),
         ];
     }
 }

@@ -41,7 +41,7 @@ class TagsAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -65,6 +65,10 @@ class TagsAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('tags.delete'),
             'export' => $actor->can('tags.export'),
             'import' => $actor->can('tags.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `tags.view` boundary is enforced separately by
+            // GET /api/activity-log/tags/{id} itself.
+            'view_activity' => $model !== null && $actor->can('tags.viewActivity'),
         ];
     }
 }

@@ -70,7 +70,7 @@ class RegistriesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -139,6 +139,10 @@ class RegistriesAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('registries.delete'),
             'export' => $actor->can('registries.export'),
             'import' => $actor->can('registries.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `registries.view` boundary is enforced separately
+            // by GET /api/activity-log/registries/{id} itself.
+            'view_activity' => $model !== null && $actor->can('registries.viewActivity'),
         ];
     }
 }

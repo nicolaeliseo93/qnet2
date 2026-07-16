@@ -52,7 +52,7 @@ class AttributesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -89,6 +89,10 @@ class AttributesAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('attributes.delete'),
             'export' => $actor->can('attributes.export'),
             'import' => $actor->can('attributes.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `attributes.view` boundary is enforced separately
+            // by GET /api/activity-log/attributes/{id} itself.
+            'view_activity' => $model !== null && $actor->can('attributes.viewActivity'),
         ];
     }
 }

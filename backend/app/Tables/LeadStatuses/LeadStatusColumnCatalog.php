@@ -101,6 +101,14 @@ final class LeadStatusColumnCatalog
                 'confirm' => true,
                 'permission' => 'lead-statuses.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'lead-statuses.viewActivity',
+            ],
         ];
     }
 }

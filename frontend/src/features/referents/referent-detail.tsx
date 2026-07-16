@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Info, MapPin, Phone } from 'lucide-react'
+import { History, Info, MapPin, Phone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -13,11 +13,12 @@ import {
 } from '@/components/detail/detail-panel'
 import { enumLabelOf } from '@/features/config/enum-label'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { cardToDraft } from '@/features/personal-data/drafts'
 import type { PersonalDataFieldPermissionResolver } from '@/features/personal-data/types'
-import type { ReferentDetail } from '@/features/referents/types'
+import type { ReferentDetailWithPermissions } from '@/features/referents/types'
 
 /**
  * Renders the (owner-agnostic, reused unchanged) contacts/addresses managers
@@ -36,7 +37,7 @@ const READ_ONLY_FIELD_PERMISSION: PersonalDataFieldPermissionResolver = () => ({
 function noopChange(): void {}
 
 interface ReferentDetailViewProps {
-  referent: ReferentDetail
+  referent: ReferentDetailWithPermissions
 }
 
 /**
@@ -99,6 +100,12 @@ export function ReferentDetailView({ referent }: ReferentDetailViewProps) {
           <DetailEmpty />
         )}
       </DetailSection>
+
+      {referent.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="referents" id={referent.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('referents.columns.created_at')}>{createdAt}</DetailMeta>

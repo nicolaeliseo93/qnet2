@@ -51,7 +51,7 @@ class LeadsAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -83,6 +83,10 @@ class LeadsAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('leads.delete'),
             'export' => $actor->can('leads.export'),
             'import' => $actor->can('leads.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `leads.view` boundary is enforced separately by
+            // GET /api/activity-log/leads/{id} itself.
+            'view_activity' => $model !== null && $actor->can('leads.viewActivity'),
         ];
     }
 }

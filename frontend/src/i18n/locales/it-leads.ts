@@ -44,7 +44,7 @@ export const leads = {
     sections: {
       contact: {
         title: 'Contatto e campagna',
-        description: 'Il contatto e la campagna che lo hanno generato, con sede, fonte e operatore.',
+        description: 'Il contatto, la campagna che lo ha generato e lo stato del lead.',
       },
       details: {
         title: 'Dettagli',
@@ -74,7 +74,13 @@ export const leads = {
     sourceSearch: 'Cerca fonti…',
     operator: 'Operatore',
     operatorSearch: 'Cerca operatori…',
+    hints: {
+      operationalSite: 'La sede operativa a cui è associato il lead.',
+      source: "Il canale o l'origine da cui proviene il lead.",
+      operator: "L'utente interno incaricato di seguire il lead.",
+    },
     notes: 'Note',
+    notesPlaceholder: 'Scrivi una nota su questo lead…',
     notesMax: 'Le note devono avere al massimo 5000 caratteri.',
     extraFields: {
       add: 'Aggiungi campo',

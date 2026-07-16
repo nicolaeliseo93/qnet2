@@ -36,6 +36,22 @@ relation-select-field); `tsc --noEmit` pulito; ESLint pulito sui file toccati. N
 PROSSIMI PASSI possibili: migrare campaigns a `sectionRevealClassName` condiviso; valutare stesso
 restyling per form referents/registries piu' vecchi.
 
+## NOTA VERIFICA TIPI FE (2026-07-16): usare `npx tsc -b`, NON `tsc --noEmit`
+
+Nel frontend `npx tsc --noEmit` esce 0 senza controllare nulla (tsconfig.json radice = solution file con
+project references, lista file vuota). Il typecheck reale e' `npx tsc -b` (primo step dello script `build`
+e dell'hook Stop `typecheck.sh`). Con stato incrementale `.tsbuildinfo` sporco la lista errori puo'
+variare tra run: usare `npx tsc -b --force` per il quadro completo.
+
+## WIP PARALLELO "ACTIVITY LOG SUI MODULI" (2026-07-16) — IN CORSO, NON MIO
+
+Nel working tree c'e' un rollout in corso (sessione parallela) di ResourceActivityDialog/ActivityLogSection
+gated da `permissions.actions.view_activity`: campaigns-table COMPLETO (pattern di riferimento),
+business-function-detail e lead-detail completati, leads-table e projects-table A META' (import/state senza
+dialog -> errori TS6133 transitori). Non toccare quei file finche' il rollout non chiude. Mio contributo
+puntuale: re-import del tipo `BusinessFunctionDetail` in business-function-detail.tsx (usato da `typeLabel`,
+era rimasto orfano del rename a `...WithPermissions`).
+
 ## WIZARD IMPORT LEAD — restyling grafico/UX (2026-07-16) — GREEN, NON COMMITTATO
 
 Refactoring SOLO presentazionale del wizard /imports/new (spec 0033): zero cambi a logica, flussi,

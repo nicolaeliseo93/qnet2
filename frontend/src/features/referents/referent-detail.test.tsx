@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { ReferentDetailView } from '@/features/referents/referent-detail'
-import type { ReferentDetail } from '@/features/referents/types'
+import type { ReferentDetailWithPermissions } from '@/features/referents/types'
 import type { PersonalDataCard } from '@/features/personal-data/types'
 
 /**
@@ -12,7 +12,7 @@ import type { PersonalDataCard } from '@/features/personal-data/types'
  * `ConfirmDialogProvider`) and `useEnumOptions()` (needs a `QueryClient`)
  * unconditionally, even read-only — every render needs both ancestors.
  */
-function renderDetail(referent: ReferentDetail) {
+function renderDetail(referent: ReferentDetailWithPermissions) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
@@ -57,7 +57,7 @@ function card(overrides: Partial<PersonalDataCard> = {}): PersonalDataCard {
   }
 }
 
-function referent(overrides: Partial<ReferentDetail> = {}): ReferentDetail {
+function referent(overrides: Partial<ReferentDetailWithPermissions> = {}): ReferentDetailWithPermissions {
   return {
     id: 7,
     name: 'Ada Lovelace',
@@ -67,6 +67,11 @@ function referent(overrides: Partial<ReferentDetail> = {}): ReferentDetail {
     notes: 'VIP sponsor',
     personal_data: card(),
     created_at: '2026-01-01T00:00:00Z',
+    permissions: {
+      resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+      fields: {},
+      actions: {},
+    },
     ...overrides,
   }
 }

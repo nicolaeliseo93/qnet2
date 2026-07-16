@@ -154,6 +154,14 @@ final class ProductCategoryColumnCatalog
                 'confirm' => true,
                 'permission' => 'product-categories.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'product-categories.viewActivity',
+            ],
         ];
     }
 }

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, CalendarRange, FolderKanban, Globe, Tags, Wallet } from 'lucide-react'
+import { AlertTriangle, CalendarRange, FolderKanban, Globe, History, Tags, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import {
@@ -13,10 +13,11 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { formatDecimal } from '@/features/products/column-renderers'
 import { GeoScopeBadge } from '@/features/geo/geo-scope-badge'
 import { geoScopePlaceName } from '@/features/geo/geo-scope'
-import type { ProjectDetail as ProjectDetailData } from '@/features/projects/types'
+import type { ProjectDetailWithPermissions as ProjectDetailData } from '@/features/projects/types'
 
 interface ProjectDetailViewProps {
   project: ProjectDetailData
@@ -163,6 +164,12 @@ export function ProjectDetailView({ project }: ProjectDetailViewProps) {
           <BudgetOverallocationWarning remainingBudget={project.remaining_budget} />
         </div>
       </DetailSection>
+
+      {project.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="projects" id={project.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('projects.columns.created_at')}>{createdAt}</DetailMeta>

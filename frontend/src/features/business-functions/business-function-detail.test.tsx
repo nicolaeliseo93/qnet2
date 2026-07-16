@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import i18n from '@/i18n'
 import { BusinessFunctionDetailView } from '@/features/business-functions/business-function-detail'
-import type { BusinessFunctionDetail } from '@/features/business-functions/types'
+import type { BusinessFunctionDetailWithPermissions } from '@/features/business-functions/types'
 
-const BASE: BusinessFunctionDetail = {
+const BASE: BusinessFunctionDetailWithPermissions = {
   id: 1,
   name: 'Engineering',
   is_business_unit: true,
@@ -18,6 +18,11 @@ const BASE: BusinessFunctionDetail = {
     { id: 21, name: 'Katherine Johnson', avatar_url: null },
   ],
   created_at: '2026-01-15T10:30:00Z',
+  permissions: {
+    resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+    fields: {},
+    actions: {},
+  },
 }
 
 describe('BusinessFunctionDetailView', () => {

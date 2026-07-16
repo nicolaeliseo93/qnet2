@@ -45,7 +45,7 @@ class BusinessFunctionsAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -72,6 +72,10 @@ class BusinessFunctionsAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('business-functions.delete'),
             'export' => $actor->can('business-functions.export'),
             'import' => $actor->can('business-functions.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `business-functions.view` boundary is enforced
+            // separately by GET /api/activity-log/business-functions/{id}.
+            'view_activity' => $model !== null && $actor->can('business-functions.viewActivity'),
         ];
     }
 }

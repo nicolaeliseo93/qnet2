@@ -8,18 +8,21 @@ import {
 import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import type { TableRow } from '@/features/table/types'
 
-interface UserActivityDialogProps {
+export interface ResourceActivityDialogProps {
+  /** Registry key of the aggregating resource, e.g. "users" or "companies". */
+  resource: string
   /** Row whose activity log is shown; `null` closes the dialog. */
   row: TableRow | null
   onOpenChange: (open: boolean) => void
 }
 
 /**
- * Row-action Dialog opened from the users table (spec 0034, AC-015): mounts
+ * Row-action Dialog opened from any domain table (spec 0034, AC-015): mounts
  * the same reusable `ActivityLogSection` shown in the detail Sheet, so the
- * timeline rendering has a single source of truth.
+ * timeline rendering has a single source of truth across every module
+ * (generalizes the former `UserActivityDialog`).
  */
-export function UserActivityDialog({ row, onOpenChange }: UserActivityDialogProps) {
+export function ResourceActivityDialog({ resource, row, onOpenChange }: ResourceActivityDialogProps) {
   const { t } = useTranslation()
 
   return (
@@ -30,7 +33,7 @@ export function UserActivityDialog({ row, onOpenChange }: UserActivityDialogProp
         </DialogHeader>
         {row ? (
           <div className="max-h-[70vh] overflow-y-auto">
-            <ActivityLogSection resource="users" id={row.id} />
+            <ActivityLogSection resource={resource} id={row.id} />
           </div>
         ) : null}
       </DialogContent>

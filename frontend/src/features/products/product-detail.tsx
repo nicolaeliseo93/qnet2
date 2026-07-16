@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Package } from 'lucide-react'
+import { History, Package } from 'lucide-react'
 import {
   DetailField,
   DetailGrid,
@@ -12,11 +12,12 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { enumLabelOf } from '@/features/config/enum-label'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { formatDecimal } from '@/features/products/column-renderers'
-import type { ProductDetail } from '@/features/products/types'
+import type { ProductDetailWithPermissions } from '@/features/products/types'
 
 interface ProductDetailViewProps {
-  product: ProductDetail
+  product: ProductDetailWithPermissions
 }
 
 /**
@@ -59,6 +60,12 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           )}
         </DetailGrid>
       </DetailSection>
+
+      {product.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="products" id={product.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('products.detail.created_at')}>{createdAt}</DetailMeta>

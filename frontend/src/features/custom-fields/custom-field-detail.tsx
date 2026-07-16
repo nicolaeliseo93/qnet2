@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Puzzle } from 'lucide-react'
+import { History, Puzzle } from 'lucide-react'
 import {
   DetailField,
   DetailGrid,
@@ -11,10 +11,11 @@ import {
 } from '@/components/detail/detail-panel'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import type { CustomFieldDefinitionDetail } from '@/features/custom-fields/types'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
+import type { CustomFieldDefinitionDetailWithPermissions } from '@/features/custom-fields/types'
 
 interface CustomFieldDetailViewProps {
-  definition: CustomFieldDefinitionDetail
+  definition: CustomFieldDefinitionDetailWithPermissions
 }
 
 /**
@@ -84,6 +85,12 @@ export function CustomFieldDetailView({ definition }: CustomFieldDetailViewProps
                 : t('customFields.form.relationCardinalityOne')}
             </DetailField>
           </DetailGrid>
+        </DetailSection>
+      ) : null}
+
+      {definition.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="custom-fields" id={definition.id} />
         </DetailSection>
       ) : null}
 

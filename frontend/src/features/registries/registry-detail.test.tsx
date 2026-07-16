@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import i18n from '@/i18n'
 import { RegistryDetailView } from '@/features/registries/registry-detail'
-import type { RegistryDetail } from '@/features/registries/types'
+import type { RegistryDetailWithPermissions } from '@/features/registries/types'
 import type { PersonalDataCard } from '@/features/personal-data/types'
 
 // The owner-agnostic managers are covered by their own suites; stub them so this
@@ -38,7 +38,7 @@ function card(overrides: Partial<PersonalDataCard> = {}): PersonalDataCard {
   }
 }
 
-function registry(overrides: Partial<RegistryDetail> = {}): RegistryDetail {
+function registry(overrides: Partial<RegistryDetailWithPermissions> = {}): RegistryDetailWithPermissions {
   return {
     id: 1,
     name: 'Acme S.p.A.',
@@ -72,6 +72,11 @@ function registry(overrides: Partial<RegistryDetail> = {}): RegistryDetail {
     employee_count: null,
     personal_data: card(),
     created_at: '2026-01-01T00:00:00Z',
+    permissions: {
+      resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+      fields: {},
+      actions: {},
+    },
     ...overrides,
   }
 }

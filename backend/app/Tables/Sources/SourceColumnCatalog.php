@@ -82,6 +82,14 @@ final class SourceColumnCatalog
                 'confirm' => true,
                 'permission' => 'sources.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'sources.viewActivity',
+            ],
         ];
     }
 }

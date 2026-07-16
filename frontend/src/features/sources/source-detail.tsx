@@ -1,16 +1,18 @@
 import { useTranslation } from 'react-i18next'
-import { Database } from 'lucide-react'
+import { Database, History } from 'lucide-react'
 import {
   DetailHero,
   DetailMeta,
   DetailMonogram,
   DetailPanel,
+  DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import type { SourceDetail } from '@/features/sources/types'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
+import type { SourceDetailWithPermissions } from '@/features/sources/types'
 
 interface SourceDetailViewProps {
-  source: SourceDetail
+  source: SourceDetailWithPermissions
 }
 
 /**
@@ -29,6 +31,12 @@ export function SourceDetailView({ source }: SourceDetailViewProps) {
         media={<DetailMonogram name={source.name} icon={<Database />} />}
         title={source.name}
       />
+
+      {source.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="sources" id={source.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('sources.detail.created_at')}>{createdAt}</DetailMeta>

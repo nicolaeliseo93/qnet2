@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { SlidersHorizontal } from 'lucide-react'
+import { History, SlidersHorizontal } from 'lucide-react'
 import {
   DetailField,
   DetailGrid,
@@ -11,12 +11,13 @@ import {
 } from '@/components/detail/detail-panel'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { DynamicIcon } from '@/features/custom-fields/dynamic-icon'
 import { FIELD_TYPE_ICONS } from '@/features/custom-fields/field-type-icons'
-import type { AttributeDetail } from '@/features/attributes/types'
+import type { AttributeDetailWithPermissions } from '@/features/attributes/types'
 
 interface AttributeDetailViewProps {
-  attribute: AttributeDetail
+  attribute: AttributeDetailWithPermissions
 }
 
 /**
@@ -69,6 +70,12 @@ export function AttributeDetailView({ attribute }: AttributeDetailViewProps) {
           )}
         </DetailSection>
       )}
+
+      {attribute.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="attributes" id={attribute.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('attributes.detail.created_at')}>{createdAt}</DetailMeta>

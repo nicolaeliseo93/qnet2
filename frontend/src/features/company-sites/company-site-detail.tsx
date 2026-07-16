@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { IdCard, Landmark, MapPin, Phone, Receipt, Star, Users } from 'lucide-react'
+import { History, IdCard, Landmark, MapPin, Phone, Receipt, Star, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/user-avatar'
@@ -18,6 +18,7 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { cardToDraft } from '@/features/personal-data/drafts'
@@ -196,6 +197,12 @@ export function CompanySiteDetailView({ companySiteId, onDefaultChange }: Compan
           </DetailField>
         </DetailGrid>
       </DetailSection>
+
+      {site.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="company-sites" id={site.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('companySites.columns.created_at')}>{createdAt}</DetailMeta>

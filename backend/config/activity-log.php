@@ -1,5 +1,25 @@
 <?php
 
+use App\Models\Attribute;
+use App\Models\BusinessFunction;
+use App\Models\Campaign;
+use App\Models\Company;
+use App\Models\CompanySite;
+use App\Models\CustomFieldDefinition;
+use App\Models\Lead;
+use App\Models\LeadStatus;
+use App\Models\OperationalSite;
+use App\Models\PipelineStatus;
+use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Models\Project;
+use App\Models\Referent;
+use App\Models\ReferentType;
+use App\Models\Registry;
+use App\Models\Role;
+use App\Models\Sector;
+use App\Models\Source;
+use App\Models\Tag;
 use App\Models\User;
 
 return [
@@ -16,11 +36,81 @@ return [
     | fully generic). Adding a resource = one entry here, no controller/service
     | change.
     |
-    | v1 covers only `users`, aggregating the personal-data card plus its
-    | contacts and addresses (HasPersonalData/HasContacts/HasAddresses).
+    | `personal_data`-aggregating resources (users, company-sites, referents,
+    | registries — every HasPersonalData owner) share the same three
+    | relations, mirroring `users`. `custom-fields` aggregates its own
+    | `options` (CustomFieldOption, its only LogsModelActivity child). Every
+    | other resource below has no aggregated child and declares no root model
+    | with no own activity-logged relation, so `relations` is omitted
+    | (ActivityLogRegistry defaults it to `[]`). `import-runs` is deliberately
+    | excluded (spec 0034): it carries no activitylog.
     |
     */
     'resources' => [
+        'attributes' => [
+            'model' => Attribute::class,
+        ],
+        'business-functions' => [
+            'model' => BusinessFunction::class,
+        ],
+        'campaigns' => [
+            'model' => Campaign::class,
+        ],
+        'companies' => [
+            'model' => Company::class,
+        ],
+        'company-sites' => [
+            'model' => CompanySite::class,
+            'relations' => ['personalData', 'personalData.contacts', 'personalData.addresses'],
+        ],
+        'custom-fields' => [
+            'model' => CustomFieldDefinition::class,
+            'relations' => ['options'],
+        ],
+        'lead-statuses' => [
+            'model' => LeadStatus::class,
+        ],
+        'leads' => [
+            'model' => Lead::class,
+        ],
+        'operational-sites' => [
+            'model' => OperationalSite::class,
+        ],
+        'pipeline-statuses' => [
+            'model' => PipelineStatus::class,
+        ],
+        'product-categories' => [
+            'model' => ProductCategory::class,
+        ],
+        'products' => [
+            'model' => Product::class,
+        ],
+        'projects' => [
+            'model' => Project::class,
+        ],
+        'referent-types' => [
+            'model' => ReferentType::class,
+        ],
+        'referents' => [
+            'model' => Referent::class,
+            'relations' => ['personalData', 'personalData.contacts', 'personalData.addresses'],
+        ],
+        'registries' => [
+            'model' => Registry::class,
+            'relations' => ['personalData', 'personalData.contacts', 'personalData.addresses'],
+        ],
+        'roles' => [
+            'model' => Role::class,
+        ],
+        'sectors' => [
+            'model' => Sector::class,
+        ],
+        'sources' => [
+            'model' => Source::class,
+        ],
+        'tags' => [
+            'model' => Tag::class,
+        ],
         'users' => [
             'model' => User::class,
             'relations' => ['personalData', 'personalData.contacts', 'personalData.addresses'],

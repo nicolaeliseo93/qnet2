@@ -62,7 +62,7 @@ class CustomFieldsAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -105,6 +105,10 @@ class CustomFieldsAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('custom-fields.delete'),
             'export' => $actor->can('custom-fields.export'),
             'import' => $actor->can('custom-fields.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `custom-fields.view` boundary is enforced
+            // separately by GET /api/activity-log/custom-fields/{id}.
+            'view_activity' => $model !== null && $actor->can('custom-fields.viewActivity'),
         ];
     }
 }

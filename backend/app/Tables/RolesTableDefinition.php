@@ -186,6 +186,14 @@ class RolesTableDefinition extends AbstractTableDefinition
                 'confirm' => true,
                 'permission' => 'roles.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'roles.viewActivity',
+            ],
         ];
     }
 
@@ -296,6 +304,10 @@ class RolesTableDefinition extends AbstractTableDefinition
 
         if (! $isSystemRole && Gate::forUser($actor)->allows('delete', $row)) {
             $allowed[] = 'delete';
+        }
+
+        if (Gate::forUser($actor)->allows('viewActivity', $row)) {
+            $allowed[] = 'activity';
         }
 
         return $allowed;

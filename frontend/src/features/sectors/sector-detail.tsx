@@ -1,11 +1,18 @@
 import { useTranslation } from 'react-i18next'
-import { ListTree } from 'lucide-react'
-import { DetailHero, DetailMeta, DetailMonogram, DetailPanel } from '@/components/detail/detail-panel'
+import { History, ListTree } from 'lucide-react'
+import {
+  DetailHero,
+  DetailMeta,
+  DetailMonogram,
+  DetailPanel,
+  DetailSection,
+} from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import type { SectorDetail } from '@/features/sectors/types'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
+import type { SectorDetailWithPermissions } from '@/features/sectors/types'
 
 interface SectorDetailViewProps {
-  sector: SectorDetail
+  sector: SectorDetailWithPermissions
 }
 
 /**
@@ -24,6 +31,12 @@ export function SectorDetailView({ sector }: SectorDetailViewProps) {
         title={sector.name}
         subtitle={sector.parent?.name}
       />
+
+      {sector.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="sectors" id={sector.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('sectors.columns.created_at')}>{createdAt}</DetailMeta>

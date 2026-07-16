@@ -15,6 +15,36 @@ interface LeadFormProps {
 }
 
 /**
+ * Loading placeholder mirroring the form's real layout (two section cards
+ * with header chip, title and field rows) so the swap to the loaded form
+ * does not shift the page. Shared with `LeadFormPage`'s edit-fetch state.
+ */
+export function LeadFormSkeleton() {
+  return (
+    <div className="flex flex-col gap-4 p-4" aria-hidden="true">
+      {[0, 1].map((section) => (
+        <div key={section} className="rounded-xl border bg-card shadow-sm">
+          <div className="flex items-center gap-3 border-b px-4 py-3.5">
+            <Skeleton className="size-9 rounded-lg" />
+            <div className="flex flex-col gap-1.5">
+              <Skeleton className="h-3.5 w-40" />
+              <Skeleton className="h-3 w-56" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-4 p-4">
+            <Skeleton className="h-9 w-full" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
  * Reusable RHF + Zod form used for both creating and editing a lead.
  * Metadata-driven (spec 0004): resolves the resource's `ResourcePermissions`
  * before rendering — edit mode from the loaded instance detail, create mode
@@ -25,13 +55,7 @@ export function LeadForm(props: LeadFormProps) {
   const meta = useLeadFormMeta(props.mode)
 
   if (meta.status === 'loading') {
-    return (
-      <div className="flex flex-col gap-4 p-4" aria-hidden="true">
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-      </div>
-    )
+    return <LeadFormSkeleton />
   }
 
   if (meta.status === 'error') {

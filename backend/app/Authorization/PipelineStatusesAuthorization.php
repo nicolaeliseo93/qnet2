@@ -43,7 +43,7 @@ class PipelineStatusesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -69,6 +69,10 @@ class PipelineStatusesAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('pipeline-statuses.delete'),
             'export' => $actor->can('pipeline-statuses.export'),
             'import' => $actor->can('pipeline-statuses.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `pipeline-statuses.view` boundary is enforced
+            // separately by GET /api/activity-log/pipeline-statuses/{id}.
+            'view_activity' => $model !== null && $actor->can('pipeline-statuses.viewActivity'),
         ];
     }
 }

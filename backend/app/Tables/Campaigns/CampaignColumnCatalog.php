@@ -196,6 +196,14 @@ final class CampaignColumnCatalog
                 'confirm' => true,
                 'permission' => 'campaigns.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'campaigns.viewActivity',
+            ],
         ];
     }
 }

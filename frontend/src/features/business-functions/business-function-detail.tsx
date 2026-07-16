@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Network, UserCog, Users } from 'lucide-react'
+import { History, Network, UserCog, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -12,10 +12,14 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import type { BusinessFunctionDetail } from '@/features/business-functions/types'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
+import type {
+  BusinessFunctionDetail,
+  BusinessFunctionDetailWithPermissions,
+} from '@/features/business-functions/types'
 
 interface BusinessFunctionDetailViewProps {
-  businessFunction: BusinessFunctionDetail
+  businessFunction: BusinessFunctionDetailWithPermissions
 }
 
 /**
@@ -65,6 +69,12 @@ export function BusinessFunctionDetailView({ businessFunction }: BusinessFunctio
           <DetailEmpty />
         )}
       </DetailSection>
+
+      {businessFunction.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="business-functions" id={businessFunction.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('businessFunctions.detail.created_at')}>{createdAt}</DetailMeta>

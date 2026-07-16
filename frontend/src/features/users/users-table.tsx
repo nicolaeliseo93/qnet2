@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
-import { History, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -14,7 +14,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Can } from '@/features/auth/can'
-import { UserActivityDialog } from '@/features/users/user-activity-dialog'
+import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
 import { useStatsPanel } from '@/features/stats/use-stats-panel'
@@ -34,15 +34,6 @@ import { UserDetailView } from '@/features/users/user-detail'
 
 /** Domain key used to mount the generic table for users. */
 const USERS_DOMAIN = 'users'
-
-/**
- * Domain icon override for the 'activity' row-action (spec 0034): the
- * catalog's `icon: 'history'` (`UserColumnCatalog::actions()`) has no shared
- * default, so it is injected here. Hoisted to module scope — `iconMap` feeds
- * a `useMemo` dependency in `TableView`, so a fresh object per render would
- * defeat the memoization.
- */
-const USERS_ICON_MAP = { history: History }
 
 /** Which sheet (if any) is currently open and for which row. */
 type SheetState =
@@ -181,7 +172,6 @@ export function UsersTable() {
         onAction={handleAction}
         isBusy={isBusy}
         decorateRow={decorateRow}
-        iconMap={USERS_ICON_MAP}
       />
 
       <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>
@@ -231,7 +221,8 @@ export function UsersTable() {
         </SheetContent>
       </Sheet>
 
-      <UserActivityDialog
+      <ResourceActivityDialog
+        resource={USERS_DOMAIN}
         row={activityRow}
         onOpenChange={(open) => {
           if (!open) {

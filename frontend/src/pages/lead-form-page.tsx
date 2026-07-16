@@ -3,12 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/page-header'
 import { Can } from '@/features/auth/can'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchLead, leadDetailQueryKey } from '@/features/leads/api'
-import { LeadForm } from '@/features/leads/lead-form'
+import { LeadForm, LeadFormSkeleton } from '@/features/leads/lead-form'
 import type { LeadDetail } from '@/features/leads/types'
 import { useBreadcrumbTitle } from '@/routes/breadcrumb-title'
 import { parseEntityId } from '@/routes/entity-id'
@@ -82,11 +81,7 @@ export default function LeadFormPage() {
               </Button>
             </div>
           ) : isEdit && (isLoading || !lead) ? (
-            <div className="flex flex-col gap-4 p-4" aria-hidden="true">
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-            </div>
+            <LeadFormSkeleton />
           ) : (
             <LeadForm
               mode={lead ? { type: 'edit', lead } : { type: 'create' }}

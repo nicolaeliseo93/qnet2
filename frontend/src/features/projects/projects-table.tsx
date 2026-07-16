@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Can } from '@/features/auth/can'
+import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
@@ -76,6 +77,7 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
 
     const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
     const [deletingId, setDeletingId] = useState<number | null>(null)
+    const [activityRow, setActivityRow] = useState<TableRow | null>(null)
 
     const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
 
@@ -114,6 +116,9 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
             break
           case 'delete':
             void runDelete(row)
+            break
+          case 'activity':
+            setActivityRow(row)
             break
           default:
             break
@@ -207,6 +212,16 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
             )}
           </SheetContent>
         </Sheet>
+
+        <ResourceActivityDialog
+          resource={PROJECTS_DOMAIN}
+          row={activityRow}
+          onOpenChange={(open) => {
+            if (!open) {
+              setActivityRow(null)
+            }
+          }}
+        />
       </div>
     )
   },

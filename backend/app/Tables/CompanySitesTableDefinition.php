@@ -183,6 +183,10 @@ class CompanySitesTableDefinition extends AbstractTableDefinition
             $allowed[] = 'delete';
         }
 
+        if (Gate::forUser($actor)->allows('viewActivity', $row)) {
+            $allowed[] = 'activity';
+        }
+
         return $allowed;
     }
 

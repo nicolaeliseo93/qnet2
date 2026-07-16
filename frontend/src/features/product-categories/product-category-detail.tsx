@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { FolderTree } from 'lucide-react'
+import { FolderTree, History } from 'lucide-react'
 import {
   DetailField,
   DetailGrid,
@@ -11,11 +11,12 @@ import {
 } from '@/components/detail/detail-panel'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { FIELD_TYPE_ICONS } from '@/features/custom-fields/field-type-icons'
-import type { ProductCategoryAttributeAssignment, ProductCategoryDetail, ProductCategoryInheritedAttribute } from '@/features/product-categories/types'
+import type { ProductCategoryAttributeAssignment, ProductCategoryDetailWithPermissions, ProductCategoryInheritedAttribute } from '@/features/product-categories/types'
 
 interface ProductCategoryDetailViewProps {
-  category: ProductCategoryDetail
+  category: ProductCategoryDetailWithPermissions
 }
 
 interface AttributeTypeBadgeProps {
@@ -115,6 +116,12 @@ export function ProductCategoryDetailView({ category }: ProductCategoryDetailVie
           </ul>
         </DetailSection>
       )}
+
+      {category.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="product-categories" id={category.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('productCategories.columns.created_at')}>{createdAt}</DetailMeta>

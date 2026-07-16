@@ -82,6 +82,14 @@ final class TagColumnCatalog
                 'confirm' => true,
                 'permission' => 'tags.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'tags.viewActivity',
+            ],
         ];
     }
 }

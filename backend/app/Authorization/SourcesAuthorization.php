@@ -41,7 +41,7 @@ class SourcesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -65,6 +65,10 @@ class SourcesAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('sources.delete'),
             'export' => $actor->can('sources.export'),
             'import' => $actor->can('sources.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `sources.view` boundary is enforced separately by
+            // GET /api/activity-log/sources/{id} itself.
+            'view_activity' => $model !== null && $actor->can('sources.viewActivity'),
         ];
     }
 }

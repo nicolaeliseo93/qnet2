@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { KeyRound, ShieldCheck } from 'lucide-react'
+import { History, KeyRound, ShieldCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -12,6 +12,7 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchRole } from '@/features/roles/api'
 import { groupPermissions, permissionAbility } from '@/features/roles/permission-groups'
@@ -86,6 +87,12 @@ export function RoleDetailView({ roleId }: RoleDetailProps) {
           <DetailEmpty />
         )}
       </DetailSection>
+
+      {role.authorization.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="roles" id={role.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('roles.columns.created_at')}>{createdAt}</DetailMeta>

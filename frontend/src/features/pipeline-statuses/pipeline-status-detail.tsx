@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Flag } from 'lucide-react'
+import { Flag, History } from 'lucide-react'
 import {
   DetailEmpty,
   DetailField,
@@ -11,12 +11,13 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
 import { cn } from '@/lib/utils'
-import type { PipelineStatusDetail } from '@/features/pipeline-statuses/types'
+import type { PipelineStatusDetailWithPermissions } from '@/features/pipeline-statuses/types'
 
 interface PipelineStatusDetailViewProps {
-  pipelineStatus: PipelineStatusDetail
+  pipelineStatus: PipelineStatusDetailWithPermissions
 }
 
 /**
@@ -57,6 +58,12 @@ export function PipelineStatusDetailView({ pipelineStatus }: PipelineStatusDetai
           </DetailField>
         </DetailGrid>
       </DetailSection>
+
+      {pipelineStatus.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="pipeline-statuses" id={pipelineStatus.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('pipelineStatuses.detail.created_at')}>{createdAt}</DetailMeta>

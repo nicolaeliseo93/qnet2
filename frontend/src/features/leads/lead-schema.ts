@@ -7,8 +7,8 @@ import type { TFunction } from 'i18next'
  * frozen backend contract (spec 0024) 1:1: exactly 6 fields, no `code` (D-3).
  */
 
-/** Backend `notes` column limit (`max:5000`). */
-const NOTES_MAX_LENGTH = 5000
+/** Backend `notes` column limit (`max:5000`); exported for the form's character counter. */
+export const NOTES_MAX_LENGTH = 5000
 
 /**
  * A single free-form `extra_fields` row as edited in the field array (spec

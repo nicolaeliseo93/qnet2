@@ -13,8 +13,10 @@ use Illuminate\Database\Eloquent\Model;
  * No contextual rules (no protected system row): every field's ceiling is
  * simply visible+editable when the actor may write (create/update), else
  * visible+readonly, mirroring BusinessFunctionsAuthorization.
- * resourcePermissions()/actionPermissions() are the AbstractResourceAuthorization
- * defaults (not overridden): every standard ability -> "companies.{ability}".
+ * resourcePermissions() is the AbstractResourceAuthorization default (not
+ * overridden). actionPermissions() IS overridden (spec 0034): `view_activity`
+ * maps to `companies.viewActivity` (camelCase ability), which the default
+ * "{resource}.{action}" mapping cannot express for an underscored action key.
  */
 class CompaniesAuthorization extends AbstractResourceAuthorization
 {
@@ -45,7 +47,7 @@ class CompaniesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -59,6 +61,22 @@ class CompaniesAuthorization extends AbstractResourceAuthorization
             'denomination' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'vat_number' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'address' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+        ];
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    public function actionPermissions(User $actor, ?Model $model): array
+    {
+        return [
+            'delete' => $model !== null && $actor->can('companies.delete'),
+            'export' => $actor->can('companies.export'),
+            'import' => $actor->can('companies.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `companies.view` boundary is enforced separately by
+            // GET /api/activity-log/companies/{id} itself.
+            'view_activity' => $model !== null && $actor->can('companies.viewActivity'),
         ];
     }
 }

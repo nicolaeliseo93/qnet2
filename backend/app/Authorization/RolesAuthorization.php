@@ -46,7 +46,7 @@ class RolesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -110,6 +110,10 @@ class RolesAuthorization extends AbstractResourceAuthorization
                 && $actor->can('roles.delete'),
             'export' => $actor->can('roles.export'),
             'import' => $actor->can('roles.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `roles.view` boundary is enforced separately by
+            // GET /api/activity-log/roles/{id} itself.
+            'view_activity' => $model !== null && $actor->can('roles.viewActivity'),
         ];
     }
 }

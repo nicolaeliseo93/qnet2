@@ -130,6 +130,14 @@ final class ReferentColumnCatalog
                 'confirm' => true,
                 'permission' => 'referents.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'referents.viewActivity',
+            ],
         ];
     }
 }

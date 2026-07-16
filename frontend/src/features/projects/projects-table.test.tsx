@@ -77,7 +77,16 @@ vi.mock('@/components/page-header', () => ({
 const refreshMock = vi.fn()
 let capturedOnAction: RowActionHandler | null = null
 
-const ROW: TableRow = { id: 12, actions: ['view', 'edit', 'delete'], name: 'Acme rollout' }
+const ROW: TableRow = { id: 12, actions: ['view', 'edit', 'delete', 'activity'], name: 'Acme rollout' }
+
+const activityLogSectionMock = vi.fn()
+
+vi.mock('@/features/activity-log/activity-log-section', () => ({
+  ActivityLogSection: (props: { resource: string; id: number }) => {
+    activityLogSectionMock(props)
+    return <div>activity-log-section</div>
+  },
+}))
 
 function action(key: string): TableActionDefinition {
   return {
@@ -104,6 +113,9 @@ vi.mock('@/features/table/table-view', () => ({
           </button>
           <button type="button" onClick={() => onAction(action('delete'), ROW)}>
             trigger-delete
+          </button>
+          <button type="button" onClick={() => onAction(action('activity'), ROW)}>
+            trigger-activity
           </button>
         </div>
       )
@@ -178,6 +190,7 @@ beforeEach(() => {
   deleteProjectMock.mockReset()
   vi.mocked(toast.success).mockClear()
   vi.mocked(toast.error).mockClear()
+  activityLogSectionMock.mockReset()
 })
 
 describe('ProjectsTable — Sheet-based CRUD (AC-020/021/022)', () => {
@@ -293,5 +306,28 @@ describe('ProjectsTable — mutation success closes the sheet and refreshes (AC-
 
     await waitFor(() => expect(screen.queryByText('Edit project')).not.toBeInTheDocument())
     expect(refreshMock).not.toHaveBeenCalled()
+  })
+})
+
+/** Spec 0034, AC-015: representative module for the activity log rollout beyond Users. */
+describe('ProjectsTable — activity row action', () => {
+  it('opens the activity dialog for the row and mounts the shared ActivityLogSection', async () => {
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-activity'))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(activityLogSectionMock).toHaveBeenCalledWith({ resource: 'projects', id: 12 })
+  })
+
+  it('closes the dialog when it is dismissed', async () => {
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-activity'))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 })

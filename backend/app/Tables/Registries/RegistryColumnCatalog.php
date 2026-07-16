@@ -148,6 +148,14 @@ final class RegistryColumnCatalog
                 'confirm' => true,
                 'permission' => 'registries.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'registries.viewActivity',
+            ],
         ];
     }
 }

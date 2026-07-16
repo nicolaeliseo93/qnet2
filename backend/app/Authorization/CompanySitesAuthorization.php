@@ -81,7 +81,7 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import', 'upload_logo', 'delete_logo', 'set_default'];
+        return ['delete', 'export', 'import', 'upload_logo', 'delete_logo', 'set_default', 'view_activity'];
     }
 
     /**
@@ -138,6 +138,10 @@ class CompanySitesAuthorization extends AbstractResourceAuthorization
             'upload_logo' => $model !== null && $actor->can('company-sites.update'),
             'delete_logo' => $model !== null && $actor->can('company-sites.update'),
             'set_default' => $model !== null && $actor->can('company-sites.update'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `company-sites.view` boundary is enforced
+            // separately by GET /api/activity-log/company-sites/{id}.
+            'view_activity' => $model !== null && $actor->can('company-sites.viewActivity'),
         ];
     }
 }

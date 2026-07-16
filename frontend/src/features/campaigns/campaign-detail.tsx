@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { CalendarRange, FolderKanban, Globe, Megaphone, Tags, Wallet } from 'lucide-react'
+import { CalendarRange, FolderKanban, Globe, History, Megaphone, Tags, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -12,10 +12,11 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { formatDecimal } from '@/features/products/column-renderers'
 import { GeoScopeBadge } from '@/features/geo/geo-scope-badge'
 import { geoScopePlaceName } from '@/features/geo/geo-scope'
-import type { CampaignDetail as CampaignDetailData } from '@/features/campaigns/types'
+import type { CampaignDetailWithPermissions as CampaignDetailData } from '@/features/campaigns/types'
 
 interface CampaignDetailViewProps {
   campaign: CampaignDetailData
@@ -142,6 +143,12 @@ export function CampaignDetailView({ campaign }: CampaignDetailViewProps) {
           </DetailField>
         </DetailGrid>
       </DetailSection>
+
+      {campaign.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="campaigns" id={campaign.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('campaigns.columns.created_at')}>{createdAt}</DetailMeta>

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Building2, Globe, Hash, Map, MapPin, MapPinned } from 'lucide-react'
+import { Building2, Globe, Hash, History, Map, MapPin, MapPinned } from 'lucide-react'
 import {
   DetailEmpty,
   DetailField,
@@ -11,10 +11,11 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import type { OperationalSiteDetail } from '@/features/operational-sites/types'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
+import type { OperationalSiteDetailWithPermissions } from '@/features/operational-sites/types'
 
 interface OperationalSiteDetailViewProps {
-  operationalSite: OperationalSiteDetail
+  operationalSite: OperationalSiteDetailWithPermissions
 }
 
 /**
@@ -59,6 +60,12 @@ export function OperationalSiteDetailView({ operationalSite }: OperationalSiteDe
           </DetailField>
         </DetailGrid>
       </DetailSection>
+
+      {operationalSite.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="operational-sites" id={operationalSite.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('operationalSites.detail.created_at')}>{createdAt}</DetailMeta>

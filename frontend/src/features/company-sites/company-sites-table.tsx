@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Can } from '@/features/auth/can'
+import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
 import { useStatsPanel } from '@/features/stats/use-stats-panel'
@@ -57,6 +58,7 @@ export function CompanySitesTable() {
 
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [activityRow, setActivityRow] = useState<TableRow | null>(null)
 
   const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
 
@@ -93,6 +95,9 @@ export function CompanySitesTable() {
           break
         case 'delete':
           void runDelete(row)
+          break
+        case 'activity':
+          setActivityRow(row)
           break
         default:
           break
@@ -193,6 +198,16 @@ export function CompanySitesTable() {
           )}
         </SheetContent>
       </Sheet>
+
+      <ResourceActivityDialog
+        resource={COMPANY_SITES_DOMAIN}
+        row={activityRow}
+        onOpenChange={(open) => {
+          if (!open) {
+            setActivityRow(null)
+          }
+        }}
+      />
     </div>
   )
 }

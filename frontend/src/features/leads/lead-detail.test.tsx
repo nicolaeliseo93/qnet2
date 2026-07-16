@@ -2,11 +2,11 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import i18n from '@/i18n'
 import { LeadDetailView } from '@/features/leads/lead-detail'
-import type { LeadDetail } from '@/features/leads/types'
+import type { LeadDetailWithPermissions } from '@/features/leads/types'
 
 /** AC-065: `/leads/:id` shows the 6 fields read-only via `DetailPanel`, no editable control. */
 
-function lead(overrides: Partial<LeadDetail> = {}): LeadDetail {
+function lead(overrides: Partial<LeadDetailWithPermissions> = {}): LeadDetailWithPermissions {
   return {
     id: 1,
     referent_id: 10,
@@ -25,6 +25,11 @@ function lead(overrides: Partial<LeadDetail> = {}): LeadDetail {
     extra_fields: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-02T00:00:00Z',
+    permissions: {
+      resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+      fields: {},
+      actions: {},
+    },
     ...overrides,
   }
 }

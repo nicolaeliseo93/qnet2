@@ -61,7 +61,7 @@ class ProjectsAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -107,6 +107,10 @@ class ProjectsAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('projects.delete'),
             'export' => $actor->can('projects.export'),
             'import' => $actor->can('projects.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `projects.view` boundary is enforced separately by
+            // GET /api/activity-log/projects/{id} itself.
+            'view_activity' => $model !== null && $actor->can('projects.viewActivity'),
         ];
     }
 }

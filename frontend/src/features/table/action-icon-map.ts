@@ -1,17 +1,20 @@
-import { Eye, MoreHorizontal, Pencil, Trash, type LucideIcon } from 'lucide-react'
+import { Eye, History, MoreHorizontal, Pencil, Trash, type LucideIcon } from 'lucide-react'
 
 /** Action icon name → Lucide component. Provided by domains for custom icons. */
 export type ActionIconMap = Record<string, LucideIcon>
 
 /**
  * Default action-icon map shared by every domain. Domain-agnostic: covers the
- * common CRUD icons. Domains that advertise new icon names inject them via the
- * table props (merged over these defaults) instead of editing this file.
+ * common CRUD icons plus the `activity` row-action icon (spec 0034, shared by
+ * every module that enables the aggregated activity log). Domains that
+ * advertise other new icon names inject them via the table props (merged over
+ * these defaults) instead of editing this file.
  */
 export const defaultActionIconMap: ActionIconMap = {
   eye: Eye,
   pencil: Pencil,
   trash: Trash,
+  history: History,
 }
 
 /** Neutral fallback used when an icon name is not mapped, so the menu never breaks. */

@@ -41,7 +41,7 @@ class SectorsAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -66,6 +66,10 @@ class SectorsAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('sectors.delete'),
             'export' => $actor->can('sectors.export'),
             'import' => $actor->can('sectors.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `sectors.view` boundary is enforced separately by
+            // GET /api/activity-log/sectors/{id} itself.
+            'view_activity' => $model !== null && $actor->can('sectors.viewActivity'),
         ];
     }
 }

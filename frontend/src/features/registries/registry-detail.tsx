@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
-import { IdCard, Info, MapPin, Phone, UserRound, Users } from 'lucide-react'
+import { History, IdCard, Info, MapPin, Phone, UserRound, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -15,12 +15,13 @@ import {
 import { cn } from '@/lib/utils'
 import { enumLabelOf } from '@/features/config/enum-label'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { AddressesManager } from '@/features/personal-data/addresses-manager'
 import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { cardToDraft } from '@/features/personal-data/drafts'
 import type { PersonalDataFieldPermissionResolver } from '@/features/personal-data/types'
 import type { PrimaryContact } from '@/features/table/types'
-import type { ManagerRef, ReferenceRef, RegistryDetail } from '@/features/registries/types'
+import type { ManagerRef, ReferenceRef, RegistryDetailWithPermissions } from '@/features/registries/types'
 
 /**
  * Renders the (owner-agnostic, reused unchanged) contacts/addresses managers
@@ -119,7 +120,7 @@ function formatDate(value: string | null): string {
 }
 
 interface RegistryDetailViewProps {
-  registry: RegistryDetail
+  registry: RegistryDetailWithPermissions
 }
 
 /**
@@ -324,6 +325,12 @@ export function RegistryDetailView({ registry }: RegistryDetailViewProps) {
           <DetailEmpty />
         )}
       </DetailSection>
+
+      {registry.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="registries" id={registry.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('registries.columns.created_at')}>{createdAt}</DetailMeta>

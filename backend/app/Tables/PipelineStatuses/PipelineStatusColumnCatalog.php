@@ -101,6 +101,14 @@ final class PipelineStatusColumnCatalog
                 'confirm' => true,
                 'permission' => 'pipeline-statuses.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'pipeline-statuses.viewActivity',
+            ],
         ];
     }
 }

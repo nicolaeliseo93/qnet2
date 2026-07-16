@@ -135,6 +135,14 @@ final class BusinessFunctionColumnCatalog
                 'confirm' => true,
                 'permission' => 'business-functions.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'business-functions.viewActivity',
+            ],
         ];
     }
 }

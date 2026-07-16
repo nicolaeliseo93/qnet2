@@ -47,7 +47,7 @@ class ProductCategoriesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import'];
+        return ['delete', 'export', 'import', 'view_activity'];
     }
 
     /**
@@ -76,6 +76,10 @@ class ProductCategoriesAuthorization extends AbstractResourceAuthorization
             'delete' => $model !== null && $actor->can('product-categories.delete'),
             'export' => $actor->can('product-categories.export'),
             'import' => $actor->can('product-categories.import'),
+            // Gates the ActivityLogSection in the detail (spec 0034); the
+            // record-level `product-categories.view` boundary is enforced
+            // separately by GET /api/activity-log/product-categories/{id}.
+            'view_activity' => $model !== null && $actor->can('product-categories.viewActivity'),
         ];
     }
 }

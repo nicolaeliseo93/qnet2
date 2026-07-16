@@ -15,6 +15,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Can } from '@/features/auth/can'
+import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
@@ -59,6 +60,7 @@ export function ReferentTypesTable() {
 
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [activityRow, setActivityRow] = useState<TableRow | null>(null)
 
   const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
 
@@ -94,6 +96,9 @@ export function ReferentTypesTable() {
           break
         case 'delete':
           void runDelete(row)
+          break
+        case 'activity':
+          setActivityRow(row)
           break
         default:
           break
@@ -184,6 +189,16 @@ export function ReferentTypesTable() {
           )}
         </SheetContent>
       </Sheet>
+
+      <ResourceActivityDialog
+        resource={REFERENT_TYPES_DOMAIN}
+        row={activityRow}
+        onOpenChange={(open) => {
+          if (!open) {
+            setActivityRow(null)
+          }
+        }}
+      />
     </div>
   )
 }

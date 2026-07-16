@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Contact, Database, Info, StickyNote } from 'lucide-react'
+import { Contact, Database, History, Info, StickyNote } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import {
@@ -13,8 +13,9 @@ import {
   DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { LEAD_STATUS_BADGE_CLASSES } from '@/features/leads/column-renderers'
-import type { LeadDetail as LeadDetailData } from '@/features/leads/types'
+import type { LeadDetailWithPermissions as LeadDetailData } from '@/features/leads/types'
 
 interface LeadDetailViewProps {
   lead: LeadDetailData
@@ -94,6 +95,12 @@ export function LeadDetailView({ lead }: LeadDetailViewProps) {
               </DetailField>
             ))}
           </DetailGrid>
+        </DetailSection>
+      ) : null}
+
+      {lead.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="leads" id={lead.id} />
         </DetailSection>
       ) : null}
 

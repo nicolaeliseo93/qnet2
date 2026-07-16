@@ -201,6 +201,14 @@ final class CompanySiteColumnCatalog
                 'confirm' => true,
                 'permission' => 'company-sites.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'company-sites.viewActivity',
+            ],
         ];
     }
 }

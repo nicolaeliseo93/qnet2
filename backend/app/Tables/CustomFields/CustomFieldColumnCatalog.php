@@ -130,6 +130,14 @@ final class CustomFieldColumnCatalog
                 'confirm' => true,
                 'permission' => 'custom-fields.delete',
             ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'custom-fields.viewActivity',
+            ],
         ];
     }
 }

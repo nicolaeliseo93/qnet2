@@ -1,16 +1,18 @@
 import { useTranslation } from 'react-i18next'
-import { Tag } from 'lucide-react'
+import { History, Tag } from 'lucide-react'
 import {
   DetailHero,
   DetailMeta,
   DetailMonogram,
   DetailPanel,
+  DetailSection,
 } from '@/components/detail/detail-panel'
 import { formatDateTime } from '@/features/table/cell-renderers'
-import type { ReferentTypeDetail } from '@/features/referent-types/types'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
+import type { ReferentTypeDetailWithPermissions } from '@/features/referent-types/types'
 
 interface ReferentTypeDetailViewProps {
-  referentType: ReferentTypeDetail
+  referentType: ReferentTypeDetailWithPermissions
 }
 
 /**
@@ -29,6 +31,12 @@ export function ReferentTypeDetailView({ referentType }: ReferentTypeDetailViewP
         media={<DetailMonogram name={referentType.name} icon={<Tag />} />}
         title={referentType.name}
       />
+
+      {referentType.permissions.actions.view_activity ? (
+        <DetailSection title={t('activityLog.title')} icon={<History />}>
+          <ActivityLogSection resource="referent-types" id={referentType.id} />
+        </DetailSection>
+      ) : null}
 
       {createdAt ? (
         <DetailMeta label={t('referentTypes.detail.created_at')}>{createdAt}</DetailMeta>

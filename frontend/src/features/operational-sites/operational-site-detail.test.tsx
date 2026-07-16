@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import i18n from '@/i18n'
 import { OperationalSiteDetailView } from '@/features/operational-sites/operational-site-detail'
-import type { OperationalSiteDetail } from '@/features/operational-sites/types'
+import type { OperationalSiteDetailWithPermissions } from '@/features/operational-sites/types'
 
-const BASE: OperationalSiteDetail = {
+const BASE: OperationalSiteDetailWithPermissions = {
   id: 1,
   alias: 'Sede Milano',
   line1: 'Via Roma 1',
@@ -18,6 +18,11 @@ const BASE: OperationalSiteDetail = {
   city_id: 4,
   city: { id: 4, name: 'Milan' },
   created_at: '2026-01-15T10:30:00Z',
+  permissions: {
+    resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
+    fields: {},
+    actions: {},
+  },
 }
 
 describe('OperationalSiteDetailView', () => {
