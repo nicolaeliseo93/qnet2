@@ -34,7 +34,7 @@ class OperationalSiteForSelectController extends BaseApiController
         try {
             $this->authorize('viewAny', OperationalSite::class);
 
-            $result = $this->service->forSelect($request->toData());
+            $result = $this->service->forSelect($request->toData(), $request->businessFunctionId());
 
             return $this->paginatedResponse(
                 OperationalSiteForSelectResource::collection($result->items),

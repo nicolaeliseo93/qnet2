@@ -40,6 +40,10 @@ class LeadResource extends JsonResource
             'lead_status' => $this->summarizeLeadStatus($this->leadStatus),
             'notes' => $this->notes,
             'extra_fields' => $this->extra_fields,
+            // spec 0040: the opportunity generated from this lead, if any
+            // (D-2: at most one). The lead itself carries no flag/column for
+            // this (D-5) — presence is derived purely from the relation.
+            'opportunity' => $this->summarizeOpportunity($this->opportunity),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
@@ -111,5 +115,13 @@ class LeadResource extends JsonResource
         $city = $address->city?->name;
 
         return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
+    }
+
+    /**
+     * @return array{id: int, name: string}|null
+     */
+    private function summarizeOpportunity(mixed $opportunity): ?array
+    {
+        return $opportunity === null ? null : ['id' => $opportunity->id, 'name' => $opportunity->name];
     }
 }

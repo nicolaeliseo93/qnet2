@@ -82,10 +82,10 @@ function NavNode({ item }: { item: NavigationItem }) {
   const label = t(item.label)
 
   if (item.children.length > 0) {
-    const hasActiveChild = item.children.some((child) => isActive(child, location.pathname))
+    const keepOpen = hasActiveDescendant(item, location.pathname)
 
     return (
-      <Collapsible asChild defaultOpen={hasActiveChild} className="group/collapsible">
+      <Collapsible asChild defaultOpen={keepOpen} className="group/collapsible">
         <SidebarMenuItem>
           <CollapsibleTrigger asChild>
             <SidebarMenuButton tooltip={label} size="sm" className={cn(NAV_ITEM_CLASS, NAV_HEADING_CLASS)}>
@@ -97,13 +97,7 @@ function NavNode({ item }: { item: NavigationItem }) {
           <CollapsibleContent>
             <SidebarMenuSub>
               {item.children.map((child) => (
-                <SidebarMenuSubItem key={child.key}>
-                  <SidebarMenuSubButton asChild size="sm" isActive={isActive(child, location.pathname)} className={cn(NAV_ITEM_CLASS, NAV_LEAF_CLASS)}>
-                    <NavLink to={child.route ?? '#'}>
-                      <span>{t(child.label)}</span>
-                    </NavLink>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
+                <NavSubNode key={child.key} item={child} />
               ))}
             </SidebarMenuSub>
           </CollapsibleContent>
@@ -137,9 +131,42 @@ function NavNode({ item }: { item: NavigationItem }) {
   )
 }
 
+// A sub-item inside a collapsible group. A leaf renders a navigable link; a
+// sub-item that itself has children stays navigable AND nests its own children
+// one level deeper (e.g. Leads → Import).
+function NavSubNode({ item }: { item: NavigationItem }) {
+  const { t } = useTranslation()
+  const location = useLocation()
+
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton asChild size="sm" isActive={isActive(item, location.pathname)} className={cn(NAV_ITEM_CLASS, NAV_LEAF_CLASS)}>
+        <NavLink to={item.route ?? '#'}>
+          <span>{t(item.label)}</span>
+        </NavLink>
+      </SidebarMenuSubButton>
+      {item.children.length > 0 && (
+        <SidebarMenuSub>
+          {item.children.map((child) => (
+            <NavSubNode key={child.key} item={child} />
+          ))}
+        </SidebarMenuSub>
+      )}
+    </SidebarMenuSubItem>
+  )
+}
+
 function isActive(item: NavigationItem, pathname: string): boolean {
   if (!item.route) {
     return false
   }
   return pathname === item.route || pathname.startsWith(`${item.route}/`)
+}
+
+// Keeps a group expanded when any descendant (not just a direct child) matches
+// the current route — needed now that sub-items can nest their own children.
+function hasActiveDescendant(item: NavigationItem, pathname: string): boolean {
+  return item.children.some(
+    (child) => isActive(child, pathname) || hasActiveDescendant(child, pathname),
+  )
 }

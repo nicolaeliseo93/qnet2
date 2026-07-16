@@ -14,6 +14,7 @@ export const leads = {
     operationalSite: 'Site',
     source: 'Source',
     operator: 'Operator',
+    isAssigned: 'Assigned',
     notes: 'Notes',
     createdAt: 'Created at',
   },
@@ -34,6 +35,8 @@ export const leads = {
     importedData: {
       title: 'Imported data',
     },
+    createOpportunity: 'Create opportunity',
+    goToOpportunity: 'Go to opportunity',
   },
   form: {
     newLead: 'New lead',

@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Pencil } from 'lucide-react'
+import { ArrowLeft, Handshake, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
+import { Can } from '@/features/auth/can'
 import { DetailError, DetailLoading } from '@/components/detail/detail-panel'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchLead, leadDetailQueryKey } from '@/features/leads/api'
@@ -48,6 +49,25 @@ export default function LeadDetailPage() {
                 {t('common.back')}
               </Link>
             </Button>
+            {lead ? (
+              lead.opportunity ? (
+                <Button variant="outline" asChild>
+                  <Link to={`/opportunities/${lead.opportunity.id}`}>
+                    <Handshake aria-hidden="true" />
+                    {t('leads.detail.goToOpportunity')}
+                  </Link>
+                </Button>
+              ) : (
+                <Can permission="opportunities.create">
+                  <Button variant="outline" asChild>
+                    <Link to={`/opportunities/new?lead_id=${leadId}`}>
+                      <Handshake aria-hidden="true" />
+                      {t('leads.detail.createOpportunity')}
+                    </Link>
+                  </Button>
+                </Can>
+              )
+            ) : null}
             {lead?.permissions.resource.update ? (
               <Button asChild>
                 <Link to={`/leads/${leadId}/edit`}>

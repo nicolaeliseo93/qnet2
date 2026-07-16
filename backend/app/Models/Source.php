@@ -43,4 +43,15 @@ class Source extends BaseModel
     {
         return $this->hasMany(Lead::class);
     }
+
+    /**
+     * The opportunities against this source (spec 0040, BR-3: restrict-on-
+     * delete — SourceService::delete() guards on this before deleting).
+     *
+     * @return HasMany<Opportunity, $this>
+     */
+    public function opportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class);
+    }
 }

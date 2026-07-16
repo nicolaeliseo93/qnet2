@@ -4,9 +4,13 @@ namespace App\Services;
 
 use App\DataObjects\CompanySites\CreateCompanySiteData;
 use App\DataObjects\CompanySites\UpdateCompanySiteData;
+use App\DataObjects\Shared\ForSelectQuery;
+use App\DataObjects\Shared\ForSelectResult;
 use App\DataObjects\Users\ProfileData;
 use App\Models\CompanySite;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -89,12 +93,18 @@ class CompanySiteService
     }
 
     /**
-     * The owned personal-data card (and its own contacts/address, via
+     * Restrictive delete (spec 0040, BR-3): a company site referenced by at
+     * least one opportunity cannot be removed. Otherwise the owned
+     * personal-data card (and its own contacts/address, via
      * HasPersonalData), banks (FK cascade) and logo (HasAttachments) all
      * cascade away with the site.
      */
     public function delete(CompanySite $companySite): void
     {
+        if ($companySite->opportunities()->exists()) {
+            abort(409, 'This company site has opportunities and cannot be deleted.');
+        }
+
         $companySite->delete();
     }
 
@@ -123,5 +133,87 @@ class CompanySiteService
     public function loadTree(CompanySite $companySite): CompanySite
     {
         return $companySite->fresh(self::HYDRATED_RELATIONS);
+    }
+
+    /**
+     * Minimal, searchable, paginated company-site list for the for-select
+     * standard (spec 0040, ADR 0011), mirroring CompanyService::forSelect.
+     * $companyId (spec 0040 BR-4), when given, restricts the list to sites of
+     * that company — mirrors BusinessFunctionForSelectRequest's
+     * exclude_descendants_of: never widening the generic ForSelectQuery
+     * contract.
+     */
+    public function forSelect(ForSelectQuery $query, ?int $companyId = null): ForSelectResult
+    {
+        $base = $this->forSelectBaseQuery();
+
+        if ($companyId !== null) {
+            $base->where('company_id', $companyId);
+        }
+
+        if ($query->hasSearch()) {
+            $base->where('name', 'like', '%'.$query->search.'%');
+        }
+
+        $total = (clone $base)->count();
+
+        /** @var Collection<int, CompanySite> $page */
+        $page = $base->orderBy('name')
+            ->orderBy('id')
+            ->offset($query->offset)
+            ->limit($query->limit)
+            ->get();
+
+        $items = $this->appendHydratedForSelectIds($page, $query);
+
+        return new ForSelectResult(
+            items: $items,
+            total: $total,
+            offset: $query->offset,
+            limit: $query->limit,
+        );
+    }
+
+    /**
+     * Base for-select query: sites with their owning company eager-loaded, so
+     * CompanySiteForSelectResource never N+1s while reading the subtitle.
+     *
+     * @return Builder<CompanySite>
+     */
+    private function forSelectBaseQuery(): Builder
+    {
+        return CompanySite::query()->select(['id', 'name', 'company_id'])->with('company:id,denomination');
+    }
+
+    /**
+     * Append the explicitly-requested `ids[]` (edit-mode hydration) that are
+     * not already on the page, deduplicated. They bypass search AND the
+     * company_id scope, mirroring every other for-select's ids[] contract.
+     * Total is unaffected.
+     *
+     * @param  Collection<int, CompanySite>  $page
+     * @return Collection<int, CompanySite>
+     */
+    private function appendHydratedForSelectIds(Collection $page, ForSelectQuery $query): Collection
+    {
+        if (! $query->hasIds()) {
+            return $page;
+        }
+
+        $presentIds = $page->pluck('id')->all();
+        $missingIds = array_values(array_diff($query->ids, $presentIds));
+
+        if ($missingIds === []) {
+            return $page;
+        }
+
+        /** @var Collection<int, CompanySite> $hydrated */
+        $hydrated = $this->forSelectBaseQuery()
+            ->whereIn('id', $missingIds)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+
+        return $page->concat($hydrated);
     }
 }

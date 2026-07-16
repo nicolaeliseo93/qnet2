@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\DataObjects\Products\CreateProductData;
 use App\Enums\ProductType;
 use App\Models\Attribute;
+use App\Models\BusinessFunction;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Services\ProductService;
@@ -70,10 +71,31 @@ class DemoProductCatalogSeeder extends Seeder
             /** @var ProductCategory $category */
             $category = ProductCategory::firstOrCreate(['name' => $name], ['parent_id' => $parent?->id]);
 
+            $this->assignBusinessFunction($category, $node['business_function'] ?? null);
             $this->assignAttributes($category, $node['attributes'] ?? [], $attributesByCode);
             $this->seedProducts($category, $node['products'] ?? []);
             $this->seedTree($node['children'] ?? [], $category, $attributesByCode);
         }
+    }
+
+    /**
+     * Assign the category's OWN business function by name (spec 0023). Left
+     * untouched when the node declares none or the function is not seeded
+     * (partial run) — never nulls an existing manual assignment.
+     */
+    private function assignBusinessFunction(ProductCategory $category, ?string $businessFunctionName): void
+    {
+        if ($businessFunctionName === null) {
+            return;
+        }
+
+        $businessFunction = BusinessFunction::query()->where('name', $businessFunctionName)->first();
+
+        if ($businessFunction === null || $category->business_function_id === $businessFunction->id) {
+            return;
+        }
+
+        $category->forceFill(['business_function_id' => $businessFunction->id])->save();
     }
 
     /**

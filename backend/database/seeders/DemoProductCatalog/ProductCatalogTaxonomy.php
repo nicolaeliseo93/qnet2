@@ -47,12 +47,17 @@ final class ProductCatalogTaxonomy
     }
 
     /**
-     * @return array<string, array{attributes: array<string, bool>, products: array<int, array<string, mixed>>, children?: array<string, mixed>}>
+     * A node may declare its OWN `business_function` (spec 0023) by name —
+     * resolved to `business_function_id` by the seeder; descendants inherit it
+     * read-side via CategoryHierarchy, so only the roots carry it here.
+     *
+     * @return array<string, array{business_function?: string, attributes: array<string, bool>, products: array<int, array<string, mixed>>, children?: array<string, mixed>}>
      */
     public static function tree(): array
     {
         return [
             'Consulenza' => [
+                'business_function' => 'Sistemi Informativi (IT)',
                 'attributes' => ['provider' => false, 'sla_hours' => false, 'delivery_mode' => false],
                 'products' => [],
                 'children' => [
@@ -113,6 +118,7 @@ final class ProductCatalogTaxonomy
                 ],
             ],
             'Formazione' => [
+                'business_function' => 'Risorse Umane',
                 'attributes' => ['delivery_mode' => false, 'certificate_included' => false],
                 'products' => [],
                 'children' => [

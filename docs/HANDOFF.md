@@ -2,6 +2,195 @@
 
 > Injected at session start. Update at every green state.
 
+## NAVIGAZIONE — OPPORTUNITA' IN GESTIONE + LEAD PADRE DI IMPORT (2026-07-16) — GREEN, NON COMMITTATO
+
+Riorganizzazione menu (decisioni utente 2026-07-16). Solo navigazione/UX; authz resta
+server-side su ogni endpoint (invariata). Nessuna migrazione, nessun endpoint nuovo.
+
+- `config/navigation.php`:
+  - voce `opportunities` spostata dal gruppo `marketing-leads` alla sezione `management`
+    (Gestione), dopo `products`. Route/permesso/icona invariati (`/opportunities`,
+    `opportunities.view`, `handshake`).
+  - `imports` ora e' FIGLIO di `leads` (prima erano fratelli piatti sotto marketing-leads).
+    `leads` resta un item navigabile (route `/leads`) CON children -> parent cliccabile con
+    figlio annidato.
+- `NavigationService::filter` + `NavigationItemResource` gia' ricorsivi a profondita'
+  arbitraria: il parent con route+children NON viene scartato (drop solo se route vuota), e la
+  Resource serializza i children ricorsivamente. Nessuna modifica backend a questi due file.
+- FE `features/navigation/icon-map.ts`: aggiunto mapping `handshake` -> `Handshake` (lucide).
+  Prima non era mappato -> cadeva sul fallback `Circle` (icona "sparita").
+- FE `components/nav-main.tsx`: nuovo `NavSubNode` ricorsivo (sub-item navigabile che annida i
+  propri children un livello sotto via `SidebarMenuSub`). Il group usa ora `hasActiveDescendant`
+  (discendente attivo, non solo figlio diretto) per `defaultOpen` -> su `/imports` il gruppo
+  resta aperto. Rimosso il rendering inline flat dei children nel branch group di `NavNode`.
+- TEST aggiornato (requisito cambiato per decisione utente, NON tampering):
+  `OpportunitySecurityTest` AC-080 cerca la voce `opportunities` in `navigationSectionKeys(...,
+  'management')` invece di `'marketing-leads'`. Il gate sui permessi verificato e' identico.
+  Nessun test asseriva `imports` come figlio diretto di marketing-leads (LeadSecurityTest
+  verifica `leads` in marketing-leads: ancora valido, `leads` e' sempre figlio diretto).
+- FIX COLLATERALE (pre-esistente, fuori scope navigazione, deciso dall'utente): l'hook Stop
+  `tsc -b` ha rivelato un errore latente in `opportunity-form-payload.test.ts` — la fixture
+  `values()` e l'asserzione AC-082 usavano `success_probability: null`, ma per A-6 il campo del
+  form e' un intero NON-nullable (default 0, "0%" ≡ non impostato; `opportunity-schema.ts:78`).
+  Allineati i test al tipo (null -> 0); l'`OpportunityDetail.success_probability` resta `number
+  |null` (invariato). Non e' tampering: i test contraddicevano il contratto di tipo. Il mio
+  `tsc --noEmit` non lo vedeva (esclude i test); solo `tsc -b` lo intercetta.
+- VERIFICATO (eseguito): Pest `--filter="Navigation|LeadSecurity|OpportunitySecurity"` 42/42
+  (109 assert); vitest `src/features/opportunities` 56/56; Pint pulito; `tsc -b` pulito (0
+  errori); ESLint sui file toccati pulito. NIENTE COMMIT (l'utente committa).
+
+## DEMO SEEDER — RELAZIONI MANCANTI (2026-07-16) — GREEN, NON COMMITTATO
+
+Colmati i gap tra relazioni definite nei Model e cio' che i seeder demo popolavano davvero
+(solo `backend/database/seeders/`, nessun tocco a schema/produzione). Ogni seeder resta
+idempotente e deterministico (faker seedato). Eseguito: 404/404 nelle suite dei moduli toccati
+(BusinessFunctions/Products/CompanySites/Opportunities/Users/Attachments), 31 test seeder
+nuovi/estesi; Pint pulito. Test = SQLite (dev e' MySQL, DemoDataSeeder NON eseguito su MySQL
+reale — scelta prudente coerente col modulo Opportunities).
+
+- `DemoBusinessFunctionSeeder`: aggiunta gerarchia `parent_id` (chiave `parent` nella lista
+  FUNCTIONS, parent sempre prima del figlio) + pivot `business_function_operational_site`
+  (attach subset deterministico 0..4 sedi per funzione, offset PRNG separato SITE_SEED_OFFSET).
+  Dipende da DemoOperationalSiteSeeder (gia' a monte). Pivot cascadeOnDelete su entrambe le FK
+  -> re-run sicuro.
+- `DemoProductCatalogSeeder` + `ProductCatalog/ProductCatalogTaxonomy`: `product_categories.
+  business_function_id` sui ROOT via nome (`business_function` nel nodo taxonomy; Consulenza ->
+  'Sistemi Informativi (IT)', Formazione -> 'Risorse Umane'); i figli ereditano effective
+  read-side (CategoryHierarchy). Null-safe se la funzione non e' seedata.
+- `DemoCompanySiteSeeder`: 4 `responsible_*_id` (rda/tickets/validation×2) pescati dai users
+  (~70% ciascuno, nullable esercitato). Vuoti se nessun utente.
+- `DemoEmploymentProfileSeeder`: `business_function_id`/`company_id`/`operational_site_id`
+  (~75% ciascuno) su manager e subordinati. Null se lookup assenti.
+- `DemoOpportunitySeeder`: manager multi-slot (1..3 distinti, ~50%, posizioni 1..n via
+  managerSyncMap) ANCHE sul batch from-lead (prima sempre null). `maybeManagerSlots` senza piu'
+  il param `$index` (rimosso, era dead).
+- NUOVO `DemoAttachmentSeeder` (registrato in DemoDataSeeder dopo users/company-sites, prima
+  delle notifiche): avatar User + logo CompanySite via path REALE `HasAttachments::attach()`
+  (UploadedFile test-mode + PNG GD deterministico per id). Idempotente: skip se la collection
+  ha gia' un allegato. Storage::fake nei test.
+
+## LEADS: COLONNA IS_ASSIGNED (2026-07-16) — GREEN, NON COMMITTATO
+
+Nuova colonna derivata booleana `is_assigned` nella tabella leads (`operator_id IS NOT NULL`),
+visibile, filtrabile (set filter Si'/No via fallback boolean generico di TableService: valori
+fissi '1'/'0') e ordinabile (asc = non assegnati prima; `orderBy(operator_id)`, NULL-first
+coerente MySQL/SQLite, niente raw SQL). Nessuna migrazione, nessun nuovo endpoint.
+
+- BE: `LeadColumnCatalog::columns()` (colonna boolean dopo `operator`),
+  `LeadsTableDefinition` (costanti IS_ASSIGNED_COLUMN/OPERATOR_FK, mapRow `is_assigned`,
+  `applyAssignedFilter()` whereNull/whereNotNull in applyDerivedFilter, branch in
+  applyDerivedSort). distinctValues NON toccato: il fallback generico boolean copre /values.
+- FE: `features/leads/column-renderers.tsx` nuovo `AssignedBadgeCell` (badge verde/rosso +
+  icona Check/X + common.yes/no, stesso pattern di users `is_active`); i18n
+  `leads.columns.isAssigned` en ('Assigned') + it ('Assegnato').
+- VERIFICATO (eseguito): Pest `--filter=Lead` 295/295 (incl. 4 test nuovi in LeadTableTest:
+  row value, filtro 1/0/entrambi, sort asc, /values fisso ['1','0']); Pint pulito; vitest
+  leads 52/52; ESLint pulito; `npx tsc -b --force` pulito. NIENTE COMMIT (in attesa).
+
+## OPPORTUNITIES MODULE — spec 0040 (2026-07-16) — IN CORSO (agent team, 3 lane)
+
+Nuovo modulo Opportunita' (trattative commerciali), spec `docs/specs/0040-opportunities-module.xml`
+APPROVATA, contratto congelato. Decisioni utente: eredita' da Lead+Campagna (valori effettivi);
+max 1 opportunita' per lead (lead_id UNIQUE) con lock server-side dei campi ereditati la cui
+derivazione e' non-null (BR-2, 422 su modifica); stati RIMANDATI; required = name+registry_id;
+NIENTE is_converted sul Lead (revoca 2026-07-14 rispettata: legame = solo opportunities.lead_id).
+Team: backend-core (MT-1 core -> MT-2 from-lead -> MT-3 tabella/stats/guardie 409), backend-select
+(MT-4 for-select), frontend-opps (MT-5 feature -> MT-6 UX da lead), verifier MT-7 gate finale.
+
+- MT-4 VERDE (backend-select, test eseguiti: 705/705 zero regressioni, 12/12 nuovo
+  CompanySiteForSelectTest, Pint pulito): NUOVO `GET /api/company-sites/for-select`
+  (CompanySites/CompanySiteForSelectController, param opzionale company_id, subtitle = company
+  denomination, authz company-sites.viewAny; route registrata da backend-core in api.php:416);
+  param additivo `registry_id` su referents/for-select (nuova Referent::registries() inversa);
+  param additivo `business_function_id` su operational-sites/for-select (nuova
+  OperationalSite::businessFunctions() inversa); registries/for-select item con
+  `meta {commercial,reporter}` (eager load, no N+1); product-categories/for-select item con
+  `meta {business_function}` EFFETTIVA via CategoryHierarchy::effectiveBusinessFunctionSummaries()
+  (nuovo, batch; effectiveBusinessFunctionNames() rifattorizzata sopra, chiamanti invariati).
+  NOTA dichiarata: 2 assert pre-esistenti dei test for-select registries/product-categories
+  aggiornati perche' ora `meta` e' sempre presente (requisito 0040, non tampering).
+- MT-1 VERDE (backend-core, test eseguiti: 13/13 OpportunityTest, 42/42 Feature/Opportunities,
+  284/284 moduli adiacenti, suite intera 2753 pass + solo rosso pre-esistente noto, Pint pulito):
+  migrations `opportunities` (2026_07_16_140000, name/registry_id NOT NULL, 10 FK restrict,
+  lead_id UNIQUE) + `opportunity_user` (position, doppio unique); Model Opportunity (BaseModel,
+  #[Fillable], LogsModelActivity, managers() pivot position); OpportunityPolicy; DTO Create/Update
+  (submitted-flag); Store/UpdateOpportunityRequest (ValidatesManagerSlots + EnforcesFieldPermissions);
+  OpportunityService (managerSyncMap come Registry); OpportunityResource (contratto esatto,
+  lead {id,label}, locked_fields); OpportunityController + routes/api/opportunities.php (require in
+  api.php, ora 482 righe); OpportunitiesAuthorization (17 campi, mandatory name+registry_id) +
+  config authorization/navigation (marketing-leads)/activity-log + morph alias 'opportunity';
+  OpportunityFactory + DemoOpportunitySeeder (solo DemoDataSeeder). Anticipato da MT-2:
+  Lead::opportunity() HasOne. Test FieldCatalogueEndpointTest aggiornato ADDITIVAMENTE
+  ('opportunities' nella lista risorse, pattern leads/campaigns).
+- SEGNALAZIONE fuori scope (da fixare a parte): `EnforcesFieldPermissions::normalize()` non
+  normalizza i cast `decimal:N` (string "150.00" vs numeric submitted) -> falso positivo
+  "changed" su no-op; latente anche su Campaign/Project.total_budget.
+- MT-2 VERDE (backend-core, test eseguiti: 15/15 OpportunityFromLeadTest AC-060..065, 325/325
+  Opportunities+Leads+Unit, suite intera 2768 pass + solo rosso pre-esistente, Pint pulito):
+  `LeadOpportunityDefaultsResolver` = UNICA fonte eredita' BR-1 (defaults endpoint + enforcement
+  BR-2 in Store/UpdateOpportunityRequest + OpportunityService); `LeadOpportunityDefaultsController`
+  invokable double-gated opportunities.create+leads.view; route GET /api/leads/{lead}/opportunity-defaults
+  in routes/api/leads.php; Lead::opportunity() HasOne + LeadResource.opportunity {id,name}|null +
+  DETAIL_RELATIONS. DemoDataSeeder NON eseguito su MySQL reale (scelta prudente, path coperto dai test).
+- MT-3 VERDE (backend-core, test eseguiti: 23/23 OpportunityRelationDeleteGuardTest AC-020..025,
+  7/7 OpportunityTableTest AC-040..042, 78/78 stats incl. StatsEndpointTest, suite intera 2810
+  pass + solo rosso pre-esistente, Pint repo pulito): OpportunitiesTableDefinition (301 righe,
+  precedente LeadsTableDefinition 307) + Opportunities/OpportunityColumnCatalog +
+  OpportunityAdvancedFilterCatalog + config/tables.php (derivate via allow-list/subquery);
+  OpportunitiesStatsDefinition + config/stats.php — INVARIANTE cross-modulo scoperta: ESATTAMENTE
+  4 stat widget in testa, icone da allow-list (StatsEndpointTest) -> widget total/estimatedValue/
+  averageProbability/fromLead + byRegistry + trend; guardie 409 nei 10 service (Registry, Company,
+  CompanySite, OperationalSite, BusinessFunction, Referent x3 FK, User supervisor, Source,
+  ProductCategory, Lead) con nuove relazioni opportunities*() sui model. StatsEndpointTest
+  aggiornato ADDITIVAMENTE (domain opportunities + label keys).
+- MT-5+MT-6 VERDI (frontend-opps, vedi entry propria piu' sotto se presente: tsc -b pulito,
+  ESLint pulito, vitest full 1543/1546 = unico rosso pre-esistente ContactsCell): feature
+  features/opportunities/ completa (form BR-4 con select filtrati/prefill, ManagerSlotsField
+  ESTRATTO in components/form/, RelationSelectField +prop params additiva, pagine+rotte+i18n)
+  + from-lead (use-opportunity-defaults, lockedFields/forceDisabled, banner, payload senza campi
+  locked + lead_id, bottone SOLO in lead-detail-page, lead.opportunity opzionale sui tipi FE).
+- ALLINEAMENTO i18n CHIUSO (frontend-opps, tsc -b pulito, vitest full 1543/1546 = solo rosso
+  pre-esistente): stats moduleStats.opportunities = total/estimatedValue/averageProbability/
+  fromLead/byRegistry/trend; advancedFilters = registry/referent/commercial/supervisor/source/
+  productCategory/valueRange/createdRange (8, ordine catalogo; rimosse 3 chiavi orfane abbozzate).
+- ROUND 2 (amendment rev.1 spec 0040, 2026-07-16, richieste utente post-MT1..6): verifier baseline
+  FERMATO (scope cambiato). Due estensioni in corso:
+  A-1 SELECT LEAD NEL FORM: nuovo `GET /api/leads/for-select` (backend-core, LeadForSelectController
+  namespace Leads, label=referent name, subtitle=campaign code, authz leads.viewAny) + select "Lead"
+  nel form CREATE (frontend-opps, riusa use-opportunity-defaults: eredita+blocca; existing_opportunity_id
+  -> blocca submit) + Lead READ-ONLY in EDIT (lead_id resta immutabile). Deep-link ?lead_id=N invariato.
+  A-2 TRE CAMPI OBBLIGATORI: company_id/company_site_id/operational_site_id -> NOT NULL (MODIFICA
+  migration MT-1 2026_07_16_140000, non committata) + required (store) / sometimes|required (update)
+  + mandatory in OpportunitiesAuthorization (mandatory finali = name, registry_id, company_id,
+  company_site_id, operational_site_id). from-lead: company/company_site NON derivati -> liberi+required
+  anche da lead; operational_site derivato+locked SOLO se il lead ce l'ha. Factory/seeder li valorizzano.
+  AC nuovi: AC-081..090. Owner: backend-core (BE), frontend-opps (FE), write surface disgiunte.
+  backend-select non coinvolto in round 2. Verifier MT-7 rilanciato a fine round 2.
+- ROUND 2 BACKEND VERDE (backend-core, test eseguiti: 172/172 mirati Leads+Opportunities+Unit,
+  suite intera 2834 pass + solo rosso pre-esistente, Pint pulito): A-2 migration 2026_07_16_140000
+  modificata in place (3 campi NOT NULL); Store/UpdateOpportunityRequest (operational_site_id via
+  derivableRule required:true = prohibited se derivato / required se libero; company+company_site
+  required sempre); OpportunitiesAuthorization 5 mandatory; OpportunityFactory con company/
+  companySite/operationalSite reali; DemoOpportunitySeeder guardia estesa. A-1 LeadForSelectController
+  (namespace Leads) + LeadForSelectResource (label referent.name, subtitle campaign.code) +
+  LeadService::forSelect (search/order via subquery correlata sul nome referente, mirror
+  OperationalSiteService) + route in leads.php sopra leads/{lead}. BUG reale corretto: LeadService
+  subquery helper tipizzato Eloquent\Builder invece di Query\Builder -> TypeError 500, sistemato.
+- ROUND 2 FRONTEND VERDE (frontend-opps, test eseguiti: tsc -b pulito, ESLint pulito, vitest full
+  1552/1555 = solo rosso pre-esistente ContactsCell): A-2 schema+types 3 campi required; A-1 nuovo
+  features/leads/for-select-api.ts (LEADS_FOR_SELECT_RESOURCE='leads'), use-opportunity-lead-selection
+  (riusa use-opportunity-defaults, no duplicazione), opportunity-lead-field (select in create),
+  banner/lock unificati deep-link+select, Save disabilitato se lead gia' collegato (D-2), Lead
+  read-only in edit (lead_id fuori dal payload). Split hook per rispettare react-hooks/refs
+  (useOpportunityForm + useOpportunityFormSubmit) e file <500 (opportunity-lead-selection.test.tsx).
+- ROUND 2 COMPLETO (BE+FE verdi). Verifier finale su TUTTI gli AC 001..090 IN CORSO.
+- NOTA branch condiviso: comparsa entry "LEADS: COLONNA IS_ASSIGNED" da ALTRA sessione
+  concorrente sul working tree (tocca LeadColumnCatalog/LeadsTableDefinition, adiacente ai
+  nostri file MT-3): il verifier deve trattarla come lavoro esterno, non 0040.
+- NIENTE COMMIT senza ordine esplicito dell'utente (CLAUDE.md §3.6).
+- Rossi pre-esistenti NON nostri: AbstractMigrationSourcePreviewTest (Pest), 3 ContactsCell
+  (Vitest, leak i18n), typecheck pipeline-status-form.test.tsx (lavoro 0039 altro team).
+
 ## SYSTEM STATUSES — spec 0039 r3 (PIVOT: status-groups ELIMINATO) — GREEN (verifier), NON COMMITTATO
 
 PIVOT UTENTE 2026-07-16 ("too much"): il modulo lookup status-groups (gia' costruito) e' stato
@@ -40,10 +229,13 @@ pre-esistenti (referent/registry form-metadata `_omit`); Vitest 1494/1497 (3 ros
 cell-renderers.test.tsx leak i18n); grep `status_group` residuo pulito. Nota: `php artisan test`
 locale richiede XDEBUG_MODE=off (segfault xdebug, non nostro). NIENTE COMMIT (in attesa utente).
 
-SEGNALAZIONI FUORI SCOPE (non toccate): (1) DemoDataSeeder NON idempotente al secondo run completo —
-DemoReferentSeeder tenta delete di un referent ancora referenziato da un lead del run precedente
-(ordine seeder, pre-esistente; i due seeder stati sono idempotenti singolarmente); (2) rossi
-pre-esistenti sopra elencati.
+FIX FOLLOW-UP (stesso giorno, su ok utente): DemoDataSeeder ora idempotente al re-run completo —
+root cause: catena FK restrict opportunities→(leads/registries/companies/sites/referents) e
+leads→(referents/campaigns/sites); i seeder delete-and-recreate a monte (DemoReferentSeeder ecc.)
+fallivano al secondo run. Fix nel punto di orchestrazione: DemoDataSeeder pre-pulisce
+Opportunity poi Lead subito dopo DatabaseSeeder (stesso pattern gia' usato da DemoProjectSeeder
+con Campaign). VERIFICATO: migrate:fresh --seed + DemoDataSeeder x2 consecutivi ok; Pint ok;
+Pest --filter=Seeder 35/35 (1021 assertions). Rossi pre-esistenti noti invariati (elenco sopra).
 
 ## REFERENT DUPLICATE WARNING — spec 0037 (2026-07-16) — GREEN (verifier), NON COMMITTATO
 
@@ -4860,3 +5052,296 @@ navigation}.php; routes/api/{lookups,projects}.php; ~20 file di test nuovi/modif
 Non committato (§3.6) — fermo qui, chiedo prima di committare. Prossimo owner: frontend (fe-mt5/ui-mt4)
 per FE configuratori stati (campo gruppo, rimozione sort_order, righe sistema bloccate, badge gruppo,
 Sheet riordino dnd) + modulo FE status-groups — contratto sopra congelato, nessun cambio unilaterale.
+
+## OPPORTUNITIES MODULE (spec 0040, 2026-07-16) — FRONTEND MT-5, GREEN VERIFICATO, NON COMMITTATO
+
+Team `frontend-opps` (lane C), parallelo a `backend-core` (lane A: modulo+from-lead) e
+`backend-select` (lane B: for-select). Contratto congelato in
+`docs/specs/0040-opportunities-module.xml`. MT-5 = feature FE completa (manual create/edit/view/list);
+MT-6 (creazione da Lead, `/opportunities/new?lead_id=N`) è il prossimo passo di questa stessa lane,
+sequenziale, non ancora iniziato.
+
+**Feature `frontend/src/features/opportunities/`** (nuova, mirror di `leads`/`registries`): `types.ts`
+(`OpportunityDetail`/`OpportunityDetailWithPermissions` con `locked_fields: string[]`, Create/
+UpdateOpportunityPayload — `lead_id` ASSENTE dallo shape di update, BR-2 immutabile — `OpportunityFormMode`),
+`api.ts` (fetch/create/update/delete + `opportunityDetailQueryKey` + `OPPORTUNITIES_DOMAIN`),
+`opportunity-schema.ts` (factory build Create/UpdateOpportunitySchema: solo `name`+`registry_id`
+required D-4, `success_probability` 0..100, `estimated_value` non-negative fino a
+9999999999999.99, `manager_slots` max 4 pieni — mirror registries), `opportunity-form-payload.ts`
+(sparse diff; `manager_slots` ricostruito dal detail's `managers` via `managerSlotsFromRefs`
+posizionale/gap-aware, dato che l'endpoint non restituisce un campo `manager_slots` dedicato come
+registries — solo `managers: [{id,name,position}]`), `use-opportunity-form.ts` +
+`use-opportunity-form-meta.ts`, `use-opportunity-selected-items.ts` (hydration edit-mode di ogni
+relazione), `opportunity-relation-meta.ts` (fetch one-shot via `queryClient.fetchQuery` +
+`fetchForSelect` generico per `meta.commercial`/`meta.reporter` di un registry e
+`meta.business_function` di una product-category — pattern identico a
+`campaigns/use-campaign-project-meta.ts`; NON tocca `registries|product-categories/for-select-api.ts`,
+tipi `meta` estesi localmente come `features/status-reorder/api.ts`).
+
+**Form** splittato per restare entro 300/500 righe: `opportunity-form.tsx` (skeleton + meta gate),
+`opportunity-form-body.tsx` (orchestratore: sezione identity con name/registry/referente-commerciale-
+segnalatore), `opportunity-registry-field.tsx` (custom field: BR-4 al cambio anagrafica azzera
+referente/commerciale/segnalatore e precompila commerciale/segnalatore da `meta`, sempre
+modificabili; prop `forceDisabled` già pronta per BR-2/MT-6), `opportunity-classification-section.tsx`
+(company/company_site scoped by `company_id`/operational_site scoped by `business_function_id`),
+`opportunity-product-category-field.tsx` (custom field: prefill business_function SOLO se vuoto),
+`opportunity-team-section.tsx` (supervisor + `ManagerSlotsField` condiviso), `opportunity-planning-section.tsx`
+(date/valore/probabilità, mirror `CampaignPlanningSection`). Tutti i campi dentro `MetaField`; select
+relazionali via `RelationSelectField` (estesa con `params` opzionale, vedi sotto) o `AsyncPaginatedSelect`
+diretto quando serve un `onChange` con side-effect (registry/product-category, mirror
+`CampaignProjectField`). Quick-create riusato via `useQuickCreateAction` su tutte le relazioni
+(si disattiva da solo dove il registro quick-create non ha un entry, nessuna nuova registrazione).
+
+**Condiviso**: `ManagerSlotsField` ESTRATTO da `features/registries/manager-slots-field.tsx` a
+`components/form/manager-slots-field.tsx` (comportamento invariato, stesse chiavi i18n
+`registries.form.*` riusate — nessuna nuova stringa per lo slot editor); import in
+`registry-form-details-tab.tsx` aggiornato; suite registries verificata verde (54/54).
+`components/form/relation-select-field.tsx` esteso con prop opzionale `params?: Record<string,
+string|number>` forwarded ad `AsyncPaginatedSelect` (additivo, retrocompatibile — nessun consumer
+esistente rompe: usato solo da opportunities per BR-4 `registry_id`→referente/commerciale/segnalatore
+e `company_id`→company_site/`business_function_id`→operational_site).
+
+**Detail/tabella**: `opportunity-detail.tsx` (`DetailPanel` con sezioni identity/classification/team/
+planning + `ActivityLogSection` resource `opportunities`; mostra `lead {id,label}` come "Originating
+lead" quando presente), `opportunities-table.tsx` (mirror `LeadsTable`: Sheet resizable,
+`ModuleStatsPanel`/`StatsToggleButton` DENTRO l'adapter — non nella pagina, stesso pattern di
+leads/campaigns/registries — refresh+invalidateStats+invalidate detail dopo mutation),
+`column-renderers.tsx` (relazioni, `estimated_value` via `formatDecimal` riusato da
+`features/products/column-renderers.tsx`, `success_probability` come percentuale, date senza ora).
+
+**Pagine + routing**: `pages/opportunities-page.tsx` (gate `opportunities.viewAny`) /
+`opportunity-detail-page.tsx` / `opportunity-form-page.tsx` (mirror leads pages 1:1); rotte
+`/opportunities`, `/opportunities/new`, `/opportunities/:id`, `/opportunities/:id/edit` in
+`routes/router.tsx` (lazy).
+
+**i18n**: `en-opportunities.ts`/`it-opportunities.ts` montati in `en.ts`/`it.ts` (+ chiave
+`navigation.opportunities` — il backend invia `label` come CHIAVE i18n, `t(item.label)` in
+`nav-main.tsx`, confermato leggendo il sorgente) + `moduleStats.opportunities` in
+`en-stats.ts`/`it-stats.ts` (chiavi `total/totalEstimatedValue/averageProbability/byRegistry/trend`
+— **PROPOSTE, non confermate da backend-core**: ho chiesto conferma dei `key` esatti di
+`OpportunitiesStatsDefinition` e delle label-key esatte di `OpportunityAdvancedFilterCatalog`
+(`opportunities.advancedFilters.*`, già scritte con naming ragionevole ma NON verificate contro il
+catalogo reale) — vedi messaggio a `backend-core`, in attesa di risposta.
+
+**Dipendenza risolta senza aspettare backend-select**: `features/company-sites/for-select-api.ts`
+NON esisteva ancora (nuovo endpoint spec 0040, lane B in corso) — creato da questa lane seguendo
+ESATTAMENTE il pattern esistente (`COMPANY_SITES_FOR_SELECT_RESOURCE = 'company-sites'`, wrapper
+fetch+hook) per sbloccare il form; ho segnalato a `backend-select` (messaggio inviato) di verificare
+che l'endpoint reale risponda con `{id, label, subtitle}` — nessuna risposta ricevuta al momento di
+questo handoff.
+
+**Test** (Vitest, eseguiti davvero): `opportunity-schema.test.ts` (11), `opportunity-form-payload.test.ts`
+(12, incl. sparse diff di `manager_slots` ricostruito dai `managers` refs e normalizzazione
+`estimated_value` stringa-decimale↔numero), `opportunity-form-body.test.tsx` (10: rendering di tutti
+i campi, disabled/params BR-4 su registry→referente-trio e su company→company_site/
+business_function→operational_site, prefill product_category→business_function solo se vuoto,
+field permissions visible/editable), `opportunity-detail.test.tsx` (5). Query a11y-role-first
+(eccetto i `data-testid` sugli stub di `AsyncPaginatedSelect`, mockato interamente — pattern identico
+a `campaign-project-link.test.tsx`), QueryClient nuovo per test.
+
+**Verificato (davvero eseguito)**: `npx tsc -b` pulito (zero errori, incluso il precedente
+`pipeline-status-form.test.tsx` segnalato come pre-esistente — risulta già risolto dall'altra lane
+0039). `npx eslint` pulito su tutti i file toccati. `npx vitest run` scoped a
+`features/opportunities` + `features/registries` + `components/form`: 4+9 file, 38+54 test verdi.
+**Full repo** `npx vitest run`: 240/241 file, 1532/1535 test verdi — unico rosso PRE-ESISTENTE
+`src/features/table/cell-renderers.test.tsx` (ContactsCell, 3 test, leak i18n it/en cross-file),
+riprodotto identico al baseline già documentato in questo file, non toccato da questa lane.
+
+File toccati (FE): `features/opportunities/**` (nuovo, 19 file prod + 4 test, 2845 righe tot., tutti
+entro 300/500), `components/form/manager-slots-field.tsx` (nuovo, spostato da
+`features/registries/manager-slots-field.tsx`, cancellato), `components/form/relation-select-field.tsx`
+(+prop `params`), `features/registries/registry-form-details-tab.tsx` (import swap),
+`features/company-sites/for-select-api.ts` (nuovo, vedi sopra), `pages/opportunit{ies,y-detail,y-form}
+-page.tsx` (nuovi), `routes/router.tsx` (+4 rotte lazy), `i18n/locales/{en,it}-opportunities.ts`
+(nuovi), `i18n/locales/{en,it}.ts` (+import/mount/nav key), `i18n/locales/{en,it}-stats.ts`
+(+moduleStats.opportunities).
+
+Non committato (§3.6) — fermo qui, chiedo prima di committare. Prossimo passo di questa lane: MT-6
+(creazione da Lead) — `use-opportunity-defaults.ts`, form in modalità from-lead (banner + forceDisabled
+sui `locked_fields` — il form-body ha già il parametro `lockedFields`/`forceDisabled` pronto ad
+accoglierli), bottone nel dettaglio Lead. In attesa di: (1) conferma backend-core su stats widget
+keys + advanced filter label keys, (2) conferma backend-select sulla shape reale di
+`company-sites/for-select` e sul contratto `GET /api/leads/{lead}/opportunity-defaults` (backend-core).
+
+## OPPORTUNITIES MODULE (spec 0040, 2026-07-16) — FRONTEND MT-6 (creazione da Lead), GREEN VERIFICATO, NON COMMITTATO
+
+Team `frontend-opps` (lane C), continuazione di MT-5 sopra. Contratto invariato (spec 0040 già
+congelata). Backend `GET /api/leads/{lead}/opportunity-defaults` consumato COME DA SPEC, non ancora
+verificato contro un'implementazione reale (backend-core lane A potrebbe essere ancora in corso —
+nessuna risposta ricevuta al momento di questo handoff).
+
+**Tipi estesi** in `features/opportunities/types.ts`: `OpportunityDefaultValues`/
+`OpportunityDefaultReferences`/`OpportunityDefaults` (risposta dell'endpoint, gia' scompattata
+dall'envelope) + `OpportunityFromLeadContext` (leadId/values/references/lockedFields, quello che
+serve DAVVERO al form, risolto una volta a livello pagina). `OpportunityFormMode.create` ora porta
+un `fromLead?: OpportunityFromLeadContext` opzionale (`edit` invariato). `CreateOpportunityPayload.
+registry_id` reso opzionale (era `number` non-nullable in MT-5): D-4 lo richiede solo per la create
+manuale, BR-1/BR-2 lo rendono OMESSO (non semplicemente ripetuto) quando è tra i `locked_fields` di
+una create-from-lead — l'unico modo per farlo tipizzare senza un cast.
+
+**Nuovi file**: `opportunity-defaults-api.ts` (fetch + query key dedicati, NON in `features/leads/`:
+la shape e lo scopo sono interamente di Opportunities anche se l'URL vive sotto `/leads`),
+`use-opportunity-defaults.ts` (query gated da `leadId !== null`), `use-opportunity-create-mode.ts`
+(hook di orchestrazione per la pagina: `'loading'|'error'|'existing'|'ready'` — `'existing'` quando
+`existing_opportunity_id` non è null, D-2, cortocircuita PRIMA di montare un form che il server
+rifiuterebbe con 422 unique), `opportunity-from-lead-banner.tsx` (banner compatto `role="status"`,
+mostra il nome del referente del lead quando noto).
+
+**Modificati**: `opportunity-form-payload.ts` (`buildCreatePayload` accetta un secondo argomento
+opzionale `{leadId, lockedFields}`: costruisce il payload SENZA i 6 campi BR-1 quando bloccati e
+aggiunge `lead_id` — retrocompatibile, ogni chiamata MT-5 esistente/testata invariata),
+`use-opportunity-form.ts` (defaultValues create merge `mode.fromLead.values`; `onSubmit` inoltra
+`{leadId, lockedFields}` al payload builder), `use-opportunity-selected-items.ts` (idratazione
+create-from-lead da `mode.fromLead.references`, stessa forma dell'edit-mode), `opportunity-form-
+body.tsx` (`lockedFields` ora letto da `mode.opportunity.locked_fields` IN EDIT o `mode.fromLead.
+lockedFields` in create-from-lead — stesso Set, stessa logica forceDisabled già scritta in MT-5;
+banner montato in testa al form quando `mode.fromLead` è presente).
+
+**Pagina** `pages/opportunity-form-page.tsx`: legge `?lead_id=N` via `useSearchParams` (solo in create,
+mai in edit), delega la risoluzione a `useOpportunityCreateMode`; nuovo componente locale
+`OpportunityCreateModeBody` per tenere la JSX leggibile (loading→skeleton, error→retry, existing→CTA
+"Vai all'opportunità esistente", ready→form). Ramo edit riscritto da ternari annidati a if/else
+esplicito (narrowing TS pulito, niente più cast).
+
+**Bottone nel dettaglio Lead** (AC-078): `features/leads/types.ts` esteso con `LeadOpportunityRef` +
+campo `opportunity?: LeadOpportunityRef | null` su `LeadDetail` — reso OPZIONALE (non il default
+"sempre presente" del contratto reale) apposta per non rompere nessuna fixture `LeadDetail` esistente
+nelle suite leads (nessun file di test leads toccato). `pages/lead-detail-page.tsx`: nell'header
+actions, "Vai all'opportunità" (link a `/opportunities/{id}`) quando `lead.opportunity` è valorizzato,
+altrimenti "Crea opportunità" (link a `/opportunities/new?lead_id=N`) gated `<Can permission=
+"opportunities.create">` — SOLO quando `lead` è caricato (niente flash del bottone sbagliato prima
+del fetch). `features/leads/lead-detail.tsx`/`leads-table.tsx` NON toccati (l'azione vive solo nella
+pagina dedicata, non nel quick-view Sheet — coerente col non-goal "row action nella tabella leads"
+della spec). Nuove chiavi i18n `leads.detail.{createOpportunity,goToOpportunity}`.
+
+**Test** (Vitest, eseguiti davvero): estensione `opportunity-form-payload.test.ts` (+4: lead_id
+appeso, campi bloccati omessi, campo con derivazione null resta libero e viene inviato, mai lead_id
+su create manuale), `use-opportunity-defaults.test.tsx` (3: gate su leadId null, resolve, existing_
+opportunity_id), estensione `opportunity-form-body.test.tsx` (+2: banner + lock/prefill end-to-end
+in create-from-lead, nessun banner/lock su create manuale), nuovo `pages/lead-detail-page.test.tsx`
+(3: create-opportunity link+href, nascosto senza permesso, go-to-opportunity quando l'opportunità
+esiste già — pattern a mirror di `registry-detail-page.test.tsx`).
+
+**Verificato (davvero eseguito)**: `npx tsc -b` pulito. `npx eslint` pulito su tutti i file toccati.
+`npx vitest run` scoped a `features/opportunities` (5 file) + `features/leads` (6 file) +
+`pages/lead-detail-page.test.tsx`: tutti verdi. **Full repo** `npx vitest run`: 242/243 file,
+1543/1546 test verdi — unico rosso PRE-ESISTENTE `cell-renderers.test.tsx` (stesso, già documentato
+sopra), non toccato da questa lane.
+
+File toccati in più rispetto a MT-5: `features/opportunities/{opportunity-defaults-api,use-
+opportunity-defaults{,.test},use-opportunity-create-mode,opportunity-from-lead-banner}.ts(x)`
+(nuovi), `features/opportunities/{types,opportunity-form-payload{,.test},use-opportunity-form,
+use-opportunity-selected-items,opportunity-form-body{,.test}}.ts(x)` (estesi), `features/leads/
+types.ts` (+opportunity ref, opzionale), `pages/{opportunity-form-page,lead-detail-page{,.test}}.tsx`,
+`i18n/locales/{en,it}-{opportunities,leads}.ts` (+chiavi). `features/opportunities/` ora 24 file
+prod + 6 test, 3274 righe totali, tutti entro 300/500.
+
+MT-5+MT-6 completi. Non committato (§3.6) — fermo qui, chiedo prima di committare. Debito aperto (non
+bloccante, segnalato ai peer): conferma backend-core sui widget stats/filtri avanzati e conferma
+backend-select sulla shape reale di `company-sites/for-select` — nessuna risposta ricevuta.
+
+## OPPORTUNITIES MODULE (spec 0040, 2026-07-16) — ALLINEAMENTO i18n FINALE (chiavi backend confermate), GREEN VERIFICATO
+
+Chiuso l'unico thread aperto della lane C: `backend-select` ha confermato che
+`features/company-sites/for-select-api.ts` (già scritto in MT-5) combacia 1:1 col contratto reale —
+nessuna modifica. `backend-core` ha chiuso MT-3 e fornito le chiavi ESATTE (lette anche direttamente
+da `backend/app/Tables/Opportunities/{OpportunityColumnCatalog,OpportunityAdvancedFilterCatalog}.php`,
+sola lettura):
+
+- **Colonne** (`opportunities.columns.*`): combaciavano già 1:1 con la bozza MT-5, nessuna modifica.
+- **Stats** (`moduleStats.opportunities` in `en/it-stats.ts`): aggiunta la chiave mancante `fromLead`
+  (4° widget "stat" in testa — invariante cross-modulo scoperta in MT-3: `StatsEndpointTest` richiede
+  esattamente 4 stat prima di distribution/trend) e rinominato `totalEstimatedValue` → `estimatedValue`
+  per matchare `OpportunitiesStatsDefinition`. Ordine/set finale: `total, estimatedValue,
+  averageProbability, fromLead, byRegistry, trend`.
+- **Filtri avanzati** (`opportunities.advancedFilters.*` in `en/it-opportunities.ts`): la mia bozza
+  MT-5 aveva 4 chiavi orfane inventate per range che il catalogo reale NON espone
+  (`successProbabilityRange`, `startDateRange`, `expectedCloseDateRange` — nessun filtro avanzato su
+  questi 3 campi, fuori contratto) più `estimatedValueRange` rinominata in `valueRange` (matcha
+  `OpportunityAdvancedFilterCatalog`'s `value_range`). Rimosse le 3 orfane, rinominata la quarta.
+  Set finale (8, ordine catalogo): `registry, referent, commercial, supervisor, source,
+  productCategory, valueRange, createdRange`. Verificato con grep che nessun file referenzia più le
+  chiavi rimosse/rinominate.
+
+Verificato (davvero eseguito): `npx tsc -b` pulito; `npx eslint` pulito sui 4 file i18n toccati;
+`npx vitest run` scoped a `features/opportunities` + `features/leads` + `features/registries` +
+`components/form` + `pages/lead-detail-page.test.tsx`: 21 file, 155 test verdi; **full repo**
+`npx vitest run`: 242/243 file, 1543/1546 test verdi — stesso, unico rosso PRE-ESISTENTE
+`cell-renderers.test.tsx` già documentato, non toccato da questa lane.
+
+Lane C (frontend-opps) COMPLETA su tutti i fronti aperti. Non committato (§3.6) — pronto per il
+verifier finale su tutti gli AC (0040), come da lead.
+
+## OPPORTUNITIES MODULE (spec 0040, amendment rev.1, 2026-07-16) — FRONTEND ROUND 2 (A-1 select Lead + A-2 3 campi obbligatori), GREEN VERIFICATO, NON COMMITTATO
+
+Team `frontend-opps` (lane C), su richiesta utente post-MT-1..6. Contratto aggiornato
+nell'`<amendment>` di `docs/specs/0040-opportunities-module.xml` (AC-081..090).
+
+**A-2 (3 campi obbligatori)**: `opportunity-schema.ts` — `company_id`/`company_site_id`/
+`operational_site_id` passano da nullable a required (stesso pattern refine di `registry_id`,
+nuovo helper `requiredRelationId`); nuove chiavi i18n `companyRequired`/`companySiteRequired`/
+`operationalSiteRequired`. `types.ts` — `OpportunityDetail.{company_id,company_site_id,
+operational_site_id}` da `number|null` a `number` (il contratto backend li rende NOT NULL);
+`CreateOpportunityPayload.company_id`/`company_site_id` diventano `number` sempre inviato (mai
+derivabile da lead, A-2); `operational_site_id` resta opzionale nel TYPE con lo stesso motivo di
+`registry_id` (omesso, non ripetuto, quando bloccato da un lead che possiede la sede). Aggiornati
+tutti i fixture `OpportunityDetail`/`OpportunityFormValues` nei test (`opportunity-schema.test.ts`
+riscritto con AC-084 dedicato; `opportunity-form-payload.test.ts` fixture `values()`/`original()`
+con company_id/company_site_id/operational_site_id concreti; `opportunity-detail.test.tsx` — il
+caso "unset" ora azzera solo le relazioni idratate, non gli FK mandatory).
+
+**A-1 (select Lead nel form)**: nuovo `features/leads/for-select-api.ts`
+(`LEADS_FOR_SELECT_RESOURCE='leads'`, pattern identico agli altri for-select-api — endpoint nuovo
+`GET /api/leads/for-select`, owner BE = backend-core). Riuso ESPLICITO (nessuna seconda
+implementazione) di `use-opportunity-defaults`: aggiunta `fetchOpportunityDefaultsOnce` (imperativa,
+`queryClient.fetchQuery` sulla STESSA query key di `useOpportunityDefaults`) in
+`opportunity-defaults-api.ts`. Nuovo `use-opportunity-lead-selection.ts` — owns lo stato del select
+in CREATE: seleziona un lead → applica values+lock esattamente come il deep-link (stesso fetch);
+svuota → resetta e sblocca i 6 campi derivabili (scelto RESET, non "lascia i valori", per
+trasparenza — comportamento meno sorprendente); lead già con opportunità (D-2) → blocca senza mai
+scrivere sul form. Nuovo `opportunity-lead-field.tsx` (select standalone, non un `MetaField` — 
+`lead_id` non è mai un campo RHF) + banner/alert riusati (`OpportunityFromLeadBanner`, CTA
+"existing"). `opportunity-form-body.tsx`: banner e `lockedFields` ora derivano SEMPRE da
+`leadSelection.state` (unifica deep-link e select-in-form, stesso meccanismo); Save disabilitato
+quando il lead scelto è già collegato (AC-087). EDIT: campo Lead READ-ONLY (`Input disabled
+readOnly`) mostrato SOLO se `opportunity.lead` esiste, mai un select (AC-088); `lead_id` resta fuori
+da `UpdateOpportunityPayload` (invariato da MT-6).
+
+**Refactor di `use-opportunity-form.ts` per una circolarità hook-order**: `useOpportunityLeadSelection`
+serve `form.setValue`, quindi deve girare DOPO `useOpportunityForm`; ma il submit deve leggere lo
+stato PIÙ RECENTE del lead selezionato (che cambia dopo il mount). Il primo tentativo (un
+`useRef` scritto durante il render) è stato bloccato dall'hook `code-guard`/eslint
+(`react-hooks/refs`: "Cannot access refs during render") — **corretto**, non aggirato: split in due
+hook, `useOpportunityForm({mode})` (solo RHF/Zod/defaultValues, ritorna `form`) e il nuovo
+`useOpportunityFormSubmit({form, mode, leadSubmission, onSuccess})` (submit + serverError), chiamato
+DOPO `useOpportunityLeadSelection` nel component body — `leadSubmission` è un valore normale
+ricalcolato ogni render (mai stale, nessun ref necessario). `useOpportunityForm` era consumato SOLO
+da `opportunity-form-body.tsx`: refactor contenuto, nessun altro call site da aggiornare.
+
+**Split per dimensione file** (hook `code-guard`, hard limit 500): i nuovi test del select Lead
+(AC-086/087/088) vivono in un file NUOVO `opportunity-lead-selection.test.tsx` (361 righe, mock
+setup completo e indipendente — pattern identico a come `campaign-project-link.test.tsx` è separato
+da `campaign-form-body.test.tsx`), non dentro `opportunity-form-body.test.tsx` (che sarebbe salito
+a 666 righe). Richiede `MemoryRouter` nel wrapper del test (il campo "existing opportunity" rende un
+`<Link>`).
+
+Test nuovi/estesi: `opportunity-schema.test.ts` (+3, AC-084), `opportunity-form-payload.test.ts`
+(+2, fixture aggiornate), `opportunity-lead-selection.test.tsx` (nuovo, 6 test: prefill+lock,
+clear+unlock, submit payload lead_id+omit-locked, existing-block+disabled-submit, edit read-only
+con/senza lead collegato).
+
+Verificato (davvero eseguito): `npx tsc -b` pulito. `npx eslint` pulito su tutti i file toccati
+(incluso il fix del `react-hooks/refs` sopra — non un semplice silenziamento, una vera
+ristrutturazione). `npx vitest run` scoped a `features/opportunities` + `features/leads`: 6+X file,
+55+ test verdi. **Full repo** `npx vitest run`: 243/244 file, 1552/1555 test verdi — stesso, unico
+rosso PRE-ESISTENTE `cell-renderers.test.tsx` già documentato, non toccato da questa lane.
+
+File toccati in più: `features/leads/for-select-api.ts` (nuovo), `features/opportunities/{opportunity-
+lead-field,use-opportunity-lead-selection,opportunity-lead-selection.test}.tsx` (nuovi),
+`features/opportunities/{types,opportunity-schema,opportunity-schema.test,opportunity-form-payload,
+opportunity-form-payload.test,opportunity-detail.test,use-opportunity-form,opportunity-form-body}.ts(x)`
+(estesi/refactored), `opportunity-defaults-api.ts` (+`fetchOpportunityDefaultsOnce`),
+`i18n/locales/{en,it}-opportunities.ts` (+chiavi lead/required).
+
+Non committato (§3.6) — fermo qui, chiedo prima di committare. Pronto per il verifier finale su
+tutti gli AC 0040 (incl. AC-081..090).

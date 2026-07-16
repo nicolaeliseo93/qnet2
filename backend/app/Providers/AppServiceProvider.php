@@ -20,6 +20,7 @@ use App\Models\EmploymentProfile;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\OperationalSite;
+use App\Models\Opportunity;
 use App\Models\PersonalData;
 use App\Models\PipelineStatus;
 use App\Models\Product;
@@ -117,6 +118,7 @@ class AppServiceProvider extends ServiceProvider
             'campaign' => Campaign::class,
             'lead' => Lead::class,
             'lead_status' => LeadStatus::class,
+            'opportunity' => Opportunity::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

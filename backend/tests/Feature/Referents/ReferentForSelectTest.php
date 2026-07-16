@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\Contact;
 use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -68,8 +70,10 @@ it('maps a referent to { id, label: name }', function () {
     $response = $this->getJson('/api/referents/for-select?search=Ada Lovelace')->assertOk();
     $item = collect($response->json('items'))->firstWhere('id', $target->id);
 
+    // `meta` is always present now (spec 0040 A-4), like registries/for-select.
     expect($item)->toMatchArray(['id' => $target->id, 'label' => 'Ada Lovelace'])
-        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label']);
+        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label', 'meta'])
+        ->and($item['meta'])->toHaveKey('contacts');
 });
 
 it('searches by name', function () {
@@ -105,4 +109,80 @@ it('resolves the literal for-select segment BEFORE the {referent} wildcard', fun
     // A non-numeric "id" would 404/fail model binding if the wildcard route
     // matched first; the literal for-select controller must win.
     $this->getJson('/api/referents/for-select')->assertOk();
+});
+
+// ---------------------------------------------------------------------------
+// AC-051 — registry_id scope (spec 0040 BR-4)
+// ---------------------------------------------------------------------------
+
+it('registry_id restricts the list to referents linked to that registry', function () {
+    $actor = referentForSelectUserWith(['viewAny']);
+    $registry = Registry::factory()->create();
+    $linked = Referent::factory()->create();
+    $registry->referents()->attach($linked);
+    Referent::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/referents/for-select?registry_id={$registry->id}")->assertOk();
+    $ids = collect($response->json('items'))->pluck('id');
+
+    expect($ids)->toContain($linked->id)
+        ->and($response->json('pagination.total'))->toBe(1);
+});
+
+it('422 when registry_id does not reference an existing registry', function () {
+    $actor = referentForSelectUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/referents/for-select?registry_id=999999')
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('registry_id');
+});
+
+it('without registry_id behaves exactly as before (every referent)', function () {
+    $actor = referentForSelectUserWith(['viewAny']);
+    Referent::factory()->count(2)->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/referents/for-select')->assertOk();
+
+    expect($response->json('pagination.total'))->toBe(2);
+});
+
+// ---------------------------------------------------------------------------
+// AC-091 — meta.contacts (spec 0040 A-4): ONLY primary contacts
+// ---------------------------------------------------------------------------
+
+it('meta.contacts carries ONLY the referent primary contacts', function () {
+    $actor = referentForSelectUserWith(['viewAny']);
+    $referent = Referent::factory()->withPersonalData()->create(['name' => 'Grace Hopper']);
+    Contact::factory()->email()->primary()->for($referent->personalData, 'contactable')->create([
+        'value' => 'grace@example.test',
+    ]);
+    Contact::factory()->phone()->for($referent->personalData, 'contactable')->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/referents/for-select?ids[]={$referent->id}")->assertOk();
+    $item = collect($response->json('items'))->firstWhere('id', $referent->id);
+
+    expect($item['meta']['contacts'])->toHaveCount(1)
+        ->and($item['meta']['contacts'][0])->toMatchArray([
+            'type' => 'email',
+            'value' => 'grace@example.test',
+            'is_primary' => true,
+        ]);
+});
+
+it('meta.contacts is [] for a referent without a card or without primary contacts', function () {
+    $actor = referentForSelectUserWith(['viewAny']);
+    $bare = Referent::factory()->create();
+    $noPrimary = Referent::factory()->withPersonalData()->create();
+    Contact::factory()->phone()->for($noPrimary->personalData, 'contactable')->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/referents/for-select?ids[]={$bare->id}&ids[]={$noPrimary->id}")->assertOk();
+    $items = collect($response->json('items'))->keyBy('id');
+
+    expect($items[$bare->id]['meta']['contacts'])->toBe([])
+        ->and($items[$noPrimary->id]['meta']['contacts'])->toBe([]);
 });

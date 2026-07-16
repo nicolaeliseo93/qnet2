@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Models\Lead;
+use App\Models\Opportunity;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -19,6 +21,17 @@ class DemoDataSeeder extends Seeder
     public function run(): void
     {
         $this->call(DatabaseSeeder::class);
+
+        // Clear the most-downstream demo entities first: opportunities
+        // restrict-reference half the graph (registries, companies, sites,
+        // referents, leads) and leads restrict referents/campaigns/sites, so
+        // on a re-run the upstream delete-and-recreate seeders (e.g.
+        // DemoReferentSeeder) would trip the FK restriction before the
+        // downstream seeders get a chance to clear their own rows. Both
+        // tables are re-seeded below (same pre-clear pattern as
+        // DemoProjectSeeder with campaigns).
+        Opportunity::query()->delete();
+        Lead::query()->delete();
 
         $this->call(DemoReferentTypeSeeder::class);
         $this->call(DemoReferentSeeder::class);
@@ -53,6 +66,14 @@ class DemoDataSeeder extends Seeder
         // (mandatory, BR-1/D-1) plus DemoOperationalSiteSeeder/DemoSourceSeeder/
         // DemoUsersSeeder (optional) — must run after all of them.
         $this->call(DemoLeadSeeder::class);
+        // Depends on DemoRegistrySeeder (mandatory) plus every optional lookup
+        // above (company/company-sites/operational-sites/business-functions/
+        // referents/users/sources/product-categories) and DemoLeadSeeder (for
+        // the BR-1 from-lead batch) — must run after all of them.
+        $this->call(DemoOpportunitySeeder::class);
+        // Needs users (avatars) and company sites (logos) already seeded above;
+        // attaches demo files through the real HasAttachments write path.
+        $this->call(DemoAttachmentSeeder::class);
         $this->call(DemoNotificationSeeder::class);
         // Last: needs every entity's rows already seeded (it populates custom
         // field values on them) and companies for the relation target.

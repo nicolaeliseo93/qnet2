@@ -18,9 +18,12 @@ interface ManagerSlotsFieldProps {
 /**
  * Ordered "G.A. n" manager slot editor. Each row is a fixed slot whose index+1
  * is its static G.A. number (the order of importance inherited by other
- * modules): pick a manager, clear it (the slot stays as a persistent empty
- * card), reorder with the arrows, or remove the slot entirely. The value is the
- * gap-aware `manager_slots` array submitted verbatim to the backend.
+ * modules, spec 0040): pick a manager, clear it (the slot stays as a
+ * persistent empty card), reorder with the arrows, or remove the slot
+ * entirely. The value is the gap-aware `manager_slots` array submitted
+ * verbatim to the backend. Domain-agnostic (spec 0020, extracted for reuse by
+ * Opportunities, spec 0040): every i18n string is the shared `registries.form.*`
+ * namespace, generic enough that "G.A." reads the same across modules.
  */
 export function ManagerSlotsField({
   value,

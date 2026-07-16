@@ -29,6 +29,19 @@ final class LeadColumnCatalog
             self::derivedColumn('operational_site', 'leads.columns.operationalSite'),
             self::derivedColumn('source', 'leads.columns.source'),
             self::derivedColumn('operator', 'leads.columns.operator'),
+            [
+                // DERIVED boolean: `operator_id IS NOT NULL`. No real DB column —
+                // filter/sort resolved by LeadsTableDefinition on the FK; the
+                // set-filter value list ('1'/'0', localized yes/no on the FE)
+                // comes from the generic boolean fallback in TableService.
+                'id' => 'is_assigned',
+                'label' => 'leads.columns.isAssigned',
+                'type' => 'boolean',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
             self::derivedColumn('lead_status', 'leads.columns.leadStatus'),
             [
                 'id' => 'created_at',

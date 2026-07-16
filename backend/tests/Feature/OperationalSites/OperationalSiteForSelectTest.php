@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Address;
+use App\Models\BusinessFunction;
 use App\Models\City;
 use App\Models\OperationalSite;
 use App\Models\User;
@@ -164,4 +165,42 @@ it('rejects a limit above 100 (422)', function () {
     $this->getJson('/api/operational-sites/for-select?limit=101')
         ->assertStatus(422)
         ->assertJsonValidationErrors('limit');
+});
+
+// ---------------------------------------------------------------------------
+// AC-052 — business_function_id scope (spec 0040 BR-4)
+// ---------------------------------------------------------------------------
+
+it('business_function_id restricts the list to sites linked to that function', function () {
+    $actor = userWithSiteAbilities(['viewAny']);
+    $function = BusinessFunction::factory()->create();
+    $linked = OperationalSite::factory()->withAddress()->create();
+    $function->operationalSites()->attach($linked);
+    OperationalSite::factory()->withAddress()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/operational-sites/for-select?business_function_id={$function->id}")->assertOk();
+    $ids = collect($response->json('items'))->pluck('id');
+
+    expect($ids)->toContain($linked->id)
+        ->and($response->json('pagination.total'))->toBe(1);
+});
+
+it('422 when business_function_id does not reference an existing function', function () {
+    $actor = userWithSiteAbilities(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/operational-sites/for-select?business_function_id=999999')
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('business_function_id');
+});
+
+it('without business_function_id behaves exactly as before (every site)', function () {
+    $actor = userWithSiteAbilities(['viewAny']);
+    OperationalSite::factory()->withAddress()->count(2)->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/operational-sites/for-select')->assertOk();
+
+    expect($response->json('pagination.total'))->toBe(2);
 });

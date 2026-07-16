@@ -9,6 +9,7 @@ use App\Models\CustomFieldDefinition;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\OperationalSite;
+use App\Models\Opportunity;
 use App\Models\PipelineStatus;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -75,6 +76,9 @@ return [
         ],
         'operational-sites' => [
             'model' => OperationalSite::class,
+        ],
+        'opportunities' => [
+            'model' => Opportunity::class,
         ],
         'pipeline-statuses' => [
             'model' => PipelineStatus::class,

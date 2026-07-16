@@ -1,5 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- renderer registry module: cells are AG Grid render functions, not route/page components */
 import type { ICellRendererParams } from 'ag-grid-community'
+import { Check, X } from 'lucide-react'
+import i18n from '@/i18n'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { DateTimeCell } from '@/features/table/cell-renderers'
@@ -87,6 +89,35 @@ function LeadStatusCell({ value }: ICellRendererParams) {
 }
 
 /**
+ * Colored tone classes for the `is_assigned` boolean badge (green = yes,
+ * red = no), matching the users/business-functions boolean badges so boolean
+ * status columns look the same across the app and adapt to dark mode.
+ */
+const BOOLEAN_BADGE_YES =
+  'border-transparent bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200'
+const BOOLEAN_BADGE_NO =
+  'border-transparent bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200'
+
+/**
+ * Renders the derived `is_assigned` column as a colored yes/no badge with a
+ * leading icon (check when an operator is assigned, cross otherwise). Icon
+ * plus text keeps it accessible — color is not the only signal.
+ */
+function AssignedBadgeCell({ value }: ICellRendererParams) {
+  if (typeof value !== 'boolean') {
+    return <EmptyCell />
+  }
+  return (
+    <div className="flex h-full items-center justify-center">
+      <Badge className={cn('h-5 min-h-5', value ? BOOLEAN_BADGE_YES : BOOLEAN_BADGE_NO)}>
+        {value ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
+        {i18n.t(value ? 'common.yes' : 'common.no')}
+      </Badge>
+    </div>
+  )
+}
+
+/**
  * Custom cell renderers keyed by the backend column `id` (spec 0024). `notes`
  * falls back to the AG Grid default cell; `created_at` reuses the shared
  * domain-agnostic renderer.
@@ -98,5 +129,6 @@ export const leadColumnRenderers: TableRendererMap = {
   operational_site: (params) => <OperationalSiteCell {...params} />,
   source: (params) => <RelationCell {...params} />,
   operator: (params) => <RelationCell {...params} />,
+  is_assigned: (params) => <AssignedBadgeCell {...params} />,
   created_at: (params) => <DateTimeCell {...params} />,
 }

@@ -1,0 +1,58 @@
+import { apiClient } from '@/api/client'
+import type { ApiResponse, ApiResponseWithPermissions } from '@/api/types'
+import type { ResourcePermissions } from '@/features/authorization/types'
+import type {
+  CreateOpportunityPayload,
+  OpportunityDetail,
+  OpportunityDetailWithPermissions,
+  UpdateOpportunityPayload,
+} from '@/features/opportunities/types'
+
+/** Table/stats domain key of this module, shared by the adapter and the stats invalidation. */
+export const OPPORTUNITIES_DOMAIN = 'opportunities'
+
+/**
+ * Query key of a single opportunity's detail (fresh-on-open pattern). Shared
+ * by the detail/edit pages and by the post-mutation invalidation, so they can
+ * never drift apart. `null` (an unparsable route param) is a key that is
+ * never fetched.
+ */
+export function opportunityDetailQueryKey(id: number | null) {
+  return ['opportunities', 'detail', id] as const
+}
+
+/**
+ * Fetches a single opportunity detail together with the actor's authorization
+ * metadata for it (`permissions`, a top-level envelope sibling of `data`).
+ */
+export async function fetchOpportunity(id: number): Promise<OpportunityDetailWithPermissions> {
+  const { data } = await apiClient.get<
+    ApiResponseWithPermissions<OpportunityDetail, ResourcePermissions>
+  >(`/opportunities/${id}`)
+  return { ...data.data, permissions: data.permissions }
+}
+
+/** Creates an opportunity. Returns the created resource. */
+export async function createOpportunity(
+  payload: CreateOpportunityPayload,
+): Promise<OpportunityDetail> {
+  const { data } = await apiClient.post<ApiResponse<OpportunityDetail>>('/opportunities', payload)
+  return data.data
+}
+
+/** Partially updates an opportunity (PATCH). Returns the updated resource. */
+export async function updateOpportunity(
+  id: number,
+  payload: UpdateOpportunityPayload,
+): Promise<OpportunityDetail> {
+  const { data } = await apiClient.patch<ApiResponse<OpportunityDetail>>(
+    `/opportunities/${id}`,
+    payload,
+  )
+  return data.data
+}
+
+/** Deletes an opportunity. Backend responds 204 with no body. */
+export async function deleteOpportunity(id: number): Promise<void> {
+  await apiClient.delete(`/opportunities/${id}`)
+}

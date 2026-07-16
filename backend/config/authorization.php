@@ -10,6 +10,7 @@ use App\Authorization\ImportRunsAuthorization;
 use App\Authorization\LeadsAuthorization;
 use App\Authorization\LeadStatusesAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
+use App\Authorization\OpportunitiesAuthorization;
 use App\Authorization\PipelineStatusesAuthorization;
 use App\Authorization\ProductCategoriesAuthorization;
 use App\Authorization\ProductsAuthorization;
@@ -66,6 +67,7 @@ return [
         'campaigns' => CampaignsAuthorization::class,
         'leads' => LeadsAuthorization::class,
         'lead-statuses' => LeadStatusesAuthorization::class,
+        'opportunities' => OpportunitiesAuthorization::class,
         'import-runs' => ImportRunsAuthorization::class,
     ],
 

@@ -37,6 +37,15 @@ class LeadsTableDefinition extends AbstractTableDefinition
     private const string OPERATIONAL_SITE_COLUMN = 'operational_site';
 
     /**
+     * Derived boolean column: whether an operator is assigned to the lead
+     * (`operator_id IS NOT NULL`). No real DB column, so filter and sort are
+     * resolved here against the FK.
+     */
+    private const string IS_ASSIGNED_COLUMN = 'is_assigned';
+
+    private const string OPERATOR_FK = 'operator_id';
+
+    /**
      * Simple (single-hop) relation-name derived columns: relation accessor,
      * related table and owning FK column, keyed by the derived column id.
      *
@@ -147,6 +156,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
             'operational_site' => $this->operationalSiteColumn->summarize($row),
             'source' => $this->summarize($row->source),
             'operator' => $this->summarize($row->operator),
+            'is_assigned' => $row->operator_id !== null,
             'lead_status' => $this->summarizeLeadStatus($row->leadStatus),
             'notes' => $row->notes,
             'created_at' => $row->created_at,
@@ -255,6 +265,12 @@ class LeadsTableDefinition extends AbstractTableDefinition
             return true;
         }
 
+        if ($columnId === self::IS_ASSIGNED_COLUMN) {
+            $this->applyAssignedFilter($query, $values);
+
+            return true;
+        }
+
         $config = self::DERIVED_RELATIONS[$columnId] ?? null;
 
         if ($config === null) {
@@ -268,6 +284,27 @@ class LeadsTableDefinition extends AbstractTableDefinition
         }
 
         return true;
+    }
+
+    /**
+     * `is_assigned` set filter: '1' keeps leads with an operator, '0' keeps
+     * unassigned ones; both (or neither) selected leaves the query untouched.
+     *
+     * @param  Builder<Lead>  $query
+     * @param  array<int, string>  $values
+     */
+    private function applyAssignedFilter(Builder $query, array $values): void
+    {
+        $wantsAssigned = in_array('1', $values, true);
+        $wantsUnassigned = in_array('0', $values, true);
+
+        if ($wantsAssigned === $wantsUnassigned) {
+            return;
+        }
+
+        $wantsAssigned
+            ? $query->whereNotNull(self::OPERATOR_FK)
+            : $query->whereNull(self::OPERATOR_FK);
     }
 
     /**
@@ -299,6 +336,14 @@ class LeadsTableDefinition extends AbstractTableDefinition
     {
         if ($columnId === self::OPERATIONAL_SITE_COLUMN) {
             $this->operationalSiteColumn->applySort($query, $direction);
+
+            return true;
+        }
+
+        if ($columnId === self::IS_ASSIGNED_COLUMN) {
+            // Boolean semantics via the FK: NULL (unassigned) sorts before any
+            // id on ASC in both MySQL and SQLite, i.e. false < true. No raw SQL.
+            $query->orderBy(self::OPERATOR_FK, $direction);
 
             return true;
         }

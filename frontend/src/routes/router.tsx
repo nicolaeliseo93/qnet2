@@ -42,6 +42,9 @@ const LeadStatusesPage = lazy(() => import('@/pages/lead-statuses-page'))
 const LeadsPage = lazy(() => import('@/pages/leads-page'))
 const LeadDetailPage = lazy(() => import('@/pages/lead-detail-page'))
 const LeadFormPage = lazy(() => import('@/pages/lead-form-page'))
+const OpportunitiesPage = lazy(() => import('@/pages/opportunities-page'))
+const OpportunityDetailPage = lazy(() => import('@/pages/opportunity-detail-page'))
+const OpportunityFormPage = lazy(() => import('@/pages/opportunity-form-page'))
 const LeadImportPage = lazy(() => import('@/pages/lead-import-page'))
 const LeadImportHistoryPage = lazy(() => import('@/pages/lead-import-history-page'))
 const LeadImportDetailPage = lazy(() => import('@/pages/lead-import-detail-page'))
@@ -228,6 +231,22 @@ export const router = createBrowserRouter([
           {
             path: 'leads/:id/edit',
             element: <LeadFormPage />,
+          },
+          {
+            path: 'opportunities',
+            element: <OpportunitiesPage />,
+          },
+          {
+            path: 'opportunities/new',
+            element: <OpportunityFormPage />,
+          },
+          {
+            path: 'opportunities/:id',
+            element: <OpportunityDetailPage />,
+          },
+          {
+            path: 'opportunities/:id/edit',
+            element: <OpportunityFormPage />,
           },
           {
             path: 'imports',

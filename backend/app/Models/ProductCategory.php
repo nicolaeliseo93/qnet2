@@ -72,4 +72,16 @@ class ProductCategory extends BaseModel
     {
         return $this->hasMany(Product::class, 'category_id');
     }
+
+    /**
+     * The opportunities against this product category (spec 0040, BR-3:
+     * restrict-on-delete — ProductCategoryService::delete() guards on this
+     * before deleting).
+     *
+     * @return HasMany<Opportunity, $this>
+     */
+    public function opportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class);
+    }
 }

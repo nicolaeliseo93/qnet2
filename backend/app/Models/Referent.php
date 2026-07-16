@@ -10,6 +10,7 @@ use Database\Factories\ReferentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -61,5 +62,43 @@ class Referent extends BaseModel
     public function leads(): HasMany
     {
         return $this->hasMany(Lead::class);
+    }
+
+    /**
+     * The registries (anagrafiche) this referent is associated to ("Referenti
+     * per azienda" — spec 0020), inverse of Registry::referents(). Feeds the
+     * referents/for-select `registry_id` scope (spec 0040 BR-4).
+     */
+    public function registries(): BelongsToMany
+    {
+        return $this->belongsToMany(Registry::class, 'referent_registry');
+    }
+
+    /**
+     * The opportunities that name this referent as their own contact person
+     * (spec 0040, BR-3: restrict-on-delete — ReferentService::delete() guards
+     * on this, PLUS the commercial/reporter roles below, before deleting).
+     *
+     * @return HasMany<Opportunity, $this>
+     */
+    public function opportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class);
+    }
+
+    /**
+     * @return HasMany<Opportunity, $this>
+     */
+    public function opportunitiesAsCommercial(): HasMany
+    {
+        return $this->hasMany(Opportunity::class, 'commercial_id');
+    }
+
+    /**
+     * @return HasMany<Opportunity, $this>
+     */
+    public function opportunitiesAsReporter(): HasMany
+    {
+        return $this->hasMany(Opportunity::class, 'reporter_id');
     }
 }

@@ -19,6 +19,7 @@ import { pipelineStatuses } from './it-pipeline-statuses'
 import { projects } from './it-projects'
 import { campaigns } from './it-campaigns'
 import { leads } from './it-leads'
+import { opportunities } from './it-opportunities'
 import { leadStatuses } from './it-lead-statuses'
 import { leadImports } from './it-lead-imports'
 import { businessFunctions } from './it-business-functions'
@@ -79,6 +80,7 @@ export const it: TranslationResources = {
     campaigns: 'Campagne',
     leads: 'Lead',
     leadStatuses: 'Stati lead',
+    opportunities: 'Opportunità',
     imports: 'Importa lead',
     pipelineStatuses: 'Stati progetto/campagna',
     marketingLeads: 'Marketing e Lead',
@@ -431,5 +433,6 @@ export const it: TranslationResources = {
   leadStatuses,
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
+  opportunities: { ...opportunities, stats: moduleStats.opportunities },
   importRuns: { stats: moduleStats.importRuns },
 }

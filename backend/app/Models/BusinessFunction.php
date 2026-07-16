@@ -73,4 +73,16 @@ class BusinessFunction extends BaseModel
     {
         return $this->belongsToMany(OperationalSite::class, 'business_function_operational_site');
     }
+
+    /**
+     * The opportunities against this business function (spec 0040, BR-3:
+     * restrict-on-delete — BusinessFunctionService::delete() guards on this
+     * before deleting).
+     *
+     * @return HasMany<Opportunity, $this>
+     */
+    public function opportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class);
+    }
 }

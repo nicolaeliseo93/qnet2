@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Leads\LeadController;
+use App\Http\Controllers\Leads\LeadForSelectController;
+use App\Http\Controllers\Leads\LeadOpportunityDefaultsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -12,10 +14,22 @@ use Illuminate\Support\Facades\Route;
 | host file is already at the 500-line hard limit). Required from
 | routes/api.php INSIDE the existing `auth:sanctum` group, so every route
 | below inherits that same middleware/prefix context.
-|
-| No for-select for the leads resource itself (out of scope, spec 0024): no
-| other module consumes a Lead as a select.
 */
+
+// Minimal searchable/paginated lead list for entity-backed selects
+// (amendment rev.1 A-1, ADR 0011) — feeds the Opportunity form's "Lead"
+// select (spec 0040). Declared ABOVE leads/{lead} so the literal
+// `for-select` segment wins over the bound wildcard. Gated by
+// leads.viewAny server-side in LeadForSelectController.
+Route::get('leads/for-select', LeadForSelectController::class);
+
+// Opportunity BR-1 defaults for the "create opportunity from lead" form
+// (spec 0040). Declared ABOVE the plain leads/{lead} show route so the
+// literal `opportunity-defaults` segment wins over the bound wildcard —
+// no conflict either way (differing segment count), but mirrors the
+// for-select precedent. Double-gated (opportunities.create AND leads.view)
+// in LeadOpportunityDefaultsController itself.
+Route::get('leads/{lead}/opportunity-defaults', LeadOpportunityDefaultsController::class);
 
 // Leads CRUD. Authorization (leads.view/create/update/delete) is enforced
 // server-side in LeadController via LeadPolicy on every endpoint.

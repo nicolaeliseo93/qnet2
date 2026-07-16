@@ -73,14 +73,19 @@ class OperationalSiteService
     }
 
     /**
-     * Restrictive delete (spec 0024 BR-2/D-4): a site referenced by at least
-     * one lead cannot be removed. Otherwise its owned address cascades away
+     * Restrictive delete (spec 0024 BR-2/D-4, spec 0040 BR-3): a site
+     * referenced by at least one lead OR opportunity cannot be removed.
+     * Otherwise its owned address cascades away
      * (HasAddresses::bootHasAddresses).
      */
     public function delete(OperationalSite $site): void
     {
         if ($site->leads()->exists()) {
             abort(409, 'This operational site has leads and cannot be deleted.');
+        }
+
+        if ($site->opportunities()->exists()) {
+            abort(409, 'This operational site has opportunities and cannot be deleted.');
         }
 
         $site->delete();
@@ -92,11 +97,19 @@ class OperationalSiteService
      * has no own name column (identity = its address, mirroring
      * OperationalSitesTableDefinition/OperationalSiteGeoColumns): search and
      * order both read the PRIMARY address' `line1`/city name, ids[] hydrated
-     * without inflating total.
+     * without inflating total. $businessFunctionId (spec 0040 BR-4), when
+     * given, restricts the list to sites linked to that function via the
+     * `business_function_operational_site` pivot.
      */
-    public function forSelect(ForSelectQuery $query): ForSelectResult
+    public function forSelect(ForSelectQuery $query, ?int $businessFunctionId = null): ForSelectResult
     {
         $base = $this->forSelectBaseQuery();
+
+        if ($businessFunctionId !== null) {
+            $base->whereHas('businessFunctions', function (Builder $functionQuery) use ($businessFunctionId): void {
+                $functionQuery->whereKey($businessFunctionId);
+            });
+        }
 
         if ($query->hasSearch()) {
             $term = '%'.$query->search.'%';

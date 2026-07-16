@@ -36,6 +36,12 @@ interface RelationSelectFieldProps<
   forceDisabled?: boolean
   /** Overrides the required marker when requiredness is form-state-dependent; forwarded to `MetaField.required`. */
   required?: boolean
+  /**
+   * Extra, resource-specific query parameters forwarded to the for-select
+   * request (spec 0032 `dependency.param`, e.g. `{ registry_id }` to scope a
+   * referent picker, spec 0040 BR-4). Omitted for a plain, unscoped picker.
+   */
+  params?: Record<string, string | number>
   placeholder: string
   emptyLabel: string
   errorLabel: string
@@ -73,6 +79,7 @@ export function RelationSelectField<
   selected,
   forceDisabled = false,
   required,
+  params,
   placeholder,
   emptyLabel,
   errorLabel,
@@ -107,6 +114,7 @@ export function RelationSelectField<
               selectedItem={toForSelectItem(quickCreatedMatch ?? selected)}
               showAvatar={showAvatar}
               disabled={isDisabled}
+              params={params}
               labels={{
                 placeholder,
                 searchPlaceholder,

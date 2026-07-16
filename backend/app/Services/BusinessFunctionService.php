@@ -95,12 +95,17 @@ class BusinessFunctionService
     /**
      * Restrictive delete: a function with child functions cannot be removed
      * (it would silently orphan them) — the service-level twin of the
-     * `parent_id` FK's restrictOnDelete.
+     * `parent_id` FK's restrictOnDelete. Also restrictive (spec 0040, BR-3)
+     * when referenced by at least one opportunity.
      */
     public function delete(BusinessFunction $businessFunction): void
     {
         if ($businessFunction->children()->exists()) {
             abort(409, 'This business function has child functions and cannot be deleted.');
+        }
+
+        if ($businessFunction->opportunities()->exists()) {
+            abort(409, 'This business function has opportunities and cannot be deleted.');
         }
 
         // The business_function_user/business_function_operational_site pivot

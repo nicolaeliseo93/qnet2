@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -61,7 +62,10 @@ it('allows actors with registries.viewAny (200) and returns the paginated envelo
 // item shape + search
 // ---------------------------------------------------------------------------
 
-it('maps a registry to { id, label: name }', function () {
+it('maps a registry to { id, label: name, meta }', function () {
+    // Requirement changed by spec 0040 BR-4: every item now unconditionally
+    // carries `meta` (commercial/reporter defaults) — see the AC-053 block
+    // below for its shape/null cases.
     $actor = registryUserWith(['viewAny']);
     $target = Registry::factory()->create(['name' => 'Acme Supplies']);
     Sanctum::actingAs($actor);
@@ -70,7 +74,7 @@ it('maps a registry to { id, label: name }', function () {
     $item = collect($response->json('items'))->firstWhere('id', $target->id);
 
     expect($item)->toMatchArray(['id' => $target->id, 'label' => 'Acme Supplies'])
-        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label']);
+        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label', 'meta']);
 });
 
 it('searches by name', function () {
@@ -109,4 +113,73 @@ it('rejects a limit above 100 (422)', function () {
 
     $this->getJson('/api/registries/for-select?limit=101')
         ->assertStatus(422)->assertJsonValidationErrors('limit');
+});
+
+// ---------------------------------------------------------------------------
+// AC-053 — meta.commercial / meta.reporter (spec 0040 BR-4)
+// ---------------------------------------------------------------------------
+
+it('exposes meta.commercial and meta.reporter when set', function () {
+    $actor = registryUserWith(['viewAny']);
+    $commercial = Referent::factory()->create(['name' => 'Carla Commercial']);
+    $reporter = Referent::factory()->create(['name' => 'Renzo Reporter']);
+    $target = Registry::factory()->create([
+        'name' => 'Meta Target',
+        'commercial_id' => $commercial->id,
+        'reporter_id' => $reporter->id,
+    ]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/registries/for-select?search=Meta Target')->assertOk();
+    $item = collect($response->json('items'))->firstWhere('id', $target->id);
+
+    expect($item['meta'])->toMatchArray([
+        'commercial' => ['id' => $commercial->id, 'name' => 'Carla Commercial'],
+        'reporter' => ['id' => $reporter->id, 'name' => 'Renzo Reporter'],
+    ]);
+});
+
+it('exposes meta.commercial/meta.reporter as null when unset', function () {
+    $actor = registryUserWith(['viewAny']);
+    $target = Registry::factory()->create(['name' => 'No Defaults', 'commercial_id' => null, 'reporter_id' => null]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/registries/for-select?search=No Defaults')->assertOk();
+    $item = collect($response->json('items'))->firstWhere('id', $target->id);
+
+    expect($item['meta'])->toMatchArray(['commercial' => null, 'reporter' => null]);
+});
+
+// ---------------------------------------------------------------------------
+// AC-092 — meta.managers (spec 0040 A-5): account managers ordered by position
+// ---------------------------------------------------------------------------
+
+it('exposes meta.managers ordered by position with {id,name,position}', function () {
+    $actor = registryUserWith(['viewAny']);
+    $first = User::factory()->create(['name' => 'First Manager']);
+    $third = User::factory()->create(['name' => 'Third Manager']);
+    $target = Registry::factory()->create(['name' => 'Managed Registry']);
+    // Attach out of order to prove the resource orders by pivot position.
+    $target->managers()->attach($third->id, ['position' => 3]);
+    $target->managers()->attach($first->id, ['position' => 1]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/registries/for-select?search=Managed Registry')->assertOk();
+    $item = collect($response->json('items'))->firstWhere('id', $target->id);
+
+    expect($item['meta']['managers'])->toBe([
+        ['id' => $first->id, 'name' => 'First Manager', 'position' => 1],
+        ['id' => $third->id, 'name' => 'Third Manager', 'position' => 3],
+    ]);
+});
+
+it('exposes meta.managers as [] when the registry has no account managers', function () {
+    $actor = registryUserWith(['viewAny']);
+    $target = Registry::factory()->create(['name' => 'Unmanaged Registry']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/registries/for-select?ids[]={$target->id}")->assertOk();
+    $item = collect($response->json('items'))->firstWhere('id', $target->id);
+
+    expect($item['meta']['managers'])->toBe([]);
 });

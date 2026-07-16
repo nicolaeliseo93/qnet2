@@ -23,6 +23,8 @@ uses(RefreshDatabase::class);
  * every other domain's global counts), verified separately in
  * ImportRunsStatsTest.
  *
+ * `opportunities` joined the panel with spec 0040, same registry pattern.
+ *
  * @return array<int, string>
  */
 function statsDomains(): array
@@ -41,6 +43,7 @@ function statsDomains(): array
         'business-functions',
         'users',
         'import-runs',
+        'opportunities',
     ];
 }
 
@@ -126,6 +129,7 @@ it('emits exactly the i18n label keys the frontend translates (AC-001)', functio
     ['business-functions', ['total', 'businessUnits', 'businessServices', 'withManager', 'byUsers']],
     ['users', ['total', 'active', 'inactive', 'managers', 'byRole', 'byBusinessFunction', 'trend']],
     ['import-runs', ['total', 'completed', 'failed', 'rowsImported', 'byStatus', 'trend']],
+    ['opportunities', ['total', 'estimatedValue', 'averageProbability', 'fromLead', 'byRegistry', 'trend']],
 ]);
 
 /**

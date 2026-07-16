@@ -192,7 +192,9 @@ class UserService
     /**
      * Delete the given user, guarding against removing the last super-admin
      * first, then against removing an operator still referenced by a lead
-     * (spec 0024 BR-2/D-4).
+     * (spec 0024 BR-2/D-4), then against removing a supervisor still
+     * referenced by an opportunity (spec 0040, BR-3). This guard runs
+     * STRICTLY AFTER guardLastSuperAdminDeletion (spec 0040 constraint).
      */
     public function delete(User $user): void
     {
@@ -200,6 +202,10 @@ class UserService
 
         if ($user->leads()->exists()) {
             abort(409, 'This user is the operator on leads and cannot be deleted.');
+        }
+
+        if ($user->opportunitiesAsSupervisor()->exists()) {
+            abort(409, 'This user is the supervisor on opportunities and cannot be deleted.');
         }
 
         $user->delete();

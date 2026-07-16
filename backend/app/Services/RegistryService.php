@@ -9,6 +9,7 @@ use App\DataObjects\Shared\ForSelectResult;
 use App\DataObjects\Users\ProfileData;
 use App\Models\Registry;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -137,19 +138,29 @@ class RegistryService
      * Delete the registry. Its personal-data card (and the card's own
      * contacts/addresses) cascade away via HasPersonalData; the 3 pivot
      * rows cascade away via their own cascadeOnDelete foreign keys.
+     *
+     * Restrictive (spec 0040, BR-3): a registry referenced by at least one
+     * opportunity cannot be removed, mirroring the other 9 guards this rule
+     * introduces.
      */
     public function delete(Registry $registry): void
     {
+        if ($registry->opportunities()->exists()) {
+            abort(409, 'This registry has opportunities and cannot be deleted.');
+        }
+
         $registry->delete();
     }
 
     /**
      * Minimal, searchable, paginated registry list for the for-select
      * standard (spec 0023, ADR 0011), mirroring SourceService::forSelect.
+     * commercial/reporter are eager-loaded so RegistryForSelectResource's
+     * `meta` (spec 0040 BR-4) never N+1s.
      */
     public function forSelect(ForSelectQuery $query): ForSelectResult
     {
-        $base = Registry::query()->select(['id', 'name']);
+        $base = $this->forSelectBaseQuery();
 
         if ($query->hasSearch()) {
             $base->where('name', 'like', '%'.$query->search.'%');
@@ -175,9 +186,22 @@ class RegistryService
     }
 
     /**
+     * Base for-select query: registries with commercial/reporter
+     * eager-loaded, so RegistryForSelectResource's `meta` never N+1s.
+     *
+     * @return Builder<Registry>
+     */
+    private function forSelectBaseQuery(): Builder
+    {
+        return Registry::query()
+            ->select(['id', 'name', 'commercial_id', 'reporter_id'])
+            ->with(['commercial:id,name', 'reporter:id,name', 'managers:id,name']);
+    }
+
+    /**
      * Append the explicitly-requested `ids[]` (edit-mode hydration) that are
      * not already on the page, deduplicated. They bypass search and the same
-     * id/name projection applies. Total is unaffected.
+     * id/name/meta projection applies. Total is unaffected.
      *
      * @param  Collection<int, Registry>  $page
      * @return Collection<int, Registry>
@@ -196,8 +220,7 @@ class RegistryService
         }
 
         /** @var Collection<int, Registry> $hydrated */
-        $hydrated = Registry::query()
-            ->select(['id', 'name'])
+        $hydrated = $this->forSelectBaseQuery()
             ->whereIn('id', $missingIds)
             ->orderBy('name')
             ->orderBy('id')

@@ -35,7 +35,7 @@ class ReferentForSelectController extends BaseApiController
         try {
             $this->authorize('viewAny', Referent::class);
 
-            $result = $this->service->forSelect($request->toData());
+            $result = $this->service->forSelect($request->toData(), $request->registryId());
 
             return $this->paginatedResponse(
                 ReferentForSelectResource::collection($result->items),

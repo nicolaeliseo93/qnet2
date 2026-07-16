@@ -86,12 +86,18 @@ class ProductCategoryService
 
     /**
      * Restrictive delete: a category with child categories or associated
-     * products cannot be removed (it would silently orphan them).
+     * products cannot be removed (it would silently orphan them). Also
+     * restrictive (spec 0040, BR-3) when referenced by at least one
+     * opportunity.
      */
     public function delete(ProductCategory $category): void
     {
         if ($category->children()->exists() || $category->products()->exists()) {
             abort(409, 'This category has child categories or products and cannot be deleted.');
+        }
+
+        if ($category->opportunities()->exists()) {
+            abort(409, 'This product category has opportunities and cannot be deleted.');
         }
 
         $category->delete();
@@ -100,7 +106,9 @@ class ProductCategoryService
     /**
      * Minimal, searchable, paginated product-category list for the
      * for-select standard (spec 0023, ADR 0011), mirroring
-     * SourceService::forSelect.
+     * SourceService::forSelect. Every returned item carries its EFFECTIVE
+     * business function (spec 0040 BR-4) as `meta.business_function`,
+     * resolved in ONE batched CategoryHierarchy call (never a query per row).
      */
     public function forSelect(ForSelectQuery $query): ForSelectResult
     {
@@ -121,12 +129,35 @@ class ProductCategoryService
 
         $items = $this->appendHydratedForSelectIds($page, $query);
 
+        $this->attachEffectiveBusinessFunctionSummaries($items);
+
         return new ForSelectResult(
             items: $items,
             total: $total,
             offset: $query->offset,
             limit: $query->limit,
         );
+    }
+
+    /**
+     * Stash each item's EFFECTIVE business function {id, name}|null as the
+     * `business_function_summary` attribute (read by
+     * ProductCategoryForSelectResource), resolved in a single batched
+     * CategoryHierarchy call — never one hierarchy walk per item.
+     *
+     * @param  Collection<int, ProductCategory>  $items
+     */
+    private function attachEffectiveBusinessFunctionSummaries(Collection $items): void
+    {
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $summaries = $this->hierarchy->effectiveBusinessFunctionSummaries();
+
+        foreach ($items as $item) {
+            $item->setAttribute('business_function_summary', $summaries[$item->id] ?? null);
+        }
     }
 
     /**

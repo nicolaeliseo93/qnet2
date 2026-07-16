@@ -23,7 +23,7 @@ import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { SECTORS_FOR_SELECT_RESOURCE } from '@/features/sectors/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
-import { ManagerSlotsField } from '@/features/registries/manager-slots-field'
+import { ManagerSlotsField } from '@/components/form/manager-slots-field'
 import type { RegistryFormValues } from '@/features/registries/use-registry-form'
 
 /** Every relation picker's edit-mode hydration, resolved once by the form hook. */

@@ -11,6 +11,7 @@ use App\Http\Controllers\BusinessFunctions\BusinessFunctionForSelectController;
 use App\Http\Controllers\Companies\CompanyController;
 use App\Http\Controllers\Companies\CompanyForSelectController;
 use App\Http\Controllers\CompanySites\CompanySiteController;
+use App\Http\Controllers\CompanySites\CompanySiteForSelectController;
 use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\Contacts\ContactController;
 use App\Http\Controllers\Export\ExportController;
@@ -363,7 +364,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // auth:sanctum group so every route there inherits the same context.
     require __DIR__.'/api/registries.php';
     require __DIR__.'/api/projects.php'; // Project statuses / Projects / Campaigns CRUD (spec 0023)
-    require __DIR__.'/api/leads.php'; // Leads CRUD (spec 0024)
+    require __DIR__.'/api/leads.php'; // Leads CRUD (spec 0024) + opportunity-defaults (spec 0040)
+    require __DIR__.'/api/opportunities.php'; // Opportunities CRUD (spec 0040)
     // Attributes CRUD (spec 0017): the global, reusable dynamic-attribute
     // catalogue assignable to product categories. Authorization
     // (attributes.view/create/update/delete) is enforced server-side in
@@ -403,11 +405,19 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Company sites CRUD + logo/set-default (spec 0020). Authorization
     // (company-sites.view/create/update/delete) is enforced server-side in
-    // CompanySiteController via CompanySitePolicy on every endpoint. No
-    // for-select in this slice. The `set-default`/`logo` literal segments are
-    // declared ABOVE the plain show/update/destroy routes, mirroring the
-    // for-select precedent, so a literal segment never risks losing to the
-    // bound {companySite} wildcard.
+    // CompanySiteController via CompanySitePolicy on every endpoint.
+    // Minimal searchable/paginated company-site list for entity-backed
+    // selects (for-select standard, ADR 0011, spec 0040 — feeds the
+    // Opportunity form's "company site" select, optionally filtered by
+    // `company_id`). Declared ABOVE company-sites/{companySite} so the
+    // literal `for-select` segment wins over the bound wildcard, mirroring
+    // every other for-select precedent. Gated by company-sites.viewAny
+    // server-side in CompanySiteForSelectController.
+    Route::get('company-sites/for-select', CompanySiteForSelectController::class);
+
+    // The `set-default`/`logo` literal segments are declared ABOVE the plain
+    // show/update/destroy routes, mirroring the for-select precedent, so a
+    // literal segment never risks losing to the bound {companySite} wildcard.
     Route::post('company-sites/{companySite}/set-default', [CompanySiteController::class, 'setDefault']);
     Route::post('company-sites/{companySite}/logo', [CompanySiteController::class, 'uploadLogo']);
     Route::delete('company-sites/{companySite}/logo', [CompanySiteController::class, 'deleteLogo']);

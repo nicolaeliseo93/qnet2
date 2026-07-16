@@ -57,12 +57,14 @@ it('GET /api/tables/leads/columns: 200 with the declared columns, 403 without vi
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['referent', 'campaign', 'operational_site', 'source', 'operator', 'lead_status', 'created_at']);
+    expect($ids)->toBe(['referent', 'campaign', 'operational_site', 'source', 'operator', 'is_assigned', 'lead_status', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['operational_site']['sortable'])->toBeTrue()
         ->and($columns['operational_site']['filterType'])->toBe('set')
-        ->and($columns['referent']['sortable'])->toBeTrue();
+        ->and($columns['referent']['sortable'])->toBeTrue()
+        ->and($columns['is_assigned']['type'])->toBe('boolean')
+        ->and($columns['is_assigned']['filterType'])->toBe('set');
 });
 
 // ---------------------------------------------------------------------------
@@ -177,6 +179,65 @@ it('rows: referent/source/operator surface as {id, name} summaries', function ()
     $row = collect($response->json('items'))->firstWhere('id', $lead->id);
 
     expect($row['referent'])->toMatchArray(['id' => $referent->id, 'name' => 'Ada Contact']);
+});
+
+// ---------------------------------------------------------------------------
+// is_assigned — derived boolean on operator_id: row value, set filter ('1'/'0'),
+// sort, and the fixed boolean value list from the /values endpoint
+// ---------------------------------------------------------------------------
+
+it('rows: is_assigned reflects the presence of an operator', function () {
+    $actor = leadUserWith(['viewAny']);
+    $assigned = Lead::factory()->create(['operator_id' => User::factory()->create()->id]);
+    $unassigned = Lead::factory()->create(['operator_id' => null]);
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/leads/rows', ['startRow' => 0, 'endRow' => 25])->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $assigned->id)['is_assigned'])->toBeTrue()
+        ->and($items->firstWhere('id', $unassigned->id)['is_assigned'])->toBeFalse();
+});
+
+it('rows: the is_assigned set filter narrows to assigned or unassigned leads', function () {
+    $actor = leadUserWith(['viewAny']);
+    $assigned = Lead::factory()->create(['operator_id' => User::factory()->create()->id]);
+    $unassigned = Lead::factory()->create(['operator_id' => null]);
+    Sanctum::actingAs($actor);
+
+    $rowsFor = fn (array $values) => collect($this->postJson('/api/tables/leads/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['is_assigned' => ['filterType' => 'set', 'values' => $values]],
+    ])->assertOk()->json('items'))->pluck('id')->all();
+
+    expect($rowsFor(['1']))->toBe([$assigned->id])
+        ->and($rowsFor(['0']))->toBe([$unassigned->id])
+        ->and($rowsFor(['1', '0']))->toHaveCount(2);
+});
+
+it('rows: sorting by is_assigned puts unassigned leads first on asc', function () {
+    $actor = leadUserWith(['viewAny']);
+    $assigned = Lead::factory()->create(['operator_id' => User::factory()->create()->id]);
+    $unassigned = Lead::factory()->create(['operator_id' => null]);
+    Sanctum::actingAs($actor);
+
+    $ids = collect($this->postJson('/api/tables/leads/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'is_assigned', 'sort' => 'asc']],
+    ])->assertOk()->json('items'))->pluck('id')->all();
+
+    expect($ids)->toBe([$unassigned->id, $assigned->id]);
+});
+
+it('values: is_assigned always offers both boolean states', function () {
+    $actor = leadUserWith(['viewAny']);
+    Lead::factory()->create(['operator_id' => null]);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/tables/leads/values', ['columnId' => 'is_assigned'])
+        ->assertOk()
+        ->assertJsonPath('data.values', ['1', '0']);
 });
 
 // ---------------------------------------------------------------------------

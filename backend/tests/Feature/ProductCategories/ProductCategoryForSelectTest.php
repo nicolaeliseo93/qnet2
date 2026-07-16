@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\BusinessFunction;
 use App\Models\ProductCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -61,7 +62,10 @@ it('allows actors with product-categories.viewAny (200) and returns the paginate
 // item shape + search
 // ---------------------------------------------------------------------------
 
-it('maps a product category to { id, label: name }', function () {
+it('maps a product category to { id, label: name, meta }', function () {
+    // Requirement changed by spec 0040 BR-4: every item now unconditionally
+    // carries `meta` (effective business function) — see the AC-053 block
+    // below for its shape/null cases.
     $actor = productCategoryUserWith(['viewAny']);
     $target = ProductCategory::factory()->create(['name' => 'Office Supplies']);
     Sanctum::actingAs($actor);
@@ -70,7 +74,7 @@ it('maps a product category to { id, label: name }', function () {
     $item = collect($response->json('items'))->firstWhere('id', $target->id);
 
     expect($item)->toMatchArray(['id' => $target->id, 'label' => 'Office Supplies'])
-        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label']);
+        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label', 'meta']);
 });
 
 it('searches by name', function () {
@@ -109,4 +113,48 @@ it('rejects a limit above 100 (422)', function () {
 
     $this->getJson('/api/product-categories/for-select?limit=101')
         ->assertStatus(422)->assertJsonValidationErrors('limit');
+});
+
+// ---------------------------------------------------------------------------
+// AC-053 — meta.business_function (spec 0040 BR-4, own-or-inherited)
+// ---------------------------------------------------------------------------
+
+it('exposes meta.business_function from the category\'s OWN assignment', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $function = BusinessFunction::factory()->create(['name' => 'Sales']);
+    $target = ProductCategory::factory()->create(['name' => 'Own Function', 'business_function_id' => $function->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/product-categories/for-select?search=Own Function')->assertOk();
+    $item = collect($response->json('items'))->firstWhere('id', $target->id);
+
+    expect($item['meta'])->toMatchArray([
+        'business_function' => ['id' => $function->id, 'name' => 'Sales'],
+    ]);
+});
+
+it('exposes meta.business_function INHERITED from an ancestor', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $function = BusinessFunction::factory()->create(['name' => 'Marketing']);
+    $parent = ProductCategory::factory()->create(['business_function_id' => $function->id]);
+    $target = ProductCategory::factory()->childOf($parent)->create(['name' => 'Inherited Function']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/product-categories/for-select?search=Inherited Function')->assertOk();
+    $item = collect($response->json('items'))->firstWhere('id', $target->id);
+
+    expect($item['meta'])->toMatchArray([
+        'business_function' => ['id' => $function->id, 'name' => 'Marketing'],
+    ]);
+});
+
+it('exposes meta.business_function as null when neither own nor inherited', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $target = ProductCategory::factory()->create(['name' => 'No Function']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/product-categories/for-select?search=No Function')->assertOk();
+    $item = collect($response->json('items'))->firstWhere('id', $target->id);
+
+    expect($item['meta'])->toMatchArray(['business_function' => null]);
 });

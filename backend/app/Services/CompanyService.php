@@ -61,9 +61,17 @@ class CompanyService
         });
     }
 
+    /**
+     * Restrictive delete (spec 0040, BR-3): a company referenced by at least
+     * one opportunity cannot be removed. Otherwise its owned address
+     * cascades away (HasAddresses::bootHasAddresses).
+     */
     public function delete(Company $company): void
     {
-        // The owned address cascades away (HasAddresses::bootHasAddresses).
+        if ($company->opportunities()->exists()) {
+            abort(409, 'This company has opportunities and cannot be deleted.');
+        }
+
         $company->delete();
     }
 

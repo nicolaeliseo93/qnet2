@@ -99,6 +99,17 @@ class User extends Authenticatable implements HasLocalePreference
     }
 
     /**
+     * The opportunities this user supervises (spec 0040, BR-3: restrict-on-
+     * delete — UserService::delete() guards on this before deleting).
+     *
+     * @return HasMany<Opportunity, $this>
+     */
+    public function opportunitiesAsSupervisor(): HasMany
+    {
+        return $this->hasMany(Opportunity::class, 'supervisor_id');
+    }
+
+    /**
      * The user's preferred locale, used to localize every notification sent to
      * them (Laravel switches locale automatically via HasLocalePreference).
      */

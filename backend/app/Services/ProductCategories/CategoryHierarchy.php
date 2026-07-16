@@ -194,28 +194,45 @@ final class CategoryHierarchy
 
     /**
      * category id → EFFECTIVE business function NAME (or null), for every
-     * category in one shot: two queries total (categories'
-     * id/parent_id/business_function_id, then business_functions' id/name),
-     * the rest resolved in memory — the list/table read path (spec 0023
-     * constraint: never a query per row).
+     * category in one shot — the list/table read path (spec 0023 constraint:
+     * never a query per row). Thin projection of effectiveBusinessFunctionSummaries().
      *
      * @return array<int, string|null>
      */
     public function effectiveBusinessFunctionNames(): array
     {
+        return array_map(
+            static fn (?array $summary): ?string => $summary['name'] ?? null,
+            $this->effectiveBusinessFunctionSummaries(),
+        );
+    }
+
+    /**
+     * category id → EFFECTIVE business function {id, name} (or null), for
+     * every category in one shot: two queries total (categories'
+     * id/parent_id/business_function_id, then business_functions' id/name),
+     * the rest resolved in memory — feeds the product-categories/for-select
+     * `meta.business_function` (spec 0040) batched across a whole page,
+     * never a query per row.
+     *
+     * @return array<int, array{id: int, name: string}|null>
+     */
+    public function effectiveBusinessFunctionSummaries(): array
+    {
         $categories = ProductCategory::query()->select('id', 'parent_id', 'business_function_id')->get()->keyBy('id');
-        $functionNames = BusinessFunction::query()->pluck('name', 'id');
+        $functions = BusinessFunction::query()->get(['id', 'name'])->keyBy('id');
 
         return $categories->keys()->mapWithKeys(
-            fn (int $id): array => [$id => $this->walkForBusinessFunctionName($id, $categories, $functionNames)],
+            fn (int $id): array => [$id => $this->walkForBusinessFunctionSummary($id, $categories, $functions)],
         )->all();
     }
 
     /**
      * @param  Collection<int, ProductCategory>  $categories
-     * @param  Collection<int, string>  $functionNames
+     * @param  Collection<int, BusinessFunction>  $functions
+     * @return array{id: int, name: string}|null
      */
-    private function walkForBusinessFunctionName(int $id, Collection $categories, Collection $functionNames): ?string
+    private function walkForBusinessFunctionSummary(int $id, Collection $categories, Collection $functions): ?array
     {
         $currentId = $id;
         $depth = 0;
@@ -228,7 +245,9 @@ final class CategoryHierarchy
             }
 
             if ($category->business_function_id !== null) {
-                return $functionNames->get($category->business_function_id);
+                $function = $functions->get($category->business_function_id);
+
+                return $function !== null ? ['id' => $function->id, 'name' => $function->name] : null;
             }
 
             $currentId = $category->parent_id;

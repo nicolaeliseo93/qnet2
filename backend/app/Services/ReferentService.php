@@ -9,6 +9,7 @@ use App\DataObjects\Shared\ForSelectResult;
 use App\DataObjects\Users\ProfileData;
 use App\Models\Referent;
 use App\Models\User;
+use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -108,13 +109,19 @@ class ReferentService
 
     /**
      * Restrictive delete (spec 0024 BR-2/D-4): a referent referenced by at
-     * least one lead cannot be removed. Otherwise its personal-data card (and
-     * the card's own contacts/addresses) cascade away via HasPersonalData.
+     * least one lead cannot be removed. Also restrictive (spec 0040, BR-3)
+     * when the referent is an opportunity's own referent, commercial OR
+     * reporter. Otherwise its personal-data card (and the card's own
+     * contacts/addresses) cascade away via HasPersonalData.
      */
     public function delete(Referent $referent): void
     {
         if ($referent->leads()->exists()) {
             abort(409, 'This referent has leads and cannot be deleted.');
+        }
+
+        if ($referent->opportunities()->exists() || $referent->opportunitiesAsCommercial()->exists() || $referent->opportunitiesAsReporter()->exists()) {
+            abort(409, 'This referent has opportunities and cannot be deleted.');
         }
 
         $referent->delete();
@@ -123,10 +130,18 @@ class ReferentService
     /**
      * Minimal, searchable, paginated referent list for the for-select
      * standard (ADR 0011, spec 0020), mirroring SourceService::forSelect.
+     * $registryId (spec 0040 BR-4), when given, restricts the list to
+     * referents linked to that registry via the `referent_registry` pivot.
      */
-    public function forSelect(ForSelectQuery $query): ForSelectResult
+    public function forSelect(ForSelectQuery $query, ?int $registryId = null): ForSelectResult
     {
-        $base = Referent::query()->select(['id', 'name']);
+        $base = Referent::query()->select(['id', 'name'])->with($this->forSelectContactEagerLoad());
+
+        if ($registryId !== null) {
+            $base->whereHas('registries', function ($registryQuery) use ($registryId): void {
+                $registryQuery->whereKey($registryId);
+            });
+        }
 
         if ($query->hasSearch()) {
             $base->where('name', 'like', '%'.$query->search.'%');
@@ -175,11 +190,26 @@ class ReferentService
         /** @var Collection<int, Referent> $hydrated */
         $hydrated = Referent::query()
             ->select(['id', 'name'])
+            ->with($this->forSelectContactEagerLoad())
             ->whereIn('id', $missingIds)
             ->orderBy('name')
             ->orderBy('id')
             ->get();
 
         return $page->concat($hydrated);
+    }
+
+    /**
+     * Eager-load spec for the for-select `meta.contacts` (spec 0040 A-4): only
+     * the PRIMARY contacts of the referent's personal-data card, so
+     * ReferentForSelectResource's `meta` never N+1s and the recap-by-ids path
+     * (appendHydratedIds) carries the same meta. Empty when the referent has no
+     * card / no primary contacts.
+     *
+     * @return array<string, Closure>
+     */
+    private function forSelectContactEagerLoad(): array
+    {
+        return ['personalData.contacts' => static fn ($contactQuery) => $contactQuery->where('is_primary', true)];
     }
 }

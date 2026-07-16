@@ -117,6 +117,14 @@ export const moduleStats = {
     byBusinessFunction: 'By business function',
     trend: 'Hires per month',
   },
+  opportunities: {
+    total: 'Opportunities',
+    estimatedValue: 'Total estimated value',
+    averageProbability: 'Average probability',
+    fromLead: 'From a lead',
+    byRegistry: 'By registry',
+    trend: 'New opportunities per month',
+  },
   importRuns: {
     total: 'Import runs',
     completed: 'Completed',

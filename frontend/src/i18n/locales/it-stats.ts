@@ -114,6 +114,14 @@ export const moduleStats = {
     byBusinessFunction: 'Per funzione aziendale',
     trend: 'Assunzioni per mese',
   },
+  opportunities: {
+    total: 'Opportunità',
+    estimatedValue: 'Valore stimato totale',
+    averageProbability: 'Probabilità media',
+    fromLead: 'Da lead',
+    byRegistry: 'Per anagrafica',
+    trend: 'Nuove opportunità per mese',
+  },
   importRuns: {
     total: 'Import',
     completed: 'Completati',

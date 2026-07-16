@@ -8,6 +8,7 @@ use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\OperationalSiteFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -108,5 +109,28 @@ class OperationalSite extends BaseModel
     public function leads(): HasMany
     {
         return $this->hasMany(Lead::class);
+    }
+
+    /**
+     * The opportunities against this operational site (spec 0040, BR-3:
+     * restrict-on-delete — OperationalSiteService::delete() guards on this
+     * before deleting).
+     *
+     * @return HasMany<Opportunity, $this>
+     */
+    public function opportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class);
+    }
+
+    /**
+     * The business functions this site is associated to (spec 0010 REV),
+     * inverse of BusinessFunction::operationalSites(). Feeds the
+     * operational-sites/for-select `business_function_id` scope (spec 0040
+     * BR-4).
+     */
+    public function businessFunctions(): BelongsToMany
+    {
+        return $this->belongsToMany(BusinessFunction::class, 'business_function_operational_site');
     }
 }

@@ -1,0 +1,97 @@
+import { z } from 'zod'
+import type { TFunction } from 'i18next'
+
+/**
+ * Zod schema for the opportunity create/edit form, built as a factory so
+ * validation messages are localized via the i18n `t` function. The shape
+ * mirrors the frozen backend contract (spec 0040 + amendment rev.1) 1:1:
+ * `name`, `registry_id`, `company_id`, `company_site_id`, `operational_site_id`
+ * required (D-4/A-2), every other relation nullable.
+ */
+
+/** Backend `name` column limit (`max:255`). */
+export const NAME_MAX_LENGTH = 255
+
+/** Backend limit on FILLED manager slots (`max:4`, `ValidatesManagerSlots`, mirrors registries). */
+const MAX_MANAGERS = 4
+
+/** Backend `estimated_value` column ceiling, `decimal(15,2)` (`max:9999999999999.99`). */
+export const ESTIMATED_VALUE_MAX = 9999999999999.99
+
+/** `success_probability` bounds (`unsignedTinyInteger`, BR-5: 0..100). */
+export const SUCCESS_PROBABILITY_MIN = 0
+export const SUCCESS_PROBABILITY_MAX = 100
+
+/**
+ * A required relation id: `null` (unset) fails the refine. See
+ * `lead-schema.ts` for why the explicit `: boolean` return type on the
+ * predicate is load-bearing (TS 5.5+'s automatic type-predicate inference
+ * would otherwise narrow the field to non-nullable `number`, breaking every
+ * consumer typed against the nullable form value).
+ */
+function requiredRelationId(message: string) {
+  return z
+    .number()
+    .nullable()
+    .refine((value): boolean => value !== null, { message })
+}
+
+/** Shared fields common to create and edit. */
+function baseFields(t: TFunction) {
+  return {
+    name: z
+      .string()
+      .trim()
+      .min(1, t('opportunities.form.nameRequired'))
+      .max(NAME_MAX_LENGTH, t('opportunities.form.nameMax')),
+    // D-4/A-2: the 4 other required fields (name is above).
+    registry_id: requiredRelationId(t('opportunities.form.registryRequired')),
+    company_id: requiredRelationId(t('opportunities.form.companyRequired')),
+    company_site_id: requiredRelationId(t('opportunities.form.companySiteRequired')),
+    // A-2: still required when derived from a lead that owns one (BR-1
+    // prefills it, non-null) — free and required when the lead has none.
+    operational_site_id: requiredRelationId(t('opportunities.form.operationalSiteRequired')),
+    business_function_id: z.number().nullable(),
+    referent_id: z.number().nullable(),
+    commercial_id: z.number().nullable(),
+    reporter_id: z.number().nullable(),
+    supervisor_id: z.number().nullable(),
+    source_id: z.number().nullable(),
+    product_category_id: z.number().nullable(),
+    // Ordered, gap-aware "G.A. n" manager slots: index+1 = G.A. number, `null`
+    // = an intentionally empty slot. At most MAX_MANAGERS filled.
+    manager_slots: z
+      .array(z.number().nullable())
+      .refine(
+        (slots) => slots.filter((slot) => slot !== null).length <= MAX_MANAGERS,
+        t('opportunities.form.managersMax'),
+      ),
+    start_date: z.string().nullable(),
+    expected_close_date: z.string().nullable(),
+    estimated_value: z
+      .number()
+      .nonnegative(t('opportunities.form.estimatedValueInvalid'))
+      .max(ESTIMATED_VALUE_MAX, t('opportunities.form.estimatedValueInvalid'))
+      .nullable(),
+    // Spec 0040 A-6: rendered as a 0..100 slider that always holds a value
+    // (default 0), so this is a plain non-nullable integer — "0%" ≡ "not set".
+    success_probability: z
+      .number()
+      .int()
+      .min(SUCCESS_PROBABILITY_MIN, t('opportunities.form.successProbabilityInvalid'))
+      .max(SUCCESS_PROBABILITY_MAX, t('opportunities.form.successProbabilityInvalid')),
+  }
+}
+
+/** Create schema. */
+export function buildCreateOpportunitySchema(t: TFunction) {
+  return z.object(baseFields(t))
+}
+
+/** Edit schema (same shape; partial PATCH is computed by the caller). */
+export function buildUpdateOpportunitySchema(t: TFunction) {
+  return buildCreateOpportunitySchema(t)
+}
+
+export type CreateOpportunityFormValues = z.infer<ReturnType<typeof buildCreateOpportunitySchema>>
+export type UpdateOpportunityFormValues = CreateOpportunityFormValues

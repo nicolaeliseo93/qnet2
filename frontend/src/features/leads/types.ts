@@ -42,6 +42,15 @@ export interface LeadOperationalSiteRef {
 }
 
 /**
+ * The linked opportunity's minimal identity, as exposed by `LeadResource.opportunity`
+ * (spec 0040 MT-6, D-2: at most one per lead). `null` when the lead has none yet.
+ */
+export interface LeadOpportunityRef {
+  id: number
+  name: string
+}
+
+/**
  * Single lead detail returned by GET/POST/PATCH /leads (envelope `data`).
  * Matches `LeadResource`. `referent_id`/`campaign_id`/`lead_status_id` are
  * always set (BR-1, D-1); the other 3 fields are nullable.
@@ -49,6 +58,11 @@ export interface LeadOperationalSiteRef {
  * `extra_fields` (spec 0033, AC-014) is a free-form key/value store: no
  * fixed shape, no per-field permissions. Keys either mirror an imported
  * file's original column name or are typed manually in the form.
+ *
+ * `opportunity` (spec 0040 MT-6) is optional here — not because the backend
+ * ever omits it (it always does), but so every pre-existing `LeadDetail`
+ * fixture across this feature's test suites keeps type-checking unchanged;
+ * treat a missing key the same as `null` (no linked opportunity).
  */
 export interface LeadDetail {
   id: number
@@ -66,6 +80,7 @@ export interface LeadDetail {
   operator: LeadRelationRef | null
   notes: string | null
   extra_fields: Record<string, string> | null
+  opportunity?: LeadOpportunityRef | null
   created_at: string
   updated_at: string
 }

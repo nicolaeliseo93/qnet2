@@ -2,8 +2,10 @@
 
 use App\Models\Attribute;
 use App\Models\AttributeOption;
+use App\Models\BusinessFunction;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Services\ProductCategories\CategoryHierarchy;
 use App\Services\ProductCategoryService;
 use Database\Seeders\DemoProductCatalogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -62,6 +64,32 @@ it('seeds a demo service directly in an intermediate category (IT), not only lea
 
     $it = ProductCategory::where('name', 'IT')->firstOrFail();
     expect(Product::where('category_id', $it->id)->exists())->toBeTrue();
+});
+
+it('assigns the root categories their own business function, children inherit it read-side', function () {
+    // The seeder resolves the business function BY NAME, so it must already
+    // exist (DemoBusinessFunctionSeeder runs earlier in DemoDataSeeder).
+    $it = BusinessFunction::create(['name' => 'Sistemi Informativi (IT)', 'is_business_service' => true]);
+    BusinessFunction::create(['name' => 'Risorse Umane', 'is_business_unit' => true]);
+
+    $this->seed(DemoProductCatalogSeeder::class);
+
+    $consulting = ProductCategory::where('name', 'Consulenza')->firstOrFail();
+    expect($consulting->business_function_id)->toBe($it->id);
+
+    // A descendant carries none of its own but inherits transitively.
+    $softwareDev = ProductCategory::where('name', 'Sviluppo Software')->firstOrFail();
+    expect($softwareDev->business_function_id)->toBeNull();
+
+    $effective = app(CategoryHierarchy::class)->effectiveBusinessFunction($softwareDev);
+    expect($effective['id'])->toBe($it->id);
+    expect($effective['inherited'])->toBeTrue();
+});
+
+it('leaves the business function null when the named function is not seeded', function () {
+    $this->seed(DemoProductCatalogSeeder::class);
+
+    expect(ProductCategory::whereNotNull('business_function_id')->count())->toBe(0);
 });
 
 it('is idempotent — re-running duplicates nothing', function () {

@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A client/supplier record (spec 0020, "Anagrafiche") that reuses the
@@ -114,5 +115,16 @@ class Registry extends BaseModel
         return $this->belongsToMany(User::class, 'registry_user')
             ->withPivot('position')
             ->orderByPivot('position');
+    }
+
+    /**
+     * The opportunities against this registry (spec 0040, BR-3: restrict-on-
+     * delete — RegistryService::delete() guards on this before deleting).
+     *
+     * @return HasMany<Opportunity, $this>
+     */
+    public function opportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class);
     }
 }

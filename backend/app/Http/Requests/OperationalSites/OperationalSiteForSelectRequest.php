@@ -13,6 +13,12 @@ use Illuminate\Foundation\Http\FormRequest;
  * Authorization is intentionally NOT handled here (it stays in the controller
  * via authorize('viewAny', OperationalSite::class)). Pagination bounds mirror
  * BaseApiController::validateRequest (offset >= 0, 1 <= limit <= MAX_LIMIT).
+ *
+ * `business_function_id` (spec 0040 BR-4) is NOT part of the shared
+ * ForSelectQuery DTO — it feeds the Opportunity form's function-scoped site
+ * picker only, so it is read directly off the request by the controller and
+ * passed to the Service as a separate argument, mirroring
+ * BusinessFunctionForSelectRequest's `exclude_descendants_of`.
  */
 class OperationalSiteForSelectRequest extends FormRequest
 {
@@ -35,7 +41,19 @@ class OperationalSiteForSelectRequest extends FormRequest
             'limit' => ['sometimes', 'integer', 'min:1', "max:{$maxLimit}"],
             'ids' => ['sometimes', 'array'],
             'ids.*' => ['integer'],
+            'business_function_id' => ['sometimes', 'integer', 'exists:business_functions,id'],
         ];
+    }
+
+    /**
+     * The validated `business_function_id` scope, or null when not submitted.
+     */
+    public function businessFunctionId(): ?int
+    {
+        /** @var array<string, mixed> $validated */
+        $validated = $this->validated();
+
+        return array_key_exists('business_function_id', $validated) ? (int) $validated['business_function_id'] : null;
     }
 
     /**

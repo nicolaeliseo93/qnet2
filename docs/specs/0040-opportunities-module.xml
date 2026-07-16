@@ -93,6 +93,89 @@
     - BR-6: nessun codice sequenziale OPP-xxxx (non richiesto; aggiungibile dopo come Project).
   </context>
 
+  <amendment date="2026-07-16" author="nicola" rev="1">
+    Post-implementazione MT-1..6 (tutte verdi), l'utente ha chiesto due estensioni. Il contratto
+    e' aggiornato QUI; gli AC nuovi sono AC-081..AC-090; gli AC pre-esistenti indicati restano validi
+    salvo dove esplicitamente sostituiti.
+
+    A-1 (SELECT LEAD NEL FORM): oltre al deep-link `/opportunities/new?lead_id=N` (invariato), il
+    form di CREATE espone un select "Lead" (opzionale). Scegliendo un lead il client chiama
+    `GET /api/leads/{lead}/opportunity-defaults` (gia' esistente) e applica values + lock ESATTAMENTE
+    come il flusso from-lead (riuso di use-opportunity-defaults, nessuna seconda implementazione);
+    svuotando il select i campi si sbloccano. Se il lead ha gia' un'opportunita'
+    (existing_opportunity_id non null) il form lo segnala e impedisce il submit (D-2, evita il 422 unique).
+    In EDIT il campo Lead e' READ-ONLY e non scollegabile (lead_id resta prohibited in update, coerenza D-2).
+    Serve un NUOVO endpoint `GET /api/leads/for-select` (ADR 0011) — la spec 0024 lo aveva messo
+    out, ora e' in scope: label = nome del referente del lead, subtitle = codice/nome campagna.
+    Owner: BE = backend-core (LeadForSelectController namespace Leads, route in routes/api/leads.php,
+    LeadService::forSelect, request); FE = frontend-opps (select nel form + read-only in edit).
+
+    A-2 (TRE CAMPI OBBLIGATORI): `company_id`, `company_site_id`, `operational_site_id` diventano
+    OBBLIGATORI. A DB: NOT NULL (le migrazioni MT-1 NON sono committate -> si modifica la migration
+    originale `2026_07_16_140000_*`, non se ne aggiunge una di alter; resta restrictOnDelete).
+    In validazione: `required` in store; `sometimes|required` (mai null) in update. In
+    OpportunitiesAuthorization: i tre campi passano a `mandatory` (quindi non nascondibili/non
+    restringibili dai field-permissions, come name/registry_id). Factory e DemoOpportunitySeeder li
+    valorizzano SEMPRE. Interazione con l'eredita': `operational_site_id` resta derivabile/bloccabile
+    dal lead SE il lead ce l'ha (allora e' valorizzato+bloccato); se il lead non ce l'ha, il campo NON
+    e' in locked_fields ma resta REQUIRED e l'utente deve compilarlo. `company_id`/`company_site_id`
+    NON sono derivabili da lead/campagna (nessuna catena): nel flusso from-lead restano liberi e
+    required, l'utente li compila comunque. SOSTITUISCE la parte di D-4/BR-1/AC-010/AC-011/AC-031
+    relativa a "solo name+registry_id required": ora i mandatory sono name, registry_id, company_id,
+    company_site_id, operational_site_id (5 campi).
+
+    Contratto aggiornato:
+    - NUOVO `GET /api/leads/for-select` -> ?search&amp;offset&amp;limit&amp;ids[]; envelope ADR 0011
+      { items:[{id, label /* referent name */, subtitle /* campaign code|name */}], export_link:null, pagination };
+      403 senza `leads.viewAny`.
+    - POST/PUT/PATCH `/api/opportunities`: company_id, company_site_id, operational_site_id ora
+      required (store) / sometimes-required (update). Resto invariato.
+    - `GET /api/meta/opportunities`: mandatory = {name, registry_id, company_id, company_site_id,
+      operational_site_id}.
+  </amendment>
+
+  <amendment date="2026-07-16" author="nicola" rev="2">
+    Rettifiche del form Opportunita' post rev.1 (tutte verdi). Solo estensioni ADDITIVE al
+    contratto for-select + comportamento del form FE; nessuna migrazione, nessun endpoint nuovo,
+    nessun tocco al CRUD/schema opportunities. AC nuovi AC-091..AC-096.
+
+    A-3 (COMMERCIALE/SEGNALATORE LIBERI): commerciale e segnalatore NON sono piu' vincolati
+    all'anagrafica: il for-select referents e' chiamato SENZA `registry_id` (lista intera della
+    piattaforma) e i due campi sono sempre abilitati (niente gate `registryChosen`). SOLO il
+    `referent_id` resta scoped all'anagrafica (BR-4 invariato per il referente). Il prefill dai
+    default dell'anagrafica (meta.commercial/meta.reporter) resta e continua a sovrascrivere i due
+    campi al cambio anagrafica (editabili). SOSTITUISCE la clausola di BR-4/AC-072 relativa a
+    "commerciale/segnalatore = solo referenti dell'anagrafica, disabilitati finche' l'anagrafica non
+    e' scelta": ora vale solo per referent_id.
+
+    A-4 (RECAP CONTATTI): scelto un referente/commerciale/segnalatore, il form mostra un recap
+    grafico compatto dei suoi contatti PRIMARI. Fonte dati: `meta.contacts` (nuovo) sull'item di
+    `referents/for-select`; il recap li legge con una query for-select `ids:[id]` (server state via
+    TanStack Query, nessun effect). Componente FE riusato dai 3 call-site.
+
+    A-5 (GESTORI ACCOUNT EREDITATI): se l'anagrafica scelta ha gestori account (pivot
+    `registry_user`), al cambio anagrafica il form SOVRASCRIVE `manager_slots` con quei gestori
+    (gap-aware: slot[position-1]=user_id), sempre modificabili dopo. Fonte: `meta.managers` (nuovo)
+    su `registries/for-select`. In edit non si sovrascrive al caricamento (solo su cambio esplicito).
+
+    A-6 (PROBABILITA' COME RANGE): `success_probability` nel form diventa uno slider 0..100 (nuovo
+    `components/ui/slider.tsx` su primitive radix-ui gia' in dipendenza). Scelta utente: "slider
+    sempre a valore" -> default 0, il form invia SEMPRE un numero (0% ≡ non impostato). Lo schema
+    server resta nullable (nessuna modifica BE). Ricade su opportunity-schema/payload/types FE e sui
+    relativi test (cambio di requisito dichiarato, non tampering).
+
+    Contratto aggiornato (additivo, retrocompatibile):
+    - `GET /api/referents/for-select`: item arricchito `meta: { contacts: [{type,label,value,
+      is_primary}] }` (solo primari). `value` re-esposto via resource esplicita (Contact->value e'
+      $hidden ma leggibile per property access, come ContactResource). Eager-load
+      `personalData.contacts` (is_primary) in ReferentService::forSelect E nel path di idratazione
+      ids (appendHydratedIds), altrimenti il recap-by-ids resta senza meta. Gated referents.viewAny
+      invariato. Envelope invariato altrove.
+    - `GET /api/registries/for-select`: item `meta` esteso con `managers: [{id,name,position}]`
+      (pivot registry_user, ordinati per position). Eager-load in forSelectBaseQuery (copre anche
+      appendHydratedForSelectIds). meta.commercial/meta.reporter invariati.
+  </amendment>
+
   <scope>
     <in>
       <item>Backend: migration `opportunities` + pivot `opportunity_user` (position), model `Opportunity` (BaseModel, #[Fillable], LogsModelActivity), DTO Create/Update, `OpportunityService` (managerSyncMap come RegistryService), `StoreOpportunityRequest`/`UpdateOpportunityRequest` (+ValidatesManagerSlots, EnforcesFieldPermissions), `OpportunityPolicy`, `OpportunityResource`, `OpportunityController`, `routes/api/opportunities.php` + require in api.php.</item>
@@ -252,7 +335,8 @@
         (name, registry_id, company_id, company_site_id, operational_site_id,
         business_function_id, referent_id, commercial_id, reporter_id, supervisor_id, source_id,
         product_category_id, manager_slots, start_date, estimated_value, expected_close_date,
-        success_probability). `lead_id` NON e' permissionabile (strutturale). Mandatory: name, registry_id.</response>
+        success_probability). `lead_id` NON e' permissionabile (strutturale). Mandatory (amendment
+        rev.1): name, registry_id, company_id, company_site_id, operational_site_id.</response>
       <errors>403 senza `opportunities.viewAny`.</errors>
     </endpoint>
     <endpoint method="GET|POST" path="/api/tables/opportunities/{columns|rows|values}">
@@ -346,6 +430,28 @@
     <criterion id="AC-078">Dettaglio Lead: bottone "Crea opportunita'" (gated opportunities.create) naviga a /opportunities/new?lead_id=N; se lead.opportunity esiste -> link "Vai all'opportunita'". Suite leads resta verde. [Vitest]</criterion>
     <criterion id="AC-079">ManagerSlotsField estratto in componente condiviso: suite registries invariata e verde. [Vitest]</criterion>
     <criterion id="AC-080">Voce "Opportunita'" in navigazione solo con `opportunities.view` (config/navigation.php, nav backend-driven). [Pest + Vitest]</criterion>
+
+    <!-- ===== AMENDMENT rev.1 (2026-07-16) ===== -->
+    <!-- A-2: tre campi obbligatori -->
+    <criterion id="AC-081">Lo schema `opportunities` ha company_id, company_site_id, operational_site_id NOT NULL (migration MT-1 modificata, non alter); down+up reversibile. [Pest: Unit/Models/OpportunityTest]</criterion>
+    <criterion id="AC-082">POST senza company_id (o company_site_id o operational_site_id) -> 422 sul campo mancante, nessuna riga; con tutti e 5 i mandatory validi -> 201. SOSTITUISCE la parte "solo name+registry_id" di AC-010/AC-011. [Pest: OpportunityCrudTest]</criterion>
+    <criterion id="AC-083">GET /api/meta/opportunities riporta mandatory = {name, registry_id, company_id, company_site_id, operational_site_id}; questi campi non sono restringibili dai field-permissions. [Pest: OpportunityMetaTest]</criterion>
+    <criterion id="AC-084">Schema Zod: company/company_site/operational_site vuoti -> errore localizzato; il form non si invia. [Vitest: opportunity-schema.test.ts]</criterion>
+    <!-- A-1: leads/for-select + select Lead nel form -->
+    <criterion id="AC-085">GET /api/leads/for-select con `leads.viewAny` -> envelope ADR 0011 { items:[{id,label,subtitle}], export_link:null, pagination }, label = referent name; ?ids[]=N idrata; senza permesso -> 403. [Pest: Feature/Leads/LeadForSelectTest]</criterion>
+    <criterion id="AC-086">Nel form CREATE, scelto un lead nel select, i campi derivati (BR-1) si compilano e bloccano come nel deep-link; svuotando il select si sbloccano; il payload inviato NON contiene i campi locked ma CONTIENE lead_id. [Vitest: opportunity-form-body.test.tsx]</criterion>
+    <criterion id="AC-087">Nel form, scelto un lead con existing_opportunity_id non null, il form segnala e blocca il submit (nessun POST). [Vitest]</criterion>
+    <criterion id="AC-088">Nel form EDIT di un'opportunita' con lead collegato, il campo Lead mostra la label ed e' read-only/non scollegabile; il PATCH non invia mai lead_id. [Vitest]</criterion>
+    <criterion id="AC-089">operational_site_id: creando da un lead che LO possiede -> valorizzato e in locked_fields; da un lead che NON lo possiede -> non in locked_fields, required, editabile. [Pest: OpportunityFromLeadTest + Vitest]</criterion>
+    <criterion id="AC-090">company_id/company_site_id nel flusso from-lead restano liberi e required (non derivati): un POST from-lead senza di essi -> 422. [Pest: OpportunityFromLeadTest]</criterion>
+
+    <!-- ===== AMENDMENT rev.2 (2026-07-16) ===== -->
+    <criterion id="AC-091">referents/for-select espone `meta.contacts` = SOLO i contatti primari (is_primary) del referente {type,label,value,is_primary}; referente senza card o senza primari -> `meta.contacts: []` (chiave sempre presente); ?ids[]=N idrata CON meta (path appendHydratedIds eager-loaded). Envelope invariato altrove; suite referents esistente verde. [Pest: ReferentForSelectTest]</criterion>
+    <criterion id="AC-092">registries/for-select espone `meta.managers` = gestori account (registry_user) {id,name,position} ordinati per position; anagrafica senza gestori -> `[]`. meta.commercial/meta.reporter invariati; ?ids[]=N idrata con meta. [Pest: RegistryForSelectTest]</criterion>
+    <criterion id="AC-093">Form: commerciale/segnalatore chiamano referents/for-select SENZA registry_id (nessun param) e sono sempre abilitati (anche senza anagrafica). Solo referent_id passa {registry_id} ed e' gated. SOSTITUISCE la clausola commerciale/segnalatore di AC-072. [Vitest: opportunity-form-body.test.tsx]</criterion>
+    <criterion id="AC-094">Scelto un referente/commerciale/segnalatore, il recap mostra i suoi contatti primari (letti da meta.contacts via query ids); azzerando il campo il recap scompare. [Vitest]</criterion>
+    <criterion id="AC-095">Cambio anagrafica con gestori account -> manager_slots sovrascritto con quei gestori (gap-aware per position), modificabile; anagrafica senza gestori -> manager_slots azzerato; in edit nessuna sovrascrittura al caricamento. [Vitest]</criterion>
+    <criterion id="AC-096">success_probability reso come slider 0..100 col valore mostrato in %; default 0 nel create; il payload invia sempre un numero (0 incluso); fuori 0..100 impossibile via slider. Suite planning verde. [Vitest: opportunity-planning + opportunity-schema]</criterion>
 
   </acceptance_criteria>
 

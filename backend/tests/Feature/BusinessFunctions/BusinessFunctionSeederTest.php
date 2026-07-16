@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\BusinessFunction;
+use App\Models\OperationalSite;
 use App\Models\User;
 use Database\Seeders\DemoBusinessFunctionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -46,6 +47,41 @@ it('seeds functions even with no users to associate', function () {
 
     expect(BusinessFunction::count())->toBe(15);
     expect(BusinessFunction::whereNotNull('manager_id')->count())->toBe(0);
+});
+
+it('wires the parent/child hierarchy from the curated definitions', function () {
+    $this->seed(DemoBusinessFunctionSeeder::class);
+
+    // Several functions declare a parent; at least the known ones resolve.
+    expect(BusinessFunction::whereNotNull('parent_id')->count())->toBeGreaterThanOrEqual(1);
+
+    $marketing = BusinessFunction::where('name', 'Marketing e Comunicazione')->firstOrFail();
+    expect($marketing->parent->name)->toBe('Commerciale e Vendite');
+
+    $root = BusinessFunction::where('name', 'Direzione Generale')->firstOrFail();
+    expect($root->parent_id)->toBeNull();
+    expect($root->children->pluck('name'))->toContain('Risorse Umane');
+});
+
+it('attaches operational sites to functions via the pivot when sites exist', function () {
+    OperationalSite::factory()->count(6)->create();
+
+    $this->seed(DemoBusinessFunctionSeeder::class);
+
+    // Some functions end up linked (the count per function is 0..4, so at the
+    // scale of 15 functions the pivot is reliably non-empty).
+    expect(BusinessFunction::has('operationalSites')->count())->toBeGreaterThanOrEqual(1);
+});
+
+it('is idempotent on the operational-site pivot — re-running does not duplicate links', function () {
+    OperationalSite::factory()->count(6)->create();
+
+    $this->seed(DemoBusinessFunctionSeeder::class);
+    $pivotCount = DB::table('business_function_operational_site')->count();
+
+    $this->seed(DemoBusinessFunctionSeeder::class);
+
+    expect(DB::table('business_function_operational_site')->count())->toBe($pivotCount);
 });
 
 // ---------------------------------------------------------------------------
