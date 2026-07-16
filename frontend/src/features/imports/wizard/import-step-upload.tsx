@@ -1,15 +1,17 @@
+import { useState, type DragEvent } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Upload } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { FileSpreadsheet, FileUp, Loader2, Upload } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
 import {
   buildImportWizardUploadSchema,
   type ImportWizardUploadFormValues,
 } from '@/features/imports/wizard/import-upload-schema'
+import { BusyState, StatTile, StepAlert, StepSectionHeader } from '@/features/imports/wizard/wizard-ui'
 import type { ImportRunDetail } from '@/features/imports/wizard/types'
 
 export interface ImportStepUploadProps {
@@ -21,69 +23,134 @@ export interface ImportStepUploadProps {
   onContinue: () => void
 }
 
+const FILE_ACCEPT =
+  '.csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel'
+
+const BYTES_PER_KB = 1024
+const BYTES_PER_MB = BYTES_PER_KB * 1024
+
+/** Human-readable file size for the selected-file chip (display only). */
+function formatFileSize(bytes: number): string {
+  if (bytes >= BYTES_PER_MB) return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / BYTES_PER_KB))} KB`
+}
+
 /**
- * Upload step (AC-020): a plain file form while no run exists yet; once the
- * server-side `AnalyzeImportJob` finishes (`status` moves past `analyzing`),
- * shows the detected columns/rows/duplicate-columns summary and an explicit
- * "continue" action — the user reviews the analysis before proceeding.
+ * Upload step (AC-020): a drag-and-drop dropzone around the same file form
+ * while no run exists yet (drop/browse only sets the form value — validation
+ * and submit are unchanged); once the server-side `AnalyzeImportJob` finishes
+ * (`status` moves past `analyzing`), shows the detected columns/rows/
+ * duplicate-columns summary and an explicit "continue" action — the user
+ * reviews the analysis before proceeding.
  */
 export function ImportStepUpload({ run, isUploading, uploadError, onUpload, onContinue }: ImportStepUploadProps) {
   const { t } = useTranslation('importWizard')
+  const [isDragging, setIsDragging] = useState(false)
   const form = useForm<ImportWizardUploadFormValues>({
     resolver: zodResolver(buildImportWizardUploadSchema(t)),
   })
 
   const onSubmit = form.handleSubmit((values) => onUpload(values.file))
+  const selectedFile = form.watch('file')
 
   if (run === null) {
+    const handleDrop = (event: DragEvent<HTMLLabelElement>, onChange: (file: File | undefined) => void) => {
+      event.preventDefault()
+      setIsDragging(false)
+      const file = event.dataTransfer.files?.[0]
+      if (file) onChange(file)
+    }
+
     return (
       <Form {...form}>
-            <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-              <FormField
-                control={form.control}
-                name="file"
-                render={({ field: { onChange, onBlur, name, ref } }) => (
-                  <FormItem>
-                    <FormLabel required>{t('upload.fileLabel')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        ref={ref}
-                        name={name}
-                        onBlur={onBlur}
-                        type="file"
-                        accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                        onChange={(event) => onChange(event.target.files?.[0])}
-                      />
-                    </FormControl>
-                    <FormMessage role="alert" />
-                  </FormItem>
-                )}
-              />
+        <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+          <FormField
+            control={form.control}
+            name="file"
+            render={({ field: { onChange, onBlur, name, ref } }) => (
+              <FormItem>
+                <FormLabel required>{t('upload.fileLabel')}</FormLabel>
+                {/* The dropzone is a <label> wrapping the (visually hidden) input:
+                    clicking opens the native picker, dropping sets the same form value. */}
+                <label
+                  className={cn(
+                    'group flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors',
+                    'focus-within:ring-[3px] focus-within:ring-ring/50 hover:border-primary/50 hover:bg-primary/5',
+                    isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25',
+                  )}
+                  onDragOver={(event) => {
+                    event.preventDefault()
+                    setIsDragging(true)
+                  }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDragging(false)
+                  }}
+                  onDrop={(event) => handleDrop(event, onChange)}
+                >
+                  <FormControl>
+                    <input
+                      ref={ref}
+                      name={name}
+                      onBlur={onBlur}
+                      type="file"
+                      className="sr-only"
+                      accept={FILE_ACCEPT}
+                      onChange={(event) => onChange(event.target.files?.[0])}
+                    />
+                  </FormControl>
+                  <span
+                    className={cn(
+                      'mb-1.5 flex size-12 items-center justify-center rounded-full transition-colors',
+                      selectedFile
+                        ? 'bg-primary/10 text-primary'
+                        : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary',
+                    )}
+                  >
+                    {selectedFile ? (
+                      <FileSpreadsheet className="size-6" aria-hidden="true" />
+                    ) : (
+                      <FileUp className="size-6" aria-hidden="true" />
+                    )}
+                  </span>
+                  {selectedFile ? (
+                    <>
+                      <span className="max-w-full truncate text-sm font-medium">{selectedFile.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatFileSize(selectedFile.size)} · {t('upload.dropzone.replace')}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-sm font-medium">{t('upload.dropzone.title')}</span>
+                      <span className="text-xs text-muted-foreground">{t('upload.dropzone.browse')}</span>
+                      <span className="mt-1 text-[11px] text-muted-foreground/80">{t('upload.dropzone.formats')}</span>
+                    </>
+                  )}
+                </label>
+                <FormMessage role="alert" />
+              </FormItem>
+            )}
+          />
 
-              {uploadError ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {uploadError}
-                </p>
-              ) : null}
+          {uploadError ? <StepAlert>{uploadError}</StepAlert> : null}
 
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isUploading}>
-                  <Upload aria-hidden="true" />
-                  {isUploading ? t('upload.uploading') : t('upload.submit')}
-                </Button>
-              </div>
-            </form>
-          </Form>
+          <div className="flex justify-end">
+            <Button type="submit" disabled={isUploading}>
+              {isUploading ? (
+                <Loader2 className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Upload aria-hidden="true" />
+              )}
+              {isUploading ? t('upload.uploading') : t('upload.submit')}
+            </Button>
+          </div>
+        </form>
+      </Form>
     )
   }
 
   if (run.status === 'analyzing') {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        {t('upload.analyzing')}
-      </div>
-    )
+    return <BusyState label={t('upload.analyzing')} />
   }
 
   const columnsCount = run.detected_columns?.length ?? 0
@@ -91,33 +158,28 @@ export function ImportStepUpload({ run, isUploading, uploadError, onUpload, onCo
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-base font-semibold">{t('upload.summaryTitle')}</h3>
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-muted-foreground">{t('upload.columnsLabel')}</dt>
-            <dd className="font-medium">{columnsCount}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">{t('upload.rowsLabel')}</dt>
-            <dd className="font-medium">{run.total_rows}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">{t('upload.duplicateColumnsLabel')}</dt>
-            <dd className="font-medium">
-              {duplicateCount > 0 ? (
-                <Badge variant="destructive">{duplicateCount}</Badge>
-              ) : (
-                t('upload.noDuplicateColumns')
-              )}
-            </dd>
-          </div>
-        </dl>
+      <StepSectionHeader
+        icon={FileSpreadsheet}
+        title={t('upload.summaryTitle')}
+        description={run.original_filename}
+      />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <StatTile label={t('upload.columnsLabel')} value={columnsCount} />
+        <StatTile label={t('upload.rowsLabel')} value={run.total_rows} />
+        <StatTile
+          label={t('upload.duplicateColumnsLabel')}
+          value={duplicateCount > 0 ? duplicateCount : t('upload.noDuplicateColumns')}
+          tone={duplicateCount > 0 ? 'destructive' : 'default'}
+        />
+      </div>
 
-        <div className="flex justify-end">
-          <Button type="button" onClick={onContinue}>
-            {t('upload.continue')}
-          </Button>
-        </div>
+      <Separator />
+
+      <div className="flex justify-end">
+        <Button type="button" onClick={onContinue}>
+          {t('upload.continue')}
+        </Button>
+      </div>
     </div>
   )
 }

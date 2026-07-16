@@ -22,9 +22,16 @@ export const importWizard = {
     mapping: 'Mapping',
     review: 'Review',
     summary: 'Summary',
+    progress: 'Step {{current}} of {{total}}',
   },
   upload: {
     fileLabel: 'File (.csv, .xlsx)',
+    dropzone: {
+      title: 'Drag your file here',
+      browse: 'or click to browse your computer',
+      formats: 'Supported formats: CSV, XLSX',
+      replace: 'click or drop another file to replace it',
+    },
     submit: 'Analyze file',
     uploading: 'Uploading…',
     analyzing: 'Analyzing the file…',
@@ -59,7 +66,13 @@ export const importWizard = {
   mapping: {
     title: 'Column mapping',
     subtitle: 'Match each file column to a lead field, or ignore it.',
+    columnHeader: 'File column',
     targetHeader: 'Target field',
+    hints: {
+      target: 'Each column can feed a lead field, be stored as an extra field, or be ignored.',
+      targetLabel: 'About the target field',
+      dedup: 'Decides what happens when a file row matches an existing lead.',
+    },
     ignore: 'Ignore this column',
     extra: 'Extra field',
     duplicateStrategy: 'Duplicate handling',
@@ -82,6 +95,7 @@ export const importWizard = {
   },
   review: {
     title: 'Review',
+    hint: 'You can fix values directly in the grid: every edit is saved immediately.',
     placeholder: 'The row-by-row review grid is not available yet.',
     continue: 'Continue to summary',
     loading: 'Loading the review…',

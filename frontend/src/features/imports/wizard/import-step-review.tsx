@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Loader2 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { AlertTriangle, ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { ReviewGrid } from '@/features/imports/wizard/review-grid'
+import { BusyState, StatTile, StepSectionHeader } from '@/features/imports/wizard/wizard-ui'
 import type { ImportRunDetail, ImportRunRowCounts } from '@/features/imports/wizard/types'
 
 export interface ImportStepReviewProps {
@@ -23,34 +24,6 @@ function countsFromRun(run: ImportRunDetail): ImportRunRowCounts {
   }
 }
 
-/** A single `dt`/`dd` counter, badged once `value > 0` for the tones that flag attention. */
-function ReviewCountStat({
-  label,
-  value,
-  badgeVariant,
-  badgeClassName,
-}: {
-  label: string
-  value: number
-  badgeVariant?: 'destructive' | 'outline'
-  badgeClassName?: string
-}) {
-  return (
-    <div>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium">
-        {badgeVariant && value > 0 ? (
-          <Badge variant={badgeVariant} className={badgeClassName}>
-            {value}
-          </Badge>
-        ) : (
-          value
-        )}
-      </dd>
-    </div>
-  )
-}
-
 /**
  * Review step (AC-023): an AG Grid SSRM grid (`ReviewGrid`) over the staged
  * rows of a `reviewing` run, with inline editing PATCHing each field back to
@@ -65,21 +38,11 @@ export function ImportStepReview({ domain, run, onContinue }: ImportStepReviewPr
   const [counts, setCounts] = useState<ImportRunRowCounts | null>(() => (run ? countsFromRun(run) : null))
 
   if (run === null) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        {t('review.loading')}
-      </div>
-    )
+    return <BusyState label={t('review.loading')} />
   }
 
   if (run.status === 'staging') {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        {t('status.staging')}
-      </div>
-    )
+    return <BusyState label={t('status.staging')} />
   }
 
   const activeCounts = counts ?? countsFromRun(run)
@@ -87,36 +50,51 @@ export function ImportStepReview({ domain, run, onContinue }: ImportStepReviewPr
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-semibold">{t('review.title')}</h3>
-          {needsAttention ? (
-            <span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" role="alert">
+      <StepSectionHeader
+        icon={ListChecks}
+        title={t('review.title')}
+        description={t('review.hint')}
+        aside={
+          needsAttention ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400"
+              role="alert"
+            >
               <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
               {t('review.needsAttention')}
             </span>
-          ) : null}
-        </div>
+          ) : null
+        }
+      />
 
-        <dl className="grid grid-cols-3 gap-3 text-xs sm:grid-cols-6">
-          <ReviewCountStat label={t('review.counts.total')} value={activeCounts.total} />
-          <ReviewCountStat label={t('review.counts.valid')} value={activeCounts.valid_rows} />
-          <ReviewCountStat
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <StatTile label={t('review.counts.total')} value={activeCounts.total} />
+          <StatTile
+            label={t('review.counts.valid')}
+            value={activeCounts.valid_rows}
+            tone={activeCounts.valid_rows > 0 ? 'success' : 'default'}
+          />
+          <StatTile
             label={t('review.counts.warning')}
             value={activeCounts.warning_rows}
-            badgeVariant="outline"
-            badgeClassName="border-amber-500 text-amber-700 dark:text-amber-400"
+            tone={activeCounts.warning_rows > 0 ? 'warning' : 'default'}
           />
-          <ReviewCountStat label={t('review.counts.error')} value={activeCounts.error_rows} badgeVariant="destructive" />
-          <ReviewCountStat
+          <StatTile
+            label={t('review.counts.error')}
+            value={activeCounts.error_rows}
+            tone={activeCounts.error_rows > 0 ? 'destructive' : 'default'}
+          />
+          <StatTile
             label={t('review.counts.duplicate')}
             value={activeCounts.duplicate_rows}
-            badgeVariant="outline"
-            badgeClassName="border-sky-500 text-sky-700 dark:text-sky-400"
+            tone={activeCounts.duplicate_rows > 0 ? 'info' : 'default'}
           />
-          <ReviewCountStat label={t('review.counts.modified')} value={activeCounts.modified_rows} />
-        </dl>
+          <StatTile label={t('review.counts.modified')} value={activeCounts.modified_rows} />
+        </div>
 
         <ReviewGrid domain={domain} run={run} onRowUpdated={(_row, nextCounts) => setCounts(nextCounts)} />
+
+        <Separator />
 
         <div className="flex justify-end">
           <Button type="button" onClick={onContinue}>

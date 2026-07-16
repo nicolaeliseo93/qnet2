@@ -2,6 +2,80 @@
 
 > Injected at session start. Update at every green state.
 
+## FORM LEAD — restyling grafico/UX (2026-07-16) — GREEN, NON COMMITTATO
+
+Refactoring SOLO presentazionale del form create/edit lead (spec 0024/0033): zero cambi a logica, flussi,
+validazioni, API, permessi, payload. Allineato (e oltre) allo standard di casa `campaign-form-body.tsx`.
+
+- `lead-form-body.tsx` RISTRUTTURATO in 4 sezioni: "Contatto e campagna" (trio required BR-1: contatto
+  full-width con avatar, campagna+stato lead in grid `sm:grid-cols-2`, `required` esplicito sul marker),
+  "Dettagli" (sede/fonte/operatore in grid 2 col, tooltip `FieldHint` via prop `hint`, avatar su operatore —
+  usa la chiave i18n `sections.details` che esisteva GIA' inutilizzata), "Note" (collassabile, aperta di
+  default, auto-apre su errore; contatore caratteri `n/5000` con `NOTES_MAX_LENGTH` ora esportato da
+  `lead-schema.ts` — solo export, regole invariate; placeholder nuovo `notesPlaceholder`), "Campi extra"
+  (collassabile). Footer sticky con backdrop-blur + `Loader2` nel submit; errore server in box destructive
+  con icona `CircleAlert` (sempre `role="alert"`).
+- `extra-fields-editor.tsx`: props nuove `className/collapsible/open/onOpenChange` (inoltrate a
+  `FormSection`); badge contatore nell'aside (SOLO span: un bottone nell'aside di una sezione collapsible
+  sarebbe un button annidato nel trigger = HTML invalido — VINCOLO da rispettare in futuro); azione
+  "Aggiungi campo" spostata nel body (CTA nell'empty state tratteggiato, riga dashed in coda alle righe);
+  label colonne in header unico, label per-riga `sr-only` (accessible name conservato per i test).
+- NUOVO `components/form-section-reveal.ts`: `sectionRevealClassName(index)` — stagger entrance motion-safe
+  con classi delay LETTERALI (`motion-safe:delay-0/50/...250`) + `fill-mode-backwards`. NOTA BUG LATENTE:
+  il pattern in `campaign-form-body.tsx` usa un template literal interpolato ("[animation-delay:...ms]") che lo
+  scanner Tailwind NON genera (delay no-op silenzioso). SEGNALATO, non toccato (fuori scope): campaigns
+  puo' migrare al helper condiviso in un task dedicato. `form-section.tsx` NON modificato (helper separato
+  per `react-refresh/only-export-components`).
+- `lead-form.tsx`: skeleton a forma di sezioni (`LeadFormSkeleton` esportato); `lead-form-page.tsx` lo riusa
+  nel fetch di edit (rimosso skeleton 3-barre + import `Skeleton` orfano).
+- i18n `{en,it}-leads.ts` (additivo): `form.hints.{operationalSite,source,operator}`, `notesPlaceholder`;
+  aggiornata `sections.contact.description` (sede/fonte/operatore usciti dalla sezione).
+
+VERIFICATO (eseguito): vitest 14 file / 88 test verdi (features/leads, pages, form-section,
+relation-select-field); `tsc --noEmit` pulito; ESLint pulito sui file toccati. NIENTE COMMIT.
+PROSSIMI PASSI possibili: migrare campaigns a `sectionRevealClassName` condiviso; valutare stesso
+restyling per form referents/registries piu' vecchi.
+
+## WIZARD IMPORT LEAD — restyling grafico/UX (2026-07-16) — GREEN, NON COMMITTATO
+
+Refactoring SOLO presentazionale del wizard /imports/new (spec 0033): zero cambi a logica, flussi,
+validazioni, API, permessi, salvataggio. Ispirazione CRM (HubSpot/Pipedrive-like), design system esistente.
+
+- NUOVO `features/imports/wizard/wizard-ui.tsx`: primitivi presentazionali condivisi del wizard —
+  `StepSectionHeader` (chip icona + titolo + descrizione, stile FormSection ma senza card: il body vive
+  gia' nella Card del wizard, NIENTE card-in-card), `StepAlert` (pannello inline destructive/warning,
+  stesso `role` alert/status di prima), `StatTile` (KPI compatto label+value con toni
+  success/warning/destructive/info), `BusyState` (spinner centrato in chip, `role="status"`).
+- SHELL `import-wizard.tsx`: CardHeader con `border-b`, contatore "Passaggio N di 5"
+  (`stepper.progress`), body step wrappato in div KEYED su currentStep con l'idioma di transizione del
+  progetto (`motion-safe:animate-in fade-in-0 slide-in-from-bottom-1 duration-300`, stesso dei form
+  Projects/Campaigns) -> replay dell'entrata a ogni cambio step. Skeleton loading a forma di card.
+- UPLOAD: dropzone drag&drop = `<label>` che avvolge l'input file reso `sr-only` (click nativo apre il
+  picker; drop chiama la stessa `onChange` del form -> validazione zod e submit INVARIATI). FormLabel
+  "File (.csv, .xlsx)" conservata (i test la usano via getByLabelText). Stato file selezionato con nome
+  + dimensione (`formatFileSize`), analisi -> 3 `StatTile`, header con nome file.
+- CONFIG: `StepSectionHeader` (usa le chiavi `config.title/subtitle` che esistevano ma erano INUTILIZZATE),
+  campi in `grid sm:grid-cols-2`.
+- MAPPING: lista in container `rounded-lg border` con header strip (Colonna del file / Campo di
+  destinazione + `FieldHint` tooltip), righe `divide-y` con hover, griglia `1fr|freccia|16rem`, freccia
+  `MoveRight` primary quando mappata / muted quando ignorata; dedup strategy come sotto-sezione con
+  header + descrizione (`mapping.hints.dedup`), label form resa sr-only (nome accessibile invariato);
+  errori via `StepAlert`; submit con spinner.
+- REVIEW: header con hint visibile ("puoi correggere nella griglia..."), chip amber "needs attention"
+  pill (role=alert invariato), contatori da `<dl>` -> 6 `StatTile` con toni (verdi/amber/destructive/sky
+  coerenti coi badge preesistenti).
+- SUMMARY: header con nome file, totali -> 6 `StatTile`, config globale in tile bordati, mappature in
+  lista bordata `divide-y` con `MoveRight`, warnings in pannello amber (role=status invariato), confirm
+  con spinner.
+- PROGRESS: processing centrato con chip spinner; failed -> `StepAlert`; completed -> pannello emerald
+  con zoom-in, chip check, link report errori invariato.
+- i18n (it/en-import-wizard.ts): nuove chiavi `stepper.progress`, `upload.dropzone.{title,browse,formats,
+  replace}`, `mapping.columnHeader`, `mapping.hints.{target,targetLabel,dedup}`, `review.hint`.
+
+VERIFICATO (eseguito): vitest wizard 69/69, suite import completa (feature+3 pagine) 107/107, `tsc
+--noEmit` pulito, ESLint 0 errori (2 warning `react-hooks/incompatible-library` su form.watch, stessa
+classe del warning preesistente gia' noto). Tutti i file <300 righe. NIENTE COMMIT.
+
 ## IMPORT LEAD — menu, sottotitoli, card wizard, dettaglio "a schede" (2026-07-16) — GREEN, NON COMMITTATO
 
 Ritocchi UX al modulo Import (solo FE, nessun cambio contratto/BE oltre navigation.php):

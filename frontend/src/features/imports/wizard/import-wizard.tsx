@@ -15,6 +15,11 @@ import { ImportStepReview } from '@/features/imports/wizard/import-step-review'
 import { ImportStepSummary } from '@/features/imports/wizard/import-step-summary'
 import { ImportStepUpload } from '@/features/imports/wizard/import-step-upload'
 import { useImportWizard } from '@/features/imports/wizard/use-import-wizard'
+import { StepAlert } from '@/features/imports/wizard/wizard-ui'
+
+/** Project idiom for step entrance (same as the Projects/Campaigns form bodies). */
+const STEP_TRANSITION_CLASSES =
+  'flex flex-col gap-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-300'
 
 export interface ImportWizardProps {
   /** Resource key selecting the backend `ImportDefinition`, e.g. `leads`. */
@@ -66,19 +71,22 @@ export function ImportWizard({ domain }: ImportWizardProps) {
 
   if (wizard.isRunLoading) {
     return (
-      <div className="flex flex-col gap-4" aria-hidden="true">
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-48 w-full" />
-      </div>
+      <Card aria-hidden="true">
+        <CardHeader className="gap-4 border-b">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-7 w-full" />
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <Skeleton className="h-40 w-full" />
+        </CardContent>
+      </Card>
     )
   }
 
   if (wizard.isRunError) {
     return (
       <div className="flex flex-col items-start gap-3">
-        <p className="text-sm text-destructive" role="alert">
-          {t('page.loadError')}
-        </p>
+        <StepAlert>{t('page.loadError')}</StepAlert>
         <Button type="button" variant="outline" size="sm" onClick={() => wizard.refetchRun()}>
           {t('config.select.retry')}
         </Button>
@@ -88,11 +96,18 @@ export function ImportWizard({ domain }: ImportWizardProps) {
 
   return (
     <Card>
-      <CardHeader className="gap-4">
-        <CardTitle className="text-base">{title}</CardTitle>
+      <CardHeader className="gap-4 border-b">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {t('stepper.progress', { current: wizard.currentStep + 1, total: steps.length })}
+          </span>
+        </div>
         <Stepper steps={steps} currentStep={wizard.currentStep} onStepClick={wizard.goToStep} />
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent>
+        {/* Keyed on the step: remounting the wrapper replays the entrance animation on every step change. */}
+        <div key={wizard.currentStep} className={STEP_TRANSITION_CLASSES}>
         {wizard.currentStep === 0 ? (
         <ImportStepUpload
           run={wizard.run}
@@ -136,6 +151,7 @@ export function ImportWizard({ domain }: ImportWizardProps) {
           confirmError={wizard.confirmError}
         />
       ) : null}
+        </div>
       </CardContent>
     </Card>
   )

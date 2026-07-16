@@ -2,11 +2,15 @@ import { useMemo } from 'react'
 import { Controller, useForm, type FieldPath } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle } from 'lucide-react'
+import { Columns3, CopyCheck, Loader2, MoveRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
+import { FieldHint } from '@/components/field-hint'
+import { StepAlert, StepSectionHeader } from '@/features/imports/wizard/wizard-ui'
 import {
   buildImportMappingSchema,
   type ImportMappingFormValues,
@@ -100,19 +104,31 @@ export function ImportStepMapping({
   return (
     <Form {...form}>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-            <div className="flex flex-col gap-3">
+            <StepSectionHeader icon={Columns3} title={t('mapping.title')} description={t('mapping.subtitle')} />
+
+            <div className="overflow-hidden rounded-lg border">
+              <div className="hidden gap-2 border-b bg-muted/40 px-3 py-2 sm:grid sm:grid-cols-[minmax(0,1fr)_1.25rem_16rem]">
+                <span className="text-xs font-medium text-muted-foreground">{t('mapping.columnHeader')}</span>
+                <span aria-hidden="true" />
+                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  {t('mapping.targetHeader')}
+                  <FieldHint text={t('mapping.hints.target')} label={t('mapping.hints.targetLabel')} />
+                </span>
+              </div>
+              <div className="divide-y">
               {columns.map((column) => {
                 const fieldName = `mapping.${column.index}` as FieldPath<ImportMappingFormValues>
                 const currentTarget = mappingValues[String(column.index)] ?? IGNORE_TARGET
                 const isConflict = signals.conflictFieldIds.has(currentTarget)
+                const isMapped = currentTarget !== IGNORE_TARGET
 
                 return (
                   <div
                     key={`${column.index}-${column.name}`}
-                    className="flex flex-col gap-1.5 border-b pb-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-1.5 px-3 py-2.5 transition-colors hover:bg-muted/40 sm:grid sm:grid-cols-[minmax(0,1fr)_1.25rem_16rem] sm:items-center sm:gap-2"
                   >
-                    <div className="flex flex-1 flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium">{column.name}</span>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="truncate text-sm font-medium">{column.name}</span>
                       {column.duplicate ? (
                         <Badge variant="outline">{t('mapping.badges.duplicateColumn')}</Badge>
                       ) : null}
@@ -120,12 +136,22 @@ export function ImportStepMapping({
                         <Badge variant="destructive">{t('mapping.badges.conflict')}</Badge>
                       ) : null}
                     </div>
+                    <MoveRight
+                      aria-hidden="true"
+                      className={cn(
+                        'hidden size-4 transition-colors sm:block',
+                        isMapped ? 'text-primary' : 'text-muted-foreground/40',
+                      )}
+                    />
                     <Controller
                       control={form.control}
                       name={fieldName}
                       render={({ field }) => (
                         <Select value={(field.value as string) || IGNORE_TARGET} onValueChange={field.onChange}>
-                          <SelectTrigger className="w-full sm:w-64" aria-label={t('mapping.targetHeader')}>
+                          <SelectTrigger
+                            className={cn('w-full', !isMapped && 'text-muted-foreground')}
+                            aria-label={t('mapping.targetHeader')}
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -143,11 +169,11 @@ export function ImportStepMapping({
                   </div>
                 )
               })}
+              </div>
             </div>
 
             {signals.requiredMissing.length > 0 ? (
-              <p className="flex items-center gap-2 text-sm text-destructive" role="alert">
-                <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+              <StepAlert>
                 {t('mapping.badges.requiredMissing', {
                   fields: signals.requiredMissing
                     .map((fieldId) => {
@@ -156,18 +182,28 @@ export function ImportStepMapping({
                     })
                     .join(', '),
                 })}
-              </p>
+              </StepAlert>
             ) : null}
+
+            <Separator />
+
+            <StepSectionHeader
+              icon={CopyCheck}
+              title={t('mapping.duplicateStrategy')}
+              description={t('mapping.hints.dedup')}
+            />
 
             <FormField
               control={form.control}
               name="dedup_strategy"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel required>{t('mapping.duplicateStrategy')}</FormLabel>
+                  <FormLabel required className="sr-only">
+                    {t('mapping.duplicateStrategy')}
+                  </FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
-                      <SelectTrigger className="w-full sm:w-64">
+                      <SelectTrigger className="w-full sm:w-80">
                         <SelectValue placeholder={t('config.select.placeholder')} />
                       </SelectTrigger>
                     </FormControl>
@@ -184,17 +220,16 @@ export function ImportStepMapping({
               )}
             />
 
-            {submitError ? (
-              <p className="text-sm text-destructive" role="alert">
-                {submitError}
-              </p>
-            ) : null}
+            {submitError ? <StepAlert>{submitError}</StepAlert> : null}
+
+            <Separator />
 
             <div className="flex justify-between">
               <Button type="button" variant="outline" onClick={onBack}>
                 {t('config.back')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
                 {isSubmitting ? t('mapping.submitting') : t('mapping.submit')}
               </Button>
             </div>

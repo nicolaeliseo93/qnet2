@@ -1,10 +1,13 @@
 import { useForm, type FieldPath } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
+import { Settings2 } from 'lucide-react'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
+import { StepSectionHeader } from '@/features/imports/wizard/wizard-ui'
 import {
   buildImportConfigSchema,
   type ImportConfigFormValues,
@@ -56,6 +59,9 @@ export function ImportStepConfig({ globalFields, initialValues, onNext }: Import
   return (
     <Form {...form}>
           <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+            <StepSectionHeader icon={Settings2} title={t('config.title')} description={t('config.subtitle')} />
+
+            <div className="grid gap-4 sm:grid-cols-2">
             {globalFields.map((globalField) => (
               <FormField
                 key={globalField.id}
@@ -95,6 +101,9 @@ export function ImportStepConfig({ globalFields, initialValues, onNext }: Import
                 )}
               />
             ))}
+            </div>
+
+            <Separator />
 
             <div className="flex justify-end">
               <Button type="submit">{t('config.continue')}</Button>

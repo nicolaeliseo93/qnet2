@@ -19,9 +19,16 @@ export const importWizard = {
     mapping: 'Mappatura',
     review: 'Revisione',
     summary: 'Riepilogo',
+    progress: 'Passaggio {{current}} di {{total}}',
   },
   upload: {
     fileLabel: 'File (.csv, .xlsx)',
+    dropzone: {
+      title: 'Trascina qui il file',
+      browse: 'oppure clicca per cercarlo sul computer',
+      formats: 'Formati supportati: CSV, XLSX',
+      replace: 'clicca o trascina un altro file per sostituirlo',
+    },
     submit: 'Analizza file',
     uploading: 'Caricamento…',
     analyzing: 'Analisi del file in corso…',
@@ -56,7 +63,14 @@ export const importWizard = {
   mapping: {
     title: 'Mappatura colonne',
     subtitle: 'Associa ogni colonna del file a un campo lead, oppure ignorala.',
+    columnHeader: 'Colonna del file',
     targetHeader: 'Campo di destinazione',
+    hints: {
+      target:
+        'Ogni colonna può alimentare un campo lead, essere salvata come campo extra oppure essere ignorata.',
+      targetLabel: 'Informazioni sul campo di destinazione',
+      dedup: 'Decide cosa succede quando una riga del file corrisponde a un lead già esistente.',
+    },
     ignore: 'Ignora questa colonna',
     extra: 'Campo extra',
     duplicateStrategy: 'Gestione duplicati',
@@ -79,6 +93,7 @@ export const importWizard = {
   },
   review: {
     title: 'Revisione',
+    hint: 'Puoi correggere i valori direttamente nella griglia: ogni modifica viene salvata subito.',
     placeholder: 'La griglia di revisione riga per riga non è ancora disponibile.',
     continue: 'Continua al riepilogo',
     loading: 'Caricamento della revisione…',

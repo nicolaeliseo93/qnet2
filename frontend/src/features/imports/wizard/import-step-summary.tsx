@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Columns3, FileCheck2, Loader2, MoveRight, PackagePlus, Settings2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { BusyState, StatTile, StepAlert, StepSectionHeader } from '@/features/imports/wizard/wizard-ui'
 import { getImportRunSummary } from '@/features/imports/wizard/api'
 import { importWizardKeys } from '@/features/imports/wizard/query-keys'
 import { ImportRunProgress } from '@/features/imports/wizard/import-run-progress'
@@ -21,18 +22,13 @@ export interface ImportStepSummaryProps {
   confirmError: string | null
 }
 
-interface SummaryStatProps {
-  label: string
-  value: number
-}
-
-/** A single totals cell (rows in the review are `error_rows`/`invalid_rows`, unchanged). */
-function SummaryStat({ label, value }: SummaryStatProps) {
+/** Small icon+title heading for the summary's sub-sections. */
+function SummarySectionTitle({ icon: Icon, children }: { icon: typeof Settings2; children: string }) {
   return (
-    <div>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium">{value}</dd>
-    </div>
+    <h4 className="flex items-center gap-2 text-sm font-medium">
+      <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      {children}
+    </h4>
   )
 }
 
@@ -66,19 +62,13 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
   }
 
   if (summaryQuery.isLoading) {
-    return (
-      <p className="text-sm text-muted-foreground" role="status">
-        {t('summary.loading')}
-      </p>
-    )
+    return <BusyState label={t('summary.loading')} />
   }
 
   if (summaryQuery.isError || !summaryQuery.data) {
     return (
       <div className="flex flex-col items-start gap-3">
-        <p className="text-sm text-destructive" role="alert">
-          {t('summary.loadError')}
-        </p>
+        <StepAlert>{t('summary.loadError')}</StepAlert>
         <Button type="button" variant="outline" size="sm" onClick={() => void summaryQuery.refetch()}>
           {t('config.select.retry')}
         </Button>
@@ -91,27 +81,43 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-base font-semibold">{t('summary.title')}</h3>
+      <StepSectionHeader icon={FileCheck2} title={t('summary.title')} description={run.original_filename} />
 
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-          <SummaryStat label={t('summary.totals.total')} value={summary.total_rows} />
-          <SummaryStat label={t('summary.totals.valid')} value={summary.valid_rows} />
-          <SummaryStat label={t('summary.totals.warning')} value={summary.warning_rows} />
-          <SummaryStat label={t('summary.totals.error')} value={summary.error_rows} />
-          <SummaryStat label={t('summary.totals.duplicate')} value={summary.duplicate_rows} />
-          <SummaryStat label={t('summary.totals.modified')} value={summary.modified_rows} />
-        </dl>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <StatTile label={t('summary.totals.total')} value={summary.total_rows} />
+          <StatTile
+            label={t('summary.totals.valid')}
+            value={summary.valid_rows}
+            tone={summary.valid_rows > 0 ? 'success' : 'default'}
+          />
+          <StatTile
+            label={t('summary.totals.warning')}
+            value={summary.warning_rows}
+            tone={summary.warning_rows > 0 ? 'warning' : 'default'}
+          />
+          <StatTile
+            label={t('summary.totals.error')}
+            value={summary.error_rows}
+            tone={summary.error_rows > 0 ? 'destructive' : 'default'}
+          />
+          <StatTile
+            label={t('summary.totals.duplicate')}
+            value={summary.duplicate_rows}
+            tone={summary.duplicate_rows > 0 ? 'info' : 'default'}
+          />
+          <StatTile label={t('summary.totals.modified')} value={summary.modified_rows} />
+        </div>
 
         <Separator />
 
         <div>
-          <h4 className="text-sm font-medium">{t('summary.configTitle')}</h4>
+          <SummarySectionTitle icon={Settings2}>{t('summary.configTitle')}</SummarySectionTitle>
           {configEntries.length > 0 ? (
             <dl className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
               {configEntries.map((entry) => (
-                <div key={entry.label}>
-                  <dt className="text-muted-foreground">{entry.label}</dt>
-                  <dd className="font-medium">{entry.value}</dd>
+                <div key={entry.label} className="rounded-lg border bg-muted/30 px-3 py-2">
+                  <dt className="text-xs font-medium text-muted-foreground">{entry.label}</dt>
+                  <dd className="mt-0.5 font-medium">{entry.value}</dd>
                 </div>
               ))}
             </dl>
@@ -123,13 +129,15 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
         <Separator />
 
         <div>
-          <h4 className="text-sm font-medium">{t('summary.mappedFieldsTitle')}</h4>
-          <ul className="mt-2 flex flex-col gap-1 text-sm">
+          <SummarySectionTitle icon={Columns3}>{t('summary.mappedFieldsTitle')}</SummarySectionTitle>
+          <ul className="mt-2 divide-y overflow-hidden rounded-lg border text-sm">
             {summary.mapped_fields.map((entry) => (
-              <li key={entry.column} className="flex items-center gap-2">
-                <span className="text-muted-foreground">{entry.column}</span>
-                <span aria-hidden="true">→</span>
-                <span className="font-medium">{resolveFieldLabel(run, entry.field, tLabel)}</span>
+              <li key={entry.column} className="flex items-center gap-2 px-3 py-2">
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">{entry.column}</span>
+                <MoveRight className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {resolveFieldLabel(run, entry.field, tLabel)}
+                </span>
               </li>
             ))}
           </ul>
@@ -137,7 +145,7 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
 
         {summary.extra_fields.length > 0 ? (
           <div>
-            <h4 className="text-sm font-medium">{t('summary.extraFieldsTitle')}</h4>
+            <SummarySectionTitle icon={PackagePlus}>{t('summary.extraFieldsTitle')}</SummarySectionTitle>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {summary.extra_fields.map((field) => (
                 <Badge key={field} variant="secondary">
@@ -149,12 +157,15 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
         ) : null}
 
         {summary.warnings.length > 0 ? (
-          <div className="flex flex-col gap-1.5" role="status">
-            <h4 className="flex items-center gap-2 text-sm font-medium text-amber-600 dark:text-amber-500">
+          <div
+            className="flex flex-col gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5"
+            role="status"
+          >
+            <h4 className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
               <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
               {t('summary.warningsTitle')}
             </h4>
-            <ul className="list-disc pl-5 text-sm text-muted-foreground">
+            <ul className="list-disc pl-6 text-sm text-muted-foreground">
               {summary.warnings.map((warning, index) => (
                 <li key={`${index}-${warning}`}>{warning}</li>
               ))}
@@ -162,14 +173,13 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
           </div>
         ) : null}
 
-        {confirmError ? (
-          <p className="text-sm text-destructive" role="alert">
-            {confirmError}
-          </p>
-        ) : null}
+        {confirmError ? <StepAlert>{confirmError}</StepAlert> : null}
+
+        <Separator />
 
         <div className="flex justify-end">
           <Button type="button" onClick={onConfirm} disabled={isConfirming}>
+            {isConfirming ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
             {isConfirming ? t('summary.confirming') : t('summary.confirm')}
           </Button>
         </div>
