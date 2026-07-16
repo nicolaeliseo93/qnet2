@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Import;
 
 use App\Enums\ImportDedupMode;
+use App\Enums\ImportRowStatus;
 use App\Enums\ImportStatus;
 use App\Http\Controllers\Abstract\BaseApiController;
 use App\Http\Requests\Import\ConfigureImportRequest;
+use App\Http\Requests\Import\ResolveImportRowRequest;
 use App\Http\Requests\Import\UpdateImportRowRequest;
 use App\Http\Requests\Import\UploadImportRequest;
 use App\Http\Resources\ImportRunResource;
@@ -242,8 +244,9 @@ class ImportController extends BaseApiController
 
     /**
      * PATCH /api/imports/{domain}/{importRun}/rows/{row} — inline-edit one
-     * staged row (spec 0033, AC-017), valid only from `reviewing`. Re-runs
-     * the SAME StagedRowBuilder pipeline (recognizers + validateRow +
+     * staged row (spec 0033, AC-017; extended by spec 0038 with the optional
+     * `geo` pin), valid only from `reviewing`. Re-runs the SAME
+     * StagedRowBuilder pipeline (recognizers + validateRow +
      * resolveDuplicate) the original staging used, via StagedRowReviser, then
      * recomputes the run's counters from the database.
      */
@@ -259,14 +262,45 @@ class ImportController extends BaseApiController
             $this->authorizeImport($definition, $actor);
             $this->assertReviewing($importRun);
 
-            $values = $request->safe()->only(['values'])['values'];
+            $data = $request->safe()->only(['values', 'geo']);
 
-            $updated = $this->rowReviser->revise($definition, $actor, $importRun, $row, $values);
+            $updated = $this->rowReviser->revise($definition, $actor, $importRun, $row, $data['values'] ?? null, $data['geo'] ?? null);
             $this->service->recomputeCounts($importRun->fresh());
 
             return $this->ok([
                 'row' => new ImportRunRowResource($updated),
                 'counts' => $this->summaryBuilder->counts($importRun->fresh()),
+            ]);
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__, ['importRun' => $importRun->id, 'row' => $row->id]);
+        }
+    }
+
+    /**
+     * PATCH /api/imports/{domain}/{importRun}/rows/{row}/resolution — the
+     * operator's per-row duplicate decision (spec 0036, AC-003): skip/create/
+     * update, valid only for a `duplicate` row on a `reviewing` run. Read
+     * back by ProcessStagedImportJob at commit time; no client-side write
+     * logic here beyond validation.
+     */
+    public function updateRowResolution(ResolveImportRowRequest $request, string $domain, ImportRun $importRun, ImportRunRow $row): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->assertOwnedRun($importRun, $actor, $domain);
+            $this->assertRowBelongsToRun($row, $importRun);
+            $this->authorize('update', $importRun);
+            $this->authorizeImport($definition, $actor);
+            $this->assertReviewing($importRun);
+            $this->assertRowIsDuplicate($row);
+
+            $row->update(['resolution' => $request->validated('resolution')]);
+
+            return $this->ok([
+                'row' => new ImportRunRowResource($row->fresh()),
+                'counts' => $this->summaryBuilder->counts($importRun),
             ]);
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['importRun' => $importRun->id, 'row' => $row->id]);
@@ -363,6 +397,16 @@ class ImportController extends BaseApiController
     {
         if ($importRun->status !== ImportStatus::Reviewing) {
             abort(422, 'The import is not in review.');
+        }
+    }
+
+    /**
+     * @throws HttpResponseException via abort() when the row is not `duplicate`.
+     */
+    private function assertRowIsDuplicate(ImportRunRow $row): void
+    {
+        if ($row->status !== ImportRowStatus::Duplicate) {
+            abort(422, 'This row is not a duplicate.');
         }
     }
 

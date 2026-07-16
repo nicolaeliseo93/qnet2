@@ -5,6 +5,7 @@ import { themeQuartz, type GetRowIdParams, type GridOptions } from 'ag-grid-comm
 import { AG_GRID_LOCALE_EN, AG_GRID_LOCALE_IT } from '@ag-grid-community/locale'
 import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
 import { buildReviewColumnDefs } from '@/features/imports/wizard/review-columns'
+import type { ReviewGeoGridContext } from '@/features/imports/wizard/review-geo-editor'
 import { useReviewRows } from '@/features/imports/wizard/use-review-rows'
 import type { ImportRunDetail, ImportRunRowCounts, ImportRunRowItem } from '@/features/imports/wizard/types'
 
@@ -73,15 +74,24 @@ export function ReviewGrid({ domain, run, onRowUpdated = noopRowUpdated, readOnl
     [i18n.language],
   )
 
-  const columnDefs = useMemo(() => buildReviewColumnDefs(run, t, readOnly), [run, t, readOnly])
-
-  const { datasource, handleCellValueChanged } = useReviewRows({
+  const { datasource, handleCellValueChanged, handleResolutionChange, handleApplyGeo } = useReviewRows({
     domain,
     importRunId: run.id,
     onRowUpdated,
   })
 
+  const columnDefs = useMemo(
+    () => buildReviewColumnDefs(run, t, readOnly, handleResolutionChange),
+    [run, t, readOnly, handleResolutionChange],
+  )
+
   const getRowId = useCallback((params: GetRowIdParams<ImportRunRowItem>) => String(params.data.id), [])
+
+  // The geo popup's apply callback (spec 0038) is shared by all 4 geo
+  // columns and never column-specific, so it travels via `gridOptions.context`
+  // instead of `cellRendererParams` — every `ReviewGeoCell` reads it off
+  // `params.context`, with no per-colDef prop drilling.
+  const gridContext = useMemo<ReviewGeoGridContext>(() => ({ onApplyGeo: handleApplyGeo }), [handleApplyGeo])
 
   const gridOptions = useMemo<GridOptions<ImportRunRowItem>>(
     () => ({
@@ -94,11 +104,12 @@ export function ReviewGrid({ domain, run, onRowUpdated = noopRowUpdated, readOnl
       paginationPageSizeSelector: [REVIEW_BLOCK_SIZE, REVIEW_BLOCK_SIZE * 2],
       defaultColDef: { resizable: true, minWidth: 120 },
       getRowId,
+      context: gridContext,
       singleClickEdit: !readOnly,
       stopEditingWhenCellsLoseFocus: !readOnly,
       onCellValueChanged: readOnly ? undefined : handleCellValueChanged,
     }),
-    [datasource, getRowId, handleCellValueChanged, readOnly],
+    [datasource, getRowId, gridContext, handleCellValueChanged, readOnly],
   )
 
   return (

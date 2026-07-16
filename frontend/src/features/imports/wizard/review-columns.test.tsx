@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import type { ICellRendererParams } from 'ag-grid-community'
 import i18n from '@/i18n'
@@ -9,6 +9,8 @@ import {
   buildReviewColumnDefs,
   reviewValueKeyOf,
 } from '@/features/imports/wizard/review-columns'
+import { ReviewGeoCell } from '@/features/imports/wizard/review-geo-editor'
+import { ReviewResolutionCell } from '@/features/imports/wizard/review-resolution-cell'
 import type { ImportRunDetail, ImportRunRowItem } from '@/features/imports/wizard/types'
 
 /**
@@ -75,9 +77,17 @@ describe('buildReviewColumnDefs', () => {
     const colDefs = buildReviewColumnDefs(baseRun(), i18n.t.bind(i18n))
     const colIds = colDefs.map((col) => col.colId)
 
-    expect(colIds).toEqual(['row_number', 'status', 'field:email', 'extra:Notes column', 'messages'])
+    expect(colIds).toEqual([
+      'row_number',
+      'status',
+      'resolution',
+      'field:email',
+      'extra:Notes column',
+      'messages',
+    ])
     expect(colDefs.find((col) => col.colId === 'row_number')?.editable).toBe(false)
     expect(colDefs.find((col) => col.colId === 'status')?.editable).toBe(false)
+    expect(colDefs.find((col) => col.colId === 'resolution')?.editable).toBe(false)
     expect(colDefs.find((col) => col.colId === 'field:email')?.editable).toBe(true)
     expect(colDefs.find((col) => col.colId === 'extra:Notes column')?.editable).toBe(true)
     expect(colDefs.find((col) => col.colId === 'messages')?.editable).toBe(false)
@@ -118,7 +128,14 @@ describe('buildReviewColumnDefs', () => {
     const colDefs = buildReviewColumnDefs(run, i18n.t.bind(i18n))
     const colIds = colDefs.map((col) => col.colId)
 
-    expect(colIds).toEqual(['row_number', 'status', 'field:first_name', 'field:last_name', 'messages'])
+    expect(colIds).toEqual([
+      'row_number',
+      'status',
+      'resolution',
+      'field:first_name',
+      'field:last_name',
+      'messages',
+    ])
     expect(colIds).not.toContain('field:full_name')
   })
 
@@ -128,8 +145,63 @@ describe('buildReviewColumnDefs', () => {
 
     for (const run of [withoutReviewFields, withEmptyReviewFields]) {
       const colIds = buildReviewColumnDefs(run, i18n.t.bind(i18n)).map((col) => col.colId)
-      expect(colIds).toEqual(['row_number', 'status', 'field:email', 'extra:Notes column', 'messages'])
+      expect(colIds).toEqual([
+        'row_number',
+        'status',
+        'resolution',
+        'field:email',
+        'extra:Notes column',
+        'messages',
+      ])
     }
+  })
+
+  it('wires the resolution column to ReviewResolutionCell, disabling onResolve in readOnly mode (spec 0036 AC-008)', () => {
+    const onResolve = vi.fn()
+
+    const resolutionCol = buildReviewColumnDefs(baseRun(), i18n.t.bind(i18n), false, onResolve).find(
+      (col) => col.colId === 'resolution',
+    )
+    expect(resolutionCol?.cellRenderer).toBe(ReviewResolutionCell)
+    expect(resolutionCol?.cellRendererParams).toEqual({ onResolve, readOnly: false })
+
+    const readOnlyResolutionCol = buildReviewColumnDefs(baseRun(), i18n.t.bind(i18n), true, onResolve).find(
+      (col) => col.colId === 'resolution',
+    )
+    expect(readOnlyResolutionCol?.cellRendererParams).toEqual({ onResolve: undefined, readOnly: true })
+  })
+
+  it('wires the 4 geo review fields to ReviewGeoCell instead of the text editor (spec 0038 AC-010)', () => {
+    const run = baseRun({
+      fields: [{ id: 'country', label: 'Country', required: false, group: 'geo', type: 'string' }],
+      review_fields: [
+        { id: 'country', label: 'Country' },
+        { id: 'region', label: 'Region' },
+        { id: 'province', label: 'Province' },
+        { id: 'city', label: 'City' },
+      ],
+    })
+    const colDefs = buildReviewColumnDefs(run, i18n.t.bind(i18n))
+
+    for (const geoField of ['country', 'region', 'province', 'city']) {
+      const col = colDefs.find((c) => c.colId === `field:${geoField}`)
+      expect(col?.editable).toBe(false)
+      expect(col?.cellEditor).toBeUndefined()
+      expect(col?.cellRenderer).toBe(ReviewGeoCell)
+      expect(col?.cellRendererParams).toEqual({ readOnly: false })
+    }
+  })
+
+  it('keeps the geo columns non-editable and disables their popup in readOnly mode (spec 0038 AC-013)', () => {
+    const run = baseRun({
+      fields: [{ id: 'country', label: 'Country', required: false, group: 'geo', type: 'string' }],
+      review_fields: [{ id: 'country', label: 'Country' }],
+    })
+    const colDefs = buildReviewColumnDefs(run, i18n.t.bind(i18n), true)
+    const col = colDefs.find((c) => c.colId === 'field:country')
+
+    expect(col?.editable).toBe(false)
+    expect(col?.cellRendererParams).toEqual({ readOnly: true })
   })
 
   it("the mapped field column's valueGetter/valueSetter read and write `values` by field id", () => {

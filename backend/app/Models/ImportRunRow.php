@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ImportRowResolution;
 use App\Enums\ImportRowStatus;
 use App\Models\Abstracts\BaseModel;
 use Database\Factories\ImportRunRowFactory;
@@ -31,6 +32,8 @@ class ImportRunRow extends BaseModel
         'status',
         'messages',
         'duplicate_of_id',
+        'duplicate_meta',
+        'resolution',
         'is_edited',
     ];
 
@@ -44,6 +47,8 @@ class ImportRunRow extends BaseModel
         'status' => ImportRowStatus::class,
         'messages' => 'array',
         'duplicate_of_id' => 'int',
+        'duplicate_meta' => 'array',
+        'resolution' => ImportRowResolution::class,
         'is_edited' => 'bool',
     ];
 

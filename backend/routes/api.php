@@ -158,6 +158,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('imports/{domain}/{importRun}/errors', [ImportController::class, 'errors']);
     Route::post('imports/{domain}/{importRun}/rows', [ImportController::class, 'rows']);
     Route::patch('imports/{domain}/{importRun}/rows/{row}', [ImportController::class, 'updateRow'])->scopeBindings();
+    Route::patch('imports/{domain}/{importRun}/rows/{row}/resolution', [ImportController::class, 'updateRowResolution'])->scopeBindings();
 
     Route::post('imports/{domain}', [ImportController::class, 'upload']);
     Route::put('imports/{domain}/{importRun}/configure', [ImportController::class, 'configure']);

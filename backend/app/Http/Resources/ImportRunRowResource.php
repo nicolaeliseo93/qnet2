@@ -15,6 +15,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * expect — field id for mapped, original column name for extra), so the
  * frontend never has to know which store a given key came from. Never the
  * raw `import_run_id`/timestamps — those are server-only bookkeeping.
+ * `duplicate_meta`/`resolution` (spec 0036, additive) are null on any row
+ * that never matched an existing record.
  */
 class ImportRunRowResource extends JsonResource
 {
@@ -32,6 +34,8 @@ class ImportRunRowResource extends JsonResource
             'status' => $row->status->value,
             'is_edited' => $row->is_edited,
             'duplicate_of_id' => $row->duplicate_of_id,
+            'duplicate_meta' => $row->duplicate_meta,
+            'resolution' => $row->resolution?->value,
             'values' => [...($row->mapped_values ?? []), ...($row->extra_values ?? [])],
             'messages' => $row->messages ?? [],
         ];

@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Enums\ImportDedupMode;
+use App\Enums\ImportRowResolution;
 use App\Imports\Leads\LeadDuplicateMatcher;
 use App\Imports\Leads\LeadImportFieldCatalog;
 use App\Imports\Leads\LeadRowPersister;
@@ -162,7 +163,31 @@ class LeadsImportDefinition extends AbstractImportDefinition
      */
     public function resolveDuplicate(array $mapped): ?int
     {
-        return $this->duplicateMatcher->match($mapped);
+        return $this->duplicateMatcher->match($mapped)?->referentId;
+    }
+
+    /**
+     * @param  array<string, mixed>  $mapped
+     * @param  array<string, mixed>  $globalConfig
+     * @return array{id: ?int, meta: ?array{referent_id: int, referent_name: string, lead_id: ?int, matched_on: array<int, string>}}
+     */
+    public function resolveDuplicateMatch(array $mapped, array $globalConfig): array
+    {
+        $match = $this->duplicateMatcher->match($mapped);
+
+        if ($match === null) {
+            return ['id' => null, 'meta' => null];
+        }
+
+        return [
+            'id' => $match->referentId,
+            'meta' => [
+                'referent_id' => $match->referentId,
+                'referent_name' => $match->referentName,
+                'lead_id' => $this->duplicateMatcher->existingLeadId($match->referentId, $globalConfig),
+                'matched_on' => $match->matchedOn,
+            ],
+        ];
     }
 
     /**
@@ -172,22 +197,31 @@ class LeadsImportDefinition extends AbstractImportDefinition
     {
         $mode = ImportDedupMode::from($dedupStrategy);
 
-        // Step 1: `ignore` never persists; a `manual` row that IS a duplicate
-        // stays parked for the user to decide — StageImportJob already marks
-        // both `skipped`/`duplicate` and keeps them out of ProcessImportJob's
-        // commit loop, this is a defensive no-op if reached anyway.
+        // Step 1: `ignore` never persists.
         if ($mode === ImportDedupMode::Ignore) {
             return;
         }
 
         $mapped = array_merge($row->mapped_values ?? [], $row->resolved ?? []);
-        $duplicateReferentId = $row->duplicate_of_id ?? $this->duplicateMatcher->match($mapped);
+        $duplicateReferentId = $row->duplicate_of_id ?? $this->duplicateMatcher->match($mapped)?->referentId;
+        $shouldUpdateReferent = $mode === ImportDedupMode::UpdateExisting;
 
+        // Step 2: a `manual` row parked on a match is governed by the
+        // operator's per-row `resolution` (spec 0036), not the run's global
+        // strategy: no resolution (or `skip`) never writes — the previous
+        // defensive no-op, now explicit; `create` forces a brand-new
+        // Referent+Lead, ignoring the match; `update` targets the matched
+        // Referent's own Lead.
         if ($mode === ImportDedupMode::Manual && $duplicateReferentId !== null) {
-            return;
+            if ($row->resolution !== ImportRowResolution::Create && $row->resolution !== ImportRowResolution::Update) {
+                return;
+            }
+
+            $shouldUpdateReferent = $row->resolution === ImportRowResolution::Update;
+            $duplicateReferentId = $shouldUpdateReferent ? $duplicateReferentId : null;
         }
 
-        // Step 2: update the matched Referent, or create a new one
+        // Step 3: update the matched Referent, or create a new one
         // (create_new always inserts; update_existing with no match falls
         // back to create_new, per spec), then attach the Lead to the
         // configured campaign.
@@ -196,7 +230,7 @@ class LeadsImportDefinition extends AbstractImportDefinition
             $globalConfig,
             $mapped,
             $row->extra_values ?? [],
-            $mode === ImportDedupMode::UpdateExisting,
+            $shouldUpdateReferent,
             $duplicateReferentId,
         );
     }

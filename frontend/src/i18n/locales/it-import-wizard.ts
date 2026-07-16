@@ -118,6 +118,7 @@ export const importWizard = {
     columns: {
       rowNumber: '#',
       status: 'Stato',
+      resolution: 'Duplicato',
       messages: 'Messaggi',
       extraSuffix: 'extra',
     },
@@ -136,11 +137,35 @@ export const importWizard = {
       duplicate: 'Duplicati',
       modified: 'Modificate',
     },
+    resolution: {
+      label: 'Risoluzione',
+      placeholder: 'Scegli…',
+      leadInCampaign: 'Questo referente ha già un lead in questa campagna.',
+      options: {
+        skip: 'Salta',
+        create: 'Crea nuovo',
+        update: 'Aggiorna esistente',
+      },
+    },
+    geo: {
+      editLabel: 'Modifica nazione/regione/provincia/città',
+      title: 'Localizzazione',
+      description: 'Scegli nazione, regione, provincia e città per questa riga.',
+      apply: 'Applica',
+      cancel: 'Annulla',
+    },
   },
   summary: {
     title: 'Riepilogo',
     placeholder: 'Il riepilogo dell’import non è ancora disponibile.',
     statusLabel: 'Stato: {{status}}',
+    duplicateResolutionsTitle: 'Risoluzione duplicati',
+    duplicateResolutions: {
+      skip: 'Saltati',
+      create: 'Creati nuovi',
+      update: 'Aggiornati esistenti',
+      unresolved: 'Non risolti',
+    },
   },
   status: {
     analyzing: 'Analisi in corso',

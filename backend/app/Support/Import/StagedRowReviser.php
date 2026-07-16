@@ -3,6 +3,7 @@
 namespace App\Support\Import;
 
 use App\Enums\ImportDedupMode;
+use App\Enums\ImportRowStatus;
 use App\Imports\ImportDefinition;
 use App\Imports\Staging\StagedRowBuilder;
 use App\Models\ImportRun;
@@ -11,10 +12,11 @@ use App\Models\User;
 
 /**
  * Re-validates ONE staged row after an inline edit (PATCH .../rows/{row},
- * spec 0033 AC-017; extended by delta D-2026-07-15-placeholder-review-fields)
- * by re-running it through the SAME StagedRowBuilder pipeline (recognizers ->
- * placeholder -> validateRow -> resolveDuplicate) StageImportJob used to
- * stage it originally — never a parallel/duplicated validation path.
+ * spec 0033 AC-017; extended by delta D-2026-07-15-placeholder-review-fields
+ * and by spec 0038's optional `geo` pin) by re-running it through the SAME
+ * StagedRowBuilder pipeline (recognizers -> placeholder -> validateRow ->
+ * resolveDuplicate) StageImportJob used to stage it originally — never a
+ * parallel/duplicated validation path.
  *
  * Unlike the original B5 implementation, this does NOT rebuild raw file
  * values by inverting column_mapping: the edited `values` are field-id-keyed
@@ -25,21 +27,35 @@ use App\Models\User;
  * `extra_values` and replays StagedRowBuilder::resolve() from there, so
  * recognizers skip fields the edit (or the original staging) already
  * populated and the placeholder only re-applies to a field still blank.
+ *
+ * `geo` (spec 0038): when present, GeoPinResolver turns the operator's 4
+ * authoritative ids into canonical name + id mapped_values BEFORE the
+ * pipeline runs, and the pipeline is told to skip GeoRecognizer — the pin IS
+ * the resolution, not a hint to re-fuzzy-match.
  */
 final class StagedRowReviser
 {
+    public function __construct(private readonly GeoPinResolver $geoPinResolver) {}
+
     /**
-     * @param  array<string, string>  $editedValues  field id (or extra column key) => new value
+     * @param  array<string, string>|null  $editedValues  field id (or extra column key) => new value
+     * @param  array{country_id: ?int, state_id: ?int, province_id: ?int, city_id: ?int}|null  $geo
      */
-    public function revise(ImportDefinition $definition, User $actor, ImportRun $run, ImportRunRow $row, array $editedValues): ImportRunRow
+    public function revise(ImportDefinition $definition, User $actor, ImportRun $run, ImportRunRow $row, ?array $editedValues, ?array $geo = null): ImportRunRow
     {
         $columnMapping = $run->column_mapping ?? [];
         $dedupMode = ImportDedupMode::from($run->dedup_strategy ?? ImportDedupMode::CreateOnly->value);
 
-        [$mappedValues, $extraValues] = $this->mergeEditedValues($row, $columnMapping, $editedValues);
+        [$mappedValues, $extraValues] = $editedValues === null
+            ? [$row->mapped_values ?? [], $row->extra_values]
+            : $this->mergeEditedValues($row, $columnMapping, $editedValues);
 
-        $builder = new StagedRowBuilder($definition, $actor, $columnMapping, $dedupMode);
-        $outcome = $builder->resolve($row->row_number, $mappedValues, $extraValues);
+        if ($geo !== null) {
+            $mappedValues = [...$mappedValues, ...$this->geoPinResolver->pin($geo)];
+        }
+
+        $builder = new StagedRowBuilder($definition, $actor, $columnMapping, $dedupMode, $run->global_config ?? []);
+        $outcome = $builder->resolve($row->row_number, $mappedValues, $extraValues, skipGeoRecognizer: $geo !== null);
 
         $row->update([
             'mapped_values' => $outcome->mappedValues,
@@ -48,6 +64,11 @@ final class StagedRowReviser
             'status' => $outcome->status,
             'messages' => $outcome->messages,
             'duplicate_of_id' => $outcome->duplicateOfId,
+            'duplicate_meta' => $outcome->duplicateMeta,
+            // spec 0036 AC-006: a match that disappears on edit (status no
+            // longer `duplicate`) clears the operator's prior resolution too
+            // — it no longer refers to a real match.
+            'resolution' => $outcome->status === ImportRowStatus::Duplicate ? $row->resolution : null,
             'is_edited' => true,
         ]);
 

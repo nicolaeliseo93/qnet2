@@ -196,6 +196,21 @@ interface ImportDefinition
     public function resolveDuplicate(array $mapped): ?int;
 
     /**
+     * Resolve BOTH resolveDuplicate()'s legacy id AND, for a definition that
+     * supports richer per-row duplicate reporting (spec 0036: leads' Referent
+     * match with matched channels + a same-campaign lead), the review-facing
+     * meta a `duplicate` row's `import_run_rows.duplicate_meta` persists.
+     * Defaults (in AbstractImportDefinition) to wrapping resolveDuplicate()
+     * with a null meta: every definition that has not adopted spec 0036
+     * behaves identically, with no extra resolution work.
+     *
+     * @param  array<string, mixed>  $mapped
+     * @param  array<string, mixed>  $globalConfig
+     * @return array{id: ?int, meta: ?array{referent_id: int, referent_name: string, lead_id: ?int, matched_on: array<int, string>}}
+     */
+    public function resolveDuplicateMatch(array $mapped, array $globalConfig): array;
+
+    /**
      * Field ids without which the domain record cannot be created at all
      * (e.g. for leads: `first_name`/`last_name`, since a Referent's identity
      * card needs one). Any of these still blank after recognizers() ran is

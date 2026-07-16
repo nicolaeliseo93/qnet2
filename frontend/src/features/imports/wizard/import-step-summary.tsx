@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Columns3, FileCheck2, Loader2, MoveRight, PackagePlus, Settings2 } from 'lucide-react'
+import { AlertTriangle, Columns3, FileCheck2, Loader2, MoveRight, PackagePlus, Settings2, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -125,6 +125,36 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
             <p className="mt-2 text-sm text-muted-foreground">{t('summary.configEmpty')}</p>
           )}
         </div>
+
+        {summary.duplicate_resolutions ? (
+          <>
+            <Separator />
+            <div>
+              <SummarySectionTitle icon={Users}>{t('summary.duplicateResolutionsTitle')}</SummarySectionTitle>
+              <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatTile
+                  label={t('summary.duplicateResolutions.skip')}
+                  value={summary.duplicate_resolutions.skip}
+                />
+                <StatTile
+                  label={t('summary.duplicateResolutions.create')}
+                  value={summary.duplicate_resolutions.create}
+                  tone={summary.duplicate_resolutions.create > 0 ? 'success' : 'default'}
+                />
+                <StatTile
+                  label={t('summary.duplicateResolutions.update')}
+                  value={summary.duplicate_resolutions.update}
+                  tone={summary.duplicate_resolutions.update > 0 ? 'info' : 'default'}
+                />
+                <StatTile
+                  label={t('summary.duplicateResolutions.unresolved')}
+                  value={summary.duplicate_resolutions.unresolved}
+                  tone={summary.duplicate_resolutions.unresolved > 0 ? 'warning' : 'default'}
+                />
+              </div>
+            </div>
+          </>
+        ) : null}
 
         <Separator />
 

@@ -1,8 +1,10 @@
 import { apiClient } from '@/api/client'
 import type { ApiResponse } from '@/api/types'
+import type { GeoValue } from '@/features/geo/geo-select'
 import type {
   ConfigureImportPayload,
   ImportMappingTemplate,
+  ImportRowResolution,
   ImportRunDetail,
   ImportRunRowsPage,
   ImportRunRowsQuery,
@@ -10,6 +12,16 @@ import type {
   ImportRunSummary,
   ImportRunSummaryReport,
 } from '@/features/imports/wizard/types'
+
+/**
+ * Body of `PATCH .../rows/{row}` (spec 0038): at least one of the two blocks
+ * is present. `geo`, when sent, is authoritative for the 4 geo levels — the
+ * backend skips its own fuzzy re-matching for them.
+ */
+export interface UpdateImportRunRowPayload {
+  values?: Record<string, string>
+  geo?: GeoValue
+}
 
 /**
  * Uploads a file to start a wizard import run (`POST /imports/{domain}`).
@@ -87,17 +99,37 @@ export async function getImportRunRows(
 
 /**
  * Inline edit of a single staged row (`PATCH .../rows/{row}`), re-validated
- * server-side. Owned by F2 (review step).
+ * server-side. Owned by F2 (review step). `payload.geo` (spec 0038) replaces
+ * the 4 geo levels in one shot instead of a text `values` edit.
  */
 export async function updateImportRunRow(
   domain: string,
   importRunId: number,
   rowId: number,
-  values: Record<string, string>,
+  payload: UpdateImportRunRowPayload,
 ): Promise<ImportRunRowUpdateResult> {
   const { data } = await apiClient.patch<ApiResponse<ImportRunRowUpdateResult>>(
     `/imports/${domain}/${importRunId}/rows/${rowId}`,
-    { values },
+    payload,
+  )
+  return data.data
+}
+
+/**
+ * Resolves a `duplicate` staged row (`PATCH .../rows/{row}/resolution`,
+ * spec 0036): skip it, create a new referent+lead anyway, or update the
+ * matched referent's lead. Valid only for a `duplicate` row of a `reviewing`
+ * run — same envelope/response shape as `updateImportRunRow`.
+ */
+export async function resolveImportRunRow(
+  domain: string,
+  importRunId: number,
+  rowId: number,
+  resolution: ImportRowResolution,
+): Promise<ImportRunRowUpdateResult> {
+  const { data } = await apiClient.patch<ApiResponse<ImportRunRowUpdateResult>>(
+    `/imports/${domain}/${importRunId}/rows/${rowId}/resolution`,
+    { resolution },
   )
   return data.data
 }

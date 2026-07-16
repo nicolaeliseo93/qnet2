@@ -131,6 +131,22 @@ export interface ConfigureImportPayload {
 /** Status of a single staged row, mirrored from `App\Enums\ImportRowStatus`. */
 export type ImportRowStatus = 'valid' | 'warning' | 'error' | 'duplicate' | 'skipped'
 
+/** Operator's chosen handling of a `duplicate` row (spec 0036). */
+export type ImportRowResolution = 'skip' | 'create' | 'update'
+
+/**
+ * Which existing referent (and, if any, lead) a `duplicate` row matched
+ * against (spec 0036 `data_contract`). Written server-side during
+ * staging/revision; `lead_id` is set only when that referent already has a
+ * lead on the run's campaign.
+ */
+export interface ImportRowDuplicateMeta {
+  referent_id: number
+  referent_name: string
+  lead_id: number | null
+  matched_on: string[]
+}
+
 /** A single staged row, as returned by the review SSRM datasource / row update. */
 export interface ImportRunRowItem {
   id: number
@@ -138,7 +154,21 @@ export interface ImportRunRowItem {
   status: ImportRowStatus
   is_edited: boolean
   duplicate_of_id: number | null
-  values: Record<string, string>
+  /**
+   * Duplicate match detail (spec 0036), present only for `duplicate` rows.
+   * Optional/nullable for backward compatibility with fixtures/backends
+   * predating the delta.
+   */
+  duplicate_meta?: ImportRowDuplicateMeta | null
+  /** Chosen resolution for a `duplicate` row (spec 0036); optional/nullable, same compat rationale. */
+  resolution?: ImportRowResolution | null
+  /**
+   * Keyed by field id (mapped) or original column name (extra). Mostly
+   * strings, but the geo fields (spec 0038) also carry the resolved
+   * `country_id`/`state_id`/`province_id`/`city_id` as numbers (or `null`
+   * when unresolved) fused in by the backend alongside the canonical names.
+   */
+  values: Record<string, string | number | null>
   messages: string[]
 }
 
@@ -186,5 +216,16 @@ export interface ImportRunSummaryReport {
   global_config: Record<string, unknown>
   dedup_strategy: string | null
   warnings: string[]
+  /**
+   * Recap of how the run's `duplicate` rows were resolved (spec 0036),
+   * derived server-side from their current `resolution`. Optional for
+   * backward compatibility with fixtures/backends predating the delta.
+   */
+  duplicate_resolutions?: {
+    skip: number
+    create: number
+    update: number
+    unresolved: number
+  }
 }
 

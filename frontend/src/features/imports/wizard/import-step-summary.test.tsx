@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 // The base `importWizard` bundle (owned by F1) must register before this
@@ -67,6 +67,7 @@ function baseSummary(overrides: Partial<ImportRunSummaryReport> = {}): ImportRun
     global_config: { campaign_id: 9 },
     dedup_strategy: 'create_new',
     warnings: ['Row 4: ambiguous city match'],
+    duplicate_resolutions: undefined,
     ...overrides,
   }
 }
@@ -121,6 +122,34 @@ describe('ImportStepSummary', () => {
     expect(screen.getByText('Loyalty tier')).toBeInTheDocument()
 
     expect(getImportRunSummaryMock).toHaveBeenCalledWith('leads', 1)
+  })
+
+  it('does not render the duplicate resolutions recap when the summary omits it (spec 0036 AC-010)', async () => {
+    getImportRunSummaryMock.mockResolvedValue(baseSummary())
+
+    renderStep()
+
+    expect(await screen.findByText('Summary')).toBeInTheDocument()
+    expect(screen.queryByText('Duplicate resolutions')).not.toBeInTheDocument()
+  })
+
+  it('renders the duplicate resolutions recap when present in the summary (spec 0036 AC-010)', async () => {
+    getImportRunSummaryMock.mockResolvedValue(
+      baseSummary({ duplicate_resolutions: { skip: 2, create: 1, update: 3, unresolved: 4 } }),
+    )
+
+    renderStep()
+
+    const heading = await screen.findByText('Duplicate resolutions')
+    const section = heading.closest('div') as HTMLElement
+    expect(within(section).getByText('Skipped')).toBeInTheDocument()
+    expect(within(section).getByText('2')).toBeInTheDocument()
+    expect(within(section).getByText('Created new')).toBeInTheDocument()
+    expect(within(section).getByText('1')).toBeInTheDocument()
+    expect(within(section).getByText('Updated existing')).toBeInTheDocument()
+    expect(within(section).getByText('3')).toBeInTheDocument()
+    expect(within(section).getByText('Unresolved')).toBeInTheDocument()
+    expect(within(section).getByText('4')).toBeInTheDocument()
   })
 
   it('shows the empty-config message when no global value is set', async () => {

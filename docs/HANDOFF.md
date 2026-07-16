@@ -2,7 +2,79 @@
 
 > Injected at session start. Update at every green state.
 
-## IMPORT MAPPING TEMPLATES — spec 0035 (2026-07-16) — GREEN (verifier), NON COMMITTATO
+## LEAD IMPORT REVIEW GEO SELECT — spec 0038 (2026-07-16) — GREEN (verifier), NON COMMITTATO
+
+Step di revisione import lead: le 4 colonne geo (country/region/province/city) non sono piu' testo libero —
+click sulla cella apre un Dialog con la cascata `GeoSelect` precompilata dagli id gia' risolti in
+`row.values`; "Applica" = UN solo PATCH col nuovo blocco `geo` (id autoritativi, niente re-fuzzy).
+Spec: `docs/specs/0038-lead-import-review-geo-select.xml`. Implementata da subagent backend+frontend
+paralleli su write surface disgiunte, chiusa da verifier indipendente: AC-001..AC-015 tutti PASS.
+
+CONTRATTO (congelato, verificato incrociato senza mismatch):
+- `PATCH /imports/{domain}/{run}/rows/{row}` body: almeno uno tra `values` (invariato) e
+  `geo {country_id,state_id,province_id,city_id: int|null}` (exists + coerenza gerarchica -> 422 su
+  `geo.*`; provincia livello opzionale: city aggancia lo state, mirror del GeoSelect FE).
+- Con `geo`: nomi canonici riscritti in mapped_values ("" per livello null) + id pinnati; il revise
+  ri-esegue la pipeline UNICA `StagedRowBuilder::resolve()` con `skipGeoRecognizer: true` (solo quel
+  recognizer saltato — placeholder/validateRow/resolveDuplicate girano); warning geo sparisce; response
+  `{row, counts}` invariata. GeoResolver/GeoFuzzyMatcher/ItalianGeoLocalizer/GeoSelect/use-geo INTATTI.
+
+BACKEND: UpdateImportRowRequest (`values`/`geo` required_without reciproco, allow-list chiavi geo,
+check gerarchia), NUOVO `Support/Import/GeoPinResolver.php` (id -> stesse chiavi mapped_values del
+GeoRecognizer, riusa le sue costanti), StagedRowReviser (`?array $geo`), StagedRowBuilder
+(`resolve(..., bool $skipGeoRecognizer = false)` additivo), ImportController::updateRow
+(`safe()->only(['values','geo'])`). NUOVO test `LeadsImportWizardUpdateRowGeoTest` (11 test).
+
+FRONTEND (features/imports/wizard/): NUOVO `review-geo-editor.tsx` (ReviewGeoCell: bottone -> Dialog
+shadcn + GeoSelect controllato, errore role="alert", `geoValueFromRow()` legge gli id da row.values);
+review-columns (GEO_FIELD_IDS + buildGeoColumn non-editable, readOnly via cellRendererParams);
+review-grid (callback `onApplyGeo` via gridOptions.context, NON cellRendererParams); use-review-rows
+(updateRowGeoMutation/handleApplyGeo: successo -> node.setData + onRowUpdated, fallimento -> riga
+intatta); api.ts (`UpdateImportRunRowPayload {values?, geo?}`, riusa `GeoValue` di geo-select);
+types.ts (`values: Record<string, string|number|null>`); i18n `review.geo.*` en+it.
+
+VERIFICATO (verifier, eseguito): Pest 349/349 `--filter=Import` + 106/106 `--filter=Geo` + 11/11 geo
+test nuovi + 7/7 regressione UpdateRow; Pint pulito sui file toccati; vitest 149/149 imports+geo,
+suite completa verde tranne il NOTO pre-esistente `table/cell-renderers.test.tsx` (leak i18n);
+ESLint pulito; `npx tsc -b --force` pulito. NIENTE COMMIT (in attesa di via libera).
+FOLLOW-UP possibile (fuori scope dichiarato): candidati fuzzy strutturati come suggerimenti nel select.
+NOTA: Pint full-repo fallisce su 3 file estranei pre-esistenti (PipelineStatus/CompanySite tests);
+`ImportController.php` a 478 righe (cresciuto per 0036) — valutare split quando si committa.
+
+## LEAD IMPORT DUPLICATE RESOLUTION — spec 0036 (2026-07-16) — GREEN (verifier), NON COMMITTATO
+
+Dedup avanzato import lead (spec `docs/specs/0036-lead-import-duplicate-resolution.xml`, APPROVATA):
+match anche per tax_code (normalizzato uppercase+trim SOLO al confronto), match lead-level (lead esistente
+su referent matchato + global_config.campaign_id -> duplicate_meta.lead_id), risoluzione PER-RIGA in
+review (skip/create/update) che override la strategia globale al commit, FIX BUG conteggio imported_rows
+(righe manual-duplicate non scritte non sono piu' contate: ProcessStagedImportJob::isWritten()).
+
+- BE: colonne additive `import_run_rows.duplicate_meta` json + `resolution` string (migrazione
+  2026_07_16_120000); DTO `LeadDuplicateMatch` (referentId/referentName/matchedOn cumulativo) + enum
+  `ImportRowResolution`; `resolveDuplicateMatch()` su ImportDefinition (default retro-compat);
+  StagedRowBuilder/StageImportJob/StagedRowReviser ricevono global_config e persistono duplicate_meta
+  (reviser azzera meta+resolution se il match sparisce); endpoint PATCH
+  imports/{domain}/{importRun}/rows/{row}/resolution (ResolveImportRowRequest, stessi gate di updateRow +
+  assertRowIsDuplicate, risposta {row,counts}); ImportRunRowResource additivo; summary additivo
+  `duplicate_resolutions` {skip,create,update,unresolved}; LeadsImportDefinition::persistRow onora la
+  resolution. Strategie legacy INVARIATE.
+- FE (features/imports/wizard/): `review-resolution-cell.tsx` (nome referente matchato, badge
+  lead-in-campaign su lead_id, select compatto skip/create/update, em dash su non-duplicate),
+  review-columns/review-grid/use-review-rows cablati (mutation con revert+toast su errore, invalida
+  summary), recap 4 StatTile in import-step-summary (condizionato), i18n review.resolution.* /
+  summary.duplicateResolutions.* en+it, api `resolveImportRunRow`.
+- VERIFICATO (verifier indipendente, eseguito): Pest 13/13 nuovi + 349/349 Import + full 2631/2633
+  (rossi ESTERNI pre-esistenti); Vitest imports 122/122, full FE 1452/1455 (3 ContactsCell esterni);
+  tsc -b --force pulito; Pint/ESLint puliti. NIENTE COMMIT.
+- ATTENZIONE COMMIT: nel working tree e' intrecciata la spec 0038 (GeoPinResolver, altra sessione) su
+  file CONDIVISI (StagedRowBuilder, StagedRowReviser, ImportController, UpdateImportRowRequest,
+  ImportRunRowResource, review-columns, review-grid, use-review-rows): un commit per-path di quei file
+  fotografa anche pezzi 0038. Logiche separate, suite verde, ma serve coordinamento sul commit.
+- Osservazione non bloccante: ImportController.php a 478 righe (soft limit superato gia' prima; hard 500
+  vicino) — candidato a split in un task dedicato.
+- PROSSIMO PASSO: build spec 0037 (avviso duplicati form referent) — APPROVATA.
+
+## IMPORT MAPPING TEMPLATES — spec 0035 (2026-07-16) — GREEN (verifier), COMMITTATO DALL'UTENTE
 
 Modelli di mappatura salvati per l'import lead (spec `docs/specs/0035-import-mapping-templates.xml`,
 APPROVATA): l'operatore salva la mappatura colonne+dedup_strategy come modello CONDIVISO al team; al

@@ -173,6 +173,20 @@ abstract class AbstractImportDefinition implements ImportDefinition
     }
 
     /**
+     * Retro-compatible default: wraps resolveDuplicate() with a null meta —
+     * only a definition that overrides this (spec 0036: leads) reports the
+     * richer review-facing match.
+     *
+     * @param  array<string, mixed>  $mapped
+     * @param  array<string, mixed>  $globalConfig
+     * @return array{id: ?int, meta: null}
+     */
+    public function resolveDuplicateMatch(array $mapped, array $globalConfig): array
+    {
+        return ['id' => $this->resolveDuplicate($mapped), 'meta' => null];
+    }
+
+    /**
      * Retro-compatible default: no field is required for creation — the 5
      * legacy domains keep rejecting a blank required column as a
      * validateRow() error, never through the placeholder mechanism.

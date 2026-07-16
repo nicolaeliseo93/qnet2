@@ -120,6 +120,7 @@ export const importWizard = {
     columns: {
       rowNumber: '#',
       status: 'Status',
+      resolution: 'Duplicate',
       messages: 'Messages',
       extraSuffix: 'extra',
     },
@@ -138,11 +139,35 @@ export const importWizard = {
       duplicate: 'Duplicates',
       modified: 'Modified',
     },
+    resolution: {
+      label: 'Resolution',
+      placeholder: 'Choose…',
+      leadInCampaign: 'This referent already has a lead in the selected campaign.',
+      options: {
+        skip: 'Skip',
+        create: 'Create new',
+        update: 'Update existing',
+      },
+    },
+    geo: {
+      editLabel: 'Edit country/region/province/city',
+      title: 'Location',
+      description: 'Pick the country, region, province and city for this row.',
+      apply: 'Apply',
+      cancel: 'Cancel',
+    },
   },
   summary: {
     title: 'Summary',
     placeholder: 'The import summary is not available yet.',
     statusLabel: 'Status: {{status}}',
+    duplicateResolutionsTitle: 'Duplicate resolutions',
+    duplicateResolutions: {
+      skip: 'Skipped',
+      create: 'Created new',
+      update: 'Updated existing',
+      unresolved: 'Unresolved',
+    },
   },
   status: {
     analyzing: 'Analyzing',

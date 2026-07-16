@@ -15,6 +15,7 @@ final readonly class StageOutcome
      * @param  array<string, string>|null  $extraValues
      * @param  array<string, mixed>|null  $resolved
      * @param  array<int, string>|null  $messages
+     * @param  array{referent_id: int, referent_name: string, lead_id: ?int, matched_on: array<int, string>}|null  $duplicateMeta
      */
     public function __construct(
         public array $mappedValues,
@@ -23,5 +24,6 @@ final readonly class StageOutcome
         public ImportRowStatus $status,
         public ?array $messages,
         public ?int $duplicateOfId,
+        public ?array $duplicateMeta = null,
     ) {}
 }

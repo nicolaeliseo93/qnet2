@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\ImportDedupMode;
+use App\Enums\ImportRowResolution;
 use App\Enums\ImportRowStatus;
 use App\Enums\ImportStatus;
 use App\Imports\ImportDefinition;
@@ -103,10 +104,28 @@ class ProcessStagedImportJob implements ShouldQueue
                 continue;
             }
 
-            $imported++;
+            if ($this->isWritten($row)) {
+                $imported++;
+            }
         }
 
         return [$imported, $failures];
+    }
+
+    /**
+     * A `duplicate` row only actually writes when its per-row `resolution`
+     * (spec 0036) is `create`/`update`; every other persistable row (valid,
+     * warning) is always written by persistRow(). An unresolved/`skip`
+     * duplicate never reaches the database, so it must never count as
+     * imported (spec 0036 AC-005 bug fix).
+     */
+    private function isWritten(ImportRunRow $row): bool
+    {
+        if ($row->status !== ImportRowStatus::Duplicate) {
+            return true;
+        }
+
+        return in_array($row->resolution, [ImportRowResolution::Create, ImportRowResolution::Update], true);
     }
 
     /**

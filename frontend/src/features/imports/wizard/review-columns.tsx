@@ -2,6 +2,7 @@
 import type {
   ColDef,
   ICellRendererParams,
+  IRowNode,
   ValueGetterParams,
   ValueSetterParams,
 } from 'ag-grid-community'
@@ -9,8 +10,10 @@ import type { TFunction } from 'i18next'
 import { AlertTriangle } from 'lucide-react'
 import i18n from '@/i18n'
 import { Badge } from '@/components/ui/badge'
+import { ReviewGeoCell } from '@/features/imports/wizard/review-geo-editor'
+import { ReviewResolutionCell } from '@/features/imports/wizard/review-resolution-cell'
 import { EXTRA_TARGET, IGNORE_TARGET } from '@/features/imports/wizard/types'
-import type { ImportRowStatus, ImportRunDetail, ImportRunRowItem } from '@/features/imports/wizard/types'
+import type { ImportRowResolution, ImportRowStatus, ImportRunDetail, ImportRunRowItem } from '@/features/imports/wizard/types'
 
 /**
  * `colId` prefixes distinguishing the two id spaces a review row value can
@@ -20,6 +23,13 @@ import type { ImportRowStatus, ImportRunDetail, ImportRunRowItem } from '@/featu
  */
 const FIELD_COLUMN_PREFIX = 'field:'
 const EXTRA_COLUMN_PREFIX = 'extra:'
+
+/**
+ * Review field ids resolved by `GeoRecognizer` (spec 0038): these 4 columns
+ * never offer text editing — a click opens the cascade popup instead of
+ * `agTextCellEditor`/`onCellValueChanged`.
+ */
+const GEO_FIELD_IDS: ReadonlySet<string> = new Set(['country', 'region', 'province', 'city'])
 
 /** Badge variant per row status (`App\Enums\ImportRowStatus` mirror). */
 const STATUS_BADGE_VARIANT: Record<ImportRowStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -114,6 +124,31 @@ function buildValueColumn(
 }
 
 /**
+ * A geo review field column (spec 0038 AC-010): non-editable, its text comes
+ * from the same `values` record as `buildValueColumn`, but the cell renders
+ * via `ReviewGeoCell` (popup cascade) instead of `agTextCellEditor`.
+ */
+function buildGeoColumn(
+  colId: string,
+  valueKey: string,
+  headerName: string,
+  sortable: boolean,
+  readOnly: boolean,
+): ColDef<ImportRunRowItem> {
+  return {
+    colId,
+    headerName,
+    editable: false,
+    sortable,
+    filter: false,
+    minWidth: 160,
+    valueGetter: (params: ValueGetterParams<ImportRunRowItem>) => params.data?.values[valueKey] ?? '',
+    cellRenderer: ReviewGeoCell,
+    cellRendererParams: { readOnly },
+  }
+}
+
+/**
  * The review grid's editable "field" columns: the FINAL persisted fields
  * (`run.review_fields`, spec 0033 delta D-2026-07-15-placeholder-review-fields)
  * — e.g. `first_name`/`last_name` — not the input-only mapped columns
@@ -143,11 +178,17 @@ function resolveEditableFields(run: ImportRunDetail): Array<{ id: string; label:
  * false`: the concluded-run detail page reuses this exact builder to render
  * the same staged rows without ever offering an edit affordance, on top of
  * the backend's own `PATCH .../rows/{row}` 422 outside `reviewing`.
+ *
+ * A `resolution` column (spec 0036 AC-008) follows `status`: it renders the
+ * matched referent + skip/create/update select for `duplicate` rows via
+ * `ReviewResolutionCell`, an em dash for every other row, and stays disabled
+ * (no `onResolve`) in `readOnly` mode.
  */
 export function buildReviewColumnDefs(
   run: ImportRunDetail,
   t: TFunction,
   readOnly = false,
+  onResolve?: (row: ImportRunRowItem, resolution: ImportRowResolution, node: IRowNode<ImportRunRowItem>) => void,
 ): ColDef<ImportRunRowItem>[] {
   const mapping = run.column_mapping ?? {}
   const extraColumnNames = Object.entries(mapping)
@@ -178,11 +219,24 @@ export function buildReviewColumnDefs(
       flex: 0,
       cellRenderer: ReviewStatusCell,
     },
+    {
+      colId: 'resolution',
+      headerName: t('review.columns.resolution'),
+      editable: false,
+      sortable: false,
+      filter: false,
+      minWidth: 220,
+      flex: 0,
+      cellRenderer: ReviewResolutionCell,
+      cellRendererParams: { onResolve: readOnly ? undefined : onResolve, readOnly },
+    },
     // `field.label` is a backend default-namespace i18n key
     // (`imports.leads.fields.*`); resolve it via the default namespace, not the
     // `importWizard`-scoped `t` used for the grid's own chrome.
     ...editableFields.map((field) =>
-      buildValueColumn(FIELD_COLUMN_PREFIX + field.id, field.id, i18n.t(field.label), true, !readOnly),
+      GEO_FIELD_IDS.has(field.id)
+        ? buildGeoColumn(FIELD_COLUMN_PREFIX + field.id, field.id, i18n.t(field.label), true, readOnly)
+        : buildValueColumn(FIELD_COLUMN_PREFIX + field.id, field.id, i18n.t(field.label), true, !readOnly),
     ),
     ...extraColumnNames.map((columnName) =>
       buildValueColumn(

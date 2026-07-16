@@ -55,7 +55,7 @@ class StageImportJob implements ShouldQueue
             /** @var User $actor */
             $actor = User::query()->findOrFail($run->user_id);
             $dedupMode = ImportDedupMode::from($run->dedup_strategy ?? ImportDedupMode::CreateOnly->value);
-            $builder = new StagedRowBuilder($definition, $actor, $run->column_mapping ?? [], $dedupMode);
+            $builder = new StagedRowBuilder($definition, $actor, $run->column_mapping ?? [], $dedupMode, $run->global_config ?? []);
 
             $this->stageRows($run, $reader, $builder);
 
@@ -96,6 +96,7 @@ class StageImportJob implements ShouldQueue
             'status' => $outcome->status,
             'messages' => $outcome->messages,
             'duplicate_of_id' => $outcome->duplicateOfId,
+            'duplicate_meta' => $outcome->duplicateMeta,
         ]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Support\Import;
 
+use App\Enums\ImportRowResolution;
 use App\Enums\ImportRowStatus;
 use App\Imports\Staging\StagedRowBuilder;
 use App\Models\ImportRun;
@@ -34,6 +35,7 @@ final class ImportRunSummaryBuilder
             'global_config' => $importRun->global_config ?? [],
             'dedup_strategy' => $importRun->dedup_strategy,
             'warnings' => $this->collectWarningMessages($importRun),
+            'duplicate_resolutions' => $this->duplicateResolutions($importRun),
         ];
     }
 
@@ -73,6 +75,30 @@ final class ImportRunSummaryBuilder
         }
 
         return [$mappedFields, $extraFields];
+    }
+
+    /**
+     * The confirm-step recap of the run's CURRENT `duplicate` rows, grouped
+     * by the operator's per-row resolution (spec 0036) — `unresolved` counts
+     * a still-null `resolution`, never blocking the confirm itself.
+     *
+     * @return array{skip: int, create: int, update: int, unresolved: int}
+     */
+    private function duplicateResolutions(ImportRun $importRun): array
+    {
+        $counts = ImportRunRow::query()
+            ->where('import_run_id', $importRun->id)
+            ->where('status', ImportRowStatus::Duplicate)
+            ->selectRaw('resolution, COUNT(*) as aggregate')
+            ->groupBy('resolution')
+            ->pluck('aggregate', 'resolution');
+
+        return [
+            'skip' => (int) ($counts[ImportRowResolution::Skip->value] ?? 0),
+            'create' => (int) ($counts[ImportRowResolution::Create->value] ?? 0),
+            'update' => (int) ($counts[ImportRowResolution::Update->value] ?? 0),
+            'unresolved' => (int) ($counts[''] ?? 0),
+        ];
     }
 
     /**

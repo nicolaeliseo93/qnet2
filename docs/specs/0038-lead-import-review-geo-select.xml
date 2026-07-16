@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0038-lead-import-review-geo-select" status="draft" owner="utente" date="2026-07-16">
+
+  <goal>
+    Nello step di revisione dell'import lead, l'utente corregge i campi geografici
+    (nazione/regione/provincia/citta') scegliendo da select a cascata precompilate con i livelli
+    gia' risolti dal matching, invece di digitare testo libero: selezionare un livello inferiore
+    (es. citta' Maddaloni) compila/corregge automaticamente gli antenati (provincia Caserta,
+    regione Campania, nazione Italia) e la scelta e' deterministica (id, non nome).
+  </goal>
+
+  <context>
+    Fatti verificati sul codice reale (spec 0033/0034 gia' implementate):
+    - Review grid: frontend/src/features/imports/wizard/{review-grid.tsx, review-columns.tsx,
+      use-review-rows.ts}. Le colonne valore usano agTextCellEditor (review-columns.tsx:106);
+      il salvataggio passa da onCellValueChanged -> PATCH per singolo campo (use-review-rows.ts).
+      Prop readOnly per il dettaglio run concluso (spec 0034 AC-013).
+    - PATCH /api/imports/{domain}/{importRun}/rows/{row}: UpdateImportRowRequest accetta solo
+      `values` (Record chiave->stringa, allow-list = field id del catalogo + colonne __extra__);
+      StagedRowReviser fonde le modifiche in mapped_values/extra_values e ri-esegue
+      StagedRowBuilder::resolve() (recognizers -> placeholder -> validateRow -> resolveDuplicate).
+      Response: { row: ImportRunRowResource, counts } nell'envelope { success, message, data }.
+    - Matching geo: GeoRecognizer legge i campi mappati country/region/province/city e produce
+      country_id/state_id/province_id/city_id via GeoResolver::resolveFuzzy() (gerarchico,
+      backfill antenati dai figli); 0 o >1 candidati -> needsReview + messaggio stringa.
+      Gli id risolti vengono FUSI in mapped_values (StagedRowBuilder::resolve step 2) e quindi
+      gia' esposti al FE dentro ImportRunRowResource.values.
+    - Gerarchia geo: Country -> State (=regione) -> Province -> City (tabelle countries/states/
+      provinces/cities, id antenati denormalizzati su ogni livello). Endpoint cascata esistenti
+      in backend/routes/api/geo.php (GET /countries, /states?country_id=, /provinces?state_id=,
+      /cities?province_id=|state_id=&search=&offset=).
+    - FE: componente GeoSelect esistente (frontend/src/features/geo/geo-select.tsx, contratto
+      GeoValue {country_id,state_id,province_id,city_id}) + hook use-geo; gia' usato in 6 form.
+    - FE types: ImportRunRowItem.values e' dichiarato Record&lt;string, string&gt; ma il backend
+      vi fonde gia' gli id numerici — il tipo va allargato, non e' un cambio di contratto.
+    Decisioni utente (2026-07-16): popup con cascata unica (un solo salvataggio dei 4 livelli);
+    select sempre disponibile sulle 4 colonne geo (non solo su warning); candidati fuzzy
+    strutturati FUORI scope (follow-up).
+  </context>
+
+  <scope>
+    <in>
+      <item>Estensione del PATCH rows/{row} con blocco `geo` opzionale (id dei 4 livelli) validato per esistenza e coerenza gerarchica.</item>
+      <item>Backend: con `geo` presente, gli id sono autoritativi — nomi canonici riscritti in mapped_values, GeoRecognizer saltato nel revise (niente re-fuzzy), status/messages ricalcolati.</item>
+      <item>Frontend: le 4 celle geo del review grid aprono un popup con la cascata GeoSelect precompilata dagli id di riga; Applica = un solo PATCH; niente piu' editing testo su quelle colonne.</item>
+      <item>Modalita' readOnly del grid: celle geo in pura visualizzazione (nessun popup).</item>
+      <item>i18n it/en per le nuove stringhe del popup.</item>
+      <item>Test Pest + Vitest per tutti gli AC.</item>
+    </in>
+    <out>
+      <item>Candidati fuzzy strutturati nella row resource / suggerimenti evidenziati nel select (follow-up dedicato).</item>
+      <item>Qualsiasi modifica a GeoResolver::resolve()/resolveFuzzy(), GeoFuzzyMatcher, ItalianGeoLocalizer e al flusso di staging iniziale (StageImportJob).</item>
+      <item>Editor select per campi non geografici (source, campaign, ...).</item>
+      <item>Nuovi endpoint geo o for-select; si riusano quelli di routes/api/geo.php.</item>
+      <item>Il flusso import legacy (spec 0012, features/imports/types.ts) e la grid dei run.</item>
+      <item>Modifiche a GeoSelect stesso (components/geo): si usa as-is; eventuali limiti si segnalano.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- UNICO endpoint toccato: estensione retro-compatibile del PATCH di spec 0033 AC-017. -->
+    <endpoint method="PATCH" path="/api/imports/{domain}/{importRun}/rows/{row}">
+      <request>
+        <!--
+          body: almeno uno tra `values` e `geo` (422 se entrambi assenti).
+
+          values?: Record<string, string|null>
+            — INVARIATO (allow-list field id + colonne __extra__, spec 0033).
+
+          geo?: {
+            country_id:  number|null,   // exists:countries,id
+            state_id:    number|null,   // exists:states,id
+            province_id: number|null,   // exists:provinces,id
+            city_id:     number|null    // exists:cities,id
+          }
+          Coerenza gerarchica (422 su violazione, error bag su geo.*):
+            - state_id    richiede country_id  e state.country_id  == geo.country_id
+            - province_id richiede state_id    e province.state_id == geo.state_id
+            - city_id     richiede state_id;
+                          se province_id presente: city.province_id == geo.province_id
+                          altrimenti:              city.state_id    == geo.state_id
+            (la provincia e' un livello opzionale: molti paesi non ne hanno — stesso
+             comportamento del GeoSelect FE, city aggancia lo state)
+          Chiavi diverse dalle 4 sopra dentro `geo` -> 422.
+        -->
+      </request>
+      <response status="200">
+        <!--
+          INVARIATA: { success, message, data: { row, counts } }.
+          Effetto osservabile con `geo` presente — dentro row.values:
+            - country/region/province/city = NOMI CANONICI delle entita' selezionate
+              (Country.name / State.name / Province.name / City.name); livello null -> "".
+            - country_id/state_id/province_id/city_id = gli id del body (null inclusi).
+            - status/messages ricalcolati SENZA re-matching fuzzy geo: un precedente
+              warning geo sparisce; restano eventuali warning/errori non geo
+              (placeholder, validateRow, duplicati).
+            - is_edited = true; counts ricalcolati.
+        -->
+      </response>
+      <errors>
+        <!--
+          401 non autenticato; 403 senza permesso import (invariato);
+          404 domain/run/row inesistenti o run altrui (invariato);
+          422 run non in status `reviewing` (invariato, vale anche per geo);
+          422 id inesistente, gerarchia incoerente, chiave geo sconosciuta,
+              body senza values ne' geo.
+        -->
+      </errors>
+    </endpoint>
+    <!--
+      Nessun altro endpoint cambia. Il FE legge la precompilazione dagli id gia'
+      presenti in row.values (nessun campo nuovo in ImportRunRowResource) e popola
+      le select con gli endpoint geo esistenti (GET /countries, /states, /provinces,
+      /cities) tramite gli hook use-geo esistenti.
+    -->
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- BACKEND (Pest, backend/tests/Feature/Imports/) -->
+    <criterion id="AC-001">Dato un run `reviewing` con una riga in warning geo ("citta' non trovata"), quando PATCH rows/{row} riceve `geo` con 4 id coerenti (citta' -> provincia -> regione -> nazione), allora risponde 200 e row.values contiene i 4 id e i 4 nomi canonici, il messaggio geo e' assente, status ricalcolato (valid se non restano altri problemi), is_edited=true e counts aggiornati.</criterion>
+    <criterion id="AC-002">Dato lo stesso run, quando `geo` e' parziale (country_id+state_id valorizzati, province_id e city_id null), allora 200 e in row.values `province` e `city` sono stringa vuota e `province_id`/`city_id` sono null, mentre country/region hanno nome canonico e id.</criterion>
+    <criterion id="AC-003">Quando `geo` contiene una city_id che non appartiene alla province_id dichiarata (o uno state_id di un altro country), allora 422 con errore su geo.* e la riga resta invariata (stessi values/status/messages, is_edited invariato).</criterion>
+    <criterion id="AC-004">Quando `geo` contiene un id inesistente o una chiave non prevista (es. geo.foo), allora 422 e riga invariata.</criterion>
+    <criterion id="AC-005">Quando il body non contiene ne' `values` ne' `geo`, allora 422.</criterion>
+    <criterion id="AC-006">Dato un run in status diverso da `reviewing` (es. completed), quando PATCH riceve `geo` valido, allora 422 e riga invariata (guardia esistente estesa al nuovo input).</criterion>
+    <criterion id="AC-007">Regressione: un PATCH con solo `values` testuali sui campi geo si comporta come oggi (re-matching fuzzy, eventuale warning con candidati in stringa); tutti i test esistenti del PATCH restano verdi.</criterion>
+    <criterion id="AC-008">Un utente senza il permesso import riceve 403 anche sul PATCH con `geo`; un run di altro owner 404 (stessi guard esistenti, coperti con un caso geo).</criterion>
+    <criterion id="AC-009">Dopo un PATCH `geo` andato a buon fine, un successivo PATCH `values` su un campo NON geo (es. first_name) non reintroduce il warning geo: i nomi canonici ri-risolvono in modo stabile.</criterion>
+    <!-- FRONTEND (Vitest, frontend/src/features/imports/wizard/) -->
+    <criterion id="AC-010">Nel review grid le 4 colonne geo (field:country, field:region, field:province, field:city) non offrono editing testuale: il click apre un popup con la cascata GeoSelect precompilata dagli id presenti in row.values (livelli non risolti vuoti e abilitati secondo la cascata).</criterion>
+    <criterion id="AC-011">Selezionati i livelli nel popup, il bottone Applica invia UN SOLO PATCH con `geo` = i 4 id correnti della cascata; su successo la riga della grid viene sostituita con la copia server (node.setData) e i contatori dello step si aggiornano (onRowUpdated).</criterion>
+    <criterion id="AC-012">Annulla (o chiusura) del popup non invia alcuna richiesta e non modifica la riga.</criterion>
+    <criterion id="AC-013">Con prop readOnly (dettaglio run concluso, spec 0034), il click sulle celle geo non apre alcun popup: pura visualizzazione.</criterion>
+    <criterion id="AC-014">Se il PATCH fallisce (es. 422), il popup mostra un errore accessibile (role="alert") e la riga resta invariata.</criterion>
+    <criterion id="AC-015">Tutte le nuove stringhe UI passano da i18next con chiavi in en-import-wizard.ts e it-import-wizard.ts (nessuna stringa hardcoded); le label dei livelli riusano le chiavi geo.* esistenti.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm). Riuso obbligatorio: GeoSelect + use-geo + endpoint routes/api/geo.php (FE); model Country/State/Province/City (BE).</item>
+    <item>GeoResolver::resolve() e resolveFuzzy() NON si toccano: il "pin" degli id vive nel percorso di revise (StagedRowReviser/StagedRowBuilder), lo staging iniziale resta identico.</item>
+    <item>Il revise con `geo` DEVE restare dentro la pipeline unica StagedRowBuilder::resolve() (placeholder/validateRow/resolveDuplicate invariati): si salta/pinna solo il GeoRecognizer, mai una pipeline parallela.</item>
+    <item>Authz server-side invariata (stessi guard del PATCH esistente); nessun nuovo endpoint.</item>
+    <item>FE: le celle geo NON passano da agTextCellEditor/onCellValueChanged — colonne non-editable con cellRenderer che apre il popup e usa la mutation dedicata; il resto del grid (colonne non geo, extra) resta invariato.</item>
+    <item>ImportRunRowItem.values si allarga a Record&lt;string, string | number | null&gt; (adeguamento del tipo alla realta' gia' esistente, non cambio di contratto).</item>
+    <item>Envelope { success, message, data } e shape { row, counts } invariati; nessun campo nuovo in ImportRunRowResource.</item>
+    <item>File entro 300/500 righe; identificatori in inglese; niente emoji; test eseguiti davvero (Pest/Vitest) + Pint/ESLint/tsc puliti.</item>
+  </constraints>
+
+</spec>
