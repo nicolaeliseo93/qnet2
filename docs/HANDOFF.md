@@ -2,6 +2,33 @@
 
 > Injected at session start. Update at every green state.
 
+## REFERENT DUPLICATE WARNING — spec 0037 (2026-07-16) — GREEN (verifier), NON COMMITTATO
+
+Avviso duplicati NON bloccante alla creazione manuale referent (spec
+`docs/specs/0037-referent-duplicate-warning.xml`, APPROVATA): match live debounced su email/phone/mobile
++ tax_code contro referenti esistenti; vale automaticamente anche nel quick-create in dialog dal form lead
+(stesso ReferentForm). Il submit resta SEMPRE possibile (decisione utente: warn, non block).
+
+- BE: `App\Support\ContactValueNormalizer` = UNICA fonte di normalizzazione (email lower+trim, phone
+  digits+'+', tax_code upper+trim) — `LeadDuplicateMatcher` ora la riusa (zero cambi comportamento,
+  Import 349/349); `ReferentDuplicateFinder` (query per canale, whereRaw SOLO con binding LOWER/UPPER,
+  cap 5 id desc, matched_on cumulativo, esclude PersonalData non-Referent); DTO in
+  DataObjects/Referents; POST `referents/duplicate-check` (invokable ReferentDuplicateCheckController,
+  gate referents.create, NIENTE throttle, route PRIMA di referents/{referent});
+  `ReferentDuplicateMatchResource` espone SOLO {referent_id, name, matched_on} — MAI PII altrui.
+- FE (features/referents/): `duplicate-check-api.ts`, `use-referent-duplicate-check.ts` (useDebouncedValue
+  300ms + useQuery enabled solo in CREATE e con criteri non vuoti), `referent-duplicate-warning.tsx`
+  (amber, role="status" NON alert, compatto) montato dopo i Tabs in referent-form-body; i18n
+  `form.duplicateWarning.*` en+it. Niente check in edit (fuori scope).
+- VERIFICATO (verifier indipendente, eseguito): Pest 12/12 nuovi + 177/177 Referent + 349/349 Import +
+  full 2643/2645 (rosso esterno noto); Vitest referents 47/47; tsc -b --force pulito; Pint/ESLint puliti.
+  NIENTE COMMIT (in attesa utente).
+- CHIUDE la serie 0035+0036+0037 (mapping templates + dedup import + warning referent): 0035 e 0036
+  COMMITTATE dall'utente. Segnalazioni aperte fuori scope: full-scan in memoria LeadDuplicateMatcher
+  (nessun indice su contacts.value — candidata colonna normalized_value indicizzata), nessun unique DB su
+  leads(referent_id,campaign_id), ImportController.php 478 righe (split candidato), rossi esterni
+  pre-esistenti AbstractMigrationSourcePreviewTest + 3 ContactsCell (leak lingua i18n tra test).
+
 ## LEAD IMPORT REVIEW GEO SELECT — spec 0038 (2026-07-16) — GREEN (verifier), NON COMMITTATO
 
 Step di revisione import lead: le 4 colonne geo (country/region/province/city) non sono piu' testo libero —

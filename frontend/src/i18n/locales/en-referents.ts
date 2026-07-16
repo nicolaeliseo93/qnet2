@@ -69,6 +69,16 @@ export const referents = {
         description: 'Registered offices and billing addresses.',
       },
     },
+    duplicateWarning: {
+      title: 'Possible duplicate',
+      entry: '{{name}} might be a duplicate ({{criteria}}).',
+      criteria: {
+        email: 'email',
+        phone: 'phone',
+        mobile: 'mobile',
+        taxCode: 'tax code',
+      },
+    },
   },
 }
 

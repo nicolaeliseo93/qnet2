@@ -17,6 +17,8 @@ import { ContactsManager } from '@/features/personal-data/contacts-manager'
 import { PersonalDataCardForm } from '@/features/personal-data/personal-data-card-form'
 import { cardOwnerRef } from '@/features/personal-data/drafts'
 import { DetailsTabContent } from '@/features/referents/referent-form-details-tab'
+import { ReferentDuplicateWarning } from '@/features/referents/referent-duplicate-warning'
+import { useReferentDuplicateCheck } from '@/features/referents/use-referent-duplicate-check'
 import { useReferentForm } from '@/features/referents/use-referent-form'
 import type { ReferentDetail, ReferentFormMode } from '@/features/referents/types'
 
@@ -60,6 +62,7 @@ export function ReferentFormBody({ mode, onSuccess, onCancel }: ReferentFormBody
     onSubmit,
     personalDataFieldPermission,
   } = useReferentForm({ mode, onSuccess })
+  const { matches: duplicateMatches } = useReferentDuplicateCheck({ mode, profileDraft })
 
   // Section visibility, read from the same authorization context `MetaField`
   // uses (the anagraphic card has no permission-gated field, so Account is
@@ -173,6 +176,8 @@ export function ReferentFormBody({ mode, onSuccess, onCancel }: ReferentFormBody
               </TabsContent>
             )}
           </Tabs>
+
+          <ReferentDuplicateWarning matches={duplicateMatches} />
 
           {serverError && (
             <p className="text-sm font-medium text-destructive" role="alert">

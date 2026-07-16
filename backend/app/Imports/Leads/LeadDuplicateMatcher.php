@@ -7,6 +7,7 @@ use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\PersonalData;
 use App\Models\Referent;
+use App\Support\ContactValueNormalizer;
 
 /**
  * Resolves the EXISTING Referent a staged row collides with, by email/phone/
@@ -92,7 +93,7 @@ final class LeadDuplicateMatcher
         foreach ($contacts as $contact) {
             /** @var ContactTypeEnum $type */
             $type = $contact->type;
-            $normalizedValue = $this->normalize($type, (string) $contact->value);
+            $normalizedValue = ContactValueNormalizer::contact($type, (string) $contact->value);
 
             if (! in_array($normalizedValue, $targets[$type->value] ?? [], true)) {
                 continue;
@@ -125,7 +126,7 @@ final class LeadDuplicateMatcher
             ->get(['id', 'tax_code', 'personable_id']);
 
         foreach ($cards as $card) {
-            if ($this->normalizeTaxCode((string) $card->tax_code) === $target) {
+            if (ContactValueNormalizer::taxCode((string) $card->tax_code) === $target) {
                 return (int) $card->personable_id;
             }
         }
@@ -173,12 +174,12 @@ final class LeadDuplicateMatcher
                 continue;
             }
 
-            if (in_array($this->normalize($type, (string) $contact->value), $targets[$type->value] ?? [], true)) {
+            if (in_array(ContactValueNormalizer::contact($type, (string) $contact->value), $targets[$type->value] ?? [], true)) {
                 $matched[] = $type->value;
             }
         }
 
-        if ($taxTarget !== null && $card->tax_code !== null && $this->normalizeTaxCode((string) $card->tax_code) === $taxTarget) {
+        if ($taxTarget !== null && $card->tax_code !== null && ContactValueNormalizer::taxCode((string) $card->tax_code) === $taxTarget) {
             $matched[] = 'tax_code';
         }
 
@@ -200,7 +201,7 @@ final class LeadDuplicateMatcher
                 continue;
             }
 
-            $targets[$type->value][] = $this->normalize($type, $value);
+            $targets[$type->value][] = ContactValueNormalizer::contact($type, $value);
         }
 
         return $targets;
@@ -213,21 +214,7 @@ final class LeadDuplicateMatcher
     {
         $value = trim((string) ($mapped['tax_code'] ?? ''));
 
-        return $value === '' ? null : $this->normalizeTaxCode($value);
-    }
-
-    private function normalizeTaxCode(string $value): string
-    {
-        return mb_strtoupper(trim($value));
-    }
-
-    private function normalize(ContactTypeEnum $type, string $value): string
-    {
-        $trimmed = trim($value);
-
-        return $type === ContactTypeEnum::Email
-            ? mb_strtolower($trimmed)
-            : (string) preg_replace('/[^0-9+]/', '', $trimmed);
+        return $value === '' ? null : ContactValueNormalizer::taxCode($value);
     }
 
     /**

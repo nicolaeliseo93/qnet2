@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0039-system-statuses-and-status-groups" status="draft" owner="nicola" date="2026-07-16">
+
+  <goal>
+    Introdurre in ENTRAMBI i configuratori di stato esistenti (pipeline-statuses, condiviso da
+    Progetti e Campagne; lead-statuses) due stati di sistema obbligatori — "Nuovo" (inizio del
+    workflow, sempre primo) e "Chiuso" (fine del workflow, sempre ultimo) — con regole speciali
+    server-enforced, e un nuovo modulo lookup "gruppi di stato" (status-groups) completamente
+    configurabile che classifica logicamente gli stati personalizzati per filtri/statistiche/KPI
+    futuri. Gli stati personalizzati diventano riordinabili via drag &amp; drop.
+  </goal>
+
+  <context>
+    <!-- Tutti i nomi sotto sono VERIFICATI sul codice reale (esplorazione 2026-07-16). -->
+
+    <existing_modules>
+      Esistono DUE configuratori, non tre (decisione utente: si mantiene il condiviso):
+      - `pipeline_statuses` / Model `PipelineStatus` / resource `pipeline-statuses` (spec 0023,
+        condiviso Progetti+Campagne; `name` NON unique). Stack: PipelineStatusController,
+        Store/UpdatePipelineStatusRequest, Create/UpdatePipelineStatusData, PipelineStatusService,
+        PipelineStatusPolicy, PipelineStatusesAuthorization, PipelineStatusResource,
+        PipelineStatusesTableDefinition + PipelineStatusColumnCatalog + AdvancedFilterCatalog,
+        route in routes/api/projects.php:40-45, FE features/pipeline-statuses/ (13 file) +
+        pages/pipeline-statuses-page.tsx.
+      - `lead_statuses` / Model `LeadStatus` / resource `lead-statuses` (spec 0029; `name` UNIQUE).
+        Stack speculare 1:1, route in routes/api/lookups.php:85-90, FE features/lead-statuses/.
+      Shape comune: {name(191), color(32) nullable = token palette BADGE_COLOR_TOKENS,
+      sort_order int default 0}. Resource: {id, name, color, sort_order, created_at}.
+      Delete guard 409 nel Service se referenziato (FK restrictOnDelete come difesa in profondita').
+    </existing_modules>
+
+    <facts_verified>
+      - NON esiste drag &amp; drop nel progetto (nessuna lib dnd in package.json, nessun rowDrag);
+        l'ordine oggi e' un Input numerico `sort_order` nel form. Nessun endpoint di reorder.
+      - NON esiste alcuna azione "duplica riga" nel framework tabellare (uniche action key:
+        view/edit/delete/activity). Il requisito "i sistema non sono duplicabili" e' quindi
+        soddisfatto per assenza della funzione; NON si introduce un'azione duplicate.
+      - NON esiste un default automatico dello stato alla creazione di Lead/Progetto/Campagna:
+        FK `required` in StoreLeadRequest/StoreProjectRequest, RelationSelectField required nel FE.
+      - Precedente "riga di sistema": RoleService::guardSystemRoleMutation → abort(422) sul ruolo
+        `super-admin`; RolesTableDefinition::deleteModel() override per il bulk-delete (il docblock
+        di AbstractTableDefinition::deleteModel cita esplicitamente il caso "protected-system-row").
+      - Envelope: okWithPermissions {success, message, data, permissions}; destroy → 204;
+        for-select → paginatedResponse {items, export_link, pagination}; ForSelectResource base
+        {id, label, subtitle?, avatar?, meta?} (optional omessi se null).
+      - Nuovo modulo tabellare = TableDefinition + riga in config/tables.php + Authorization in
+        config/authorization.php + Policy extends BasePolicy (permessi derivati da SyncPermissions).
+      - Seed: DatabaseSeeder pulito; dati demo SOLO via DemoDataSeeder (DemoPipelineStatusSeeder
+        riga 42, DemoLeadStatusSeeder riga 51, updateOrCreate keyed by name).
+      - Enum dir esistente: backend/app/Enums (es. ImportRowResolution).
+      - FE: configuratori = pagina dedicata + TableView (AG Grid SSRM) + Sheet laterale
+        (SheetState none|create|view|edit); azioni riga whitelisted server-side via row.actions;
+        `decorateRow` disponibile per filtrare azioni lato FE (precedente: users-table.tsx:116).
+      - Colore = ColorTokenPicker (features/custom-fields/components/color-token-picker.tsx),
+        token di BADGE_COLOR_TOKENS, mai hex.
+    </facts_verified>
+
+    <working_tree_warning>
+      Il branch ha modifiche NON committate (spec 0036/0038, subsystem import lead). I microtask
+      di questa spec NON toccano backend/app/Imports/*, backend/app/Jobs/StageImportJob.php,
+      frontend/src/features/imports/* ne' i locales *-import-wizard.ts. L'import lead non richiede
+      modifiche: il fallback "Nuovo" agisce solo quando lead_status_id e' assente e l'import
+      continua a passare lo stato esplicitamente.
+    </working_tree_warning>
+  </context>
+
+  <decisions>
+    <!-- Decisioni prese dall'utente il 2026-07-16 in fase di pianificazione. -->
+    <decision id="D-1">
+      Configuratore Progetti+Campagne resta CONDIVISO (pipeline-statuses). Le regole di sistema
+      si applicano in modo identico a pipeline-statuses e lead-statuses (implementazione condivisa).
+    </decision>
+    <decision id="D-2">
+      Gli stati di sistema hanno un gruppo funzionale FISSO assegnato in migrazione e NON
+      modificabile ("Nuovo" → gruppo "Aperto", "Chiuso" → gruppo "Chiuso"). Sui sistema si
+      modificano SOLO name e color.
+    </decision>
+    <decision id="D-3">
+      Default automatico: alla creazione di Lead/Progetto/Campagna il FE preseleziona lo stato
+      di sistema "Nuovo" (modificabile); se il payload omette la FK, il server assegna "Nuovo"
+      (fallback). La FK diventa opzionale nel contratto di store.
+    </decision>
+    <decision id="D-4">
+      Drag &amp; drop con NUOVA DIPENDENZA AUTORIZZATA: @dnd-kit (core + sortable + utilities,
+      SOLO questi pacchetti). Lista di riordino dedicata in un Sheet, FUORI da AG Grid.
+    </decision>
+    <decision id="D-5">
+      `sort_order` diventa SERVER-MANAGED su entrambi i moduli stati: sparisce da store/update
+      (API e form); si gestisce con placement automatico in create (nuovo custom = ultimo prima
+      di "Chiuso") + endpoint di reorder. Sequenza normalizzata: Nuovo=0, custom 10,20,...,
+      Chiuso=max+10.
+    </decision>
+    <decision id="D-6">
+      I gruppi (`status_groups`) sono un'entita' GLOBALE unica condivisa da entrambi i configuratori,
+      modulo lookup full-CRUD (stesso template di lead-statuses: name UNIQUE + color token +
+      sort_order numerico manuale — per i gruppi NIENTE dnd). Associazione stato→gruppo opzionale
+      (nullable) per gli stati custom.
+    </decision>
+    <decision id="D-7">
+      Scope della classificazione = SOLE FONDAMENTA: gruppo esposto nelle Resource, colonna +
+      advanced filter nelle tabelle dei due configuratori, for-select. Cablaggio in dashboard/KPI/
+      report/conteggi/automazioni e filtri per gruppo sulle tabelle Leads/Projects/Campaigns = FUORI
+      SCOPE (feature future).
+    </decision>
+  </decisions>
+
+  <naming>
+    <!-- Identificatori in INGLESE (engineering.md §1.2); label di dominio in italiano = dati. -->
+    Tabella `status_groups` · Model `StatusGroup` · resource/route `status-groups` · permessi
+    `status-groups.{viewAny,view,create,update,delete,export,import}` · namespace i18n FE
+    `statusGroups` · FK `pipeline_statuses.status_group_id`, `lead_statuses.status_group_id`.
+    Colonna di sistema: `system_key` string(16) nullable unique per tabella; enum PHP
+    `App\Enums\StatusSystemKey { case New = 'new'; case Closed = 'closed'; }`.
+    Servizi condivisi: `App\Services\Statuses\SystemStatusGuard` (regole di protezione),
+    `App\Services\Statuses\StatusOrderManager` (placement + resequence + reorder).
+    Label seedate (dati, non i18n): stati "Nuovo" (slate) / "Chiuso" (green); gruppi "Aperto"
+    (blue) / "Chiuso" (green).
+    FE: componente riordino condiviso `frontend/src/features/status-reorder/` (StatusReorderSheet,
+    use-status-reorder.ts) parametrizzato per resource; primitiva dnd riusabile
+    `frontend/src/components/ui/sortable-list.tsx` (@dnd-kit).
+  </naming>
+
+  <scope>
+    <in>
+      <item>Migrazioni: `status_groups`; `system_key` + `status_group_id` su pipeline_statuses e lead_statuses; creazione/promozione righe di sistema + normalizzazione ordini su dati esistenti.</item>
+      <item>Modulo BE status-groups completo (CRUD + for-select + TableDefinition + policy + authorization + export gratuito via config/tables.php).</item>
+      <item>Regole di sistema server-enforced sui due moduli stati (delete 422, update limitato a name/color, esclusione dal reorder) inclusi bulk-delete override.</item>
+      <item>Endpoint reorder per pipeline-statuses e lead-statuses; sort_order server-managed (D-5).</item>
+      <item>Associazione stato→gruppo (nullable) su store/update degli stati custom; esposizione nel Resource, colonna + advanced filter + mapRow nelle due TableDefinition.</item>
+      <item>Fallback "Nuovo" in store di Lead, Project, Campaign (solo campagne non linked) + preselezione FE.</item>
+      <item>meta.system_key nei for-select dei due moduli stati.</item>
+      <item>Modulo FE status-groups (feature + pagina + route + nav + i18n en/it + quick-create entry).</item>
+      <item>FE configuratori stati: campo gruppo nel form, rimozione input numerico sort_order, righe di sistema con delete nascosto e campi bloccati (solo name/color), badge gruppo in tabella.</item>
+      <item>Sheet di riordino drag &amp; drop condiviso (@dnd-kit) con righe di sistema pinnate non trascinabili.</item>
+      <item>Factory + stati factory; DemoStatusGroupSeeder; aggiornamento dei due demo seeder stati (gruppi assegnati, ordini coerenti, rispetto delle righe di sistema).</item>
+      <item>Test Pest + Vitest per tutti gli AC.</item>
+    </in>
+    <out>
+      <item>Split del configuratore condiviso in Progetti vs Campagne (D-1).</item>
+      <item>Azione "duplica" (per stati o qualsiasi riga): non esiste e non si introduce.</item>
+      <item>Cablaggio gruppi in dashboard/KPI/report/conteggi/automazioni; filtri per gruppo su tabelle Leads/Projects/Campaigns (D-7).</item>
+      <item>Transizioni di workflow vincolate (macchina a stati tra status): fuori scope.</item>
+      <item>Import lead e file del subsystem import (working_tree_warning).</item>
+      <item>Drag &amp; drop dentro AG Grid / framework tabellare generico.</item>
+      <item>Riordino dnd per i gruppi (hanno sort_order numerico manuale come oggi gli stati).</item>
+      <item>Fix del difetto preesistente "badge scolorito" in ProjectsTableDefinition::mapRow (spec 0029 known_defect).</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- ===================== SCHEMA ===================== -->
+    <schema>
+      status_groups: id, name(191) UNIQUE, color(32) nullable, sort_order int default 0, timestamps.
+      pipeline_statuses += system_key string(16) nullable UNIQUE, status_group_id FK nullable
+        → status_groups restrictOnDelete.
+      lead_statuses += identiche due colonne.
+      Migrazione dati (stessa logica per entrambe le tabelle, eseguita in up(), reversibile):
+      (1) crea i gruppi "Aperto" (blue, 0) e "Chiuso" (green, 10) se assenti (match by name);
+      (2) promozione: se esiste una riga con name esatto "Nuovo"/"Chiuso" (prima per id), riceve
+          system_key new/closed; altrimenti la riga di sistema viene creata;
+      (3) resequence: Nuovo → sort_order 0 + gruppo Aperto; ogni stato custom esistente →
+          10,20,... nell'ordine (sort_order, name, id) attuale; Chiuso → max+10 + gruppo Chiuso.
+      Su DB vuoto il risultato sono le sole 2 righe di sistema per tabella + 2 gruppi (il seed
+      pulito le CONTIENE: sono configurazione obbligatoria, non dato demo).
+    </schema>
+
+    <!-- ===================== STATUS GROUPS (nuovo modulo, template lead-statuses) ===================== -->
+    <endpoint method="GET" path="/api/status-groups/for-select">
+      <request>search? string max:255, offset? int min:0, limit? int 1..100, ids[]? int</request>
+      <response status="200">{ items: [{ id, label: name }], export_link: null, pagination: { total, offset, limit, total_pages } } — ordinati per sort_order asc, name asc, id asc; appendHydratedIds per ids[]</response>
+      <errors>403 senza status-groups.viewAny</errors>
+    </endpoint>
+    <endpoint method="GET" path="/api/status-groups/{statusGroup}">
+      <response status="200">{ success: true, message, data: { id, name, color, sort_order, created_at }, permissions }</response>
+      <errors>403 senza status-groups.view · 404 id inesistente</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/status-groups">
+      <request>{ name: required string max:191 unique, color?: nullable string max:32, sort_order?: integer }</request>
+      <response status="201">envelope con data come show</response>
+      <errors>403 senza create · 422 name duplicato/invalid</errors>
+    </endpoint>
+    <endpoint method="PATCH" path="/api/status-groups/{statusGroup}">
+      <request>stessi campi tutti sometimes; unique ignora self</request>
+      <response status="200">envelope con data come show</response>
+      <errors>403 · 404 · 422</errors>
+    </endpoint>
+    <endpoint method="DELETE" path="/api/status-groups/{statusGroup}">
+      <response status="204">body vuoto</response>
+      <errors>403 senza delete · 409 se referenziato da pipeline_statuses o lead_statuses ("This status group is used by a status and cannot be deleted.")</errors>
+    </endpoint>
+    <!-- Dominio tabellare 'status-groups' registrato in config/tables.php: colonne name (text,
+         sortable, searchable), color (non sortable), sort_order (number, sortable),
+         created_at (datetime); actions view/edit/delete/activity; defaultSort sort_order asc;
+         advanced filters: name Text, sort_order_range NumberRange, created_range DateRange. -->
+
+    <!-- ===================== STATI: shape estesa (identica per i due moduli) ===================== -->
+    <endpoint method="GET" path="/api/{pipeline-statuses|lead-statuses}/{id}">
+      <response status="200">data: { id, name, color, sort_order, system_key: 'new'|'closed'|null, status_group_id: number|null, status_group: { id, name, color }|null, created_at }</response>
+    </endpoint>
+    <endpoint method="POST" path="/api/{pipeline-statuses|lead-statuses}">
+      <request>{ name: required (unique solo su lead-statuses), color?: nullable, status_group_id?: nullable integer exists:status_groups,id } — sort_order NON accettato (D-5: unknown field ignorato, placement automatico = ultimo custom prima di Chiuso)</request>
+      <response status="201">shape estesa; system_key sempre null in create</response>
+      <errors>422 status_group_id inesistente</errors>
+    </endpoint>
+    <endpoint method="PATCH" path="/api/{pipeline-statuses|lead-statuses}/{id}">
+      <request>name?, color?, status_group_id? (sometimes) — sort_order NON accettato</request>
+      <response status="200">shape estesa</response>
+      <errors>422 se la riga e' di sistema E il payload include status_group_id
+        ("System statuses accept only name and color changes.") · 422 unique name (lead) · 403 · 404</errors>
+    </endpoint>
+    <endpoint method="DELETE" path="/api/{pipeline-statuses|lead-statuses}/{id}">
+      <errors>422 se system_key non null ("The 'Nuovo'/'Chiuso' status is a system status and cannot be deleted." — messaggio con il name corrente) · 409 se referenziato (invariato) · 403</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/{pipeline-statuses|lead-statuses}/reorder">
+      <request>{ ordered_ids: required array min:1 di integer distinct } — DEVE contenere ESATTAMENTE tutti gli id degli stati custom (nessun system_key), nessuno in piu' o in meno</request>
+      <response status="200">{ success: true, message, data: [{ id, sort_order, system_key }] } — lista COMPLETA fresca ordinata (Nuovo 0, custom 10,20,..., Chiuso ultimo)</response>
+      <errors>403 senza {resource}.update · 422 se ordered_ids include un id di sistema, un id inesistente, duplicati, o non copre tutti i custom</errors>
+      <!-- Route letterale dichiarata PRIMA della wildcard {model} (precedente: for-select). -->
+    </endpoint>
+    <!-- for-select stati: item diventa { id, label: name, meta: { system_key: 'new'|'closed'|null } }.
+         Ordinamento invariato (sort_order, name, id). -->
+    <!-- TableDefinition stati: mapRow += status_group {id, name, color}|null e system_key;
+         nuova colonna 'status_group' (derived, non sortable, filtro advanced Select/Text su nome
+         gruppo); actionsFor() OMETTE 'delete' e 'edit' NON viene omesso per le righe di sistema
+         (edit resta: name/color modificabili); deleteModel() override → abort(422) su system_key
+         (bulk-delete). -->
+
+    <!-- ===================== FALLBACK "Nuovo" (D-3) ===================== -->
+    <endpoint method="POST" path="/api/leads · /api/projects · /api/campaigns">
+      <request>lead_status_id / pipeline_status_id: da `required` a `nullable|sometimes` (+ exists invariato). Campagne linked: comportamento derivato invariato.</request>
+      <response status="201">se FK omessa/null → il service assegna lo stato con system_key='new'; se fornita → onorata invariata</response>
+    </endpoint>
+
+    <authorization_fields>
+      StatusGroupsAuthorization: name (text, mandatory), color (color), sort_order (number);
+      actions ['delete','export','import','view_activity']. Registrata in config/authorization.php.
+      PipelineStatuses/LeadStatusesAuthorization: += status_group_id (select); RIMOSSO sort_order
+      dai fields() (non piu' scrivibile via API, D-5); la colonna resta in tabella.
+    </authorization_fields>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- BE: Pest. FE: Vitest. Il verifier li esegue tutti. -->
+    <criterion id="AC-001">Dato un DB vuoto, quando girano le migrazioni, allora pipeline_statuses e lead_statuses contengono ciascuna esattamente 2 righe: name "Nuovo" {system_key new, sort_order 0, gruppo "Aperto"} e name "Chiuso" {system_key closed, sort_order 10, gruppo "Chiuso"}; status_groups contiene "Aperto" e "Chiuso". La down() e' reversibile.</criterion>
+    <criterion id="AC-002">Dato un DB con stati preesistenti (incluso uno chiamato "Nuovo"), quando gira la migrazione, allora la riga omonima viene promossa (system_key valorizzato, NESSUNA riga duplicata), gli altri stati vengono risequenziati 10,20,... preservando l'ordine relativo, e "Chiuso" risulta ultimo.</criterion>
+    <criterion id="AC-003">Quando DELETE su uno stato con system_key (single o bulk-delete tabellare), allora 422 con messaggio di sistema e la riga persiste; DELETE su stato custom non referenziato → 204; su custom referenziato → 409 (invariato).</criterion>
+    <criterion id="AC-004">Quando PATCH su uno stato di sistema con name e/o color, allora 200 e i valori cambiano; quando il payload include status_group_id, allora 422 e nessuna modifica persiste.</criterion>
+    <criterion id="AC-005">Quando POST reorder con ordered_ids = permutazione esatta dei custom, allora 200, i custom ricevono 10,20,... nell'ordine dato, "Nuovo" resta 0 e "Chiuso" resta ultimo; con un id di sistema, un id mancante o un duplicato → 422; senza permesso update → 403.</criterion>
+    <criterion id="AC-006">Quando POST su uno dei due moduli stati senza sort_order, allora il nuovo custom si posiziona ultimo tra i custom (prima di "Chiuso"); un sort_order eventualmente inviato viene ignorato.</criterion>
+    <criterion id="AC-007">CRUD status-groups: create/show/update funzionano con envelope standard; name duplicato → 422; DELETE su gruppo referenziato da uno stato → 409; non referenziato → 204; ogni endpoint nega 403 senza il permesso corrispondente.</criterion>
+    <criterion id="AC-008">Quando store/update di uno stato custom con status_group_id valido, allora la Resource risponde con status_group {id, name, color}; con id inesistente → 422; mapRow della tabella espone status_group e system_key.</criterion>
+    <criterion id="AC-009">Quando POST /leads, /projects o /campaigns (non linked) senza FK stato, allora 201 e l'entita' ha lo stato system_key='new'; con FK esplicita → onorata. Il for-select degli stati espone meta.system_key.</criterion>
+    <criterion id="AC-010">FE (Vitest): nelle tabelle dei configuratori le righe di sistema non offrono l'azione delete; nel form (edit di sistema) il campo gruppo e' disabilitato e name/color restano editabili; l'input numerico sort_order non esiste piu' nel form.</criterion>
+    <criterion id="AC-011">FE (Vitest): lo StatusReorderSheet mostra "Nuovo" pinnato in testa e "Chiuso" pinnato in coda (non trascinabili), permette il riordino dei custom e al submit chiama POST reorder con ordered_ids nell'ordine visuale; su 422/403 mostra toast e non altera l'ordine mostrato.</criterion>
+    <criterion id="AC-012">FE (Vitest): il form di creazione Lead (e Project) preseleziona lo stato con meta.system_key='new' quando il campo e' vuoto; la pagina status-groups renderizza gated su status-groups.viewAny; quick-create entry presente.</criterion>
+    <criterion id="AC-013">Suite completa VERDE: Pest full, Vitest full, Pint, ESLint, tsc -b --force. Nessuna regressione nei moduli projects/campaigns/leads/pipeline-statuses/lead-statuses (i test esistenti che inviavano sort_order o FK stato required vengono adeguati SOLO se il requisito e' cambiato, dichiarandolo).</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Unica nuova dipendenza autorizzata: @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities (frontend). Nessun'altra.</item>
+    <item>Authz server-side su ogni endpoint (Policy + FormRequest); reorder gated su {resource}.update; regole di sistema enforce nel Service/Guard, MAI solo nel FE.</item>
+    <item>Ordinamento/filtri SSRM da allow-list di colonne (mai input grezzo in raw SQL).</item>
+    <item>Colore sempre token BADGE_COLOR_TOKENS via ColorTokenPicker; mai hex; mai colori hard-coded nel FE.</item>
+    <item>Migrazioni nuove (mai modificare le committate), reversibili, verificate su SQLite; comportamento MySQL da annotare per il deploy.</item>
+    <item>Seed pulito: le righe di sistema nascono in MIGRAZIONE (configurazione obbligatoria); i dati demo restano solo in Demo*Seeder via DemoDataSeeder.</item>
+    <item>Non toccare i file del subsystem import ne' i locales import-wizard (lavoro 0036/0038 non committato in working tree).</item>
+    <item>i18n: nessuna stringa hardcoded; namespace statusGroups + estensioni pipelineStatuses/leadStatuses, en+it.</item>
+    <item>File entro 300/500 righe; identificatori in inglese; niente commit senza ordine esplicito (CLAUDE.md §3.6).</item>
+  </constraints>
+
+</spec>
