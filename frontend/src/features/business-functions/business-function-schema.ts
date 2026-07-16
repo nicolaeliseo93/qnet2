@@ -32,6 +32,11 @@ function baseFields(t: TFunction) {
     manager_id: z.number().nullable(),
     // Multiselect associated users (for-select standard): ids, full-replace.
     users: z.array(z.number()),
+    // Single-select parent function (for-select standard): `null` = top-level.
+    // The anti-cycle rule (self/descendant) is enforced server-side (422).
+    parent_id: z.number().nullable(),
+    // Multiselect operational sites (for-select standard): ids, full-replace.
+    operational_sites: z.array(z.number()),
   }
 }
 

@@ -95,6 +95,30 @@ export interface ImportRunDetail extends ImportRunSummary {
    * delta — callers fall back to the mapped-fields derivation.
    */
   review_fields?: Array<{ id: string; label: string }>
+  /**
+   * A saved mapping template whose `columns` (spec 0035) match, in exact
+   * order, this run's detected columns — computed SERVER-SIDE, never by the
+   * client. Optional/possibly absent for backward compatibility with
+   * fixtures predating the delta, mirroring `review_fields` above.
+   */
+  matching_template?: {
+    id: number
+    name: string
+    column_mapping: Record<string, string>
+    dedup_strategy: string | null
+  } | null
+}
+
+/** A saved column-mapping template (spec 0035), shared team-wide per domain. */
+export interface ImportMappingTemplate {
+  id: number
+  name: string
+  /** Ordered snapshot of the source run's column keys — the exact-match signature. */
+  columns: string[]
+  column_mapping: Record<string, string>
+  dedup_strategy: string | null
+  created_by: { id: number; name: string }
+  created_at: string
 }
 
 /** Body of `PUT /imports/{domain}/{importRun}/configure`. */

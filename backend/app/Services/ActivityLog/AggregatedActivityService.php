@@ -20,6 +20,8 @@ use Spatie\Activitylog\Models\Activity;
  */
 final class AggregatedActivityService
 {
+    public function __construct(private readonly ForeignKeyLabelResolver $labelResolver) {}
+
     /**
      * @param  array<int, string>  $relations  dot-path relations declared for this resource
      */
@@ -38,7 +40,10 @@ final class AggregatedActivityService
         $hasMore = $activities->count() > $perPage;
         $items = $activities->take($perPage)->values();
 
-        return new ActivityLogPage($items, $hasMore ? $this->cursorFor($items->last())->encode() : null);
+        // Step 4: resolve every FK label the page needs, in one batch (no N+1)
+        $labels = $this->labelResolver->resolve($items);
+
+        return new ActivityLogPage($items, $labels, $hasMore ? $this->cursorFor($items->last())->encode() : null);
     }
 
     /**

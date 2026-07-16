@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0036-lead-import-duplicate-resolution" status="approved" owner="utente" date="2026-07-16">
+
+  <goal>
+    L'import lead riconosce i duplicati anche per codice fiscale e a livello di LEAD
+    (stesso referente nella stessa campagna), e l'operatore risolve ogni riga duplicata
+    direttamente nella review (salta / crea comunque / aggiorna esistente), vedendo QUALE
+    referente esistente e' stato matchato.
+  </goal>
+
+  <context>
+    Decisioni utente (2026-07-16): lead duplicato = stesso referente + stessa campagna;
+    match contatto = email + telefono/cellulare (attuale) + codice fiscale; risoluzione
+    per-riga in review; il dedup intra-file NON e' stato richiesto (fuori scope).
+
+    Fatti verificati nel repo (mappa agente explore-dedup, 2026-07-16):
+    - Match esistente SOLO contro Referent a DB via Contact email/phone/mobile:
+      `LeadDuplicateMatcher` (app/Imports/Leads/LeadDuplicateMatcher.php) — normalizza
+      email lowercase e telefono a cifre+`+`, campi riga da `LeadContactFields::map()`.
+    - `tax_code` e' gia' campo mappabile (`LeadImportFieldCatalog::FIELD_CATALOG`) e
+      colonna `personal_data.tax_code` (nullable, index, migrazione
+      2026_06_15_110000_create_personal_data_table.php:44). PersonalData e' morph
+      `personable` di Referent; Contact e' morph `contactable` di PersonalData.
+    - Staging: `StageImportJob` -> `StagedRowBuilder::resolve()` (Step 4:
+      `resolveDuplicate($mapped)` -> `resolveStatus()`): match+`manual` -> status
+      `duplicate`; match+`ignore` -> `skipped`; match+`create_new`/`update_existing` ->
+      `valid`. `duplicate_of_id` (referent id) persistito su `import_run_rows`.
+    - Commit: `ProcessStagedImportJob` persiste [valid, warning, duplicate];
+      `LeadsImportDefinition::persistRow()` con `manual`+match fa no-op MA il job conta
+      comunque `imported++` (BUG noto, da correggere in questa spec). `LeadRowPersister::
+      attachLead()` cerca il lead esistente per coppia `referent_id + campaign_id` solo
+      nel ramo update. La campagna del run e' `global_config['campaign_id']` (required,
+      `LeadImportFieldCatalog::GLOBAL_FIELDS`).
+    - Re-validazione: `StagedRowReviser::revise()` rigioca `StagedRowBuilder::resolve()`
+      sul PATCH riga; `ImportService::recomputeCounts()` deriva i contatori dagli status.
+    - Review FE: `import-step-review.tsx` + `review-grid.tsx`/`review-columns.tsx` (SSRM;
+      badge status `duplicate` outline sky; unica interazione = edit inline valori).
+      `duplicate_of_id` gia' nel type FE (wizard/types.ts) ma non renderizzato.
+    - Endpoint riga esistente: PATCH /api/imports/{domain}/{importRun}/rows/{row}
+      (UpdateImportRowRequest, solo `values`), risponde { row, counts }.
+  </context>
+
+  <scope>
+    <in>
+      <item>Estensione match: codice fiscale (`personal_data.tax_code` dei Referent, normalizzato uppercase+trim) accanto a email/phone/mobile.</item>
+      <item>Match lead-level: referente matchato + lead esistente su `global_config.campaign_id` -> segnalato distintamente nella riga.</item>
+      <item>Nuova colonna `import_run_rows.duplicate_meta` (json) + `resolution` (string nullable) — shape congelata sotto.</item>
+      <item>Endpoint di risoluzione per-riga (solo righe `duplicate`, solo run `reviewing`).</item>
+      <item>Commit che onora la risoluzione per-riga (skip/create/update) e correzione del conteggio `imported` per i manual-duplicate non importati.</item>
+      <item>Review grid: colonna/righe duplicate con referente matchato (nome + link) e select di risoluzione; recap risoluzioni nel summary.</item>
+      <item>Test Pest + Vitest eseguiti.</item>
+    </in>
+    <out>
+      <item>Dedup intra-file (righe duplicate dentro lo stesso file) — non richiesto.</item>
+      <item>Match fuzzy o su nome/cognome/azienda.</item>
+      <item>Refactor performance di LeadDuplicateMatcher (full-scan in memoria) — SEGNALATO, non toccato.</item>
+      <item>Vincoli unique a DB su contacts/leads.</item>
+      <item>Avviso duplicati nella creazione manuale referent/lead — spec 0037 separata.</item>
+      <item>Blocco del confirm con duplicati non risolti: il confirm resta sempre possibile, i non risolti vengono saltati e rendicontati.</item>
+      <item>Nessuna nuova dipendenza; nessuna nuova permission.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Colonne nuove su import_run_rows (migrazione additiva, reversibile):
+         duplicate_meta json nullable, resolution string nullable.
+         duplicate_meta (scritto in staging/revisione quando il match esiste):
+           { referent_id: number, referent_name: string,
+             lead_id: number|null,            // lead esistente su referent+campagna del run
+             matched_on: string[] }           // subset di ["email","phone","mobile","tax_code"]
+         resolution: "skip" | "create" | "update" | null (solo righe duplicate). -->
+
+    <endpoint method="PATCH" path="/api/imports/{domain}/{importRun}/rows/{row}/resolution">
+      <request>{ resolution: "skip" | "create" | "update" }</request>
+      <response status="200">
+        { success, message, data: { row: ImportRunRowItem, counts } }
+        <!-- stessa shape del PATCH riga esistente; row include i campi additivi sotto -->
+      </response>
+      <errors>
+        401; 403 senza `import-runs.update` o senza gate `{domain}.import`;
+        404 run non dell'attore / resource diversa / riga di altro run;
+        422 run non `reviewing`, riga non `duplicate`, resolution fuori enum.
+      </errors>
+    </endpoint>
+
+    <!-- SOLO ADDITIVO su shape esistenti: -->
+    <endpoint method="POST" path="/api/imports/{domain}/{importRun}/rows">
+      <response status="200">
+        items[].duplicate_meta: duplicate_meta | null
+        items[].resolution: "skip"|"create"|"update"|null
+      </response>
+    </endpoint>
+    <endpoint method="GET" path="/api/imports/{domain}/{importRun}/summary">
+      <response status="200">
+        data.summary.duplicate_resolutions:
+          { skip: number, create: number, update: number, unresolved: number }
+        <!-- calcolato dalle righe status=duplicate correnti del run -->
+      </response>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- Backend (Pest) -->
+    <criterion id="AC-001">Dato un Referent esistente con `personal_data.tax_code` X, quando lo staging processa una riga con tax_code X (case/spazi diversi) e strategia `manual`, allora la riga e' `duplicate` con duplicate_meta.matched_on contenente "tax_code" e referent_id/referent_name valorizzati.</criterion>
+    <criterion id="AC-002">Dato un referente matchato che HA un lead sulla campagna del run (global_config.campaign_id), allora duplicate_meta.lead_id e' l'id di quel lead; se il lead esiste solo su ALTRA campagna, lead_id e' null (il match contatto resta).</criterion>
+    <criterion id="AC-003">Dato un run `reviewing` con riga `duplicate`, quando PATCH .../resolution con "update", allora 200 con row.resolution="update" e counts ricalcolati; con run non reviewing o riga non duplicate, allora 422; da attore non owner, allora 404; senza permesso update, allora 403.</criterion>
+    <criterion id="AC-004">Dato un confirm con righe duplicate risolte "skip", "create", "update", allora: skip non scrive nulla; create crea NUOVO referent+lead; update aggiorna il referent matchato e il suo lead della campagna (via percorso LeadRowPersister esistente); `imported_rows` conta SOLO le righe realmente scritte.</criterion>
+    <criterion id="AC-005">Dato un confirm con righe duplicate NON risolte (strategia manual), allora non vengono scritte, NON incrementano `imported_rows` (bug fix), e il summary le espone in duplicate_resolutions.unresolved.</criterion>
+    <criterion id="AC-006">Dato l'edit inline di una riga duplicata che ne cambia i contatti (StagedRowReviser), allora duplicate_meta viene ricalcolato coerentemente (match sparito -> meta null e status non-duplicate; resolution azzerata).</criterion>
+    <criterion id="AC-007">I comportamenti esistenti restano invariati: strategie `create_new`/`update_existing`/`ignore` producono gli stessi status/persistenze di prima (regressione coperta dai test esistenti, eseguiti).</criterion>
+    <!-- Frontend (Vitest) -->
+    <criterion id="AC-008">Data una riga `duplicate` nella review grid, allora mostra il nome del referente matchato (con indicazione se esiste gia' un lead in campagna) e il select di risoluzione salta/crea/aggiorna; le righe non duplicate non lo mostrano.</criterion>
+    <criterion id="AC-009">Quando l'operatore sceglie una risoluzione, allora parte la mutation PATCH resolution, la riga e i contatori si aggiornano dall'esito, gli errori sono notificati.</criterion>
+    <criterion id="AC-010">Il summary step mostra il recap duplicate_resolutions (skip/create/update/non risolti).</criterion>
+    <criterion id="AC-011">Suite Pest e Vitest ESEGUITE verdi; `npx tsc -b` pulito; Pint/ESLint puliti sui file toccati.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza. Nessuna nuova permission: il nuovo endpoint usa i gate esistenti (`import-runs.update` + `authorizeImport`), status/ownership come updateRow (assertOwnedRun/assertRowBelongsToRun/assertReviewing).</item>
+    <item>Migrazione ADDITIVA e reversibile su `import_run_rows`; MAI modificare migrazioni committate.</item>
+    <item>La risoluzione per-riga vive in `import_run_rows.resolution`: il commit la legge da li'; nessuna logica di risoluzione client-side.</item>
+    <item>Estendere `LeadDuplicateMatcher`/`LeadContactFields` senza cambiare la semantica dei match esistenti; normalizzazione tax_code SOLO al confronto (i valori restano persistiti raw, come oggi).</item>
+    <item>`persistRow`/`ProcessStagedImportJob`: il fix del conteggio non cambia l'envelope ne' gli status; una riga non scritta non e' mai `imported`.</item>
+    <item>FE: mutation TanStack Query con invalidazione di righe+counts+summary; stringhe i18n namespace importWizard (en+it); review-columns resta allow-list driven (nessun input grezzo verso il backend SSRM).</item>
+    <item>File FE nuovi se lo step/griglia supera le 300 righe (es. `review-resolution-cell.tsx`).</item>
+  </constraints>
+
+</spec>

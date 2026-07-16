@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Address;
 use App\Models\BusinessFunction;
+use App\Models\OperationalSite;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -25,8 +27,12 @@ class BusinessFunctionResource extends JsonResource
             'type' => $this->type(),
             'manager_id' => $this->manager_id,
             'manager' => $this->userSummary($this->manager),
+            'parent_id' => $this->parent_id,
+            'parent' => $this->parentSummary($this->parent),
             'user_ids' => $this->users->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all(),
             'users' => $this->users->map(fn (User $user): array => $this->userSummary($user))->all(),
+            'operational_site_ids' => $this->operationalSites->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all(),
+            'operational_sites' => $this->operationalSites->map(fn (OperationalSite $site): array => $this->operationalSiteSummary($site))->all(),
             'created_at' => $this->created_at,
         ];
     }
@@ -59,5 +65,43 @@ class BusinessFunctionResource extends JsonResource
             'name' => $user->name,
             'avatar_url' => $user->avatarDataUri(),
         ];
+    }
+
+    /**
+     * @return array{id: int, name: string}|null
+     */
+    private function parentSummary(?BusinessFunction $parent): ?array
+    {
+        if ($parent === null) {
+            return null;
+        }
+
+        return ['id' => $parent->id, 'name' => $parent->name];
+    }
+
+    /**
+     * @return array{id: int, label: string}
+     */
+    private function operationalSiteSummary(OperationalSite $site): array
+    {
+        /** @var Address|null $address */
+        $address = $site->addresses->first();
+
+        return ['id' => $site->id, 'label' => $this->composeAddressLabel($address)];
+    }
+
+    /**
+     * Same composition as OperationalSiteForSelectResource/LeadOperationalSiteColumn:
+     * "{line1} - {city}", or just line1 when the address has no city.
+     */
+    private function composeAddressLabel(?Address $address): string
+    {
+        if ($address === null) {
+            return '';
+        }
+
+        $city = $address->city?->name;
+
+        return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
     }
 }

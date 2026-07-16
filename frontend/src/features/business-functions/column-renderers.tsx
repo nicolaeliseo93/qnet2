@@ -2,6 +2,7 @@
 import type { ICellRendererParams } from 'ag-grid-community'
 import { Check, X } from 'lucide-react'
 import i18n from '@/i18n'
+import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/user-avatar'
 import { Badge } from '@/components/ui/badge'
 import { AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar'
@@ -13,10 +14,17 @@ import {
 } from '@/components/ui/tooltip'
 import { DateTimeCell } from '@/features/table/cell-renderers'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
-import type { BusinessFunctionMember } from '@/features/business-functions/types'
+import type {
+  BusinessFunctionMember,
+  BusinessFunctionOperationalSite,
+  BusinessFunctionParent,
+} from '@/features/business-functions/types'
 
 /** Hoisted empty-array default: a stable reference avoids a new array per render. */
 const EMPTY_MEMBERS: BusinessFunctionMember[] = []
+
+/** Hoisted empty-array default for the operational-sites cell. */
+const EMPTY_SITES: BusinessFunctionOperationalSite[] = []
 
 /** How many avatars are shown inline before collapsing into a “+N” chip. */
 const MAX_VISIBLE_AVATARS = 5
@@ -125,6 +133,75 @@ function UsersCell({ value }: ICellRendererParams) {
   )
 }
 
+/** Renders the `parent` column: the parent function's name, em dash for a top-level function. */
+function ParentCell({ value }: ICellRendererParams) {
+  const parent = value as BusinessFunctionParent | null
+
+  if (!parent) {
+    return <EmptyCell />
+  }
+
+  return (
+    <div className="flex h-full items-center">
+      <span className="truncate">{parent.name}</span>
+    </div>
+  )
+}
+
+/** Shared cell wrapper for the operational-sites count badge (mirrors `productCategoryColumnRenderers`). */
+const SITES_CELL_WRAPPER = 'flex h-full w-full items-center justify-center px-2 py-1 overflow-hidden'
+
+/** Consistent pill height so the count badge aligns with every other badge column. */
+const SITES_BADGE_BASE = 'h-5 min-h-5'
+
+/**
+ * Renders the `operational_sites` column: a compact badge with the total,
+ * revealing every site's label (`"line1 - city"`) in a hover/focus tooltip —
+ * mirrors the count-plus-tooltip pattern shared by `TagsCountCell` and
+ * `productCategoryColumnRenderers`'s `CountWithNamesCell`.
+ */
+function OperationalSitesCell({ value }: ICellRendererParams) {
+  const sites = Array.isArray(value) ? (value as BusinessFunctionOperationalSite[]) : EMPTY_SITES
+
+  if (sites.length === 0) {
+    return (
+      <div className={SITES_CELL_WRAPPER}>
+        <span className="text-muted-foreground">—</span>
+      </div>
+    )
+  }
+
+  const allLabels = sites.map((site) => site.label).join(', ')
+
+  return (
+    <div className={SITES_CELL_WRAPPER}>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="secondary"
+              className={cn(SITES_BADGE_BASE, 'cursor-default tabular-nums')}
+              tabIndex={0}
+              aria-label={allLabels}
+            >
+              {sites.length}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" variant="light" className="max-h-64 max-w-64 overflow-y-auto p-0">
+            <ul className="flex flex-col divide-y">
+              {sites.map((site) => (
+                <li key={site.id} className="px-3 py-1.5 text-sm">
+                  {site.label}
+                </li>
+              ))}
+            </ul>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  )
+}
+
 /**
  * Colored tone classes for the boolean badge (green = yes, red = no), reusing
  * the same palette as the generic table BadgeCell so tones stay consistent
@@ -162,5 +239,7 @@ export const businessFunctionColumnRenderers: TableRendererMap = {
   is_business_service: (params) => <BooleanCell {...params} />,
   manager: (params) => <ManagerCell {...params} />,
   users: (params) => <UsersCell {...params} />,
+  parent: (params) => <ParentCell {...params} />,
+  operational_sites: (params) => <OperationalSitesCell {...params} />,
   created_at: (params) => <DateTimeCell {...params} />,
 }

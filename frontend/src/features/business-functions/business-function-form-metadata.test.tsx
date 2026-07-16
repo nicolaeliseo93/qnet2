@@ -31,15 +31,18 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
+// Keyed by `resource` so the responsabile and parent-function single-selects
+// (both `AsyncPaginatedSelect`) stay independently addressable; same for the
+// associated-users and operational-sites multiselects.
 vi.mock('@/components/ui/async-paginated-select', () => ({
-  AsyncPaginatedSelect: ({ value }: { value: number | null }) => (
-    <div data-testid="manager-value">{value ?? ''}</div>
+  AsyncPaginatedSelect: ({ resource, value }: { resource: string; value: number | null }) => (
+    <div data-testid={`${resource}-value`}>{value ?? ''}</div>
   ),
 }))
 
 vi.mock('@/components/ui/async-paginated-multi-select', () => ({
-  AsyncPaginatedMultiSelect: ({ value }: { value: number[] }) => (
-    <div data-testid="users-value">{value.join(',')}</div>
+  AsyncPaginatedMultiSelect: ({ resource, value }: { resource: string; value: number[] }) => (
+    <div data-testid={`${resource}-values`}>{value.join(',')}</div>
   ),
 }))
 
@@ -70,6 +73,10 @@ function businessFunction(
     manager: { id: 5, name: 'Ada Lovelace', avatar_url: null },
     user_ids: [],
     users: [],
+    parent_id: null,
+    parent: null,
+    operational_site_ids: [],
+    operational_sites: [],
     created_at: '2026-01-01T00:00:00Z',
     permissions: {
       resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
@@ -179,7 +186,7 @@ describe('BusinessFunctionForm — metadata-driven authorization (spec 0004)', (
 
     await waitFor(() => expect(screen.getByLabelText(/^Name/)).toBeInTheDocument())
     // No crash, and the responsabile field renders (the graceful default).
-    expect(screen.getByTestId('manager-value')).toBeInTheDocument()
+    expect(screen.getByTestId('users-value')).toBeInTheDocument()
   })
 
   it('seeds permissions from the loaded detail and surfaces a 422 field error inline', async () => {

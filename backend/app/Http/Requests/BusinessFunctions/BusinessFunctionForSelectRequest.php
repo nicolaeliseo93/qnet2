@@ -13,6 +13,11 @@ use Illuminate\Foundation\Http\FormRequest;
  * Authorization is intentionally NOT handled here (it stays in the controller
  * via authorize('viewAny', BusinessFunction::class)). Pagination bounds mirror
  * BaseApiController::validateRequest (offset >= 0, 1 <= limit <= MAX_LIMIT).
+ *
+ * `exclude_descendants_of` (spec 0010 REV) is NOT part of the shared
+ * ForSelectQuery DTO — it feeds the edit-mode parent picker only, so it is
+ * read directly off the request by the controller and passed to the Service
+ * as a separate argument, never widening the generic for-select contract.
  */
 class BusinessFunctionForSelectRequest extends FormRequest
 {
@@ -35,7 +40,22 @@ class BusinessFunctionForSelectRequest extends FormRequest
             'limit' => ['sometimes', 'integer', 'min:1', "max:{$maxLimit}"],
             'ids' => ['sometimes', 'array'],
             'ids.*' => ['integer'],
+            'exclude_descendants_of' => ['sometimes', 'integer', 'exists:business_functions,id'],
         ];
+    }
+
+    /**
+     * The validated `exclude_descendants_of` param, or null when not
+     * submitted.
+     */
+    public function excludeDescendantsOf(): ?int
+    {
+        /** @var array<string, mixed> $validated */
+        $validated = $this->validated();
+
+        return array_key_exists('exclude_descendants_of', $validated)
+            ? (int) $validated['exclude_descendants_of']
+            : null;
     }
 
     /**

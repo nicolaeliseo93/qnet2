@@ -19,6 +19,10 @@ export interface ActivityLogChange {
   field: string
   old_value: unknown
   new_value: unknown
+  /** Human-readable label for `old_value`, resolved server-side; set only when `field` is an FK. */
+  old_display: string | null
+  /** Human-readable label for `new_value`, resolved server-side; set only when `field` is an FK. */
+  new_display: string | null
 }
 
 /** One aggregated activity-log entry (root record or a declared relation). */

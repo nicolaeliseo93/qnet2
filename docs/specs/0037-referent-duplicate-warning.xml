@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0037-referent-duplicate-warning" status="approved" owner="utente" date="2026-07-16">
+
+  <goal>
+    Alla creazione manuale di un referente (form dedicato E quick-create in dialog dal form
+    lead), l'operatore viene avvisato in tempo reale, in modo NON bloccante, se un referente
+    con gli stessi contatti (email/telefono/cellulare) o lo stesso codice fiscale esiste
+    gia', cosi' da non creare duplicati.
+  </goal>
+
+  <context>
+    Decisioni utente (2026-07-16): il controllo duplicati parte anche dal modulo referent
+    ("il form referent dovra' avvisare che quell'utente esiste gia'"); criteri di match =
+    email + telefono/cellulare + codice fiscale (stessi della spec 0036).
+    Proposta da validare: avviso NON bloccante (il salvataggio resta possibile) — i dati
+    reali possono legittimamente coincidere e il blocco duro creerebbe falsi positivi.
+
+    Fatti verificati nel repo (mappa agente explore-referents, 2026-07-16):
+    - I valori da matchare vivono su DUE tabelle: `contacts.value` (morph contactable =
+      PersonalData, type da ContactTypeEnum; NESSUN indice su value) e
+      `personal_data.tax_code` (nullable, INDEX non-unique, migrazione
+      2026_06_15_110000:44). Catena: Referent -> personalData (morph personable) ->
+      contacts (morphMany).
+    - Normalizzazione match GIA' esistente ma privata in `LeadDuplicateMatcher::normalize()`
+      (app/Imports/Leads/LeadDuplicateMatcher.php:86-93): email lowercase+trim, telefoni
+      digits+`+`. `LeadContactFields::map()` mappa email/phone/mobile -> ContactTypeEnum.
+    - Nessun endpoint check/lookup esiste; il pattern piu' vicino e' l'invokable for-select
+      (`ReferentForSelectController` + FormRequest + authorize + Service).
+    - Form FE: `features/referents/` — referent-form.tsx / referent-form-body.tsx /
+      use-referent-form.ts; i campi contatto e tax_code NON stanno nello schema RHF ma nel
+      buffer `profileDraft` (useState, use-referent-form.ts:115-119). Quick-create referent
+      (spec 0028) riusa LO STESSO ReferentForm in dialog dal form lead
+      (use-quick-create-action.tsx) -> l'avviso vale automaticamente anche li'.
+    - Pattern debounce esistente: hook `useDebouncedValue` (hooks/use-debounced-value.ts,
+      300ms) + TanStack Query (async-paginated-select.tsx). Stile warning amber esistente:
+      `border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400`
+      (import-step-review.tsx:60).
+    - Envelope { success, message, data }; errori 422 Laravel standard.
+    - Rate limiting VIETATO fuori dagli endpoint credenziali (decisione 2026-07-15).
+  </context>
+
+  <scope>
+    <in>
+      <item>Endpoint read-only di verifica duplicati referent (contratto sotto), gate `referents.create`.</item>
+      <item>Estrazione della normalizzazione contatti in una unita' condivisa riusata da `LeadDuplicateMatcher` (zero cambi di comportamento all'import).</item>
+      <item>Avviso live non bloccante nel form referent in CREATE (debounced), con elenco dei referenti corrispondenti e criterio di match; attivo anche nel quick-create in dialog (stesso componente).</item>
+      <item>Test Pest + Vitest eseguiti.</item>
+    </in>
+    <out>
+      <item>Blocco del salvataggio o merge/unione di referenti duplicati.</item>
+      <item>Avviso in EDIT del referente (solo create).</item>
+      <item>Avviso nel form lead in se' (il lead seleziona un referente esistente; il quick-create e' gia' coperto perche' riusa ReferentForm).</item>
+      <item>Colonna normalizzata/indice su `contacts.value` — SEGNALATO come ottimizzazione futura, non incluso.</item>
+      <item>Match fuzzy o su nome/cognome; vat_number.</item>
+      <item>Nessuna nuova dipendenza; nessuna nuova permission; nessun rate limiting.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <endpoint method="POST" path="/api/referents/duplicate-check">
+      <!-- Invokable ReferentDuplicateCheckController, mirrorando il pattern for-select.
+           POST (non GET) perche' il body porta una lista strutturata di contatti.
+           Registrata PRIMA delle route con binding {referent}. -->
+      <request>
+        { tax_code?: string|null (max 32),
+          contacts?: Array&lt;{ type: "email"|"phone"|"mobile", value: string (max 255) }&gt; }
+        <!-- Almeno UN criterio non vuoto richiesto (422 altrimenti).
+             Il confronto avviene sui valori NORMALIZZATI (email lowercase+trim,
+             telefoni digits+'+', tax_code uppercase+trim), stessa semantica
+             dell'import (unita' condivisa). -->
+      </request>
+      <response status="200">
+        { success, message, data: { matches: Array&lt;{
+            referent_id: number,
+            name: string,
+            matched_on: string[]   // subset di ["email","phone","mobile","tax_code"]
+          }&gt; } }
+        <!-- max 5 match, id desc; array vuoto = nessun duplicato.
+             SOLO id/name/criterio: nessun dato di contatto altrui nella risposta
+             (il check non deve diventare un canale di esfiltrazione PII). -->
+      </response>
+      <errors>
+        401 non autenticato; 403 senza `referents.create`;
+        422 nessun criterio fornito / type fuori enum / value oltre max.
+      </errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- Backend (Pest) -->
+    <criterion id="AC-001">Dato un referente esistente con contatto email "Mario.Rossi@Example.com", quando POST duplicate-check con "mario.rossi@example.com", allora 200 con un match { referent_id, name, matched_on: ["email"] }.</criterion>
+    <criterion id="AC-002">Dato un referente con telefono "+39 02 1234-567", quando il check riceve "0212 34567" con prefisso/formattazione diversa ma stesse cifre normalizzate, allora matcha su "phone"; cifre diverse non matchano.</criterion>
+    <criterion id="AC-003">Dato un referente con personal_data.tax_code "rssmra80a01h501u", quando il check riceve "RSSMRA80A01H501U ", allora matcha su "tax_code".</criterion>
+    <criterion id="AC-004">Un referente che matcha su PIU' criteri compare UNA volta con matched_on cumulativo; i match sono al massimo 5, id desc; contatti appartenenti a PersonalData non-Referent (es. utenti) NON matchano.</criterion>
+    <criterion id="AC-005">Senza autenticazione 401; con utente senza `referents.create` 403; body senza alcun criterio 422; la risposta non contiene MAI valori di contatto o tax_code altrui.</criterion>
+    <criterion id="AC-006">La suite Pest esistente dell'import lead resta verde dopo l'estrazione della normalizzazione condivisa (zero regressioni su LeadDuplicateMatcher).</criterion>
+    <!-- Frontend (Vitest) -->
+    <criterion id="AC-007">Dato il form referent in create, quando l'operatore digita un'email che corrisponde a un referente esistente (mock API), allora dopo il debounce compare l'avviso amber non bloccante con nome del referente e criterio; il submit resta abilitato e funzionante.</criterion>
+    <criterion id="AC-008">Quando i campi osservati tornano vuoti o il check risponde senza match, allora l'avviso scompare; il check NON parte con tutti i criteri vuoti (nessuna richiesta).</criterion>
+    <criterion id="AC-009">L'avviso e' annunciato con `role="status"` (aria-live polite, non alert bloccante) e resta leggibile a 375px.</criterion>
+    <criterion id="AC-010">Suite Pest e Vitest ESEGUITE verdi; `npx tsc -b` pulito; Pint/ESLint puliti sui file toccati.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza; nessuna nuova permission (gate = Policy `create` esistente dei referents); nessun `throttle`.</item>
+    <item>Layering invokable-controller + FormRequest + Service (nuovo `ReferentDuplicateFinder` o equivalente in app/Services), mirrorando ReferentForSelectController. Mai model raw in risposta.</item>
+    <item>Query parametrizzate: eventuali confronti case-insensitive via whereRaw SOLO con binding (`whereRaw('LOWER(value) = ?', [...])`); nessun input grezzo interpolato. Le query filtrano per ContactTypeEnum e per morph PersonalData->Referent, mai scansione cieca.</item>
+    <item>La normalizzazione estratta e' UNICA fonte condivisa (import 0033/0036 + check 0037): stessa semantica, nessun fork.</item>
+    <item>FE: check debounced con `useDebouncedValue` + `useQuery` (enabled solo con criteri non vuoti), client axios, chiavi query centralizzate nella feature; stringhe i18n namespace referents (en+it); NIENTE logica nel JSX (custom hook `use-referent-duplicate-check.ts`).</item>
+    <item>Il warning e' presentazione: nessun gate client-side sul submit; il backend resta l'unica autorita' (qui non c'e' nulla da autorizzare in piu': la creazione resta permessa).</item>
+    <item>Se `referent-form-body.tsx` supera le 300 righe con l'avviso, estrarre `referent-duplicate-warning.tsx`.</item>
+  </constraints>
+
+</spec>

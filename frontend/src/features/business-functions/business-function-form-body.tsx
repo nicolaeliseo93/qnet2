@@ -1,4 +1,4 @@
-import { Building2, Users as UsersIcon } from 'lucide-react'
+import { Building2, MapPin, Users as UsersIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,8 @@ import { RelationSelectField } from '@/components/form/relation-select-field'
 import { toRelationFieldRef, toRelationFieldRefs } from '@/components/form/relation-field-ref'
 import { RelationMultiSelectField } from '@/components/form/relation-multi-select-field'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
+import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
+import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { useBusinessFunctionForm } from '@/features/business-functions/use-business-function-form'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
 import { BUSINESS_FUNCTION_TYPES } from '@/features/business-functions/types'
@@ -54,16 +56,27 @@ const TYPE_LABEL_KEYS: Record<BusinessFunctionType, string> = {
 export function BusinessFunctionFormBody({ mode, onSuccess, onCancel }: BusinessFunctionFormBodyProps) {
   const { t } = useTranslation()
   const { field: fieldPermission } = useResourcePermissions()
-  const { form, serverError, selectedManagerItem, selectedUserItems, onSubmit } =
-    useBusinessFunctionForm({ mode, onSuccess })
+  const {
+    form,
+    serverError,
+    selectedManagerItem,
+    selectedUserItems,
+    selectedParentItem,
+    selectedSiteItems,
+    onSubmit,
+  } = useBusinessFunctionForm({ mode, onSuccess })
 
   // Whole-section visibility, read from the same authorization context
   // `MetaField` uses: a card is only worth rendering if at least one of its
   // fields is visible. `MetaField` still gates each field individually — this
   // only decides whether the surrounding card is shown at all.
-  const identityVisible = fieldPermission('name').visible || fieldPermission('type').visible
+  const identityVisible =
+    fieldPermission('name').visible ||
+    fieldPermission('type').visible ||
+    fieldPermission('parent_id').visible
   const assignmentVisible =
     fieldPermission('manager_id').visible || fieldPermission('users').visible
+  const locationsVisible = fieldPermission('operational_sites').visible
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -124,6 +137,21 @@ export function BusinessFunctionFormBody({ mode, onSuccess, onCancel }: Business
                   </Select>
                 )}
               </MetaField>
+
+              <RelationSelectField
+                control={form.control}
+                name="parent_id"
+                metaKey="parent_id"
+                label={t('businessFunctions.form.parent')}
+                resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('businessFunctions.form.parentSearch')}
+                selected={toRelationFieldRef(selectedParentItem)}
+                placeholder={t('businessFunctions.form.parentPlaceholder')}
+                emptyLabel={t('businessFunctions.form.parentEmpty')}
+                errorLabel={t('businessFunctions.form.parentError')}
+                clearLabel={t('common.clear')}
+                retryLabel={t('common.retry')}
+              />
             </FormSection>
           )}
 
@@ -162,6 +190,29 @@ export function BusinessFunctionFormBody({ mode, onSuccess, onCancel }: Business
                 emptyLabel={t('businessFunctions.form.usersEmpty')}
                 errorLabel={t('businessFunctions.form.usersError')}
                 removeLabel={t('businessFunctions.form.usersRemove')}
+                retryLabel={t('common.retry')}
+              />
+            </FormSection>
+          )}
+
+          {locationsVisible && (
+            <FormSection
+              icon={MapPin}
+              title={t('businessFunctions.form.sections.locations.title')}
+              description={t('businessFunctions.form.sections.locations.description')}
+            >
+              <RelationMultiSelectField
+                control={form.control}
+                name="operational_sites"
+                metaKey="operational_sites"
+                label={t('businessFunctions.form.operationalSites')}
+                resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('businessFunctions.form.operationalSitesSearch')}
+                selected={toRelationFieldRefs(selectedSiteItems)}
+                placeholder={t('businessFunctions.form.operationalSitesPlaceholder')}
+                emptyLabel={t('businessFunctions.form.operationalSitesEmpty')}
+                errorLabel={t('businessFunctions.form.operationalSitesError')}
+                removeLabel={t('businessFunctions.form.operationalSitesRemove')}
                 retryLabel={t('common.retry')}
               />
             </FormSection>

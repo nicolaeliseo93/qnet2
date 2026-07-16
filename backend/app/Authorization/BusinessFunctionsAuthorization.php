@@ -36,7 +36,9 @@ class BusinessFunctionsAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('name', 'text', mandatory: true),
             new FieldDefinition('type', 'select'),
             new FieldDefinition('manager_id', 'select'),
+            new FieldDefinition('parent_id', 'select'),
             new FieldDefinition('users', 'multiselect'),
+            new FieldDefinition('operational_sites', 'multiselect'),
         ];
     }
 
@@ -59,7 +61,9 @@ class BusinessFunctionsAuthorization extends AbstractResourceAuthorization
             'name' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'type' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'manager_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'parent_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'users' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'operational_sites' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];
     }
 

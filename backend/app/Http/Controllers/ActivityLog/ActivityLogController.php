@@ -10,6 +10,7 @@ use App\Services\ActivityLog\AggregatedActivityService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
+use Spatie\Activitylog\Models\Activity;
 use Throwable;
 
 /**
@@ -51,7 +52,9 @@ class ActivityLogController extends BaseApiController
             $page = $this->service->paginate($record, $definition->relations, $request->perPage(), $request->cursor());
 
             return $this->ok([
-                'items' => ActivityLogEntryResource::collection($page->items),
+                'items' => $page->items->map(
+                    fn (Activity $activity): ActivityLogEntryResource => new ActivityLogEntryResource($activity, $page->labels)
+                ),
                 'next_cursor' => $page->nextCursor,
             ]);
         } catch (Throwable $exception) {

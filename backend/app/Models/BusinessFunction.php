@@ -9,13 +9,16 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Business function (spec 0010): a name, a mutually-exclusive type
  * (is_business_unit XOR is_business_service, both false meaning "neither"),
- * an optional manager and an optional set of associated users.
+ * an optional manager, an optional set of associated users, an optional
+ * parent/child hierarchy (spec 0010 REV, mirroring ProductCategory) and an
+ * optional many-to-many with operational sites.
  */
-#[Fillable(['name', 'is_business_unit', 'is_business_service', 'manager_id'])]
+#[Fillable(['name', 'is_business_unit', 'is_business_service', 'manager_id', 'parent_id'])]
 class BusinessFunction extends BaseModel
 {
     /** @use HasFactory<BusinessFunctionFactory> */
@@ -50,5 +53,24 @@ class BusinessFunction extends BaseModel
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'business_function_user');
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /**
+     * The operational sites associated to this function (0..n), via the
+     * pivot table.
+     */
+    public function operationalSites(): BelongsToMany
+    {
+        return $this->belongsToMany(OperationalSite::class, 'business_function_operational_site');
     }
 }

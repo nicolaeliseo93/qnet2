@@ -2,6 +2,7 @@ import { apiClient } from '@/api/client'
 import type { ApiResponse } from '@/api/types'
 import type {
   ConfigureImportPayload,
+  ImportMappingTemplate,
   ImportRunDetail,
   ImportRunRowsPage,
   ImportRunRowsQuery,
@@ -113,4 +114,36 @@ export async function getImportRunSummary(
     `/imports/${domain}/${importRunId}/summary`,
   )
   return data.data.summary
+}
+
+/**
+ * Lists every saved mapping template for a domain (spec 0035, team-shared —
+ * not scoped to the actor), ordered id desc by the backend.
+ */
+export async function listMappingTemplates(domain: string): Promise<ImportMappingTemplate[]> {
+  const { data } = await apiClient.get<ApiResponse<{ mapping_templates: ImportMappingTemplate[] }>>(
+    `/imports/${domain}/mapping-templates`,
+  )
+  return data.data.mapping_templates
+}
+
+/**
+ * Saves the current mapping/dedup strategy of an already-configured run as a
+ * reusable template. The server snapshots `columns`/`column_mapping`/
+ * `dedup_strategy` from the run itself — this call never sends them.
+ */
+export async function createMappingTemplate(
+  domain: string,
+  payload: { name: string; import_run_id: number },
+): Promise<ImportMappingTemplate> {
+  const { data } = await apiClient.post<ApiResponse<{ mapping_template: ImportMappingTemplate }>>(
+    `/imports/${domain}/mapping-templates`,
+    payload,
+  )
+  return data.data.mapping_template
+}
+
+/** Deletes a saved mapping template (owner-only server-side, spec 0035). */
+export async function deleteMappingTemplate(domain: string, mappingTemplateId: number): Promise<void> {
+  await apiClient.delete(`/imports/${domain}/mapping-templates/${mappingTemplateId}`)
 }

@@ -15,6 +15,8 @@ export const businessFunctions = {
     is_business_service: 'Business Service',
     manager: 'Responsible',
     users: 'Associated users',
+    parent: 'Parent function',
+    operational_sites: 'Operational sites',
     created_at: 'Created at',
   },
   detail: {
@@ -25,6 +27,8 @@ export const businessFunctions = {
     type: 'Type',
     manager: 'Responsible',
     users: 'Associated users',
+    parent: 'Parent function',
+    operationalSites: 'Operational sites',
     created_at: 'Created at',
   },
   form: {
@@ -42,6 +46,17 @@ export const businessFunctions = {
     usersEmpty: 'No users found.',
     usersError: 'Unable to load users.',
     usersRemove: 'Remove user',
+    parent: 'Parent function',
+    parentPlaceholder: 'Select a parent function…',
+    parentSearch: 'Search functions…',
+    parentEmpty: 'No functions found.',
+    parentError: 'Unable to load functions.',
+    operationalSites: 'Operational sites',
+    operationalSitesPlaceholder: 'Select operational sites…',
+    operationalSitesSearch: 'Search operational sites…',
+    operationalSitesEmpty: 'No operational sites found.',
+    operationalSitesError: 'Unable to load operational sites.',
+    operationalSitesRemove: 'Remove operational site',
     type: {
       label: 'Type',
       businessUnit: 'Business Unit',
@@ -67,6 +82,10 @@ export const businessFunctions = {
       assignment: {
         title: 'Assignment',
         description: 'Responsible and associated users.',
+      },
+      locations: {
+        title: 'Operational sites',
+        description: 'Physical sites where this business function operates.',
       },
     },
   },

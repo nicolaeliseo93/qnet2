@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { History, Network, UserCog, Users } from 'lucide-react'
+import { GitBranch, History, MapPin, Network, UserCog, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   DetailEmpty,
@@ -39,6 +39,12 @@ export function BusinessFunctionDetailView({ businessFunction }: BusinessFunctio
         badges={<Badge variant="secondary">{typeLabel(t, businessFunction.type)}</Badge>}
       />
 
+      {businessFunction.parent ? (
+        <DetailSection title={t('businessFunctions.detail.parent')} icon={<GitBranch />}>
+          <span className="text-sm text-foreground">{businessFunction.parent.name}</span>
+        </DetailSection>
+      ) : null}
+
       <DetailSection title={t('businessFunctions.detail.manager')} icon={<UserCog />}>
         {businessFunction.manager ? (
           <DetailPerson
@@ -63,6 +69,28 @@ export function BusinessFunctionDetailView({ businessFunction }: BusinessFunctio
           <div className="flex flex-col gap-3">
             {businessFunction.users.map((user) => (
               <DetailPerson key={user.id} name={user.name} avatarUrl={user.avatar_url} />
+            ))}
+          </div>
+        ) : (
+          <DetailEmpty />
+        )}
+      </DetailSection>
+
+      <DetailSection
+        title={t('businessFunctions.detail.operationalSites')}
+        icon={<MapPin />}
+        action={
+          businessFunction.operational_sites.length > 0 ? (
+            <Badge variant="secondary">{businessFunction.operational_sites.length}</Badge>
+          ) : null
+        }
+      >
+        {businessFunction.operational_sites.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {businessFunction.operational_sites.map((site) => (
+              <Badge key={site.id} variant="outline">
+                {site.label}
+              </Badge>
             ))}
           </div>
         ) : (

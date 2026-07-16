@@ -34,7 +34,7 @@ class BusinessFunctionForSelectController extends BaseApiController
         try {
             $this->authorize('viewAny', BusinessFunction::class);
 
-            $result = $this->service->forSelect($request->toData());
+            $result = $this->service->forSelect($request->toData(), $request->excludeDescendantsOf());
 
             return $this->paginatedResponse(
                 BusinessFunctionForSelectResource::collection($result->items),

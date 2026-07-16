@@ -7,6 +7,7 @@ use App\Http\Resources\ImportRunResource;
 use App\Imports\ImportDefinition;
 use App\Imports\Support\ColumnAnalysis;
 use App\Imports\Support\ColumnMapper;
+use App\Models\ImportMappingTemplate;
 use App\Models\ImportRun;
 
 /**
@@ -31,6 +32,11 @@ use App\Models\ImportRun;
  * builds its editable columns from this, never from column_mapping's
  * targets, so an input-only field a recognizer replaces (e.g. leads'
  * `full_name` -> `first_name`/`last_name`) is never itself a grid column.
+ *
+ * `matching_template` (spec 0035) is the domain's most recent
+ * ImportMappingTemplate whose `columns` snapshot EXACTLY matches (same
+ * list, same order) this run's detected column keys, or null — computed
+ * SERVER-SIDE here, never decided by the client.
  */
 final class ImportRunPayloadBuilder
 {
@@ -56,8 +62,32 @@ final class ImportRunPayloadBuilder
             static fn (ImportDedupMode $mode): string => $mode->value,
             $definition->dedupModes(),
         );
+        $payload['matching_template'] = $importRun->detected_columns !== null
+            ? $this->matchingTemplate($importRun)
+            : null;
 
         return $payload;
+    }
+
+    /**
+     * @return array{id: int, name: string, column_mapping: array<string, string>, dedup_strategy: ?string}|null
+     */
+    private function matchingTemplate(ImportRun $importRun): ?array
+    {
+        $columnKeys = ColumnAnalysis::columnKeys($importRun->detected_columns);
+
+        $template = ImportMappingTemplate::query()
+            ->where('resource', $importRun->resource)
+            ->latest('id')
+            ->get()
+            ->first(static fn (ImportMappingTemplate $candidate): bool => $candidate->columns === $columnKeys);
+
+        return $template === null ? null : [
+            'id' => $template->id,
+            'name' => $template->name,
+            'column_mapping' => $template->column_mapping,
+            'dedup_strategy' => $template->dedup_strategy,
+        ];
     }
 
     /**

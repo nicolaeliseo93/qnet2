@@ -112,11 +112,35 @@
               module: string,             // alias morph subject_type: 'user'|'personal_data'|'contact'|'address'
               subject_id: number,
               causer: { id: number|null, name: string|null },
-              changes: Array&lt;{ field: string, old_value: unknown|null, new_value: unknown|null }&gt;
+              changes: Array&lt;{
+                field: string,
+                old_value: unknown|null,
+                new_value: unknown|null,
+                old_display: string|null,   // solo campi FK risolti (v2, vedi nota); altrimenti null
+                new_display: string|null
+              }&gt;
             }&gt;,
             next_cursor: string|null       // null = ultima pagina
           }
         }
+        <!--
+          v2 (FK-label extension, backend owner): estensione additiva, nessun campo
+          rimosso. Copre due difetti riportati dal cliente su un lead created:
+          "referent_id: — → 206" invece del nome, e righe rumore
+          "operational_site_id: — → —" per campi null alla creazione.
+          - changes[] con old_value E new_value entrambi null NON e' piu' emesso
+            (created: campi lasciati null; deleted: campi gia' null). Con
+            logOnlyDirty un updated non puo' essere null->null, quindi l'entry
+            resta sempre, anche se changes[] risulta vuoto dopo il filtro.
+          - old_display/new_display valorizzati SOLO per i campi `{prefix}_id`
+            per cui il model subject espone una relation BelongsTo
+            `Str::camel({prefix})` (rilevata dal FK stesso, mai dal nome campo);
+            altrimenti sempre null (nessun errore per un `_id` senza relazione).
+          - Risoluzione a livello di PAGINA, una query per classe correlata
+            (mai per riga/campo) — vedi App\Services\ActivityLog\ForeignKeyLabelResolver.
+          - Record correlato cancellato (o mai esistito) -> display null, id
+            grezzo invariato; il FE fa fallback sull'id.
+        -->
       </response>
       <errors>
         <error status="401" note="non autenticato"/>
@@ -151,6 +175,11 @@
     <criterion id="AC-013">Row-action 'activity' presente sulla riga users solo se l'attore ha viewActivity; assente altrimenti.</criterion>
     <criterion id="AC-014">FE: `ActivityLogSection` mostra data/ora, autore, tipo operazione (i18n), modulo (i18n), e per ogni change field/old/new; gated da `<Can>`; usa TanStack Query (no useEffect+fetch).</criterion>
     <criterion id="AC-015">FE: la row-action 'activity' apre un Dialog/Sheet che monta lo stesso `ActivityLogSection`; il detail lo monta come DetailSection quando permissions.actions.view_activity=true.</criterion>
+    <criterion id="AC-016">FK-label extension. Dato un created con un campo `{prefix}_id` valorizzato la cui relation BelongsTo `Str::camel({prefix})` esiste sul model subject, quando GET, allora quel change ha `new_display` = label del record correlato (`old_display`=null, AC-008 invariato).</criterion>
+    <criterion id="AC-017">FK-label extension. Dato un created con un campo `{prefix}_id` lasciato null (nessun valore alla creazione), quando GET, allora quel campo NON compare in changes[] (old_value e new_value entrambi null = rumore, filtrato).</criterion>
+    <criterion id="AC-018">FK-label extension. Dato un update che cambia un campo FK, quando GET, allora il change ha sia `old_display` che `new_display` valorizzati con le label corrispondenti.</criterion>
+    <criterion id="AC-019">FK-label extension. Dato un campo FK il cui record correlato e' stato successivamente cancellato (o non esiste piu'), quando GET, allora quel campo ha display=null mentre old_value/new_value restano il valore grezzo (id) invariato.</criterion>
+    <criterion id="AC-020">FK-label extension. La risoluzione delle label e' fatta a livello di PAGINA, una query per classe correlata indipendentemente dal numero di righe/campi che la referenziano (no N+1) — vedi App\Services\ActivityLog\ForeignKeyLabelResolver.</criterion>
   </acceptance_criteria>
 
   <constraints>

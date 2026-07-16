@@ -40,8 +40,11 @@ class UpdateBusinessFunctionRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:191'],
             'type' => ['sometimes', 'nullable', Rule::in(['business_unit', 'business_service'])],
             'manager_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'parent_id' => ['sometimes', 'nullable', 'integer', 'exists:business_functions,id'],
             'users' => ['sometimes', 'nullable', 'array'],
             'users.*' => ['integer', 'exists:users,id', 'distinct'],
+            'operational_sites' => ['sometimes', 'nullable', 'array'],
+            'operational_sites.*' => ['integer', 'exists:operational_sites,id', 'distinct'],
         ];
     }
 

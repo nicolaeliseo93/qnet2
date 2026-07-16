@@ -4,16 +4,19 @@ namespace App\Tables\BusinessFunctions;
 
 /**
  * Declarative column/filter/action catalogue for the `business-functions`
- * domain (spec 0010).
+ * domain (spec 0010, spec 0010 REV).
  *
  * Extracted out of BusinessFunctionsTableDefinition (file-size split,
  * engineering.md §6): pure data (no logic), mirroring UserColumnCatalog.
  *
- * `manager` and `users` have no real DB column of their own (manager is a
- * relation name, users a belongsToMany) — both are DERIVED, handled by
+ * `manager`, `parent`, `users` and `operational_sites` have no real DB column
+ * of their own (manager/parent are relation names, users/operational_sites a
+ * belongsToMany) — all four are DERIVED, handled by
  * BusinessFunctionsTableDefinition's applyDerivedFilter/applyDerivedSort/
- * distinctValues. `is_business_unit`/`is_business_service` ARE real columns,
- * so the generic engine handles their `set` filter and distinct values.
+ * distinctValues (parent/operational_sites delegated to
+ * BusinessFunctionParentColumn/BusinessFunctionOperationalSitesColumn).
+ * `is_business_unit`/`is_business_service` ARE real columns, so the generic
+ * engine handles their `set` filter and distinct values.
  */
 final class BusinessFunctionColumnCatalog
 {
@@ -66,12 +69,40 @@ final class BusinessFunctionColumnCatalog
                 'filterType' => 'set',
             ],
             [
+                // The parent function's name, derived from the self-referencing
+                // parent() relation (spec 0010 REV). Sorted via a correlated
+                // subquery, filtered via whereHas (BusinessFunctionParentColumn).
+                // Root functions (no parent) surface as null/empty.
+                'id' => 'parent',
+                'label' => 'businessFunctions.columns.parent',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
                 // Associated users' names, derived from the users()
                 // belongsToMany. Rendered as a stack of avatars. Not sortable
                 // (a to-many value has no single sort key); filterable via
                 // whereHas.
                 'id' => 'users',
                 'label' => 'businessFunctions.columns.users',
+                'type' => 'tags',
+                'visible' => true,
+                'sortable' => false,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
+                // Associated operational sites (spec 0010 REV), derived from
+                // the operationalSites() belongsToMany. Rendered as a stack of
+                // tags (line1 - city). Not sortable (a to-many value has no
+                // single sort key); filterable via whereHas
+                // (BusinessFunctionOperationalSitesColumn, matched on the raw
+                // primary-address line1).
+                'id' => 'operational_sites',
+                'label' => 'businessFunctions.columns.operational_sites',
                 'type' => 'tags',
                 'visible' => true,
                 'sortable' => false,
@@ -100,7 +131,9 @@ final class BusinessFunctionColumnCatalog
             ['columnId' => 'is_business_unit', 'type' => 'set'],
             ['columnId' => 'is_business_service', 'type' => 'set'],
             ['columnId' => 'manager', 'type' => 'set'],
+            ['columnId' => 'parent', 'type' => 'set'],
             ['columnId' => 'users', 'type' => 'set'],
+            ['columnId' => 'operational_sites', 'type' => 'set'],
             ['columnId' => 'created_at', 'type' => 'date'],
         ];
     }

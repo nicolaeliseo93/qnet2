@@ -6,7 +6,7 @@ import type {
 import type { BusinessFunctionFormValues } from '@/features/business-functions/use-business-function-form'
 import { buildCustomFieldsCreate, buildCustomFieldsUpdate } from '@/features/custom-fields/custom-fields-payload'
 
-/** Builds the create payload: `{name, type, manager_id, users}` (spec 0010 AC-019). */
+/** Builds the create payload: `{name, type, manager_id, users, parent_id, operational_sites}` (spec 0010 AC-019). */
 export function buildCreatePayload(
   values: BusinessFunctionFormValues,
 ): CreateBusinessFunctionPayload {
@@ -16,16 +16,19 @@ export function buildCreatePayload(
     type: values.type,
     manager_id: values.manager_id,
     users: values.users,
+    parent_id: values.parent_id,
+    operational_sites: values.operational_sites,
     ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
 
 /**
  * Builds a partial PATCH payload carrying only fields that changed from the
- * original business function (spec 0010 AC-019). `users` is compared as an
- * order-insensitive id set and, when different, sent as a full replacement;
- * `manager_id: null` is sent whenever the responsabile was cleared; `type`
- * is sent whenever the selection changed (including to/from `null`).
+ * original business function (spec 0010 AC-019). `users`/`operational_sites`
+ * are compared as an order-insensitive id set and, when different, sent as a
+ * full replacement; `manager_id: null` is sent whenever the responsabile was
+ * cleared; `type`/`parent_id` are sent whenever the selection changed
+ * (including to/from `null`).
  */
 export function buildUpdatePayload(
   values: BusinessFunctionFormValues,
@@ -44,6 +47,12 @@ export function buildUpdatePayload(
   }
   if (!sameIdSet(values.users, original.user_ids)) {
     payload.users = values.users
+  }
+  if (values.parent_id !== original.parent_id) {
+    payload.parent_id = values.parent_id
+  }
+  if (!sameIdSet(values.operational_sites, original.operational_site_ids)) {
+    payload.operational_sites = values.operational_sites
   }
 
   const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})

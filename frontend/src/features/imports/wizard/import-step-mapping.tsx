@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Controller, useForm, type FieldPath } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
@@ -16,6 +16,11 @@ import {
   type ImportMappingFormValues,
 } from '@/features/imports/wizard/import-mapping-schema'
 import { computeMappingSignals } from '@/features/imports/wizard/mapping-signals'
+import {
+  MatchingTemplateBanner,
+  SavedTemplatesMenu,
+  SaveAsTemplateToggle,
+} from '@/features/imports/wizard/mapping-template-controls'
 import { EXTRA_TARGET, IGNORE_TARGET } from '@/features/imports/wizard/types'
 import type { DetectedColumn, ImportRunDetail } from '@/features/imports/wizard/types'
 
@@ -27,7 +32,12 @@ export interface ImportStepMappingProps {
   initialMapping: Record<string, string>
   initialDedupStrategy: string | null
   onBack: () => void
-  onSubmit: (mapping: Record<string, string>, dedupStrategy: string) => void
+  onSubmit: (
+    mapping: Record<string, string>,
+    dedupStrategy: string,
+    /** Present only when the operator checked "save as template" (spec 0035 AC-011). */
+    saveAsTemplate?: { name: string },
+  ) => void
   isSubmitting: boolean
   submitError: string | null
 }
@@ -82,6 +92,9 @@ export function ImportStepMapping({
     defaultValues: { mapping: completeMapping, dedup_strategy: initialDedupStrategy ?? dedupModes[0] ?? '' },
   })
 
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+
   const mappingValues = form.watch('mapping')
   // Re-key the index-based form values back to the real column keys for the
   // signals (which reason per column key). Computed inline every render (not
@@ -98,13 +111,45 @@ export function ImportStepMapping({
     for (const column of columns) {
       realMapping[column.key] = values.mapping[String(column.index)] ?? IGNORE_TARGET
     }
-    onSubmit(realMapping, values.dedup_strategy)
+    const trimmedTemplateName = templateName.trim()
+    if (saveAsTemplate && trimmedTemplateName.length > 0) {
+      onSubmit(realMapping, values.dedup_strategy, { name: trimmedTemplateName })
+    } else {
+      onSubmit(realMapping, values.dedup_strategy)
+    }
   })
+
+  // Applies a server-matched template's mapping/dedup strategy onto the form
+  // (AC-009): every value stays a normal `setValue`, so it remains fully
+  // editable afterward — this never submits or bypasses validation.
+  const applyMatchingTemplate = () => {
+    const template = run?.matching_template
+    if (!template) return
+    for (const column of columns) {
+      const fieldName = `mapping.${column.index}` as FieldPath<ImportMappingFormValues>
+      form.setValue(fieldName, template.column_mapping[column.key] ?? IGNORE_TARGET)
+    }
+    if (template.dedup_strategy) {
+      form.setValue('dedup_strategy', template.dedup_strategy)
+    }
+  }
 
   return (
     <Form {...form}>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-            <StepSectionHeader icon={Columns3} title={t('mapping.title')} description={t('mapping.subtitle')} />
+            <StepSectionHeader
+              icon={Columns3}
+              title={t('mapping.title')}
+              description={t('mapping.subtitle')}
+              aside={run ? <SavedTemplatesMenu domain={run.resource} /> : null}
+            />
+
+            {run?.matching_template ? (
+              <MatchingTemplateBanner
+                templateName={run.matching_template.name}
+                onApply={applyMatchingTemplate}
+              />
+            ) : null}
 
             <div className="overflow-hidden rounded-lg border">
               <div className="hidden gap-2 border-b bg-muted/40 px-3 py-2 sm:grid sm:grid-cols-[minmax(0,1fr)_1.25rem_16rem]">
@@ -221,6 +266,13 @@ export function ImportStepMapping({
             />
 
             {submitError ? <StepAlert>{submitError}</StepAlert> : null}
+
+            <SaveAsTemplateToggle
+              checked={saveAsTemplate}
+              onCheckedChange={setSaveAsTemplate}
+              name={templateName}
+              onNameChange={setTemplateName}
+            />
 
             <Separator />
 

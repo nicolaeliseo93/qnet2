@@ -79,3 +79,17 @@ it('attaches associated users via the withUsers state', function () {
 
     expect($function->users)->toHaveCount(3);
 });
+
+it('assigns a parent via the childOf state', function () {
+    $parent = BusinessFunction::factory()->create();
+
+    $child = BusinessFunction::factory()->childOf($parent)->create();
+
+    expect($child->parent_id)->toBe($parent->id);
+});
+
+it('attaches associated operational sites via the withOperationalSites state', function () {
+    $function = BusinessFunction::factory()->withOperationalSites(2)->create();
+
+    expect($function->operationalSites)->toHaveCount(2);
+});

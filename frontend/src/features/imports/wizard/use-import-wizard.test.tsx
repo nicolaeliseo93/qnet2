@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { useImportWizard } from '@/features/imports/wizard/use-import-wizard'
 import type { ImportRunDetail, ImportRunSummary } from '@/features/imports/wizard/types'
 
@@ -16,13 +17,17 @@ const analyzeImportMock = vi.fn()
 const getImportWizardRunMock = vi.fn()
 const configureImportRunMock = vi.fn()
 const confirmImportRunMock = vi.fn()
+const createMappingTemplateMock = vi.fn()
 
 vi.mock('@/features/imports/wizard/api', () => ({
   analyzeImport: (...args: unknown[]) => analyzeImportMock(...args),
   getImportWizardRun: (...args: unknown[]) => getImportWizardRunMock(...args),
   configureImportRun: (...args: unknown[]) => configureImportRunMock(...args),
   confirmImportRun: (...args: unknown[]) => confirmImportRunMock(...args),
+  createMappingTemplate: (...args: unknown[]) => createMappingTemplateMock(...args),
 }))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 function createdRun(overrides: Partial<ImportRunSummary> = {}): ImportRunSummary {
   return {
@@ -74,6 +79,9 @@ beforeEach(() => {
   getImportWizardRunMock.mockReset()
   configureImportRunMock.mockReset()
   confirmImportRunMock.mockReset()
+  createMappingTemplateMock.mockReset()
+  vi.mocked(toast.success).mockClear()
+  vi.mocked(toast.error).mockClear()
 })
 
 describe('useImportWizard', () => {
@@ -169,5 +177,57 @@ describe('useImportWizard', () => {
     })
 
     await waitFor(() => expect(result.current.currentStep).toBe(4))
+  })
+
+  it('saves the mapping as a template after a successful configure, without blocking the advance (AC-011)', async () => {
+    getImportWizardRunMock
+      .mockResolvedValueOnce(detailRun())
+      .mockResolvedValue(detailRun({ status: 'staging' }))
+    configureImportRunMock.mockResolvedValue(createdRun({ status: 'staging' }))
+    createMappingTemplateMock.mockResolvedValue({ id: 9, name: 'Monthly leads' })
+
+    const { result } = renderHook(() => useImportWizard({ domain: 'leads', initialRunId: 1 }), {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(result.current.run).not.toBeNull())
+
+    act(() => result.current.submitConfig({ campaign_id: 9 }))
+    act(() =>
+      result.current.submitMapping({ Email: 'email' }, 'create_new', { name: 'Monthly leads' }),
+    )
+
+    // The wizard advances on the configure response alone.
+    await waitFor(() => expect(result.current.currentStep).toBe(3))
+
+    await waitFor(() =>
+      expect(createMappingTemplateMock).toHaveBeenCalledWith('leads', {
+        name: 'Monthly leads',
+        import_run_id: 1,
+      }),
+    )
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+  })
+
+  it('does not block the wizard advance when saving the mapping template fails (AC-011)', async () => {
+    getImportWizardRunMock
+      .mockResolvedValueOnce(detailRun())
+      .mockResolvedValue(detailRun({ status: 'staging' }))
+    configureImportRunMock.mockResolvedValue(createdRun({ status: 'staging' }))
+    createMappingTemplateMock.mockRejectedValue(new Error('duplicate name'))
+
+    const { result } = renderHook(() => useImportWizard({ domain: 'leads', initialRunId: 1 }), {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(result.current.run).not.toBeNull())
+
+    act(() => result.current.submitConfig({ campaign_id: 9 }))
+    act(() =>
+      result.current.submitMapping({ Email: 'email' }, 'create_new', { name: 'Monthly leads' }),
+    )
+
+    await waitFor(() => expect(result.current.currentStep).toBe(3))
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
   })
 })

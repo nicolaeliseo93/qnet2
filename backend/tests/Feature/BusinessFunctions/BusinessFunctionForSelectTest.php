@@ -142,3 +142,34 @@ it('rejects a limit above 100 (422)', function () {
         ->assertStatus(422)
         ->assertJsonValidationErrors('limit');
 });
+
+// ---------------------------------------------------------------------------
+// spec 0010 REV — exclude_descendants_of (edit-mode parent picker)
+// ---------------------------------------------------------------------------
+
+it('exclude_descendants_of excludes the node itself and every descendant', function () {
+    $actor = businessFunctionUserWith(['viewAny']);
+    $root = BusinessFunction::factory()->create(['name' => 'Root']);
+    $child = BusinessFunction::factory()->childOf($root)->create(['name' => 'Child']);
+    $grandchild = BusinessFunction::factory()->childOf($child)->create(['name' => 'Grandchild']);
+    $unrelated = BusinessFunction::factory()->create(['name' => 'Unrelated']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/business-functions/for-select?exclude_descendants_of={$root->id}&limit=100")
+        ->assertOk();
+
+    $ids = collect($response->json('items'))->pluck('id');
+    expect($ids)->not->toContain($root->id)
+        ->and($ids)->not->toContain($child->id)
+        ->and($ids)->not->toContain($grandchild->id)
+        ->and($ids)->toContain($unrelated->id);
+});
+
+it('422 when exclude_descendants_of does not reference an existing function', function () {
+    $actor = businessFunctionUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/business-functions/for-select?exclude_descendants_of=999999')
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('exclude_descendants_of');
+});

@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import {
   analyzeImport,
   confirmImportRun,
   configureImportRun,
+  createMappingTemplate,
   getImportWizardRun,
 } from '@/features/imports/wizard/api'
 import { importWizardKeys } from '@/features/imports/wizard/query-keys'
@@ -163,10 +165,26 @@ export function useImportWizard({ domain, initialRunId, onRunCreated }: UseImpor
   }, [])
 
   const submitMapping = useCallback(
-    (mapping: Record<string, string>, strategy: string) => {
-      configureMutation.mutate({ column_mapping: mapping, global_config: configValues, dedup_strategy: strategy })
+    (mapping: Record<string, string>, strategy: string, saveAsTemplate?: { name: string }) => {
+      configureMutation.mutate(
+        { column_mapping: mapping, global_config: configValues, dedup_strategy: strategy },
+        {
+          // Side-effect POST run AFTER configure already succeeded (spec 0035
+          // constraint: never blocks/rolls back the wizard's advance, which
+          // `configureMutation`'s own onSuccess above already committed).
+          onSuccess: () => {
+            if (!saveAsTemplate || runId == null) return
+            createMappingTemplate(domain, { name: saveAsTemplate.name, import_run_id: runId })
+              .then(() => {
+                toast.success(t('mapping.templates.saveSuccess'))
+                void queryClient.invalidateQueries({ queryKey: importWizardKeys.mappingTemplates(domain) })
+              })
+              .catch(() => toast.error(t('mapping.templates.saveError')))
+          },
+        },
+      )
     },
-    [configValues, configureMutation],
+    [configValues, configureMutation, domain, runId, queryClient, t],
   )
 
   const advanceFromReview = useCallback(() => setLocalStep(4), [])

@@ -43,7 +43,7 @@ it('200: field catalogue matches the frozen contract, in order', function () {
         ->assertJsonPath('success', true);
 
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
-    expect($keys)->toBe(['name', 'type', 'manager_id', 'users']);
+    expect($keys)->toBe(['name', 'type', 'manager_id', 'parent_id', 'users', 'operational_sites']);
 
     $fields = collect($response->json('data.fields'))->keyBy('key');
     expect($fields['name']['mandatory'])->toBeTrue()
@@ -51,7 +51,9 @@ it('200: field catalogue matches the frozen contract, in order', function () {
         ->and($fields['name']['type'])->toBe('text')
         ->and($fields['type']['type'])->toBe('select')
         ->and($fields['manager_id']['type'])->toBe('select')
-        ->and($fields['users']['type'])->toBe('multiselect');
+        ->and($fields['parent_id']['type'])->toBe('select')
+        ->and($fields['users']['type'])->toBe('multiselect')
+        ->and($fields['operational_sites']['type'])->toBe('multiselect');
 
     foreach ($response->json('permissions.fields') as $field) {
         expect($field)->toHaveKeys(['visible', 'hidden', 'editable', 'readonly', 'required', 'disabled']);

@@ -8,13 +8,16 @@ use App\DataObjects\Shared\ForSelectQuery;
 use App\DataObjects\Shared\ForSelectResult;
 use App\Models\BusinessFunction;
 use App\Models\User;
+use App\Services\BusinessFunctions\BusinessFunctionHierarchy;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Business logic for the `business-functions` resource (spec 0010): create /
  * update / delete, including the `type` -> is_business_unit/is_business_service
- * boolean remap and the `users` full-replace sync. The controller stays thin;
+ * boolean remap, the `users`/`operationalSites` full-replace syncs and the
+ * `parent_id` hierarchy (spec 0010 REV: anti-cycle guard on update, a
+ * restrictive delete guard when children exist). The controller stays thin;
  * this Service is the single authority.
  *
  * `type` is mutually exclusive by construction: 'business_unit' sets
@@ -29,23 +32,30 @@ class BusinessFunctionService
 
     /**
      * Relations eager-loaded on every returned model, so the Resource never
-     * N+1s while hydrating manager/users avatars.
+     * N+1s while hydrating manager/parent/users/operationalSites avatars and
+     * addresses.
      *
      * @var array<int, string>
      */
-    private const array HYDRATED_RELATIONS = ['manager.avatar', 'users.avatar'];
+    private const array HYDRATED_RELATIONS = ['manager.avatar', 'parent', 'users.avatar', 'operationalSites.addresses.city'];
+
+    public function __construct(private readonly BusinessFunctionHierarchy $hierarchy) {}
 
     public function create(User $actor, CreateBusinessFunctionData $data): BusinessFunction
     {
         return DB::transaction(function () use ($data): BusinessFunction {
             /** @var BusinessFunction $businessFunction */
             $businessFunction = BusinessFunction::create(array_merge(
-                ['name' => $data->name, 'manager_id' => $data->managerId],
+                ['name' => $data->name, 'manager_id' => $data->managerId, 'parent_id' => $data->parentId],
                 $this->typeToBooleans($data->type),
             ));
 
             if ($data->hasUsers()) {
                 $businessFunction->users()->sync($data->users);
+            }
+
+            if ($data->hasOperationalSites()) {
+                $businessFunction->operationalSites()->sync($data->operationalSites);
             }
 
             return $businessFunction->fresh(self::HYDRATED_RELATIONS);
@@ -54,6 +64,10 @@ class BusinessFunctionService
 
     public function update(User $actor, BusinessFunction $businessFunction, UpdateBusinessFunctionData $data): BusinessFunction
     {
+        if ($data->hasParentId() && $data->parentId !== null) {
+            $this->assertNoCycle($businessFunction, $data->parentId);
+        }
+
         return DB::transaction(function () use ($businessFunction, $data): BusinessFunction {
             $attributes = $data->submittedAttributes();
 
@@ -70,14 +84,28 @@ class BusinessFunctionService
                 $businessFunction->users()->sync($data->users);
             }
 
+            if ($data->hasOperationalSites()) {
+                $businessFunction->operationalSites()->sync($data->operationalSites);
+            }
+
             return $businessFunction->fresh(self::HYDRATED_RELATIONS);
         });
     }
 
+    /**
+     * Restrictive delete: a function with child functions cannot be removed
+     * (it would silently orphan them) — the service-level twin of the
+     * `parent_id` FK's restrictOnDelete.
+     */
     public function delete(BusinessFunction $businessFunction): void
     {
-        // The business_function_user pivot rows cascade on delete (migration
-        // FK constraint), so no explicit detach is needed here.
+        if ($businessFunction->children()->exists()) {
+            abort(409, 'This business function has child functions and cannot be deleted.');
+        }
+
+        // The business_function_user/business_function_operational_site pivot
+        // rows cascade on delete (migration FK constraint), so no explicit
+        // detach is needed here.
         $businessFunction->delete();
     }
 
@@ -85,10 +113,21 @@ class BusinessFunctionService
      * Minimal, searchable, paginated business-function list for the for-select
      * standard (spec 0015, ADR 0011), mirroring UserService::forSelect: search
      * by `name`, order by name/id, ids[] hydrated without inflating total.
+     *
+     * $excludeDescendantsOf (spec 0010 REV) additionally excludes that
+     * function AND every one of its descendants — the parent picker in edit
+     * must never offer $self or a node that would create a cycle. Applied
+     * only to the paginated/base query, mirroring how search does not reach
+     * the explicit `ids[]` hydration below.
      */
-    public function forSelect(ForSelectQuery $query): ForSelectResult
+    public function forSelect(ForSelectQuery $query, ?int $excludeDescendantsOf = null): ForSelectResult
     {
         $base = BusinessFunction::query()->select(['id', 'name']);
+
+        if ($excludeDescendantsOf !== null) {
+            $excludedIds = array_merge([$excludeDescendantsOf], $this->hierarchy->descendantIds($excludeDescendantsOf));
+            $base->whereNotIn('id', $excludedIds);
+        }
 
         if ($query->hasSearch()) {
             $base->where('name', 'like', '%'.$query->search.'%');
@@ -157,5 +196,23 @@ class BusinessFunctionService
             'is_business_unit' => $type === self::TYPE_BUSINESS_UNIT,
             'is_business_service' => $type === self::TYPE_BUSINESS_SERVICE,
         ];
+    }
+
+    /**
+     * $parentId may not be $businessFunction itself, nor one of its own
+     * descendants (i.e. $businessFunction may not be an ancestor of the
+     * prospective new parent) — either would create a cycle in the tree.
+     */
+    private function assertNoCycle(BusinessFunction $businessFunction, int $parentId): void
+    {
+        if ($parentId === $businessFunction->id) {
+            abort(422, 'A business function cannot be its own parent.');
+        }
+
+        $parent = BusinessFunction::find($parentId);
+
+        if ($parent !== null && $this->hierarchy->isAncestorOf($parent, $businessFunction->id)) {
+            abort(422, 'A business function cannot be moved under one of its own descendants.');
+        }
     }
 }

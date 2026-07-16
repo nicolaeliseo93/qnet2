@@ -2,6 +2,82 @@
 
 > Injected at session start. Update at every green state.
 
+## IMPORT MAPPING TEMPLATES — spec 0035 (2026-07-16) — GREEN (verifier), NON COMMITTATO
+
+Modelli di mappatura salvati per l'import lead (spec `docs/specs/0035-import-mapping-templates.xml`,
+APPROVATA): l'operatore salva la mappatura colonne+dedup_strategy come modello CONDIVISO al team; al
+riconoscimento di un file con struttura IDENTICA (stessa lista ORDINATA di column key) il wizard propone
+il modello con conferma esplicita. Matching SOLO server-side; POST fotografa dal run (anti-tamper).
+
+- BE: tabella `import_mapping_templates` (resource idx, user_id FK cascade come import_runs, name(100),
+  columns json, column_mapping json, dedup_strategy nullable, unique(resource,name)) + factory;
+  `ImportMappingTemplate` model; `ImportMappingTemplatePolicy` delete owner-only (no bypass duplicato);
+  `ImportMappingTemplateController` (index/store/destroy, doppio gate create-ImportRun + {domain}.import,
+  404-mai-403 su run altrui, DELETE risponde 200 envelope, NON 204); route letterali `mapping-templates`
+  PRIMA del wildcard {importRun}; `ImportRunPayloadBuilder` espone `matching_template` (confronto ===
+  ordinato, vince id max). Resource shape: { id, name, columns, column_mapping, dedup_strategy,
+  created_by{id,name}, created_at }.
+- FE (features/imports/wizard/): `mapping-template-controls.tsx` (MatchingTemplateBanner role=status,
+  SaveAsTemplateToggle, SavedTemplatesMenu con delete solo sui propri), `use-mapping-templates.ts`,
+  api/types/query-keys estesi, i18n `mapping.templates.*` en+it; `import-step-mapping.tsx` onSubmit ora
+  accetta 3o arg opzionale {saveAsTemplate}; `use-import-wizard.ts` salva il template come side-effect
+  post-configure (fire-and-forget + toast, MAI blocca l'avanzamento).
+- VERIFICATO (verifier indipendente, eseguito): Pest 16/16 nuovi + 325/325 modulo import + full suite
+  (2603/2605, 1 rosso ESTERNO pre-esistente AbstractMigrationSourcePreviewTest); Vitest wizard 76/76,
+  full FE 1427/1430 (3 rossi ESTERNI pre-esistenti in table/cell-renderers.test.tsx: leak lingua i18n);
+  `tsc -b --force` pulito; Pint/ESLint puliti. NIENTE COMMIT (in attesa di ok utente).
+- PROSSIMI PASSI: build spec 0036 (dedup import: tax_code, lead-level, risoluzione per-riga) poi 0037
+  (avviso duplicati form referent) — APPROVATE, ordine vincolato dalle write surface condivise.
+  Segnalazioni aperte: fix conteggio imported_rows incluso in 0036; full-scan matcher e unique DB fuori
+  scope (decisione utente pendente).
+
+## BUSINESS FUNCTIONS — gerarchia parent + sedi operative m2m (2026-07-16) — GREEN, NON COMMITTATO
+
+Estensione full-stack del modulo business functions (spec base 0010): (a) gerarchia padre-figlio via
+`parent_id`, (b) many-to-many con operational sites. Implementata da teammate backend+frontend su
+ownership disgiunta contro contratto congelato; chiusa da verifier indipendente (VERDE su tutto).
+
+CONTRATTO (congelato, rispettato 1:1 — verificato incrociato):
+- Request store/update: `parent_id nullable|integer|exists:business_functions,id`;
+  `operational_sites nullable|array` + `*.integer|exists:operational_sites,id|distinct` (update `sometimes`).
+- Resource: `+parent_id`, `parent {id,name}|null`, `operational_site_ids number[]`,
+  `operational_sites [{id,label}]` (label = "line1 - city", stessa identity del for-select sedi).
+- `GET /business-functions/for-select?exclude_descendants_of=<id>` esclude self+discendenti (param letto
+  nel controller, ForSelectQuery condiviso INTATTO). Anti-ciclo write-side 422 (self/discendente),
+  delete guard 409 se ha figli (anche in deleteModel per bulk) + `restrictOnDelete` sulla FK.
+
+BACKEND: 2 migration additive (`2026_07_16_100000_add_parent_id_to_business_functions_table`,
+`2026_07_16_100100_create_business_function_operational_site_table` — pivot cascade entrambe + unique);
+NUOVO `Services/BusinessFunctions/BusinessFunctionHierarchy.php` (walker PHP, mirror consapevole di
+CategoryHierarchy — candidato a estrazione condivisa alla terza gerarchia); model parent/children/
+operationalSites; DTO/FormRequest con flag submitted; sync sedi in transazione (pattern users);
+Authorization fields `parent_id` (select) + `operational_sites` (multiselect); TableDefinition: NUOVE
+colonne `parent` (derived sortable, `BusinessFunctionParentColumn`) e `operational_sites` (derived tags
+non sortable, `BusinessFunctionOperationalSitesColumn`, mirror LeadOperationalSiteColumn); factory stati
+`childOf`/`withOperationalSites`. NOTA: `BusinessFunctionsTableDefinition` 356 righe (>300 soft, come
+l'omologa ProductCategories — split non fatto per coerenza).
+
+FRONTEND (features/business-functions/): types (+`BusinessFunctionParent`,`BusinessFunctionOperationalSite`),
+schema (`parent_id` nullable, `operational_sites` number[]), payload diff (`sameIdSet` per sedi),
+`SERVER_ERROR_FIELDS` += parent_id/operational_sites, idratazione `selectedParentItem`/`selectedSiteItems`;
+form: parent in sezione "identity" via `RelationSelectField` (resource business-functions), sedi in NUOVA
+FormSection "locations" (MapPin) via `RelationMultiSelectField` (resource operational-sites, no avatar);
+renderer `ParentCell` + `OperationalSitesCell` (count+tooltip); detail: 2 nuove DetailSection; i18n en+it
+(columns.parent, columns.operational_sites, detail.*, form.parent*/operationalSites*, sections.locations).
+LIMITE NOTO: il FE NON passa `exclude_descendants_of` — `RelationSelectField` non espone un prop `params`
+passthrough (il plumbing sotto lo supporta gia'); micro-follow-up possibile, anti-ciclo comunque garantito
+dal 422 server.
+
+VERIFICATO (verifier indipendente, eseguito): Pest 123/123 BusinessFunction + regressioni 78/78
+OperationalSite, 79/79 ProductCategor, 487/488 Table (1 skip preesistente); Pint pulito; vitest 52/52
+business-functions; `npx tsc -b --force` pulito; ESLint 0 errori sui file toccati; contratto FE/BE
+allineato senza mismatch; migration reversibili; niente emoji/console.log/config toccate.
+NOTE AMBIENTE: `php artisan test` SENZA filtro segfaulta nel sandbox (pre-esistente, usare filtri);
+fallimento pre-esistente noto in `features/table/cell-renderers.test.tsx` (leak lingua i18n, anche su
+baseline). NIENTE COMMIT (in attesa di via libera).
+PROSSIMI PASSI possibili: prop `params?` passthrough su `RelationSelectField` per exclude_descendants_of;
+estrazione walker gerarchia condiviso alla terza occorrenza.
+
 ## FORM LEAD — restyling grafico/UX (2026-07-16) — GREEN, NON COMMITTATO
 
 Refactoring SOLO presentazionale del form create/edit lead (spec 0024/0033): zero cambi a logica, flussi,
@@ -4425,3 +4501,133 @@ Contract consumed as frozen in the spec — no field invented: `ImportRunDetail.
 Not committed (§3.6) — stopping here per protocol; ask before committing. Backend lane (permissions/
 policy/authorization/table+stats rename/ImportController gate) is a separate, parallel in-flight change in
 the same working tree (see `git status`) — this note only certifies the frontend files listed above.
+
+Spec 0034 [activity log FE rollout — 20 modules beyond Users]:
+- Generalized the row-action dialog: new `features/activity-log/resource-activity-dialog.tsx`
+  (`ResourceActivityDialog`, prop `resource: string`) replaces the users-only `user-activity-dialog.tsx`
+  (deleted). `users-table.tsx` now consumes it with `resource="users"`.
+- Centralized the `activity` row-action icon: `features/table/action-icon-map.ts` `defaultActionIconMap`
+  gained `history: History` (was a local `USERS_ICON_MAP` override in `users-table.tsx`, now removed —
+  real duplication across 20 domains, so hoisted to the shared default per engineering.md §3 DRY).
+- Every module's `<Entity>DetailView` (attributes, business-functions, campaigns, companies, company-sites,
+  custom-fields, lead-statuses, leads, operational-sites, pipeline-statuses, product-categories, products,
+  projects, referent-types, referents, registries, roles, sectors, sources, tags) gained a
+  `permissions.actions.view_activity`-gated `DetailSection` mounting `<ActivityLogSection resource={slug}
+  id={entity.id} />`, placed as the last section before the `created_at` `DetailMeta` (mirrors
+  `UserDetailView`). Every module's `*-table.tsx` gained an `activityRow` state + `case 'activity'` in the
+  row-action handler + a mounted `<ResourceActivityDialog resource={DOMAIN_CONST} .../>` (3 modules —
+  products, referents, registries — have no CRUD Sheet at all, view/edit navigate to dedicated pages; the
+  activity Dialog was added there as an independent, Sheet-less piece of state).
+- Contract: the generic `resource`/`id` props of `ActivityLogSection`/`fetchActivityLog` were NOT touched
+  (frozen per spec). Two detail-fetch shapes exist: self-fetching (`companies`, `company-sites`, `roles`,
+  `users` — the `DetailView` calls `useEntityDetail`/`fetchX` itself) and presentational (the other 16 —
+  the table's "view" Sheet loader fetches and passes the detail down). For presentational modules the prop
+  type changed from `<X>Detail` to the already-existing `<X>DetailWithPermissions` (every module already had
+  this type for its edit-mode form; reused, not invented). `roles` is the one naming exception: its wire
+  envelope already used `permissions` for the role's OWN granted-permission list, so the authorization
+  block is `role.authorization.actions.view_activity` (matches `RoleDetailWithPermissions.authorization`,
+  pre-existing naming documented in `roles/types.ts`).
+- Fixed 6 pre-existing detail-view test fixtures that constructed a bare `<X>Detail` (no `permissions`)
+  now that the component's prop type requires the `WithPermissions` variant: `business-function-detail.test.tsx`,
+  `lead-detail.test.tsx`, `operational-site-detail.test.tsx`, `referent-detail.test.tsx`,
+  `registry-detail.test.tsx`, `project-detail.test.tsx` — added a `permissions: { resource: {...all true},
+  fields: {}, actions: {} }` block to each fixture factory (empty `actions` keeps `view_activity` falsy,
+  matching every pre-existing assertion unchanged).
+- New tests: `resource-activity-dialog.test.tsx` (mounts `ActivityLogSection` with the given
+  `resource`/row id when open; renders nothing when `row` is `null`). 3 representative modules got explicit
+  activity-log coverage beyond the generic component (companies = self-fetching, projects = presentational
+  + dedicated-page pattern, tags = presentational + Sheet pattern): `company-detail.test.tsx` (new),
+  `companies-table.test.tsx` (new, row-action → dialog), `project-detail.test.tsx` (extended, new describe
+  block) + `projects-table.test.tsx` (extended, new `trigger-activity` stub button + describe block),
+  `tag-detail.test.tsx` (new) + `tags-table.test.tsx` (extended: the existing suite tested `TagsPage`
+  only — added a second `TableView` stub button and a describe block importing `TagsTable` directly).
+- i18n: no new keys — `activityLog.*` is already generic (spec 0034 v1); no row-action label lives in the
+  FE (comes from the backend catalog).
+
+Verified (first-hand): `npx tsc --noEmit` — clean. `npx eslint` on every touched file (2 batches) — clean.
+`npx vitest run` scoped to every touched module — 130 files / 781 tests green. Full repo `npx vitest run`:
+228/229 files, 1409/1412 tests green — the only red is the same PRE-EXISTING
+`src/features/table/cell-renderers.test.tsx` (ContactsCell, 3 tests, it/en locale leak) already documented
+above (FE-2 entry), reproduced in isolation, not touched by this lane.
+
+Anomaly to flag: mid-task, a commit (`f17291d`) appeared in the working tree bundling this lane's
+in-progress frontend edits together with the backend's activity-log authorization/table changes and a
+`docs/HANDOFF.md` update — none of it made by this agent (never ran `git commit`; CORE §3.6 forbids it
+without a fresh explicit ask every time). Only `tags-table.test.tsx` still shows as unstaged after it. Not
+committed by this lane — surfaced to the team lead, not auto-fixed.
+
+Not committed (§3.6) — stopping here per protocol; ask before committing.
+
+## ACTIVITY LOG SU TUTTI I MODULI (spec 0034 v2, 2026-07-16) — GREEN VERIFICATO, chiusura consolidata
+
+Rollout dell'Aggregated Activity Log da `users` a 20 moduli (tutti tranne `import-runs`, escluso
+deliberatamente: e' esso stesso uno storico, ImportRun senza LogsModelActivity + ImportRunPolicy
+override che droppa viewActivity). Team: backend + frontend paralleli su ownership disgiunta,
+verifier indipendente a valle. Contratto spec 0034 INVARIATO (endpoint generico
+GET /api/activity-log/{resource}/{id}, flag `permissions.actions.view_activity`, row action `activity`).
+
+BACKEND (dettagli lane): `config/activity-log.php` 21 entry totali (users + 20); relations
+personal-data (`personalData`, `personalData.contacts`, `personalData.addresses`) per company-sites/
+referents/registries, `options` per custom-fields, root-only per gli altri 15. `view_activity` in 20
+*Authorization (Companies/OperationalSites: aggiunto l'override actionPermissions() mancante — il
+default non mappa view_activity→viewActivity). Row action `activity` in 20 TableDefinition + catalog
+(Roles: catalogo inline nella definition). Nuovo `tests/Feature/ActivityLog/ActivityLogModulesTest.php`
+dataset sui 20 resource (200 view+viewActivity / 403 senza viewActivity / 403 senza view sul record).
+Permessi: nessun cambio seeder — `{resource}.viewActivity` gia' generato da BasePolicy::abilities().
+
+FRONTEND: vedi entry precedente "Spec 0034 [activity log FE rollout — 20 modules beyond Users]".
+
+VERIFIER (indipendente, eseguito): BE 2560/2562 (1 skip + 1 rosso PRE-esistente
+AbstractMigrationSourcePreviewTest); Pint pulito sui 61 file BE toccati (3 fail Pint repo-wide su file
+NON di questa lane); FE tsc pulito, vitest 1409/1412 (3 rossi PRE-esistenti cell-renderers ContactsCell),
+eslint pulito sui file toccati (2 errori `_omit` in referent/registry-form-metadata.test.tsx PRE-esistenti,
+ultimi tocchi a11f263/d1e9700). Coerenza slug BE config ↔ FE resource verificata stringa-per-stringa (21).
+Zero riferimenti residui a user-activity-dialog.
+
+DEBITO SEGNALATO (non di questa lane, non implementato per scope): (1) costante
+`PROJECT_STATUSES_DOMAIN` in pipeline-statuses-table.tsx:32 — valore corretto 'pipeline-statuses' ma nome
+fuorviante post-rename bdcab29; (2) 9 TableDefinition oltre soft-limit 300 righe (gia' oltre prima, +~4
+righe qui); (3) Pint fail su 3 test file pre-esistenti; (4) eslint `_omit` unused in 2 test file.
+
+NOTA GIT (RISOLTA 2026-07-16): i commit `94d73ff` e `f17291d` comparsi durante il lavoro sono stati
+eseguiti MANUALMENTE DALL'UTENTE (confermato a voce), non dalla sessione team. Residuo non committato dopo
+f17291d: `frontend/src/features/tags/tags-table.test.tsx` + questo HANDOFF (l'utente decidera' quando
+committare, probabilmente insieme al giro successivo "label FK + restyle card" in corso).
+
+## ACTIVITY LOG v2 — LABEL FK + RESTYLE CARD (spec 0034, 2026-07-16) — GREEN VERIFICATO, NON COMMITTATO
+
+Richiesta utente: niente id grezzi nei diff ("referent_id: — → 206"), niente righe rumore "— → —",
+card piu' leggibile. Team: backend + frontend paralleli, verifier indipendente. CONTRATTO (esteso
+additivamente, spec 0034 aggiornata: data_contract v2 + AC-016..020): changes[] item =
+`{ field, old_value, new_value, old_display: string|null, new_display: string|null }`;
+change con old_value E new_value entrambi null NON emesso (l'entry resta anche con changes=[]).
+
+BACKEND: nuovo `app/Services/ActivityLog/ForeignKeyLabelResolver.php` — risoluzione FK page-level
+(una query whereIn per classe correlata, no N+1, testato con query-log reale). Detection: campo
+`{prefix}_id` → relation camelCase sul model subject (morph alias → classe) → SOLO se BelongsTo,
+classe da getRelated(). Label map centralizzata (Company→denomination, CustomFieldDefinition→label,
+OperationalSite→alias) + fallback `Schema::hasColumn('name')`; classe senza label → display null.
+Nessun SoftDeletes nel codebase (branch withTrashed generico comunque presente). Toccati anche
+AggregatedActivityService (DI resolver), ActivityLogPage (campo labels), ActivityLogController,
+ActivityLogEntryResource (filtro null→null + display). Nuovo ActivityLogForeignKeyLabelTest (4 test).
+
+FRONTEND (`features/activity-log/` + locales): types.ts esteso (old_display/new_display); card
+ridisegnata (Badge evento con varianti cva esistenti created/default updated/secondary
+deleted/destructive restored/outline, causer riga muted con icona User size-3, diff per campo:
+label font-medium + vecchio muted/line-through solo se esiste + ArrowRight size-3 + nuovo; created
+solo nuovo valore, deleted solo vecchio barrato; truncate max-w-40; rail border-l sull'ol; p-2.5).
+Display con fallback raw via renderChangeValue; label campo da i18n `activityLog.fields.*` con
+fallback humanizeFieldKey (funzione pura testata). i18n: +90 chiavi fields.* (it+en, dai $fillable
+reali dei 21 root + PersonalData/Contact/Address/CustomFieldOption, esclusi gli $hidden) e
+modules.* estese 4→25 (tutti gli alias morph raggiungibili). Props pubbliche di
+ActivityLogSection/ResourceActivityDialog INVARIATE — i 21 moduli integrati non toccati.
+
+VERIFIER (eseguito): BE suite 2607/2609 (1 skip + 1 rosso PRE-esistente AbstractMigrationSourcePreviewTest,
+scorrelato); tests/Feature/ActivityLog 81/81; Pint pulito sui file toccati. FE tsc pulito; vitest
+1432/1435 (3 rossi PRE-esistenti cell-renderers ContactsCell); eslint pulito. Parita' chiavi i18n
+en/it verificata programmaticamente (124=124). Contratto BE↔FE verificato riga-per-riga; spec 0034
+AC-016..020 mappati 1:1 sui test. File tutti entro le 300 righe.
+
+NOTA WORKTREE: `BusinessFunctionsAuthorization.php` risulta modificato da una feature PARALLELA
+(parent_id/operational_sites — altra sessione utente), non da queste lane. Prossimo passo: commit
+(decisione utente; include anche i residui del giro precedente tags-table.test.tsx + HANDOFF).

@@ -2,9 +2,11 @@
 
 use App\Models\BusinessFunction;
 use App\Models\Concerns\LogsModelActivity;
+use App\Models\OperationalSite;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,7 +36,7 @@ beforeEach(fn () => Relation::morphMap(['business_function' => BusinessFunction:
 it('creates the business_functions table with the expected columns', function () {
     expect(Schema::hasTable('business_functions'))->toBeTrue();
     expect(Schema::hasColumns('business_functions', [
-        'id', 'name', 'is_business_unit', 'is_business_service', 'manager_id', 'created_at', 'updated_at',
+        'id', 'name', 'is_business_unit', 'is_business_service', 'manager_id', 'parent_id', 'created_at', 'updated_at',
     ]))->toBeTrue();
 });
 
@@ -43,6 +45,60 @@ it('creates the business_function_user pivot table with the expected columns', f
     expect(Schema::hasColumns('business_function_user', [
         'id', 'business_function_id', 'user_id',
     ]))->toBeTrue();
+});
+
+it('creates the business_function_operational_site pivot table with the expected columns', function () {
+    expect(Schema::hasTable('business_function_operational_site'))->toBeTrue();
+    expect(Schema::hasColumns('business_function_operational_site', [
+        'id', 'business_function_id', 'operational_site_id',
+    ]))->toBeTrue();
+});
+
+it('parent_id restricts on delete: a function with children cannot be deleted at the DB level', function () {
+    $parent = BusinessFunction::factory()->create();
+    BusinessFunction::factory()->childOf($parent)->create();
+
+    expect(fn () => DB::table('business_functions')->where('id', $parent->id)->delete())
+        ->toThrow(QueryException::class);
+});
+
+it('the operational_site pivot rejects duplicate (business_function_id, operational_site_id) rows', function () {
+    $function = BusinessFunction::factory()->create();
+    $site = OperationalSite::factory()->withAddress()->create();
+
+    $function->operationalSites()->attach($site);
+
+    expect(fn () => DB::table('business_function_operational_site')->insert([
+        'business_function_id' => $function->id,
+        'operational_site_id' => $site->id,
+    ]))->toThrow(QueryException::class);
+});
+
+it('the operational_site pivot cascades on function or site deletion', function () {
+    $function = BusinessFunction::factory()->create();
+    $site = OperationalSite::factory()->withAddress()->create();
+    $function->operationalSites()->attach($site);
+
+    $function->delete();
+
+    expect(DB::table('business_function_operational_site')->where('operational_site_id', $site->id)->exists())->toBeFalse();
+});
+
+it('down()/up() reverses and recreates the parent_id + operational_site migrations', function () {
+    $operationalSitePivot = require database_path('migrations/2026_07_16_100100_create_business_function_operational_site_table.php');
+    $parentId = require database_path('migrations/2026_07_16_100000_add_parent_id_to_business_functions_table.php');
+
+    $operationalSitePivot->down();
+    $parentId->down();
+
+    expect(Schema::hasTable('business_function_operational_site'))->toBeFalse();
+    expect(Schema::hasColumn('business_functions', 'parent_id'))->toBeFalse();
+
+    $parentId->up();
+    $operationalSitePivot->up();
+
+    expect(Schema::hasColumn('business_functions', 'parent_id'))->toBeTrue();
+    expect(Schema::hasTable('business_function_operational_site'))->toBeTrue();
 });
 
 it('name is required at the database level', function () {
@@ -116,6 +172,36 @@ it('users() is a BelongsToMany relation to User via the pivot table', function (
     expect($relation)->toBeInstanceOf(BelongsToMany::class);
     expect($relation->getRelated())->toBeInstanceOf(User::class);
     expect($relation->getTable())->toBe('business_function_user');
+});
+
+it('parent() is a self-referencing BelongsTo relation', function () {
+    $relation = (new BusinessFunction)->parent();
+
+    expect($relation)->toBeInstanceOf(BelongsTo::class);
+    expect($relation->getRelated())->toBeInstanceOf(BusinessFunction::class);
+});
+
+it('children() is a self-referencing HasMany relation', function () {
+    $relation = (new BusinessFunction)->children();
+
+    expect($relation)->toBeInstanceOf(HasMany::class);
+    expect($relation->getRelated())->toBeInstanceOf(BusinessFunction::class);
+});
+
+it('operationalSites() is a BelongsToMany relation to OperationalSite via the pivot table', function () {
+    $relation = (new BusinessFunction)->operationalSites();
+
+    expect($relation)->toBeInstanceOf(BelongsToMany::class);
+    expect($relation->getRelated())->toBeInstanceOf(OperationalSite::class);
+    expect($relation->getTable())->toBe('business_function_operational_site');
+});
+
+it('resolves the parent/children hierarchy', function () {
+    $root = BusinessFunction::factory()->create();
+    $child = BusinessFunction::factory()->childOf($root)->create();
+
+    expect($child->parent->is($root))->toBeTrue();
+    expect($root->children->pluck('id'))->toContain($child->id);
 });
 
 it('casts is_business_unit and is_business_service to boolean', function () {

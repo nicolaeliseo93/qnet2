@@ -10,6 +10,8 @@ const formValues: BusinessFunctionFormValues = {
   type: 'business_unit',
   manager_id: 1,
   users: [2, 3],
+  parent_id: 100,
+  operational_sites: [200, 201],
   custom_fields: {},
 }
 
@@ -28,6 +30,13 @@ function original(
     users: [
       { id: 2, name: 'Grace Hopper', avatar_url: null },
       { id: 3, name: 'Alan Turing', avatar_url: null },
+    ],
+    parent_id: 100,
+    parent: { id: 100, name: 'Operations' },
+    operational_site_ids: [200, 201],
+    operational_sites: [
+      { id: 200, label: 'Via Roma 1 - Milano' },
+      { id: 201, label: 'Via Torino 2 - Torino' },
     ],
     created_at: '2026-01-01T00:00:00Z',
     permissions: {
@@ -48,15 +57,26 @@ describe('buildCreatePayload', () => {
       type: 'business_unit',
       manager_id: 1,
       users: [2, 3],
+      parent_id: 100,
+      operational_sites: [200, 201],
     })
   })
 
-  it('carries a null type and manager_id through unchanged', () => {
-    const payload = buildCreatePayload({ ...formValues, type: null, manager_id: null, users: [] })
+  it('carries a null type, manager_id and parent_id through unchanged', () => {
+    const payload = buildCreatePayload({
+      ...formValues,
+      type: null,
+      manager_id: null,
+      users: [],
+      parent_id: null,
+      operational_sites: [],
+    })
 
     expect(payload.type).toBeNull()
     expect(payload.manager_id).toBeNull()
     expect(payload.users).toEqual([])
+    expect(payload.parent_id).toBeNull()
+    expect(payload.operational_sites).toEqual([])
   })
 })
 
@@ -95,9 +115,33 @@ describe('buildUpdatePayload', () => {
     expect(toNone).toEqual({ type: null })
   })
 
+  it('remaps parent_id when the selection changes, including to/from null', () => {
+    const toOther = buildUpdatePayload({ ...formValues, parent_id: 300 }, original())
+    expect(toOther).toEqual({ parent_id: 300 })
+
+    const toRoot = buildUpdatePayload({ ...formValues, parent_id: null }, original())
+    expect(toRoot).toEqual({ parent_id: null })
+  })
+
+  it('includes operational_sites only when the id set actually differs (order-insensitive)', () => {
+    const reordered = buildUpdatePayload({ ...formValues, operational_sites: [201, 200] }, original())
+    expect(reordered).toEqual({})
+
+    const changed = buildUpdatePayload({ ...formValues, operational_sites: [200, 202] }, original())
+    expect(changed).toEqual({ operational_sites: [200, 202] })
+  })
+
   it('combines multiple changed fields in a single payload', () => {
     const payload = buildUpdatePayload(
-      { name: 'Platform', type: 'business_service', manager_id: null, users: [9], custom_fields: {} },
+      {
+        name: 'Platform',
+        type: 'business_service',
+        manager_id: null,
+        users: [9],
+        parent_id: null,
+        operational_sites: [9],
+        custom_fields: {},
+      },
       original(),
     )
 
@@ -106,6 +150,8 @@ describe('buildUpdatePayload', () => {
       type: 'business_service',
       manager_id: null,
       users: [9],
+      parent_id: null,
+      operational_sites: [9],
     })
   })
 })

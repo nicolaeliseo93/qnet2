@@ -14,6 +14,8 @@ export const businessFunctions = {
     is_business_service: 'Business Service',
     manager: 'Responsabile',
     users: 'Utenti associati',
+    parent: 'Funzione padre',
+    operational_sites: 'Sedi operative',
     created_at: 'Creato il',
   },
   detail: {
@@ -24,6 +26,8 @@ export const businessFunctions = {
     type: 'Tipo',
     manager: 'Responsabile',
     users: 'Utenti associati',
+    parent: 'Funzione padre',
+    operationalSites: 'Sedi operative',
     created_at: 'Creato il',
   },
   form: {
@@ -41,6 +45,17 @@ export const businessFunctions = {
     usersEmpty: 'Nessun utente trovato.',
     usersError: 'Impossibile caricare gli utenti.',
     usersRemove: 'Rimuovi utente',
+    parent: 'Funzione padre',
+    parentPlaceholder: 'Seleziona una funzione padre…',
+    parentSearch: 'Cerca funzioni…',
+    parentEmpty: 'Nessuna funzione trovata.',
+    parentError: 'Impossibile caricare le funzioni.',
+    operationalSites: 'Sedi operative',
+    operationalSitesPlaceholder: 'Seleziona le sedi operative…',
+    operationalSitesSearch: 'Cerca sedi operative…',
+    operationalSitesEmpty: 'Nessuna sede operativa trovata.',
+    operationalSitesError: 'Impossibile caricare le sedi operative.',
+    operationalSitesRemove: 'Rimuovi sede operativa',
     type: {
       label: 'Tipo',
       businessUnit: 'Business Unit',
@@ -66,6 +81,10 @@ export const businessFunctions = {
       assignment: {
         title: 'Assegnazione',
         description: 'Responsabile e utenti associati.',
+      },
+      locations: {
+        title: 'Sedi operative',
+        description: 'Sedi fisiche in cui opera questa funzione aziendale.',
       },
     },
   },

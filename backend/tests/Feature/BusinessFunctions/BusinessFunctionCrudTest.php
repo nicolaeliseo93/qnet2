@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\BusinessFunction;
+use App\Models\OperationalSite;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -74,7 +75,27 @@ it('show: type is null when neither boolean is set', function () {
         ->assertOk()
         ->assertJsonPath('data.type', null)
         ->assertJsonPath('data.manager', null)
-        ->assertJsonPath('data.user_ids', []);
+        ->assertJsonPath('data.user_ids', [])
+        ->assertJsonPath('data.parent', null)
+        ->assertJsonPath('data.operational_site_ids', []);
+});
+
+it('show: 200 with parent and operational_sites hydrated', function () {
+    $actor = businessFunctionUserWith(['view']);
+    $parent = BusinessFunction::factory()->create(['name' => 'Group']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    $target = BusinessFunction::factory()->childOf($parent)->create();
+    $target->operationalSites()->sync([$site->id]);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/business-functions/{$target->id}")
+        ->assertOk()
+        ->assertJsonPath('data.parent_id', $parent->id)
+        ->assertJsonPath('data.parent.id', $parent->id)
+        ->assertJsonPath('data.parent.name', 'Group')
+        ->assertJsonPath('data.operational_site_ids', [$site->id])
+        ->assertJsonPath('data.operational_sites.0.id', $site->id)
+        ->assertJsonPath('data.operational_sites.0.label', fn (string $label): bool => $label !== '');
 });
 
 it('show: 403 without business-functions.view', function () {
@@ -163,6 +184,28 @@ it('create: hydrates manager and users', function () {
         ->assertJsonPath('data.user_ids', [$member->id]);
 });
 
+it('create: hydrates parent and operational_sites', function () {
+    $actor = businessFunctionUserWith(['create']);
+    $parent = BusinessFunction::factory()->create(['name' => 'Group']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/business-functions', [
+        'name' => 'Sub-function',
+        'parent_id' => $parent->id,
+        'operational_sites' => [$site->id],
+    ])->assertCreated()
+        ->assertJsonPath('data.parent_id', $parent->id)
+        ->assertJsonPath('data.parent.name', 'Group')
+        ->assertJsonPath('data.operational_site_ids', [$site->id]);
+
+    $this->assertDatabaseHas('business_functions', ['name' => 'Sub-function', 'parent_id' => $parent->id]);
+    $this->assertDatabaseHas('business_function_operational_site', [
+        'business_function_id' => $response->json('data.id'),
+        'operational_site_id' => $site->id,
+    ]);
+});
+
 it('create: 422 when name is missing', function () {
     $actor = businessFunctionUserWith(['create']);
     Sanctum::actingAs($actor);
@@ -185,6 +228,22 @@ it('create: 422 when users contains a non-existent id', function () {
 
     $this->postJson('/api/business-functions', ['name' => 'X', 'users' => [999999]])
         ->assertStatus(422)->assertJsonValidationErrors('users.0');
+});
+
+it('create: 422 when parent_id does not exist', function () {
+    $actor = businessFunctionUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/business-functions', ['name' => 'X', 'parent_id' => 999999])
+        ->assertStatus(422)->assertJsonValidationErrors('parent_id');
+});
+
+it('create: 422 when operational_sites contains a non-existent id', function () {
+    $actor = businessFunctionUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/business-functions', ['name' => 'X', 'operational_sites' => [999999]])
+        ->assertStatus(422)->assertJsonValidationErrors('operational_sites.0');
 });
 
 it('create: 403 without business-functions.create', function () {
@@ -251,6 +310,61 @@ it('update: 422 when the submitted type is invalid', function () {
         ->assertStatus(422)->assertJsonValidationErrors('type');
 });
 
+it('update: PATCH partial (only operational_sites) full-replaces the relation, other fields untouched', function () {
+    $actor = businessFunctionUserWith(['update']);
+    $target = BusinessFunction::factory()->create(['name' => 'Keep Me']);
+    $old = OperationalSite::factory()->withAddress()->create();
+    $new = OperationalSite::factory()->withAddress()->create();
+    $target->operationalSites()->sync([$old->id]);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/business-functions/{$target->id}", ['operational_sites' => [$new->id]])
+        ->assertOk()
+        ->assertJsonPath('data.name', 'Keep Me')
+        ->assertJsonPath('data.operational_site_ids', [$new->id]);
+
+    expect($target->fresh()->operationalSites->pluck('id')->all())->toBe([$new->id]);
+});
+
+it('update: PATCH {parent_id: <id>} sets the parent, then {parent_id: null} detaches it', function () {
+    $actor = businessFunctionUserWith(['update']);
+    $parent = BusinessFunction::factory()->create();
+    $target = BusinessFunction::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/business-functions/{$target->id}", ['parent_id' => $parent->id])
+        ->assertOk()
+        ->assertJsonPath('data.parent_id', $parent->id);
+
+    $this->patchJson("/api/business-functions/{$target->id}", ['parent_id' => null])
+        ->assertOk()
+        ->assertJsonPath('data.parent_id', null)
+        ->assertJsonPath('data.parent', null);
+
+    $this->assertDatabaseHas('business_functions', ['id' => $target->id, 'parent_id' => null]);
+});
+
+it('update: parent_id = self → 422 (anti-cycle)', function () {
+    $actor = businessFunctionUserWith(['update']);
+    $target = BusinessFunction::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/business-functions/{$target->id}", ['parent_id' => $target->id])->assertStatus(422);
+
+    expect($target->fresh()->parent_id)->toBeNull();
+});
+
+it('update: parent_id = own descendant → 422 (anti-cycle)', function () {
+    $actor = businessFunctionUserWith(['update']);
+    $root = BusinessFunction::factory()->create();
+    $child = BusinessFunction::factory()->childOf($root)->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/business-functions/{$root->id}", ['parent_id' => $child->id])->assertStatus(422);
+
+    expect($root->fresh()->parent_id)->toBeNull();
+});
+
 it('update: 403 without business-functions.update', function () {
     $actor = businessFunctionUserWith([]);
     $target = BusinessFunction::factory()->create();
@@ -270,17 +384,30 @@ it('update: 404 for a non-existent function', function () {
 // delete — DELETE /api/business-functions/{businessFunction} (AC-012)
 // ---------------------------------------------------------------------------
 
-it('delete: 204, removes the function and cleans up the pivot rows', function () {
+it('delete: 204, removes the function and cleans up the users/operational_sites pivot rows', function () {
     $actor = businessFunctionUserWith(['delete']);
     $target = BusinessFunction::factory()->create();
     $member = User::factory()->create();
+    $site = OperationalSite::factory()->withAddress()->create();
     $target->users()->sync([$member->id]);
+    $target->operationalSites()->sync([$site->id]);
     Sanctum::actingAs($actor);
 
     $this->deleteJson("/api/business-functions/{$target->id}")->assertNoContent();
 
     $this->assertDatabaseMissing('business_functions', ['id' => $target->id]);
     $this->assertDatabaseMissing('business_function_user', ['business_function_id' => $target->id]);
+    $this->assertDatabaseMissing('business_function_operational_site', ['business_function_id' => $target->id]);
+});
+
+it('delete: 409 when it has child functions', function () {
+    $actor = businessFunctionUserWith(['delete']);
+    $parent = BusinessFunction::factory()->create();
+    BusinessFunction::factory()->childOf($parent)->create();
+    Sanctum::actingAs($actor);
+
+    $this->deleteJson("/api/business-functions/{$parent->id}")->assertStatus(409);
+    $this->assertDatabaseHas('business_functions', ['id' => $parent->id]);
 });
 
 it('delete: 403 without business-functions.delete', function () {

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { ImportWizard } from '@/features/imports/wizard/import-wizard'
 import type { ImportRunDetail, ImportRunSummary } from '@/features/imports/wizard/types'
 
@@ -16,12 +17,22 @@ const analyzeImportMock = vi.fn()
 const getImportWizardRunMock = vi.fn()
 const configureImportRunMock = vi.fn()
 const confirmImportRunMock = vi.fn()
+const listMappingTemplatesMock = vi.fn()
 
 vi.mock('@/features/imports/wizard/api', () => ({
   analyzeImport: (...args: unknown[]) => analyzeImportMock(...args),
   getImportWizardRun: (...args: unknown[]) => getImportWizardRunMock(...args),
   configureImportRun: (...args: unknown[]) => configureImportRunMock(...args),
   confirmImportRun: (...args: unknown[]) => confirmImportRunMock(...args),
+  createMappingTemplate: vi.fn(),
+  listMappingTemplates: (...args: unknown[]) => listMappingTemplatesMock(...args),
+}))
+
+// The mapping step's `SavedTemplatesMenu` (spec 0035) reads the actor from
+// auth context; irrelevant to this end-to-end orchestration test, so a
+// minimal stub avoids requiring a full `AuthProvider` tree here.
+vi.mock('@/features/auth/use-auth', () => ({
+  useAuth: () => ({ user: { id: 1, name: 'Test user' } }),
 }))
 
 const useForSelectMock = vi.fn()
@@ -79,11 +90,13 @@ function renderWizard(initialEntry: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[initialEntry]}>
-        <Routes>
-          <Route path="/leads/import" element={<ImportWizard domain="leads" />} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmDialogProvider>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <Routes>
+            <Route path="/leads/import" element={<ImportWizard domain="leads" />} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmDialogProvider>
     </QueryClientProvider>,
   )
 }
@@ -97,6 +110,8 @@ beforeEach(() => {
   getImportWizardRunMock.mockReset()
   configureImportRunMock.mockReset()
   confirmImportRunMock.mockReset()
+  listMappingTemplatesMock.mockReset()
+  listMappingTemplatesMock.mockResolvedValue([])
   useForSelectMock.mockReset()
   useForSelectMock.mockReturnValue({
     data: { pages: [{ items: [{ id: 9, label: 'Spring campaign' }] }] },

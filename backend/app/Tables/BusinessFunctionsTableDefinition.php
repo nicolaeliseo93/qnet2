@@ -4,20 +4,27 @@ namespace App\Tables;
 
 use App\Models\BusinessFunction;
 use App\Models\User;
+use App\Services\BusinessFunctionService;
 use App\Tables\BusinessFunctions\BusinessFunctionColumnCatalog;
+use App\Tables\BusinessFunctions\BusinessFunctionOperationalSitesColumn;
+use App\Tables\BusinessFunctions\BusinessFunctionParentColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Table definition for the `business-functions` domain (spec 0010).
+ * Table definition for the `business-functions` domain (spec 0010, spec 0010
+ * REV).
  *
  * Real columns (name, is_business_unit, is_business_service, created_at) are
  * handled entirely by the generic engine. `manager` (belongsTo) and `users`
  * (belongsToMany) have no real DB column of their own and are DERIVED: their
  * set filter/sort/distinct-values are resolved here against the related
  * users' names, mirroring UsersTableDefinition's `roles` derived filter.
+ * `parent` (self-referencing belongsTo) and `operational_sites`
+ * (belongsToMany) are likewise DERIVED, delegated to
+ * BusinessFunctionParentColumn/BusinessFunctionOperationalSitesColumn.
  */
 class BusinessFunctionsTableDefinition extends AbstractTableDefinition
 {
@@ -26,6 +33,12 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
      * Caps the WHERE IN cardinality (defence in depth); excess values ignored.
      */
     private const int MAX_FILTER_VALUES = 200;
+
+    public function __construct(
+        private readonly BusinessFunctionService $service,
+        private readonly BusinessFunctionParentColumn $parentColumn,
+        private readonly BusinessFunctionOperationalSitesColumn $operationalSitesColumn,
+    ) {}
 
     public function domain(): string
     {
@@ -50,8 +63,12 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
     public function baseQuery(): Builder
     {
         // Eager-load manager/users + their avatar relation to avoid N+1 when
-        // each row projects avatar_url for the manager and every associated user.
-        return BusinessFunction::query()->with(['manager.avatar', 'users.avatar']);
+        // each row projects avatar_url for the manager and every associated
+        // user, plus parent (spec 0010 REV) and operationalSites' primary
+        // address + city for the composed label (BusinessFunctionOperationalSitesColumn).
+        return BusinessFunction::query()->with([
+            'manager.avatar', 'users.avatar', 'parent', 'operationalSites.addresses.city',
+        ]);
     }
 
     /**
@@ -111,7 +128,9 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
             'is_business_unit' => $row->is_business_unit,
             'is_business_service' => $row->is_business_service,
             'manager' => $this->userSummary($row->manager),
+            'parent' => $this->parentSummary($row->parent),
             'users' => $row->users->map(fn (User $user): array => $this->userSummary($user))->all(),
+            'operational_sites' => $this->operationalSitesColumn->summarize($row),
             'created_at' => $row->created_at,
         ];
     }
@@ -130,6 +149,18 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
             'name' => $user->name,
             'avatar_url' => $user->avatarDataUri(),
         ];
+    }
+
+    /**
+     * @return array{id: int, name: string}|null
+     */
+    private function parentSummary(?BusinessFunction $parent): ?array
+    {
+        if ($parent === null) {
+            return null;
+        }
+
+        return ['id' => $parent->id, 'name' => $parent->name];
     }
 
     /**
@@ -161,8 +192,9 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Handle the derived `manager`/`users` set filters. Every other column id
-     * (the real columns) falls through to the generic engine.
+     * Handle the derived `manager`/`parent`/`users`/`operational_sites` set
+     * filters. Every other column id (the real columns) falls through to the
+     * generic engine.
      *
      * @param  Builder<BusinessFunction>  $query
      * @param  array<string, mixed>  $columnConfig
@@ -173,6 +205,8 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
         return match ($columnId) {
             'manager' => $this->filterByRelatedName($query, 'manager', $filter),
             'users' => $this->filterByRelatedName($query, 'users', $filter),
+            'parent' => $this->parentColumn->applyFilter($query, $filter),
+            'operational_sites' => $this->operationalSitesColumn->applyFilter($query, $filter),
             default => false,
         };
     }
@@ -207,14 +241,21 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * ORDER BY the manager's name via a correlated subquery, so sorting never
-     * needs a row-multiplying JOIN on the main query. `users` (to-many) has no
-     * single sort key and is not declared sortable, so it is never reached here.
+     * ORDER BY the manager's/parent's name via a correlated subquery, so
+     * sorting never needs a row-multiplying JOIN on the main query. `users`/
+     * `operational_sites` (to-many) have no single sort key and are not
+     * declared sortable, so they are never reached here.
      *
      * @param  Builder<BusinessFunction>  $query
      */
     public function applyDerivedSort(Builder $query, string $columnId, string $direction): bool
     {
+        if ($columnId === 'parent') {
+            $this->parentColumn->applySort($query, $direction);
+
+            return true;
+        }
+
         if ($columnId !== 'manager') {
             return false;
         }
@@ -231,8 +272,9 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
 
     /**
      * Excel-like distinct values (spec 0004/0005) for the derived `manager`/
-     * `users` columns: distinct related-user NAMES among the functions
-     * matching `$query` (already scoped by every OTHER active filter).
+     * `parent`/`users`/`operational_sites` columns: distinct related NAMES/
+     * labels among the functions matching `$query` (already scoped by every
+     * OTHER active filter).
      *
      * @param  Builder<BusinessFunction>  $query
      * @param  array<string, mixed>  $columnConfig
@@ -243,6 +285,8 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
         return match ($columnId) {
             'manager' => $this->distinctManagerNames($query, $search, $limit),
             'users' => $this->distinctAssociatedUserNames($query, $search, $limit),
+            'parent' => $this->parentColumn->distinctValues($query, $search, $limit),
+            'operational_sites' => $this->operationalSitesColumn->distinctValues($query, $search, $limit),
             default => null,
         };
     }
@@ -296,5 +340,17 @@ class BusinessFunctionsTableDefinition extends AbstractTableDefinition
     private function escapeLike(string $value): string
     {
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
+    /**
+     * Delegate to BusinessFunctionService::delete() so the generic
+     * bulk-delete endpoint respects the same restrictive-delete guard
+     * (children in use, spec 0010 REV) as the single DELETE
+     * /business-functions/{businessFunction} endpoint.
+     */
+    public function deleteModel(Model $model): void
+    {
+        /** @var BusinessFunction $model */
+        $this->service->delete($model);
     }
 }

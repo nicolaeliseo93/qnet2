@@ -9,6 +9,11 @@ import type { ActivityLogEntry, ActivityLogPage } from '@/features/activity-log/
  * Spec 0034, AC-014: the timeline shows date/time, author, operation type,
  * module and the field-level diff for every entry; loads more pages on
  * demand; covers the loading/empty/error states.
+ *
+ * Requirement change (backend now resolves FK labels, spec 0034 follow-up):
+ * `ActivityLogChange` grew `old_display`/`new_display`, and the diff row no
+ * longer shows a "— →" for `created`/`deleted` entries — the field-label
+ * assertion also moved from the raw key to its (now translated) label.
  */
 
 const fetchActivityLogMock = vi.fn()
@@ -26,7 +31,15 @@ function entry(overrides: Partial<ActivityLogEntry> = {}): ActivityLogEntry {
     module: 'user',
     subject_id: 1,
     causer: { id: 9, name: 'Jane Doe' },
-    changes: [{ field: 'email', old_value: 'old@example.com', new_value: 'new@example.com' }],
+    changes: [
+      {
+        field: 'email',
+        old_value: 'old@example.com',
+        new_value: 'new@example.com',
+        old_display: null,
+        new_display: null,
+      },
+    ],
     ...overrides,
   }
 }
@@ -59,11 +72,110 @@ describe('ActivityLogSection', () => {
     renderSection()
 
     await waitFor(() => expect(screen.getByText('Jane Doe')).toBeInTheDocument())
-    expect(screen.getByText(/Updated/)).toBeInTheDocument()
-    expect(screen.getByText(/User/)).toBeInTheDocument()
-    expect(screen.getByText(/email/)).toBeInTheDocument()
+    expect(screen.getByText('Updated')).toBeInTheDocument()
+    expect(screen.getByText('User')).toBeInTheDocument()
+    expect(screen.getByText('Email')).toBeInTheDocument()
     expect(screen.getByText(/old@example.com/)).toBeInTheDocument()
     expect(screen.getByText(/new@example.com/)).toBeInTheDocument()
+  })
+
+  it('shows the resolved FK label instead of the raw id when the backend provides one', async () => {
+    fetchActivityLogMock.mockResolvedValue(
+      page({
+        items: [
+          entry({
+            changes: [
+              {
+                field: 'registry_id',
+                old_value: 3,
+                new_value: 8,
+                old_display: 'Acme Inc.',
+                new_display: 'Globex Corp.',
+              },
+            ],
+          }),
+        ],
+      }),
+    )
+
+    renderSection()
+
+    await waitFor(() => expect(screen.getByText('Client')).toBeInTheDocument())
+    expect(screen.getByText('Acme Inc.')).toBeInTheDocument()
+    expect(screen.getByText('Globex Corp.')).toBeInTheDocument()
+    expect(screen.queryByText('3')).not.toBeInTheDocument()
+    expect(screen.queryByText('8')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the raw value when the backend resolved no display label', async () => {
+    fetchActivityLogMock.mockResolvedValue(
+      page({
+        items: [
+          entry({
+            changes: [{ field: 'cost', old_value: 10, new_value: 12, old_display: null, new_display: null }],
+          }),
+        ],
+      }),
+    )
+
+    renderSection()
+
+    await waitFor(() => expect(screen.getByText('10')).toBeInTheDocument())
+    expect(screen.getByText('12')).toBeInTheDocument()
+  })
+
+  it('shows only the new value for a created entry, with no old value or arrow', async () => {
+    fetchActivityLogMock.mockResolvedValue(
+      page({
+        items: [
+          entry({
+            event: 'created',
+            changes: [{ field: 'name', old_value: null, new_value: 'Acme Inc.', old_display: null, new_display: null }],
+          }),
+        ],
+      }),
+    )
+
+    renderSection()
+
+    await waitFor(() => expect(screen.getByText('Acme Inc.')).toBeInTheDocument())
+    expect(screen.queryByText('—')).not.toBeInTheDocument()
+  })
+
+  it('shows only the struck-through old value for a deleted entry', async () => {
+    fetchActivityLogMock.mockResolvedValue(
+      page({
+        items: [
+          entry({
+            event: 'deleted',
+            changes: [{ field: 'name', old_value: 'Acme Inc.', new_value: null, old_display: null, new_display: null }],
+          }),
+        ],
+      }),
+    )
+
+    renderSection()
+
+    const oldValue = await screen.findByText('Acme Inc.')
+    expect(oldValue).toHaveClass('line-through')
+  })
+
+  it('falls back to a humanized field key when no translation exists for the field', async () => {
+    fetchActivityLogMock.mockResolvedValue(
+      page({
+        items: [
+          entry({
+            changes: [
+              { field: 'unmapped_custom_column', old_value: 'a', new_value: 'b', old_display: null, new_display: null },
+            ],
+          }),
+        ],
+      }),
+    )
+
+    renderSection()
+
+    await waitFor(() => expect(screen.getByText('Unmapped custom column')).toBeInTheDocument())
   })
 
   it('falls back to the system-causer label when causer is null', async () => {

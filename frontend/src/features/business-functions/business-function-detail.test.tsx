@@ -17,6 +17,10 @@ const BASE: BusinessFunctionDetailWithPermissions = {
     { id: 20, name: 'Grace Hopper', avatar_url: null },
     { id: 21, name: 'Katherine Johnson', avatar_url: null },
   ],
+  parent_id: 5,
+  parent: { id: 5, name: 'Operations' },
+  operational_site_ids: [30],
+  operational_sites: [{ id: 30, label: 'Via Roma 1 - Milano' }],
   created_at: '2026-01-15T10:30:00Z',
   permissions: {
     resource: { view: true, create: true, update: true, delete: true, export: true, import: true },
@@ -63,5 +67,30 @@ describe('BusinessFunctionDetailView', () => {
   it('renders the formatted creation date', () => {
     render(<BusinessFunctionDetailView businessFunction={BASE} />)
     expect(screen.getByText(/2026/)).toBeInTheDocument()
+  })
+
+  it('renders the parent function when present', () => {
+    render(<BusinessFunctionDetailView businessFunction={BASE} />)
+    expect(screen.getByText('Operations')).toBeInTheDocument()
+  })
+
+  it('omits the parent section for a top-level function', () => {
+    render(<BusinessFunctionDetailView businessFunction={{ ...BASE, parent_id: null, parent: null }} />)
+    expect(screen.queryByText(i18n.t('businessFunctions.detail.parent'))).not.toBeInTheDocument()
+  })
+
+  it('renders every operational site as a badge', () => {
+    render(<BusinessFunctionDetailView businessFunction={BASE} />)
+    expect(screen.getByText('Via Roma 1 - Milano')).toBeInTheDocument()
+  })
+
+  it('renders the empty state when no operational site is assigned', () => {
+    render(
+      <BusinessFunctionDetailView
+        businessFunction={{ ...BASE, operational_site_ids: [], operational_sites: [] }}
+      />,
+    )
+    expect(screen.getByText(i18n.t('businessFunctions.detail.operationalSites'))).toBeInTheDocument()
+    expect(screen.getByText('—')).toBeInTheDocument()
   })
 })

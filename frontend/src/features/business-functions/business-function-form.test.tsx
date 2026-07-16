@@ -40,45 +40,58 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => Promise.resolve({ fields: [], permissions: FULL_ACCESS_PERMISSIONS }),
 }))
 
-// Replace the async single-select responsabile with a lightweight controllable
-// stub so this suite focuses on the form's own logic, not the network-backed
-// select (covered by its own component test).
+// Replace the async single-select (responsabile AND parent function both use
+// this component) with a lightweight controllable stub, keyed by `resource`
+// so the two instances stay independently addressable — this suite focuses
+// on the form's own logic, not the network-backed select (covered by its own
+// component test).
 vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
+    resource,
     value,
     onChange,
   }: {
+    resource: string
     value: number | null
     onChange: (value: number | null) => void
-  }) => (
-    <div>
-      <span data-testid="manager-value">{value ?? ''}</span>
-      <button type="button" onClick={() => onChange(5)}>
-        select-manager-5
-      </button>
-      <button type="button" onClick={() => onChange(null)}>
-        clear-manager
-      </button>
-    </div>
-  ),
+  }) => {
+    const pickedId = resource === 'users' ? 5 : 50
+    return (
+      <div>
+        <span data-testid={`${resource}-value`}>{value ?? ''}</span>
+        <button type="button" onClick={() => onChange(pickedId)}>
+          {`select-${resource}-${pickedId}`}
+        </button>
+        <button type="button" onClick={() => onChange(null)}>
+          {`clear-${resource}`}
+        </button>
+      </div>
+    )
+  },
 }))
 
-// Same for the associated-users multiselect.
+// Same for the multiselects (associated users AND operational sites both use
+// this component), also keyed by `resource`.
 vi.mock('@/components/ui/async-paginated-multi-select', () => ({
   AsyncPaginatedMultiSelect: ({
+    resource,
     value,
     onChange,
   }: {
+    resource: string
     value: number[]
     onChange: (value: number[]) => void
-  }) => (
-    <div>
-      <span data-testid="users-value">{value.join(',')}</span>
-      <button type="button" onClick={() => onChange([...value, 7])}>
-        add-user-7
-      </button>
-    </div>
-  ),
+  }) => {
+    const addedId = resource === 'users' ? 7 : 70
+    return (
+      <div>
+        <span data-testid={`${resource}-values`}>{value.join(',')}</span>
+        <button type="button" onClick={() => onChange([...value, addedId])}>
+          {`add-${resource}-${addedId}`}
+        </button>
+      </div>
+    )
+  },
 }))
 
 function wrapper() {
@@ -101,6 +114,10 @@ function businessFunction(
     manager: { id: 5, name: 'Ada Lovelace', avatar_url: null },
     user_ids: [11],
     users: [{ id: 11, name: 'Grace Hopper', avatar_url: null }],
+    parent_id: 40,
+    parent: { id: 40, name: 'Operations' },
+    operational_site_ids: [60],
+    operational_sites: [{ id: 60, label: 'Via Roma 1 - Milano' }],
     created_at: '2026-01-01T00:00:00Z',
     permissions: FULL_ACCESS_PERMISSIONS,
     ...overrides,
@@ -117,7 +134,7 @@ beforeEach(() => {
 })
 
 describe('BusinessFunctionForm — create/edit', () => {
-  it('AC-017 — renders name, type, responsabile and associated-users fields in create mode', () => {
+  it('AC-017 — renders name, type, responsabile, associated-users, parent and operational-sites fields in create mode', () => {
     render(
       <BusinessFunctionForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
       { wrapper: wrapper() },
@@ -125,8 +142,10 @@ describe('BusinessFunctionForm — create/edit', () => {
 
     expect(screen.getByLabelText(/^Name/)).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Type' })).toBeInTheDocument()
-    expect(screen.getByTestId('users-value')).toBeInTheDocument()
-    expect(screen.getByText('select-manager-5')).toBeInTheDocument()
+    expect(screen.getByTestId('users-values')).toBeInTheDocument()
+    expect(screen.getByText('select-users-5')).toBeInTheDocument()
+    expect(screen.getByText('select-business-functions-50')).toBeInTheDocument()
+    expect(screen.getByTestId('operational-sites-values')).toBeInTheDocument()
   })
 
   it('submits the create payload on save', async () => {
@@ -139,8 +158,10 @@ describe('BusinessFunctionForm — create/edit', () => {
     )
 
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Support' } })
-    fireEvent.click(screen.getByText('select-manager-5'))
-    fireEvent.click(screen.getByText('add-user-7'))
+    fireEvent.click(screen.getByText('select-users-5'))
+    fireEvent.click(screen.getByText('add-users-7'))
+    fireEvent.click(screen.getByText('select-business-functions-50'))
+    fireEvent.click(screen.getByText('add-operational-sites-70'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createBusinessFunctionMock).toHaveBeenCalledTimes(1))
@@ -149,6 +170,8 @@ describe('BusinessFunctionForm — create/edit', () => {
       type: null,
       manager_id: 5,
       users: [7],
+      parent_id: 50,
+      operational_sites: [70],
     })
     await waitFor(() => expect(onSuccess).toHaveBeenCalledWith(businessFunction()))
   })
@@ -172,7 +195,7 @@ describe('BusinessFunctionForm — create/edit', () => {
     )
   })
 
-  it('hydrates responsabile and associated users in edit mode', () => {
+  it('hydrates responsabile, associated users, parent and operational sites in edit mode', () => {
     render(
       <BusinessFunctionForm
         mode={{ type: 'edit', businessFunction: businessFunction() }}
@@ -182,8 +205,10 @@ describe('BusinessFunctionForm — create/edit', () => {
       { wrapper: wrapper() },
     )
 
-    expect(screen.getByTestId('manager-value')).toHaveTextContent('5')
-    expect(screen.getByTestId('users-value')).toHaveTextContent('11')
+    expect(screen.getByTestId('users-value')).toHaveTextContent('5')
+    expect(screen.getByTestId('users-values')).toHaveTextContent('11')
+    expect(screen.getByTestId('business-functions-value')).toHaveTextContent('40')
+    expect(screen.getByTestId('operational-sites-values')).toHaveTextContent('60')
   })
 
   it('submits only the changed fields on a partial update', async () => {

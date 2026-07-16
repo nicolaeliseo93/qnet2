@@ -10,16 +10,19 @@ namespace App\DataObjects\BusinessFunctions;
  * BusinessFunctionService contract is explicit — see
  * standards/architecture.md → Data Transfer Objects.
  *
- * `type` and `manager_id` are both legitimately nullable VALUES (clearing the
- * type, removing the manager), so a plain null property cannot distinguish
- * "not submitted" from "submitted as null" the way UpdateUserData/UpdateRoleData
- * do for their non-nullable fields. The `*Submitted` flags carry that
- * distinction explicitly; `hasType()`/`hasManager()`/`hasUsers()` expose it.
+ * `type`, `manager_id` and `parent_id` are all legitimately nullable VALUES
+ * (clearing the type, removing the manager, detaching the parent), so a
+ * plain null property cannot distinguish "not submitted" from "submitted as
+ * null" the way UpdateUserData/UpdateRoleData do for their non-nullable
+ * fields. The `*Submitted` flags carry that distinction explicitly;
+ * `hasType()`/`hasManager()`/`hasParentId()`/`hasUsers()`/
+ * `hasOperationalSites()` expose it.
  */
 final readonly class UpdateBusinessFunctionData
 {
     /**
      * @param  array<int, int>|null  $users
+     * @param  array<int, int>|null  $operationalSites
      */
     public function __construct(
         public ?string $name = null,
@@ -27,7 +30,10 @@ final readonly class UpdateBusinessFunctionData
         public bool $typeSubmitted = false,
         public ?int $managerId = null,
         public bool $managerSubmitted = false,
+        public ?int $parentId = null,
+        public bool $parentIdSubmitted = false,
         public ?array $users = null,
+        public ?array $operationalSites = null,
     ) {}
 
     /**
@@ -45,7 +51,14 @@ final readonly class UpdateBusinessFunctionData
                 ? (int) $data['manager_id']
                 : null,
             managerSubmitted: array_key_exists('manager_id', $data),
+            parentId: array_key_exists('parent_id', $data) && $data['parent_id'] !== null
+                ? (int) $data['parent_id']
+                : null,
+            parentIdSubmitted: array_key_exists('parent_id', $data),
             users: array_key_exists('users', $data) ? array_map('intval', (array) $data['users']) : null,
+            operationalSites: array_key_exists('operational_sites', $data)
+                ? array_map('intval', (array) $data['operational_sites'])
+                : null,
         );
     }
 
@@ -59,16 +72,26 @@ final readonly class UpdateBusinessFunctionData
         return $this->managerSubmitted;
     }
 
+    public function hasParentId(): bool
+    {
+        return $this->parentIdSubmitted;
+    }
+
     public function hasUsers(): bool
     {
         return $this->users !== null;
     }
 
+    public function hasOperationalSites(): bool
+    {
+        return $this->operationalSites !== null;
+    }
+
     /**
      * Only the plain scalar attributes the client actually submitted, ready
      * for a partial mass-assignment update (framework array boundary). `type`
-     * is handled separately by the Service (boolean remap); `users` is synced
-     * separately.
+     * is handled separately by the Service (boolean remap); `users`/
+     * `operationalSites` are synced separately.
      *
      * @return array<string, mixed>
      */
@@ -82,6 +105,10 @@ final readonly class UpdateBusinessFunctionData
 
         if ($this->managerSubmitted) {
             $attributes['manager_id'] = $this->managerId;
+        }
+
+        if ($this->parentIdSubmitted) {
+            $attributes['parent_id'] = $this->parentId;
         }
 
         return $attributes;

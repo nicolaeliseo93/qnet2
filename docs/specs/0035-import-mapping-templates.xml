@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0035-import-mapping-templates" status="approved" owner="utente" date="2026-07-16">
+
+  <goal>
+    L'operatore che importa lead puo' salvare la mappatura colonne corrente come modello
+    riutilizzabile e condiviso col team; agli import successivi, se il file caricato ha la
+    STESSA struttura (stesse intestazioni, stesso ordine) di un modello salvato, il wizard
+    lo riconosce e lo propone con conferma esplicita, evitando di rimappare tutte le colonne.
+  </goal>
+
+  <context>
+    Decisioni utente (2026-07-16): visibilita' CONDIVISA al team (chiunque abbia il permesso
+    di import del dominio); matching ESATTO (stessa lista ordinata di colonne — garanzia che
+    il file e' identico al modello); applicazione PROPOSTA CON CONFERMA (banner + click,
+    mappatura resta modificabile); il modello salva column_mapping + dedup_strategy
+    (global_config resta da scegliere a ogni import).
+
+    Fatti verificati nel repo:
+    - Flusso wizard (spec 0033): upload -> analyzing -> configuring -> PUT configure ->
+      staging -> reviewing -> confirm. `ImportRun` persiste `detected_columns`
+      (shape {name,index,duplicate}) e `column_mapping` keyed dalla column key deterministica
+      `ColumnAnalysis::columnKeys()` (nome bare, `"{name}#{index}"` sui duplicati).
+    - `ImportController` (app/Http/Controllers/Import/ImportController.php): doppio gate
+      authz — modulo `ImportRunPolicy` (`import-runs.*`) + dominio
+      `authorizeImport()` (`{resource}.import`). Il download template CSV usa
+      `authorize('create', ImportRun::class)` + `authorizeImport` — stesso gate per i
+      mapping template. Route letterali (`imports/{domain}/template`) registrate PRIMA
+      del wildcard `{importRun}` in routes/api.php.
+    - `ImportRunPayloadBuilder` (app/Support/Import/) arricchisce GET run con
+      detected_columns keyed / suggested_mapping / fields / global_fields / dedup_modes:
+      punto naturale dove aggiungere `matching_template`.
+    - Precedente strutturale: `TableFilterView` + `TableFilterViewPolicy` (ownership-only,
+      super-admin via Gate::before in AppServiceProvider — NON duplicare il bypass).
+    - Envelope: `BaseApiController::ok()/created()` -> { success, message, data }.
+    - Frontend: `features/imports/wizard/` — `use-import-wizard.ts` (initialMapping =
+      suggested_mapping + column_mapping), `import-step-mapping.tsx` (form keyed per INDICE
+      colonna, submit rimappa alle column key reali), `types.ts` (contratto 1:1), `api.ts`,
+      `i18n.ts` (namespace importWizard), primitivi in `wizard-ui.tsx` (StepAlert,
+      StepSectionHeader).
+  </context>
+
+  <scope>
+    <in>
+      <item>Migrazione + model `ImportMappingTemplate` (tabella `import_mapping_templates`).</item>
+      <item>Endpoint list/create/delete dei modelli, annidati sotto `imports/{domain}` (generici per dominio, come tutto il framework import).</item>
+      <item>`matching_template` calcolato SERVER-SIDE nel payload di GET run (confronto esatto ordinato delle column key).</item>
+      <item>Wizard step mappatura: banner "struttura riconosciuta" con applicazione a un click; controllo "salva come modello" (nome) al submit; popover di gestione con elenco ed eliminazione dei propri modelli.</item>
+      <item>Policy delete owner-only; permessi riusati dai gate import esistenti (nessuna nuova permission nel catalogo).</item>
+      <item>Test Pest (endpoint + matching) e Vitest (banner/salvataggio/gestione), eseguiti.</item>
+    </in>
+    <out>
+      <item>Rinomina/aggiornamento di un modello esistente (si elimina e si risalva).</item>
+      <item>Applicazione manuale di un modello NON corrispondente al file (violerebbe la garanzia di identita' della struttura).</item>
+      <item>Matching parziale / stesso set senza ordine (decisione utente: solo esatto ordinato).</item>
+      <item>Salvataggio di global_config (progetto/campagna) nel modello.</item>
+      <item>Pagina di amministrazione dedicata dei modelli fuori dal wizard.</item>
+      <item>Nuove permission nel catalogo / RolePermissionSeeder.</item>
+      <item>Nessuna nuova dipendenza composer/npm.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Tabella: import_mapping_templates
+         id, resource (string, index), user_id (FK users, creatore), name (string 100),
+         columns (json: lista ORDINATA di column key, snapshot di
+         ColumnAnalysis::columnKeys(detected_columns) del run sorgente),
+         column_mapping (json), dedup_strategy (string, nullable), timestamps.
+         Unique (resource, name). Shape `mapping_template` condivisa da tutte le risposte:
+         { id: number, name: string, columns: string[],
+           column_mapping: Record&lt;string,string&gt;, dedup_strategy: string|null,
+           created_by: { id: number, name: string }, created_at: string } -->
+
+    <endpoint method="GET" path="/api/imports/{domain}/mapping-templates">
+      <request><!-- nessun parametro --></request>
+      <response status="200">
+        { success, message, data: { mapping_templates: mapping_template[] } }
+        <!-- TUTTI i modelli del dominio (condivisi al team), ordinati per id desc -->
+      </response>
+      <errors>
+        401 non autenticato; 403 senza `import-runs.create` O senza gate dominio
+        `{domain}.import`; 404 {domain} sconosciuto al registry.
+      </errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/imports/{domain}/mapping-templates">
+      <request>
+        { name: string (required, max 100, unique per dominio),
+          import_run_id: number (required) }
+        <!-- Il server NON accetta mapping dal client: fotografa dal run
+             (anti-tamper e coerenza garantita) columns =
+             ColumnAnalysis::columnKeys(run.detected_columns),
+             column_mapping = run.column_mapping, dedup_strategy = run.dedup_strategy. -->
+      </request>
+      <response status="201">
+        { success, message, data: { mapping_template: mapping_template } }
+      </response>
+      <errors>
+        401; 403 come GET; 404 {domain} sconosciuto, oppure run inesistente / non
+        dell'attore / resource diversa da {domain} (mai 403, come assertOwnedRun);
+        422 name mancante/duplicato per il dominio, oppure run senza column_mapping
+        persistito (wizard non ancora configurato).
+      </errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/imports/{domain}/mapping-templates/{mappingTemplate}">
+      <request><!-- nessun body --></request>
+      <response status="200">{ success, message }</response>
+      <errors>
+        401; 403 attore non creatore del modello (super-admin bypassa via Gate::before);
+        404 {domain} sconosciuto, id inesistente o modello di un altro dominio.
+      </errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/imports/{domain}/{importRun}">
+      <request><!-- invariato (spec 0033) --></request>
+      <response status="200">
+        <!-- SOLO ADDITIVO al payload esistente: -->
+        data.import_run.matching_template:
+          { id: number, name: string, column_mapping: Record&lt;string,string&gt;,
+            dedup_strategy: string|null } | null
+        <!-- Valorizzato quando detected_columns non e' null ED esiste un modello del
+             dominio con columns STRETTAMENTE uguale (stessa lista, stesso ordine) a
+             ColumnAnalysis::columnKeys(detected_columns); a parita' di match vince
+             il piu' recente (id max). Altrimenti null. -->
+      </response>
+      <errors><!-- invariati --></errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- Backend (Pest) -->
+    <criterion id="AC-001">Dato un run `leads` dell'attore con column_mapping persistito, quando POST mapping-templates con name valido, allora 201 con mapping_template che fotografa columns (column key ordinate), column_mapping e dedup_strategy del run.</criterion>
+    <criterion id="AC-002">Dato un modello esistente con lo stesso name nello stesso dominio, quando POST con quel name, allora 422 di validazione.</criterion>
+    <criterion id="AC-003">Dato un import_run_id di un ALTRO utente (o di un altro dominio), quando POST, allora 404 (mai 403).</criterion>
+    <criterion id="AC-004">Dato un run dell'attore ancora senza column_mapping (analyzing/configuring mai configurato), quando POST, allora 422.</criterion>
+    <criterion id="AC-005">Dati modelli creati da utenti DIVERSI sullo stesso dominio, quando un altro operatore con i permessi di import fa GET mapping-templates, allora li riceve TUTTI, ordinati per id desc.</criterion>
+    <criterion id="AC-006">Dato un modello le cui columns coincidono ESATTAMENTE (stessa lista ordinata) con le column key del run, quando GET run, allora matching_template contiene id/name/column_mapping/dedup_strategy di quel modello (il piu' recente se piu' d'uno); con stesse colonne in ordine diverso, colonne in piu' o in meno, allora matching_template e' null.</criterion>
+    <criterion id="AC-007">Dato un modello creato da un altro utente, quando DELETE da attore non creatore e non super-admin, allora 403; quando DELETE dal creatore, allora 200 e il modello non esiste piu'; quando DELETE con {domain} diverso dal resource del modello, allora 404.</criterion>
+    <criterion id="AC-008">Dato un attore SENZA `import-runs.create` oppure senza il permesso di import del dominio, quando GET o POST mapping-templates, allora 403.</criterion>
+    <!-- Frontend (Vitest) -->
+    <criterion id="AC-009">Dato run.matching_template valorizzato, quando lo step mappatura renderizza, allora mostra il banner con il nome del modello e il bottone Applica; al click i select della mappatura e la strategia duplicati assumono i valori del modello e restano modificabili.</criterion>
+    <criterion id="AC-010">Dato run.matching_template null, quando lo step mappatura renderizza, allora nessun banner di modello e' presente.</criterion>
+    <criterion id="AC-011">Dato il controllo "salva come modello" attivato con un nome, quando il submit della mappatura va a buon fine (configure 200), allora viene chiamata POST mapping-templates con quel name e l'import_run_id corrente e l'esito e' notificato via toast; un errore del salvataggio modello NON blocca l'avanzamento del wizard.</criterion>
+    <criterion id="AC-012">Dato l'elenco modelli nel popover di gestione, quando il modello e' dell'operatore corrente, allora espone l'azione elimina (con conferma) che chiama la DELETE e aggiorna l'elenco; i modelli altrui non espongono l'azione.</criterion>
+    <criterion id="AC-013">Suite backend Pest e frontend Vitest ESEGUITE verdi; `npx tsc -b` pulito; Pint/ESLint puliti sui file toccati.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza. Solo librerie gia' in composer.json / package.json.</item>
+    <item>Authz server-side su OGNI endpoint: doppio gate (`authorize('create', ImportRun::class)` + `authorizeImport`) per list/create; delete aggiunge `ImportMappingTemplatePolicy::delete` owner-only (niente bypass duplicato: Gate::before copre il super-admin).</item>
+    <item>Il matching e' calcolato SOLO server-side (ImportRunPayloadBuilder): il client non decide mai se il file corrisponde.</item>
+    <item>POST non accetta columns/column_mapping dal client: snapshot dal run posseduto (anti-tamper).</item>
+    <item>Route letterali `mapping-templates` registrate PRIMA del wildcard `imports/{domain}/{importRun}` in routes/api.php.</item>
+    <item>Mai model raw in risposta: nuova `ImportMappingTemplateResource`. Envelope `{ success, message, data }` invariato.</item>
+    <item>FE: TanStack Query (nuove chiavi in wizard/query-keys.ts), client axios configurato, stringhe via i18next (namespace importWizard, en+it). Nessun useEffect+fetch.</item>
+    <item>`import-step-mapping.tsx` e' gia' a ~240 righe: i controlli modello vivono in un NUOVO componente `features/imports/wizard/mapping-template-controls.tsx` (banner + salva + popover gestione), composto nello step.</item>
+    <item>Nessuna modifica al flusso configure/staging esistente: il salvataggio modello e' un side-effect POST separato dopo il configure.</item>
+  </constraints>
+
+</spec>

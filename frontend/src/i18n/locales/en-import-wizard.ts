@@ -92,6 +92,21 @@ export const importWizard = {
     errors: {
       dedupRequired: 'Select a duplicate handling strategy.',
     },
+    templates: {
+      matchBanner: 'This file matches the "{{name}}" mapping template.',
+      apply: 'Apply',
+      manage: 'Saved templates',
+      empty: 'No saved templates yet.',
+      createdBy: 'By {{name}}',
+      delete: 'Delete template',
+      deleteConfirm: 'Delete the "{{name}}" mapping template? This cannot be undone.',
+      deleteSuccess: 'Mapping template deleted.',
+      deleteError: 'Unable to delete the mapping template.',
+      saveToggle: 'Save this mapping as a reusable template',
+      namePlaceholder: 'Template name',
+      saveSuccess: 'Mapping template saved.',
+      saveError: 'Unable to save the mapping template.',
+    },
   },
   review: {
     title: 'Review',

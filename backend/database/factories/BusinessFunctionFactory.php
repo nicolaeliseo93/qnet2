@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\BusinessFunction;
+use App\Models\OperationalSite;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Collection;
@@ -28,7 +29,16 @@ class BusinessFunctionFactory extends Factory
             'is_business_unit' => $type === 'business_unit',
             'is_business_service' => $type === 'business_service',
             'manager_id' => null,
+            'parent_id' => null,
         ];
+    }
+
+    /**
+     * Attach $parent as this function's parent (spec 0010 REV).
+     */
+    public function childOf(BusinessFunction $parent): static
+    {
+        return $this->state(fn (): array => ['parent_id' => $parent->id]);
     }
 
     /**
@@ -77,6 +87,27 @@ class BusinessFunctionFactory extends Factory
                 : User::factory()->count($count)->create();
 
             $businessFunction->users()->syncWithoutDetaching(
+                collect($members)->pluck('id')->all(),
+            );
+        });
+    }
+
+    /**
+     * Attach associated operational sites after creation (spec 0010 REV). Pass
+     * existing sites to avoid creating new ones; otherwise $count sites (each
+     * with an address, so geo-derived label composition has data to work
+     * with) are created.
+     *
+     * @param  Collection<int, OperationalSite>|array<int, OperationalSite>|null  $sites
+     */
+    public function withOperationalSites(int $count = 2, Collection|array|null $sites = null): static
+    {
+        return $this->afterCreating(function (BusinessFunction $businessFunction) use ($count, $sites): void {
+            $members = $sites !== null
+                ? collect($sites)->take($count)
+                : OperationalSite::factory()->withAddress()->count($count)->create();
+
+            $businessFunction->operationalSites()->syncWithoutDetaching(
                 collect($members)->pluck('id')->all(),
             );
         });

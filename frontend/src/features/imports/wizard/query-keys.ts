@@ -16,4 +16,6 @@ export const importWizardKeys = {
   /** Owned by F3 (summary step). */
   summary: (domain: string, importRunId: number) =>
     ['imports', 'wizard', domain, importRunId, 'summary'] as const,
+  /** Saved mapping templates of a domain (spec 0035), team-shared. */
+  mappingTemplates: (domain: string) => ['imports', 'wizard', domain, 'mapping-templates'] as const,
 }

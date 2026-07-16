@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import i18n from '@/i18n'
 import { ImportStepMapping } from '@/features/imports/wizard/import-step-mapping'
 import '@/features/imports/wizard/i18n'
-import { IGNORE_TARGET } from '@/features/imports/wizard/types'
+import { EXTRA_TARGET, IGNORE_TARGET } from '@/features/imports/wizard/types'
 import type { ImportRunDetail } from '@/features/imports/wizard/types'
 
 /**
@@ -11,7 +11,18 @@ import type { ImportRunDetail } from '@/features/imports/wizard/types'
  * the auto-mapping suggestion, flags a required field left unmapped, and
  * persists (via `onSubmit`, wired to `PUT .../configure` upstream) the
  * mapping + dedup strategy once valid.
+ *
+ * `SavedTemplatesMenu` (spec 0035) needs its own `QueryClientProvider`/auth
+ * context — irrelevant to this file's AC-009/010/011 coverage (which is
+ * about the banner/toggle, not the management popover, covered separately
+ * in `mapping-template-controls.test.tsx`) — so it is stubbed out here.
  */
+vi.mock('@/features/imports/wizard/mapping-template-controls', async () => {
+  const actual = await vi.importActual<typeof import('@/features/imports/wizard/mapping-template-controls')>(
+    '@/features/imports/wizard/mapping-template-controls',
+  )
+  return { ...actual, SavedTemplatesMenu: () => null }
+})
 
 function baseRun(overrides: Partial<ImportRunDetail> = {}): ImportRunDetail {
   return {
@@ -218,5 +229,100 @@ describe('ImportStepMapping', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('applies a matching template on click, leaving the mapping/strategy editable (AC-009)', async () => {
+    const onSubmit = vi.fn()
+    render(
+      <ImportStepMapping
+        run={baseRun({
+          // A third, non-required column absent from the template's mapping
+          // isolates the "stays editable" assertion from the required-field
+          // gate below (flipping Email/Full name off would block submit).
+          detected_columns: [
+            { key: 'Full name', name: 'Full name', index: 0, duplicate: false },
+            { key: 'Email', name: 'Email', index: 1, duplicate: false },
+            { key: 'Notes', name: 'Notes', index: 2, duplicate: false },
+          ],
+          matching_template: {
+            id: 5,
+            name: 'My template',
+            column_mapping: { 'Full name': 'full_name', Email: 'email' },
+            dedup_strategy: 'update_existing',
+          },
+        })}
+        initialMapping={{}}
+        initialDedupStrategy={null}
+        onBack={vi.fn()}
+        onSubmit={onSubmit}
+        isSubmitting={false}
+        submitError={null}
+      />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('My template')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    const rows = screen.getAllByRole('combobox', { name: 'Target field' })
+    expect(rows[0]).toHaveTextContent('Full name *')
+    expect(rows[1]).toHaveTextContent('Email *')
+
+    // The applied mapping stays editable: change the untouched third column.
+    fireEvent.click(rows[2])
+    fireEvent.click(screen.getByRole('option', { name: 'Extra field' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save mapping and continue' }))
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { 'Full name': 'full_name', Email: 'email', Notes: EXTRA_TARGET },
+        'update_existing',
+      ),
+    )
+  })
+
+  it('renders no matching-template banner when the run has none (AC-010)', () => {
+    render(
+      <ImportStepMapping
+        run={baseRun()}
+        initialMapping={{}}
+        initialDedupStrategy="create_new"
+        onBack={vi.fn()}
+        onSubmit={vi.fn()}
+        isSubmitting={false}
+        submitError={null}
+      />,
+    )
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('passes the save-as-template request to onSubmit once checked with a name (AC-011)', async () => {
+    const onSubmit = vi.fn()
+    render(
+      <ImportStepMapping
+        run={baseRun()}
+        initialMapping={{ 'Full name': 'full_name', Email: 'email' }}
+        initialDedupStrategy="update_existing"
+        onBack={vi.fn()}
+        onSubmit={onSubmit}
+        isSubmitting={false}
+        submitError={null}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Save this mapping as a reusable template' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Template name' }), {
+      target: { value: 'Monthly leads' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save mapping and continue' }))
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { 'Full name': 'full_name', Email: 'email' },
+        'update_existing',
+        { name: 'Monthly leads' },
+      ),
+    )
   })
 })

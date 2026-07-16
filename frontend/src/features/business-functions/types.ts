@@ -24,6 +24,18 @@ export interface BusinessFunctionMember {
   avatar_url: string | null
 }
 
+/** The parent business function reference, hydrated on the detail (hierarchy). */
+export interface BusinessFunctionParent {
+  id: number
+  name: string
+}
+
+/** An operational site reference, hydrated on the detail: `label` is `"line1 - city"`. */
+export interface BusinessFunctionOperationalSite {
+  id: number
+  label: string
+}
+
 /**
  * Single business-function detail returned by GET/POST/PATCH
  * /business-functions (envelope `data`). Matches `BusinessFunctionResource`.
@@ -40,6 +52,12 @@ export interface BusinessFunctionDetail {
   user_ids: number[]
   /** Hydrates the multiselect associated-users control. */
   users: BusinessFunctionMember[]
+  parent_id: number | null
+  /** Hydrates the single-select parent-function picker. */
+  parent: BusinessFunctionParent | null
+  operational_site_ids: number[]
+  /** Hydrates the multiselect operational-sites control. */
+  operational_sites: BusinessFunctionOperationalSite[]
   created_at: string
   /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
   custom_fields?: Record<string, CustomFieldValue>
@@ -61,6 +79,8 @@ export interface CreateBusinessFunctionPayload {
   type: BusinessFunctionType | null
   manager_id: number | null
   users: number[]
+  parent_id: number | null
+  operational_sites: number[]
   /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
   custom_fields?: Record<string, CustomFieldValue>
 }

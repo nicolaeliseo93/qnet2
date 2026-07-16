@@ -24,7 +24,14 @@ import type {
 import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
-const SERVER_ERROR_FIELDS = ['name', 'type', 'manager_id', 'users'] as const
+const SERVER_ERROR_FIELDS = [
+  'name',
+  'type',
+  'manager_id',
+  'users',
+  'parent_id',
+  'operational_sites',
+] as const
 
 export type BusinessFunctionFormValues = CreateBusinessFunctionFormValues &
   UpdateBusinessFunctionFormValues
@@ -71,15 +78,26 @@ export function useBusinessFunctionForm({ mode, onSuccess }: UseBusinessFunction
         type: mode.businessFunction.type,
         manager_id: mode.businessFunction.manager_id,
         users: mode.businessFunction.user_ids,
+        parent_id: mode.businessFunction.parent_id,
+        operational_sites: mode.businessFunction.operational_site_ids,
         custom_fields: customFields.defaultValues,
       }
     }
-    return { name: '', type: null, manager_id: null, users: [], custom_fields: customFields.defaultValues }
+    return {
+      name: '',
+      type: null,
+      manager_id: null,
+      users: [],
+      parent_id: null,
+      operational_sites: [],
+      custom_fields: customFields.defaultValues,
+    }
   }, [mode, customFields.defaultValues])
 
-  // EDIT: pre-known {id, label} for the responsabile/associated-users pickers
-  // so they show their current selection immediately (no hydration
-  // round-trip) — the names come from the resource itself.
+  // EDIT: pre-known {id, label} for the responsabile/associated-users/parent/
+  // operational-sites pickers so they show their current selection
+  // immediately (no hydration round-trip) — the labels come from the
+  // resource itself.
   const selectedManagerItem = useMemo(
     () =>
       mode.type === 'edit' && mode.businessFunction.manager
@@ -92,6 +110,19 @@ export function useBusinessFunctionForm({ mode, onSuccess }: UseBusinessFunction
       mode.type === 'edit'
         ? mode.businessFunction.users.map((user) => ({ id: user.id, label: user.name }))
         : [],
+    [mode],
+  )
+  const selectedParentItem = useMemo(
+    () =>
+      mode.type === 'edit' && mode.businessFunction.parent
+        ? { id: mode.businessFunction.parent.id, label: mode.businessFunction.parent.name }
+        : null,
+    [mode],
+  )
+  // `operational_sites` already carries `{id, label}` (label = "line1 - city"),
+  // the exact `ForSelectItem` projection the multiselect hydrates from.
+  const selectedSiteItems = useMemo(
+    () => (mode.type === 'edit' ? mode.businessFunction.operational_sites : []),
     [mode],
   )
 
@@ -134,6 +165,8 @@ export function useBusinessFunctionForm({ mode, onSuccess }: UseBusinessFunction
     serverError,
     selectedManagerItem,
     selectedUserItems,
+    selectedParentItem,
+    selectedSiteItems,
     onSubmit,
   }
 }

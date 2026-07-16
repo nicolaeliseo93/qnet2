@@ -3,7 +3,11 @@ import type { ICellRendererParams } from 'ag-grid-community'
 import { describe, expect, it } from 'vitest'
 import i18n from '@/i18n'
 import { businessFunctionColumnRenderers } from '@/features/business-functions/column-renderers'
-import type { BusinessFunctionMember } from '@/features/business-functions/types'
+import type {
+  BusinessFunctionMember,
+  BusinessFunctionOperationalSite,
+  BusinessFunctionParent,
+} from '@/features/business-functions/types'
 
 const MANAGER: BusinessFunctionMember = { id: 1, name: 'Ada Lovelace', avatar_url: null }
 const USERS: BusinessFunctionMember[] = [
@@ -82,6 +86,46 @@ describe('businessFunctionColumnRenderers.users', () => {
 
   it('renders an em dash when there is no associated user', () => {
     renderCell('users', [])
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('businessFunctionColumnRenderers.parent', () => {
+  const PARENT: BusinessFunctionParent = { id: 4, name: 'Operations' }
+
+  it("renders the parent function's name", () => {
+    renderCell('parent', PARENT)
+    expect(screen.getByText('Operations')).toBeInTheDocument()
+  })
+
+  it('renders an em dash for a top-level function', () => {
+    renderCell('parent', null)
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('businessFunctionColumnRenderers.operational_sites', () => {
+  const SITES: BusinessFunctionOperationalSite[] = [
+    { id: 1, label: 'Via Roma 1 - Milano' },
+    { id: 2, label: 'Via Torino 2 - Torino' },
+  ]
+
+  it('renders the sites count', () => {
+    renderCell('operational_sites', SITES)
+    expect(screen.getByText('2')).toBeInTheDocument()
+  })
+
+  it('reveals every site label in an accessible tooltip', async () => {
+    renderCell('operational_sites', SITES)
+    fireEvent.pointerMove(screen.getByText('2'))
+    await waitFor(() => {
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Via Roma 1 - Milano')
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Via Torino 2 - Torino')
+    })
+  })
+
+  it('renders an em dash when no operational site is assigned', () => {
+    renderCell('operational_sites', [])
     expect(screen.getByText('—')).toBeInTheDocument()
   })
 })

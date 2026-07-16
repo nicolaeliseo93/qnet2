@@ -90,6 +90,21 @@ export const importWizard = {
     errors: {
       dedupRequired: 'Seleziona una strategia di gestione dei duplicati.',
     },
+    templates: {
+      matchBanner: 'Questo file corrisponde al modello di mappatura "{{name}}".',
+      apply: 'Applica',
+      manage: 'Modelli salvati',
+      empty: 'Nessun modello salvato.',
+      createdBy: 'Di {{name}}',
+      delete: 'Elimina modello',
+      deleteConfirm: 'Eliminare il modello di mappatura "{{name}}"? L’azione non è reversibile.',
+      deleteSuccess: 'Modello di mappatura eliminato.',
+      deleteError: 'Impossibile eliminare il modello di mappatura.',
+      saveToggle: 'Salva questa mappatura come modello riutilizzabile',
+      namePlaceholder: 'Nome del modello',
+      saveSuccess: 'Modello di mappatura salvato.',
+      saveError: 'Impossibile salvare il modello di mappatura.',
+    },
   },
   review: {
     title: 'Revisione',

@@ -11,19 +11,22 @@ namespace App\DataObjects\BusinessFunctions;
  *
  * `type` is the single client-facing mutually-exclusive selector; the Service
  * maps it onto the two `is_business_unit`/`is_business_service` columns.
- * `users` is null when the client did not submit the key at all (nothing to
- * sync — a brand new function starts with no associated users anyway).
+ * `users`/`operationalSites` are null when the client did not submit the key
+ * at all (nothing to sync — a brand new function starts with neither).
  */
 final readonly class CreateBusinessFunctionData
 {
     /**
      * @param  array<int, int>|null  $users
+     * @param  array<int, int>|null  $operationalSites
      */
     public function __construct(
         public string $name,
         public ?string $type = null,
         public ?int $managerId = null,
+        public ?int $parentId = null,
         public ?array $users = null,
+        public ?array $operationalSites = null,
     ) {}
 
     /**
@@ -39,12 +42,23 @@ final readonly class CreateBusinessFunctionData
             managerId: array_key_exists('manager_id', $data) && $data['manager_id'] !== null
                 ? (int) $data['manager_id']
                 : null,
+            parentId: array_key_exists('parent_id', $data) && $data['parent_id'] !== null
+                ? (int) $data['parent_id']
+                : null,
             users: array_key_exists('users', $data) ? array_map('intval', (array) $data['users']) : null,
+            operationalSites: array_key_exists('operational_sites', $data)
+                ? array_map('intval', (array) $data['operational_sites'])
+                : null,
         );
     }
 
     public function hasUsers(): bool
     {
         return $this->users !== null;
+    }
+
+    public function hasOperationalSites(): bool
+    {
+        return $this->operationalSites !== null;
     }
 }

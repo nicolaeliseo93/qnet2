@@ -15,6 +15,7 @@ use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\Contacts\ContactController;
 use App\Http\Controllers\Export\ExportController;
 use App\Http\Controllers\Import\ImportController;
+use App\Http\Controllers\Import\ImportMappingTemplateController;
 use App\Http\Controllers\Meta\MetaController;
 use App\Http\Controllers\Migration\MigrationController;
 use App\Http\Controllers\Navigation\NavigationController;
@@ -141,6 +142,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // {row}: scopeBindings() + explicit assertRowBelongsToRun 404 guard.
     Route::get('imports/{domain}/template', [ImportController::class, 'template']);
     Route::get('imports/{domain}', [ImportController::class, 'index']);
+
+    // Team-shared, per-domain saved column-mapping templates (spec 0035):
+    // list/create are DOUBLE-GATED exactly like the CSV template above;
+    // delete is owner-only via ImportMappingTemplatePolicy. Literal
+    // `mapping-templates` segment registered BEFORE the {importRun} wildcard
+    // below so it is never captured as a run id.
+    Route::get('imports/{domain}/mapping-templates', [ImportMappingTemplateController::class, 'index']);
+    Route::post('imports/{domain}/mapping-templates', [ImportMappingTemplateController::class, 'store']);
+    Route::delete('imports/{domain}/mapping-templates/{mappingTemplate}', [ImportMappingTemplateController::class, 'destroy'])
+        ->scopeBindings();
+
     Route::get('imports/{domain}/{importRun}', [ImportController::class, 'show']);
     Route::get('imports/{domain}/{importRun}/summary', [ImportController::class, 'summary']);
     Route::get('imports/{domain}/{importRun}/errors', [ImportController::class, 'errors']);
