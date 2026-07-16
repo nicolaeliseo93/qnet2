@@ -118,16 +118,21 @@ it('create: missing campaign_id -> 422 on that field, no row created (AC-011)', 
     expect(Lead::count())->toBe(0);
 });
 
-it('create: missing lead_status_id -> 422 on that field, no row created (spec 0029 D-1, AC-011)', function () {
+it('create: missing lead_status_id -> 201, falls back to the system_key=new status (spec 0039 D-3, AC-009)', function () {
+    // requirement changed (spec 0039, D-3): lead_status_id went from
+    // `required` to `nullable` — an omitted FK no longer 422s, it falls
+    // back to the mandatory system_key='new' status (spec 0029 D-1/AC-011
+    // is superseded).
     $actor = leadUserWith(['create']);
     $referent = Referent::factory()->create();
     $campaign = Campaign::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/leads', ['referent_id' => $referent->id, 'campaign_id' => $campaign->id])
-        ->assertStatus(422)->assertJsonValidationErrors('lead_status_id');
+        ->assertCreated();
 
-    expect(Lead::count())->toBe(0);
+    $lead = Lead::query()->with('leadStatus')->sole();
+    expect($lead->leadStatus->system_key)->toBe('new');
 });
 
 it('create: 403 without leads.create, no row created (AC-012)', function () {

@@ -67,7 +67,6 @@ export const leads = {
     campaignRequired: 'La campagna è obbligatoria.',
     leadStatus: 'Stato lead',
     leadStatusSearch: 'Cerca stati lead…',
-    leadStatusRequired: 'Lo stato lead è obbligatorio.',
     operationalSite: 'Sede',
     operationalSiteSearch: 'Cerca sedi…',
     source: 'Fonte',

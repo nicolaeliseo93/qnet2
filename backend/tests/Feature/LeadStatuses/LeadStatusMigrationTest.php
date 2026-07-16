@@ -23,9 +23,10 @@ it('migrate:fresh runs clean on an empty database (AC-012)', function () {
 
     expect(Schema::hasTable('lead_statuses'))->toBeTrue();
     expect(Schema::hasColumn('leads', 'lead_status_id'))->toBeTrue();
-    // The clean seed stays clean: no default status is created when there
-    // were no leads to backfill (BR-1 step 2 is a no-op on an empty table).
-    expect(DB::table('lead_statuses')->count())->toBe(0);
+    // requirement changed (spec 0039, D-2): the system-status migration now
+    // seeds the 2 mandatory rows ("Nuovo"/"Chiuso") unconditionally, even on
+    // an empty database — the baseline is 2, not 0.
+    expect(DB::table('lead_statuses')->count())->toBe(2);
 
     Artisan::call('migrate:fresh');
 });

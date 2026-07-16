@@ -7,44 +7,92 @@ use App\DataObjects\LeadStatuses\UpdateLeadStatusData;
 use App\DataObjects\Shared\ForSelectQuery;
 use App\DataObjects\Shared\ForSelectResult;
 use App\Models\LeadStatus;
+use App\Services\Statuses\StatusOrderManager;
+use App\Services\Statuses\SystemStatusGuard;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 /**
  * Business logic for the `lead-statuses` resource (spec 0029): a full-CRUD
- * lookup entity (name/color/sort_order) describing a Lead's working state.
- * Mirrors PipelineStatusService's shape, including the BR-3 delete guard.
+ * lookup entity (name/color) describing a Lead's working state. Mirrors
+ * PipelineStatusService's shape, including the BR-3 delete guard.
+ *
+ * spec 0039: `sort_order` (D-5) is server-managed — placed by
+ * StatusOrderManager::placeNew() on create, resequenced by reorder(); the two
+ * mandatory system rows ("Nuovo"/"Chiuso", D-2) are protected by
+ * SystemStatusGuard on both update() and delete().
  */
 class LeadStatusService
 {
+    public function __construct(
+        private readonly StatusOrderManager $orderManager,
+        private readonly SystemStatusGuard $systemStatusGuard,
+    ) {}
+
+    /**
+     * Eager-loads `statusGroup` (spec 0039, D-6) so LeadStatusResource never
+     * N+1s. Shared by show (controller)/create/update.
+     */
+    public function loadDetail(LeadStatus $leadStatus): LeadStatus
+    {
+        return $leadStatus->loadMissing('statusGroup');
+    }
+
     public function create(CreateLeadStatusData $data): LeadStatus
     {
-        return LeadStatus::create($data->attributes());
+        $sortOrder = $this->orderManager->placeNew(LeadStatus::class);
+
+        $leadStatus = LeadStatus::create([...$data->attributes(), 'sort_order' => $sortOrder]);
+
+        return $this->loadDetail($leadStatus);
     }
 
     public function update(LeadStatus $leadStatus, UpdateLeadStatusData $data): LeadStatus
     {
         $attributes = $data->submittedAttributes();
 
+        $this->systemStatusGuard->assertUpdatable($leadStatus, $attributes);
+
         // Unconditional save: fire the model's saved event even when no native
         // attribute changed, so the HasCustomFields write pipeline (spec 0021)
         // persists a custom-fields-only edit. A clean save runs no UPDATE query.
         $leadStatus->fill($attributes)->save();
 
-        return $leadStatus->fresh();
+        return $this->loadDetail($leadStatus->fresh());
     }
 
     /**
      * BR-3 (delete-guard): a status referenced by at least one Lead cannot be
      * removed (it would silently orphan them). Defense in depth: the FK is
-     * also restrictOnDelete at the schema layer.
+     * also restrictOnDelete at the schema layer. The system-row guard (spec
+     * 0039, D-2) runs FIRST: a system row is never deletable regardless of
+     * whether it happens to be unreferenced.
      */
     public function delete(LeadStatus $leadStatus): void
     {
+        $this->systemStatusGuard->assertDeletable($leadStatus);
+
         if ($leadStatus->leads()->exists()) {
             abort(409, 'This lead status is used by a lead and cannot be deleted.');
         }
 
         $leadStatus->delete();
+    }
+
+    /**
+     * Resequences every custom row to $orderedIds' order and returns the
+     * fresh, complete, ordered list (spec 0039, D-5). See
+     * StatusOrderManager::reorder() for the validation/renormalization rules.
+     *
+     * @param  array<int, int>  $orderedIds
+     * @return EloquentCollection<int, LeadStatus>
+     */
+    public function reorder(array $orderedIds): EloquentCollection
+    {
+        /** @var EloquentCollection<int, LeadStatus> $reordered */
+        $reordered = $this->orderManager->reorder(LeadStatus::class, $orderedIds);
+
+        return $reordered;
     }
 
     /**
@@ -55,7 +103,7 @@ class LeadStatusService
      */
     public function forSelect(ForSelectQuery $query): ForSelectResult
     {
-        $base = LeadStatus::query()->select(['id', 'name']);
+        $base = LeadStatus::query()->select(['id', 'name', 'system_key']);
 
         if ($query->hasSearch()) {
             $base->where('name', 'like', '%'.$query->search.'%');
@@ -104,7 +152,7 @@ class LeadStatusService
 
         /** @var Collection<int, LeadStatus> $hydrated */
         $hydrated = LeadStatus::query()
-            ->select(['id', 'name'])
+            ->select(['id', 'name', 'system_key'])
             ->whereIn('id', $missingIds)
             ->orderBy('sort_order')
             ->orderBy('name')

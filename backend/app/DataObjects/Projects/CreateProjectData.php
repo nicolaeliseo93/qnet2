@@ -22,13 +22,18 @@ namespace App\DataObjects\Projects;
  * DemoProjectSeeder, does not supply them yet); `country_id` is REQUIRED at
  * the StoreProjectRequest layer, so fromValidated() always fills it from a
  * validated payload.
+ *
+ * spec 0039, D-3: `pipelineStatusId` is now NULLABLE — an omitted FK falls
+ * back to the system_key='new' status, resolved server-side in
+ * ProjectService::create() (never here: a DTO stays pure data, no
+ * App\Services\Statuses dependency).
  */
 final readonly class CreateProjectData
 {
     public function __construct(
         public ?string $code,
         public string $name,
-        public int $pipelineStatusId,
+        public ?int $pipelineStatusId,
         public ?string $description,
         public ?int $registryId,
         public ?int $sourceId,
@@ -55,7 +60,7 @@ final readonly class CreateProjectData
         return new self(
             code: self::nullIfEmpty($data['code'] ?? null),
             name: (string) $data['name'],
-            pipelineStatusId: (int) $data['pipeline_status_id'],
+            pipelineStatusId: isset($data['pipeline_status_id']) ? (int) $data['pipeline_status_id'] : null,
             description: $data['description'] ?? null,
             registryId: isset($data['registry_id']) ? (int) $data['registry_id'] : null,
             sourceId: isset($data['source_id']) ? (int) $data['source_id'] : null,

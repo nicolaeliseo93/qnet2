@@ -31,6 +31,11 @@ use Illuminate\Validation\Rule;
  * required only when the project itself has none — legacy rows) and
  * validated by ValidatesGeoHierarchy against the MERGED tuple.
  *
+ * spec 0039, D-3: when NOT linked, `pipeline_status_id` went from `required`
+ * to `nullable` — an omitted FK falls back to the system_key='new' status in
+ * CampaignService::create() (server-side default). Linked campaigns are
+ * UNCHANGED (still `prohibited`, BR-2 derivation invariant).
+ *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Campaign::class)). EnforcesFieldPermissions
  * (spec 0004) additionally rejects any submitted field the actor cannot edit
@@ -73,7 +78,7 @@ class StoreCampaignRequest extends FormRequest
             'partner_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'pipeline_status_id' => $linked
                 ? ['prohibited']
-                : ['required', 'integer', Rule::exists('pipeline_statuses', 'id')],
+                : ['nullable', 'integer', Rule::exists('pipeline_statuses', 'id')],
             'business_function_id' => $linked
                 ? ['prohibited']
                 : ['required', 'integer', Rule::exists('business_functions', 'id')],

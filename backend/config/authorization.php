@@ -20,6 +20,7 @@ use App\Authorization\RegistriesAuthorization;
 use App\Authorization\RolesAuthorization;
 use App\Authorization\SectorsAuthorization;
 use App\Authorization\SourcesAuthorization;
+use App\Authorization\StatusGroupsAuthorization;
 use App\Authorization\TagsAuthorization;
 use App\Authorization\UsersAuthorization;
 
@@ -66,6 +67,7 @@ return [
         'campaigns' => CampaignsAuthorization::class,
         'leads' => LeadsAuthorization::class,
         'lead-statuses' => LeadStatusesAuthorization::class,
+        'status-groups' => StatusGroupsAuthorization::class,
         'import-runs' => ImportRunsAuthorization::class,
     ],
 

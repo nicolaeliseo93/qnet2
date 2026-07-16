@@ -121,6 +121,24 @@ describe('PipelineStatusesPage — permission gating (AC-045)', () => {
   })
 })
 
+describe('PipelineStatusesTable — reorder toggle (spec 0039 D-4)', () => {
+  it('shows the reorder button with pipeline-statuses.update', () => {
+    canMock.mockImplementation((permission) => permission === 'pipeline-statuses.update')
+
+    renderTable()
+
+    expect(screen.getByRole('button', { name: 'Reorder' })).toBeInTheDocument()
+  })
+
+  it('hides the reorder button without pipeline-statuses.update', () => {
+    canMock.mockReturnValue(false)
+
+    renderTable()
+
+    expect(screen.queryByRole('button', { name: 'Reorder' })).not.toBeInTheDocument()
+  })
+})
+
 describe('PipelineStatusesTable — delete (BR-4)', () => {
   it('shows the backend message on a 409 (status still in use)', async () => {
     deletePipelineStatusMock.mockRejectedValue(

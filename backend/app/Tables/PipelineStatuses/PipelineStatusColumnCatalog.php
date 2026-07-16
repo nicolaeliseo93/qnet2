@@ -6,10 +6,13 @@ namespace App\Tables\PipelineStatuses;
  * Declarative column/filter/action catalogue for the `pipeline-statuses`
  * domain (spec 0023). Extracted out of PipelineStatusesTableDefinition
  * (file-size split, engineering.md §6): pure data (no logic), mirroring
- * SourceColumnCatalog. All four columns are real DB columns handled entirely
- * by the generic engine — no derived column. `color` is deliberately not
- * sortable/filterable (a swatch value, not a meaningful ordering/filter
- * axis).
+ * SourceColumnCatalog. `name`/`color`/`sort_order`/`created_at` are real DB
+ * columns handled entirely by the generic engine. `color` is deliberately
+ * not sortable/filterable (a swatch value, not a meaningful ordering/filter
+ * axis). `status_group` (spec 0039, D-6/D-7) is DERIVED (no real column,
+ * PipelineStatusesTableDefinition delegates to StatusGroupColumn): neither
+ * sortable nor basic-filterable — reachable only via the advanced Text
+ * filter on the group's name.
  */
 final class PipelineStatusColumnCatalog
 {
@@ -46,6 +49,14 @@ final class PipelineStatusColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'number',
+            ],
+            [
+                'id' => 'status_group',
+                'label' => 'pipelineStatuses.columns.statusGroup',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => false,
+                'filterable' => false,
             ],
             [
                 'id' => 'created_at',

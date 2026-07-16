@@ -24,16 +24,17 @@ function extraFieldEntrySchema(t: TFunction) {
 }
 
 /**
- * BR-1/D-1: contact, campaign and lead status are unconditionally required
- * (unlike campaigns' conditionally-required classification fields), so a
- * plain `refine` on the controlled-select's `null` unset state is enough —
- * no cross-field rule needed. The explicit `: boolean` return type on each
+ * BR-1/D-1: contact and campaign are unconditionally required, so a plain
+ * `refine` on the controlled-select's `null` unset state is enough — no
+ * cross-field rule needed. The explicit `: boolean` return type on each
  * predicate is load-bearing, not stylistic: without it, TS 5.5+'s automatic
  * type-predicate inference treats `value !== null` as a `value is number`
  * guard, silently narrowing the field's inferred type to non-nullable
  * `number` and breaking every consumer typed against the nullable form
  * value (`RelationSelectField`'s `Control<LeadFormValues>`, `useForm`'s
- * `defaultValues`).
+ * `defaultValues`). `lead_status_id` is nullable, NOT required (spec 0039
+ * D-3): the server falls back to the system "Nuovo" status when omitted, and
+ * the create form preselects it as soon as the for-select resolves.
  */
 function baseFields(t: TFunction) {
   return {
@@ -45,10 +46,7 @@ function baseFields(t: TFunction) {
       .number()
       .nullable()
       .refine((value): boolean => value !== null, { message: t('leads.form.campaignRequired') }),
-    lead_status_id: z
-      .number()
-      .nullable()
-      .refine((value): boolean => value !== null, { message: t('leads.form.leadStatusRequired') }),
+    lead_status_id: z.number().nullable(),
     operational_site_id: z.number().nullable(),
     source_id: z.number().nullable(),
     operator_id: z.number().nullable(),

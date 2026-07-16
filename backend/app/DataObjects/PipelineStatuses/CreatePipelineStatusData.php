@@ -7,13 +7,18 @@ namespace App\DataObjects\PipelineStatuses;
  * spec 0023). Declared DTO (no "magic flying array") so the
  * StorePipelineStatusRequest -> PipelineStatusService contract is explicit —
  * see standards/architecture.md -> Data Transfer Objects.
+ *
+ * spec 0039, D-5: `sort_order` is GONE from this DTO — server-managed,
+ * placed by App\Services\Statuses\StatusOrderManager::placeNew() inside
+ * PipelineStatusService::create(), never accepted from the client.
+ * `status_group_id` (D-6) is the new optional classification FK.
  */
 final readonly class CreatePipelineStatusData
 {
     public function __construct(
         public string $name,
         public ?string $color = null,
-        public int $sortOrder = 0,
+        public ?int $statusGroupId = null,
     ) {}
 
     /**
@@ -26,7 +31,9 @@ final readonly class CreatePipelineStatusData
         return new self(
             name: (string) $data['name'],
             color: array_key_exists('color', $data) ? $data['color'] : null,
-            sortOrder: array_key_exists('sort_order', $data) ? (int) $data['sort_order'] : 0,
+            statusGroupId: array_key_exists('status_group_id', $data) && $data['status_group_id'] !== null
+                ? (int) $data['status_group_id']
+                : null,
         );
     }
 
@@ -38,7 +45,7 @@ final readonly class CreatePipelineStatusData
         return [
             'name' => $this->name,
             'color' => $this->color,
-            'sort_order' => $this->sortOrder,
+            'status_group_id' => $this->statusGroupId,
         ];
     }
 }

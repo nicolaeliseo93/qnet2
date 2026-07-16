@@ -13,9 +13,12 @@ use Illuminate\Database\Eloquent\Model;
  *
  * No contextual rules: every field's ceiling is simply visible+editable when
  * the actor may write (create/update), else visible+readonly, mirroring
- * CampaignsAuthorization. `referent_id`/`campaign_id`/`lead_status_id` are
- * the mandatory fields (BR-1, spec 0029 D-1); no `code` field exists for a
- * Lead (D-3).
+ * CampaignsAuthorization. `referent_id`/`campaign_id` are the mandatory
+ * fields (BR-1); no `code` field exists for a Lead (D-3).
+ *
+ * spec 0039, D-3: `lead_status_id` is NO LONGER mandatory — the FK went from
+ * `required` to `nullable` in StoreLeadRequest (server-side fallback to the
+ * system_key='new' status when omitted, LeadService::create()).
  */
 class LeadsAuthorization extends AbstractResourceAuthorization
 {
@@ -40,7 +43,7 @@ class LeadsAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('operational_site_id', 'select'),
             new FieldDefinition('source_id', 'select'),
             new FieldDefinition('operator_id', 'select'),
-            new FieldDefinition('lead_status_id', 'select', mandatory: true),
+            new FieldDefinition('lead_status_id', 'select'),
             new FieldDefinition('notes', 'textarea'),
             new FieldDefinition('extra_fields', 'textarea'),
         ];
@@ -67,7 +70,7 @@ class LeadsAuthorization extends AbstractResourceAuthorization
             'operational_site_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'operator_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'lead_status_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
+            'lead_status_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'notes' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'extra_fields' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];

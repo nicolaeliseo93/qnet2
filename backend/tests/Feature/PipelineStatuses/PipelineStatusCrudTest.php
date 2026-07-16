@@ -1,8 +1,8 @@
 <?php
 
 use App\Models\Campaign;
-use App\Models\Project;
 use App\Models\PipelineStatus;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -111,7 +111,10 @@ it('POST create: 403 without pipeline-statuses.create, no row created (AC-002)',
 
     $this->postJson('/api/pipeline-statuses', ['name' => 'Nope'])->assertForbidden();
 
-    expect(PipelineStatus::count())->toBe(0);
+    // spec 0039 (D-2): the migration seeds the 2 mandatory system rows
+    // ("Nuovo"/"Chiuso") unconditionally, so the post-403 baseline is 2, not
+    // 0 — requirement change, not a regression.
+    expect(PipelineStatus::count())->toBe(2);
 });
 
 it('PATCH update: 403 without pipeline-statuses.update, no change persisted (AC-002)', function () {

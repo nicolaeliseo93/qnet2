@@ -4,14 +4,15 @@ import { buildCreateCampaignSchema } from '@/features/campaigns/campaign-schema'
 import { buildCustomFieldsSchema } from '@/features/custom-fields/build-custom-fields-schema'
 
 /**
- * Spec 0023 BR-2 (required-when-standalone, now 3 classification fields —
- * `state_id` left this group, spec 0027 D-3) and BR-6 (end_date >=
- * start_date), mirrored client-side. Spec 0025 AC-010: `code` is optional
- * and, when set, mirrors the backend's max:32. Spec 0027 BR-4/BR-5: the geo
- * hierarchy rule (`country_id` required unless the project locks it,
- * province/city require a state) is covered separately below — the existing
- * BR-2 assertions on `state_id` were REWRITTEN, not tampered with: the
- * requirement changed (D-3).
+ * Spec 0023 BR-2 (required-when-standalone, now 2 classification fields —
+ * `state_id` left this group, spec 0027 D-3; `pipeline_status_id` left it
+ * too, spec 0039 D-3) and BR-6 (end_date >= start_date), mirrored
+ * client-side. Spec 0025 AC-010: `code` is optional and, when set, mirrors
+ * the backend's max:32. Spec 0027 BR-4/BR-5: the geo hierarchy rule
+ * (`country_id` required unless the project locks it, province/city require
+ * a state) is covered separately below — the existing BR-2 assertions on
+ * `state_id`/`pipeline_status_id` were REWRITTEN, not tampered with: the
+ * requirement changed (D-3, spec 0027 then spec 0039).
  */
 
 const EMPTY_CUSTOM_FIELDS_SCHEMA = buildCustomFieldsSchema(
@@ -51,7 +52,7 @@ beforeAll(async () => {
 })
 
 describe('buildCreateCampaignSchema — standalone (project_id null)', () => {
-  it('accepts a valid standalone payload with the 3 classification fields set and a country', () => {
+  it('accepts a valid standalone payload with the 2 classification fields set and a country', () => {
     const schema = buildCreateCampaignSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
     const result = schema.safeParse(baseValues())
     expect(result.success).toBe(true)
@@ -63,11 +64,10 @@ describe('buildCreateCampaignSchema — standalone (project_id null)', () => {
     expect(result.success).toBe(false)
   })
 
-  it('rejects each of the 3 classification fields when null (AC-023/AC-043)', () => {
+  it('rejects each of the 2 classification fields when null (AC-023/AC-043)', () => {
     const schema = buildCreateCampaignSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
     const result = schema.safeParse(
       baseValues({
-        pipeline_status_id: null,
         business_function_id: null,
         product_category_id: null,
       }),
@@ -76,9 +76,15 @@ describe('buildCreateCampaignSchema — standalone (project_id null)', () => {
     if (!result.success) {
       const paths = result.error.issues.map((issue) => issue.path.join('.'))
       expect(paths).toEqual(
-        expect.arrayContaining(['pipeline_status_id', 'business_function_id', 'product_category_id']),
+        expect.arrayContaining(['business_function_id', 'product_category_id']),
       )
     }
+  })
+
+  it('accepts a null pipeline_status_id even when standalone (spec 0039 D-3: server falls back to "Nuovo")', () => {
+    const schema = buildCreateCampaignSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
+    const result = schema.safeParse(baseValues({ pipeline_status_id: null }))
+    expect(result.success).toBe(true)
   })
 
   it('rejects end_date earlier than start_date (BR-6)', () => {

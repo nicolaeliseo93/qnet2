@@ -281,7 +281,7 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
 })
 
 describe('CampaignForm — deselecting the Project (AC-043)', () => {
-  it('clears and unlocks the 3 classification fields and the 4 geo levels, requiring Status and Country again', async () => {
+  it('clears and unlocks the 3 classification fields and the 4 geo levels, requiring Country again (spec 0039 D-3: Status is no longer required)', async () => {
     const linkedCampaign = campaign({
       project_id: TEST_PROJECT_ID,
       project: { id: TEST_PROJECT_ID, code: 'PRJ-0042', name: 'Acme rollout' },
@@ -310,12 +310,9 @@ describe('CampaignForm — deselecting the Project (AC-043)', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('Status is required when the campaign is not linked to a project.'),
+        screen.getByText('Country is required when the linked project does not provide one.'),
       ).toBeInTheDocument(),
     )
-    expect(
-      screen.getByText('Country is required when the linked project does not provide one.'),
-    ).toBeInTheDocument()
     expect(updateCampaignMock).not.toHaveBeenCalled()
   })
 })

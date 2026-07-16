@@ -20,6 +20,7 @@ import { projects } from './it-projects'
 import { campaigns } from './it-campaigns'
 import { leads } from './it-leads'
 import { leadStatuses } from './it-lead-statuses'
+import { statusGroups } from './it-status-groups'
 import { leadImports } from './it-lead-imports'
 import { businessFunctions } from './it-business-functions'
 import { moduleStats, statsPanel } from './it-stats'
@@ -79,6 +80,7 @@ export const it: TranslationResources = {
     campaigns: 'Campagne',
     leads: 'Lead',
     leadStatuses: 'Stati lead',
+    statusGroups: 'Gruppi di stato',
     imports: 'Importa lead',
     pipelineStatuses: 'Stati progetto/campagna',
     marketingLeads: 'Marketing e Lead',
@@ -429,6 +431,7 @@ export const it: TranslationResources = {
   pipelineStatuses,
   campaigns: { ...campaigns, stats: moduleStats.campaigns },
   leadStatuses,
+  statusGroups,
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
   importRuns: { stats: moduleStats.importRuns },

@@ -277,12 +277,19 @@ it('create: 422 when name is missing (AC-012)', function () {
         ->assertStatus(422)->assertJsonValidationErrors('name');
 });
 
-it('create: 422 when pipeline_status_id is missing (AC-012)', function () {
+it('create: missing pipeline_status_id -> 201, falls back to the system_key=new status (spec 0039 D-3, AC-009)', function () {
+    // requirement changed (spec 0039, D-3): pipeline_status_id went from
+    // `required` to `nullable` — an omitted FK no longer 422s, it falls
+    // back to the mandatory system_key='new' status (AC-012 is superseded).
     $actor = projectUserWith(['create']);
+    $countryId = Country::factory()->create()->id;
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/projects', ['name' => 'No Status'])
-        ->assertStatus(422)->assertJsonValidationErrors('pipeline_status_id');
+    $this->postJson('/api/projects', ['name' => 'No Status', 'country_id' => $countryId, ...projectStoreExtras()])
+        ->assertCreated();
+
+    $project = Project::query()->with('pipelineStatus')->where('name', 'No Status')->sole();
+    expect($project->pipelineStatus->system_key)->toBe('new');
 });
 
 it('create: 422 when end_date < start_date (AC-013)', function () {

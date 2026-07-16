@@ -18,6 +18,35 @@ vi.mock('@/features/pipeline-statuses/api', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 
 /**
+ * Stubs the group single-select, keyed by its accessible trigger label
+ * (mirrors `project-form-body.test.tsx`): a plain button reflecting `value`
+ * and `disabled`, so this suite never depends on the quick-create/auth
+ * machinery `RelationSelectField`/`AsyncPaginatedSelect` otherwise pull in.
+ */
+vi.mock('@/components/ui/async-paginated-select', () => ({
+  AsyncPaginatedSelect: ({
+    value,
+    onChange,
+    disabled,
+    labels,
+  }: {
+    value: number | null
+    onChange: (value: number) => void
+    disabled?: boolean
+    labels: { triggerLabel: string }
+  }) => (
+    <button
+      type="button"
+      data-testid={`select-${labels.triggerLabel}`}
+      disabled={disabled}
+      onClick={() => onChange(2)}
+    >
+      {value ?? ''}
+    </button>
+  ),
+}))
+
+/**
  * Every field resolves as visible+editable (the `MetaField` fallback, since
  * `fields` is empty) — not about authorization metadata.
  */
@@ -53,6 +82,9 @@ function pipelineStatus(
     name: 'Draft',
     color: 'blue',
     sort_order: 1,
+    system_key: null,
+    status_group_id: null,
+    status_group: null,
     created_at: null as unknown as string,
     permissions: FULL_ACCESS_PERMISSIONS,
     ...overrides,
@@ -68,8 +100,8 @@ beforeEach(() => {
   updatePipelineStatusMock.mockReset()
 })
 
-describe('PipelineStatusForm — create/edit (spec 0023)', () => {
-  it('renders the name, color and sort order fields in create mode', () => {
+describe('PipelineStatusForm — create/edit (spec 0023, spec 0039)', () => {
+  it('renders the name, color and group fields in create mode, with no order input (D-5)', () => {
     render(
       <PipelineStatusForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
       { wrapper: wrapper() },
@@ -77,10 +109,11 @@ describe('PipelineStatusForm — create/edit (spec 0023)', () => {
 
     expect(screen.getByLabelText(/^Name/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /choose a color/i })).toBeInTheDocument()
-    expect(screen.getByLabelText(/^Order/)).toBeInTheDocument()
+    expect(screen.getByTestId('select-Group')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^Order/)).not.toBeInTheDocument()
   })
 
-  it('submits the create payload on save', async () => {
+  it('submits the create payload on save, without sort_order', async () => {
     createPipelineStatusMock.mockResolvedValue(pipelineStatus())
     const onSuccess = vi.fn()
 
@@ -93,14 +126,21 @@ describe('PipelineStatusForm — create/edit (spec 0023)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createPipelineStatusMock).toHaveBeenCalledTimes(1))
-    expect(createPipelineStatusMock).toHaveBeenCalledWith({ name: 'Draft', color: null, sort_order: 0 })
+    expect(createPipelineStatusMock).toHaveBeenCalledWith({
+      name: 'Draft',
+      color: null,
+      status_group_id: null,
+    })
     await waitFor(() => expect(onSuccess).toHaveBeenCalledWith(pipelineStatus()))
   })
 
-  it('hydrates name, color and sort order in edit mode', () => {
+  it('hydrates name, color and group in edit mode', () => {
     render(
       <PipelineStatusForm
-        mode={{ type: 'edit', pipelineStatus: pipelineStatus() }}
+        mode={{
+          type: 'edit',
+          pipelineStatus: pipelineStatus({ status_group_id: 2, status_group: { id: 2, name: 'Open', color: 'blue' } }),
+        }}
         onSuccess={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -108,8 +148,8 @@ describe('PipelineStatusForm — create/edit (spec 0023)', () => {
     )
 
     expect(screen.getByLabelText(/^Name/)).toHaveValue('Draft')
-    expect(screen.getByLabelText(/^Order/)).toHaveValue(1)
     expect(screen.getByRole('button', { name: /Blue/ })).toBeInTheDocument()
+    expect(screen.getByTestId('select-Group')).toHaveTextContent('2')
   })
 
   it('submits only the changed name on a partial update', async () => {
@@ -131,5 +171,31 @@ describe('PipelineStatusForm — create/edit (spec 0023)', () => {
     const [id, payload] = updatePipelineStatusMock.mock.calls[0]
     expect(id).toBe(9)
     expect(payload).toEqual({ name: 'Active' })
+  })
+})
+
+describe('PipelineStatusForm — system row (spec 0039 D-2, AC-010)', () => {
+  it('disables the group field and shows a hint, while name/color stay editable', () => {
+    render(
+      <PipelineStatusForm
+        mode={{
+          type: 'edit',
+          pipelineStatus: pipelineStatus({
+            name: 'Nuovo',
+            system_key: 'new',
+            status_group_id: 1,
+            status_group: { id: 1, name: 'Aperto', color: 'slate' },
+          }),
+        }}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    )
+
+    expect(screen.getByLabelText(/^Name/)).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /Blue/ })).not.toBeDisabled()
+    expect(screen.getByTestId('select-Group')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'More information' })).toBeInTheDocument()
   })
 })

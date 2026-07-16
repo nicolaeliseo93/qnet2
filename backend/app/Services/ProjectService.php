@@ -11,9 +11,11 @@ use App\DataObjects\Projects\UpdateProjectData;
 use App\DataObjects\Shared\ForSelectQuery;
 use App\DataObjects\Shared\ForSelectResult;
 use App\Models\Lead;
+use App\Models\PipelineStatus;
 use App\Models\Project;
 use App\Services\Concerns\GeneratesSequentialCode;
 use App\Services\Concerns\RealignsCampaignGeo;
+use App\Services\Statuses\SystemStatusGuard;
 use App\Services\Table\TableQueryBuilder;
 use App\Tables\TableRegistry;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,6 +42,7 @@ class ProjectService
     public function __construct(
         private readonly TableRegistry $tableRegistry,
         private readonly TableQueryBuilder $queryBuilder,
+        private readonly SystemStatusGuard $systemStatusGuard,
     ) {}
 
     /**
@@ -82,12 +85,19 @@ class ProjectService
     public function create(CreateProjectData $data): Project
     {
         $project = DB::transaction(function () use ($data): Project {
+            $attributes = $data->attributes();
+
+            // spec 0039, D-3: an omitted/null FK falls back to the mandatory
+            // system_key='new' status (resolved by system_key, never by name).
+            $attributes['pipeline_status_id'] = $data->pipelineStatusId
+                ?? $this->systemStatusGuard->resolveNewStatusId(PipelineStatus::class);
+
             // `code` is deliberately absent from Project's #[Fillable] (BR-1),
             // so a mass-assigned Project::create() would silently drop it,
             // leaving the NOT NULL `code` column unset — assign it directly
             // (bypasses mass-assignment guarding) AFTER the fillable attributes,
             // mirroring CampaignService::create().
-            $project = new Project($data->attributes());
+            $project = new Project($attributes);
             $project->code = $data->code ?? $this->nextSequentialCode(self::CODE_TABLE, self::CODE_COLUMN, self::CODE_PREFIX);
             $project->save();
 

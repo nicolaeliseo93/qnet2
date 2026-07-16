@@ -8,6 +8,7 @@ use App\Models\PipelineStatus;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for PUT/PATCH /api/pipeline-statuses/{pipelineStatus}
@@ -16,7 +17,10 @@ use Illuminate\Foundation\Http\FormRequest;
  * Authorization is intentionally NOT handled here (it stays in the controller
  * via authorize('update', $pipelineStatus)). EnforcesFieldPermissions (spec
  * 0004) additionally rejects any submitted field the actor cannot edit on
- * this specific model.
+ * this specific model. spec 0039, D-5: `sort_order` is no longer accepted
+ * here (see App\Services\Statuses\StatusOrderManager); `status_group_id`
+ * (D-6) is the new field — App\Services\Statuses\SystemStatusGuard rejects it
+ * outright, at the Service layer, when the target row is a system status.
  */
 class UpdatePipelineStatusRequest extends FormRequest
 {
@@ -36,7 +40,7 @@ class UpdatePipelineStatusRequest extends FormRequest
         return [
             'name' => ['sometimes', 'required', 'string', 'max:191'],
             'color' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'sort_order' => ['sometimes', 'integer'],
+            'status_group_id' => ['sometimes', 'nullable', 'integer', Rule::exists('status_groups', 'id')],
         ];
     }
 

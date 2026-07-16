@@ -7,6 +7,7 @@ use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for POST /api/pipeline-statuses (spec 0023).
@@ -14,7 +15,11 @@ use Illuminate\Foundation\Http\FormRequest;
  * Authorization is intentionally NOT handled here (it stays in the controller
  * via authorize('create', PipelineStatus::class)). EnforcesFieldPermissions
  * (spec 0004) additionally rejects any submitted field the actor cannot edit
- * (create-context, model = null).
+ * (create-context, model = null). spec 0039, D-5: `sort_order` is no longer
+ * accepted here (absent from rules() -> validated() silently drops it,
+ * "unknown field ignorato") — server-managed, see
+ * App\Services\Statuses\StatusOrderManager. `status_group_id` (D-6) is the
+ * new optional classification FK.
  */
 class StorePipelineStatusRequest extends FormRequest
 {
@@ -34,7 +39,7 @@ class StorePipelineStatusRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:191'],
             'color' => ['nullable', 'string', 'max:32'],
-            'sort_order' => ['sometimes', 'integer'],
+            'status_group_id' => ['nullable', 'integer', Rule::exists('status_groups', 'id')],
         ];
     }
 

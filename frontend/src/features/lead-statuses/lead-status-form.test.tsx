@@ -18,6 +18,35 @@ vi.mock('@/features/lead-statuses/api', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 
 /**
+ * Stubs the group single-select, keyed by its accessible trigger label
+ * (mirrors `project-form-body.test.tsx`): a plain button reflecting `value`
+ * and `disabled`, so this suite never depends on the quick-create/auth
+ * machinery `RelationSelectField`/`AsyncPaginatedSelect` otherwise pull in.
+ */
+vi.mock('@/components/ui/async-paginated-select', () => ({
+  AsyncPaginatedSelect: ({
+    value,
+    onChange,
+    disabled,
+    labels,
+  }: {
+    value: number | null
+    onChange: (value: number) => void
+    disabled?: boolean
+    labels: { triggerLabel: string }
+  }) => (
+    <button
+      type="button"
+      data-testid={`select-${labels.triggerLabel}`}
+      disabled={disabled}
+      onClick={() => onChange(2)}
+    >
+      {value ?? ''}
+    </button>
+  ),
+}))
+
+/**
  * Every field resolves as visible+editable (the `MetaField` fallback, since
  * `fields` is empty) — not about authorization metadata.
  */
@@ -53,6 +82,9 @@ function leadStatus(
     name: 'Draft',
     color: 'blue',
     sort_order: 1,
+    system_key: null,
+    status_group_id: null,
+    status_group: null,
     created_at: null as unknown as string,
     permissions: FULL_ACCESS_PERMISSIONS,
     ...overrides,
@@ -68,8 +100,8 @@ beforeEach(() => {
   updateLeadStatusMock.mockReset()
 })
 
-describe('LeadStatusForm — create/edit (spec 0029)', () => {
-  it('renders the name, color and sort order fields in create mode', () => {
+describe('LeadStatusForm — create/edit (spec 0029, spec 0039)', () => {
+  it('renders the name, color and group fields in create mode, with no order input (D-5)', () => {
     render(
       <LeadStatusForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
       { wrapper: wrapper() },
@@ -77,10 +109,11 @@ describe('LeadStatusForm — create/edit (spec 0029)', () => {
 
     expect(screen.getByLabelText(/^Name/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /choose a color/i })).toBeInTheDocument()
-    expect(screen.getByLabelText(/^Order/)).toBeInTheDocument()
+    expect(screen.getByTestId('select-Group')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^Order/)).not.toBeInTheDocument()
   })
 
-  it('submits the create payload on save', async () => {
+  it('submits the create payload on save, without sort_order', async () => {
     createLeadStatusMock.mockResolvedValue(leadStatus())
     const onSuccess = vi.fn()
 
@@ -93,14 +126,17 @@ describe('LeadStatusForm — create/edit (spec 0029)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createLeadStatusMock).toHaveBeenCalledTimes(1))
-    expect(createLeadStatusMock).toHaveBeenCalledWith({ name: 'Draft', color: null, sort_order: 0 })
+    expect(createLeadStatusMock).toHaveBeenCalledWith({ name: 'Draft', color: null, status_group_id: null })
     await waitFor(() => expect(onSuccess).toHaveBeenCalledWith(leadStatus()))
   })
 
-  it('hydrates name, color and sort order in edit mode', () => {
+  it('hydrates name, color and group in edit mode', () => {
     render(
       <LeadStatusForm
-        mode={{ type: 'edit', leadStatus: leadStatus() }}
+        mode={{
+          type: 'edit',
+          leadStatus: leadStatus({ status_group_id: 2, status_group: { id: 2, name: 'Open', color: 'blue' } }),
+        }}
         onSuccess={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -108,8 +144,8 @@ describe('LeadStatusForm — create/edit (spec 0029)', () => {
     )
 
     expect(screen.getByLabelText(/^Name/)).toHaveValue('Draft')
-    expect(screen.getByLabelText(/^Order/)).toHaveValue(1)
     expect(screen.getByRole('button', { name: /Blue/ })).toBeInTheDocument()
+    expect(screen.getByTestId('select-Group')).toHaveTextContent('2')
   })
 
   it('submits only the changed name on a partial update', async () => {
@@ -131,5 +167,31 @@ describe('LeadStatusForm — create/edit (spec 0029)', () => {
     const [id, payload] = updateLeadStatusMock.mock.calls[0]
     expect(id).toBe(9)
     expect(payload).toEqual({ name: 'Active' })
+  })
+})
+
+describe('LeadStatusForm — system row (spec 0039 D-2, AC-010)', () => {
+  it('disables the group field and shows a hint, while name/color stay editable', () => {
+    render(
+      <LeadStatusForm
+        mode={{
+          type: 'edit',
+          leadStatus: leadStatus({
+            name: 'Nuovo',
+            system_key: 'new',
+            status_group_id: 1,
+            status_group: { id: 1, name: 'Aperto', color: 'slate' },
+          }),
+        }}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    )
+
+    expect(screen.getByLabelText(/^Name/)).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /Blue/ })).not.toBeDisabled()
+    expect(screen.getByTestId('select-Group')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'More information' })).toBeInTheDocument()
   })
 })

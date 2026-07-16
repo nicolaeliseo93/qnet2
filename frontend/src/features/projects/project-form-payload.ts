@@ -17,8 +17,8 @@ export function buildCreatePayload(values: ProjectFormValues): CreateProjectPayl
   return {
     ...(code ? { code } : {}),
     name: values.name,
-    // Validated non-null by the schema's required-value superRefine before submit.
-    pipeline_status_id: values.pipeline_status_id as number,
+    // Nullable/optional (spec 0039 D-3): the server falls back to the system "Nuovo" status when omitted.
+    pipeline_status_id: values.pipeline_status_id,
     description: values.description,
     registry_id: values.registry_id,
     source_id: values.source_id,
@@ -52,7 +52,7 @@ export function buildUpdatePayload(
     payload.name = values.name
   }
   if (values.pipeline_status_id !== original.pipeline_status_id) {
-    payload.pipeline_status_id = values.pipeline_status_id as number
+    payload.pipeline_status_id = values.pipeline_status_id
   }
   if (values.description !== original.description) {
     payload.description = values.description

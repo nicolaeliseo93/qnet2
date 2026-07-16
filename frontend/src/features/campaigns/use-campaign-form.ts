@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -13,6 +13,8 @@ import {
   buildUpdateCampaignSchema,
   type CreateCampaignFormValues,
 } from '@/features/campaigns/campaign-schema'
+import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-statuses/for-select-api'
+import { useDefaultSystemStatusId } from '@/features/status-reorder/use-default-system-status'
 import type { CampaignDetail, CampaignFormMode } from '@/features/campaigns/types'
 import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
@@ -132,6 +134,26 @@ export function useCampaignForm({ mode, onSuccess, initialCode }: UseCampaignFor
     resolver: zodResolver(schema),
     defaultValues,
   })
+
+  // Spec 0039 D-3: preselect the system "Nuovo" status on a standalone
+  // create, once the for-select resolves, but only if the field is still
+  // untouched — the user (or a faster manual pick, or linking a project,
+  // which overwrites it itself) always wins. Guarded to apply at most once:
+  // an effect is the correct tool here, since RHF's `defaultValues` are
+  // fixed at mount and this value only becomes known asynchronously.
+  const defaultStatus = useDefaultSystemStatusId(PROJECT_STATUSES_FOR_SELECT_RESOURCE, 'new', !isEdit)
+  const appliedDefaultStatus = useRef(false)
+  useEffect(() => {
+    if (isEdit || appliedDefaultStatus.current || defaultStatus.data == null) {
+      return
+    }
+    if (form.getValues('project_id') !== null || form.getFieldState('pipeline_status_id').isDirty) {
+      appliedDefaultStatus.current = true
+      return
+    }
+    form.setValue('pipeline_status_id', defaultStatus.data)
+    appliedDefaultStatus.current = true
+  }, [isEdit, defaultStatus.data, form])
 
   const onSubmit = async (values: CampaignFormValues) => {
     setServerError(null)

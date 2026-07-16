@@ -20,6 +20,7 @@ use App\Tables\RegistriesTableDefinition;
 use App\Tables\RolesTableDefinition;
 use App\Tables\SectorsTableDefinition;
 use App\Tables\SourcesTableDefinition;
+use App\Tables\StatusGroupsTableDefinition;
 use App\Tables\TagsTableDefinition;
 use App\Tables\UsersTableDefinition;
 
@@ -67,6 +68,7 @@ return [
         'campaigns' => CampaignsTableDefinition::class,
         'leads' => LeadsTableDefinition::class,
         'lead-statuses' => LeadStatusesTableDefinition::class,
+        'status-groups' => StatusGroupsTableDefinition::class,
         'import-runs' => LeadImportsTableDefinition::class,
     ],
 

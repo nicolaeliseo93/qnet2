@@ -61,7 +61,7 @@ it('allows actors with pipeline-statuses.viewAny (200) and returns the paginated
 // AC-006 — item shape + search
 // ---------------------------------------------------------------------------
 
-it('maps a project status to { id, label: name }', function () {
+it('maps a project status to { id, label: name, meta: { system_key } } (spec 0039, D-2)', function () {
     $actor = pipelineStatusUserWith(['viewAny']);
     $target = PipelineStatus::factory()->create(['name' => 'In Progress']);
     Sanctum::actingAs($actor);
@@ -69,8 +69,10 @@ it('maps a project status to { id, label: name }', function () {
     $response = $this->getJson('/api/pipeline-statuses/for-select?search=In Progress')->assertOk();
     $item = collect($response->json('items'))->firstWhere('id', $target->id);
 
-    expect($item)->toMatchArray(['id' => $target->id, 'label' => 'In Progress'])
-        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label']);
+    // requirement changed (spec 0039, AC-009): `meta.system_key` is a new,
+    // always-present key (null for a custom row) — was {id, label} only.
+    expect($item)->toMatchArray(['id' => $target->id, 'label' => 'In Progress', 'meta' => ['system_key' => null]])
+        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label', 'meta']);
 });
 
 it('search="boz" returns only names containing "boz" (AC-006)', function () {

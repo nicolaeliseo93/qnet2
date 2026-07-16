@@ -31,6 +31,7 @@ use App\Models\Registry;
 use App\Models\Role;
 use App\Models\Sector;
 use App\Models\Source;
+use App\Models\StatusGroup;
 use App\Models\Tag;
 use App\Models\User;
 use App\Models\UserTablePreference;
@@ -117,6 +118,7 @@ class AppServiceProvider extends ServiceProvider
             'campaign' => Campaign::class,
             'lead' => Lead::class,
             'lead_status' => LeadStatus::class,
+            'status_group' => StatusGroup::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

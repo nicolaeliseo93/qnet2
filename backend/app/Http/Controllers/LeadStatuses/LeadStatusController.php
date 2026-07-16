@@ -8,6 +8,7 @@ use App\Enums\HttpStatusEnum;
 use App\Http\Controllers\Abstract\BaseApiController;
 use App\Http\Requests\LeadStatuses\StoreLeadStatusRequest;
 use App\Http\Requests\LeadStatuses\UpdateLeadStatusRequest;
+use App\Http\Requests\Statuses\ReorderStatusesRequest;
 use App\Http\Resources\LeadStatusResource;
 use App\Models\LeadStatus;
 use App\Models\User;
@@ -47,6 +48,8 @@ class LeadStatusController extends BaseApiController
     {
         try {
             $this->authorize('view', $leadStatus);
+
+            $leadStatus = $this->service->loadDetail($leadStatus);
 
             return $this->okWithPermissions(
                 new LeadStatusResource($leadStatus),
@@ -112,6 +115,30 @@ class LeadStatusController extends BaseApiController
             return $this->noContent();
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['leadStatus' => $leadStatus->id]);
+        }
+    }
+
+    /**
+     * POST /api/lead-statuses/reorder — resequence the custom rows (spec
+     * 0039, D-5). Gated on `lead-statuses.update` directly (no single Model
+     * instance exists for a bulk reorder, so there is no Policy
+     * `update($user, $model)` to delegate to — mirrors ExportController's
+     * `export` ability check).
+     */
+    public function reorder(ReorderStatusesRequest $request): JsonResponse
+    {
+        try {
+            $this->authorize('lead-statuses.update');
+
+            $reordered = $this->service->reorder($request->orderedIds());
+
+            return $this->ok($reordered->map(static fn (LeadStatus $status): array => [
+                'id' => $status->id,
+                'sort_order' => $status->sort_order,
+                'system_key' => $status->system_key,
+            ])->all());
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
         }
     }
 

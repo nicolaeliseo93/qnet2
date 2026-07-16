@@ -33,17 +33,18 @@ if (! function_exists('leadStatusUserWith')) {
 // create — POST /api/lead-statuses (AC-001)
 // ---------------------------------------------------------------------------
 
-it('create: 201 + persists (AC-001)', function () {
+it('create: 201 + persists, submitted sort_order ignored (AC-001, spec 0039 D-5)', function () {
     $actor = leadStatusUserWith(['create']);
     Sanctum::actingAs($actor);
 
+    // requirement changed (spec 0039, D-5): sort_order is server-managed —
+    // a submitted value is silently ignored (placement is automatic, AC-006).
     $this->postJson('/api/lead-statuses', ['name' => 'Qualified', 'color' => 'green', 'sort_order' => 2])
         ->assertCreated()
         ->assertJsonPath('data.name', 'Qualified')
-        ->assertJsonPath('data.color', 'green')
-        ->assertJsonPath('data.sort_order', 2);
+        ->assertJsonPath('data.color', 'green');
 
-    $this->assertDatabaseHas('lead_statuses', ['name' => 'Qualified', 'color' => 'green', 'sort_order' => 2]);
+    $this->assertDatabaseHas('lead_statuses', ['name' => 'Qualified', 'color' => 'green']);
 });
 
 it('create: 422 when name is missing', function () {
@@ -109,15 +110,17 @@ it('update: PATCH partial {name} updates the lead status', function () {
     $this->assertDatabaseHas('lead_statuses', ['id' => $target->id, 'name' => 'After']);
 });
 
-it('update: 200 when re-submitting its OWN unchanged name (unique ignores self, AC-003)', function () {
+it('update: 200 when re-submitting its OWN unchanged name (unique ignores self, AC-003), submitted sort_order ignored (spec 0039 D-5)', function () {
     $actor = leadStatusUserWith(['update']);
     $target = LeadStatus::factory()->create(['name' => 'Same', 'sort_order' => 1]);
     Sanctum::actingAs($actor);
 
+    // requirement changed (spec 0039, D-5): sort_order left store/update —
+    // a submitted value is silently ignored, the persisted one is untouched.
     $this->patchJson("/api/lead-statuses/{$target->id}", ['name' => 'Same', 'sort_order' => 5])
         ->assertOk()
         ->assertJsonPath('data.name', 'Same')
-        ->assertJsonPath('data.sort_order', 5);
+        ->assertJsonPath('data.sort_order', 1);
 });
 
 it('update: 422 when name duplicates ANOTHER existing status', function () {
@@ -148,7 +151,10 @@ it('POST create: 403 without lead-statuses.create, no row created (AC-006)', fun
 
     $this->postJson('/api/lead-statuses', ['name' => 'Nope'])->assertForbidden();
 
-    expect(LeadStatus::count())->toBe(0);
+    // spec 0039 (D-2): the migration seeds the 2 mandatory system rows
+    // ("Nuovo"/"Chiuso") unconditionally, so the post-403 baseline is 2, not
+    // 0 — requirement change, not a regression.
+    expect(LeadStatus::count())->toBe(2);
 });
 
 it('PATCH update: 403 without lead-statuses.update, no change persisted (AC-006)', function () {

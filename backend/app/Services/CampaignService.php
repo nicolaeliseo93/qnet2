@@ -9,8 +9,10 @@ use App\DataObjects\Campaigns\UpdateCampaignData;
 use App\DataObjects\Shared\ForSelectQuery;
 use App\DataObjects\Shared\ForSelectResult;
 use App\Models\Campaign;
+use App\Models\PipelineStatus;
 use App\Models\Project;
 use App\Services\Concerns\GeneratesSequentialCode;
+use App\Services\Statuses\SystemStatusGuard;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +30,8 @@ use Illuminate\Validation\ValidationException;
 class CampaignService
 {
     use GeneratesSequentialCode;
+
+    public function __construct(private readonly SystemStatusGuard $systemStatusGuard) {}
 
     private const string CODE_PREFIX = 'CMP';
 
@@ -93,6 +97,14 @@ class CampaignService
             }
 
             $attributes = $this->applyGeoInheritance($data->attributes(), $project);
+
+            // spec 0039, D-3: only for a STANDALONE campaign — a linked one
+            // stays null (BR-2 derivation, read through the project instead).
+            // An omitted/null FK falls back to the mandatory system_key='new'
+            // status (resolved by system_key, never by name).
+            if (! $data->isLinkedToProject() && $attributes['pipeline_status_id'] === null) {
+                $attributes['pipeline_status_id'] = $this->systemStatusGuard->resolveNewStatusId(PipelineStatus::class);
+            }
 
             // `code` is deliberately absent from Campaign's #[Fillable] (BR-1),
             // so a mass-assigned Campaign::create() would silently drop it,

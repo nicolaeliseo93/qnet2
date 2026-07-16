@@ -42,15 +42,18 @@ it('200: field catalogue matches the frozen contract, in order (AC-010)', functi
         ->assertOk()
         ->assertJsonPath('success', true);
 
+    // requirement changed (spec 0039, D-5/D-6): `sort_order` left the
+    // catalogue (server-managed, no longer writable) and `status_group_id`
+    // replaced it — same position, new key.
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
-    expect($keys)->toBe(['name', 'color', 'sort_order']);
+    expect($keys)->toBe(['name', 'color', 'status_group_id']);
 
     $fields = collect($response->json('data.fields'))->keyBy('key');
     expect($fields['name']['mandatory'])->toBeTrue()
         ->and($fields['name']['type'])->toBe('text')
         ->and($fields['color']['mandatory'])->toBeFalse()
         ->and($fields['color']['type'])->toBe('color')
-        ->and($fields['sort_order']['type'])->toBe('number');
+        ->and($fields['status_group_id']['type'])->toBe('select');
 
     foreach ($response->json('permissions.fields') as $field) {
         expect($field)->toHaveKeys(['visible', 'hidden', 'editable', 'readonly', 'required', 'disabled']);
@@ -61,12 +64,14 @@ it('200: create-context permissions.fields are editable when the actor may creat
     $actor = leadStatusUserWith(['viewAny', 'create']);
     Sanctum::actingAs($actor);
 
+    // requirement changed (spec 0039, D-5/D-6): status_group_id replaces
+    // sort_order in the field catalogue.
     $this->getJson('/api/meta/lead-statuses')
         ->assertOk()
         ->assertJsonPath('permissions.fields.name.editable', true)
         ->assertJsonPath('permissions.fields.name.required', true)
         ->assertJsonPath('permissions.fields.color.editable', true)
-        ->assertJsonPath('permissions.fields.sort_order.editable', true);
+        ->assertJsonPath('permissions.fields.status_group_id.editable', true);
 });
 
 it('permissions.fields are readonly when the actor may not create (AC-010)', function () {

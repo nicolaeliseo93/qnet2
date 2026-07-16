@@ -102,7 +102,6 @@ export const projects = {
     description: 'Descrizione',
     status: 'Stato',
     statusSearch: 'Cerca stati…',
-    statusRequired: 'Lo stato è obbligatorio.',
     registry: 'Cliente',
     registrySearch: 'Cerca clienti…',
     source: 'Fonte',

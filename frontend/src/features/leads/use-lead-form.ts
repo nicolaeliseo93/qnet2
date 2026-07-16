@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -14,6 +14,8 @@ import {
   buildUpdateLeadSchema,
   type CreateLeadFormValues,
 } from '@/features/leads/lead-schema'
+import { LEAD_STATUSES_FOR_SELECT_RESOURCE } from '@/features/lead-statuses/for-select-api'
+import { useDefaultSystemStatusId } from '@/features/status-reorder/use-default-system-status'
 import type { LeadDetail, LeadFormMode } from '@/features/leads/types'
 
 /** Server-side field names mapped onto the form for 422 handling. */
@@ -82,6 +84,25 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
     resolver: zodResolver(schema),
     defaultValues,
   })
+
+  // Spec 0039 D-3: preselect the system "Nuovo" status on create, once the
+  // for-select resolves, but only if the field is still untouched — the
+  // user (or a faster manual pick) always wins. Guarded to apply at most
+  // once: an effect is the correct tool here, since RHF's `defaultValues`
+  // are fixed at mount and this value only becomes known asynchronously.
+  const defaultStatus = useDefaultSystemStatusId(LEAD_STATUSES_FOR_SELECT_RESOURCE, 'new', !isEdit)
+  const appliedDefaultStatus = useRef(false)
+  useEffect(() => {
+    if (isEdit || appliedDefaultStatus.current || defaultStatus.data == null) {
+      return
+    }
+    if (form.getFieldState('lead_status_id').isDirty) {
+      appliedDefaultStatus.current = true
+      return
+    }
+    form.setValue('lead_status_id', defaultStatus.data)
+    appliedDefaultStatus.current = true
+  }, [isEdit, defaultStatus.data, form])
 
   const onSubmit = async (values: LeadFormValues) => {
     setServerError(null)

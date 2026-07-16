@@ -61,7 +61,7 @@ it('allows actors with lead-statuses.viewAny (200) and returns the paginated env
 // AC-008 — item shape + sort_order-first ordering + search
 // ---------------------------------------------------------------------------
 
-it('maps a lead status to { id, label: name }', function () {
+it('maps a lead status to { id, label: name, meta: { system_key } } (spec 0039, D-2)', function () {
     $actor = leadStatusUserWith(['viewAny']);
     $target = LeadStatus::factory()->create(['name' => 'In Progress']);
     Sanctum::actingAs($actor);
@@ -69,18 +69,28 @@ it('maps a lead status to { id, label: name }', function () {
     $response = $this->getJson('/api/lead-statuses/for-select?search=In Progress')->assertOk();
     $item = collect($response->json('items'))->firstWhere('id', $target->id);
 
-    expect($item)->toMatchArray(['id' => $target->id, 'label' => 'In Progress'])
-        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label']);
+    // requirement changed (spec 0039, AC-009): `meta.system_key` is a new,
+    // always-present key (null for a custom row) — was {id, label} only.
+    expect($item)->toMatchArray(['id' => $target->id, 'label' => 'In Progress', 'meta' => ['system_key' => null]])
+        ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label', 'meta']);
 });
 
 it('orders by sort_order asc, not alphabetically (AC-008)', function () {
     $actor = leadStatusUserWith(['viewAny']);
-    $zLast = LeadStatus::factory()->create(['name' => 'Zeta', 'sort_order' => 0]);
-    $aFirst = LeadStatus::factory()->create(['name' => 'Alpha', 'sort_order' => 1]);
+    // sort_order 100/101 (not 0/10) so this pair never collides with the two
+    // migration-seeded system rows ("Nuovo" sort_order 0, "Chiuso" 10).
+    $zLast = LeadStatus::factory()->create(['name' => 'Zeta', 'sort_order' => 100]);
+    $aFirst = LeadStatus::factory()->create(['name' => 'Alpha', 'sort_order' => 101]);
     Sanctum::actingAs($actor);
 
     $response = $this->getJson('/api/lead-statuses/for-select')->assertOk();
-    $ids = collect($response->json('items'))->pluck('id')->all();
+    // Filtered to this pair (preserving response order): the endpoint also
+    // returns the two system rows, irrelevant to this ordering assertion.
+    $ids = collect($response->json('items'))
+        ->pluck('id')
+        ->filter(fn (int $id): bool => in_array($id, [$zLast->id, $aFirst->id], true))
+        ->values()
+        ->all();
 
     expect($ids)->toBe([$zLast->id, $aFirst->id]);
 });

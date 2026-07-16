@@ -16,7 +16,11 @@ use Illuminate\Validation\Rule;
  * via authorize('create', LeadStatus::class)). EnforcesFieldPermissions
  * (spec 0004) additionally rejects any submitted field the actor cannot edit
  * (create-context, model = null). `name` is unique (BR-2/D-4), unlike
- * StorePipelineStatusRequest.
+ * StorePipelineStatusRequest. spec 0039, D-5: `sort_order` is no longer
+ * accepted here (absent from rules() -> validated() silently drops it,
+ * "unknown field ignorato") — server-managed, see
+ * App\Services\Statuses\StatusOrderManager. `status_group_id` (D-6) is the
+ * new optional classification FK.
  */
 class StoreLeadStatusRequest extends FormRequest
 {
@@ -36,7 +40,7 @@ class StoreLeadStatusRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:191', Rule::unique('lead_statuses', 'name')],
             'color' => ['nullable', 'string', 'max:32'],
-            'sort_order' => ['sometimes', 'integer'],
+            'status_group_id' => ['nullable', 'integer', Rule::exists('status_groups', 'id')],
         ];
     }
 

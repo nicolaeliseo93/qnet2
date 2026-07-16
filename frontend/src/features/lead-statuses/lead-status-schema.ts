@@ -9,8 +9,10 @@ import {
  * Zod schema for the lead status create/edit form, built as a factory so
  * validation messages are localized via the i18n `t` function (same pattern
  * as `pipeline-statuses`). The shape mirrors the frozen backend contract
- * (spec 0029) 1:1. `color` stores a palette TOKEN (empty string = unset,
- * mapped to `null` by the payload builder) — see `ColorTokenPicker`.
+ * (spec 0029, extended by spec 0039) 1:1. `color` stores a palette TOKEN
+ * (empty string = unset, mapped to `null` by the payload builder) — see
+ * `ColorTokenPicker`. `sort_order` is server-managed (spec 0039 D-5) and has
+ * no form field.
  */
 
 /** Backend `name` column limit (`max:191`). */
@@ -27,10 +29,10 @@ function baseFields(t: TFunction) {
       .min(1, t('leadStatuses.form.nameRequired'))
       .max(NAME_MAX_LENGTH, t('leadStatuses.form.nameMax')),
     color: z.string().max(COLOR_MAX_LENGTH, t('leadStatuses.form.colorMax')),
-    sort_order: z.coerce
-      .number()
-      .int(t('leadStatuses.form.sortOrderInvalid'))
-      .min(0, t('leadStatuses.form.sortOrderMin')),
+    // Optional relation (spec 0039 D-6): `null` = unset. System rows only
+    // ever accept `name`/`color` — the group control is disabled for them in
+    // the form body, so this field never diverges from its hydrated value.
+    status_group_id: z.number().nullable(),
   }
 }
 

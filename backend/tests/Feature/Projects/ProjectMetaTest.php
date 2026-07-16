@@ -63,11 +63,13 @@ it('200: create-context permissions.fields are editable when the actor may creat
     $actor = projectUserWith(['viewAny', 'create']);
     Sanctum::actingAs($actor);
 
+    // requirement changed (spec 0039, D-3): pipeline_status_id is no longer
+    // mandatory — an omitted FK falls back to the system_key='new' status.
     $this->getJson('/api/meta/projects')
         ->assertOk()
         ->assertJsonPath('permissions.fields.name.editable', true)
         ->assertJsonPath('permissions.fields.name.required', true)
-        ->assertJsonPath('permissions.fields.pipeline_status_id.required', true);
+        ->assertJsonPath('permissions.fields.pipeline_status_id.required', false);
 });
 
 it('permissions.fields are readonly when the actor may not create', function () {

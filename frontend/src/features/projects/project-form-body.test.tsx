@@ -46,6 +46,12 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
+/** Spec 0039 D-3: the create form preselects this resolved "Nuovo" status id. */
+const fetchSystemStatusIdMock = vi.fn<() => Promise<number | null>>()
+vi.mock('@/features/status-reorder/api', () => ({
+  fetchSystemStatusId: () => fetchSystemStatusIdMock(),
+}))
+
 /**
  * Stubs every single-select field, keyed by its accessible trigger label
  * (mirrors `registry-form-metadata.test.tsx`). Renders as a button calling
@@ -179,6 +185,8 @@ beforeEach(() => {
   fetchProjectNextCodeMock.mockResolvedValue('PRJ-0100')
   fetchResourceMetaMock.mockReset()
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
+  fetchSystemStatusIdMock.mockReset()
+  fetchSystemStatusIdMock.mockResolvedValue(null)
 })
 
 /**
@@ -194,6 +202,31 @@ function completeRequiredCreateFields() {
   fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-01-01' } })
   fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-12-31' } })
 }
+
+describe('ProjectForm — default status preselection (spec 0039 D-3, AC-012)', () => {
+  it('preselects the resolved "Nuovo" status id on create once it resolves', async () => {
+    fetchSystemStatusIdMock.mockResolvedValue(42)
+
+    render(<ProjectForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Status')).toHaveTextContent('42'))
+  })
+
+  it('does not preselect in edit mode', async () => {
+    fetchSystemStatusIdMock.mockResolvedValue(42)
+
+    render(
+      <ProjectForm mode={{ type: 'edit', project: project() }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByTestId('select-Status')).toBeInTheDocument())
+    expect(screen.getByTestId('select-Status')).toHaveTextContent('3')
+    expect(fetchSystemStatusIdMock).not.toHaveBeenCalled()
+  })
+})
 
 describe('ProjectForm — manual code (spec 0025 AC-010/AC-011)', () => {
   it('auto-fills the enabled, required code field with the next sequential suggestion on create (AC-010)', async () => {

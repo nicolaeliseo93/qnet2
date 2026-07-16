@@ -8,6 +8,7 @@ use App\Enums\HttpStatusEnum;
 use App\Http\Controllers\Abstract\BaseApiController;
 use App\Http\Requests\PipelineStatuses\StorePipelineStatusRequest;
 use App\Http\Requests\PipelineStatuses\UpdatePipelineStatusRequest;
+use App\Http\Requests\Statuses\ReorderStatusesRequest;
 use App\Http\Resources\PipelineStatusResource;
 use App\Models\PipelineStatus;
 use App\Models\User;
@@ -48,6 +49,8 @@ class PipelineStatusController extends BaseApiController
     {
         try {
             $this->authorize('view', $pipelineStatus);
+
+            $pipelineStatus = $this->service->loadDetail($pipelineStatus);
 
             return $this->okWithPermissions(
                 new PipelineStatusResource($pipelineStatus),
@@ -113,6 +116,30 @@ class PipelineStatusController extends BaseApiController
             return $this->noContent();
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['pipelineStatus' => $pipelineStatus->id]);
+        }
+    }
+
+    /**
+     * POST /api/pipeline-statuses/reorder — resequence the custom rows (spec
+     * 0039, D-5). Gated on `pipeline-statuses.update` directly (no single
+     * Model instance exists for a bulk reorder, so there is no Policy
+     * `update($user, $model)` to delegate to — mirrors ExportController's
+     * `export` ability check).
+     */
+    public function reorder(ReorderStatusesRequest $request): JsonResponse
+    {
+        try {
+            $this->authorize('pipeline-statuses.update');
+
+            $reordered = $this->service->reorder($request->orderedIds());
+
+            return $this->ok($reordered->map(static fn (PipelineStatus $status): array => [
+                'id' => $status->id,
+                'sort_order' => $status->sort_order,
+                'system_key' => $status->system_key,
+            ])->all());
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
         }
     }
 

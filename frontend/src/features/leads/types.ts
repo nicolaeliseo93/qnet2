@@ -80,14 +80,15 @@ export interface LeadDetailWithPermissions extends LeadDetail {
 }
 
 /**
- * Payload for POST /leads (create). `referent_id`/`campaign_id`/
- * `lead_status_id` are required (BR-1, D-1); the other 3 fields are
- * optional/nullable.
+ * Payload for POST /leads (create). `referent_id`/`campaign_id` are required
+ * (BR-1, D-1); `lead_status_id` is nullable/optional (spec 0039 D-3: the
+ * server falls back to the system "Nuovo" status when omitted); the other 3
+ * fields are optional/nullable.
  */
 export interface CreateLeadPayload {
   referent_id: number
   campaign_id: number
-  lead_status_id: number
+  lead_status_id?: number | null
   operational_site_id?: number | null
   source_id?: number | null
   operator_id?: number | null

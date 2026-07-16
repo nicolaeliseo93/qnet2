@@ -6,6 +6,7 @@ import { REFERENT_TYPES_FOR_SELECT_RESOURCE } from '@/features/referent-types/fo
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-statuses/for-select-api'
 import { LEAD_STATUSES_FOR_SELECT_RESOURCE } from '@/features/lead-statuses/for-select-api'
+import { STATUS_GROUPS_FOR_SELECT_RESOURCE } from '@/features/status-groups/for-select-api'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-api'
 import { TAGS_FOR_SELECT_RESOURCE } from '@/features/tags/for-select-api'
@@ -128,6 +129,24 @@ const leadStatuses: QuickCreateEntry = {
   }),
 }
 
+const statusGroups: QuickCreateEntry = {
+  titleKey: 'statusGroups.form.createTitle',
+  descriptionKey: 'statusGroups.form.createSubtitle',
+  permission: 'status-groups.create',
+  form: lazy(async () => {
+    const { StatusGroupForm } = await import('@/features/status-groups/status-group-form')
+    return {
+      default: ({ onSuccess, onCancel }: QuickCreateFormProps) => (
+        <StatusGroupForm
+          mode={{ type: 'create' }}
+          onSuccess={(statusGroup) => onSuccess({ id: statusGroup.id, name: statusGroup.name })}
+          onCancel={onCancel}
+        />
+      ),
+    }
+  }),
+}
+
 const registries: QuickCreateEntry = {
   titleKey: 'registries.form.createTitle',
   descriptionKey: 'registries.form.createSubtitle',
@@ -226,6 +245,7 @@ export const moduleEntries: Record<string, QuickCreateEntry> = {
   [BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE]: businessFunctions,
   [PROJECT_STATUSES_FOR_SELECT_RESOURCE]: pipelineStatuses,
   [LEAD_STATUSES_FOR_SELECT_RESOURCE]: leadStatuses,
+  [STATUS_GROUPS_FOR_SELECT_RESOURCE]: statusGroups,
   [REGISTRIES_FOR_SELECT_RESOURCE]: registries,
   [CAMPAIGNS_FOR_SELECT_RESOURCE]: campaigns,
   [TAGS_FOR_SELECT_RESOURCE]: tags,

@@ -102,7 +102,6 @@ export const projects = {
     description: 'Description',
     status: 'Status',
     statusSearch: 'Search statuses…',
-    statusRequired: 'Status is required.',
     registry: 'Client',
     registrySearch: 'Search clients…',
     source: 'Source',

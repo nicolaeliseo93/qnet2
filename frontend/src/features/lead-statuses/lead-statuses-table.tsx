@@ -25,6 +25,7 @@ import { leadStatusColumnRenderers } from '@/features/lead-statuses/column-rende
 import { deleteLeadStatus, fetchLeadStatus } from '@/features/lead-statuses/api'
 import { LeadStatusForm } from '@/features/lead-statuses/lead-status-form'
 import { LeadStatusDetailView } from '@/features/lead-statuses/lead-status-detail'
+import { StatusReorderToggle } from '@/features/status-reorder/status-reorder-toggle'
 import { DetailError, DetailLoading } from '@/components/detail/detail-panel'
 import type { LeadStatusDetail } from '@/features/lead-statuses/types'
 
@@ -142,12 +143,29 @@ export function LeadStatusesTable() {
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
         actions={
-          <Can permission="lead-statuses.create">
-            <Button onClick={() => setSheet({ kind: 'create' })}>
-              <Plus aria-hidden="true" />
-              {t('leadStatuses.form.newLeadStatus')}
-            </Button>
-          </Can>
+          <>
+            <StatusReorderToggle
+              resource={LEAD_STATUSES_DOMAIN}
+              permission="lead-statuses.update"
+              labels={{
+                openButton: t('leadStatuses.reorder.openButton'),
+                title: t('leadStatuses.reorder.title'),
+                subtitle: t('leadStatuses.reorder.subtitle'),
+                dragHandleLabel: t('leadStatuses.reorder.dragHandleLabel'),
+                loadError: t('leadStatuses.reorder.loadError'),
+                saved: t('leadStatuses.reorder.saved'),
+                forbidden: t('leadStatuses.reorder.forbidden'),
+                genericError: t('leadStatuses.reorder.genericError'),
+              }}
+              onReordered={refreshGrid}
+            />
+            <Can permission="lead-statuses.create">
+              <Button onClick={() => setSheet({ kind: 'create' })}>
+                <Plus aria-hidden="true" />
+                {t('leadStatuses.form.newLeadStatus')}
+              </Button>
+            </Can>
+          </>
         }
       />
 

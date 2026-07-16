@@ -7,12 +7,16 @@ namespace App\DataObjects\LeadStatuses;
  * (PUT/PATCH /api/lead-statuses/{leadStatus}, spec 0029).
  *
  * Declared DTO (no "magic flying array") so the UpdateLeadStatusRequest ->
- * LeadStatusService contract is explicit. `color` is a legitimately nullable
- * VALUE (clearing it back to none), so a plain null property cannot
- * distinguish "not submitted" from "submitted as null" — `colorSubmitted`
- * carries that distinction explicitly, mirroring UpdatePipelineStatusData's
- * same pair. `sort_order` is never legitimately null (schema default 0, not
- * nullable), so a plain null sentinel is enough to mean "not submitted".
+ * LeadStatusService contract is explicit. `color`/`status_group_id` are
+ * legitimately nullable VALUES (clearing them back to none), so a plain null
+ * property cannot distinguish "not submitted" from "submitted as null" —
+ * `colorSubmitted`/`statusGroupIdSubmitted` carry that distinction
+ * explicitly, mirroring UpdatePipelineStatusData's same pairs. spec 0039,
+ * D-5: `sort_order` is GONE from this DTO — server-managed, never accepted
+ * from the client (see App\Services\Statuses\StatusOrderManager).
+ * `status_group_id` (D-6) is the new field; App\Services\Statuses\
+ * SystemStatusGuard rejects it outright when the target row is a system
+ * status.
  */
 final readonly class UpdateLeadStatusData
 {
@@ -20,7 +24,8 @@ final readonly class UpdateLeadStatusData
         public ?string $name = null,
         public ?string $color = null,
         public bool $colorSubmitted = false,
-        public ?int $sortOrder = null,
+        public ?int $statusGroupId = null,
+        public bool $statusGroupIdSubmitted = false,
     ) {}
 
     /**
@@ -34,7 +39,10 @@ final readonly class UpdateLeadStatusData
             name: array_key_exists('name', $data) ? (string) $data['name'] : null,
             color: array_key_exists('color', $data) ? $data['color'] : null,
             colorSubmitted: array_key_exists('color', $data),
-            sortOrder: array_key_exists('sort_order', $data) ? (int) $data['sort_order'] : null,
+            statusGroupId: array_key_exists('status_group_id', $data) && $data['status_group_id'] !== null
+                ? (int) $data['status_group_id']
+                : null,
+            statusGroupIdSubmitted: array_key_exists('status_group_id', $data),
         );
     }
 
@@ -56,8 +64,8 @@ final readonly class UpdateLeadStatusData
             $attributes['color'] = $this->color;
         }
 
-        if ($this->sortOrder !== null) {
-            $attributes['sort_order'] = $this->sortOrder;
+        if ($this->statusGroupIdSubmitted) {
+            $attributes['status_group_id'] = $this->statusGroupId;
         }
 
         return $attributes;

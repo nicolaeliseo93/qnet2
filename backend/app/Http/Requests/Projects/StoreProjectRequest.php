@@ -20,6 +20,10 @@ use Illuminate\Validation\Rule;
  * `city_id` are optional but must form a consistent geo chain, enforced by
  * ValidatesGeoHierarchy.
  *
+ * spec 0039, D-3: `pipeline_status_id` went from `required` to `nullable` —
+ * an omitted FK falls back to the system_key='new' status in
+ * ProjectService::create() (server-side default).
+ *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Project::class)). EnforcesFieldPermissions
  * (spec 0004) additionally rejects any submitted field the actor cannot edit
@@ -44,7 +48,7 @@ class StoreProjectRequest extends FormRequest
         return [
             'code' => ['nullable', 'string', 'max:32', Rule::unique('projects', 'code')],
             'name' => ['required', 'string', 'max:191'],
-            'pipeline_status_id' => ['required', 'integer', Rule::exists('pipeline_statuses', 'id')],
+            'pipeline_status_id' => ['nullable', 'integer', Rule::exists('pipeline_statuses', 'id')],
             'description' => ['nullable', 'string'],
             'registry_id' => ['nullable', 'integer', Rule::exists('registries', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],

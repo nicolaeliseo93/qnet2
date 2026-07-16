@@ -39,6 +39,7 @@ const CampaignsPage = lazy(() => import('@/pages/campaigns-page'))
 const CampaignDetailPage = lazy(() => import('@/pages/campaign-detail-page'))
 const CampaignFormPage = lazy(() => import('@/pages/campaign-form-page'))
 const LeadStatusesPage = lazy(() => import('@/pages/lead-statuses-page'))
+const StatusGroupsPage = lazy(() => import('@/pages/status-groups-page'))
 const LeadsPage = lazy(() => import('@/pages/leads-page'))
 const LeadDetailPage = lazy(() => import('@/pages/lead-detail-page'))
 const LeadFormPage = lazy(() => import('@/pages/lead-form-page'))
@@ -212,6 +213,10 @@ export const router = createBrowserRouter([
           {
             path: 'lead-statuses',
             element: <LeadStatusesPage />,
+          },
+          {
+            path: 'status-groups',
+            element: <StatusGroupsPage />,
           },
           {
             path: 'leads',

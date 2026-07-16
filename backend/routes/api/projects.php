@@ -39,6 +39,12 @@ use Illuminate\Support\Facades\Route;
 // pipeline-statuses.viewAny server-side in PipelineStatusForSelectController.
 Route::get('pipeline-statuses/for-select', PipelineStatusForSelectController::class);
 
+// Custom-row resequencing (spec 0039, D-5): `sort_order` is server-managed,
+// this is the only way to change it. Declared ABOVE the bound wildcard for
+// the same literal-segment reason as `for-select`. Gated on
+// pipeline-statuses.update directly in PipelineStatusController::reorder.
+Route::post('pipeline-statuses/reorder', [PipelineStatusController::class, 'reorder']);
+
 Route::get('pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'show']);
 Route::post('pipeline-statuses', [PipelineStatusController::class, 'store']);
 Route::match(['put', 'patch'], 'pipeline-statuses/{pipelineStatus}', [PipelineStatusController::class, 'update']);

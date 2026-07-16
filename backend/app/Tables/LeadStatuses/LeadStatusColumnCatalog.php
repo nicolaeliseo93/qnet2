@@ -6,10 +6,13 @@ namespace App\Tables\LeadStatuses;
  * Declarative column/filter/action catalogue for the `lead-statuses` domain
  * (spec 0029). Extracted out of LeadStatusesTableDefinition (file-size split,
  * engineering.md §6): pure data (no logic), mirroring
- * PipelineStatusColumnCatalog. All four columns are real DB columns handled
- * entirely by the generic engine — no derived column. `color` is deliberately
- * not sortable/filterable (a swatch value, not a meaningful ordering/filter
- * axis).
+ * PipelineStatusColumnCatalog. `name`/`color`/`sort_order`/`created_at` are
+ * real DB columns handled entirely by the generic engine. `color` is
+ * deliberately not sortable/filterable (a swatch value, not a meaningful
+ * ordering/filter axis). `status_group` (spec 0039, D-6/D-7) is DERIVED (no
+ * real column, LeadStatusesTableDefinition delegates to StatusGroupColumn):
+ * neither sortable nor basic-filterable — reachable only via the advanced
+ * Text filter on the group's name.
  */
 final class LeadStatusColumnCatalog
 {
@@ -46,6 +49,14 @@ final class LeadStatusColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'number',
+            ],
+            [
+                'id' => 'status_group',
+                'label' => 'leadStatuses.columns.statusGroup',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => false,
+                'filterable' => false,
             ],
             [
                 'id' => 'created_at',

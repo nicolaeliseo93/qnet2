@@ -61,12 +61,14 @@ it('200: create-context permissions.fields are editable when the actor may creat
     $actor = leadUserWith(['viewAny', 'create']);
     Sanctum::actingAs($actor);
 
+    // requirement changed (spec 0039, D-3): lead_status_id is no longer
+    // mandatory — an omitted FK falls back to the system_key='new' status.
     $this->getJson('/api/meta/leads')
         ->assertOk()
         ->assertJsonPath('permissions.fields.referent_id.editable', true)
         ->assertJsonPath('permissions.fields.referent_id.required', true)
         ->assertJsonPath('permissions.fields.campaign_id.required', true)
-        ->assertJsonPath('permissions.fields.lead_status_id.required', true)
+        ->assertJsonPath('permissions.fields.lead_status_id.required', false)
         ->assertJsonPath('permissions.fields.notes.required', false);
 });
 

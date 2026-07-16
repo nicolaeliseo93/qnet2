@@ -94,7 +94,6 @@ export const campaigns = {
     projectSearch: 'Cerca progetti…',
     status: 'Stato',
     statusSearch: 'Cerca stati…',
-    statusRequired: 'Lo stato è obbligatorio quando la campagna non è collegata a un progetto.',
     registry: 'Cliente',
     registrySearch: 'Cerca clienti…',
     source: 'Fonte',

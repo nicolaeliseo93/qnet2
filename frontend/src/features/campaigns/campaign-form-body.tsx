@@ -215,7 +215,6 @@ export function CampaignFormBody({ mode, onSuccess, onCancel, initialCode }: Cam
                 searchPlaceholder={t('campaigns.form.statusSearch')}
                 selected={original?.pipeline_status ?? null}
                 forceDisabled={isLinked}
-                required={!isLinked}
               />
 
               <CampaignRelationField

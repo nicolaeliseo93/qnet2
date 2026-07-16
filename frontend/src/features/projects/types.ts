@@ -86,11 +86,13 @@ export interface ProjectDetailWithPermissions extends ProjectDetail {
  * Payload for POST /projects (create). `code` is optional and manual
  * (spec 0025): omitted or empty falls back to server-side sequential
  * generation (`PRJ-xxxx`); PATCH never accepts it (immutable after create).
+ * `pipeline_status_id` is nullable/optional (spec 0039 D-3): the server
+ * falls back to the system "Nuovo" status when omitted.
  */
 export interface CreateProjectPayload {
   code?: string
   name: string
-  pipeline_status_id: number
+  pipeline_status_id?: number | null
   description?: string | null
   registry_id?: number | null
   source_id?: number | null

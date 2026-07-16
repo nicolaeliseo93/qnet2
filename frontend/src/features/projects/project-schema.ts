@@ -37,9 +37,9 @@ function baseFields(t: TFunction) {
     description: z.string().nullable(),
     // Single-select relations (for-select standard): `null` = unset.
     registry_id: z.number().nullable(),
-    // Held nullable so the controlled select can represent "unset"; the
-    // required-value superRefine below rejects a null at submit, mirroring
-    // the backend's `required` rule (spec D-5).
+    // Nullable/optional (spec 0039 D-3): the server falls back to the system
+    // "Nuovo" status when omitted, and the create form preselects it as soon
+    // as the for-select resolves.
     pipeline_status_id: z.number().nullable(),
     source_id: z.number().nullable(),
     business_function_id: z.number().nullable(),
@@ -75,14 +75,14 @@ function withDateOrderRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
 }
 
 /**
- * The single-select relations that must be set: `pipeline_status_id` (D-5),
- * plus `business_function_id` and `product_category_id` (now mandatory,
- * mirroring the backend's `required` rules). Held nullable in `baseFields` so
- * the controlled selects can represent "unset"; this rule rejects a null at
- * submit.
+ * The single-select relations that must be set: `business_function_id` and
+ * `product_category_id` (mandatory, mirroring the backend's `required`
+ * rules). `pipeline_status_id` left this group (spec 0039 D-3): it is now
+ * nullable/optional, the server falling back to the system "Nuovo" status
+ * when omitted. Held nullable in `baseFields` so the controlled selects can
+ * represent "unset"; this rule rejects a null at submit.
  */
 const REQUIRED_RELATIONS = [
-  { field: 'pipeline_status_id', message: 'projects.form.statusRequired' },
   { field: 'business_function_id', message: 'projects.form.businessFunctionRequired' },
   { field: 'product_category_id', message: 'projects.form.productCategoryRequired' },
 ] as const

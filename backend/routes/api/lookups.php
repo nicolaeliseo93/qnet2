@@ -6,6 +6,8 @@ use App\Http\Controllers\Sectors\SectorController;
 use App\Http\Controllers\Sectors\SectorForSelectController;
 use App\Http\Controllers\Sources\SourceController;
 use App\Http\Controllers\Sources\SourceForSelectController;
+use App\Http\Controllers\StatusGroups\StatusGroupController;
+use App\Http\Controllers\StatusGroups\StatusGroupForSelectController;
 use App\Http\Controllers\Tags\TagController;
 use App\Http\Controllers\Tags\TagForSelectController;
 use Illuminate\Support\Facades\Route;
@@ -84,7 +86,29 @@ Route::delete('sectors/{sector}', [SectorController::class, 'destroy']);
 // server-side in LeadStatusForSelectController.
 Route::get('lead-statuses/for-select', LeadStatusForSelectController::class);
 
+// Custom-row resequencing (spec 0039, D-5): `sort_order` is server-managed,
+// this is the only way to change it. Declared ABOVE the bound wildcard for
+// the same literal-segment reason as `for-select`. Gated on
+// lead-statuses.update directly in LeadStatusController::reorder.
+Route::post('lead-statuses/reorder', [LeadStatusController::class, 'reorder']);
+
 Route::get('lead-statuses/{leadStatus}', [LeadStatusController::class, 'show']);
 Route::post('lead-statuses', [LeadStatusController::class, 'store']);
 Route::match(['put', 'patch'], 'lead-statuses/{leadStatus}', [LeadStatusController::class, 'update']);
 Route::delete('lead-statuses/{leadStatus}', [LeadStatusController::class, 'destroy']);
+
+// Status groups CRUD (spec 0039, D-6): the GLOBAL classification lookup
+// shared by both status configurators (pipeline-statuses, lead-statuses).
+// The 409 delete-guard (referenced by either) lives in StatusGroupService.
+// Authorization (status-groups.view/create/update/delete) is enforced
+// server-side in StatusGroupController via StatusGroupPolicy.
+// Minimal searchable/paginated list for entity-backed selects (ADR 0011).
+// Declared ABOVE status-groups/{statusGroup} so the literal `for-select`
+// segment wins over the bound wildcard. Gated by status-groups.viewAny
+// server-side in StatusGroupForSelectController.
+Route::get('status-groups/for-select', StatusGroupForSelectController::class);
+
+Route::get('status-groups/{statusGroup}', [StatusGroupController::class, 'show']);
+Route::post('status-groups', [StatusGroupController::class, 'store']);
+Route::match(['put', 'patch'], 'status-groups/{statusGroup}', [StatusGroupController::class, 'update']);
+Route::delete('status-groups/{statusGroup}', [StatusGroupController::class, 'destroy']);

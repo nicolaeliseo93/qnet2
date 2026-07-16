@@ -58,8 +58,9 @@ export function buildCreatePayload(values: CampaignFormValues): CreateCampaignPa
     ...(linked
       ? {}
       : {
+          // Nullable/optional (spec 0039 D-3): the server falls back to the system "Nuovo" status when omitted.
+          pipeline_status_id: values.pipeline_status_id,
           // Validated non-null by the schema's required-when-standalone superRefine before submit.
-          pipeline_status_id: values.pipeline_status_id as number,
           business_function_id: values.business_function_id,
           product_category_id: values.product_category_id,
         }),

@@ -25,6 +25,7 @@ import { pipelineStatusColumnRenderers } from '@/features/pipeline-statuses/colu
 import { deletePipelineStatus, fetchPipelineStatus } from '@/features/pipeline-statuses/api'
 import { PipelineStatusForm } from '@/features/pipeline-statuses/pipeline-status-form'
 import { PipelineStatusDetailView } from '@/features/pipeline-statuses/pipeline-status-detail'
+import { StatusReorderToggle } from '@/features/status-reorder/status-reorder-toggle'
 import { DetailError, DetailLoading } from '@/components/detail/detail-panel'
 import type { PipelineStatusDetail } from '@/features/pipeline-statuses/types'
 
@@ -142,12 +143,29 @@ export function PipelineStatusesTable() {
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
         actions={
-          <Can permission="pipeline-statuses.create">
-            <Button onClick={() => setSheet({ kind: 'create' })}>
-              <Plus aria-hidden="true" />
-              {t('pipelineStatuses.form.newPipelineStatus')}
-            </Button>
-          </Can>
+          <>
+            <StatusReorderToggle
+              resource={PROJECT_STATUSES_DOMAIN}
+              permission="pipeline-statuses.update"
+              labels={{
+                openButton: t('pipelineStatuses.reorder.openButton'),
+                title: t('pipelineStatuses.reorder.title'),
+                subtitle: t('pipelineStatuses.reorder.subtitle'),
+                dragHandleLabel: t('pipelineStatuses.reorder.dragHandleLabel'),
+                loadError: t('pipelineStatuses.reorder.loadError'),
+                saved: t('pipelineStatuses.reorder.saved'),
+                forbidden: t('pipelineStatuses.reorder.forbidden'),
+                genericError: t('pipelineStatuses.reorder.genericError'),
+              }}
+              onReordered={refreshGrid}
+            />
+            <Can permission="pipeline-statuses.create">
+              <Button onClick={() => setSheet({ kind: 'create' })}>
+                <Plus aria-hidden="true" />
+                {t('pipelineStatuses.form.newPipelineStatus')}
+              </Button>
+            </Can>
+          </>
         }
       />
 

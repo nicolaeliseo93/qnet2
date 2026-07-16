@@ -55,13 +55,10 @@ describe('buildCreateProjectSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('rejects a null pipeline_status_id (D-5)', () => {
+  it('accepts a null pipeline_status_id (spec 0039 D-3: server falls back to "Nuovo")', () => {
     const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
     const result = schema.safeParse({ ...baseValues(), pipeline_status_id: null })
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.issues.some((issue) => issue.path.join('.') === 'pipeline_status_id')).toBe(true)
-    }
+    expect(result.success).toBe(true)
   })
 
   it('rejects end_date earlier than start_date (BR-6)', () => {

@@ -103,7 +103,6 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
                 resource={LEAD_STATUSES_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('leads.form.leadStatusSearch')}
                 selected={original?.lead_status ?? null}
-                required
                 {...selectLabels}
               />
             </div>

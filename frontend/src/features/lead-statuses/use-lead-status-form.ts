@@ -21,7 +21,7 @@ import type { LeadStatusDetail, LeadStatusFormMode } from '@/features/lead-statu
 import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
 
 /** Server-side field names mapped onto the form for 422 handling. */
-const SERVER_ERROR_FIELDS = ['name', 'color', 'sort_order'] as const
+const SERVER_ERROR_FIELDS = ['name', 'color', 'status_group_id'] as const
 
 export type LeadStatusFormValues = CreateLeadStatusFormValues & UpdateLeadStatusFormValues
 
@@ -65,11 +65,11 @@ export function useLeadStatusForm({ mode, onSuccess }: UseLeadStatusFormArgs) {
       return {
         name: mode.leadStatus.name,
         color: mode.leadStatus.color ?? '',
-        sort_order: mode.leadStatus.sort_order,
+        status_group_id: mode.leadStatus.status_group_id,
         custom_fields: customFields.defaultValues,
       }
     }
-    return { name: '', color: '', sort_order: 0, custom_fields: customFields.defaultValues }
+    return { name: '', color: '', status_group_id: null, custom_fields: customFields.defaultValues }
   }, [mode, customFields.defaultValues])
 
   const form = useForm<LeadStatusFormValues>({

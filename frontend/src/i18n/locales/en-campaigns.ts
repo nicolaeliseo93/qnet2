@@ -92,7 +92,6 @@ export const campaigns = {
     projectSearch: 'Search projects…',
     status: 'Status',
     statusSearch: 'Search statuses…',
-    statusRequired: 'Status is required when the campaign is not linked to a project.',
     registry: 'Client',
     registrySearch: 'Search clients…',
     source: 'Source',

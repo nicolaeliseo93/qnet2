@@ -2,6 +2,40 @@
 
 > Injected at session start. Update at every green state.
 
+## SYSTEM STATUSES + STATUS GROUPS — spec 0039 (2026-07-16) — IN CORSO (agent team), NON COMMITTATO
+
+Spec `docs/specs/0039-system-statuses-and-status-groups.xml` (APPROVATA, contratto congelato): stati di
+sistema "Nuovo" (system_key `new`, sort 0, gruppo fisso Aperto) e "Chiuso" (`closed`, sempre ultimo,
+gruppo fisso Chiuso) su ENTRAMBI i configuratori (pipeline-statuses condiviso Progetti+Campagne,
+lead-statuses); nuovo modulo lookup globale `status-groups` (name unique + color token + sort_order
+manuale); sort_order degli STATI diventa server-managed (placement in create + POST {resource}/reorder
+con ordered_ids = permutazione esatta dei soli custom); fallback stato "Nuovo" in store di
+Lead/Project/Campaign (FK ora nullable); dnd via @dnd-kit (UNICA nuova dipendenza autorizzata).
+Sui sistema: delete/bulk-delete 422, update solo name+color (status_group_id → 422), esclusi dal reorder.
+
+MICROTASK VERDI (test ESEGUITI dai teammate, verifier finale ancora da lanciare):
+- MT-1 (database): 3 migration `2026_07_16_1300xx` (status_groups; system_key string(16) unique +
+  status_group_id FK restrictOnDelete su entrambe le tabelle stati; promozione by-name "Nuovo"/"Chiuso"
+  + resequence 10,20,... con closed=max+10; down schema-only documentata); StatusGroupFactory; state
+  factory system()/withGroup(); DemoStatusGroupSeeder (Aperto/Chiuso creati in MIGRATION, demo groups:
+  In lavorazione/Pending/Sospeso) + demo seeder stati aggiornati; test
+  tests/Feature/Statuses/SystemStatusMigrationTest.php 3 passed/48 assertions (AC-001/AC-002).
+- MT-4 (ui-design): @dnd-kit/{core,sortable,utilities} installati; components/ui/sortable-list.tsx —
+  `SortableList<T extends {id: string}>` props {items, renderItem, onReorder(orderedIds), isPinned?,
+  dragHandleLabel, className?}; pinned FUORI dal DndContext (non attraversabili); keyboard dnd; 4/4 test.
+  NOTA: id string → i chiamanti mappano gli id numerici.
+- MT-5 (frontend): modulo FE status-groups completo mirror di lead-statuses (feature 13+ file, pagina,
+  route, breadcrumb, quick-create entry, i18n en/it namespace `statusGroups`, icon-map `shapes`);
+  22/22 Vitest feature; tsc/ESLint puliti. La voce nav sta in backend/config/navigation.php → in MT-2.
+
+IN CORSO: MT-2+MT-3 (teammate backend `be-mt23`): stack BE status-groups (template lead-statuses) +
+nav entry + StatusSystemKey enum + SystemStatusGuard/StatusOrderManager (Services/Statuses/) + reorder
+endpoints + Resource/mapRow/actionsFor/deleteModel + fallback Nuovo + fix 5 regressioni test ATTESE
+segnalate da MT-1 (baseline: tabelle stati mai piu' vuote). POI: MT-6 (frontend `fe-mt5`: configuratori
++ StatusReorderSheet features/status-reorder/ + preselezione Nuovo via for-select meta.system_key) e
+MT-7 verifier su tutti gli AC. Rossi preesistenti noti NON nostri: AbstractMigrationSourcePreviewTest
+(BE), 3 test cell-renderers.test.tsx leak i18n (FE).
+
 ## REFERENT DUPLICATE WARNING — spec 0037 (2026-07-16) — GREEN (verifier), NON COMMITTATO
 
 Avviso duplicati NON bloccante alla creazione manuale referent (spec
@@ -4730,3 +4764,90 @@ AC-016..020 mappati 1:1 sui test. File tutti entro le 300 righe.
 NOTA WORKTREE: `BusinessFunctionsAuthorization.php` risulta modificato da una feature PARALLELA
 (parent_id/operational_sites — altra sessione utente), non da queste lane. Prossimo passo: commit
 (decisione utente; include anche i residui del giro precedente tags-table.test.tsx + HANDOFF).
+
+## SYSTEM STATUSES + STATUS GROUPS (spec 0039, 2026-07-16) — BACKEND MT-2+MT-3, GREEN VERIFICATO, NON COMMITTATO
+
+Team `backend` (MT-2 poi MT-3, sequenziale). Contratto congelato in `docs/specs/0039-system-statuses-and-status-groups.xml`.
+Depend da MT-1 (db-mt1): migrazioni `2026_07_16_130000/130100/130200` (status_groups + system_key/
+status_group_id su pipeline_statuses/lead_statuses, promozione/resequence dati) + factory states
+`system('new'|'closed')`/`withGroup(int)` — GIA' verificate verdi da questa lane, non ritoccate.
+
+MT-2 — modulo `status-groups` (mirror 1:1 di lead-statuses): Model `StatusGroup` (Fillable name/color/
+sort_order, relazioni `pipelineStatuses()`/`leadStatuses()` HasMany), `StatusGroupPolicy`,
+`StatusGroupsAuthorization` (fields name/color/sort_order — sort_order RESTA qui, D-6: i gruppi non
+hanno drag&drop), `StatusGroupService` (delete-guard 409 se referenziato da pipeline_statuses O
+lead_statuses), DTO Create/UpdateStatusGroupData, Store/UpdateStatusGroupRequest, StatusGroupController
++ ForSelectController, StatusGroupResource + ForSelectResource, StatusGroupsTableDefinition +
+ColumnCatalog + AdvancedFilterCatalog, route in `routes/api/lookups.php` (for-select PRIMA della
+wildcard), righe in `config/tables.php`/`config/authorization.php`, voce nav dopo lead-statuses
+(icona `shapes`). **Aggiunto `'status_group' => StatusGroup::class` al morph map di
+`AppServiceProvider::boot()`** (mancava — LogsModelActivity falliva con `ClassMorphViolationException`
+senza, non documentato nella spec). Test `tests/Feature/StatusGroups/` (Crud/ForSelect/Table, 28 test) —
+attenzione: `status_groups` NON e' mai vuota nei test (le 2 righe "Aperto"/"Chiuso" sono seedate dalla
+migrazione), i test evitano quei nomi/sort_order e filtrano per id dove serve.
+
+MT-3 — regole di sistema, reorder, gruppo, fallback: `App\Enums\StatusSystemKey` (New/Closed). Model
+PipelineStatus/LeadStatus: `status_group_id` in Fillable (MAI `system_key`), cast int,
+`statusGroup(): BelongsTo`, `isSystem(): bool`. **Servizi condivisi** `App\Services\Statuses\
+SystemStatusGuard` (assertDeletable/assertUpdatable/resolveNewStatusId per class-string) e
+`StatusOrderManager` (placeNew/reorder, invariante Nuovo=0/custom 10,20.../Chiuso=max+10, transazionale).
+Pipeline/LeadStatusService: create→placeNew, update→assertUpdatable, delete→assertDeletable PRIMA del
+guard 409; DTO/FormRequest: sort_order RIMOSSO (ignorato silenziosamente, non piu' in rules()),
+status_group_id aggiunto (`nullable|integer|exists:status_groups,id`). Authorization: fields()
+sort_order→status_group_id (select), mandatory rimosso. Endpoint `POST {pipeline-statuses|
+lead-statuses}/reorder` (route letterale PRIMA della wildcard) — `ReorderStatusesRequest` condiviso in
+`App\Http\Requests\Statuses`, controller autorizza `{resource}.update` DIRETTAMENTE (`$this->
+authorize('pipeline-statuses.update')`, niente Model per un'azione bulk — Spatie registra ogni
+permission come Gate::define, stesso pattern di `ExportController::authorizeExport`). Resource +=
+system_key/status_group_id/status_group{id,name,color}; ForSelectResource += `meta.system_key`
+(select sempre presente su ambo i for-select). TableDefinition: nuova colonna derivata `status_group`
+(non sortable/non basic-filterable, SOLO filtro advanced Text sul nome gruppo via `App\Tables\Statuses\
+StatusGroupColumn`, classe CONDIVISA dai due moduli — pattern BusinessFunctionParentColumn);
+`actionsFor()` omette `delete` sulle righe di sistema (edit RESTA); `deleteModel()` delega al Service
+(bulk-delete rispetta lo stesso guard). Fallback "Nuovo" (D-3): FK `required→nullable` in
+Store{Lead,Project,Campaign}Request (per Campaign SOLO ramo standalone, linked resta `prohibited`
+invariato); DTO status id `?int`; Service inietta `SystemStatusGuard` e risolve
+`resolveNewStatusId(...)` quando la FK e' assente — per `Project` il campo NOT NULL a schema, quindi
+va risolta PRIMA dell'insert. `LeadsAuthorization`/`ProjectsAuthorization`: `lead_status_id`/
+`pipeline_status_id` mandatory→false (Campaign gia' non-mandatory, invariato).
+
+Test nuovi: `LeadStatusSystemRuleTest`/`PipelineStatusSystemRuleTest` (AC-003/004/008, incl. bulk-delete
+via `/api/tables/{domain}/bulk-delete` — risposta `{deleted:int, failed:[{id,reason}]}`, non liste id),
+`LeadStatusReorderTest`/`PipelineStatusReorderTest` (AC-005: permutazione valida, id di sistema, id
+mancante, duplicato, 403), `CampaignStatusFallbackTest` (nuovo file — split da CampaignCrudTest.php
+che era a 511 righe, hard-limit 500 via `code-guard.js`).
+
+5 test regrediti da MT-1 sistemati (dichiarato nei commenti, requisito cambiato D-2/D-3, non modificati
+per "farli passare"): `LeadStatusMigrationTest.php:28`, `LeadStatusCrudTest.php:151`,
+`PipelineStatusCrudTest.php:114` (baseline post-403 = 2, non 0 — le 2 righe di sistema sono sempre
+presenti), `LeadStatusForSelectTest.php:85` (ordering test isola la coppia via filter, evita collisione
+sort_order coi system rows), `Leads/DemoLeadSeederTest.php:48` (riscritto: "nessuno stato" non e' piu'
+raggiungibile, il seeder ora usa i system rows). **Altri 9 test rotti DA QUESTA feature stessa** (non
+regressioni MT-1, conseguenza diretta dei miei cambi, sistemati con commento dichiarato): meta.system_key
+nei for-select (`LeadStatusForSelectTest`/`PipelineStatusForSelectTest`, "maps a ... status" ora include
+`meta`), colonna `status_group` nelle tabelle (`LeadStatusTableTest`/`PipelineStatusTableTest`), campo
+`status_group_id` al posto di `sort_order` nel catalogo (`LeadStatusMetaTest`), sort_order ignorato in
+create/update (`LeadStatusCrudTest` 2 test), `FieldCatalogueEndpointTest` (nuovo resource `status-groups`
+nella lista attesa), fallback FK in create (`LeadCrudTest`/`LeadMetaTest`/`ProjectCrudTest`/
+`ProjectMetaTest`: "missing FK → 422" riscritto in "missing FK → 201 + fallback new").
+
+Verificato (davvero eseguito, non "dovrebbe"): `php artisan migrate:fresh` pulito. `./vendor/bin/pest`
+FULL SUITE (xdebug disabilitato, altrimenti segfault/timeout sul run intero) — **2709/2711 verde**, unico
+rosso `AbstractMigrationSourcePreviewTest` (PRE-esistente, scorrelato, gia' documentato sopra come noto).
+`./vendor/bin/pint` pulito su tutti i file BE toccati da questa lane (nessuna riformattazione fuori scope).
+
+File toccati (BE, mai `backend/database/**` — ownership db-mt1): vedi `git status` — Models
+LeadStatus/PipelineStatus/StatusGroup; Enums/StatusSystemKey; Policies/StatusGroupPolicy;
+Authorization/{LeadStatuses,PipelineStatuses,StatusGroups,Leads,Projects}Authorization; Services/
+{LeadStatus,PipelineStatus,StatusGroup,Lead,Project,Campaign}Service + Services/Statuses/{SystemStatusGuard,
+StatusOrderManager}; DataObjects/{LeadStatuses,PipelineStatuses,StatusGroups}/*, Leads/CreateLeadData,
+Projects/CreateProjectData; Http/Requests/{LeadStatuses,PipelineStatuses,StatusGroups,Statuses}/*,
+Leads/StoreLeadRequest, Projects/StoreProjectRequest, Campaigns/StoreCampaignRequest; Http/Controllers/
+{LeadStatuses,PipelineStatuses,StatusGroups}/*; Http/Resources/{LeadStatus,PipelineStatus,StatusGroup}
+{,ForSelect}Resource; Tables/{LeadStatuses,PipelineStatuses,StatusGroups}TableDefinition + catalogs +
+Tables/Statuses/StatusGroupColumn; Providers/AppServiceProvider (morph map); config/{tables,authorization,
+navigation}.php; routes/api/{lookups,projects}.php; ~20 file di test nuovi/modificati in tests/Feature/.
+
+Non committato (§3.6) — fermo qui, chiedo prima di committare. Prossimo owner: frontend (fe-mt5/ui-mt4)
+per FE configuratori stati (campo gruppo, rimozione sort_order, righe sistema bloccate, badge gruppo,
+Sheet riordino dnd) + modulo FE status-groups — contratto sopra congelato, nessun cambio unilaterale.

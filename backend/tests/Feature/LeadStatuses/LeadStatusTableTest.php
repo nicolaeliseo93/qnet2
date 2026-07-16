@@ -51,8 +51,10 @@ it('GET /api/tables/lead-statuses/columns: 200 with the declared columns, 403 wi
         ->and($data['defaultSort'])->toBe([['columnId' => 'sort_order', 'direction' => 'asc']])
         ->and($data['searchable'])->toBe(['name']);
 
+    // requirement changed (spec 0039, D-6/D-7): `status_group` is a new
+    // derived column between `sort_order` and `created_at`.
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['name', 'color', 'sort_order', 'created_at']);
+    expect($ids)->toBe(['name', 'color', 'sort_order', 'status_group', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['name']['sortable'])->toBeTrue()

@@ -2,7 +2,9 @@
  * Project statuses domain (spec 0023). Extracted to a sibling file to keep
  * `en.ts` within the engineering size limits (see
  * `.claude/rules/engineering.md` §6); mirrors `sources` (spec 0018) 1:1,
- * with the `color`/`sort_order` fields added.
+ * with the `color`/`sort_order` fields added. Spec 0039 extends it with
+ * system statuses ("Nuovo"/"Chiuso"), a `status_group` classification and a
+ * drag & drop reorder sheet for the custom rows.
  */
 
 export const pipelineStatuses = {
@@ -13,11 +15,13 @@ export const pipelineStatuses = {
     name: 'Name',
     color: 'Color',
     sort_order: 'Order',
+    status_group: 'Group',
     created_at: 'Created at',
   },
   advancedFilters: {
     name: 'Name',
     sortOrderRange: 'Order',
+    statusGroup: 'Group',
     createdRange: 'Created at',
   },
   detail: {
@@ -26,6 +30,7 @@ export const pipelineStatuses = {
     loadError: 'Unable to load the project status. Please try again.',
     color: 'Color',
     sort_order: 'Order',
+    status_group: 'Group',
     created_at: 'Created at',
   },
   form: {
@@ -36,7 +41,11 @@ export const pipelineStatuses = {
     editSubtitle: 'Update the selected project status.',
     name: 'Name',
     color: 'Color',
-    sortOrder: 'Order',
+    statusGroup: 'Group',
+    statusGroupSearch: 'Search groups…',
+    selectPlaceholder: 'Select…',
+    selectEmpty: 'No results found.',
+    selectError: 'Unable to load the options.',
     save: 'Save',
     saving: 'Saving…',
     cancel: 'Cancel',
@@ -46,8 +55,6 @@ export const pipelineStatuses = {
     nameRequired: 'Name is required.',
     nameMax: 'Name must be at most 191 characters.',
     colorMax: 'Color must be at most 32 characters.',
-    sortOrderInvalid: 'Order must be a whole number.',
-    sortOrderMin: 'Order must be zero or greater.',
     genericError: 'Something went wrong. Please try again.',
     deleteError: 'Unable to delete the project status. Please try again.',
     deleteForbidden: 'You cannot delete this project status.',
@@ -55,8 +62,21 @@ export const pipelineStatuses = {
     sections: {
       identity: {
         title: 'Details',
-        description: 'Name, color and sort order of the status.',
+        description: 'Name, color and group of the status.',
       },
     },
+    hints: {
+      systemStatusGroup: 'System statuses have a fixed group and cannot be reclassified.',
+    },
+  },
+  reorder: {
+    openButton: 'Reorder',
+    title: 'Reorder statuses',
+    subtitle: 'Drag the custom statuses to reorder them. "Nuovo" stays first and "Chiuso" stays last.',
+    dragHandleLabel: 'Drag to reorder',
+    loadError: 'Unable to load the statuses. Please try again.',
+    saved: 'Order updated successfully.',
+    forbidden: 'You cannot reorder these statuses.',
+    genericError: 'Unable to update the order. Please try again.',
   },
 }

@@ -13,6 +13,10 @@ use Illuminate\Database\Eloquent\Model;
  * No contextual rules: every field's ceiling is simply visible+editable when
  * the actor may write (create/update), else visible+readonly, mirroring
  * SourcesAuthorization.
+ *
+ * spec 0039, D-5: `sort_order` is REMOVED from fields() — server-managed, no
+ * longer writable via the API (the table column itself is unaffected, see
+ * PipelineStatusColumnCatalog). `status_group_id` (D-6) is the new field.
  */
 class PipelineStatusesAuthorization extends AbstractResourceAuthorization
 {
@@ -34,7 +38,7 @@ class PipelineStatusesAuthorization extends AbstractResourceAuthorization
         return [
             new FieldDefinition('name', 'text', mandatory: true),
             new FieldDefinition('color', 'color'),
-            new FieldDefinition('sort_order', 'number'),
+            new FieldDefinition('status_group_id', 'select'),
         ];
     }
 
@@ -56,7 +60,7 @@ class PipelineStatusesAuthorization extends AbstractResourceAuthorization
         return [
             'name' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'color' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'sort_order' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'status_group_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];
     }
 

@@ -39,13 +39,21 @@ it('is a no-op when there are no referents, campaigns or lead statuses to seed a
     expect(Lead::query()->count())->toBe(0);
 });
 
-it('is a no-op when there are no lead statuses to seed against (spec 0029 D-1)', function (): void {
+it('seeds leads using the always-present system statuses when no custom lead status exists (spec 0039 D-2)', function (): void {
+    // requirement changed (spec 0039, D-2): the "no lead statuses to seed
+    // against" case (spec 0029 D-1) is no longer reachable — the
+    // system-status migration seeds the 2 mandatory rows ("Nuovo"/"Chiuso")
+    // unconditionally, so `lead_statuses` is never empty. The seeder now
+    // proceeds and round-robins leads against those 2 system rows.
     Referent::factory()->count(5)->create();
     Campaign::factory()->count(5)->create();
 
     $this->seed(DemoLeadSeeder::class);
 
-    expect(Lead::query()->count())->toBe(0);
+    $leads = Lead::query()->with('leadStatus')->get();
+
+    expect($leads)->not->toBeEmpty();
+    $leads->each(fn (Lead $lead) => expect($lead->leadStatus?->system_key)->not->toBeNull());
 });
 
 it('is idempotent: re-running clears and recreates instead of duplicating', function (): void {

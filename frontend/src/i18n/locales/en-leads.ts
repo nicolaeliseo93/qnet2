@@ -67,7 +67,6 @@ export const leads = {
     campaignRequired: 'Campaign is required.',
     leadStatus: 'Lead status',
     leadStatusSearch: 'Search lead statuses…',
-    leadStatusRequired: 'Lead status is required.',
     operationalSite: 'Site',
     operationalSiteSearch: 'Search sites…',
     source: 'Source',

@@ -21,15 +21,13 @@ const NAME_MAX_LENGTH = 191
 const CODE_MAX_LENGTH = 32
 
 /**
- * The 3 classification fields whose requiredness flips with `project_id`
+ * The 2 classification fields whose requiredness flips with `project_id`
  * (BR-2). `state_id` LEFT this group (spec 0027 D-3): it is now one of the 4
- * geo fields, following BR-5 instead.
+ * geo fields, following BR-5 instead. `pipeline_status_id` LEFT this group
+ * too (spec 0039 D-3): it is nullable/optional in every case now, the server
+ * falling back to the system "Nuovo" status when omitted and standalone.
  */
-const DERIVED_FIELDS = [
-  'pipeline_status_id',
-  'business_function_id',
-  'product_category_id',
-] as const
+const DERIVED_FIELDS = ['business_function_id', 'product_category_id'] as const
 
 function baseFields(t: TFunction) {
   return {
@@ -96,7 +94,7 @@ function withDateOrderRule<T extends z.ZodTypeAny>(schema: T, t: TFunction) {
 }
 
 /**
- * BR-2/AC-023/AC-043: the 3 classification fields are required only when the
+ * BR-2/AC-023/AC-043: the 2 classification fields are required only when the
  * campaign is standalone (`project_id === null`). When linked, the backend
  * forces/derives them and the payload builder never sends them regardless of
  * their form value, so no "must be empty" counterpart is needed here.
@@ -111,7 +109,6 @@ function withRequiredDerivedFieldsRule<T extends z.ZodTypeAny>(schema: T, t: TFu
       return
     }
     const messages: Record<(typeof DERIVED_FIELDS)[number], string> = {
-      pipeline_status_id: t('campaigns.form.statusRequired'),
       business_function_id: t('campaigns.form.businessFunctionRequired'),
       product_category_id: t('campaigns.form.productCategoryRequired'),
     }

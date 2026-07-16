@@ -13,6 +13,7 @@ import {
   Megaphone,
   Package,
   Puzzle,
+  Shapes,
   ShieldCheck,
   SlidersHorizontal,
   Tag,
@@ -48,6 +49,7 @@ const iconMap: Record<string, LucideIcon> = {
   'list-tree': ListTree,
   package: Package,
   puzzle: Puzzle,
+  shapes: Shapes,
   'user-plus': UserPlus,
 }
 

@@ -121,6 +121,24 @@ describe('LeadStatusesPage — permission gating (AC-017)', () => {
   })
 })
 
+describe('LeadStatusesTable — reorder toggle (spec 0039 D-4)', () => {
+  it('shows the reorder button with lead-statuses.update', () => {
+    canMock.mockImplementation((permission) => permission === 'lead-statuses.update')
+
+    renderTable()
+
+    expect(screen.getByRole('button', { name: 'Reorder' })).toBeInTheDocument()
+  })
+
+  it('hides the reorder button without lead-statuses.update', () => {
+    canMock.mockReturnValue(false)
+
+    renderTable()
+
+    expect(screen.queryByRole('button', { name: 'Reorder' })).not.toBeInTheDocument()
+  })
+})
+
 describe('LeadStatusesTable — delete (BR-3)', () => {
   it('shows the backend message on a 409 (status still in use)', async () => {
     deleteLeadStatusMock.mockRejectedValue(

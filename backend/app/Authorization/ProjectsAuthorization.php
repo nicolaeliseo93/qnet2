@@ -17,6 +17,10 @@ use Illuminate\Database\Eloquent\Model;
  * writable only in create ($model === null); once persisted it is
  * permanently readonly, enforced by the same ceiling so
  * EnforcesFieldPermissions rejects a changed `code` on update with a 422.
+ *
+ * spec 0039, D-3: `pipeline_status_id` is NO LONGER mandatory — the FK went
+ * from `required` to `nullable` in StoreProjectRequest (server-side fallback
+ * to the system_key='new' status when omitted, ProjectService::create()).
  */
 class ProjectsAuthorization extends AbstractResourceAuthorization
 {
@@ -40,7 +44,7 @@ class ProjectsAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('name', 'text', mandatory: true),
             new FieldDefinition('description', 'textarea'),
             new FieldDefinition('registry_id', 'select'),
-            new FieldDefinition('pipeline_status_id', 'select', mandatory: true),
+            new FieldDefinition('pipeline_status_id', 'select'),
             new FieldDefinition('source_id', 'select'),
             new FieldDefinition('business_function_id', 'select', mandatory: true),
             new FieldDefinition('country_id', 'select', mandatory: true),
@@ -81,7 +85,7 @@ class ProjectsAuthorization extends AbstractResourceAuthorization
             'name' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'description' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'registry_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'pipeline_status_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
+            'pipeline_status_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'business_function_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'country_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),

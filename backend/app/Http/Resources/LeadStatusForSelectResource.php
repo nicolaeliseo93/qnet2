@@ -10,7 +10,9 @@ use Illuminate\Http\Request;
  * For-select projection of a LeadStatus (GET /api/lead-statuses/for-select).
  *
  * Minimal by design (ADR 0011): label = name, no subtitle/avatar. Mirrors
- * PipelineStatusForSelectResource.
+ * PipelineStatusForSelectResource. `meta.system_key` (spec 0039, D-2) lets
+ * the frontend recognize/pin the two system rows in an entity-backed select
+ * without a second lookup.
  *
  * @mixin LeadStatus
  */
@@ -24,6 +26,7 @@ class LeadStatusForSelectResource extends ForSelectResource
         return [
             'id' => $this->id,
             'label' => $this->name,
+            'meta' => ['system_key' => $this->system_key],
         ];
     }
 }

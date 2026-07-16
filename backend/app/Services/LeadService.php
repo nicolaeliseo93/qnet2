@@ -7,6 +7,8 @@ namespace App\Services;
 use App\DataObjects\Leads\CreateLeadData;
 use App\DataObjects\Leads\UpdateLeadData;
 use App\Models\Lead;
+use App\Models\LeadStatus;
+use App\Services\Statuses\SystemStatusGuard;
 
 /**
  * Business logic for the `leads` resource (spec 0024): plain create/update/
@@ -18,6 +20,8 @@ use App\Models\Lead;
  */
 class LeadService
 {
+    public function __construct(private readonly SystemStatusGuard $systemStatusGuard) {}
+
     /**
      * Relations eager-loaded for the detail read tree (LeadResource), so a
      * single query never N+1s.
@@ -40,7 +44,14 @@ class LeadService
 
     public function create(CreateLeadData $data): Lead
     {
-        $lead = Lead::create($data->attributes());
+        $attributes = $data->attributes();
+
+        // spec 0039, D-3: an omitted/null FK falls back to the mandatory
+        // system_key='new' status (resolved by system_key, never by name).
+        $attributes['lead_status_id'] = $data->leadStatusId
+            ?? $this->systemStatusGuard->resolveNewStatusId(LeadStatus::class);
+
+        $lead = Lead::create($attributes);
 
         return $this->loadDetail($lead);
     }

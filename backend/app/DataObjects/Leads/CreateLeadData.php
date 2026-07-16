@@ -9,10 +9,15 @@ namespace App\DataObjects\Leads;
  *
  * Declared DTO (no "magic flying array") so the StoreLeadRequest ->
  * LeadService contract is explicit — see standards/architecture.md → Data
- * Transfer Objects. `referent_id`/`campaign_id`/`lead_status_id` are
- * mandatory (BR-1, spec 0029 D-1); no `code` field exists for a Lead (D-3).
- * `extra_fields` (spec 0033) is an optional free-form key/value store, also
- * populated by LeadsImportDefinition::persistRow() for imported rows.
+ * Transfer Objects. `referent_id`/`campaign_id` are mandatory (BR-1); no
+ * `code` field exists for a Lead (D-3). `extra_fields` (spec 0033) is an
+ * optional free-form key/value store, also populated by
+ * LeadsImportDefinition::persistRow() for imported rows.
+ *
+ * spec 0039, D-3: `lead_status_id` is now NULLABLE — an omitted FK falls
+ * back to the system_key='new' status, resolved server-side in
+ * LeadService::create() (never here: a DTO stays pure data, no
+ * App\Services\Statuses dependency).
  */
 final readonly class CreateLeadData
 {
@@ -25,7 +30,7 @@ final readonly class CreateLeadData
         public ?int $operationalSiteId,
         public ?int $sourceId,
         public ?int $operatorId,
-        public int $leadStatusId,
+        public ?int $leadStatusId,
         public ?string $notes,
         public ?array $extraFields = null,
     ) {}
@@ -43,7 +48,7 @@ final readonly class CreateLeadData
             operationalSiteId: isset($data['operational_site_id']) ? (int) $data['operational_site_id'] : null,
             sourceId: isset($data['source_id']) ? (int) $data['source_id'] : null,
             operatorId: isset($data['operator_id']) ? (int) $data['operator_id'] : null,
-            leadStatusId: (int) $data['lead_status_id'],
+            leadStatusId: isset($data['lead_status_id']) ? (int) $data['lead_status_id'] : null,
             notes: $data['notes'] ?? null,
             extraFields: $data['extra_fields'] ?? null,
         );
