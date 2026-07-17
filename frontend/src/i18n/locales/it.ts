@@ -50,6 +50,7 @@ export const it: TranslationResources = {
     back: 'Indietro',
     edit: 'Modifica',
     new: 'Nuovo',
+    viewProfile: 'Vedi il profilo di {{name}}',
   },
   config: {
     error: {
@@ -328,6 +329,8 @@ export const it: TranslationResources = {
       valueModal: 'Modale',
       valuePage: 'Pagina singola',
       perModuleAria: 'Modalità di apertura per {{module}}',
+      saved: 'Modalità di apertura aggiornata con successo.',
+      reset: 'Ripristina default',
     },
     passwordTitle: 'Password',
     passwordSubtitle: 'Modifica la password usata per accedere.',

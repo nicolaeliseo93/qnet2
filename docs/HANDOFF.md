@@ -2,6 +2,56 @@
 
 > Injected at session start. Update at every green state.
 
+## FE+BE: CELLA UTENTE CONDIVISA CON HOVERCARD CLICCABILE -> MODALE DETTAGLIO UTENTE (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente: sulla colonna `operatore` dei lead un tooltip che permette di cliccare il nome
+per aprire la modale di vista dell'utente, e quel componente riusato in TUTTE le colonne con uno o
+piu' user. Decisioni (AskUserQuestion): (1) HoverCard cliccabile (Radix Tooltip non e' interattivo);
+(2) convertire TUTTE le colonne utente.
+
+CONTRATTO valore cella "persona" (congelato): single = `{id, name, avatar_url?}` | null;
+multiplo = array dello stesso. Tutte gia' lo emettono TRANNE `reports_to` (era bare name string).
+
+NUOVI FILE FE:
+- `components/ui/hover-card.tsx`: wrapper shadcn su `radix-ui` HoverCard (Root/Trigger/Content),
+  open/close delay 100ms. (components/ui e' in eslint-ignore: shadcn primitive, atteso.)
+- `features/users/user-detail-sheet-context.ts`: SOLO context + hook `useUserDetailSheet()` +
+  `UserDetailSheetContext` (export). Split VOLUTO dal provider: le celle (in ogni griglia) dipendono
+  solo da questo hook leggero, NON dal grafo pesante di UserDetailView. NON re-accorpare: importare
+  UserDetailView nel modulo della cella rompeva il grafo di mock di leads-table.test (e bloat bundle).
+- `features/users/user-detail-sheet.tsx`: `UserDetailSheetProvider` (owns UN solo `<Sheet>` con
+  `UserDetailView`), montato in App.tsx dentro ConfirmDialogProvider attorno a RouterProvider.
+- `features/table/user-cell.tsx`: `UserCell` (single: avatar+nome) e `UserStackCell` (multi:
+  AvatarGroup, cap 5 + "+N"), tipo `UserSummary`. Trigger = `<button>` (apre su click/Enter,
+  keyboard-accessible senza dipendere dall'hovercard) avvolto in HoverCard che mostra il nome
+  cliccabile (`UserHoverAction`). aria-label = `common.viewProfile` (nuova chiave i18n en/it).
+
+RENDERER RICABLATI a UserCell/UserStackCell:
+- leads `operator`, opportunities `supervisor` (era testo, ora avatar+nome), business-functions
+  `manager`(UserCell)+`users`(UserStackCell), users `reports_to`.
+- RIMOSSO `UserAvatarCell` da `features/table/rich-cells.tsx` (+ helper initialsOf/avatarToneClass/
+  AVATAR_TONE_TOKENS, import Avatar) come dead code; test rich-cells aggiornato. Rimossi da BF
+  column-renderers i locali AvatarWithTooltip/ManagerCell/UsersCell (Tooltip resta per
+  OperationalSitesCell).
+
+BACKEND: `app/Tables/Users/UserEmploymentColumns.php` mapRow `reports_to` ora `userSummary()` ->
+`{id, name}` (relazione `employment.reportsTo` gia' eager-loaded in UsersTableDefinition). Filtri/sort
+invariati (usano il join, non il valore riga).
+
+VERIFICATO (eseguito davvero):
+- FE `vitest` verde su user-cell.test (nuovo), rich-cells.test, business-functions/column-renderers.test,
+  leads-table.test, opportunities/column-renderers.test, dir users/business-functions/opportunities/table.
+  `tsc --noEmit` pulito; eslint pulito sui file toccati.
+- BE `pest tests/Feature/Table tests/Feature/Users` 270/270; `pint --test` clean.
+
+PRE-ESISTENTI NON MIEI (verificati con le mie modifiche STASHED, falliscono identici):
+- `leads/leads-table-import.test.tsx` (3) e `table/cell-renderers.test.tsx > ContactsCell` (3):
+  falliscono per `useAuth must be used within an AuthProvider` via useModuleOpener (spec 0042
+  in-flight, i wrapper di test non forniscono i provider) e per ContactsCell (tooltip), non per
+  questo task.
+
+NIENTE COMMIT (in attesa di via libera).
+
 ## FE+BE: RIMOZIONE RELAZIONE CLIENTE (registry) DA PROGETTI/CAMPAGNE + PARTNER HINT (2026-07-17) — GREEN, NON COMMITTATO
 
 Richiesta utente: eliminare la relazione "Cliente" (= `registry`/`registry_id`) da Progetti e
@@ -85,9 +135,19 @@ VERIFICATO (eseguito davvero): BE `pest tests/Feature/Opportunities + Unit/Oppor
 `pest tests/Feature/Authorization` 78/78. FE `vitest run src/features/opportunities` 82/82;
 `tsc --noEmit` pulito; eslint pulito sui file toccati; Pint pulito. NIENTE COMMIT (in attesa via libera).
 
-PROSSIMO BUG (richiesto dall'utente, DA FARE DOPO): selezionando un'anagrafica il form
-auto-seleziona commerciale e segnalatore (reporter) — NON deve. Investigare l'autofill lato FE
-(probabile in use-opportunity-* / registry field onChange).
+## FE: OPPORTUNITY registry non auto-compila commerciale/segnalatore (2026-07-17) — GREEN, NON COMMITTATO
+
+Bug utente: selezionando un'anagrafica il form opportunita' auto-selezionava commerciale e
+segnalatore. Causa: `applyRegistrySelection` in `opportunity-registry-field.tsx` faceva
+`setValue('commercial_id', meta.commercial...)` e `setValue('reporter_id', meta.reporter...)` dai
+default del registry — in CONTRADDIZIONE con A-3 (commercial/reporter sono la lista intera di
+piattaforma, INDIPENDENTI dall'anagrafica; solo `referent_id` e' scoped al registry, BR-4). Fix:
+rimosso ogni tocco (reset+popolamento) di commercial_id/reporter_id alla selezione registry;
+restano il reset di `referent_id` (scoped) e l'ereditarieta' `manager_slots` (A-5). Il flusso
+from-lead non passa da applyRegistrySelection (setValue programmatico), quindi non impattato.
+Test aggiornati in opportunity-form-body.test.tsx (2 test invertiti: "not auto-filled" + "leaves
+commercial/reporter untouched on registry change"; manager-inheritance invariato). VERIFICATO:
+vitest src/features/opportunities 82/82, eslint pulito, tsc -b pulito. NIENTE COMMIT.
 
 ## FE+BE: BADGE CODICE + STATO COLORATO PROGETTI/CAMPAGNE + COLORI GRUPPO (2026-07-17) — GREEN, NON COMMITTATO
 
@@ -5922,3 +5982,89 @@ opportunity-form-payload.test,opportunity-detail.test,use-opportunity-form,oppor
 
 Non committato (§3.6) — fermo qui, chiedo prima di committare. Pronto per il verifier finale su
 tutti gli AC 0040 (incl. AC-081..090).
+
+## SPEC 0042 — MODALITA' APERTURA MODULI per-utente (2026-07-17) — FOUNDATION GREEN, NON COMMITTATO
+
+Impostazione per-utente: come si aprono create/edit/detail dei moduli — "solo modale",
+"solo pagina singola", "personalizzata" (per-modulo). Salvata su users via /auth/me, applicata
+app-wide cambiando SOLO il punto di mount (Sheet vs pagina), zero cambi a logica/permessi/validazioni.
+Spec: docs/specs/0042-user-module-open-mode.xml.
+
+DECISIONI UTENTE (2026-07-17): (a) rollout COMPLETO su tutti i moduli; (b) sezione DEDICATA nel
+settings-page dopo "Password"; (c) elenco moduli AUTOMATICO (niente registro a mano); (d) persistenza
+JSON unico su users via /auth/me.
+
+BACKEND (VERDE, 44 test Pest): migration module_open_preferences json nullable su users; cast array
+(NON fillable, guarded); UserResource default {mode:'custom',overrides:{}} (mai null); UpdateProfileRequest
+valida mode in[modal,page,custom]/overrides.* in[modal,page]/chiavi override = domini switchable
+(config/tables.php meno import-runs, via switchableModuleDomains()); AuthService.updateProfile persiste
+via forceFill (self). Riusa PATCH /auth/me (nessun nuovo endpoint). Test: tests/Feature/Auth/ModuleOpenPreferencesTest.php.
+
+FRONTEND FOUNDATION (VERDE, 66 test su 10 file):
+- features/modules/: types.ts (OpenMode/ModuleOpenPreferences), resolve-open-mode.ts (puro),
+  use-module-open-mode.ts (legge ['auth','me']+registry), use-module-opener.tsx (instrada Sheet vs navigate),
+  module-detail-page.tsx/module-form-page.tsx (host pagina generici), module-routes.tsx (buildModuleRoutes),
+  module-open-mode-field.tsx (control) + module-open-mode-form.tsx (sezione con save autonomo parziale).
+- REGISTRY AUTOMATICO: module-registry.ts usa import.meta.glob('../*/*-screens.tsx',{eager}) e raccoglie
+  ogni export `moduleScreen`. NIENTE lista centrale: un modulo si aggiunge SOLO creando il suo
+  features/<m>/<m>-screens.tsx che esporta moduleScreen -> appare in settings + rotte generate + commutabile.
+- SETTINGS: nuova sezione 'modules' in pages/settings-page.tsx SECTIONS (dopo 'security'), icona PanelsTopLeft.
+  Lista moduli = MODULE_REGISTRY (auto). i18n settings.moduleOpenMode.* (it/en). ProfileForm NON contiene piu'
+  la preferenza (ripristinato). UpdateProfilePayload.locale reso opzionale (partial PATCH).
+- 4 MODULI GIA' CABLATI (adapter <m>-screens.tsx con moduleScreen + <m>-table.tsx su useModuleOpener):
+  projects (+ projects-view.tsx create), campaigns, leads (+ LeadDetailPageActions), opportunities.
+  Tutti defaultMode 'modal'. router.tsx: rotte deep-link dei 4 ora GENERATE da buildModuleRoutes (rimosse
+  le manuali + pagine per-modulo cancellate). registries/referents/products restano manuali (page) FINCHE'
+  non cablati.
+
+ROLLOUT RESIDUO (per completare "tutti i moduli"): creare <m>-screens.tsx (moduleScreen) + rewire
+<m>-table.tsx per: users, roles, companies, company-sites, operational-sites, referent-types, sectors,
+sources, tags, vat-rates, attributes, custom-fields, product-categories, pipeline-statuses, lead-statuses
+(defaultMode 'modal'); e registries, referents, products (defaultMode 'page' -> per questi RIMUOVERE anche
+le rotte manuali :id/:id/edit/new + import pagina in router.tsx, che io centralizzo). Pattern di riferimento:
+features/projects/project-screens.tsx + features/projects/projects-table.tsx. labelKey = navigation.<camelKey>
+(ATTENZIONE: multi-parola camelCase, es. domain company-sites -> labelKey 'navigation.companySites').
+ESCLUSO per ora: business-functions (column-renderers rotto da altra sessione, in-flight). import-runs/migrations
+FUORI SCOPE (non-CRUD).
+
+VERIFICA: tsc -b --force pulito sui file 0042 (gli unici errori sono business-functions/column-renderers.tsx
+di ALTRA sessione, in-flight, NON miei). vitest 66/66 sui file toccati. NIENTE COMMIT (attesa via libera).
+
+## SPEC 0042 — ROLLOUT COMPLETO (2026-07-17) — GREEN, NON COMMITTATO
+
+Tutti i 23 moduli CRUD ora COMMUTABILI modale/pagina, auto-registrati via glob (import.meta.glob
+'../*/*-screens.tsx' -> moduleScreen). Registro/rotte/settings AUTOMATICI: un nuovo modulo si aggiunge
+SOLO creando il suo <m>-screens.tsx con `export const moduleScreen` (nessun file centrale da editare).
+
+MODULI CABLATI (23): projects, campaigns, leads, opportunities, users, roles, companies, company-sites,
+operational-sites, referent-types, sectors, sources, tags, vat-rates, attributes, custom-fields,
+product-categories, pipeline-statuses, lead-statuses, business-functions (defaultMode 'modal');
+registries, referents, products (defaultMode 'page' + generateRoutes:false: tengono le pagine bespoke
+spec 0022, ottengono il modale via adapter). import-runs/migrations FUORI SCOPE (non-CRUD).
+
+FIX FOUNDATION (post-rollout, in features/modules/use-module-opener.tsx): i titoli/sottotitoli Sheet
+ora usano il namespace i18n camelCase (moduleI18nNamespace(domain): kebab->camel), perche' i namespace
+i18n sono camelCase (referentTypes, companySites, ...) mentre domain e' kebab. Lo storageKey resta kebab.
+Aggiunto campo opzionale ModuleRegistryEntry.generateRoutes (default true) -> buildModuleRoutes lo filtra.
+
+CONVENZIONE ESLINT: ogni <m>-screens.tsx ha in testa
+`/* eslint-disable react-refresh/only-export-components -- registry adapter ... */`
+(inevitabile: mix export componenti + oggetto moduleScreen; stessa deroga di router.tsx/column-renderers).
+
+GAP DI PARITA' NOTI (minori, documentati, NON risolti): il refresh LIVE della griglia innescato da DENTRO
+lo Sheet non e' piu' agganciabile con la firma generica ModuleFormScreenProps/ModuleDetailScreenProps
+({id}/{mode,onSuccess,onCancel}) -> (1) users: onAvatarChange (upload avatar mid-edit) non rinfresca piu'
+la riga finche' non si salva; (2) company-sites: onDefaultChange/onSiteChange (set-default/logo mid-Sheet)
+idem. La griglia si aggiorna comunque al save/refresh naturale. Se serve parita' bit-per-bit, aggiungere
+uno slot opzionale onEntityChanged su ModuleRegistryEntry passato da useModuleOpener (foundation).
+
+SETTINGS: sezione dedicata 'modules' in pages/settings-page.tsx (dopo 'security', icona PanelsTopLeft) ->
+crea sia la voce nel rail sezioni sia la card. ModuleOpenModeForm (features/modules) con save autonomo
+(PATCH /auth/me solo module_open_preferences). Lista = MODULE_REGISTRY (auto, tutti i 23 moduli).
+
+VERIFICA FINALE (eseguita): tsc -b --force = 0 errori su tutto il progetto. vitest run intero = 1656 passati,
+3 falliti = SOLO ContactsCell (cell-renderers.test.tsx) PRE-ESISTENTI (aria-label lingua-dipendente,
+features/table/ mai toccato da 0042, documentati da sessioni precedenti). ESLint pulito su screens + file 0042.
+Backend 44 Pest verdi. NIENTE COMMIT (attesa via libera §3.6).
+
+- 0042 UPDATE: ModuleOpenModeForm ha ora un pulsante "Ripristina default" (RotateCcw) che riporta la preferenza a DEFAULT_MODULE_OPEN_PREFERENCES ({mode:custom,overrides:{}} = ogni modulo nativo) e la persiste in un click (persist() riusato da Salva e Ripristina). i18n settings.moduleOpenMode.reset (it/en). Test in module-open-mode-form.test.tsx. Verde: tsc 0, eslint pulito, vitest 3/3.

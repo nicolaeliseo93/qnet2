@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,6 +11,7 @@ import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
 import { useStatsPanel } from '@/features/stats/use-stats-panel'
 import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
+import { useModuleOpener } from '@/features/modules/use-module-opener'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
@@ -23,23 +23,35 @@ const REGISTRIES_DOMAIN = 'registries'
 
 /**
  * Thin Registries adapter over the generic table. It mounts `<TableView>` with
- * the `registries` domain, its custom cell renderers and a row-action handler.
- * View/create/edit are dedicated pages (spec 0022): the row actions and the
- * "New" button navigate there. Only the delete stays here — it runs inline and
- * refreshes the SSRM grid through the table's imperative handle. Permission
- * gating is an affordance only; the backend re-authorizes each call.
+ * the `registries` domain, its custom cell renderers and a row-action handler,
+ * and delegates the open mode (dedicated page vs modal Sheet) of view/edit/
+ * create to `useModuleOpener`, resolved from the user's preference (spec
+ * 0042). Its default stays the bespoke dedicated pages (spec 0022); the
+ * generic table still owns the delete flow (confirm + toast + grid refresh)
+ * and the SSRM grid refresh after every mutation via the table's imperative
+ * handle. Permission gating is an affordance only; the backend re-authorizes
+ * each call.
  */
 export function RegistriesTable() {
   const { t } = useTranslation()
   const stats = useStatsPanel(REGISTRIES_DOMAIN)
   const invalidateStats = useInvalidateModuleStats(REGISTRIES_DOMAIN)
-  const navigate = useNavigate()
 
   const tableRef = useRef<TableViewHandle>(null)
   const refreshGrid = useCallback(() => tableRef.current?.refresh(), [])
 
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [activityRow, setActivityRow] = useState<TableRow | null>(null)
+
+  // After a modal create/edit succeeds the Sheet closes itself; the grid and
+  // the stats panel are this adapter's to refresh. The detail query is
+  // invalidated inside `RegistryFormScreen`. Page mode never calls this.
+  const onSaved = useCallback(() => {
+    refreshGrid()
+    invalidateStats()
+  }, [refreshGrid, invalidateStats])
+
+  const { openCreate, openView, openEdit, sheet } = useModuleOpener(REGISTRIES_DOMAIN, { onSaved })
 
   const runDelete = useCallback(
     async (row: TableRow) => {
@@ -65,10 +77,10 @@ export function RegistriesTable() {
     (action: TableActionDefinition, row: TableRow) => {
       switch (action.key) {
         case 'view':
-          void navigate(`/registries/${row.id}`)
+          openView(row)
           break
         case 'edit':
-          void navigate(`/registries/${row.id}/edit`)
+          openEdit(row)
           break
         case 'delete':
           void runDelete(row)
@@ -80,7 +92,7 @@ export function RegistriesTable() {
           break
       }
     },
-    [navigate, runDelete],
+    [openView, openEdit, runDelete],
   )
 
   const isBusy = useCallback((row: TableRow) => row.id === deletingId, [deletingId])
@@ -96,7 +108,7 @@ export function RegistriesTable() {
               onToggle={stats.toggle}
             />
             <Can permission="registries.create">
-              <Button onClick={() => void navigate('/registries/new')}>
+              <Button onClick={openCreate}>
                 <Plus aria-hidden="true" />
                 {t('registries.form.newRegistry')}
               </Button>
@@ -114,6 +126,8 @@ export function RegistriesTable() {
         onAction={handleAction}
         isBusy={isBusy}
       />
+
+      {sheet}
 
       <ResourceActivityDialog
         resource={REGISTRIES_DOMAIN}

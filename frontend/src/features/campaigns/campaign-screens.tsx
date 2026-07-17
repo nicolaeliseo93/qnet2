@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- registry adapter: components + moduleScreen descriptor colocated by design (spec 0042) */
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -7,9 +8,11 @@ import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { campaignDetailQueryKey, fetchCampaign } from '@/features/campaigns/api'
 import { CampaignForm } from '@/features/campaigns/campaign-form'
 import { CampaignDetailView } from '@/features/campaigns/campaign-detail'
+import { OPEN_MODE_MODAL } from '@/features/modules/types'
 import type {
   ModuleDetailScreenProps,
   ModuleFormScreenProps,
+  ModuleRegistryEntry,
 } from '@/features/modules/types'
 import type { CampaignDetail } from '@/features/campaigns/types'
 
@@ -105,4 +108,14 @@ function CampaignEditScreen({ campaignId, onSuccess, onCancel }: CampaignEditScr
   return (
     <CampaignForm mode={{ type: 'edit', campaign }} onSuccess={onSuccess} onCancel={onCancel} />
   )
+}
+
+/** Auto-registered in the module registry (spec 0042). */
+export const moduleScreen: ModuleRegistryEntry = {
+  domain: 'campaigns',
+  basePath: '/campaigns',
+  defaultMode: OPEN_MODE_MODAL,
+  labelKey: 'navigation.campaigns',
+  DetailScreen: CampaignDetailScreen,
+  FormScreen: CampaignFormScreen,
 }

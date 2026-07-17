@@ -78,10 +78,26 @@ class UserEmploymentColumns
             'relationship_type' => $employment?->relationship_type?->value,
             'qualification_type' => $employment?->qualification_type?->value,
             'is_manager' => $employment?->is_manager ?? false,
-            'reports_to' => $employment?->reportsTo?->name,
+            'reports_to' => $this->userSummary($employment?->reportsTo),
             'hired_at' => $employment?->hired_at,
             'terminated_at' => $employment?->terminated_at,
         ];
+    }
+
+    /**
+     * `reports_to` as an `{id, name}` summary (not a bare name), so the grid can
+     * render it as a clickable user chip that opens the person's detail — the
+     * same row shape every other user column emits.
+     *
+     * @return array{id: int, name: string}|null
+     */
+    private function userSummary(?User $user): ?array
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        return ['id' => $user->id, 'name' => $user->name];
     }
 
     /**

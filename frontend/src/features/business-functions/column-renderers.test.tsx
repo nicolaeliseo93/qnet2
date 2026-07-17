@@ -26,25 +26,10 @@ function renderCell(columnId: string, value: unknown) {
 }
 
 describe('businessFunctionColumnRenderers.manager', () => {
-  it('renders an avatar for the responsabile', () => {
+  it('renders the responsabile as a user chip (avatar + name)', () => {
     renderCell('manager', MANAGER)
     expect(screen.getByText('AL')).toBeInTheDocument()
-  })
-
-  it('reveals the name in an accessible tooltip on hover', async () => {
-    renderCell('manager', MANAGER)
-    // Radix Tooltip opens on `pointermove` (not `mouseenter`, see TooltipTrigger)
-    // via a zero-delay timer on first open, hence the `waitFor`.
-    fireEvent.pointerMove(screen.getByLabelText('Ada Lovelace'))
-    await waitFor(() => {
-      expect(screen.getByRole('tooltip')).toHaveTextContent('Ada Lovelace')
-    })
-  })
-
-  it('reveals the name on keyboard focus (accessible without a mouse)', () => {
-    renderCell('manager', MANAGER)
-    fireEvent.focus(screen.getByLabelText('Ada Lovelace'))
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Ada Lovelace')
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
   })
 
   it('renders an em dash when there is no responsabile', () => {
@@ -61,15 +46,7 @@ describe('businessFunctionColumnRenderers.users', () => {
     expect(screen.getByText('KJ')).toBeInTheDocument()
   })
 
-  it("exposes each user's name via its own tooltip", async () => {
-    renderCell('users', USERS)
-    fireEvent.pointerMove(screen.getByLabelText('Grace Hopper'))
-    await waitFor(() => {
-      expect(screen.getByRole('tooltip')).toHaveTextContent('Grace Hopper')
-    })
-  })
-
-  it('collapses avatars beyond the visible cap into a "+N" chip', async () => {
+  it('collapses avatars beyond the visible cap into a "+N" chip', () => {
     const many = Array.from({ length: 7 }, (_, index) => ({
       id: index + 1,
       name: `User ${index + 1}`,
@@ -78,10 +55,6 @@ describe('businessFunctionColumnRenderers.users', () => {
     renderCell('users', many)
 
     expect(screen.getByText('+2')).toBeInTheDocument()
-    fireEvent.pointerMove(screen.getByText('+2'))
-    await waitFor(() => {
-      expect(screen.getByRole('tooltip')).toHaveTextContent('User 6, User 7')
-    })
   })
 
   it('renders an em dash when there is no associated user', () => {

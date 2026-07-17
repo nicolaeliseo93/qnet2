@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import i18n from '@/i18n'
 import { ModuleOpenModeField } from '@/features/modules/module-open-mode-field'
 import { MODULE_REGISTRY } from '@/features/modules/module-registry'
@@ -52,13 +52,16 @@ describe('ModuleOpenModeField', () => {
     const { rerender } = render(<ModuleOpenModeField value={withOverride} onChange={vi.fn()} />)
     expect(screen.getAllByRole('combobox')).toHaveLength(1)
 
-    // Switching back to custom surfaces the preserved per-module choice.
+    // Switching back to custom surfaces the preserved per-module choice: the
+    // Projects row (a modal-default module) now shows the retained 'page'.
     rerender(
       <ModuleOpenModeField
         value={{ mode: 'custom', overrides: { projects: 'page' } }}
         onChange={vi.fn()}
       />,
     )
-    expect(screen.getByText('Single page')).toBeInTheDocument()
+    const projectsRow = screen.getByText(i18n.t('navigation.projects')).closest('li')
+    expect(projectsRow).not.toBeNull()
+    expect(within(projectsRow as HTMLElement).getByText('Single page')).toBeInTheDocument()
   })
 })

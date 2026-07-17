@@ -4,15 +4,7 @@ import axios from 'axios'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/page-header'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { Can } from '@/features/auth/can'
 import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
@@ -20,35 +12,27 @@ import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
 import { useStatsPanel } from '@/features/stats/use-stats-panel'
 import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { useAuth } from '@/features/auth/use-auth'
+import { useModuleOpener } from '@/features/modules/use-module-opener'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type {
   TableActionDefinition,
   TableRow,
 } from '@/features/table/types'
-import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { userColumnRenderers } from '@/features/users/column-renderers'
-import { deleteUser, fetchUser } from '@/features/users/api'
-import { UserForm } from '@/features/users/user-form'
-import { UserDetailView } from '@/features/users/user-detail'
+import { deleteUser } from '@/features/users/api'
 
 /** Domain key used to mount the generic table for users. */
 const USERS_DOMAIN = 'users'
 
-/** Which sheet (if any) is currently open and for which row. */
-type SheetState =
-  | { kind: 'none' }
-  | { kind: 'create' }
-  | { kind: 'view'; row: TableRow }
-  | { kind: 'edit'; row: TableRow }
-
 /**
  * Thin Users adapter over the generic table. It mounts `<TableView>` with the
- * `users` domain, its custom cell renderers and a row-action handler, and owns
- * the CRUD flows: opening a Sheet for view/edit/create, confirming + running the
- * delete mutation, and refreshing the SSRM grid after every mutation via the
- * table's imperative handle. No table logic lives here — only users CRUD wiring.
- * Permission gating is an affordance only; the backend re-authorizes each call.
+ * `users` domain, its custom cell renderers and a row-action handler, and
+ * delegates the open mode (modal Sheet vs dedicated page) of view/edit/create
+ * to `useModuleOpener`, resolved from the user's preference (spec 0042). It
+ * still owns the delete flow (confirm + toast + grid refresh) and the SSRM
+ * grid refresh after every mutation. Permission gating is an affordance only;
+ * the backend re-authorizes each call.
  */
 export function UsersTable() {
   const { t } = useTranslation()
@@ -59,11 +43,18 @@ export function UsersTable() {
   const tableRef = useRef<TableViewHandle>(null)
   const refreshGrid = useCallback(() => tableRef.current?.refresh(), [])
 
-  const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [activityRow, setActivityRow] = useState<TableRow | null>(null)
 
-  const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
+  // After a modal create/edit succeeds the Sheet closes itself; the grid and
+  // the stats panel are this adapter's to refresh. The detail query is
+  // invalidated inside `UserFormScreen`. Page mode never calls this.
+  const onSaved = useCallback(() => {
+    refreshGrid()
+    invalidateStats()
+  }, [refreshGrid, invalidateStats])
+
+  const { openCreate, openView, openEdit, sheet } = useModuleOpener(USERS_DOMAIN, { onSaved })
 
   const runDelete = useCallback(
     async (row: TableRow) => {
@@ -93,10 +84,10 @@ export function UsersTable() {
     (action: TableActionDefinition, row: TableRow) => {
       switch (action.key) {
         case 'view':
-          setSheet({ kind: 'view', row })
+          openView(row)
           break
         case 'edit':
-          setSheet({ kind: 'edit', row })
+          openEdit(row)
           break
         case 'delete':
           void runDelete(row)
@@ -108,7 +99,7 @@ export function UsersTable() {
           break
       }
     },
-    [runDelete],
+    [openView, openEdit, runDelete],
   )
 
   // Hide the delete action on the current user's own row (self-delete is
@@ -128,21 +119,6 @@ export function UsersTable() {
     [deletingId],
   )
 
-  const onSheetOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) {
-        closeSheet()
-      }
-    },
-    [closeSheet],
-  )
-
-  const onMutationSuccess = useCallback(() => {
-    closeSheet()
-    refreshGrid()
-    invalidateStats()
-  }, [closeSheet, refreshGrid, invalidateStats])
-
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
@@ -154,7 +130,7 @@ export function UsersTable() {
               onToggle={stats.toggle}
             />
             <Can permission="users.create">
-              <Button onClick={() => setSheet({ kind: 'create' })}>
+              <Button onClick={openCreate}>
                 <Plus aria-hidden="true" />
                 {t('users.form.newUser')}
               </Button>
@@ -174,52 +150,7 @@ export function UsersTable() {
         decorateRow={decorateRow}
       />
 
-      <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>
-        <SheetContent className="gap-0" storageKey={`sheet-width:${USERS_DOMAIN}`}>
-          {sheet.kind === 'view' && (
-            <>
-              <SheetHeader className="sr-only">
-                <SheetTitle>{t('users.detail.title')}</SheetTitle>
-                <SheetDescription>{t('users.detail.subtitle')}</SheetDescription>
-              </SheetHeader>
-              <UserDetailView userId={sheet.row.id} />
-            </>
-          )}
-
-          {sheet.kind === 'create' && (
-            <>
-              <SheetHeader>
-                <SheetTitle>{t('users.form.createTitle')}</SheetTitle>
-                <SheetDescription>
-                  {t('users.form.createSubtitle')}
-                </SheetDescription>
-              </SheetHeader>
-              <UserForm
-                mode={{ type: 'create' }}
-                onSuccess={onMutationSuccess}
-                onCancel={closeSheet}
-              />
-            </>
-          )}
-
-          {sheet.kind === 'edit' && (
-            <>
-              <SheetHeader>
-                <SheetTitle>{t('users.form.editTitle')}</SheetTitle>
-                <SheetDescription>
-                  {t('users.form.editSubtitle')}
-                </SheetDescription>
-              </SheetHeader>
-              <EditUserLoader
-                userId={sheet.row.id}
-                onSuccess={onMutationSuccess}
-                onCancel={closeSheet}
-                onAvatarChange={refreshGrid}
-              />
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+      {sheet}
 
       <ResourceActivityDialog
         resource={USERS_DOMAIN}
@@ -231,62 +162,5 @@ export function UsersTable() {
         }}
       />
     </div>
-  )
-}
-
-interface EditUserLoaderProps {
-  userId: number
-  onSuccess: () => void
-  onCancel: () => void
-  onAvatarChange: () => void
-}
-
-/**
- * Fetches the fresh, re-authorized user detail before mounting the edit form,
- * so the partial PATCH starts from authoritative values rather than the grid
- * row snapshot.
- */
-function EditUserLoader({
-  userId,
-  onSuccess,
-  onCancel,
-  onAvatarChange,
-}: EditUserLoaderProps) {
-  const { t } = useTranslation()
-  const {
-    data: user,
-    isLoading,
-    isError,
-    refetch,
-  } = useEntityDetail(['users', 'detail', userId], () => fetchUser(userId))
-
-  if (isError) {
-    return (
-      <div className="flex flex-col items-start gap-3 p-4">
-        <p className="text-sm text-destructive">{t('users.detail.loadError')}</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          {t('common.retry')}
-        </Button>
-      </div>
-    )
-  }
-
-  if (isLoading || !user) {
-    return (
-      <div className="flex flex-col gap-4 p-4">
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-      </div>
-    )
-  }
-
-  return (
-    <UserForm
-      mode={{ type: 'edit', user }}
-      onSuccess={onSuccess}
-      onCancel={onCancel}
-      onAvatarChange={onAvatarChange}
-    />
   )
 }

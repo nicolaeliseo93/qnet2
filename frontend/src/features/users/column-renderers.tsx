@@ -9,6 +9,7 @@ import {
   DateTimeCell,
   TagsCountCell,
 } from '@/features/table/cell-renderers'
+import { UserCell } from '@/features/table/user-cell'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 
 /** Renders an employment `Y-m-d` date column, no time part (spec 0015). */
@@ -106,6 +107,9 @@ export const userColumnRenderers: TableRendererMap = {
   // fallback (no entry needed here).
   is_active: (params) => <ActiveBadgeCell {...params} />,
   is_manager: (params) => <BooleanCell {...params} />,
+  // `reports_to` is a person ({id, name}); the shared user cell renders it as an
+  // avatar + name chip that opens the user's detail Sheet on click.
+  reports_to: (params) => <UserCell {...params} />,
   hired_at: (params) => <DateCell {...params} />,
   terminated_at: (params) => <DateCell {...params} />,
 }

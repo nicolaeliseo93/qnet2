@@ -1,10 +1,17 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
 import i18n from '@/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CompanySitesTable } from '@/features/company-sites/company-sites-table'
+
+// This suite exercises the default modal behaviour; force the resolved open
+// mode so it never depends on an AuthProvider (spec 0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
+}))
 
 /**
  * Spec 0020 AC-014: the page's `<TableView domain="company-sites">` mounts
@@ -52,7 +59,9 @@ function renderCompanySitesTable() {
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
         <TooltipProvider>
-          <CompanySitesTable />
+          <MemoryRouter>
+            <CompanySitesTable />
+          </MemoryRouter>
         </TooltipProvider>
       </I18nextProvider>
     </QueryClientProvider>,

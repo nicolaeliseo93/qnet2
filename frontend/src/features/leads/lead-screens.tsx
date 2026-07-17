@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- registry adapter: components + moduleScreen descriptor colocated by design (spec 0042) */
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
@@ -10,9 +11,11 @@ import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchLead, leadDetailQueryKey } from '@/features/leads/api'
 import { LeadForm } from '@/features/leads/lead-form'
 import { LeadDetailView } from '@/features/leads/lead-detail'
+import { OPEN_MODE_MODAL } from '@/features/modules/types'
 import type {
   ModuleDetailScreenProps,
   ModuleFormScreenProps,
+  ModuleRegistryEntry,
 } from '@/features/modules/types'
 import type { LeadDetail } from '@/features/leads/types'
 
@@ -144,4 +147,15 @@ export function LeadDetailPageActions({ id }: ModuleDetailScreenProps) {
       </Button>
     </Can>
   )
+}
+
+/** Auto-registered in the module registry (spec 0042). */
+export const moduleScreen: ModuleRegistryEntry = {
+  domain: 'leads',
+  basePath: '/leads',
+  defaultMode: OPEN_MODE_MODAL,
+  labelKey: 'navigation.leads',
+  DetailScreen: LeadDetailScreen,
+  FormScreen: LeadFormScreen,
+  DetailPageActions: LeadDetailPageActions,
 }

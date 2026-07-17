@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- registry adapter: components + moduleScreen descriptor colocated by design (spec 0042) */
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { DetailError, DetailLoading } from '@/components/detail/detail-panel'
@@ -6,9 +7,11 @@ import { fetchProject, projectDetailQueryKey } from '@/features/projects/api'
 import { ProjectForm } from '@/features/projects/project-form'
 import { ProjectEditLoader } from '@/features/projects/project-edit-loader'
 import { ProjectDetailView } from '@/features/projects/project-detail'
+import { OPEN_MODE_MODAL } from '@/features/modules/types'
 import type {
   ModuleDetailScreenProps,
   ModuleFormScreenProps,
+  ModuleRegistryEntry,
 } from '@/features/modules/types'
 import type { ProjectDetail } from '@/features/projects/types'
 
@@ -59,4 +62,14 @@ export function ProjectFormScreen({ mode, onSuccess, onCancel }: ModuleFormScree
   }
 
   return <ProjectEditLoader projectId={mode.id} onSuccess={handleSuccess} onCancel={onCancel} />
+}
+
+/** Auto-registered in the module registry (spec 0042). */
+export const moduleScreen: ModuleRegistryEntry = {
+  domain: 'projects',
+  basePath: '/projects',
+  defaultMode: OPEN_MODE_MODAL,
+  labelKey: 'navigation.projects',
+  DetailScreen: ProjectDetailScreen,
+  FormScreen: ProjectFormScreen,
 }

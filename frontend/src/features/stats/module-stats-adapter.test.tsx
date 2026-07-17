@@ -18,6 +18,12 @@ import type { ModuleStats } from '@/features/stats/types'
 
 const fetchModuleStatsMock = vi.fn<() => Promise<ModuleStats>>()
 
+// Default modal behaviour; force the resolved open mode (spec 0042) so the
+// table adapter does not depend on an AuthProvider.
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
+}))
+
 vi.mock('@/features/stats/api', () => ({
   fetchModuleStats: () => fetchModuleStatsMock(),
   moduleStatsQueryKey: (domain: string) => ['stats', domain],

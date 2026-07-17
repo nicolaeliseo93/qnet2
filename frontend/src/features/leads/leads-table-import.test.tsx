@@ -16,6 +16,12 @@ import { LeadsTable } from '@/features/leads/leads-table'
  */
 
 const navigateMock = vi.fn()
+// Default modal behaviour; force the resolved open mode (spec 0042) so the
+// table does not depend on an AuthProvider.
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
+}))
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return { ...actual, useNavigate: () => navigateMock }

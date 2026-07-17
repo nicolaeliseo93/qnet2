@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/features/auth/auth-provider'
+import { UserDetailSheetProvider } from '@/features/users/user-detail-sheet'
 import { ConfigGate } from '@/features/config/config-gate'
 import { FullScreenLoader } from '@/components/full-screen-loader'
 import { queryClient } from '@/app/query-client'
@@ -19,9 +20,11 @@ function App() {
           <AuthProvider>
             <TooltipProvider>
               <ConfirmDialogProvider>
-                <Suspense fallback={<FullScreenLoader />}>
-                  <RouterProvider router={router} />
-                </Suspense>
+                <UserDetailSheetProvider>
+                  <Suspense fallback={<FullScreenLoader />}>
+                    <RouterProvider router={router} />
+                  </Suspense>
+                </UserDetailSheetProvider>
               </ConfirmDialogProvider>
               <Toaster />
             </TooltipProvider>

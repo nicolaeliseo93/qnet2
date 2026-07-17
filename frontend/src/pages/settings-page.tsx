@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Lock, UserRound, type LucideIcon } from 'lucide-react'
+import { Lock, PanelsTopLeft, UserRound, type LucideIcon } from 'lucide-react'
 import {
   Card,
   CardContent,
@@ -15,6 +15,7 @@ import { useAuth } from '@/features/auth/use-auth'
 import { ProfileForm } from '@/features/auth/profile-form'
 import { PasswordForm } from '@/features/auth/password-form'
 import { AvatarForm } from '@/features/auth/avatar-form'
+import { ModuleOpenModeForm } from '@/features/modules/module-open-mode-form'
 
 interface SectionMeta {
   id: string
@@ -37,6 +38,12 @@ const SECTIONS: readonly SectionMeta[] = [
     icon: Lock,
     titleKey: 'settings.passwordTitle',
     descKey: 'settings.passwordSubtitle',
+  },
+  {
+    id: 'modules',
+    icon: PanelsTopLeft,
+    titleKey: 'settings.moduleOpenMode.title',
+    descKey: 'settings.moduleOpenMode.subtitle',
   },
 ]
 
@@ -132,6 +139,17 @@ export default function SettingsPage() {
           >
             <FieldPanel>
               <PasswordForm />
+            </FieldPanel>
+          </SettingsSection>
+
+          <SettingsSection
+            id="modules"
+            icon={PanelsTopLeft}
+            title={t('settings.moduleOpenMode.title')}
+            description={t('settings.moduleOpenMode.subtitle')}
+          >
+            <FieldPanel>
+              <ModuleOpenModeForm />
             </FieldPanel>
           </SettingsSection>
         </div>

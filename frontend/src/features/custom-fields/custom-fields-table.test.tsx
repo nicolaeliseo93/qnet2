@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import CustomFieldsPage from '@/pages/custom-fields-page'
@@ -28,6 +29,12 @@ vi.mock('@/components/page-header', () => ({
   PageHeader: ({ actions }: { actions?: ReactNode }) => <div>{actions}</div>,
 }))
 
+// This suite exercises the default modal behaviour; force the resolved open
+// mode so it never depends on an AuthProvider (spec 0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
+}))
+
 vi.mock('@/features/table/table-view', () => ({
   TableView: forwardRef<{ refresh: () => void }, { domain: string }>(
     function TableViewStub({ domain }, ref) {
@@ -41,7 +48,9 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <CustomFieldsPage />
+      <MemoryRouter>
+        <CustomFieldsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

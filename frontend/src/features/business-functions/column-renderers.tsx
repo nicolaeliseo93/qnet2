@@ -3,9 +3,7 @@ import type { ICellRendererParams } from 'ag-grid-community'
 import { Check, X } from 'lucide-react'
 import i18n from '@/i18n'
 import { cn } from '@/lib/utils'
-import { UserAvatar } from '@/components/user-avatar'
 import { Badge } from '@/components/ui/badge'
-import { AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar'
 import {
   Tooltip,
   TooltipContent,
@@ -13,122 +11,21 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { DateTimeCell } from '@/features/table/cell-renderers'
+import { UserCell, UserStackCell } from '@/features/table/user-cell'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 import type {
-  BusinessFunctionMember,
   BusinessFunctionOperationalSite,
   BusinessFunctionParent,
 } from '@/features/business-functions/types'
 
-/** Hoisted empty-array default: a stable reference avoids a new array per render. */
-const EMPTY_MEMBERS: BusinessFunctionMember[] = []
-
 /** Hoisted empty-array default for the operational-sites cell. */
 const EMPTY_SITES: BusinessFunctionOperationalSite[] = []
-
-/** How many avatars are shown inline before collapsing into a “+N” chip. */
-const MAX_VISIBLE_AVATARS = 5
-
-/**
- * Compact avatar size used inside grid cells — matches the Users table avatar
- * column (`UserAvatar size="sm"` = `size-6`), kept as a class so we never touch
- * the untyped `size` prop.
- */
-const CELL_AVATAR_CLASS = 'size-6'
 
 /** Em-dash placeholder for an empty/unknown cell value. */
 function EmptyCell() {
   return (
     <div className="flex h-full items-center justify-center">
       <span className="text-muted-foreground">—</span>
-    </div>
-  )
-}
-
-/**
- * A single avatar wrapped in an accessible hover/focus tooltip revealing the
- * member's name (AC-015). Shared by the `manager` (single avatar) and `users`
- * (avatar stack) cells so the tooltip composition lives in exactly one place.
- * Module-scoped (not nested in a render function) so it keeps a stable
- * component identity across re-renders.
- */
-function AvatarWithTooltip({ member }: { member: BusinessFunctionMember }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          aria-label={member.name}
-          className="inline-flex rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <UserAvatar name={member.name} src={member.avatar_url} className={CELL_AVATAR_CLASS} />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top">{member.name}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-/**
- * Renders the `manager` column: a single avatar with a name tooltip, or an
- * em dash when the business function has no responsabile.
- */
-function ManagerCell({ value }: ICellRendererParams) {
-  const member = value as BusinessFunctionMember | null
-
-  if (!member) {
-    return <EmptyCell />
-  }
-
-  return (
-    <div className="flex h-full items-center">
-      <TooltipProvider>
-        <AvatarWithTooltip member={member} />
-      </TooltipProvider>
-    </div>
-  )
-}
-
-/**
- * Renders the `users` column: an overlapping avatar stack (one per associated
- * user), each with its own name tooltip. Caps the visible avatars at
- * `MAX_VISIBLE_AVATARS` and collapses the rest into a “+N” chip whose tooltip
- * lists the remaining names. Em dash when no user is associated.
- */
-function UsersCell({ value }: ICellRendererParams) {
-  const members = Array.isArray(value) ? (value as BusinessFunctionMember[]) : EMPTY_MEMBERS
-
-  if (members.length === 0) {
-    return <EmptyCell />
-  }
-
-  const visibleMembers = members.slice(0, MAX_VISIBLE_AVATARS)
-  const overflowMembers = members.slice(MAX_VISIBLE_AVATARS)
-  const overflowNames = overflowMembers.map((member) => member.name).join(', ')
-
-  return (
-    <div className="flex h-full items-center">
-      <TooltipProvider>
-        <AvatarGroup>
-          {visibleMembers.map((member) => (
-            <AvatarWithTooltip key={member.id} member={member} />
-          ))}
-          {overflowMembers.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <AvatarGroupCount
-                  tabIndex={0}
-                  className={CELL_AVATAR_CLASS}
-                  aria-label={overflowNames}
-                >
-                  +{overflowMembers.length}
-                </AvatarGroupCount>
-              </TooltipTrigger>
-              <TooltipContent side="top">{overflowNames}</TooltipContent>
-            </Tooltip>
-          )}
-        </AvatarGroup>
-      </TooltipProvider>
     </div>
   )
 }
@@ -237,8 +134,8 @@ function BooleanCell({ value }: ICellRendererParams) {
 export const businessFunctionColumnRenderers: TableRendererMap = {
   is_business_unit: (params) => <BooleanCell {...params} />,
   is_business_service: (params) => <BooleanCell {...params} />,
-  manager: (params) => <ManagerCell {...params} />,
-  users: (params) => <UsersCell {...params} />,
+  manager: (params) => <UserCell {...params} />,
+  users: (params) => <UserStackCell {...params} />,
   parent: (params) => <ParentCell {...params} />,
   operational_sites: (params) => <OperationalSitesCell {...params} />,
   created_at: (params) => <DateTimeCell {...params} />,

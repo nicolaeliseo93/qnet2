@@ -13,6 +13,15 @@ import { useModuleOpenMode } from '@/features/modules/use-module-open-mode'
 import { OPEN_MODE_MODAL } from '@/features/modules/types'
 import type { TableRow } from '@/features/table/types'
 
+/**
+ * Maps a kebab-case module `domain` (e.g. `company-sites`) to its camelCase
+ * i18n namespace (`companySites`), which is how every module's strings are
+ * keyed in the locale files. Single-word domains pass through unchanged.
+ */
+function moduleI18nNamespace(domain: string): string {
+  return domain.replace(/-([a-z])/g, (_, char: string) => char.toUpperCase())
+}
+
 /** Which sheet (if any) is currently open and for which row — same shape every `*-table.tsx` used inline before the rewire. */
 type SheetState =
   | { kind: 'none' }
@@ -56,6 +65,9 @@ export function useModuleOpener(domain: string, options: UseModuleOpenerOptions 
   // route/component; this "basePath" fallback only exists so hooks stay
   // unconditional (rules-of-hooks) up to the invariant check at the bottom.
   const basePath = entry?.basePath ?? ''
+  // Sheet titles/subtitles are keyed under the module's camelCase i18n
+  // namespace, while `domain` is the kebab-case slug (spec 0042).
+  const ns = moduleI18nNamespace(domain)
 
   const { onSaved } = options
   const [sheetState, setSheetState] = useState<SheetState>({ kind: 'none' })
@@ -119,8 +131,8 @@ export function useModuleOpener(domain: string, options: UseModuleOpenerOptions 
           {sheetState.kind === 'view' && (
             <>
               <SheetHeader className="sr-only">
-                <SheetTitle>{t(`${domain}.detail.title`)}</SheetTitle>
-                <SheetDescription>{t(`${domain}.detail.subtitle`)}</SheetDescription>
+                <SheetTitle>{t(`${ns}.detail.title`)}</SheetTitle>
+                <SheetDescription>{t(`${ns}.detail.subtitle`)}</SheetDescription>
               </SheetHeader>
               <DetailScreen id={sheetState.row.id} />
             </>
@@ -129,8 +141,8 @@ export function useModuleOpener(domain: string, options: UseModuleOpenerOptions 
           {sheetState.kind === 'create' && (
             <>
               <SheetHeader>
-                <SheetTitle>{t(`${domain}.form.createTitle`)}</SheetTitle>
-                <SheetDescription>{t(`${domain}.form.createSubtitle`)}</SheetDescription>
+                <SheetTitle>{t(`${ns}.form.createTitle`)}</SheetTitle>
+                <SheetDescription>{t(`${ns}.form.createSubtitle`)}</SheetDescription>
               </SheetHeader>
               <FormScreen mode={{ type: 'create' }} onSuccess={handleSaved} onCancel={closeSheet} />
             </>
@@ -139,8 +151,8 @@ export function useModuleOpener(domain: string, options: UseModuleOpenerOptions 
           {sheetState.kind === 'edit' && (
             <>
               <SheetHeader>
-                <SheetTitle>{t(`${domain}.form.editTitle`)}</SheetTitle>
-                <SheetDescription>{t(`${domain}.form.editSubtitle`)}</SheetDescription>
+                <SheetTitle>{t(`${ns}.form.editTitle`)}</SheetTitle>
+                <SheetDescription>{t(`${ns}.form.editSubtitle`)}</SheetDescription>
               </SheetHeader>
               <FormScreen
                 mode={{ type: 'edit', id: sheetState.row.id }}

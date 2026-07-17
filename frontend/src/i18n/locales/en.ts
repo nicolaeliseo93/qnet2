@@ -57,6 +57,7 @@ export const en = {
     back: 'Back',
     edit: 'Edit',
     new: 'New',
+    viewProfile: "View {{name}}'s profile",
   },
   config: {
     error: {
@@ -338,6 +339,8 @@ export const en = {
       valueModal: 'Modal',
       valuePage: 'Single page',
       perModuleAria: 'Open mode for {{module}}',
+      saved: 'Open mode updated successfully.',
+      reset: 'Restore defaults',
     },
     passwordTitle: 'Password',
     passwordSubtitle: 'Change the password used to sign in.',

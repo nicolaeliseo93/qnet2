@@ -1,11 +1,18 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { CompaniesTable } from '@/features/companies/companies-table'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
+
+// This suite exercises the default modal behaviour; force the resolved open
+// mode so it never depends on an AuthProvider (spec 0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
+}))
 
 /**
  * Spec 0034, AC-015: representative module for the activity log rollout
@@ -63,7 +70,9 @@ function renderTable() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <CompaniesTable />
+      <MemoryRouter>
+        <CompaniesTable />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

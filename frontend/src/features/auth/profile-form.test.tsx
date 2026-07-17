@@ -193,8 +193,9 @@ describe('ProfileForm', () => {
     expect(payload.personal_data.first_name).toBe('Ada')
     expect(payload.personal_data.contacts).toHaveLength(1)
     expect(payload.personal_data.contacts[0].id).toBe(5)
-    // AC-015: the module open-mode preference travels in the same payload.
-    expect(payload.module_open_preferences).toEqual(DEFAULT_MODULE_OPEN_PREFERENCES)
+    // The module open-mode preference is its own settings section now, never
+    // part of the profile payload (spec 0042).
+    expect(payload.module_open_preferences).toBeUndefined()
   })
 
   it('blocks the save until the required personal-data fields are filled', async () => {

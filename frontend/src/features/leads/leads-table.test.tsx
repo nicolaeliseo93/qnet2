@@ -46,6 +46,11 @@ const mockLead: LeadDetailWithPermissions = {
 }
 
 const canMock = vi.fn<(permission: string) => boolean>()
+// Default modal behaviour; force the resolved open mode (spec 0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
+}))
+
 vi.mock('@/features/auth/use-abilities', () => ({
   useAbilities: () => ({
     can: (permission: string) => canMock(permission),

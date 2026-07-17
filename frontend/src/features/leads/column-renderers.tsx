@@ -5,8 +5,8 @@ import {
   BooleanBadgeCell,
   RelationCell,
   StatusBadgeCell,
-  UserAvatarCell,
 } from '@/features/table/rich-cells'
+import { UserCell } from '@/features/table/user-cell'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 
 /**
@@ -21,7 +21,8 @@ export const LEAD_STATUS_BADGE_CLASSES = BADGE_COLOR_CLASSES
  * Custom cell renderers keyed by the backend column `id` (spec 0024), built
  * from the shared cross-module cell library so relations, the status pill and
  * the boolean badges match the projects/campaigns grids. `operator` is a person,
- * so it renders as an initials avatar + name; `operational_site` has no `name`
+ * so it renders as the shared user cell (avatar + name, click to open the user
+ * detail Sheet); `operational_site` has no `name`
  * (BR-3), only the server-composed `label`, which `RelationCell` reads. `notes`
  * falls back to the AG Grid default cell; `created_at` reuses the shared
  * datetime renderer.
@@ -32,7 +33,7 @@ export const leadColumnRenderers: TableRendererMap = {
   lead_status: (params) => <StatusBadgeCell {...params} />,
   operational_site: (params) => <RelationCell {...params} icon={MapPin} />,
   source: (params) => <RelationCell {...params} icon={Radio} />,
-  operator: (params) => <UserAvatarCell {...params} />,
+  operator: (params) => <UserCell {...params} />,
   is_assigned: (params) => <BooleanBadgeCell {...params} />,
   is_converted: (params) => <BooleanBadgeCell {...params} />,
   created_at: (params) => <DateTimeCell {...params} />,

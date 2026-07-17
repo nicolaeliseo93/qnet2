@@ -7,9 +7,10 @@ import { OpportunityForm } from '@/features/opportunities/opportunity-form'
 import type { ResourceMeta } from '@/features/authorization/types'
 
 /**
- * AC-071 (every field of the contract renders), AC-072 (referent/commercial/
- * reporter disabled without a registry, scoped by `registry_id` once chosen,
- * reset+prefilled on registry change), AC-074 (field permissions: hidden vs
+ * AC-071 (every field of the contract renders), AC-072 (referent disabled
+ * without a registry, scoped by `registry_id` once chosen and reset on registry
+ * change; commercial/reporter are free and, per user directive 2026-07-17, are
+ * never auto-filled from the anagrafica), AC-074 (field permissions: hidden vs
  * disabled), AC-107/108 (amendment rev.3: the name auto-fill override and
  * `operational_site` no longer scoped by business function).
  */
@@ -201,7 +202,7 @@ describe('OpportunityFormBody — referent scoping + free commercial/reporter (A
     expect(screen.getByTestId('disabled-Reporter')).toHaveTextContent('false')
   })
 
-  it('scopes ONLY the referent by registry_id; commercial/reporter receive no params but still prefill from defaults', async () => {
+  it('scopes ONLY the referent by registry_id; commercial/reporter receive no params and are NOT auto-filled (user directive 2026-07-17)', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
@@ -216,26 +217,35 @@ describe('OpportunityFormBody — referent scoping + free commercial/reporter (A
     // A-3: commercial/reporter are the whole platform list — no registry_id param.
     expect(screen.getByTestId('params-Sales rep')).toHaveTextContent('null')
     expect(screen.getByTestId('params-Reporter')).toHaveTextContent('null')
-    await waitFor(() => expect(screen.getByTestId('value-Sales rep')).toHaveTextContent('71'))
-    expect(screen.getByTestId('value-Reporter')).toHaveTextContent('81')
-    // Never a default for the referent itself: no such concept on the registry.
+    // They are independent of the anagrafica: picking a registry must NOT
+    // auto-fill them from its defaults — they stay empty.
+    expect(screen.getByTestId('value-Sales rep')).toHaveTextContent('')
+    expect(screen.getByTestId('value-Reporter')).toHaveTextContent('')
     expect(screen.getByTestId('value-Contact')).toHaveTextContent('')
   })
 
-  it('resets referent and reflects the new registry defaults on change', async () => {
+  it('resets referent on registry change but leaves the manually chosen commercial/reporter untouched (A-3 independence)', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
 
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
     screen.getByRole('button', { name: `select Registry ${TEST_REGISTRY_WITH_DEFAULTS}` }).click()
-    await waitFor(() => expect(screen.getByTestId('value-Sales rep')).toHaveTextContent('71'))
 
+    // The user manually picks a referent (scoped), a commercial and a reporter.
+    await waitFor(() => expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('false'))
+    screen.getByRole('button', { name: 'select Contact 1' }).click()
+    screen.getByRole('button', { name: 'select Sales rep 1' }).click()
+    screen.getByRole('button', { name: 'select Reporter 1' }).click()
+    await waitFor(() => expect(screen.getByTestId('value-Contact')).toHaveTextContent('1'))
+
+    // Changing the anagrafica resets ONLY the scoped referent; the independent
+    // commercial/reporter keep the user's choices.
     screen.getByRole('button', { name: `select Registry ${TEST_REGISTRY_WITHOUT_DEFAULTS}` }).click()
 
-    await waitFor(() => expect(screen.getByTestId('value-Sales rep')).toHaveTextContent(''))
-    expect(screen.getByTestId('value-Reporter')).toHaveTextContent('')
-    expect(screen.getByTestId('value-Contact')).toHaveTextContent('')
+    await waitFor(() => expect(screen.getByTestId('value-Contact')).toHaveTextContent(''))
+    expect(screen.getByTestId('value-Sales rep')).toHaveTextContent('1')
+    expect(screen.getByTestId('value-Reporter')).toHaveTextContent('1')
   })
 
   it('inherits the account managers of the chosen anagrafica into gap-aware slots, then clears them for one without (AC-095)', async () => {

@@ -27,10 +27,11 @@ function toForSelectItem(ref: RelationFieldRef | null): ForSelectItem | null {
 
 /**
  * The opportunity's required anagrafica (`registry_id`, D-4). Picking a
- * registry resets `referent_id` (BR-4: still anagrafica-scoped) and overwrites
- * commercial/reporter from the registry's defaults (`meta.commercial`/
- * `meta.reporter`) and `manager_slots` from its account managers
- * (`meta.managers`, spec 0040 A-5) — all still freely editable afterwards.
+ * registry resets `referent_id` (BR-4: still anagrafica-scoped) and inherits
+ * `manager_slots` from its account managers (`meta.managers`, spec 0040 A-5),
+ * still freely editable afterwards. commercial/reporter (A-3) are the whole
+ * platform list, INDEPENDENT of the anagrafica, so they are NOT touched here
+ * (user directive 2026-07-17: selecting a registry must not auto-fill them).
  * A single one-shot fetch, run as a direct consequence of the user's
  * selection, never a render-time effect, so it never re-overwrites a later
  * edit.
@@ -46,9 +47,10 @@ export function OpportunityRegistryField({
   const { quickCreated, renderAction } = useQuickCreateAction(REGISTRIES_FOR_SELECT_RESOURCE)
 
   const applyRegistrySelection = async (registryId: number | null) => {
+    // Referent is anagrafica-scoped (BR-4): a referent from the previous
+    // registry is no longer valid, so reset it. commercial/reporter (A-3) are
+    // independent of the anagrafica and are intentionally left untouched.
     setValue('referent_id', null, { shouldDirty: true })
-    setValue('commercial_id', null, { shouldDirty: true })
-    setValue('reporter_id', null, { shouldDirty: true })
     // A-5: account managers are inherited from the anagrafica — clear them too,
     // then repopulate below (empty when the registry has none).
     setValue('manager_slots', [], { shouldDirty: true })
@@ -60,8 +62,6 @@ export function OpportunityRegistryField({
     if (!meta) {
       return
     }
-    setValue('commercial_id', meta.commercial?.id ?? null, { shouldDirty: true })
-    setValue('reporter_id', meta.reporter?.id ?? null, { shouldDirty: true })
     setValue('manager_slots', managerSlotsFromRefs(meta.managers ?? []), { shouldDirty: true })
   }
 

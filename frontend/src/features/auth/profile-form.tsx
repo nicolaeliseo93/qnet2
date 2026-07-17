@@ -37,11 +37,6 @@ import {
 } from '@/features/personal-data/drafts'
 import { buildPersonalDataSchema } from '@/features/personal-data/personal-data-schema'
 import type { PersonalDataDraft } from '@/features/personal-data/types'
-import { ModuleOpenModeField } from '@/features/modules/module-open-mode-field'
-import {
-  DEFAULT_MODULE_OPEN_PREFERENCES,
-  type ModuleOpenPreferences,
-} from '@/features/modules/types'
 
 interface ProfileValues {
   locale: string
@@ -79,12 +74,6 @@ export function ProfileForm() {
     user?.personal_data
       ? cardToDraft(user.personal_data)
       : emptyPersonalDataDraft(),
-  )
-
-  // The per-user module open-mode preference (spec 0042), seeded once from the
-  // loaded user and submitted inside the same PATCH /auth/me payload.
-  const [openMode, setOpenMode] = useState<ModuleOpenPreferences>(
-    () => user?.module_open_preferences ?? DEFAULT_MODULE_OPEN_PREFERENCES,
   )
 
   const schema = useMemo(
@@ -128,7 +117,6 @@ export function ProfileForm() {
       const updatedUser = await updateProfile({
         locale: values.locale,
         personal_data: draftToPayload(draft),
-        module_open_preferences: openMode,
       })
       // Updating the `me` cache triggers the AuthProvider effect that applies
       // the user's locale, so the UI language switches automatically here.
@@ -205,10 +193,6 @@ export function ProfileForm() {
 
         <div className="border-t pt-4">
           <PersonalDataSection value={draft} onChange={setDraft} />
-        </div>
-
-        <div className="border-t pt-4">
-          <ModuleOpenModeField value={openMode} onChange={setOpenMode} />
         </div>
 
         {serverError && (

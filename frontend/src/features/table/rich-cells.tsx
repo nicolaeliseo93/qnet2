@@ -4,7 +4,6 @@ import { Check, X, type LucideIcon } from 'lucide-react'
 import i18n from '@/i18n'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   BADGE_BASE,
   BADGE_COLOR_CLASSES,
@@ -152,54 +151,6 @@ export function BooleanBadgeCell({ value }: ICellRendererParams) {
         {value ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
         {i18n.t(value ? 'common.yes' : 'common.no')}
       </Badge>
-    </div>
-  )
-}
-
-/** Tone tokens used for person avatars — the lively half of the palette (no neutrals). */
-const AVATAR_TONE_TOKENS = [
-  'red', 'orange', 'amber', 'green', 'emerald', 'teal', 'blue', 'indigo', 'violet', 'purple', 'pink',
-] as const
-
-/** Two-letter initials from the first and last word of a name. */
-function initialsOf(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean)
-  const first = words[0] ?? ''
-  const last = words.length > 1 ? (words[words.length - 1] ?? '') : ''
-  return (first.charAt(0) + last.charAt(0)).toUpperCase() || '?'
-}
-
-/** Deterministic soft tone per name, so the same person keeps the same avatar color. */
-function avatarToneClass(name: string): string {
-  let hash = 0
-  for (let index = 0; index < name.length; index += 1) {
-    hash = (hash * 31 + name.charCodeAt(index)) >>> 0
-  }
-  const token = AVATAR_TONE_TOKENS[hash % AVATAR_TONE_TOKENS.length] ?? 'slate'
-  return BADGE_COLOR_CLASSES[token] ?? BADGE_COLOR_CLASSES.slate
-}
-
-/**
- * A person relation (`operator`): a compact initials avatar plus the name. The
- * avatar tone is derived from the name, so the eye can track a person across
- * rows even before reading. Left-aligned; truncates with a native tooltip.
- */
-export function UserAvatarCell({ value }: ICellRendererParams) {
-  const name = relationLabel(value)
-  if (!name) {
-    return <EmptyCell align="left" />
-  }
-  const tone = avatarToneClass(name)
-  return (
-    <div className="flex h-full items-center gap-2 overflow-hidden">
-      <Avatar className="size-5">
-        <AvatarFallback className={cn('text-[0.625rem] font-semibold', tone)}>
-          {initialsOf(name)}
-        </AvatarFallback>
-      </Avatar>
-      <span className="truncate" title={name}>
-        {name}
-      </span>
     </div>
   )
 }

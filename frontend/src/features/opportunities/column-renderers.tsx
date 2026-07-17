@@ -3,6 +3,7 @@ import type { ICellRendererParams } from 'ag-grid-community'
 import i18n from '@/i18n'
 import { formatDecimal } from '@/features/products/column-renderers'
 import { DateTimeCell } from '@/features/table/cell-renderers'
+import { UserCell } from '@/features/table/user-cell'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 import type { OpportunityRelationRef } from '@/features/opportunities/types'
 
@@ -15,7 +16,7 @@ function EmptyCell() {
   )
 }
 
-/** Renders a hydrated `{id, name}` relation column (registry, referent, commercial, supervisor, source): the name, or an em dash. */
+/** Renders a hydrated `{id, name}` relation column (registry, referent, commercial, source): the name, or an em dash. */
 function RelationCell({ value }: ICellRendererParams) {
   const relation = value as OpportunityRelationRef | null | undefined
   if (!relation) {
@@ -71,7 +72,7 @@ export const opportunityColumnRenderers: TableRendererMap = {
   registry: (params) => <RelationCell {...params} />,
   referent: (params) => <RelationCell {...params} />,
   commercial: (params) => <RelationCell {...params} />,
-  supervisor: (params) => <RelationCell {...params} />,
+  supervisor: (params) => <UserCell {...params} />,
   source: (params) => <RelationCell {...params} />,
   product_category: (params) => <NamesCell {...params} />,
   business_function: (params) => <NamesCell {...params} />,

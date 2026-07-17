@@ -1,66 +1,25 @@
-import { OPEN_MODE_MODAL, type ModuleRegistryEntry } from '@/features/modules/types'
-import { OPPORTUNITIES_DOMAIN } from '@/features/opportunities/api'
-import {
-  OpportunityDetailScreen,
-  OpportunityFormScreen,
-} from '@/features/opportunities/opportunity-screens'
-import { ProjectDetailScreen, ProjectFormScreen } from '@/features/projects/project-screens'
-import { CampaignDetailScreen, CampaignFormScreen } from '@/features/campaigns/campaign-screens'
-import {
-  LeadDetailPageActions,
-  LeadDetailScreen,
-  LeadFormScreen,
-} from '@/features/leads/lead-screens'
-
-/** Domain slugs — the same kebab-case keys as `config/tables.php`/`TableRegistry` server-side. */
-export const PROJECTS_DOMAIN = 'projects'
-export const CAMPAIGNS_DOMAIN = 'campaigns'
-export const LEADS_DOMAIN = 'leads'
+import type { ModuleRegistryEntry } from '@/features/modules/types'
 
 /**
- * Single source of truth of every module whose open mode (modal vs
- * dedicated page) the user can control (spec 0042). Wave 0 registers the 4
- * reference modules, which already own both mount points today; later waves
- * append entries here without touching `useModuleOpener`, the generic
- * `ModuleDetailPage`/`ModuleFormPage` hosts, or the settings UI. `import-runs`
- * and `migrations` are intentionally never registered (non-CRUD flows, out
- * of scope — spec 0042 `<out>`).
+ * Single, AUTOMATIC source of truth of every switchable module (spec 0042).
+ *
+ * Any `features/<module>/<name>-screens.tsx` that exports a `moduleScreen`
+ * descriptor is collected here at build time via `import.meta.glob` — there is
+ * NO hand-maintained list. Adding a new module (or a new switchable one) needs
+ * only its own adapter file: it then appears automatically in the settings
+ * list, gets its generated deep-link routes, and becomes commutable modal/page.
+ * `import-runs`/`migrations` simply never export a `moduleScreen` (non-CRUD,
+ * out of scope).
  */
-export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
-  {
-    domain: PROJECTS_DOMAIN,
-    basePath: '/projects',
-    defaultMode: OPEN_MODE_MODAL,
-    labelKey: 'navigation.projects',
-    DetailScreen: ProjectDetailScreen,
-    FormScreen: ProjectFormScreen,
-  },
-  {
-    domain: CAMPAIGNS_DOMAIN,
-    basePath: '/campaigns',
-    defaultMode: OPEN_MODE_MODAL,
-    labelKey: 'navigation.campaigns',
-    DetailScreen: CampaignDetailScreen,
-    FormScreen: CampaignFormScreen,
-  },
-  {
-    domain: LEADS_DOMAIN,
-    basePath: '/leads',
-    defaultMode: OPEN_MODE_MODAL,
-    labelKey: 'navigation.leads',
-    DetailScreen: LeadDetailScreen,
-    FormScreen: LeadFormScreen,
-    DetailPageActions: LeadDetailPageActions,
-  },
-  {
-    domain: OPPORTUNITIES_DOMAIN,
-    basePath: '/opportunities',
-    defaultMode: OPEN_MODE_MODAL,
-    labelKey: 'navigation.opportunities',
-    DetailScreen: OpportunityDetailScreen,
-    FormScreen: OpportunityFormScreen,
-  },
-]
+const adapters = import.meta.glob<{ moduleScreen?: ModuleRegistryEntry }>(
+  '../*/*-screens.tsx',
+  { eager: true },
+)
+
+export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = Object.values(adapters)
+  .map((adapter) => adapter.moduleScreen)
+  .filter((entry): entry is ModuleRegistryEntry => Boolean(entry))
+  .sort((a, b) => a.domain.localeCompare(b.domain))
 
 /** Looks up a registered module by its domain slug, or `undefined` if not (yet) registered. */
 export function getModuleRegistryEntry(domain: string): ModuleRegistryEntry | undefined {

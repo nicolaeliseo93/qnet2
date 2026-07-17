@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { toast } from 'sonner'
@@ -9,6 +10,12 @@ import { SectorsTable } from '@/features/sectors/sectors-table'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
 import type { SectorDetailWithPermissions } from '@/features/sectors/types'
+
+// This suite exercises the default modal behaviour; force the resolved open
+// mode so it never depends on an AuthProvider (spec 0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
+}))
 
 /**
  * Spec 0018 AC-020 — the Sectors adapter mounts the generic table on the
@@ -103,7 +110,9 @@ function renderTable() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <SectorsTable />
+      <MemoryRouter>
+        <SectorsTable />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

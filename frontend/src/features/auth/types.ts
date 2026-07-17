@@ -32,7 +32,8 @@ export interface LoginPayload {
 }
 
 export interface UpdateProfilePayload {
-  locale: string
+  /** Optional: PATCH /auth/me is a partial update (backend `sometimes`). */
+  locale?: string
   /** Nested registry card + contacts + addresses (ADR 0013). */
   personal_data?: PersonalDataPayload
   /** Optional: updates the modal-vs-page open mode preference (spec 0042). */

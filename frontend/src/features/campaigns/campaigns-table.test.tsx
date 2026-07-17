@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { toast } from 'sonner'
@@ -67,6 +68,11 @@ vi.mock('@/features/auth/use-abilities', () => ({
     roles: [],
     isLoading: false,
   }),
+}))
+
+// Default modal behaviour; force the resolved open mode (spec 0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
 }))
 
 vi.mock('@/components/page-header', () => ({
@@ -153,7 +159,9 @@ function renderTable() {
     client,
     ...render(
       <QueryClientProvider client={client}>
-        <CampaignsTable />
+        <MemoryRouter>
+          <CampaignsTable />
+        </MemoryRouter>
       </QueryClientProvider>,
     ),
   }

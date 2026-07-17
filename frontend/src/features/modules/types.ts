@@ -67,6 +67,16 @@ export interface ModuleRegistryEntry {
   defaultMode: OpenMode
   /** i18n key under `navigation.*`. */
   labelKey: string
+  /**
+   * When `false`, the generic `new`/`:id`/`:id/edit` routes are NOT generated
+   * for this module: it keeps its own bespoke dedicated pages (declared by hand
+   * in `router.tsx`), e.g. registries/referents/products whose detail pages own
+   * extra behaviour (breadcrumb titles, spec 0022) the generic host does not
+   * replicate. `'page'` mode then navigates to those existing routes, while
+   * `'modal'` mode still mounts the adapters below in a Sheet. Defaults to
+   * `true` (generate the routes) when omitted.
+   */
+  generateRoutes?: boolean
   DetailScreen: ComponentType<ModuleDetailScreenProps>
   FormScreen: ComponentType<ModuleFormScreenProps>
   /**

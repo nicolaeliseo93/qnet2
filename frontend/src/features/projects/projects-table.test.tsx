@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { toast } from 'sonner'
@@ -70,6 +71,12 @@ vi.mock('@/features/auth/use-abilities', () => ({
 
 vi.mock('@/components/page-header', () => ({
   PageHeader: ({ actions }: { actions?: ReactNode }) => <div>{actions}</div>,
+}))
+
+// This suite exercises the default modal behaviour; force the resolved open
+// mode so it never depends on an AuthProvider (spec 0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
 }))
 
 const refreshMock = vi.fn()
@@ -162,7 +169,9 @@ function renderTable() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return { client, ...render(
     <QueryClientProvider client={client}>
-      <ProjectsTable />
+      <MemoryRouter>
+        <ProjectsTable />
+      </MemoryRouter>
     </QueryClientProvider>,
   ) }
 }

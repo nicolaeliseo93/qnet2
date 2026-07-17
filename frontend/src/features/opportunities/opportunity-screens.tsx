@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- registry adapter: components + moduleScreen descriptor colocated by design (spec 0042) */
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
@@ -13,9 +14,11 @@ import { OpportunityForm, OpportunityFormSkeleton } from '@/features/opportuniti
 import { OpportunityDetailView } from '@/features/opportunities/opportunity-detail'
 import { useOpportunityCreateMode } from '@/features/opportunities/use-opportunity-create-mode'
 import { parseEntityId } from '@/routes/entity-id'
+import { OPEN_MODE_MODAL } from '@/features/modules/types'
 import type {
   ModuleDetailScreenProps,
   ModuleFormScreenProps,
+  ModuleRegistryEntry,
 } from '@/features/modules/types'
 import type { OpportunityDetail } from '@/features/opportunities/types'
 
@@ -168,4 +171,14 @@ function OpportunityEditScreen({ opportunityId, onSuccess, onCancel }: Opportuni
   return (
     <OpportunityForm mode={{ type: 'edit', opportunity }} onSuccess={onSuccess} onCancel={onCancel} />
   )
+}
+
+/** Auto-registered in the module registry (spec 0042). */
+export const moduleScreen: ModuleRegistryEntry = {
+  domain: 'opportunities',
+  basePath: '/opportunities',
+  defaultMode: OPEN_MODE_MODAL,
+  labelKey: 'navigation.opportunities',
+  DetailScreen: OpportunityDetailScreen,
+  FormScreen: OpportunityFormScreen,
 }

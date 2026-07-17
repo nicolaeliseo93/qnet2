@@ -12,7 +12,6 @@ import {
   GroupCell,
   RelationCell,
   StatusBadgeCell,
-  UserAvatarCell,
 } from '@/features/table/rich-cells'
 
 /**
@@ -132,18 +131,6 @@ describe('BooleanBadgeCell', () => {
 
   it('renders an em dash for a non-boolean value', () => {
     expect(render(<BooleanBadgeCell {...params(null)} />).getByText('—')).toBeInTheDocument()
-  })
-})
-
-describe('UserAvatarCell', () => {
-  it('renders the person name with initials', () => {
-    const { getByText } = render(<UserAvatarCell {...params({ name: 'Marco Rossi' })} />)
-    expect(getByText('Marco Rossi')).toBeInTheDocument()
-    expect(getByText('MR')).toBeInTheDocument()
-  })
-
-  it('renders an em dash when there is no person', () => {
-    expect(render(<UserAvatarCell {...params(null)} />).getByText('—')).toBeInTheDocument()
   })
 })
 

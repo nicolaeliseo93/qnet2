@@ -14,6 +14,10 @@ import type { TableActionDefinition, TableRow } from '@/features/table/types'
  * opening a Sheet.
  */
 const canMock = vi.fn<(permission: string) => boolean>()
+// Default open mode for products (page, spec 0022/0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'page',
+}))
 
 vi.mock('@/features/auth/use-abilities', () => ({
   useAbilities: () => ({

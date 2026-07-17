@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import BusinessFunctionsPage from '@/pages/business-functions-page'
@@ -14,6 +15,11 @@ import BusinessFunctionsPage from '@/pages/business-functions-page'
  * mounting `<TableView domain="business-functions">` with the right domain.
  */
 const canMock = vi.fn<(permission: string) => boolean>()
+
+// Default modal behaviour; force the resolved open mode (spec 0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
+}))
 
 vi.mock('@/features/auth/use-abilities', () => ({
   useAbilities: () => ({
@@ -41,7 +47,9 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <BusinessFunctionsPage />
+      <MemoryRouter>
+        <BusinessFunctionsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

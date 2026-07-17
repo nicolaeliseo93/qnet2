@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import i18n from '@/i18n'
@@ -25,6 +26,11 @@ vi.mock('@/features/auth/use-abilities', () => ({
     roles: [],
     isLoading: false,
   }),
+}))
+
+// Default modal behaviour; force the resolved open mode (spec 0042).
+vi.mock('@/features/modules/use-module-open-mode', () => ({
+  useModuleOpenMode: () => 'modal',
 }))
 
 vi.mock('@/components/page-header', () => ({
@@ -71,7 +77,9 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <PipelineStatusesPage />
+      <MemoryRouter>
+        <PipelineStatusesPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -80,7 +88,9 @@ function renderTable() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <PipelineStatusesTable />
+      <MemoryRouter>
+        <PipelineStatusesTable />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

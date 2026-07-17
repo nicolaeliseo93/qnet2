@@ -11,7 +11,7 @@ import ModuleFormPage from '@/features/modules/module-form-page'
  * the same route array `router.tsx` builds by hand for the rest.
  */
 export function buildModuleRoutes(): RouteObject[] {
-  return MODULE_REGISTRY.flatMap((entry) => {
+  return MODULE_REGISTRY.filter((entry) => entry.generateRoutes !== false).flatMap((entry) => {
     const base = entry.basePath.replace(/^\//, '')
     return [
       { path: `${base}/new`, element: <ModuleFormPage domain={entry.domain} /> },
