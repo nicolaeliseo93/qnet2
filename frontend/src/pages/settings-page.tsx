@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Lock, PanelsTopLeft, UserRound, type LucideIcon } from 'lucide-react'
+import { Cog, Lock, Scaling, UserRound, type LucideIcon } from 'lucide-react'
 import {
   Card,
   CardContent,
@@ -16,6 +16,7 @@ import { ProfileForm } from '@/features/auth/profile-form'
 import { PasswordForm } from '@/features/auth/password-form'
 import { AvatarForm } from '@/features/auth/avatar-form'
 import { ModuleOpenModeForm } from '@/features/modules/module-open-mode-form'
+import { UiScaleForm } from '@/features/appearance/ui-scale-form'
 
 interface SectionMeta {
   id: string
@@ -40,10 +41,16 @@ const SECTIONS: readonly SectionMeta[] = [
     descKey: 'settings.passwordSubtitle',
   },
   {
-    id: 'modules',
-    icon: PanelsTopLeft,
-    titleKey: 'settings.moduleOpenMode.title',
-    descKey: 'settings.moduleOpenMode.subtitle',
+    id: 'appearance',
+    icon: Scaling,
+    titleKey: 'settings.appearance.title',
+    descKey: 'settings.appearance.subtitle',
+  },
+  {
+    id: 'system',
+    icon: Cog,
+    titleKey: 'settings.systemSettings.title',
+    descKey: 'settings.systemSettings.subtitle',
   },
 ]
 
@@ -143,10 +150,21 @@ export default function SettingsPage() {
           </SettingsSection>
 
           <SettingsSection
-            id="modules"
-            icon={PanelsTopLeft}
-            title={t('settings.moduleOpenMode.title')}
-            description={t('settings.moduleOpenMode.subtitle')}
+            id="appearance"
+            icon={Scaling}
+            title={t('settings.appearance.title')}
+            description={t('settings.appearance.subtitle')}
+          >
+            <FieldPanel>
+              <UiScaleForm />
+            </FieldPanel>
+          </SettingsSection>
+
+          <SettingsSection
+            id="system"
+            icon={Cog}
+            title={t('settings.systemSettings.title')}
+            description={t('settings.systemSettings.subtitle')}
           >
             <FieldPanel>
               <ModuleOpenModeForm />

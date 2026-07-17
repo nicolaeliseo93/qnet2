@@ -14,12 +14,6 @@ function opportunity(
     name: 'Enterprise deal',
     registry_id: 10,
     registry: { id: 10, name: 'Acme S.p.A.' },
-    company_id: 20,
-    company: { id: 20, name: 'Acme Group' },
-    company_site_id: 30,
-    company_site: { id: 30, name: 'HQ' },
-    operational_site_id: 40,
-    operational_site: { id: 40, label: 'Via Roma 1 - Milano' },
     referent_id: 60,
     referent: { id: 60, name: 'Mario Rossi' },
     commercial_id: 70,
@@ -70,10 +64,7 @@ describe('OpportunityDetailView — read-only (AC-077)', () => {
     expect(screen.getByRole('heading', { name: 'Enterprise deal' })).toBeInTheDocument()
     // "Acme S.p.A." appears twice: the hero subtitle and the registry field.
     expect(screen.getAllByText('Acme S.p.A.').length).toBe(2)
-    expect(screen.getByText('Acme Group')).toBeInTheDocument()
-    expect(screen.getByText('HQ')).toBeInTheDocument()
     expect(screen.getByText('Sales')).toBeInTheDocument()
-    expect(screen.getByText('Via Roma 1 - Milano')).toBeInTheDocument()
     expect(screen.getByText('Mario Rossi')).toBeInTheDocument()
     expect(screen.getByText('Luca Verdi')).toBeInTheDocument()
     expect(screen.getByText('Giulia Neri')).toBeInTheDocument()
@@ -97,12 +88,6 @@ describe('OpportunityDetailView — read-only (AC-077)', () => {
     render(
       <OpportunityDetailView
         opportunity={opportunity({
-          // company_id/company_site_id/operational_site_id are mandatory
-          // (amendment A-2): only their hydrated relation objects can be
-          // unresolved, the FK itself is always present.
-          company: null,
-          company_site: null,
-          operational_site: null,
           referent_id: null,
           referent: null,
           commercial_id: null,

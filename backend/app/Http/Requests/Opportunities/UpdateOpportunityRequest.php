@@ -18,18 +18,16 @@ use Illuminate\Validation\Rule;
 /**
  * Validates the payload for PUT/PATCH /api/opportunities/{opportunity}
  * (spec 0040). Every field is `sometimes` (partial PATCH), never null once
- * touched for `name`/`company_id`/`company_site_id` (mandatory, amendment
- * rev.1 A-2 — NEITHER is BR-1-derivable). `lead_id` is ALWAYS `prohibited`
- * (BR-2, immutable once set). When $opportunity carries a `lead_id`, its 3
+ * touched for `name` (mandatory). `lead_id` is ALWAYS `prohibited` (BR-2,
+ * immutable once set). When $opportunity carries a `lead_id`, its 2
  * BR-1-derivable fields are re-resolved against the CURRENT lead/campaign
  * state (LeadOpportunityDefaultsResolver — same source as create): a
  * submission of one of them must equal that current derived value
  * (`Rule::in`) — a DIFFERENT value 422s, the SAME value is a no-op (BR-2).
- * `operational_site_id`, when NOT locked, is mandatory like `registry_id`'s
- * unlocked case; `source_id` stays optional even unlocked. An opportunity
- * with no lead has none of these fields locked. `referent_id` is NOT
- * derivable (spec 0041 D-1/D-3): it stays a plain, always-editable field
- * scoped to the chosen registry (BR-4, spec 0040).
+ * `source_id` stays optional even unlocked. An opportunity with no lead has
+ * none of these fields locked. `referent_id` is NOT derivable (spec 0041
+ * D-1/D-3): it stays a plain, always-editable field scoped to the chosen
+ * registry (BR-4, spec 0040).
  *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('update', $opportunity)). EnforcesFieldPermissions
@@ -42,6 +40,7 @@ use Illuminate\Validation\Rule;
  * 2026-07-17: `product_lines` may be OMITTED (partial PATCH, rows untouched)
  * but may NOT be cleared to `[]` (`min:1`) — an opportunity always keeps at
  * least one {business_function_id, product_category_id} row.
+ * `company_id`/`company_site_id`/`operational_site_id` are REMOVED entirely.
  */
 class UpdateOpportunityRequest extends FormRequest
 {
@@ -67,9 +66,6 @@ class UpdateOpportunityRequest extends FormRequest
         return array_merge([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'registry_id' => $this->lockableRule($locked, 'registry_id', 'registries'),
-            'company_id' => ['sometimes', 'required', 'integer', Rule::exists('companies', 'id')],
-            'company_site_id' => ['sometimes', 'required', 'integer', Rule::exists('company_sites', 'id')],
-            'operational_site_id' => $this->lockableRule($locked, 'operational_site_id', 'operational_sites', required: true),
             'referent_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
             'commercial_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
             'reporter_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
@@ -84,12 +80,11 @@ class UpdateOpportunityRequest extends FormRequest
     }
 
     /**
-     * One of the 3 BR-1-derivable fields: when $locked carries a value for
+     * One of the 2 BR-1-derivable fields: when $locked carries a value for
      * it, the submission must match EXACTLY (`Rule::in`, BR-2); otherwise the
-     * plain relation rule applies — `required` only for `operational_site_id`
-     * (amendment rev.1 A-2: mandatory when not locked, like `registry_id`'s
-     * own unlocked case), `nullable` for `source_id` (never forced on an
-     * unlocked, previously-empty field).
+     * plain relation rule applies — `required` only for `registry_id`'s own
+     * unlocked case, `nullable` for `source_id` (never forced on an unlocked,
+     * previously-empty field).
      *
      * @param  array<string, int>  $locked
      * @return array<int, mixed>

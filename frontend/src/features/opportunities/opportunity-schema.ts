@@ -5,8 +5,7 @@ import type { TFunction } from 'i18next'
  * Zod schema for the opportunity create/edit form, built as a factory so
  * validation messages are localized via the i18n `t` function. The shape
  * mirrors the frozen backend contract (spec 0040 + amendment rev.1) 1:1:
- * `name`, `registry_id`, `company_id`, `company_site_id`, `operational_site_id`
- * required (D-4/A-2), every other relation nullable.
+ * `name`, `registry_id` required (D-4), every other relation nullable.
  */
 
 /** Backend `name` column limit (`max:255`). */
@@ -44,13 +43,8 @@ function baseFields(t: TFunction) {
       .trim()
       .min(1, t('opportunities.form.nameRequired'))
       .max(NAME_MAX_LENGTH, t('opportunities.form.nameMax')),
-    // D-4/A-2: the 4 other required fields (name is above).
+    // D-4: registry_id is the other required field (name is above).
     registry_id: requiredRelationId(t('opportunities.form.registryRequired')),
-    company_id: requiredRelationId(t('opportunities.form.companyRequired')),
-    company_site_id: requiredRelationId(t('opportunities.form.companySiteRequired')),
-    // A-2: still required when derived from a lead that owns one (BR-1
-    // prefills it, non-null) — free and required when the lead has none.
-    operational_site_id: requiredRelationId(t('opportunities.form.operationalSiteRequired')),
     referent_id: z.number().nullable(),
     commercial_id: z.number().nullable(),
     reporter_id: z.number().nullable(),

@@ -29,9 +29,6 @@ class OpportunityService
      */
     private const array DETAIL_RELATIONS = [
         'registry',
-        'company',
-        'companySite',
-        'operationalSite.addresses.city',
         'referent',
         'commercial',
         'reporter',
@@ -58,7 +55,7 @@ class OpportunityService
     }
 
     /**
-     * Create a new opportunity. When `lead_id` is submitted, the 3 BR-1-
+     * Create a new opportunity. When `lead_id` is submitted, the 2 BR-1-
      * derivable attributes are overwritten with LeadOpportunityDefaultsResolver's
      * values (StoreOpportunityRequest already rejected a conflicting
      * submission as `prohibited`, so this only ever fills in fields the
@@ -126,7 +123,7 @@ class OpportunityService
     }
 
     /**
-     * Overwrite $attributes' 3 BR-1-derivable keys with the linked lead's
+     * Overwrite $attributes' 2 BR-1-derivable keys with the linked lead's
      * current defaults, for every field whose derivation is non-null.
      *
      * @param  array<string, mixed>  $attributes

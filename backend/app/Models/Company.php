@@ -8,7 +8,6 @@ use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\CompanyFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Company entity (spec 0010 — "Società aziendali"): a denomination, an
@@ -48,16 +47,5 @@ class Company extends BaseModel
 
             return $addresses->firstWhere('is_primary', true) ?? $addresses->first();
         });
-    }
-
-    /**
-     * The opportunities against this company (spec 0040, BR-3: restrict-on-
-     * delete — CompanyService::delete() guards on this before deleting).
-     *
-     * @return HasMany<Opportunity, $this>
-     */
-    public function opportunities(): HasMany
-    {
-        return $this->hasMany(Opportunity::class);
     }
 }

@@ -112,18 +112,6 @@ class OperationalSite extends BaseModel
     }
 
     /**
-     * The opportunities against this operational site (spec 0040, BR-3:
-     * restrict-on-delete — OperationalSiteService::delete() guards on this
-     * before deleting).
-     *
-     * @return HasMany<Opportunity, $this>
-     */
-    public function opportunities(): HasMany
-    {
-        return $this->hasMany(Opportunity::class);
-    }
-
-    /**
      * The business functions this site is associated to (spec 0010 REV),
      * inverse of BusinessFunction::operationalSites(). Feeds the
      * operational-sites/for-select `business_function_id` scope (spec 0040

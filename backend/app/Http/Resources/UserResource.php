@@ -22,6 +22,12 @@ class UserResource extends JsonResource
     private const array DEFAULT_MODULE_OPEN_PREFERENCES = ['mode' => 'custom', 'overrides' => []];
 
     /**
+     * Default UI scale when the column is null: 40 on the 0..100 slider, which
+     * the client maps to 100% (normal size). Never null in the response.
+     */
+    private const int UI_SCALE_DEFAULT = 40;
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -61,6 +67,8 @@ class UserResource extends JsonResource
             // Spec 0042: mode/overrides for the per-user module open preference,
             // defaulted here (never null) when the column is unset.
             'module_open_preferences' => $this->module_open_preferences ?? self::DEFAULT_MODULE_OPEN_PREFERENCES,
+            // Per-user UI scale (0..100), defaulted to 40 (=100%) when unset.
+            'ui_scale' => $this->ui_scale ?? self::UI_SCALE_DEFAULT,
         ];
     }
 }

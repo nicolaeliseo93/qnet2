@@ -73,19 +73,14 @@ class OperationalSiteService
     }
 
     /**
-     * Restrictive delete (spec 0024 BR-2/D-4, spec 0040 BR-3): a site
-     * referenced by at least one lead OR opportunity cannot be removed.
-     * Otherwise its owned address cascades away
+     * Restrictive delete (spec 0024 BR-2/D-4): a site referenced by at least
+     * one lead cannot be removed. Otherwise its owned address cascades away
      * (HasAddresses::bootHasAddresses).
      */
     public function delete(OperationalSite $site): void
     {
         if ($site->leads()->exists()) {
             abort(409, 'This operational site has leads and cannot be deleted.');
-        }
-
-        if ($site->opportunities()->exists()) {
-            abort(409, 'This operational site has opportunities and cannot be deleted.');
         }
 
         $site->delete();

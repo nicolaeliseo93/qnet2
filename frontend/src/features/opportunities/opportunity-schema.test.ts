@@ -3,18 +3,14 @@ import i18n from '@/i18n'
 import { buildCreateOpportunitySchema } from '@/features/opportunities/opportunity-schema'
 
 /**
- * AC-070/AC-084: `name`, `registry_id`, `company_id`, `company_site_id` and
- * `operational_site_id` are mandatory (D-4 + amendment A-2); every other
- * field is optional; probability out of 0..100 rejected.
+ * AC-070: `name` and `registry_id` are mandatory (D-4); every other field is
+ * optional; probability out of 0..100 rejected.
  */
 
 function baseValues(overrides: Record<string, unknown> = {}) {
   return {
     name: 'Enterprise deal',
     registry_id: 1,
-    company_id: 2,
-    company_site_id: 3,
-    operational_site_id: 4,
     referent_id: null,
     commercial_id: null,
     reporter_id: null,
@@ -38,7 +34,7 @@ beforeAll(async () => {
 })
 
 describe('buildCreateOpportunitySchema', () => {
-  it('accepts a valid payload with only the 5 mandatory fields set', () => {
+  it('accepts a valid payload with only the 2 mandatory fields set', () => {
     const schema = buildCreateOpportunitySchema(i18n.t)
     const result = schema.safeParse(baseValues())
     expect(result.success).toBe(true)
@@ -60,38 +56,6 @@ describe('buildCreateOpportunitySchema', () => {
     if (!result.success) {
       expect(result.error.issues.some((issue) => issue.path.join('.') === 'registry_id')).toBe(true)
     }
-  })
-
-  /** AC-084: the 3 amendment A-2 mandatory fields. */
-  describe('mandatory company_id/company_site_id/operational_site_id (AC-084)', () => {
-    it('rejects a missing company_id', () => {
-      const schema = buildCreateOpportunitySchema(i18n.t)
-      const result = schema.safeParse(baseValues({ company_id: null }))
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.issues.some((issue) => issue.path.join('.') === 'company_id')).toBe(true)
-      }
-    })
-
-    it('rejects a missing company_site_id', () => {
-      const schema = buildCreateOpportunitySchema(i18n.t)
-      const result = schema.safeParse(baseValues({ company_site_id: null }))
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.issues.some((issue) => issue.path.join('.') === 'company_site_id')).toBe(true)
-      }
-    })
-
-    it('rejects a missing operational_site_id', () => {
-      const schema = buildCreateOpportunitySchema(i18n.t)
-      const result = schema.safeParse(baseValues({ operational_site_id: null }))
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(
-          result.error.issues.some((issue) => issue.path.join('.') === 'operational_site_id'),
-        ).toBe(true)
-      }
-    })
   })
 
   it('accepts every truly optional relation left null', () => {

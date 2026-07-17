@@ -15,17 +15,15 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Validates the payload for POST /api/opportunities (spec 0040). `name`/
- * `company_id`/`company_site_id` are always required (D-4, amendment rev.1
- * A-2 — NEITHER is BR-1-derivable, no lead/campaign chain to either);
- * `registry_id`/`operational_site_id` are required UNLESS `lead_id` derives
- * them (BR-1). The 3 BR-1-derivable fields (source_id/operational_site_id/
- * registry_id) become `prohibited` when `lead_id` derives a non-null value
- * for them — LeadOpportunityDefaultsResolver is the single source of truth
- * for which ones, shared verbatim with OpportunityService's write-side
- * derivation and the GET /api/leads/{lead}/opportunity-defaults prefill.
- * `referent_id` is NOT derivable (spec 0041 D-1/D-3): it stays a plain,
- * always-editable field scoped to the chosen registry (BR-4, spec 0040).
+ * Validates the payload for POST /api/opportunities (spec 0040). `name` is
+ * always required (D-4); `registry_id` is required UNLESS `lead_id` derives
+ * it (BR-1). The 2 BR-1-derivable fields (source_id/registry_id) become
+ * `prohibited` when `lead_id` derives a non-null value for them —
+ * LeadOpportunityDefaultsResolver is the single source of truth for which
+ * ones, shared verbatim with OpportunityService's write-side derivation and
+ * the GET /api/leads/{lead}/opportunity-defaults prefill. `referent_id` is
+ * NOT derivable (spec 0041 D-1/D-3): it stays a plain, always-editable field
+ * scoped to the chosen registry (BR-4, spec 0040).
  *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Opportunity::class)). EnforcesFieldPermissions
@@ -35,7 +33,8 @@ use Illuminate\Validation\Rule;
  * Amendment rev.3: `business_function_id`/`product_category_id` are REPLACED
  * by `product_lines` (ValidatesProductLines) — no longer BR-1-derivable/
  * lockable scalars. User directive 2026-07-17: `product_lines` is REQUIRED
- * (at least one {business_function_id, product_category_id} row) to create.
+ * (at least one {business_function_id, product_category_id} row) to create;
+ * `company_id`/`company_site_id`/`operational_site_id` are REMOVED entirely.
  */
 class StoreOpportunityRequest extends FormRequest
 {
@@ -63,9 +62,6 @@ class StoreOpportunityRequest extends FormRequest
         return array_merge([
             'name' => ['required', 'string', 'max:255'],
             'registry_id' => $this->derivableRule($locked, 'registry_id', required: true, table: 'registries'),
-            'company_id' => ['required', 'integer', Rule::exists('companies', 'id')],
-            'company_site_id' => ['required', 'integer', Rule::exists('company_sites', 'id')],
-            'operational_site_id' => $this->derivableRule($locked, 'operational_site_id', required: true, table: 'operational_sites'),
             'referent_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'commercial_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'reporter_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
@@ -80,7 +76,7 @@ class StoreOpportunityRequest extends FormRequest
     }
 
     /**
-     * One of the 6 BR-1-derivable fields: `prohibited` when $locked derives a
+     * One of the 2 BR-1-derivable fields: `prohibited` when $locked derives a
      * value for it, else the plain (required or nullable) relation rule.
      *
      * @param  array<int, string>  $locked

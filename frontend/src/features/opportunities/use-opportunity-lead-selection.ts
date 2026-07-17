@@ -9,7 +9,7 @@ import type { OpportunityProductLine } from '@/features/opportunities/types'
 import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
 
 /**
- * The 3 BR-1 fields a lead selection writes to (or clears from) the form.
+ * The 2 BR-1 fields a lead selection writes to (or clears from) the form.
  * `referent_id` is NOT among them (spec 0041 D-3): it stays a free,
  * anagrafica-scoped pick (BR-4 spec 0040), never derived/locked by the lead.
  * `business_function_id`/`product_category_id` are NOT single fields anymore
@@ -17,7 +17,7 @@ import type { OpportunityFormValues } from '@/features/opportunities/use-opportu
  * both exist, seeds `product_lines` instead (handled separately below,
  * alongside the name auto-fill).
  */
-const DERIVED_FIELDS = ['source_id', 'operational_site_id', 'registry_id'] as const
+const DERIVED_FIELDS = ['source_id', 'registry_id'] as const
 
 export interface OpportunityLeadSelectionState {
   leadId: number | null
@@ -133,7 +133,6 @@ export function useOpportunityLeadSelection(
       }
 
       setValue('source_id', defaults.values.source_id, { shouldDirty: true })
-      setValue('operational_site_id', defaults.values.operational_site_id, { shouldDirty: true })
       setValue('registry_id', defaults.values.registry_id, { shouldDirty: true })
       applyProductLines(defaults.product_lines)
 

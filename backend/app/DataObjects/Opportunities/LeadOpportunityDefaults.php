@@ -20,8 +20,8 @@ namespace App\DataObjects\Opportunities;
 final readonly class LeadOpportunityDefaults
 {
     /**
-     * @param  array<string, int|null>  $values  keyed by the 3 derivable fields (source_id/operational_site_id/registry_id)
-     * @param  array<string, array{id: int, name: string}|array{id: int, label: string}|null>  $references  same keys, {id,name|label} summaries
+     * @param  array<string, int|null>  $values  keyed by the 2 derivable fields (source_id/registry_id)
+     * @param  array<string, array{id: int, name: string}|null>  $references  same keys, {id,name} summaries
      * @param  array<int, string>  $lockedFields  the subset of $values whose derivation is non-null (BR-2)
      * @param  array<int, array{business_function: array{id: int, name: string}, product_category: array{id: int, name: string}}>  $productLines  0 or 1 row, editable/removable in the form (never locked)
      */

@@ -1,10 +1,7 @@
 <?php
 
 use App\Models\BusinessFunction;
-use App\Models\Company;
-use App\Models\CompanySite;
 use App\Models\Lead;
-use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\ProductCategory;
 use App\Models\Referent;
@@ -40,14 +37,15 @@ if (! function_exists('opportunityUserWith')) {
 
 if (! function_exists('mandatoryOpportunityFks')) {
     /**
-     * The mandatory create payload beyond `name`: the 4 mandatory relation FKs
-     * (amendment rev.1 A-2: registry_id/company_id/company_site_id/
-     * operational_site_id) plus a valid one-row `product_lines` collection
-     * (user directive 2026-07-17: at least one row is required to create).
-     * Each a freshly created row. Tests asserting a specific `product_lines`
-     * payload merge this helper FIRST so their own value overrides it.
+     * The mandatory create payload beyond `name`: `registry_id` (D-4) plus a
+     * valid one-row `product_lines` collection (user directive 2026-07-17:
+     * at least one row is required to create). Each a freshly created row.
+     * Tests asserting a specific `product_lines` payload merge this helper
+     * FIRST so their own value overrides it. User directive 2026-07-17:
+     * `company_id`/`company_site_id`/`operational_site_id` are REMOVED
+     * entirely, no longer part of this payload.
      *
-     * @return array{registry_id: int, company_id: int, company_site_id: int, operational_site_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{registry_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
      */
     function mandatoryOpportunityFks(): array
     {
@@ -56,9 +54,6 @@ if (! function_exists('mandatoryOpportunityFks')) {
 
         return [
             'registry_id' => Registry::factory()->create()->id,
-            'company_id' => Company::factory()->create()->id,
-            'company_site_id' => CompanySite::factory()->create()->id,
-            'operational_site_id' => OperationalSite::factory()->create()->id,
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],
@@ -67,9 +62,9 @@ if (! function_exists('mandatoryOpportunityFks')) {
 }
 
 // ---------------------------------------------------------------------------
-// create (AC-012/AC-013/AC-014/AC-016/AC-017/AC-082 — SOSTITUISCE la parte
-// "solo name+registry_id" di AC-010/AC-011: i 5 mandatory sono ora name +
-// registry_id/company_id/company_site_id/operational_site_id)
+// create (AC-012/AC-013/AC-014/AC-016/AC-017/AC-082 — i mandatory sono ora
+// SOLO name + registry_id; company_id/company_site_id/operational_site_id
+// sono stati rimossi per direttiva utente 2026-07-17)
 // ---------------------------------------------------------------------------
 
 it('create: with the mandatory fields only -> 201, every optional scalar null (AC-082)', function () {
@@ -100,8 +95,6 @@ it('create: 201, response shape matches the frozen contract', function () {
     $fks = mandatoryOpportunityFks();
     $registry = Registry::find($fks['registry_id']);
     $registry->update(['name' => 'Acme Spa']);
-    $company = Company::find($fks['company_id']);
-    $company->update(['denomination' => 'Acme Group']);
     $referent = Referent::factory()->create(['name' => 'Ada Contact']);
     $supervisor = User::factory()->create(['name' => 'Sara Supervisor']);
     Sanctum::actingAs($actor);
@@ -117,7 +110,6 @@ it('create: 201, response shape matches the frozen contract', function () {
     ]))->assertCreated()
         ->assertJsonPath('data.name', 'Deal Beta')
         ->assertJsonPath('data.registry', ['id' => $registry->id, 'name' => 'Acme Spa'])
-        ->assertJsonPath('data.company', ['id' => $company->id, 'name' => 'Acme Group'])
         ->assertJsonPath('data.referent', ['id' => $referent->id, 'name' => 'Ada Contact'])
         ->assertJsonPath('data.supervisor', ['id' => $supervisor->id, 'name' => 'Sara Supervisor'])
         ->assertJsonPath('data.estimated_value', '12345.67')
@@ -153,42 +145,6 @@ it('create: missing registry_id -> 422 on that field, no row created', function 
     expect(Opportunity::count())->toBe(0);
 });
 
-it('create: missing company_id -> 422 on that field, no row created (AC-082)', function () {
-    $actor = opportunityUserWith(['create']);
-    $fks = mandatoryOpportunityFks();
-    unset($fks['company_id']);
-    Sanctum::actingAs($actor);
-
-    $this->postJson('/api/opportunities', array_merge(['name' => 'No Company'], $fks))
-        ->assertStatus(422)->assertJsonValidationErrors('company_id');
-
-    expect(Opportunity::count())->toBe(0);
-});
-
-it('create: missing company_site_id -> 422 on that field, no row created (AC-082)', function () {
-    $actor = opportunityUserWith(['create']);
-    $fks = mandatoryOpportunityFks();
-    unset($fks['company_site_id']);
-    Sanctum::actingAs($actor);
-
-    $this->postJson('/api/opportunities', array_merge(['name' => 'No Company Site'], $fks))
-        ->assertStatus(422)->assertJsonValidationErrors('company_site_id');
-
-    expect(Opportunity::count())->toBe(0);
-});
-
-it('create: missing operational_site_id -> 422 on that field, no row created (AC-082)', function () {
-    $actor = opportunityUserWith(['create']);
-    $fks = mandatoryOpportunityFks();
-    unset($fks['operational_site_id']);
-    Sanctum::actingAs($actor);
-
-    $this->postJson('/api/opportunities', array_merge(['name' => 'No Operational Site'], $fks))
-        ->assertStatus(422)->assertJsonValidationErrors('operational_site_id');
-
-    expect(Opportunity::count())->toBe(0);
-});
-
 it('create: 403 without opportunities.create, no row created (AC-012)', function () {
     $actor = opportunityUserWith([]);
     $fks = mandatoryOpportunityFks();
@@ -208,18 +164,6 @@ it('create: a non-existent registry_id -> 422 (exists), not 500 (AC-017)', funct
 
     $this->postJson('/api/opportunities', array_merge(['name' => 'Ghost registry'], $fks))
         ->assertStatus(422)->assertJsonValidationErrors('registry_id');
-
-    expect(Opportunity::count())->toBe(0);
-});
-
-it('create: a non-existent company_id -> 422 (exists), not 500 (AC-017)', function () {
-    $actor = opportunityUserWith(['create']);
-    $fks = mandatoryOpportunityFks();
-    $fks['company_id'] = 999999;
-    Sanctum::actingAs($actor);
-
-    $this->postJson('/api/opportunities', array_merge(['name' => 'Ghost company'], $fks))
-        ->assertStatus(422)->assertJsonValidationErrors('company_id');
 
     expect(Opportunity::count())->toBe(0);
 });
@@ -370,13 +314,9 @@ it('delete: 404 for a non-existent opportunity', function () {
 // response shape sanity for the remaining relation summaries
 // ---------------------------------------------------------------------------
 
-it('exposes company/company_site/operational_site/source/product_lines summaries', function () {
+it('exposes source/product_lines summaries', function () {
     $actor = opportunityUserWith(['create']);
     $fks = mandatoryOpportunityFks();
-    $company = Company::find($fks['company_id']);
-    $company->update(['denomination' => 'Acme Group']);
-    $companySite = CompanySite::find($fks['company_site_id']);
-    $companySite->update(['name' => 'Sede Nord']);
     $businessFunction = BusinessFunction::factory()->create(['name' => 'Vendite']);
     $source = Source::factory()->create(['name' => 'Fiera']);
     $productCategory = ProductCategory::factory()->create(['name' => 'Servizi Cloud', 'business_function_id' => $businessFunction->id]);
@@ -389,10 +329,7 @@ it('exposes company/company_site/operational_site/source/product_lines summaries
             ['business_function_id' => $businessFunction->id, 'product_category_id' => $productCategory->id],
         ],
     ]))->assertCreated()
-        ->assertJsonPath('data.company', ['id' => $company->id, 'name' => 'Acme Group'])
-        ->assertJsonPath('data.company_site', ['id' => $companySite->id, 'name' => 'Sede Nord'])
-        ->assertJsonPath('data.source', ['id' => $source->id, 'name' => 'Fiera'])
-        ->assertJsonPath('data.operational_site.id', $fks['operational_site_id']);
+        ->assertJsonPath('data.source', ['id' => $source->id, 'name' => 'Fiera']);
 
     $productLines = $response->json('data.product_lines');
     expect($productLines)->toHaveCount(1);

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Opportunities;
 
 use App\DataObjects\Opportunities\LeadOpportunityDefaults;
-use App\Models\Address;
 use App\Models\Lead;
 use Illuminate\Database\Eloquent\Model;
 
@@ -17,11 +16,11 @@ use Illuminate\Database\Eloquent\Model;
  * UpdateOpportunityRequest lock enforcement (BR-2), so the two can never
  * drift apart.
  *
- * `registry_id`/`operational_site_id` come straight off the lead (spec 0041
- * D-3: `registry_id` is now the LEAD's own, no longer the campaign's);
- * `source_id` falls back to the campaign's own source when the lead has
- * none. `referent_id` is NOT derived (spec 0041 D-3): it stays a plain
- * field, scoped to the chosen registry (BR-4, spec 0040).
+ * `registry_id` comes straight off the lead (spec 0041 D-3: `registry_id` is
+ * now the LEAD's own, no longer the campaign's); `source_id` falls back to
+ * the campaign's own source when the lead has none. `referent_id` is NOT
+ * derived (spec 0041 D-3): it stays a plain field, scoped to the chosen
+ * registry (BR-4, spec 0040).
  *
  * Amendment rev.3: business function/product category are NO LONGER
  * BR-2-locked scalars — `productLines` carries the campaign's EFFECTIVE pair
@@ -29,19 +28,19 @@ use Illuminate\Database\Eloquent\Model;
  * — the exact `project !== null ? project->x : campaign->x` merge
  * CampaignResource already uses for the same 2 columns, spec 0023 BR-2, no
  * second implementation) as a single EDITABLE/removable row, only when BOTH
- * are present.
+ * are present. User directive 2026-07-17: `operational_site_id` is REMOVED
+ * from the derivable set entirely.
  */
 final class LeadOpportunityDefaultsResolver
 {
     /**
-     * The 3 BR-1-derivable/lockable field keys, in the contract's declared
+     * The 2 BR-1-derivable/lockable field keys, in the contract's declared
      * order.
      *
      * @var array<int, string>
      */
     private const array DERIVED_FIELDS = [
         'source_id',
-        'operational_site_id',
         'registry_id',
     ];
 
@@ -53,7 +52,6 @@ final class LeadOpportunityDefaultsResolver
      */
     private const array REQUIRED_RELATIONS = [
         'registry',
-        'operationalSite.addresses.city',
         'source',
         'opportunity',
         'campaign.source',
@@ -76,13 +74,11 @@ final class LeadOpportunityDefaultsResolver
 
         $values = [
             'source_id' => $effectiveSource?->id,
-            'operational_site_id' => $lead->operational_site_id,
             'registry_id' => $lead->registry_id,
         ];
 
         $references = [
             'source' => $this->summarizeByName($effectiveSource),
-            'operational_site' => $this->summarizeOperationalSite($lead->operationalSite),
             'registry' => $this->summarizeByName($lead->registry),
         ];
 
@@ -133,35 +129,5 @@ final class LeadOpportunityDefaultsResolver
     private function summarizeByName(?Model $related): ?array
     {
         return $related === null ? null : ['id' => $related->id, 'name' => $related->name];
-    }
-
-    /**
-     * `operational_site` has no own name column (mirrors LeadResource's
-     * identical composition): label = primary address `line1` plus
-     * " - {city}" when present.
-     *
-     * @return array{id: int, label: string}|null
-     */
-    private function summarizeOperationalSite(mixed $site): ?array
-    {
-        if ($site === null) {
-            return null;
-        }
-
-        /** @var Address|null $address */
-        $address = $site->addresses->first();
-
-        return ['id' => $site->id, 'label' => $this->composeSiteLabel($address)];
-    }
-
-    private function composeSiteLabel(?Address $address): string
-    {
-        if ($address === null) {
-            return '';
-        }
-
-        $city = $address->city?->localizedName();
-
-        return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
     }
 }

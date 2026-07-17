@@ -15,16 +15,13 @@ export interface CreatePayloadFromLead {
 }
 
 /**
- * Builds the create payload. `name`, `registry_id`, `company_id`,
- * `company_site_id` and `operational_site_id` are validated non-null by the
- * schema's refine before submit (D-4/A-2) — `company_id`/`company_site_id`
- * are NEVER derivable from a Lead (amendment A-2) so they are always sent.
- * `registry_id`/`operational_site_id` are the exception: sent as-is UNLESS
- * locked (`fromLead`, BR-1) — either way the RHF value is always present at
- * submit time, just not always sent. `product_lines` (amendment rev.3) is
- * NEVER locked — even the row derived from a linked Lead is a normal,
- * editable/removable row (AC-102/103) — so it is always sent as-is, in
- * full (the server replaces the entire collection, AC-099). When creating
+ * Builds the create payload. `name`/`registry_id` are validated non-null by
+ * the schema's refine before submit (D-4). `registry_id` is sent as-is
+ * UNLESS locked (`fromLead`, BR-1) — either way the RHF value is always
+ * present at submit time, just not always sent. `product_lines` (amendment
+ * rev.3) is NEVER locked — even the row derived from a linked Lead is a
+ * normal, editable/removable row (AC-102/103) — so it is always sent as-is,
+ * in full (the server replaces the entire collection, AC-099). When creating
  * from a Lead (spec 0040 MT-6/A-1), every field named in
  * `fromLead.lockedFields` is OMITTED entirely (not merely repeated) and
  * `lead_id` is appended.
@@ -37,8 +34,6 @@ export function buildCreatePayload(
 
   const payload: CreateOpportunityPayload = {
     name: values.name.trim(),
-    company_id: values.company_id as number,
-    company_site_id: values.company_site_id as number,
     commercial_id: values.commercial_id,
     reporter_id: values.reporter_id,
     supervisor_id: values.supervisor_id,
@@ -58,9 +53,6 @@ export function buildCreatePayload(
   }
   if (!locked.has('source_id')) {
     payload.source_id = values.source_id
-  }
-  if (!locked.has('operational_site_id')) {
-    payload.operational_site_id = values.operational_site_id as number
   }
 
   if (fromLead) {
@@ -91,15 +83,6 @@ export function buildUpdatePayload(
   }
   if (values.registry_id !== original.registry_id) {
     payload.registry_id = values.registry_id as number
-  }
-  if (values.company_id !== original.company_id) {
-    payload.company_id = values.company_id as number
-  }
-  if (values.company_site_id !== original.company_site_id) {
-    payload.company_site_id = values.company_site_id as number
-  }
-  if (values.operational_site_id !== original.operational_site_id) {
-    payload.operational_site_id = values.operational_site_id as number
   }
   if (values.referent_id !== original.referent_id) {
     payload.referent_id = values.referent_id

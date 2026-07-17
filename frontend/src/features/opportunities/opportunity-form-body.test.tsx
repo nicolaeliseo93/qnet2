@@ -11,8 +11,7 @@ import type { ResourceMeta } from '@/features/authorization/types'
  * without a registry, scoped by `registry_id` once chosen and reset on registry
  * change; commercial/reporter are free and, per user directive 2026-07-17, are
  * never auto-filled from the anagrafica), AC-074 (field permissions: hidden vs
- * disabled), AC-107/108 (amendment rev.3: the name auto-fill override and
- * `operational_site` no longer scoped by business function).
+ * disabled), AC-107 (amendment rev.3: the name auto-fill override).
  */
 
 const createOpportunityMock = vi.fn()
@@ -178,9 +177,6 @@ describe('OpportunityFormBody — fields render (AC-071)', () => {
     expect(screen.getByTestId('select-Contact')).toBeInTheDocument()
     expect(screen.getByTestId('select-Sales rep')).toBeInTheDocument()
     expect(screen.getByTestId('select-Reporter')).toBeInTheDocument()
-    expect(screen.getByTestId('select-Company')).toBeInTheDocument()
-    expect(screen.getByTestId('select-Company site')).toBeInTheDocument()
-    expect(screen.getByTestId('select-Operational site')).toBeInTheDocument()
     expect(screen.getByTestId('select-Source')).toBeInTheDocument()
     expect(screen.getByTestId('select-Supervisor')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add account manager' })).toBeInTheDocument()
@@ -270,41 +266,6 @@ describe('OpportunityFormBody — referent scoping + free commercial/reporter (A
   })
 })
 
-describe('OpportunityFormBody — site scoping (BR-4)', () => {
-  it('scopes company_site by company_id once a company is chosen', async () => {
-    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Company')).toBeInTheDocument())
-    expect(screen.getByTestId('params-Company site')).toHaveTextContent('null')
-
-    screen.getByRole('button', { name: 'select Company 1' }).click()
-
-    await waitFor(() =>
-      expect(screen.getByTestId('params-Company site')).toHaveTextContent(JSON.stringify({ company_id: 1 })),
-    )
-  })
-
-  /** Amendment rev.3, AC-108: operational_site is no longer scoped by a single business_function_id. */
-  it('never scopes operational_site by business function, even after picking one in a product-line row', async () => {
-    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Add product line' })).toBeInTheDocument())
-    expect(screen.getByTestId('params-Operational site')).toHaveTextContent('null')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add product line' }))
-    screen.getByRole('button', { name: `select Business function 1 ${TEST_BUSINESS_FUNCTION}` }).click()
-
-    await waitFor(() =>
-      expect(screen.getByTestId('value-Business function 1')).toHaveTextContent(String(TEST_BUSINESS_FUNCTION)),
-    )
-    expect(screen.getByTestId('params-Operational site')).toHaveTextContent('null')
-  })
-})
-
 describe('OpportunityFormBody — product lines + name auto-fill (AC-106/107)', () => {
   it('scopes the row category by the row own business function', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
@@ -352,8 +313,6 @@ describe('OpportunityFormBody — product lines + name auto-fill (AC-106/107)', 
     await waitFor(() => expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('false'))
     // The row's category is left unset on purpose.
 
-    screen.getByRole('button', { name: 'select Company 1' }).click()
-    screen.getByRole('button', { name: 'select Company site 1' }).click()
     fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Enterprise deal' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -433,12 +392,10 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
               // spec 0041 D-3/AC-050: no longer a derived field.
               referent_id: null,
               source_id: 20,
-              operational_site_id: null,
               registry_id: 30,
             },
             references: {
               source: { id: 20, name: 'Web' },
-              operational_site: null,
               registry: { id: 30, name: 'Acme S.p.A.' },
             },
             lockedFields: ['registry_id', 'source_id'],
@@ -469,10 +426,6 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
     expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('false')
     expect(screen.getByTestId('value-Source')).toHaveTextContent('20')
     expect(screen.getByTestId('disabled-Source')).toHaveTextContent('true')
-
-    // The lead had no operational site (derivation null, BR-2): stays free and editable.
-    expect(screen.getByTestId('value-Operational site')).toHaveTextContent('')
-    expect(screen.getByTestId('disabled-Operational site')).toHaveTextContent('false')
 
     // Amendment rev.3 (AC-102/103): the seeded row is editable/removable —
     // never disabled — and its category already auto-fills the name.

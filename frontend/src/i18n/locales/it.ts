@@ -317,6 +317,21 @@ export const it: TranslationResources = {
     saveProfile: 'Salva modifiche',
     savingProfile: 'Salvataggio…',
     profileUpdated: 'Profilo aggiornato con successo.',
+    systemSettings: {
+      title: 'Impostazioni sistema',
+      subtitle: 'Preferenze di sistema del gestionale.',
+    },
+    appearance: {
+      title: 'Aspetto',
+      subtitle: "Regola la dimensione dell'interfaccia a tuo piacimento.",
+    },
+    uiScale: {
+      title: 'Risoluzione interfaccia',
+      subtitle:
+        "Trascina per rimpicciolire o ingrandire testi, layout e tabelle dell'intera app. 100% è la dimensione normale.",
+      saved: 'Risoluzione aggiornata con successo.',
+      reset: 'Ripristina default',
+    },
     moduleOpenMode: {
       title: 'Modalità apertura moduli',
       subtitle:

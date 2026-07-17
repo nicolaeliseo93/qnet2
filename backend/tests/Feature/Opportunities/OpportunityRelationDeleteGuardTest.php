@@ -16,11 +16,15 @@ use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Permission;
 
 /**
- * BR-3 (spec 0040): none of the 10 entities an Opportunity references may be
+ * BR-3 (spec 0040): none of the entities an Opportunity references may be
  * deleted while that Opportunity exists (AC-020..024). AC-025 (no false
  * positive on an unreferenced row / manager pivot NOT blocking) is exercised
- * inline here plus by the pre-existing delete suites of the 9 other modules,
- * proven green alongside this file.
+ * inline here plus by the pre-existing delete suites of the other modules,
+ * proven green alongside this file. User directive 2026-07-17: the guards on
+ * Company/CompanySite/OperationalSite (referenced via the now-removed
+ * `company_id`/`company_site_id`/`operational_site_id`) are REMOVED entirely
+ * — those 3 entities no longer have any Opportunity-driven delete
+ * restriction (OperationalSite keeps its own leads-driven guard, untouched).
  */
 uses(RefreshDatabase::class);
 
@@ -52,38 +56,8 @@ it('a registry referenced by an opportunity cannot be deleted: 409, not deleted 
 });
 
 // ---------------------------------------------------------------------------
-// AC-021 — Company, CompanySite, OperationalSite, BusinessFunction
+// AC-021 — BusinessFunction
 // ---------------------------------------------------------------------------
-
-it('a company referenced by an opportunity cannot be deleted: 409, not deleted (AC-021)', function () {
-    $actor = grantDeleteAbility('companies');
-    $company = Company::factory()->create();
-    Opportunity::factory()->create(['company_id' => $company->id]);
-    Sanctum::actingAs($actor);
-
-    $this->deleteJson("/api/companies/{$company->id}")->assertStatus(409);
-    $this->assertDatabaseHas('companies', ['id' => $company->id]);
-});
-
-it('a company site referenced by an opportunity cannot be deleted: 409, not deleted (AC-021)', function () {
-    $actor = grantDeleteAbility('company-sites');
-    $companySite = CompanySite::factory()->create();
-    Opportunity::factory()->create(['company_site_id' => $companySite->id]);
-    Sanctum::actingAs($actor);
-
-    $this->deleteJson("/api/company-sites/{$companySite->id}")->assertStatus(409);
-    $this->assertDatabaseHas('company_sites', ['id' => $companySite->id]);
-});
-
-it('an operational site referenced by an opportunity cannot be deleted: 409, not deleted (AC-021)', function () {
-    $actor = grantDeleteAbility('operational-sites');
-    $site = OperationalSite::factory()->create();
-    Opportunity::factory()->create(['operational_site_id' => $site->id]);
-    Sanctum::actingAs($actor);
-
-    $this->deleteJson("/api/operational-sites/{$site->id}")->assertStatus(409);
-    $this->assertDatabaseHas('operational_sites', ['id' => $site->id]);
-});
 
 it('a business function referenced by an opportunity (via a product line) cannot be deleted: 409, not deleted (AC-021, amendment rev.3)', function () {
     $actor = grantDeleteAbility('business-functions');

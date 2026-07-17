@@ -2,8 +2,6 @@
 
 namespace App\Http\Resources;
 
-use App\Models\Address;
-use App\Models\Company;
 use App\Models\Opportunity;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
 use Illuminate\Database\Eloquent\Model;
@@ -13,10 +11,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * @mixin Opportunity
  *
- * `operational_site` mirrors LeadResource's identical composed-label logic
- * (BR-3 of spec 0024, reused verbatim here — the site has no own name
- * column). `locked_fields` (spec 0040, BR-2) is [] when the opportunity has
- * no lead, else re-resolved from the CURRENT lead/campaign state via
+ * `locked_fields` (spec 0040, BR-2) is [] when the opportunity has no lead,
+ * else re-resolved from the CURRENT lead/campaign state via
  * LeadOpportunityDefaultsResolver — the same single source of truth the
  * write-path lock enforcement uses. Relies on OpportunityService::loadDetail()
  * having eager-loaded every relation this touches (including the lead's own
@@ -24,7 +20,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * Amendment rev.3: `business_function_id`/`business_function`/
  * `product_category_id`/`product_category` are REPLACED by `product_lines`
- * (one row per funzione-aziendale + categoria-prodotto pair).
+ * (one row per funzione-aziendale + categoria-prodotto pair). User directive
+ * 2026-07-17: `company_id`/`company`/`company_site_id`/`company_site`/
+ * `operational_site_id`/`operational_site` are REMOVED entirely.
  */
 class OpportunityResource extends JsonResource
 {
@@ -38,12 +36,6 @@ class OpportunityResource extends JsonResource
             'name' => $this->name,
             'registry_id' => $this->registry_id,
             'registry' => $this->summarizeByName($this->registry),
-            'company_id' => $this->company_id,
-            'company' => $this->summarizeCompany($this->company),
-            'company_site_id' => $this->company_site_id,
-            'company_site' => $this->summarizeByName($this->companySite),
-            'operational_site_id' => $this->operational_site_id,
-            'operational_site' => $this->summarizeOperationalSite($this->operationalSite),
             'referent_id' => $this->referent_id,
             'referent' => $this->summarizeByName($this->referent),
             'commercial_id' => $this->commercial_id,
@@ -74,47 +66,6 @@ class OpportunityResource extends JsonResource
     private function summarizeByName(?Model $related): ?array
     {
         return $related === null ? null : ['id' => $related->id, 'name' => $related->name];
-    }
-
-    /**
-     * `companies.name` does not exist as a column: the display name is
-     * `denomination` (see Company model).
-     *
-     * @return array{id: int, name: string}|null
-     */
-    private function summarizeCompany(?Company $company): ?array
-    {
-        return $company === null ? null : ['id' => $company->id, 'name' => $company->denomination];
-    }
-
-    /**
-     * `operational_site` has no own name column (mirrors LeadResource's
-     * identical composition): label = primary address `line1` plus
-     * " - {city}" when present.
-     *
-     * @return array{id: int, label: string}|null
-     */
-    private function summarizeOperationalSite(mixed $site): ?array
-    {
-        if ($site === null) {
-            return null;
-        }
-
-        /** @var Address|null $address */
-        $address = $site->addresses->first();
-
-        return ['id' => $site->id, 'label' => $this->composeSiteLabel($address)];
-    }
-
-    private function composeSiteLabel(?Address $address): string
-    {
-        if ($address === null) {
-            return '';
-        }
-
-        $city = $address->city?->localizedName();
-
-        return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
     }
 
     /**

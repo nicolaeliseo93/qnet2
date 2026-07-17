@@ -2,8 +2,6 @@ import { useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AgGridReact } from 'ag-grid-react'
 import {
-  iconOverrides,
-  themeQuartz,
   type ColDef,
   type ColumnMovedEvent,
   type ColumnResizedEvent,
@@ -31,9 +29,11 @@ import {
   type CellRenderer,
 } from '@/components/data-table/column-defaults'
 import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
+import { buildDataTableTheme } from '@/components/data-table/data-table-theme'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { TableColumn, TableRow } from '@/features/table/types'
 import { MAX_COLUMN_WIDTH } from '@/features/table/use-table-preferences'
+import { useUiScale } from '@/features/appearance/ui-scale-context'
 
 // Re-exported so existing domain renderer maps (`features/table/renderer-registry.ts`)
 // keep importing `CellRenderer` from this module; the type itself now lives in
@@ -42,57 +42,6 @@ export type { CellRenderer }
 
 // Register enterprise modules + license once, at module load.
 setupAgGrid()
-
-/**
- * Funnel glyph for the column header filter button. The stock Quartz `filter`
- * icon is three stacked lines, not a funnel; this replaces it with a funnel
- * outline in the app's lucide icon language. The stroke color is irrelevant —
- * `mask: true` uses only the shape's alpha, so the button keeps the theme's
- * icon color (and tracks dark mode) automatically.
- */
-const FILTER_FUNNEL_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>'
-
-/**
- * Compact grid theme aligned to the app's design tokens. The grid sits on the
- * white `--card` surface so it stands out against the grey `--background` body,
- * while borders/hover/header text reference the shared CSS variables
- * (`--border`, `--muted*`) so it tracks the app palette and dark mode
- * automatically. Sizing is tightened (smaller rows, smaller font) and
- * cells/headers carry light borders in the app border color.
- */
-const dataTableTheme = themeQuartz
-  .withParams({
-    fontFamily: 'inherit',
-    fontSize: 12,
-    rowHeight: 28,
-    headerHeight: 32,
-    headerFontSize: 10,
-    headerFontWeight: 600,
-    cellHorizontalPadding: 10,
-    backgroundColor: 'var(--card)',
-    foregroundColor: 'var(--card-foreground)',
-    borderColor: 'var(--border)',
-    headerBackgroundColor: 'var(--card)',
-    headerTextColor: 'var(--muted-foreground)',
-    rowHoverColor: 'var(--muted)',
-    // The grid is fused into the toolbar block (spec 0009): the outer card owns
-    // the border and radius, so the grid drops its own wrapper border to read as
-    // one continuous surface with the header above it.
-    wrapperBorder: false,
-    rowBorder: true,
-    columnBorder: true,
-    headerColumnBorder: true,
-    wrapperBorderRadius: 0,
-  })
-  // Swap the header filter button's three-line glyph for an actual funnel.
-  .withPart(
-    iconOverrides({
-      type: 'image',
-      mask: true,
-      icons: { filter: { svg: FILTER_FUNNEL_SVG } },
-    }),
-  )
 
 /** Column id of the synthetic, right-pinned row-actions column. */
 export const ACTIONS_COLUMN_ID = '__actions'
@@ -256,6 +205,11 @@ export function DataTable({
   onSelectionChanged,
 }: DataTableProps) {
   const { t, i18n } = useTranslation()
+
+  // Rebuild the theme when the user's UI scale changes so the grid's absolute
+  // pixel sizes track the rest of the app.
+  const { factor } = useUiScale()
+  const theme = useMemo(() => buildDataTableTheme(factor), [factor])
 
   // AG Grid's own UI strings (filter menus, set filter, column panel, context
   // menu, pagination, "Loading…"/"No Rows To Show") come from the official
@@ -463,7 +417,7 @@ export function DataTable({
     // normal layout, flex-1 in fullscreen — spec 0009).
     <div className="h-full min-h-0 w-full">
       <AgGridReact
-        theme={dataTableTheme}
+        theme={theme}
         columnDefs={colDefs}
         localeText={localeText}
         initialState={initialState}

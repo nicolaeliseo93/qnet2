@@ -9,6 +9,7 @@ import {
 import type { ForSelectItem } from '@/features/for-select/types'
 
 const useForSelectMock = vi.fn()
+const useForSelectLabelsMock = vi.fn()
 const fetchNextPage = vi.fn()
 const refetch = vi.fn()
 
@@ -17,9 +18,10 @@ vi.mock('@/features/for-select/use-for-select', async () => {
     typeof import('@/features/for-select/use-for-select')
   >('@/features/for-select/use-for-select')
   return {
-    // Keep the real flatten helper; only the hook is controlled.
+    // Keep the real flatten helper; only the hooks are controlled.
     flattenForSelectPages: actual.flattenForSelectPages,
     useForSelect: (args: unknown) => useForSelectMock(args),
+    useForSelectLabels: (args: unknown) => useForSelectLabelsMock(args),
   }
 })
 
@@ -116,9 +118,11 @@ beforeAll(async () => {
 
 beforeEach(() => {
   useForSelectMock.mockReset()
+  useForSelectLabelsMock.mockReset()
   fetchNextPage.mockReset()
   refetch.mockReset()
   useForSelectMock.mockReturnValue(queryState())
+  useForSelectLabelsMock.mockReturnValue(new Map())
 })
 
 describe('AsyncPaginatedMultiSelect', () => {
@@ -240,14 +244,22 @@ describe('AsyncPaginatedMultiSelect', () => {
     expect(screen.getByText('#7')).toBeInTheDocument()
   })
 
-  it('hydrates selected labels on mount when some selected ids are unknown', () => {
+  it('hydrates selected labels on mount via the ids-keyed label query', () => {
     renderSelect({ value: [7], selectedItems: [{ id: 8, label: 'Other User' }] })
-    expect(useForSelectMock).toHaveBeenCalledWith(
+    expect(useForSelectLabelsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         ids: [7],
         enabled: true,
       }),
     )
+  })
+
+  it('resolves badge labels from the ids-keyed label query', () => {
+    useForSelectLabelsMock.mockReturnValue(
+      new Map([[7, { id: 7, label: 'Label-Query User' }]]),
+    )
+    renderSelect({ value: [7] })
+    expect(screen.getByText('Label-Query User')).toBeInTheDocument()
   })
 
   it('shows the empty state when the query returns no options', () => {

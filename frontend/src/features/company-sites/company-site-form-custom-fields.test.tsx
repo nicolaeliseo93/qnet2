@@ -59,6 +59,7 @@ vi.mock('@/features/for-select/use-for-select', () => ({
     refetch: () => {},
   }),
   flattenForSelectPages: () => [],
+  useForSelectLabels: () => new Map(),
 }))
 
 vi.mock('@/features/config/use-config', () => ({

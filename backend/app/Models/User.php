@@ -25,7 +25,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Spatie\Activitylog\Traits\CausesActivity;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'locale', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'locale', 'is_active', 'ui_scale'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements HasLocalePreference
 {
@@ -145,6 +145,10 @@ class User extends Authenticatable implements HasLocalePreference
             // $fillable) on purpose: only the self-service /auth/me flow may set
             // it, via forceFill() (AuthService::updateProfile), never mass assignment.
             'module_open_preferences' => 'array',
+            // Per-user UI scale (0..100 slider). A plain display preference like
+            // `locale`: fillable, validated 0..100 by UpdateProfileRequest, no
+            // escalation risk.
+            'ui_scale' => 'integer',
         ];
     }
 }

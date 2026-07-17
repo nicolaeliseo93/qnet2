@@ -15,6 +15,7 @@ vi.mock('@/features/for-select/use-for-select', async () => {
   return {
     flattenForSelectPages: actual.flattenForSelectPages,
     useForSelect: (args: unknown) => useForSelectMock(args),
+    useForSelectLabels: () => new Map(),
   }
 })
 

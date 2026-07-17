@@ -17,6 +17,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import {
   flattenForSelectPages,
   useForSelect,
+  useForSelectLabels,
 } from '@/features/for-select/use-for-select'
 import type { ForSelectItem } from '@/features/for-select/types'
 
@@ -121,16 +122,23 @@ export function AsyncPaginatedSelect({
   const scrollRef = useRef<HTMLDivElement>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
 
-  // Fetch while open, and also on mount when the hydration prop does not
-  // already know the selected value's label — otherwise the trigger would
-  // show `#id` until the popup is first opened.
+  // The selected value's trigger label is resolved by a dedicated ids-keyed
+  // query (collision-free across sibling selects), not by the shared paginated
+  // list — so it never falls back to `#id` when another instance's ids won the
+  // shared cache entry. Skipped when the hydration prop already knows the label.
   const missingSelectedItem = value !== null && selectedItem?.id !== value
+  const hydratedLabels = useForSelectLabels({
+    resource,
+    ids: missingSelectedItem ? [value as number] : [],
+    enabled: missingSelectedItem,
+    params,
+  })
 
   const query = useForSelect({
     resource,
     search: debouncedSearch,
     ids: value !== null ? [value] : undefined,
-    enabled: open || missingSelectedItem,
+    enabled: open,
     params,
   })
 
@@ -149,17 +157,19 @@ export function AsyncPaginatedSelect({
     [data?.pages],
   )
 
-  // The loaded page always wins over the hydration prop (freshest data); the
-  // prop only fills the gap before the query resolves.
+  // The loaded page wins over the resolved sources (freshest data); the
+  // hydration prop and the ids-keyed label query fill the gap before, or
+  // independently of, the paginated list.
   const selected = useMemo(() => {
     if (value === null) {
       return null
     }
     return (
       options.find((item) => item.id === value) ??
+      hydratedLabels.get(value) ??
       (selectedItem?.id === value ? selectedItem : null)
     )
-  }, [options, selectedItem, value])
+  }, [options, hydratedLabels, selectedItem, value])
 
   // Keep the latest paging state in a ref so the sentinel's callback ref can
   // read fresh values without re-attaching the observer on every render.

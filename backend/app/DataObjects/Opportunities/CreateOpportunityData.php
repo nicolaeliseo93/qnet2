@@ -20,7 +20,8 @@ namespace App\DataObjects\Opportunities;
  * Amendment rev.3: `businessFunctionId`/`productCategoryId` are REPLACED by
  * `productLines` — a to-many collection, delete-all + insert synced
  * separately by OpportunityService (like `managerSlots`), so it also stays
- * out of attributes().
+ * out of attributes(). User directive 2026-07-17: `companyId`/
+ * `companySiteId`/`operationalSiteId` are REMOVED entirely.
  */
 final readonly class CreateOpportunityData
 {
@@ -31,9 +32,6 @@ final readonly class CreateOpportunityData
     public function __construct(
         public string $name,
         public ?int $registryId,
-        public ?int $companyId,
-        public ?int $companySiteId,
-        public ?int $operationalSiteId,
         public ?int $referentId,
         public ?int $commercialId,
         public ?int $reporterId,
@@ -58,9 +56,6 @@ final readonly class CreateOpportunityData
         return new self(
             name: (string) $data['name'],
             registryId: isset($data['registry_id']) ? (int) $data['registry_id'] : null,
-            companyId: isset($data['company_id']) ? (int) $data['company_id'] : null,
-            companySiteId: isset($data['company_site_id']) ? (int) $data['company_site_id'] : null,
-            operationalSiteId: isset($data['operational_site_id']) ? (int) $data['operational_site_id'] : null,
             referentId: isset($data['referent_id']) ? (int) $data['referent_id'] : null,
             commercialId: isset($data['commercial_id']) ? (int) $data['commercial_id'] : null,
             reporterId: isset($data['reporter_id']) ? (int) $data['reporter_id'] : null,
@@ -115,9 +110,6 @@ final readonly class CreateOpportunityData
         return [
             'name' => $this->name,
             'registry_id' => $this->registryId,
-            'company_id' => $this->companyId,
-            'company_site_id' => $this->companySiteId,
-            'operational_site_id' => $this->operationalSiteId,
             'referent_id' => $this->referentId,
             'commercial_id' => $this->commercialId,
             'reporter_id' => $this->reporterId,

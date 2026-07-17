@@ -43,6 +43,10 @@ class UpdateProfileRequest extends FormRequest
         return array_merge([
             'locale' => ['sometimes', 'required', Rule::in(LocaleEnum::values())],
 
+            // Per-user UI scale slider (0..100). A plain display preference,
+            // clamped server-side to the 0..100 range the client exposes.
+            'ui_scale' => ['sometimes', 'integer', 'between:0,100'],
+
             // Spec 0042 — per-user module open mode preference. `mode` is
             // required only when the object itself is submitted; override
             // keys are checked against the table registry in withValidator().
@@ -113,7 +117,7 @@ class UpdateProfileRequest extends FormRequest
      * mass-assignment update. The name is derived from the card (not here), and
      * any forbidden field is dropped by the validator before this runs.
      *
-     * @return array<string, string>
+     * @return array<string, mixed>
      */
     public function accountAttributes(): array
     {
@@ -123,6 +127,7 @@ class UpdateProfileRequest extends FormRequest
         return array_filter(
             [
                 'locale' => $validated['locale'] ?? null,
+                'ui_scale' => $validated['ui_scale'] ?? null,
             ],
             static fn ($value): bool => $value !== null,
         );

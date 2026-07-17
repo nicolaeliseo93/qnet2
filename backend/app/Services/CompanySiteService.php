@@ -93,18 +93,14 @@ class CompanySiteService
     }
 
     /**
-     * Restrictive delete (spec 0040, BR-3): a company site referenced by at
-     * least one opportunity cannot be removed. Otherwise the owned
-     * personal-data card (and its own contacts/address, via
-     * HasPersonalData), banks (FK cascade) and logo (HasAttachments) all
-     * cascade away with the site.
+     * Delete: no restrictive guard remains on CompanySite (spec 0040's
+     * opportunity-referenced restriction was removed per user directive
+     * 2026-07-17). The owned personal-data card (and its own contacts/
+     * address, via HasPersonalData), banks (FK cascade) and logo
+     * (HasAttachments) all cascade away with the site.
      */
     public function delete(CompanySite $companySite): void
     {
-        if ($companySite->opportunities()->exists()) {
-            abort(409, 'This company site has opportunities and cannot be deleted.');
-        }
-
         $companySite->delete();
     }
 

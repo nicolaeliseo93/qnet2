@@ -92,15 +92,6 @@ export function OpportunityDetailView({ opportunity }: OpportunityDetailViewProp
 
       <DetailSection title={t('opportunities.form.sections.classification.title')} icon={<Building2 />}>
         <DetailGrid>
-          <DetailField label={t('opportunities.form.company')}>
-            {opportunity.company?.name ?? <DetailEmpty />}
-          </DetailField>
-          <DetailField label={t('opportunities.form.companySite')}>
-            {opportunity.company_site?.name ?? <DetailEmpty />}
-          </DetailField>
-          <DetailField label={t('opportunities.form.operationalSite')}>
-            {opportunity.operational_site?.label ?? <DetailEmpty />}
-          </DetailField>
           <DetailField label={t('opportunities.form.source')}>
             {opportunity.source?.name ?? <DetailEmpty />}
           </DetailField>

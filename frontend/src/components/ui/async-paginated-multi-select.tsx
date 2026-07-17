@@ -18,6 +18,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import {
   flattenForSelectPages,
   useForSelect,
+  useForSelectLabels,
 } from '@/features/for-select/use-for-select'
 import type { ForSelectItem } from '@/features/for-select/types'
 
@@ -120,21 +121,27 @@ export function AsyncPaginatedMultiSelect({
   const listboxId = useId()
   const scrollRef = useRef<HTMLDivElement>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
-  const missingSelectedItems = useMemo(() => {
-    if (value.length === 0) {
-      return false
-    }
+  // Ids whose label the hydration prop does not already cover. Resolved by the
+  // dedicated ids-keyed query (collision-free across sibling selects), so a
+  // selected badge never falls back to `#id` because another instance's ids won
+  // the shared, ids-less list cache.
+  const missingIds = useMemo(() => {
     const hydratedIds = new Set(selectedItems.map((item) => item.id))
-    return value.some((id) => !hydratedIds.has(id))
+    return value.filter((id) => !hydratedIds.has(id))
   }, [selectedItems, value])
+
+  const hydratedLabels = useForSelectLabels({
+    resource,
+    ids: missingIds,
+    enabled: missingIds.length > 0,
+    params,
+  })
 
   const query = useForSelect({
     resource,
     search: debouncedSearch,
     ids: value,
-    // Fetch while open, and also on mount when edit-mode selections need their
-    // labels hydrated; otherwise selected badges would fall back to `#id`.
-    enabled: open || missingSelectedItems,
+    enabled: open,
     params,
   })
 
@@ -153,18 +160,22 @@ export function AsyncPaginatedMultiSelect({
     [data?.pages],
   )
 
-  // Build a label lookup from both hydration props and loaded options so every
-  // selected badge can resolve a label even before its page is fetched.
+  // Build a label lookup from the hydration prop, the ids-keyed label query, and
+  // the loaded options so every selected badge resolves a label even before (or
+  // independently of) its page in the paginated list.
   const labelById = useMemo(() => {
     const map = new Map<number, ForSelectItem>()
     for (const item of selectedItems) {
+      map.set(item.id, item)
+    }
+    for (const item of hydratedLabels.values()) {
       map.set(item.id, item)
     }
     for (const item of options) {
       map.set(item.id, item)
     }
     return map
-  }, [selectedItems, options])
+  }, [selectedItems, hydratedLabels, options])
 
   const selectedSet = useMemo(() => new Set(value), [value])
 

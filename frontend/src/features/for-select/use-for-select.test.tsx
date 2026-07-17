@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import {
   flattenForSelectPages,
   useForSelect,
+  useForSelectLabels,
 } from '@/features/for-select/use-for-select'
 import type {
   ForSelectItem,
@@ -110,6 +111,51 @@ describe('useForSelect', () => {
   it('does not run while disabled', () => {
     renderHook(
       () => useForSelect({ resource: 'users', search: '', enabled: false }),
+      { wrapper: wrapper() },
+    )
+    expect(fetchForSelectMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('useForSelectLabels', () => {
+  it('resolves an id set into a label map, requesting exactly those ids', async () => {
+    fetchForSelectMock.mockResolvedValue(
+      page(
+        [
+          { id: 5, label: 'Alice' },
+          { id: 88, label: 'Bob' },
+        ],
+        { total: 0, offset: 0, limit: 2 },
+      ),
+    )
+
+    const { result } = renderHook(
+      () => useForSelectLabels({ resource: 'users', ids: [88, 5] }),
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(result.current.size).toBe(2))
+    expect(result.current.get(5)?.label).toBe('Alice')
+    expect(result.current.get(88)?.label).toBe('Bob')
+    // Ids are sorted for a stable, order-independent query key.
+    expect(fetchForSelectMock).toHaveBeenCalledWith(
+      'users',
+      expect.objectContaining({ offset: 0, ids: [5, 88] }),
+    )
+  })
+
+  it('does not run for an empty id set', () => {
+    const { result } = renderHook(
+      () => useForSelectLabels({ resource: 'users', ids: [] }),
+      { wrapper: wrapper() },
+    )
+    expect(fetchForSelectMock).not.toHaveBeenCalled()
+    expect(result.current.size).toBe(0)
+  })
+
+  it('does not run while disabled', () => {
+    renderHook(
+      () => useForSelectLabels({ resource: 'users', ids: [5], enabled: false }),
       { wrapper: wrapper() },
     )
     expect(fetchForSelectMock).not.toHaveBeenCalled()

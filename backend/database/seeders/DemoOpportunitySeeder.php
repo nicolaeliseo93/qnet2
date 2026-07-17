@@ -3,10 +3,7 @@
 namespace Database\Seeders;
 
 use App\DataObjects\Opportunities\CreateOpportunityData;
-use App\Models\Company;
-use App\Models\CompanySite;
 use App\Models\Lead;
-use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\Referent;
 use App\Models\Registry;
@@ -21,11 +18,10 @@ use Illuminate\Support\Collection;
 
 /**
  * Development seed for the opportunities module (spec 0040): round-robins
- * existing registries/companies/company-sites/operational-sites (all 5
- * mandatory columns, D-4/amendment rev.1 A-2) against the optional lookups
- * for a batch of STANDALONE deals, then generates a handful more FROM
- * existing leads (BR-1) so the demo grid exercises both creation paths and
- * the `locked_fields`/`lead` detail shape.
+ * existing registries (the only mandatory relation, D-4) against the
+ * optional lookups for a batch of STANDALONE deals, then generates a
+ * handful more FROM existing leads (BR-1) so the demo grid exercises both
+ * creation paths and the `locked_fields`/`lead` detail shape.
  *
  * Every opportunity is created through OpportunityService::create() — the
  * same path POST /api/opportunities uses — so this exercises the real write
@@ -33,16 +29,17 @@ use Illuminate\Support\Collection;
  * existing opportunities are cleared first (harmless — nothing else
  * references an Opportunity, restrictOnDelete only runs the OTHER way).
  *
- * Depends on DemoRegistrySeeder/DemoCompanySeeder/DemoCompanySiteSeeder/
- * DemoOperationalSiteSeeder (all mandatory) plus DemoBusinessFunctionSeeder/
+ * Depends on DemoRegistrySeeder (mandatory) plus DemoBusinessFunctionSeeder/
  * DemoReferentSeeder/DemoUsersSeeder/DemoSourceSeeder/DemoProductCatalogSeeder/
  * DemoLeadSeeder (optional, seeded earlier in DemoDataSeeder) — a no-op
- * (nothing to seed) if any of the 4 mandatory lookups is empty.
+ * (nothing to seed) if registries is empty.
  *
  * Amendment rev.3: `business_function_id`/`product_category_id` are REPLACED
  * by `product_lines` — a category is only ever picked alongside its own
  * EFFECTIVE business function (see `productLineCandidates`), so every seeded
- * row already satisfies the withValidator pairing rule.
+ * row already satisfies the withValidator pairing rule. User directive
+ * 2026-07-17: `company_id`/`company_site_id`/`operational_site_id` are
+ * REMOVED entirely.
  */
 class DemoOpportunitySeeder extends Seeder
 {
@@ -65,12 +62,9 @@ class DemoOpportunitySeeder extends Seeder
         $faker->seed(20260716);
 
         $registries = Registry::query()->orderBy('id')->get();
-        $companies = Company::query()->orderBy('id')->get();
-        $companySites = CompanySite::query()->orderBy('id')->get();
-        $operationalSites = OperationalSite::query()->orderBy('id')->get();
 
-        if ($registries->isEmpty() || $companies->isEmpty() || $companySites->isEmpty() || $operationalSites->isEmpty()) {
-            // Nothing sensible to seed without the 4 mandatory relations (D-4).
+        if ($registries->isEmpty()) {
+            // Nothing sensible to seed without the mandatory relation (D-4).
             return;
         }
 
@@ -80,13 +74,10 @@ class DemoOpportunitySeeder extends Seeder
         $productLineCandidates = $this->productLineCandidates();
 
         for ($index = 0; $index < self::STANDALONE_OPPORTUNITIES; $index++) {
-            $this->createStandalone(
-                $faker, $index, $registries, $companies, $companySites, $operationalSites,
-                $referents, $supervisors, $sources, $productLineCandidates,
-            );
+            $this->createStandalone($faker, $index, $registries, $referents, $supervisors, $sources, $productLineCandidates);
         }
 
-        $this->createFromLeads($faker, $companies, $companySites, $operationalSites, $supervisors);
+        $this->createFromLeads($faker, $supervisors);
     }
 
     /**
@@ -113,9 +104,6 @@ class DemoOpportunitySeeder extends Seeder
 
     /**
      * @param  Collection<int, Registry>  $registries
-     * @param  Collection<int, Company>  $companies
-     * @param  Collection<int, CompanySite>  $companySites
-     * @param  Collection<int, OperationalSite>  $operationalSites
      * @param  Collection<int, Referent>  $referents
      * @param  Collection<int, User>  $supervisors
      * @param  Collection<int, Source>  $sources
@@ -125,9 +113,6 @@ class DemoOpportunitySeeder extends Seeder
         Generator $faker,
         int $index,
         Collection $registries,
-        Collection $companies,
-        Collection $companySites,
-        Collection $operationalSites,
         Collection $referents,
         Collection $supervisors,
         Collection $sources,
@@ -136,9 +121,6 @@ class DemoOpportunitySeeder extends Seeder
         $data = new CreateOpportunityData(
             name: $faker->catchPhrase(),
             registryId: $registries[$index % $registries->count()]->id,
-            companyId: $companies[$index % $companies->count()]->id,
-            companySiteId: $companySites[$index % $companySites->count()]->id,
-            operationalSiteId: $operationalSites[$index % $operationalSites->count()]->id,
             referentId: $this->maybePick($referents, $index + 4, $faker, 60)?->id,
             commercialId: $this->maybePick($referents, $index + 5, $faker, 40)?->id,
             reporterId: $this->maybePick($referents, $index + 6, $faker, 30)?->id,
@@ -160,34 +142,18 @@ class DemoOpportunitySeeder extends Seeder
      * A handful of opportunities generated FROM existing leads that do not
      * already have one (BR-1) — exercises the derivation path and the
      * `lead`/`locked_fields` detail shape the standalone batch above never
-     * touches. `company_id`/`company_site_id` are NEVER derivable from a lead
-     * (amendment rev.1 A-2 — no lead/campaign chain to either), so they are
-     * always picked here just like the standalone batch. `operational_site_id`
-     * IS derivable when the lead has one (left null — OpportunityService
-     * overwrites it from the resolver regardless of what is submitted); when
-     * the lead has none, it stays mandatory, so a real site is picked instead.
+     * touches.
      *
-     * @param  Collection<int, Company>  $companies
-     * @param  Collection<int, CompanySite>  $companySites
-     * @param  Collection<int, OperationalSite>  $operationalSites
      * @param  Collection<int, User>  $supervisors
      */
-    private function createFromLeads(
-        Generator $faker,
-        Collection $companies,
-        Collection $companySites,
-        Collection $operationalSites,
-        Collection $supervisors,
-    ): void {
+    private function createFromLeads(Generator $faker, Collection $supervisors): void
+    {
         $leads = Lead::query()->doesntHave('opportunity')->orderBy('id')->limit(self::FROM_LEAD_OPPORTUNITIES)->get();
 
         foreach ($leads as $index => $lead) {
             $data = new CreateOpportunityData(
                 name: $faker->catchPhrase(),
                 registryId: null,
-                companyId: $companies[$index % $companies->count()]->id,
-                companySiteId: $companySites[$index % $companySites->count()]->id,
-                operationalSiteId: $lead->operational_site_id ?? $operationalSites[$index % $operationalSites->count()]->id,
                 referentId: null,
                 commercialId: null,
                 reporterId: null,

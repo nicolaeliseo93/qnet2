@@ -121,16 +121,4 @@ class CompanySite extends BaseModel
 
         return 'data:'.$logo->mime_type.';base64,'.base64_encode($disk->get($logo->path));
     }
-
-    /**
-     * The opportunities against this company site (spec 0040, BR-3:
-     * restrict-on-delete — CompanySiteService::delete() guards on this
-     * before deleting).
-     *
-     * @return HasMany<Opportunity, $this>
-     */
-    public function opportunities(): HasMany
-    {
-        return $this->hasMany(Opportunity::class);
-    }
 }

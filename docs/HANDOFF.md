@@ -2,6 +2,91 @@
 
 > Injected at session start. Update at every green state.
 
+## FE: FIX "#id" NEI SELECT UTENTE (gestori account) — 2026-07-17 — GREEN, NON COMMITTATO
+
+Bug utente: nei select "gestori account" di anagrafica (registries) e opportunita' a volte compariva
+`#<id>` invece del nome utente reale.
+
+ROOT CAUSE (provata con test): la query key di `useForSelect` ESCLUDE gli `ids`
+(`forSelectKeys.list` = `['for-select', resource, {search}]`). Piu' select-utente fratelli sullo
+stesso resource con `search=''` condividono UNA sola entry di cache; React Query esegue il queryFn una
+volta sola con gli `ids` del PRIMO observer, quindi solo un id viene idratato dal server e gli altri
+select (valore fuori dalla prima pagina, senza `selectedItem`) mostrano `#id`. Riprodotto: due
+`ManagerSlotsField`/`AsyncPaginatedSelect` non idratati -> uno mostra il nome, l'altro `#88`.
+
+FIX (solo FE, nessuna modifica BE — il backend gia' appende gli `ids` richiesti oltre alla pagina,
+`UserService::forSelect`/`appendHydratedIds`): nuovo hook `useForSelectLabels` in
+`features/for-select/use-for-select.ts` che risolve le label di un set di id con una query DEDICATA e
+keyed PER IDS (`forSelectKeys.labels` = `[...,'labels',{ids}]`, ids pre-ordinati) -> ogni select ha la
+sua entry, niente collisione. `AsyncPaginatedSelect` e `AsyncPaginatedMultiSelect` ora derivano la
+label del trigger/badge da: options (lista aperta) -> `useForSelectLabels` -> prop `selectedItem(s)`.
+La query paginata `useForSelect` torna a `enabled: open` (l'idratazione a popup chiuso e' del nuovo
+hook). `forSelectKeys.resource(resource)` resta prefisso valido per l'invalidazione (copre anche
+`labels`).
+
+TEST (eseguiti, verdi): nuovo `async-paginated-select.collision.test.tsx` (due fratelli entrambi
+risolti, niente `#id`); nuovi casi in `use-for-select.test.tsx` per `useForSelectLabels`; aggiornati i
+test che mockavano `useForSelect` per esporre anche `useForSelectLabels` (async-paginated select/
+multi-select, relation-select-field, relation-multi-select-field, products, product-categories,
+imports wizard, advanced-filter-panel, company-sites, users/for-select-api). `tsc --noEmit` pulito;
+eslint pulito (i file in `components/ui` sono eslint-ignored: shadcn primitives, atteso). Suite intera
+FE: 1658/1661; i 3 rossi residui sono `table/cell-renderers.test.tsx > ContactsCell` (tooltip/
+AuthProvider), PRE-ESISTENTI e non toccati da questo task (nessun riferimento a for-select).
+
+NIENTE COMMIT (in attesa di via libera).
+
+## FE+BE: RIMOZIONE company/company_site/operational_site DA OPPORTUNITY (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente: eliminare dall'Opportunity (spec 0040) 3 campi: `company_id`/`company` (Societa'
+aziendale), `company_site_id`/`company_site` (Societa'/Sede), `operational_site_id`/`operational_site`
+(Sede operativa). Toglierli da form, DB e tabella. NB: la "tabella" griglia non mostrava questi 3
+campi (nessuna colonna in OpportunityColumnCatalog/AdvancedFilterCatalog/TableDefinition), quindi la
+rimozione riguarda DB + form + tutto il resto. In piu': `operational_site_id` esce dai campi BR-1
+derivabili dal lead -> i derivabili ora sono SOLO `source_id`/`registry_id`.
+
+CONTRATTO congelato (BE emette, FE consuma): OpportunityResource NON espone piu' company_id/company/
+company_site_id/company_site/operational_site_id/operational_site. GET /leads/{lead}/opportunity-defaults
+(LeadOpportunityDefaults) values/references/lockedFields portano solo source_id/registry_id. GET
+/api/meta/opportunities e /api/authorization/fields ora elencano 13 field (era 16). Mandatory rimasti:
+name + registry_id (+ product_lines, gia' obbligatorio). Payload create/update NON inviano piu' i 3 campi.
+
+BACKEND (owner backend/, teammate disgiunto):
+- Model Opportunity: tolti da #[Fillable] + cancellate relazioni company()/companySite()/operationalSite().
+- NUOVA migrazione `2026_07_17_180000_drop_company_and_site_columns_from_opportunities_table.php`
+  (reversibile, dropConstrainedForeignId x3; down ricrea NOT NULL identiche). Create migration NON toccata.
+- Resource: tolte 6 chiavi + helper orfani summarizeCompany/summarizeOperationalSite/composeSiteLabel + import.
+- Store/Update Request: tolte regole 3 campi (derivable/lockable ora 2). Create/UpdateOpportunityData:
+  tolte proprieta'/fromValidated/attributes/submittedAttributes. LeadOpportunityDefaults: docblock.
+- OpportunityService: tolti 3 eager-load da DETAIL_RELATIONS (RESTA `lead.operationalSite...` = sede del
+  LEAD). LeadOpportunityDefaultsResolver: DERIVED_FIELDS/REQUIRED_RELATIONS/values/references ora solo
+  source_id/registry_id; cancellati helper orfani operational-site. OpportunitiesAuthorization: -3 field.
+- Relazioni inverse + delete-guard rimossi: Company::opportunities()+CompanyService guard, CompanySite
+  idem, OperationalSite::opportunities()+guard (RESTA leads() e il suo guard). Factory+DemoOpportunitySeeder
+  ripuliti. Test BE aggiornati (helper mandatoryOpportunityFks/nonDerivableOpportunityFks, MetaTest 13 key,
+  RelationDeleteGuardTest tolti i casi company/site/operational, FromLead niente derivazione operational_site).
+
+FRONTEND (owner frontend/, teammate disgiunto):
+- types (OpportunityDetail/CreateOpportunityPayload/OpportunityDefaultValues/References + tolta interface
+  OpportunityOperationalSiteRef), opportunity-schema (baseFields -3), classification-section (resta solo
+  source_id; tolti import for-select company/company-sites/operational-sites), form-payload build create/update,
+  use-opportunity-form (SERVER_ERROR_FIELDS+defaults), use-opportunity-selected-items (-company/companySite/
+  operationalSite), use-opportunity-lead-selection (DERIVED_FIELDS=['source_id','registry_id']), detail (-3
+  DetailField). i18n it/en: rimosse company*/companySite*/operationalSite* + description classification.
+  Test FE aggiornati (fixture, payload attesi, rimossi i test BR-4 company_site scoping e operational_site).
+  NB: i18n activity-log NON toccati (label generiche condivise da altri moduli).
+
+VERIFICATO (gate indipendente, eseguito davvero):
+- BE: pint --test --dirty passed; migrate:fresh + rollback --step=1 + re-migrate verdi; pest
+  Opportunities+Unit/OpportunityTest+Authorization 188/189.
+- FE: vitest src/features/opportunities 77/77; tsc --noEmit exit 0; eslint pulito.
+
+PRE-ESISTENTE NON MIO (verificato: 0 riferimenti ai campi rimossi, config/navigation.php pulito):
+`OpportunitySecurityTest::navigation ... AC-080` fallisce ("traversable contains 'opportunities'") per
+il nodo navigation non registrato — stesso pattern di CompanySecurityTest/CompanySitePermissionsTest/
+OperationalSiteSecurityTest (test-infra /api/navigation), non causato da questo task.
+
+NIENTE COMMIT (in attesa di via libera).
+
 ## FE+BE: CELLA UTENTE CONDIVISA CON HOVERCARD CLICCABILE -> MODALE DETTAGLIO UTENTE (2026-07-17) — GREEN, NON COMMITTATO
 
 Richiesta utente: sulla colonna `operatore` dei lead un tooltip che permette di cliccare il nome

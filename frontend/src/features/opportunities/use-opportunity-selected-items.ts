@@ -10,9 +10,6 @@ export interface OpportunitySelectedItems {
   referent: RelationFieldRef | null
   commercial: RelationFieldRef | null
   reporter: RelationFieldRef | null
-  company: RelationFieldRef | null
-  companySite: RelationFieldRef | null
-  operationalSite: RelationFieldRef | null
   source: RelationFieldRef | null
   supervisor: RelationFieldRef | null
   managers: ForSelectItem[]
@@ -23,9 +20,6 @@ const EMPTY_SELECTED_ITEMS: OpportunitySelectedItems = {
   referent: null,
   commercial: null,
   reporter: null,
-  company: null,
-  companySite: null,
-  operationalSite: null,
   source: null,
   supervisor: null,
   managers: [],
@@ -57,11 +51,6 @@ export function useOpportunitySelectedItems(
         referent: opportunity.referent,
         commercial: opportunity.commercial,
         reporter: opportunity.reporter,
-        company: opportunity.company,
-        companySite: opportunity.company_site,
-        operationalSite: opportunity.operational_site
-          ? { id: opportunity.operational_site.id, name: opportunity.operational_site.label }
-          : null,
         source: opportunity.source,
         supervisor: opportunity.supervisor,
         managers: opportunity.managers.map((manager) => ({ id: manager.id, label: manager.name })),
@@ -75,9 +64,6 @@ export function useOpportunitySelectedItems(
       ...EMPTY_SELECTED_ITEMS,
       registry: leadSelection.registry ?? references?.registry ?? null,
       source: references?.source ?? null,
-      operationalSite: references?.operational_site
-        ? { id: references.operational_site.id, name: references.operational_site.label }
-        : null,
     }
   }, [mode, leadSelection.registry])
 }

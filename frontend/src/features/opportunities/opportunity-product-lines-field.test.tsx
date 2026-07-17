@@ -73,9 +73,6 @@ function baseFormValues(overrides: Partial<OpportunityFormValues> = {}): Opportu
   return {
     name: '',
     registry_id: 1,
-    company_id: 2,
-    company_site_id: 3,
-    operational_site_id: 4,
     referent_id: null,
     commercial_id: null,
     reporter_id: null,

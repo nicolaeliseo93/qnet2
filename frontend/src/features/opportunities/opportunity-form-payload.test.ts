@@ -9,9 +9,6 @@ function values(overrides: Partial<OpportunityFormValues> = {}): OpportunityForm
   return {
     name: 'Enterprise deal',
     registry_id: 1,
-    company_id: 2,
-    company_site_id: 3,
-    operational_site_id: 4,
     referent_id: null,
     commercial_id: null,
     reporter_id: null,
@@ -34,12 +31,6 @@ function original(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail
     name: 'Enterprise deal',
     registry_id: 1,
     registry: { id: 1, name: 'Acme S.p.A.' },
-    company_id: 2,
-    company: { id: 2, name: 'Acme Group' },
-    company_site_id: 3,
-    company_site: { id: 3, name: 'HQ' },
-    operational_site_id: 4,
-    operational_site: { id: 4, label: 'Via Roma 1 - Milano' },
     referent_id: null,
     referent: null,
     commercial_id: null,
@@ -66,15 +57,12 @@ function original(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail
 }
 
 describe('buildCreatePayload', () => {
-  it('includes the 5 mandatory fields and every truly optional field as null when unset (AC-082)', () => {
+  it('includes the 2 mandatory fields and every truly optional field as null when unset (AC-082)', () => {
     const payload = buildCreatePayload(values())
 
     expect(payload).toEqual({
       name: 'Enterprise deal',
       registry_id: 1,
-      company_id: 2,
-      company_site_id: 3,
-      operational_site_id: 4,
       referent_id: null,
       commercial_id: null,
       reporter_id: null,
@@ -135,7 +123,6 @@ describe('buildCreatePayload', () => {
           registry_id: 30,
           referent_id: 10,
           source_id: 20,
-          operational_site_id: null,
         }),
         {
           leadId: 9,
@@ -147,17 +134,15 @@ describe('buildCreatePayload', () => {
       expect(payload).not.toHaveProperty('registry_id')
       expect(payload).not.toHaveProperty('referent_id')
       expect(payload).not.toHaveProperty('source_id')
-      // The lead had no operational site (derivation null, BR-2): the field stays free and IS sent.
-      expect(payload).toHaveProperty('operational_site_id', null)
     })
 
     it('sends a field whose derivation is null (BR-2: not locked, stays free) even from a lead', () => {
       const payload = buildCreatePayload(
-        values({ operational_site_id: 70 }),
+        values({ source_id: 70 }),
         { leadId: 9, lockedFields: ['registry_id', 'referent_id'] },
       )
 
-      expect(payload.operational_site_id).toBe(70)
+      expect(payload.source_id).toBe(70)
       expect(payload).not.toHaveProperty('registry_id')
       expect(payload).not.toHaveProperty('referent_id')
     })
@@ -194,10 +179,10 @@ describe('buildUpdatePayload', () => {
 
   it('includes multiple changed fields together', () => {
     const payload = buildUpdatePayload(
-      values({ referent_id: 11, company_id: 7 }),
+      values({ referent_id: 11, source_id: 7 }),
       original(),
     )
-    expect(payload).toEqual({ referent_id: 11, company_id: 7 })
+    expect(payload).toEqual({ referent_id: 11, source_id: 7 })
   })
 
   it('omits estimated_value when the server decimal string round-trips to the same number', () => {

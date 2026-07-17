@@ -17,4 +17,16 @@ export const forSelectKeys = {
     params && Object.keys(params).length > 0
       ? (['for-select', resource, { search, params }] as const)
       : (['for-select', resource, { search }] as const),
+  /**
+   * Label-hydration key for an explicit id set (edit-mode / off-page selections).
+   * Unlike `list`, the ids ARE part of this key: each selection resolves its own
+   * cache entry so sibling selects sharing a resource never collide on a single,
+   * ids-less list entry (which would let only one instance's ids reach the
+   * server, leaving the others showing `#id`). Ids are pre-sorted by the caller
+   * so key identity is order-independent.
+   */
+  labels: (resource: string, ids: number[], params?: Record<string, string | number>) =>
+    params && Object.keys(params).length > 0
+      ? (['for-select', resource, 'labels', { ids, params }] as const)
+      : (['for-select', resource, 'labels', { ids }] as const),
 }

@@ -14,6 +14,7 @@ vi.mock('@/features/for-select/api', () => ({
 }))
 vi.mock('@/features/for-select/use-for-select', () => ({
   useForSelect: (args: unknown) => useForSelect(args),
+  useForSelectLabels: () => new Map(),
 }))
 
 beforeEach(() => {

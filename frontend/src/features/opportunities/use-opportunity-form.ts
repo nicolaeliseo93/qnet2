@@ -32,9 +32,6 @@ import type { OpportunityDetail, OpportunityFormMode } from '@/features/opportun
 const SERVER_ERROR_FIELDS = [
   'name',
   'registry_id',
-  'company_id',
-  'company_site_id',
-  'operational_site_id',
   'referent_id',
   'commercial_id',
   'reporter_id',
@@ -98,9 +95,6 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
       return {
         name: opportunity.name,
         registry_id: opportunity.registry_id,
-        company_id: opportunity.company_id,
-        company_site_id: opportunity.company_site_id,
-        operational_site_id: opportunity.operational_site_id,
         referent_id: opportunity.referent_id,
         commercial_id: opportunity.commercial_id,
         reporter_id: opportunity.reporter_id,
@@ -122,9 +116,6 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
     const empty: OpportunityFormValues = {
       name: '',
       registry_id: null,
-      company_id: null,
-      company_site_id: null,
-      operational_site_id: null,
       referent_id: null,
       commercial_id: null,
       reporter_id: null,

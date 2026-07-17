@@ -328,6 +328,21 @@ export const en = {
     saveProfile: 'Save changes',
     savingProfile: 'Saving…',
     profileUpdated: 'Profile updated successfully.',
+    systemSettings: {
+      title: 'System settings',
+      subtitle: 'System-wide preferences for the application.',
+    },
+    appearance: {
+      title: 'Appearance',
+      subtitle: 'Adjust the size of the interface to your liking.',
+    },
+    uiScale: {
+      title: 'Interface scale',
+      subtitle:
+        'Drag to shrink or enlarge text, layout and tables across the whole app. 100% is the normal size.',
+      saved: 'Interface scale updated successfully.',
+      reset: 'Restore defaults',
+    },
     moduleOpenMode: {
       title: 'Module open mode',
       subtitle: 'Choose how each module opens its create, edit and detail screens.',

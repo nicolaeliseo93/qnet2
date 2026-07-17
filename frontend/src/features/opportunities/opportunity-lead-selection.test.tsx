@@ -128,12 +128,6 @@ function editOpportunity(
     name: 'Enterprise deal',
     registry_id: TEST_REGISTRY_ID,
     registry: { id: TEST_REGISTRY_ID, name: 'Acme S.p.A.' },
-    company_id: 1,
-    company: { id: 1, name: 'Acme Group' },
-    company_site_id: 1,
-    company_site: { id: 1, name: 'HQ' },
-    operational_site_id: 30,
-    operational_site: { id: 30, label: 'Via Roma 1 - Milano' },
     referent_id: 10,
     referent: { id: 10, name: 'Mario Rossi' },
     commercial_id: null,
@@ -158,7 +152,7 @@ function editOpportunity(
     estimated_value: null,
     expected_close_date: null,
     success_probability: null,
-    locked_fields: ['referent_id', 'source_id', 'operational_site_id', 'registry_id'],
+    locked_fields: ['referent_id', 'source_id', 'registry_id'],
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     permissions: FULL_PERMISSIONS,
@@ -184,8 +178,8 @@ beforeEach(() => {
       return {
         lead_id: leadId,
         existing_opportunity_id: 777,
-        values: { referent_id: null, source_id: null, operational_site_id: null, registry_id: null },
-        references: { source: null, operational_site: null, registry: null },
+        values: { referent_id: null, source_id: null, registry_id: null },
+        references: { source: null, registry: null },
         locked_fields: [],
         product_lines: [],
       }
@@ -197,15 +191,13 @@ beforeEach(() => {
         // spec 0041 D-3/AC-050: no longer a derived field — the resolver never writes it.
         referent_id: null,
         source_id: 20,
-        operational_site_id: 30,
         registry_id: TEST_REGISTRY_ID,
       },
       references: {
         source: { id: 20, name: 'Web' },
-        operational_site: { id: 30, label: 'Via Roma 1 - Milano' },
         registry: { id: TEST_REGISTRY_ID, name: 'Acme S.p.A.' },
       },
-      locked_fields: ['source_id', 'operational_site_id', 'registry_id'],
+      locked_fields: ['source_id', 'registry_id'],
       // Amendment rev.3 (AC-102/103): editable/removable seed row, never locked.
       product_lines: [
         {
@@ -237,8 +229,6 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('false')
     expect(screen.getByTestId('value-Source')).toHaveTextContent('20')
     expect(screen.getByTestId('disabled-Source')).toHaveTextContent('true')
-    expect(screen.getByTestId('value-Operational site')).toHaveTextContent('30')
-    expect(screen.getByTestId('disabled-Operational site')).toHaveTextContent('true')
     // Amendment rev.3 (AC-102/103): the derived function+category is a
     // normal, editable/removable product-line row — never a locked field.
     expect(screen.getByText('Sales')).toBeInTheDocument()
@@ -265,8 +255,6 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     // Referent is still gated by registry being unset again, not by the lead lock.
     expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('true')
     expect(screen.getByTestId('value-Contact')).toHaveTextContent('')
-    expect(screen.getByTestId('value-Operational site')).toHaveTextContent('')
-    expect(screen.getByTestId('disabled-Operational site')).toHaveTextContent('false')
     // The derived product-line row is cleared away too (rev.3, "least surprising" whole-field reset).
     expect(screen.queryByText('Sales')).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('')
@@ -284,10 +272,6 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
     await waitFor(() => expect(screen.getByTestId('disabled-Registry')).toHaveTextContent('true'))
 
-    // company_id/company_site_id are never derivable (A-2): still required, filled manually.
-    screen.getByRole('button', { name: 'select Company 1' }).click()
-    screen.getByRole('button', { name: 'select Company site 1' }).click()
-
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createOpportunityMock).toHaveBeenCalledTimes(1))
@@ -298,11 +282,8 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     // like any other free field (here still unset by the user).
     expect(payload.referent_id).toBeNull()
     expect(payload).not.toHaveProperty('source_id')
-    expect(payload).not.toHaveProperty('operational_site_id')
     // Amendment rev.3: product_lines is NEVER locked — always sent, in full.
     expect(payload.product_lines).toEqual([{ business_function_id: 40, product_category_id: 50 }])
-    expect(payload.company_id).toBe(1)
-    expect(payload.company_site_id).toBe(1)
   })
 
   it('blocks the submit and shows a message when the picked lead already has an opportunity (AC-087)', async () => {

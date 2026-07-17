@@ -21,7 +21,8 @@ namespace App\DataObjects\Opportunities;
  * enforcement is needed here.
  *
  * Amendment rev.3: `businessFunctionId`/`productCategoryId` are REPLACED by
- * `productLines`.
+ * `productLines`. User directive 2026-07-17: `companyId`/`companySiteId`/
+ * `operationalSiteId` are REMOVED entirely.
  */
 final readonly class UpdateOpportunityData
 {
@@ -34,12 +35,6 @@ final readonly class UpdateOpportunityData
         public bool $nameSubmitted = false,
         public ?int $registryId = null,
         public bool $registryIdSubmitted = false,
-        public ?int $companyId = null,
-        public bool $companyIdSubmitted = false,
-        public ?int $companySiteId = null,
-        public bool $companySiteIdSubmitted = false,
-        public ?int $operationalSiteId = null,
-        public bool $operationalSiteIdSubmitted = false,
         public ?int $referentId = null,
         public bool $referentIdSubmitted = false,
         public ?int $commercialId = null,
@@ -74,12 +69,6 @@ final readonly class UpdateOpportunityData
             nameSubmitted: array_key_exists('name', $data),
             registryId: self::nullableInt($data, 'registry_id'),
             registryIdSubmitted: array_key_exists('registry_id', $data),
-            companyId: self::nullableInt($data, 'company_id'),
-            companyIdSubmitted: array_key_exists('company_id', $data),
-            companySiteId: self::nullableInt($data, 'company_site_id'),
-            companySiteIdSubmitted: array_key_exists('company_site_id', $data),
-            operationalSiteId: self::nullableInt($data, 'operational_site_id'),
-            operationalSiteIdSubmitted: array_key_exists('operational_site_id', $data),
             referentId: self::nullableInt($data, 'referent_id'),
             referentIdSubmitted: array_key_exists('referent_id', $data),
             commercialId: self::nullableInt($data, 'commercial_id'),
@@ -146,18 +135,6 @@ final readonly class UpdateOpportunityData
 
         if ($this->registryIdSubmitted) {
             $attributes['registry_id'] = $this->registryId;
-        }
-
-        if ($this->companyIdSubmitted) {
-            $attributes['company_id'] = $this->companyId;
-        }
-
-        if ($this->companySiteIdSubmitted) {
-            $attributes['company_site_id'] = $this->companySiteId;
-        }
-
-        if ($this->operationalSiteIdSubmitted) {
-            $attributes['operational_site_id'] = $this->operationalSiteId;
         }
 
         if ($this->referentIdSubmitted) {

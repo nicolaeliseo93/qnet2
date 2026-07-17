@@ -1,9 +1,6 @@
 <?php
 
 use App\Models\BusinessFunction;
-use App\Models\Company;
-use App\Models\CompanySite;
-use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\ProductCategory;
 use App\Models\Registry;
@@ -42,15 +39,12 @@ if (! function_exists('productLinesOpportunityUserWith')) {
 
 if (! function_exists('productLinesMandatoryOpportunityFks')) {
     /**
-     * @return array{registry_id: int, company_id: int, company_site_id: int, operational_site_id: int}
+     * @return array{registry_id: int}
      */
     function productLinesMandatoryOpportunityFks(): array
     {
         return [
             'registry_id' => Registry::factory()->create()->id,
-            'company_id' => Company::factory()->create()->id,
-            'company_site_id' => CompanySite::factory()->create()->id,
-            'operational_site_id' => OperationalSite::factory()->create()->id,
         ];
     }
 }

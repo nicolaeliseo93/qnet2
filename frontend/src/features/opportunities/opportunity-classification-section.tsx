@@ -1,12 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { Building2 } from 'lucide-react'
 import type { Control } from 'react-hook-form'
-import { useWatch } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { RelationSelectField } from '@/components/form/relation-select-field'
-import { COMPANIES_FOR_SELECT_RESOURCE } from '@/features/companies/for-select-api'
-import { COMPANY_SITES_FOR_SELECT_RESOURCE } from '@/features/company-sites/for-select-api'
-import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
 import type { OpportunitySelectedItems } from '@/features/opportunities/use-opportunity-selected-items'
@@ -20,12 +16,9 @@ interface OpportunityClassificationSectionProps {
 }
 
 /**
- * The opportunity's site/classification relations: company (+ its site,
- * BR-4: `company_site` scoped by `company_id`), operational site (no longer
- * scoped by business function, spec 0040 amendment rev.3 AC-108) and source.
- * The function+category product-line rows live in their own dedicated
- * `OpportunityProductLinesSection` (AC-106). Split out of `OpportunityFormBody`
- * to stay within the engineering size limits (mirrors `CampaignPlanningSection`).
+ * The opportunity's classification relation: source. Split out of
+ * `OpportunityFormBody` to stay within the engineering size limits (mirrors
+ * `CampaignPlanningSection`).
  */
 export function OpportunityClassificationSection({
   control,
@@ -34,7 +27,6 @@ export function OpportunityClassificationSection({
   className,
 }: OpportunityClassificationSectionProps) {
   const { t } = useTranslation()
-  const companyId = useWatch({ control, name: 'company_id' })
 
   const selectLabels = {
     placeholder: t('opportunities.form.selectPlaceholder'),
@@ -52,41 +44,6 @@ export function OpportunityClassificationSection({
       className={className}
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <RelationSelectField
-          control={control}
-          name="company_id"
-          metaKey="company_id"
-          label={t('opportunities.form.company')}
-          resource={COMPANIES_FOR_SELECT_RESOURCE}
-          searchPlaceholder={t('opportunities.form.companySearch')}
-          selected={selectedItems.company}
-          {...selectLabels}
-        />
-
-        <RelationSelectField
-          control={control}
-          name="company_site_id"
-          metaKey="company_site_id"
-          label={t('opportunities.form.companySite')}
-          resource={COMPANY_SITES_FOR_SELECT_RESOURCE}
-          searchPlaceholder={t('opportunities.form.companySiteSearch')}
-          selected={selectedItems.companySite}
-          params={companyId !== null ? { company_id: companyId } : undefined}
-          {...selectLabels}
-        />
-
-        <RelationSelectField
-          control={control}
-          name="operational_site_id"
-          metaKey="operational_site_id"
-          label={t('opportunities.form.operationalSite')}
-          resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
-          searchPlaceholder={t('opportunities.form.operationalSiteSearch')}
-          selected={selectedItems.operationalSite}
-          forceDisabled={lockedFields.has('operational_site_id')}
-          {...selectLabels}
-        />
-
         <RelationSelectField
           control={control}
           name="source_id"

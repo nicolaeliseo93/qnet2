@@ -13,14 +13,15 @@ use Illuminate\Database\Eloquent\Model;
  *
  * No contextual rules: every field's ceiling is simply visible+editable when
  * the actor may write (create/update), else visible+readonly, mirroring
- * LeadsAuthorization. `name`/`registry_id`/`company_id`/`company_site_id`/
- * `operational_site_id` are the mandatory fields (D-4, amendment rev.1 A-2);
+ * LeadsAuthorization. `name`/`registry_id` are the mandatory fields (D-4);
  * `lead_id` is NOT permissionable (structural, immutable server-side
  * derivation — BR-1/BR-2) and carries no FieldDefinition here. Amendment
  * rev.3: the former `business_function_id`/`product_category_id` scalars are
  * REPLACED by a single `product_lines` field (a to-many collection) — which,
  * per user directive 2026-07-17, is itself mandatory (at least one row to
  * create; never clearable to empty), so it joins the non-restrictable set.
+ * User directive 2026-07-17: `company_id`/`company_site_id`/
+ * `operational_site_id` are REMOVED entirely.
  */
 class OpportunitiesAuthorization extends AbstractResourceAuthorization
 {
@@ -42,9 +43,6 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
         return [
             new FieldDefinition('name', 'text', mandatory: true),
             new FieldDefinition('registry_id', 'select', mandatory: true),
-            new FieldDefinition('company_id', 'select', mandatory: true),
-            new FieldDefinition('company_site_id', 'select', mandatory: true),
-            new FieldDefinition('operational_site_id', 'select', mandatory: true),
             new FieldDefinition('referent_id', 'select'),
             new FieldDefinition('commercial_id', 'select'),
             new FieldDefinition('reporter_id', 'select'),
@@ -77,9 +75,6 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
         return [
             'name' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'registry_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
-            'company_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
-            'company_site_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
-            'operational_site_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'referent_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'commercial_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'reporter_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),

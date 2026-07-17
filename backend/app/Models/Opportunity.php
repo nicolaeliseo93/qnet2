@@ -15,22 +15,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Opportunity entity (spec 0040): a commercial deal against an Anagrafica
  * (`registry`), created manually or generated from a `Lead` (`lead_id`,
  * nullable, UNIQUE — D-2: at most one opportunity per lead). `name`/
- * `registry_id`/`company_id`/`company_site_id`/`operational_site_id` are
- * mandatory (D-4, amendment rev.1 A-2); every other relation is optional.
+ * `registry_id` are mandatory (D-4); every other relation is optional.
  * `commercial`/`reporter` mirror Registry's own referent fields; `referent`
- * is BR-1-derivable from the linked lead, like `source`/`operational_site`
- * — `company`/`company_site` are NOT derivable (no lead/campaign chain to
- * either), always freely required. No `code` (D-3: no opportunity status/
- * sequence in this iteration). Amendment rev.3: the former single
+ * is NOT derivable (spec 0041 D-3), a plain always-editable field; `source`
+ * is BR-1-derivable from the linked lead. No `code` (D-3: no opportunity
+ * status/sequence in this iteration). Amendment rev.3: the former single
  * `business_function_id`/`product_category_id` columns are REPLACED by
  * `productLines()`, a one-to-many collection (see OpportunityProductLine).
+ * User directive 2026-07-17: `company_id`/`company_site_id`/
+ * `operational_site_id` and their relations are REMOVED entirely.
  */
 #[Fillable([
     'name',
     'registry_id',
-    'company_id',
-    'company_site_id',
-    'operational_site_id',
     'referent_id',
     'commercial_id',
     'reporter_id',
@@ -65,24 +62,9 @@ class Opportunity extends BaseModel
         return $this->belongsTo(Registry::class);
     }
 
-    public function company(): BelongsTo
-    {
-        return $this->belongsTo(Company::class);
-    }
-
-    public function companySite(): BelongsTo
-    {
-        return $this->belongsTo(CompanySite::class);
-    }
-
-    public function operationalSite(): BelongsTo
-    {
-        return $this->belongsTo(OperationalSite::class);
-    }
-
     /**
-     * The contact person driving the deal (BR-1-derivable from the linked
-     * lead's own referent).
+     * The contact person driving the deal. NOT derivable (spec 0041 D-3): a
+     * plain, always-editable field scoped to the chosen registry (BR-4).
      */
     public function referent(): BelongsTo
     {

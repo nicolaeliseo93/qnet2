@@ -14,16 +14,6 @@ export interface OpportunityRelationRef {
   name: string
 }
 
-/**
- * The linked operational site's identity, as exposed by
- * `OpportunityResource.operational_site`. `operational_sites` has no `name`
- * column: the identity is a server-composed label (mirrors leads).
- */
-export interface OpportunityOperationalSiteRef {
-  id: number
-  label: string
-}
-
 /** The linked lead's identity, as exposed by `OpportunityResource.lead` (the lead's referent name, BR-1). */
 export interface OpportunityLeadRef {
   id: number
@@ -63,15 +53,6 @@ export interface OpportunityDetail {
   name: string
   registry_id: number
   registry: OpportunityRelationRef | null
-  /** Mandatory since spec 0040 amendment A-2 (was nullable in the original contract). */
-  company_id: number
-  company: OpportunityRelationRef | null
-  /** Mandatory since spec 0040 amendment A-2 (was nullable in the original contract). */
-  company_site_id: number
-  company_site: OpportunityRelationRef | null
-  /** Mandatory since spec 0040 amendment A-2; still derivable+lockable from a Lead that owns one (BR-1/BR-2). */
-  operational_site_id: number
-  operational_site: OpportunityOperationalSiteRef | null
   referent_id: number | null
   referent: OpportunityRelationRef | null
   commercial_id: number | null
@@ -128,16 +109,6 @@ export interface CreateOpportunityPayload {
    * the single place that decides whether to include it.
    */
   registry_id?: number
-  /** Mandatory (A-2): never derivable from a Lead, always sent, never omitted. */
-  company_id: number
-  /** Mandatory (A-2): never derivable from a Lead, always sent, never omitted. */
-  company_site_id: number
-  /**
-   * Mandatory (A-2), but still derivable+lockable from a Lead that owns one
-   * (BR-1/BR-2) — optional here for the same reason as `registry_id`: OMITTED
-   * entirely when locked, never merely repeated.
-   */
-  operational_site_id?: number
   referent_id?: number | null
   commercial_id?: number | null
   reporter_id?: number | null
@@ -166,8 +137,8 @@ export interface CreateOpportunityPayload {
 export type UpdateOpportunityPayload = Partial<Omit<CreateOpportunityPayload, 'lead_id'>>
 
 /**
- * BR-1: the fields a Lead's campaign can derive. `null` = the derivation
- * itself is null (e.g. the lead has no operational site) — the field then
+ * BR-1: the fields a Lead's campaign can derive — only `source_id` and
+ * `registry_id`. `null` = the derivation itself is null — the field then
  * stays free, per BR-2, and is NOT part of `locked_fields`. Amendment rev.3:
  * `business_function_id`/`product_category_id` are REMOVED from here — the
  * lead's derived function+category, when both exist, is exposed instead as
@@ -176,7 +147,6 @@ export type UpdateOpportunityPayload = Partial<Omit<CreateOpportunityPayload, 'l
 export interface OpportunityDefaultValues {
   referent_id: number | null
   source_id: number | null
-  operational_site_id: number | null
   registry_id: number | null
 }
 
@@ -187,7 +157,6 @@ export interface OpportunityDefaultValues {
  */
 export interface OpportunityDefaultReferences {
   source: OpportunityRelationRef | null
-  operational_site: OpportunityOperationalSiteRef | null
   registry: OpportunityRelationRef | null
 }
 

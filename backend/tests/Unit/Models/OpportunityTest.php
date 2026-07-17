@@ -1,10 +1,7 @@
 <?php
 
-use App\Models\Company;
-use App\Models\CompanySite;
 use App\Models\Concerns\LogsModelActivity;
 use App\Models\Lead;
-use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\OpportunityProductLine;
 use App\Models\Referent;
@@ -32,7 +29,7 @@ uses(TestCase::class, RefreshDatabase::class);
 it('creates the opportunities table with the expected columns', function () {
     expect(Schema::hasTable('opportunities'))->toBeTrue();
     expect(Schema::hasColumns('opportunities', [
-        'id', 'name', 'registry_id', 'company_id', 'company_site_id', 'operational_site_id',
+        'id', 'name', 'registry_id',
         'referent_id', 'commercial_id', 'reporter_id', 'supervisor_id',
         'source_id', 'lead_id', 'start_date', 'estimated_value',
         'expected_close_date', 'success_probability', 'created_at', 'updated_at',
@@ -41,6 +38,12 @@ it('creates the opportunities table with the expected columns', function () {
     // Amendment rev.3: the former single scalar columns are DROPPED.
     expect(Schema::hasColumn('opportunities', 'business_function_id'))->toBeFalse();
     expect(Schema::hasColumn('opportunities', 'product_category_id'))->toBeFalse();
+
+    // User directive 2026-07-17: company_id/company_site_id/operational_site_id
+    // are DROPPED entirely.
+    expect(Schema::hasColumn('opportunities', 'company_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'company_site_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeFalse();
 
     expect(Schema::hasTable('opportunity_user'))->toBeTrue();
     expect(Schema::hasColumns('opportunity_user', ['id', 'opportunity_id', 'user_id', 'position']))->toBeTrue();
@@ -51,20 +54,11 @@ it('creates the opportunities table with the expected columns', function () {
     ]))->toBeTrue();
 });
 
-it('the 5 mandatory fields are NOT NULL, every other relation is nullable (AC-001/AC-081)', function () {
+it('the 2 mandatory fields are NOT NULL, every other relation is nullable (AC-001/AC-081)', function () {
     expect(fn () => Opportunity::factory()->make(['name' => null])->saveQuietly())
         ->toThrow(QueryException::class);
 
     expect(fn () => Opportunity::factory()->make(['registry_id' => null])->saveQuietly())
-        ->toThrow(QueryException::class);
-
-    expect(fn () => Opportunity::factory()->make(['company_id' => null])->saveQuietly())
-        ->toThrow(QueryException::class);
-
-    expect(fn () => Opportunity::factory()->make(['company_site_id' => null])->saveQuietly())
-        ->toThrow(QueryException::class);
-
-    expect(fn () => Opportunity::factory()->make(['operational_site_id' => null])->saveQuietly())
         ->toThrow(QueryException::class);
 
     $opportunity = Opportunity::factory()->create([
@@ -148,11 +142,14 @@ it('opportunity_product_lines: unique(opportunity_id, business_function_id, prod
 // migration reversibility (AC-003)
 // ---------------------------------------------------------------------------
 
-it('down() reverses opportunity_user then opportunities, up() recreates both', function () {
+it('down() reverses the 4 opportunities migrations in LIFO order, up() recreates them all', function () {
     $pivotMigration = require database_path('migrations/2026_07_16_140100_create_opportunity_user_table.php');
     $productLinesMigration = require database_path('migrations/2026_07_17_150000_create_opportunity_product_lines_table.php');
     $tableMigration = require database_path('migrations/2026_07_16_140000_create_opportunities_table.php');
+    $dropCompanySiteMigration = require database_path('migrations/2026_07_17_180000_drop_company_and_site_columns_from_opportunities_table.php');
 
+    // LIFO: the LAST migration to run (the column drop) is the FIRST reversed.
+    $dropCompanySiteMigration->down();
     $pivotMigration->down();
     $productLinesMigration->down();
     $tableMigration->down();
@@ -164,10 +161,30 @@ it('down() reverses opportunity_user then opportunities, up() recreates both', f
     $tableMigration->up();
     $productLinesMigration->up();
     $pivotMigration->up();
+    $dropCompanySiteMigration->up();
 
     expect(Schema::hasTable('opportunities'))->toBeTrue();
     expect(Schema::hasTable('opportunity_product_lines'))->toBeTrue();
     expect(Schema::hasTable('opportunity_user'))->toBeTrue();
+    expect(Schema::hasColumn('opportunities', 'company_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'company_site_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeFalse();
+});
+
+it('drop-company-and-site-columns migration is reversible standalone: down() then up()', function () {
+    $migration = require database_path('migrations/2026_07_17_180000_drop_company_and_site_columns_from_opportunities_table.php');
+
+    $migration->down();
+
+    expect(Schema::hasColumn('opportunities', 'company_id'))->toBeTrue();
+    expect(Schema::hasColumn('opportunities', 'company_site_id'))->toBeTrue();
+    expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeTrue();
+
+    $migration->up();
+
+    expect(Schema::hasColumn('opportunities', 'company_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'company_site_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeFalse();
 });
 
 it('opportunity_product_lines is reversible standalone: down() then up() (AC-097)', function () {
@@ -195,12 +212,6 @@ it('every to-one relation is a BelongsTo to the expected model', function () {
 
     expect($opportunity->registry())->toBeInstanceOf(BelongsTo::class)
         ->and($opportunity->registry()->getRelated())->toBeInstanceOf(Registry::class)
-        ->and($opportunity->company())->toBeInstanceOf(BelongsTo::class)
-        ->and($opportunity->company()->getRelated())->toBeInstanceOf(Company::class)
-        ->and($opportunity->companySite())->toBeInstanceOf(BelongsTo::class)
-        ->and($opportunity->companySite()->getRelated())->toBeInstanceOf(CompanySite::class)
-        ->and($opportunity->operationalSite())->toBeInstanceOf(BelongsTo::class)
-        ->and($opportunity->operationalSite()->getRelated())->toBeInstanceOf(OperationalSite::class)
         ->and($opportunity->referent())->toBeInstanceOf(BelongsTo::class)
         ->and($opportunity->referent()->getRelated())->toBeInstanceOf(Referent::class)
         ->and($opportunity->source())->toBeInstanceOf(BelongsTo::class)

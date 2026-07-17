@@ -46,18 +46,13 @@ it('opportunity-defaults: business_function/product_category come from the linke
     ]);
     $campaign = Campaign::factory()->forProject($project)->create();
 
-    $lead = Lead::factory()->create([
-        'campaign_id' => $campaign->id,
-        'operational_site_id' => null,
-    ]);
+    $lead = Lead::factory()->create(['campaign_id' => $campaign->id]);
     Sanctum::actingAs($actor);
 
     $response = $this->getJson("/api/leads/{$lead->id}/opportunity-defaults")->assertOk();
 
     expect($response->json('data.product_lines.0.business_function.id'))->toBe($businessFunction->id);
     expect($response->json('data.product_lines.0.product_category.id'))->toBe($productCategory->id);
-    expect($response->json('data.values.operational_site_id'))->toBeNull();
-    expect($response->json('data.locked_fields'))->not->toContain('operational_site_id');
 });
 
 it('opportunity-defaults: product_lines is empty when the campaign has neither business function nor product category (AC-102)', function () {

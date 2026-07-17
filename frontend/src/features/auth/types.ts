@@ -24,6 +24,8 @@ export interface User {
   created_at: string | null
   /** Per-user modal-vs-page open mode preference (spec 0042). Never null on the wire. */
   module_open_preferences: ModuleOpenPreferences
+  /** Per-user UI scale slider (0..100). Never null on the wire (defaults to 40). */
+  ui_scale: number
 }
 
 export interface LoginPayload {
@@ -38,6 +40,8 @@ export interface UpdateProfilePayload {
   personal_data?: PersonalDataPayload
   /** Optional: updates the modal-vs-page open mode preference (spec 0042). */
   module_open_preferences?: ModuleOpenPreferences
+  /** Optional: updates the per-user UI scale slider (0..100). */
+  ui_scale?: number
 }
 
 export interface ChangePasswordPayload {

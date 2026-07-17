@@ -8,6 +8,7 @@ import {
 import type { ForSelectItem } from '@/features/for-select/types'
 
 const useForSelectMock = vi.fn()
+const useForSelectLabelsMock = vi.fn()
 const fetchNextPage = vi.fn()
 const refetch = vi.fn()
 
@@ -16,9 +17,10 @@ vi.mock('@/features/for-select/use-for-select', async () => {
     typeof import('@/features/for-select/use-for-select')
   >('@/features/for-select/use-for-select')
   return {
-    // Keep the real flatten helper; only the hook is controlled.
+    // Keep the real flatten helper; only the hooks are controlled.
     flattenForSelectPages: actual.flattenForSelectPages,
     useForSelect: (args: unknown) => useForSelectMock(args),
+    useForSelectLabels: (args: unknown) => useForSelectLabelsMock(args),
   }
 })
 
@@ -78,9 +80,11 @@ beforeAll(async () => {
 
 beforeEach(() => {
   useForSelectMock.mockReset()
+  useForSelectLabelsMock.mockReset()
   fetchNextPage.mockReset()
   refetch.mockReset()
   useForSelectMock.mockReturnValue(queryState())
+  useForSelectLabelsMock.mockReturnValue(new Map())
 })
 
 describe('AsyncPaginatedSelect', () => {
@@ -186,17 +190,25 @@ describe('AsyncPaginatedSelect', () => {
     expect(screen.getByText('#7')).toBeInTheDocument()
   })
 
-  it('hydrates the selected label on mount when it is unknown', () => {
+  it('hydrates the selected label on mount via the ids-keyed label query', () => {
     renderSelect({ value: 7 })
-    expect(useForSelectMock).toHaveBeenCalledWith(
+    expect(useForSelectLabelsMock).toHaveBeenCalledWith(
       expect.objectContaining({ ids: [7], enabled: true }),
     )
   })
 
+  it('resolves the trigger label from the ids-keyed label query', () => {
+    useForSelectLabelsMock.mockReturnValue(
+      new Map([[7, { id: 7, label: 'Label-Query User' }]]),
+    )
+    renderSelect({ value: 7 })
+    expect(screen.getByText('Label-Query User')).toBeInTheDocument()
+  })
+
   it('does not eagerly hydrate when the selected item is already known', () => {
     renderSelect({ value: 7, selectedItem: { id: 7, label: 'Known User' } })
-    expect(useForSelectMock).toHaveBeenCalledWith(
-      expect.objectContaining({ ids: [7], enabled: false }),
+    expect(useForSelectLabelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ ids: [], enabled: false }),
     )
   })
 

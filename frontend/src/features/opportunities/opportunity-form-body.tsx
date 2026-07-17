@@ -49,14 +49,13 @@ function sectionRevealClassName(index: number): string {
  * The opportunity create/edit form UI (spec 0040 + amendment rev.1): an
  * optional in-form "Lead" picker in create (A-1) or its read-only equivalent
  * in edit (D-2), identity (name, the required anagrafica and its 3 BR-4
- * scoped relations), classification (company/site/function/category/source,
- * all 3 of company/company_site/operational_site mandatory per A-2), team
- * (supervisor + managers) and planning (dates/value/probability) — all
- * wrapped in `MetaField`. All non-render logic lives in `useOpportunityForm`/
- * `useOpportunityFormSubmit` and `useOpportunityLeadSelection`. BR-2 field
- * locking (from a linked Lead) applies uniformly whether the lead came from
- * the `?lead_id=N` deep-link or from picking one in the select
- * (`useOpportunityLeadSelection` unifies both).
+ * scoped relations), classification (source), team (supervisor + managers)
+ * and planning (dates/value/probability) — all wrapped in `MetaField`. All
+ * non-render logic lives in `useOpportunityForm`/`useOpportunityFormSubmit`
+ * and `useOpportunityLeadSelection`. BR-2 field locking (from a linked Lead)
+ * applies uniformly whether the lead came from the `?lead_id=N` deep-link or
+ * from picking one in the select (`useOpportunityLeadSelection` unifies
+ * both).
  */
 export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFormBodyProps) {
   const { t } = useTranslation()

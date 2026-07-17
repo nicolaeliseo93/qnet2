@@ -129,6 +129,7 @@ function user(overrides: Partial<User> = {}): User {
     personal_data: null,
     created_at: null,
     module_open_preferences: DEFAULT_MODULE_OPEN_PREFERENCES,
+    ui_scale: 40,
     ...overrides,
   }
 }

@@ -54,6 +54,7 @@ vi.mock('@/features/for-select/use-for-select', () => ({
     refetch: () => {},
   }),
   flattenForSelectPages: () => [],
+  useForSelectLabels: () => new Map(),
 }))
 
 // The Profilo tab now embeds the shared personal-data card/contacts/address

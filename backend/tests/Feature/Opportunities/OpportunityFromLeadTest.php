@@ -2,13 +2,10 @@
 
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
-use App\Models\Company;
-use App\Models\CompanySite;
 use App\Models\Lead;
 use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\ProductCategory;
-use App\Models\Project;
 use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\Source;
@@ -21,14 +18,15 @@ uses(RefreshDatabase::class);
 
 if (! function_exists('nonDerivableOpportunityFks')) {
     /**
-     * `company_id`/`company_site_id` are mandatory but NEVER BR-1-derivable
-     * (amendment rev.1 A-2: no lead/campaign chain to either) — every
-     * from-lead POST in this file still needs them explicitly. Since the
-     * user directive 2026-07-17 makes `product_lines` mandatory to create,
-     * a valid one-row collection ships here too (tests that assert a specific
-     * product_lines payload merge the helper FIRST so their own value wins).
+     * Since the user directive 2026-07-17 makes `product_lines` mandatory to
+     * create, a valid one-row collection ships here for every from-lead POST
+     * in this file (tests that assert a specific product_lines payload merge
+     * the helper FIRST so their own value wins). `company_id`/
+     * `company_site_id` were the former mandatory-but-never-derivable fields
+     * (amendment rev.1 A-2) — REMOVED entirely per user directive
+     * 2026-07-17, so this helper now only carries `product_lines`.
      *
-     * @return array{company_id: int, company_site_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
      */
     function nonDerivableOpportunityFks(): array
     {
@@ -36,8 +34,6 @@ if (! function_exists('nonDerivableOpportunityFks')) {
         $category = ProductCategory::factory()->create(['business_function_id' => $businessFunction->id]);
 
         return [
-            'company_id' => Company::factory()->create()->id,
-            'company_site_id' => CompanySite::factory()->create()->id,
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],
@@ -74,8 +70,10 @@ if (! function_exists('opportunityFromLeadActor')) {
 if (! function_exists('completeLead')) {
     /**
      * A lead with its own registry (spec 0041 D-3) and NOT NULL on every
-     * other BR-1-derivable source column, so every one of the 3 locked
-     * fields locks. The category's OWN business_function_id matches the
+     * other BR-1-derivable source column, so both locked fields lock. The
+     * lead's own `operational_site_id` (unrelated to Opportunity, which no
+     * longer has that field) still carries a real site, mirroring the
+     * common-case fixture. The category's OWN business_function_id matches the
      * campaign's (amendment rev.3): the product_lines row the defaults
      * endpoint prefills must satisfy the SAME
      * CategoryHierarchy::effectiveBusinessFunction() check the write path
@@ -105,14 +103,15 @@ if (! function_exists('completeLead')) {
 }
 
 // ---------------------------------------------------------------------------
-// AC-060 — GET opportunity-defaults, lead completo -> 3 campi valorizzati e
+// AC-060 — GET opportunity-defaults, lead completo -> 2 campi valorizzati e
 // bloccati (spec 0041 D-3: referent_id is no longer derivable, registry_id
 // comes from the lead itself, not the campaign; amendment rev.3:
 // business_function_id/product_category_id are NO LONGER locked scalars —
-// they surface as `product_lines`, see AC-102/103 below)
+// they surface as `product_lines`, see AC-102/103 below; user directive
+// 2026-07-17: operational_site_id is REMOVED from the derivable set)
 // ---------------------------------------------------------------------------
 
-it('opportunity-defaults: a complete lead locks all 3 derivable fields (AC-060, AC-050 spec 0041)', function () {
+it('opportunity-defaults: a complete lead locks both derivable fields (AC-060, AC-050 spec 0041)', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
     Sanctum::actingAs($actor);
@@ -121,13 +120,13 @@ it('opportunity-defaults: a complete lead locks all 3 derivable fields (AC-060, 
 
     expect($response->json('data.lead_id'))->toBe($lead->id);
     expect($response->json('data.existing_opportunity_id'))->toBeNull();
-    expect($response->json('data.values.operational_site_id'))->toBe($lead->operational_site_id);
     expect($response->json('data.values.registry_id'))->toBe($lead->registry_id);
     expect($response->json('data.values.source_id'))->toBe($lead->campaign->source_id);
     expect($response->json('data.values'))->not->toHaveKey('business_function_id');
     expect($response->json('data.values'))->not->toHaveKey('product_category_id');
+    expect($response->json('data.values'))->not->toHaveKey('operational_site_id');
     expect($response->json('data.locked_fields'))->toEqualCanonicalizing([
-        'source_id', 'operational_site_id', 'registry_id',
+        'source_id', 'registry_id',
     ]);
     expect($response->json('data.locked_fields'))->not->toContain('referent_id');
     expect($response->json('data.references.registry.id'))->toBe($lead->registry_id);
@@ -191,7 +190,6 @@ it('create with lead_id: the server writes the derived attributes (AC-063)', fun
     $this->assertDatabaseHas('opportunities', [
         'id' => $response->json('data.id'),
         'lead_id' => $lead->id,
-        'operational_site_id' => $lead->operational_site_id,
         'registry_id' => $lead->registry_id,
         'source_id' => $lead->campaign->source_id,
     ]);
@@ -242,39 +240,6 @@ it('create with lead_id: a second opportunity for the same lead -> 422 unique (A
         ->assertStatus(422)->assertJsonValidationErrors('lead_id');
 
     expect(Opportunity::count())->toBe(1);
-});
-
-// ---------------------------------------------------------------------------
-// AC-090 — company_id/company_site_id are NEVER derivable: still required
-// even in the from-lead flow
-// ---------------------------------------------------------------------------
-
-it('create with lead_id: missing company_id -> 422, not derived from the lead/campaign (AC-090)', function () {
-    $actor = opportunityFromLeadActor(['create'], ['view']);
-    $lead = completeLead();
-    Sanctum::actingAs($actor);
-
-    $fks = nonDerivableOpportunityFks();
-    unset($fks['company_id']);
-
-    $this->postJson('/api/opportunities', array_merge(['name' => 'No company from lead', 'lead_id' => $lead->id], $fks))
-        ->assertStatus(422)->assertJsonValidationErrors('company_id');
-
-    expect(Opportunity::count())->toBe(0);
-});
-
-it('create with lead_id: missing company_site_id -> 422, not derived from the lead/campaign (AC-090)', function () {
-    $actor = opportunityFromLeadActor(['create'], ['view']);
-    $lead = completeLead();
-    Sanctum::actingAs($actor);
-
-    $fks = nonDerivableOpportunityFks();
-    unset($fks['company_site_id']);
-
-    $this->postJson('/api/opportunities', array_merge(['name' => 'No company site from lead', 'lead_id' => $lead->id], $fks))
-        ->assertStatus(422)->assertJsonValidationErrors('company_site_id');
-
-    expect(Opportunity::count())->toBe(0);
 });
 
 // ---------------------------------------------------------------------------
@@ -336,63 +301,11 @@ it('update: lead_id is prohibited (AC-064)', function () {
         ->assertStatus(422)->assertJsonValidationErrors('lead_id');
 });
 
-it('update: a field with a NULL derivation stays freely editable (AC-064)', function () {
-    $actor = opportunityFromLeadActor(['create', 'update'], ['view']);
-
-    $project = Project::factory()->create([
-        'business_function_id' => BusinessFunction::factory(),
-        'product_category_id' => ProductCategory::factory(),
-    ]);
-    $campaign = Campaign::factory()->forProject($project)->create();
-    // registry_id is omitted here: it is ALWAYS non-null on a Lead (BR-1,
-    // spec 0041 D-1), so it always locks — unlike operational_site_id below,
-    // which stays a valid null derivation when the lead has no site.
-    $lead = Lead::factory()->create(['campaign_id' => $campaign->id, 'operational_site_id' => null]);
-    Sanctum::actingAs($actor);
-
-    $initialSite = OperationalSite::factory()->create();
-
-    $created = $this->postJson('/api/opportunities', array_merge([
-        'name' => 'Unlocked site',
-        'lead_id' => $lead->id,
-        'operational_site_id' => $initialSite->id,
-    ], nonDerivableOpportunityFks()))->assertCreated();
-    $opportunityId = $created->json('data.id');
-
-    $newSite = OperationalSite::factory()->withAddress()->create();
-
-    $this->patchJson("/api/opportunities/{$opportunityId}", ['operational_site_id' => $newSite->id])
-        ->assertOk()
-        ->assertJsonPath('data.operational_site_id', $newSite->id);
-});
-
-// ---------------------------------------------------------------------------
-// AC-089 — operational_site_id: locked when the lead has one, mandatory
-// (not locked) when it does not
-// ---------------------------------------------------------------------------
-
-it('create with lead_id: a lead WITHOUT operational_site_id -> the field is required, not locked (AC-089)', function () {
-    $actor = opportunityFromLeadActor(['create'], ['view']);
-    $lead = completeLead();
-    $lead->update(['operational_site_id' => null]);
-    Sanctum::actingAs($actor);
-
-    // Omitted entirely -> 422 (mandatory when the lead does not derive it).
-    $this->postJson('/api/opportunities', array_merge(['name' => 'No site from lead', 'lead_id' => $lead->id], nonDerivableOpportunityFks()))
-        ->assertStatus(422)->assertJsonValidationErrors('operational_site_id');
-
-    // Supplied explicitly -> 201, freely chosen (not locked).
-    $site = OperationalSite::factory()->create();
-
-    $response = $this->postJson('/api/opportunities', array_merge([
-        'name' => 'Site chosen manually',
-        'lead_id' => $lead->id,
-        'operational_site_id' => $site->id,
-    ], nonDerivableOpportunityFks()))->assertCreated();
-
-    expect($response->json('data.operational_site_id'))->toBe($site->id);
-    expect($response->json('data.locked_fields'))->not->toContain('operational_site_id');
-});
+// operational_site_id was Opportunity's third BR-1-derivable/lockable field
+// (both the "NULL derivation stays freely editable" AC-064 case and the
+// AC-089 "locked when the lead has one, mandatory when it does not" suite
+// exercised it) — REMOVED per user directive 2026-07-17: the field no
+// longer exists on Opportunity, so neither scenario applies anymore.
 
 // ---------------------------------------------------------------------------
 // AC-065 — detail shape (lead {id,label}, locked_fields) + LeadResource.opportunity
@@ -412,7 +325,7 @@ it('detail: an opportunity from a lead exposes lead {id,label} and locked_fields
         ->assertJsonPath('data.lead.id', $lead->id)
         ->assertJsonPath('data.lead.label', $lead->registry->name)
         ->assertJsonPath('data.locked_fields', [
-            'source_id', 'operational_site_id', 'registry_id',
+            'source_id', 'registry_id',
         ]);
 });
 
