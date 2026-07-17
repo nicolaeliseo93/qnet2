@@ -20,6 +20,7 @@ import {
   normalizeDecimal,
   type CreatePayloadFromLead,
 } from '@/features/opportunities/opportunity-form-payload'
+import { composeProductLinesName } from '@/features/opportunities/opportunity-product-line-name'
 import {
   buildCreateOpportunitySchema,
   buildUpdateOpportunitySchema,
@@ -34,13 +35,12 @@ const SERVER_ERROR_FIELDS = [
   'company_id',
   'company_site_id',
   'operational_site_id',
-  'business_function_id',
   'referent_id',
   'commercial_id',
   'reporter_id',
   'supervisor_id',
   'source_id',
-  'product_category_id',
+  'product_lines',
   'manager_slots',
   'start_date',
   'expected_close_date',
@@ -101,13 +101,15 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
         company_id: opportunity.company_id,
         company_site_id: opportunity.company_site_id,
         operational_site_id: opportunity.operational_site_id,
-        business_function_id: opportunity.business_function_id,
         referent_id: opportunity.referent_id,
         commercial_id: opportunity.commercial_id,
         reporter_id: opportunity.reporter_id,
         supervisor_id: opportunity.supervisor_id,
         source_id: opportunity.source_id,
-        product_category_id: opportunity.product_category_id,
+        product_lines: opportunity.product_lines.map((line) => ({
+          business_function_id: line.business_function.id,
+          product_category_id: line.product_category.id,
+        })),
         manager_slots: managerSlotsFromRefs(opportunity.managers),
         start_date: opportunity.start_date,
         expected_close_date: opportunity.expected_close_date,
@@ -123,22 +125,38 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
       company_id: null,
       company_site_id: null,
       operational_site_id: null,
-      business_function_id: null,
       referent_id: null,
       commercial_id: null,
       reporter_id: null,
       supervisor_id: null,
       source_id: null,
-      product_category_id: null,
+      product_lines: [],
       manager_slots: [],
       start_date: null,
       expected_close_date: null,
       estimated_value: null,
       success_probability: 0,
     }
-    // Spec 0040 MT-6: BR-1's 6 derived fields (whichever aren't null) seed the
+    if (!mode.fromLead) {
+      return empty
+    }
+    // Spec 0040 MT-6: BR-1's derived fields (whichever aren't null) seed the
     // create form, whether locked (BR-2) or left free by a null derivation.
-    return mode.fromLead ? { ...empty, ...mode.fromLead.values } : empty
+    // Amendment rev.3 (AC-102/103): the lead's 0/1 product line seeds
+    // `product_lines` instead of a locked business_function_id/
+    // product_category_id pair — editable/removable like any other row. The
+    // name (still empty at this point, CREATE starts in auto mode) is
+    // computed eagerly here, once, from that same seed: no later event fires
+    // to trigger the usual imperative auto-fill for this initial mount.
+    return {
+      ...empty,
+      ...mode.fromLead.values,
+      product_lines: mode.fromLead.productLines.map((line) => ({
+        business_function_id: line.business_function.id,
+        product_category_id: line.product_category.id,
+      })),
+      name: composeProductLinesName(mode.fromLead.productLines.map((line) => line.product_category.name)),
+    }
   }, [mode])
 
   const form = useForm<OpportunityFormValues>({

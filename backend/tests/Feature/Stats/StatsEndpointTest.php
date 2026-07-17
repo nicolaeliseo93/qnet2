@@ -47,25 +47,37 @@ function statsDomains(): array
     ];
 }
 
+if (! function_exists('statsPermissionForDomain')) {
+    /**
+     * The permission gating a domain's stats panel. Every module uses its own
+     * `{domain}.viewAny`, EXCEPT `import-runs`: its dedicated permission set was
+     * removed (2026-07-17) and the module rides the lead module's `leads.import`
+     * (ImportRunPolicy::viewAny).
+     */
+    function statsPermissionForDomain(string $domain): string
+    {
+        return $domain === 'import-runs' ? 'leads.import' : "{$domain}.viewAny";
+    }
+}
+
 if (! function_exists('statsUserWith')) {
     /**
-     * A user granted `{domain}.viewAny` for each domain in $domains. Every
-     * domain's permission is created first (idempotent), so a user granted
-     * none is genuinely unauthorized rather than merely missing a permission
-     * row.
+     * A user granted each domain's stats permission (see statsPermissionForDomain).
+     * Every permission is created first (idempotent), so a user granted none is
+     * genuinely unauthorized rather than merely missing a permission row.
      *
      * @param  array<int, string>  $domains
      */
     function statsUserWith(array $domains): User
     {
         foreach (statsDomains() as $domain) {
-            Permission::findOrCreate("{$domain}.viewAny");
+            Permission::findOrCreate(statsPermissionForDomain($domain));
         }
 
         $user = User::factory()->create();
 
         foreach ($domains as $domain) {
-            $user->givePermissionTo("{$domain}.viewAny");
+            $user->givePermissionTo(statsPermissionForDomain($domain));
         }
 
         return $user;

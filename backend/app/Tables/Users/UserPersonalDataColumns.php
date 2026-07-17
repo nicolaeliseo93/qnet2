@@ -228,9 +228,9 @@ class UserPersonalDataColumns
         $street = trim((string) ($address->line1 ?? ''));
         $locality = trim(implode(' ', array_filter([
             $address->postal_code,
-            $address->city?->name,
+            $address->city?->localizedName(),
         ])));
-        $province = $address->province?->name;
+        $province = $address->province?->localizedName();
 
         if ($province !== null && $locality !== '') {
             $locality .= " ({$province})";

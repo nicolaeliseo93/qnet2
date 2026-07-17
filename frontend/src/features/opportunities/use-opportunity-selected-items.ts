@@ -12,9 +12,7 @@ export interface OpportunitySelectedItems {
   reporter: RelationFieldRef | null
   company: RelationFieldRef | null
   companySite: RelationFieldRef | null
-  businessFunction: RelationFieldRef | null
   operationalSite: RelationFieldRef | null
-  productCategory: RelationFieldRef | null
   source: RelationFieldRef | null
   supervisor: RelationFieldRef | null
   managers: ForSelectItem[]
@@ -27,9 +25,7 @@ const EMPTY_SELECTED_ITEMS: OpportunitySelectedItems = {
   reporter: null,
   company: null,
   companySite: null,
-  businessFunction: null,
   operationalSite: null,
-  productCategory: null,
   source: null,
   supervisor: null,
   managers: [],
@@ -40,7 +36,9 @@ const EMPTY_SELECTED_ITEMS: OpportunitySelectedItems = {
  * the loaded instance in edit mode, or from the Lead's derived `references`
  * (spec 0040 MT-6) in a create-from-lead — so each `AsyncPaginatedSelect`
  * shows its (possibly locked) current selection immediately, no hydration
- * round-trip. A plain manual create has nothing to hydrate.
+ * round-trip. A plain manual create has nothing to hydrate. `business_function`/
+ * `product_category` are NOT part of this shape anymore (spec 0040 amendment
+ * rev.3): `OpportunityProductLinesField` resolves its own row labels.
  *
  * `leadSelection.registry` (spec 0041 AC-051) takes precedence over
  * `mode.fromLead.references.registry`: it reflects the in-form "Lead" picker,
@@ -61,11 +59,9 @@ export function useOpportunitySelectedItems(
         reporter: opportunity.reporter,
         company: opportunity.company,
         companySite: opportunity.company_site,
-        businessFunction: opportunity.business_function,
         operationalSite: opportunity.operational_site
           ? { id: opportunity.operational_site.id, name: opportunity.operational_site.label }
           : null,
-        productCategory: opportunity.product_category,
         source: opportunity.source,
         supervisor: opportunity.supervisor,
         managers: opportunity.managers.map((manager) => ({ id: manager.id, label: manager.name })),
@@ -82,8 +78,6 @@ export function useOpportunitySelectedItems(
       operationalSite: references?.operational_site
         ? { id: references.operational_site.id, name: references.operational_site.label }
         : null,
-      businessFunction: references?.business_function ?? null,
-      productCategory: references?.product_category ?? null,
     }
   }, [mode, leadSelection.registry])
 }

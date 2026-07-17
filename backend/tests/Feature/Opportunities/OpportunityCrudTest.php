@@ -72,15 +72,14 @@ it('create: with the 5 mandatory fields only -> 201, every other field is null (
 
     $opportunityId = $response->json('data.id');
     $this->assertDatabaseHas('opportunities', array_merge(['id' => $opportunityId, 'name' => 'Deal Alpha'], $fks, [
-        'business_function_id' => null,
         'referent_id' => null,
         'commercial_id' => null,
         'reporter_id' => null,
         'supervisor_id' => null,
         'source_id' => null,
-        'product_category_id' => null,
         'lead_id' => null,
     ]));
+    expect($response->json('data.product_lines'))->toBe([]);
 });
 
 it('create: 201, response shape matches the frozen contract', function () {
@@ -358,7 +357,7 @@ it('delete: 404 for a non-existent opportunity', function () {
 // response shape sanity for the remaining relation summaries
 // ---------------------------------------------------------------------------
 
-it('exposes company/company_site/operational_site/business_function/source/product_category summaries', function () {
+it('exposes company/company_site/operational_site/source/product_lines summaries', function () {
     $actor = opportunityUserWith(['create']);
     $fks = mandatoryOpportunityFks();
     $company = Company::find($fks['company_id']);
@@ -367,19 +366,23 @@ it('exposes company/company_site/operational_site/business_function/source/produ
     $companySite->update(['name' => 'Sede Nord']);
     $businessFunction = BusinessFunction::factory()->create(['name' => 'Vendite']);
     $source = Source::factory()->create(['name' => 'Fiera']);
-    $productCategory = ProductCategory::factory()->create(['name' => 'Servizi Cloud']);
+    $productCategory = ProductCategory::factory()->create(['name' => 'Servizi Cloud', 'business_function_id' => $businessFunction->id]);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/opportunities', array_merge($fks, [
+    $response = $this->postJson('/api/opportunities', array_merge($fks, [
         'name' => 'Full relations',
-        'business_function_id' => $businessFunction->id,
         'source_id' => $source->id,
-        'product_category_id' => $productCategory->id,
+        'product_lines' => [
+            ['business_function_id' => $businessFunction->id, 'product_category_id' => $productCategory->id],
+        ],
     ]))->assertCreated()
         ->assertJsonPath('data.company', ['id' => $company->id, 'name' => 'Acme Group'])
         ->assertJsonPath('data.company_site', ['id' => $companySite->id, 'name' => 'Sede Nord'])
-        ->assertJsonPath('data.business_function', ['id' => $businessFunction->id, 'name' => 'Vendite'])
         ->assertJsonPath('data.source', ['id' => $source->id, 'name' => 'Fiera'])
-        ->assertJsonPath('data.product_category', ['id' => $productCategory->id, 'name' => 'Servizi Cloud'])
         ->assertJsonPath('data.operational_site.id', $fks['operational_site_id']);
+
+    $productLines = $response->json('data.product_lines');
+    expect($productLines)->toHaveCount(1);
+    expect($productLines[0]['business_function'])->toBe(['id' => $businessFunction->id, 'name' => 'Vendite']);
+    expect($productLines[0]['product_category'])->toBe(['id' => $productCategory->id, 'name' => 'Servizi Cloud']);
 });

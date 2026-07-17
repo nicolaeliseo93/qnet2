@@ -1,0 +1,162 @@
+import { render } from '@testing-library/react'
+import type { ICellRendererParams } from 'ag-grid-community'
+import { Building2 } from 'lucide-react'
+import { beforeAll, describe, expect, it } from 'vitest'
+import i18n from '@/i18n'
+import {
+  BooleanBadgeCell,
+  ColorSwatchCell,
+  CurrencyCell,
+  DateCell,
+  GroupCell,
+  RelationCell,
+  StatusBadgeCell,
+  UserAvatarCell,
+} from '@/features/table/rich-cells'
+
+/**
+ * The shared cross-module cell library: one component per data kind, reused by
+ * every table (projects/campaigns/leads/imports/status configurators). These
+ * tests pin the visual contract each cell exposes — the value shown, the empty
+ * fallback, and the accessibility-relevant markup (status dot, avatar initials).
+ */
+beforeAll(async () => {
+  await i18n.changeLanguage('en')
+})
+
+/** Builds an AG Grid renderer params stub carrying just the cell `value`. */
+function params(value: unknown): ICellRendererParams {
+  return { value } as unknown as ICellRendererParams
+}
+
+describe('RelationCell', () => {
+  it('renders the relation name', () => {
+    const { getByText } = render(<RelationCell {...params({ name: 'Acme Corp' })} />)
+    expect(getByText('Acme Corp')).toBeInTheDocument()
+  })
+
+  it('falls back to the composed label when there is no name (operational site)', () => {
+    const { getByText } = render(<RelationCell {...params({ label: 'Via Roma 1 - Milano' })} />)
+    expect(getByText('Via Roma 1 - Milano')).toBeInTheDocument()
+  })
+
+  it('renders the optional leading kind icon', () => {
+    const { container, getByText } = render(
+      <RelationCell {...params({ name: 'Acme Corp' })} icon={Building2} />,
+    )
+    expect(getByText('Acme Corp')).toBeInTheDocument()
+    expect(container.querySelector('svg')).not.toBeNull()
+  })
+
+  it('renders an em dash when the relation is null', () => {
+    const { getByText } = render(<RelationCell {...params(null)} />)
+    expect(getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('StatusBadgeCell', () => {
+  it('renders the status name with its color class and a leading status dot', () => {
+    const { getByText, container } = render(
+      <StatusBadgeCell {...params({ name: 'Won', color: 'blue' })} />,
+    )
+    expect(getByText('Won')).toBeInTheDocument()
+    // The soft badge class sits on the pill, the strong shade on the status dot.
+    expect(container.querySelector('.bg-blue-100')).not.toBeNull()
+    expect(container.querySelector('.bg-blue-500')).not.toBeNull()
+  })
+
+  it('renders a neutral badge (no dot) for a colorless status', () => {
+    const { getByText, container } = render(<StatusBadgeCell {...params({ name: 'Draft', color: null })} />)
+    expect(getByText('Draft')).toBeInTheDocument()
+    expect(container.querySelector('.bg-blue-500')).toBeNull()
+  })
+
+  it('renders an em dash when the status is null', () => {
+    const { getByText } = render(<StatusBadgeCell {...params(null)} />)
+    expect(getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('DateCell', () => {
+  it('renders a localized date for a valid Y-m-d value', () => {
+    const { queryByText, container } = render(<DateCell {...params('2026-07-17')} />)
+    expect(queryByText('—')).toBeNull()
+    expect(container.textContent).toContain('2026')
+  })
+
+  it('renders an em dash for an empty value', () => {
+    expect(render(<DateCell {...params('')} />).getByText('—')).toBeInTheDocument()
+  })
+
+  it('renders an em dash for an unparseable value', () => {
+    expect(render(<DateCell {...params('not-a-date')} />).getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('CurrencyCell', () => {
+  it('renders a formatted amount for a decimal string', () => {
+    const { queryByText, container } = render(<CurrencyCell {...params('1500.00')} />)
+    expect(queryByText('—')).toBeNull()
+    expect(container.textContent).toMatch(/\d/)
+  })
+
+  it('renders an em dash when the amount is null', () => {
+    expect(render(<CurrencyCell {...params(null)} />).getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('BooleanBadgeCell', () => {
+  it('renders a yes badge with an icon when true', () => {
+    const { getByText, container } = render(<BooleanBadgeCell {...params(true)} />)
+    expect(getByText(i18n.t('common.yes'))).toBeInTheDocument()
+    expect(container.querySelector('svg')).not.toBeNull()
+  })
+
+  it('renders a no badge when false', () => {
+    const { getByText } = render(<BooleanBadgeCell {...params(false)} />)
+    expect(getByText(i18n.t('common.no'))).toBeInTheDocument()
+  })
+
+  it('renders an em dash for a non-boolean value', () => {
+    expect(render(<BooleanBadgeCell {...params(null)} />).getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('UserAvatarCell', () => {
+  it('renders the person name with initials', () => {
+    const { getByText } = render(<UserAvatarCell {...params({ name: 'Marco Rossi' })} />)
+    expect(getByText('Marco Rossi')).toBeInTheDocument()
+    expect(getByText('MR')).toBeInTheDocument()
+  })
+
+  it('renders an em dash when there is no person', () => {
+    expect(render(<UserAvatarCell {...params(null)} />).getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('ColorSwatchCell', () => {
+  it('renders the localized token name', () => {
+    const { getByText } = render(<ColorSwatchCell {...params('blue')} />)
+    expect(getByText(i18n.t('customFields.colors.blue'))).toBeInTheDocument()
+  })
+
+  it('renders an em dash for a missing token', () => {
+    expect(render(<ColorSwatchCell {...params(null)} />).getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('GroupCell', () => {
+  it('renders the localized group label under the given namespace', () => {
+    const { getByText } = render(
+      <GroupCell {...params('open')} labelPrefix="pipelineStatuses.form.group" />,
+    )
+    expect(getByText(i18n.t('pipelineStatuses.form.group.open'))).toBeInTheDocument()
+  })
+
+  it('renders an em dash when the group is null', () => {
+    const { getByText } = render(
+      <GroupCell {...params(null)} labelPrefix="pipelineStatuses.form.group" />,
+    )
+    expect(getByText('—')).toBeInTheDocument()
+  })
+})

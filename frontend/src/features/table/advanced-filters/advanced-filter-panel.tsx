@@ -1,5 +1,6 @@
 import { useId, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Check, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -63,11 +64,13 @@ export function AdvancedFilterPanel({ descriptors, filters }: AdvancedFilterPane
               key={descriptor.name}
               className={cn('flex flex-col gap-1', WIDTH_CLASS[descriptor.width])}
             >
-              <Label htmlFor={fieldId} className="text-xs font-medium text-muted-foreground">
-                {t(descriptor.label)}
+              <Label
+                htmlFor={fieldId}
+                className="flex items-center gap-1 text-xs font-medium text-muted-foreground"
+              >
+                <span className="truncate">{t(descriptor.label)}</span>
                 {descriptor.required ? (
                   <span aria-hidden="true" className="text-destructive">
-                    {' '}
                     *
                   </span>
                 ) : null}
@@ -92,7 +95,7 @@ export function AdvancedFilterPanel({ descriptors, filters }: AdvancedFilterPane
         })}
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2">
+      <div className="flex items-center justify-end gap-2 border-t border-border bg-background/40 px-3 py-2">
         <Button
           type="button"
           variant="ghost"
@@ -100,6 +103,7 @@ export function AdvancedFilterPanel({ descriptors, filters }: AdvancedFilterPane
           onClick={filters.reset}
           disabled={filters.isSaving}
         >
+          <RotateCcw aria-hidden="true" />
           {t('table.advancedFilters.reset')}
         </Button>
         <Button
@@ -108,6 +112,7 @@ export function AdvancedFilterPanel({ descriptors, filters }: AdvancedFilterPane
           onClick={filters.apply}
           disabled={!filters.canApply || filters.isSaving}
         >
+          <Check aria-hidden="true" />
           {t('table.advancedFilters.apply')}
         </Button>
       </div>

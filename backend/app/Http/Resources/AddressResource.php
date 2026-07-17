@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Address;
+use App\Support\Geo\GeoNameLocalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -61,6 +62,6 @@ class AddressResource extends JsonResource
      */
     private function toGeoRef(?Model $related): ?array
     {
-        return $related !== null ? ['id' => $related->id, 'name' => $related->name] : null;
+        return $related !== null ? ['id' => $related->id, 'name' => GeoNameLocalizer::toItalian($related->name)] : null;
     }
 }

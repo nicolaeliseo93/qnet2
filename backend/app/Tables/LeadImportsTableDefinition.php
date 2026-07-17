@@ -24,10 +24,10 @@ use Illuminate\Support\Facades\Gate;
  *    module now shows only lead runs; other domains may join later without
  *    touching this class's scoping contract.
  *
- * `authorizeViewAny` is no longer overridden: ImportRunPolicy now extends
- * BasePolicy (`import-runs.*`), so AbstractTableDefinition's default
- * (`Gate::allows('viewAny', ImportRun::class)`) resolves the real
- * `import-runs.viewAny` permission instead of a non-existent one.
+ * `authorizeViewAny` is not overridden: AbstractTableDefinition's default
+ * (`Gate::allows('viewAny', ImportRun::class)`) resolves through
+ * ImportRunPolicy, which now checks the lead module's `leads.import` ability
+ * (the former dedicated `import-runs.*` set was removed 2026-07-17).
  */
 class LeadImportsTableDefinition extends AbstractTableDefinition
 {

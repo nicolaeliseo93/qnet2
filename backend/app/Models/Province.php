@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Abstracts\BaseModel;
+use App\Models\Concerns\LocalizesGeoName;
 use Database\Factories\ProvinceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,8 @@ class Province extends BaseModel
 {
     /** @use HasFactory<ProvinceFactory> */
     use HasFactory;
+
+    use LocalizesGeoName;
 
     protected $fillable = [
         'country_id',

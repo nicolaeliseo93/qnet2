@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Http\Resources\Abstracts\ForSelectResource;
 use App\Models\Project;
+use App\Support\Geo\GeoNameLocalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 
@@ -36,7 +37,7 @@ class ProjectForSelectResource extends ForSelectResource
                 'partner' => $this->summarize($this->partner),
                 'pipeline_status' => $this->summarize($this->pipelineStatus),
                 'business_function' => $this->summarize($this->businessFunction),
-                'state' => $this->summarize($this->state),
+                'state' => $this->summarize($this->state, geo: true),
                 'product_category' => $this->summarize($this->productCategory),
                 'total_budget' => $totalBudget === null ? null : $this->formatMoney((float) $totalBudget),
                 'allocated_budget' => $this->formatMoney($allocatedBudget),
@@ -54,15 +55,21 @@ class ProjectForSelectResource extends ForSelectResource
     }
 
     /**
+     * A related row projected to {id, label}. `$geo` localizes the label to
+     * Italian (state only here) — never applied to the other relations, whose
+     * names are user data.
+     *
      * @return array{id: int, label: string}|null
      */
-    private function summarize(?Model $related): ?array
+    private function summarize(?Model $related, bool $geo = false): ?array
     {
         if ($related === null) {
             return null;
         }
 
-        return ['id' => $related->id, 'label' => $related->name];
+        $label = $geo ? GeoNameLocalizer::toItalian($related->name) : $related->name;
+
+        return ['id' => $related->id, 'label' => $label];
     }
 
     /**

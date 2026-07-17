@@ -30,13 +30,15 @@ if (! function_exists('opportunityMetaUserWith')) {
 
 const OPPORTUNITY_FIELD_KEYS = [
     'name', 'registry_id', 'company_id', 'company_site_id', 'operational_site_id',
-    'business_function_id', 'referent_id', 'commercial_id', 'reporter_id', 'supervisor_id',
-    'source_id', 'product_category_id', 'manager_slots', 'start_date', 'estimated_value',
+    'referent_id', 'commercial_id', 'reporter_id', 'supervisor_id',
+    'source_id', 'product_lines', 'manager_slots', 'start_date', 'estimated_value',
     'expected_close_date', 'success_probability',
 ];
 
 // ---------------------------------------------------------------------------
-// AC-031 — GET /api/meta/opportunities: the 17 fields, lead_id absent
+// AC-031 — GET /api/meta/opportunities: the 16 fields (amendment rev.3:
+// business_function_id/product_category_id merged into product_lines),
+// lead_id absent
 // ---------------------------------------------------------------------------
 
 it('403 without opportunities.viewAny', function () {
@@ -46,7 +48,7 @@ it('403 without opportunities.viewAny', function () {
     $this->getJson('/api/meta/opportunities')->assertForbidden();
 });
 
-it('200: field catalogue has the 17 contract fields, in order, lead_id absent (AC-031)', function () {
+it('200: field catalogue has the 16 contract fields, in order, lead_id absent (AC-031)', function () {
     $actor = opportunityMetaUserWith(['viewAny', 'create']);
     Sanctum::actingAs($actor);
 
@@ -75,7 +77,7 @@ it('200: create-context permissions.fields are editable when the actor may creat
         ->assertJsonPath('permissions.fields.company_id.required', true)
         ->assertJsonPath('permissions.fields.company_site_id.required', true)
         ->assertJsonPath('permissions.fields.operational_site_id.required', true)
-        ->assertJsonPath('permissions.fields.business_function_id.required', false)
+        ->assertJsonPath('permissions.fields.product_lines.required', false)
         ->assertJsonPath('permissions.fields.estimated_value.required', false);
 });
 
@@ -119,7 +121,7 @@ it('permissions.fields are readonly when the actor may not create', function () 
 // AC-033 — the resource surfaces in the Role matrix's field catalogue too
 // ---------------------------------------------------------------------------
 
-it('GET /api/authorization/fields includes opportunities with its 17 fields (AC-033)', function () {
+it('GET /api/authorization/fields includes opportunities with its 16 fields (AC-033)', function () {
     foreach (['viewAny', 'create'] as $ability) {
         Permission::findOrCreate("roles.{$ability}");
     }

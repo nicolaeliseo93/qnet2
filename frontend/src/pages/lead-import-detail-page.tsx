@@ -15,7 +15,7 @@ import NotFoundPage from '@/pages/not-found-page'
  * Dedicated read-only page of a single lead import run (spec 0034 AC-013):
  * mirrors `ReferentDetailPage` — a fresh, re-authorized fetch on mount, the
  * presentational `LeadImportDetailView`, and a "Resume import" action when
- * the run is still resumable. Gated behind `import-runs.view` (`<Can>`,
+ * the run is still resumable. Gated behind `leads.import` (`<Can>`,
  * UI-only — the backend re-checks the same ability fail-closed, plus the
  * ownership scoping already baked into the wizard endpoints).
  */
@@ -36,7 +36,7 @@ export default function LeadImportDetailPage() {
 
   return (
     <Can
-      permission="import-runs.view"
+      permission="leads.import"
       fallback={<p className="text-sm text-muted-foreground">{t('leadImports.forbidden')}</p>}
     >
       <div className="flex flex-1 flex-col gap-4">

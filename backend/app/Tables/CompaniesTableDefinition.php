@@ -132,11 +132,11 @@ class CompaniesTableDefinition extends AbstractTableDefinition
             'id' => $row->id,
             'denomination' => $row->denomination,
             'vat_number' => $row->vat_number,
-            'city' => $address?->city?->name,
-            'province' => $address?->province?->name,
-            'region' => $address?->state?->name,
+            'city' => $address?->city?->localizedName(),
+            'province' => $address?->province?->localizedName(),
+            'region' => $address?->state?->localizedName(),
             'postal_code' => $address?->postal_code,
-            'country' => $address?->country?->name,
+            'country' => $address?->country?->localizedName(),
             'created_at' => $row->created_at,
         ];
     }

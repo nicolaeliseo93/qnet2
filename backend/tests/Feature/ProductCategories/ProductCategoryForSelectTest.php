@@ -158,3 +158,56 @@ it('exposes meta.business_function as null when neither own nor inherited', func
 
     expect($item['meta'])->toMatchArray(['business_function' => null]);
 });
+
+// ---------------------------------------------------------------------------
+// AC-104 — business_function_id param (spec 0040 amendment rev.3): additive,
+// scopes results to categories whose EFFECTIVE business function matches
+// ---------------------------------------------------------------------------
+
+it('business_function_id filters to categories whose OWN business function matches (AC-104)', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $function = BusinessFunction::factory()->create();
+    $otherFunction = BusinessFunction::factory()->create();
+    $matching = ProductCategory::factory()->create(['name' => 'Matching Own', 'business_function_id' => $function->id]);
+    ProductCategory::factory()->create(['name' => 'Other Own', 'business_function_id' => $otherFunction->id]);
+    ProductCategory::factory()->create(['name' => 'No Function']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/product-categories/for-select?business_function_id={$function->id}")->assertOk();
+    $ids = collect($response->json('items'))->pluck('id');
+
+    expect($ids->all())->toBe([$matching->id]);
+});
+
+it('business_function_id filters to categories whose INHERITED business function matches (AC-104)', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    $function = BusinessFunction::factory()->create();
+    $parent = ProductCategory::factory()->create(['business_function_id' => $function->id]);
+    $child = ProductCategory::factory()->childOf($parent)->create(['name' => 'Inherited Child']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/product-categories/for-select?business_function_id={$function->id}")->assertOk();
+    $ids = collect($response->json('items'))->pluck('id');
+
+    expect($ids)->toContain($parent->id)
+        ->and($ids)->toContain($child->id);
+});
+
+it('without business_function_id, the behaviour is IDENTICAL to before (retrocompatible, AC-104)', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    ProductCategory::factory()->create(['name' => 'Alpha']);
+    ProductCategory::factory()->create(['name' => 'Beta', 'business_function_id' => BusinessFunction::factory()->create()->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/product-categories/for-select')->assertOk();
+
+    expect($response->json('pagination.total'))->toBe(2);
+});
+
+it('an invalid business_function_id -> 422 (exists)', function () {
+    $actor = productCategoryUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/product-categories/for-select?business_function_id=999999')
+        ->assertStatus(422)->assertJsonValidationErrors('business_function_id');
+});

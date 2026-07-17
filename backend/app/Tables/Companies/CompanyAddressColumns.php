@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\Country;
 use App\Models\Province;
 use App\Models\State;
+use App\Support\Geo\GeoNameLocalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -74,8 +75,10 @@ class CompanyAddressColumns
                     // Morph alias (enforced morphMap), not the FQCN.
                     ->where('addressable_type', (new Company)->getMorphClass());
             })
-            ->orderBy('name')
             ->pluck('name')
+            ->map(GeoNameLocalizer::toItalian(...))
+            ->sort()
+            ->values()
             ->all();
     }
 
@@ -114,12 +117,15 @@ class CompanyAddressColumns
             return;
         }
 
+        // The option list is Italian; match on the DB name (English or already-Italian).
+        $matchNames = GeoNameLocalizer::filterMatchNames($names);
+
         $relation = self::GEO_COLUMNS[$columnId]['relation'];
 
-        $query->whereHas('addresses', static function (Builder $addressQuery) use ($relation, $names): void {
+        $query->whereHas('addresses', static function (Builder $addressQuery) use ($relation, $matchNames): void {
             $addressQuery->where('is_primary', true)
-                ->whereHas($relation, static function (Builder $geoQuery) use ($names): void {
-                    $geoQuery->whereIn('name', $names);
+                ->whereHas($relation, static function (Builder $geoQuery) use ($matchNames): void {
+                    $geoQuery->whereIn('name', $matchNames);
                 });
         });
     }

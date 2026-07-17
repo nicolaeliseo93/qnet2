@@ -5,6 +5,7 @@ namespace App\Tables;
 use App\Enums\GeoScopeLevel;
 use App\Models\Project;
 use App\Models\User;
+use App\Support\Geo\GeoNameLocalizer;
 use App\Tables\Projects\ProjectAdvancedFilterCatalog;
 use App\Tables\Projects\ProjectColumnCatalog;
 use Illuminate\Database\Eloquent\Builder;
@@ -58,6 +59,16 @@ class ProjectsTableDefinition extends AbstractTableDefinition
         'product_category' => ['relation' => 'productCategory', 'table' => 'product_categories', 'fk' => 'product_category_id'],
         'partner' => ['relation' => 'partner', 'table' => 'referents', 'fk' => 'partner_id'],
     ];
+
+    /**
+     * The subset of DERIVED_RELATIONS whose `name` is geo reference data and
+     * must render / filter in Italian (display localized, set-filter value
+     * reversed back to the English DB name). The other derived relations carry
+     * user data and are never localized (a company could be named "Milan").
+     *
+     * @var array<int, string>
+     */
+    private const array GEO_COLUMN_IDS = ['country', 'state', 'province', 'city'];
 
     public function domain(): string
     {
@@ -152,7 +163,7 @@ class ProjectsTableDefinition extends AbstractTableDefinition
         ];
 
         foreach (self::DERIVED_RELATIONS as $columnId => $config) {
-            $mapped[$columnId] = $this->summarize($row->{$config['relation']});
+            $mapped[$columnId] = $this->summarize($row->{$config['relation']}, in_array($columnId, self::GEO_COLUMN_IDS, true));
         }
 
         $mapped['geo_scope'] = GeoScopeLevel::for($row->country_id, $row->state_id, $row->province_id, $row->city_id)?->value;
@@ -167,15 +178,21 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     }
 
     /**
+     * A related row projected to {id, name}. `$geo` localizes the name to
+     * Italian (country/state/province/city) — never applied to the other
+     * derived relations, whose names are user data.
+     *
      * @return array{id: int, name: string}|null
      */
-    private function summarize(?Model $related): ?array
+    private function summarize(?Model $related, bool $geo = false): ?array
     {
         if ($related === null) {
             return null;
         }
 
-        return ['id' => $related->id, 'name' => $related->name];
+        $name = $geo ? GeoNameLocalizer::toItalian($related->name) : $related->name;
+
+        return ['id' => $related->id, 'name' => $name];
     }
 
     /**
@@ -235,6 +252,12 @@ class ProjectsTableDefinition extends AbstractTableDefinition
         )), 0, self::MAX_FILTER_VALUES);
 
         if ($names !== []) {
+            // Geo columns list options in Italian; match on the DB name
+            // (English as in world.sql, or already-Italian if seeded/imported so).
+            if (in_array($columnId, self::GEO_COLUMN_IDS, true)) {
+                $names = GeoNameLocalizer::filterMatchNames($names);
+            }
+
             $query->whereHas($config['relation'], static function (Builder $relatedQuery) use ($names): void {
                 $relatedQuery->whereIn('name', $names);
             });
@@ -287,6 +310,13 @@ class ProjectsTableDefinition extends AbstractTableDefinition
             return null;
         }
 
+        // Geo columns list options in Italian, so both the match against the
+        // search term and the sort must run on the localized value in PHP
+        // (the DB column is English). Values-in-use keep this list small.
+        if (in_array($columnId, self::GEO_COLUMN_IDS, true)) {
+            return $this->geoDistinctValues($config, $query, $search, $limit);
+        }
+
         $relatedIds = (clone $query)->whereNotNull($config['fk'])->select($config['fk']);
 
         return DB::table($config['table'])
@@ -300,6 +330,33 @@ class ProjectsTableDefinition extends AbstractTableDefinition
             ->pluck('name')
             ->map(static fn (mixed $name): string => (string) $name)
             ->all();
+    }
+
+    /**
+     * Excel-like distinct values for a GEO derived column, localized: the
+     * distinct English names in use are translated to Italian, then filtered
+     * by the (Italian) search term, sorted and capped — mirroring the geo
+     * column catalogs of the other domains.
+     *
+     * @param  array{relation: string, table: string, fk: string}  $config
+     * @param  Builder<Project>  $query
+     * @return array<int, string>
+     */
+    private function geoDistinctValues(array $config, Builder $query, ?string $search, int $limit): array
+    {
+        $relatedIds = (clone $query)->whereNotNull($config['fk'])->select($config['fk']);
+
+        $localized = DB::table($config['table'])
+            ->whereIn('id', $relatedIds)
+            ->distinct()
+            ->pluck('name')
+            ->map(static fn (mixed $name): string => (string) GeoNameLocalizer::toItalian((string) $name));
+
+        if ($search !== null && $search !== '') {
+            $localized = $localized->filter(static fn (string $name): bool => stripos($name, $search) !== false);
+        }
+
+        return $localized->sort()->values()->take($limit)->all();
     }
 
     /**

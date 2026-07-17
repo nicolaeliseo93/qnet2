@@ -15,13 +15,12 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     company_id: 2,
     company_site_id: 3,
     operational_site_id: 4,
-    business_function_id: null,
     referent_id: null,
     commercial_id: null,
     reporter_id: null,
     supervisor_id: null,
     source_id: null,
-    product_category_id: null,
+    product_lines: [],
     manager_slots: [],
     start_date: null,
     expected_close_date: null,
@@ -99,17 +98,84 @@ describe('buildCreateOpportunitySchema', () => {
     expect(result.success).toBe(true)
   })
 
+  /**
+   * Amendment rev.3 (AC-097/099/106): `product_lines` replaces the single
+   * business_function_id/product_category_id fields with an inline-editable
+   * row collection (mirrors `manager_slots`: "Add" appends an empty row).
+   * Each id is individually nullable, but a `superRefine` requires BOTH
+   * non-null per row before submit.
+   */
+  describe('product_lines (amendment rev.3)', () => {
+    it('accepts an empty collection', () => {
+      const schema = buildCreateOpportunitySchema(i18n.t)
+      const result = schema.safeParse(baseValues({ product_lines: [] }))
+      expect(result.success).toBe(true)
+    })
+
+    it('accepts one or more complete rows', () => {
+      const schema = buildCreateOpportunitySchema(i18n.t)
+      const result = schema.safeParse(
+        baseValues({
+          product_lines: [
+            { business_function_id: 1, product_category_id: 11 },
+            { business_function_id: 2, product_category_id: 22 },
+          ],
+        }),
+      )
+      expect(result.success).toBe(true)
+    })
+
+    it('rejects a freshly-added empty row (both ids null)', () => {
+      const schema = buildCreateOpportunitySchema(i18n.t)
+      const result = schema.safeParse(
+        baseValues({ product_lines: [{ business_function_id: null, product_category_id: null }] }),
+      )
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues.some((issue) => issue.path.join('.') === 'product_lines')).toBe(true)
+      }
+    })
+
+    it('rejects a row missing only business_function_id', () => {
+      const schema = buildCreateOpportunitySchema(i18n.t)
+      const result = schema.safeParse(
+        baseValues({ product_lines: [{ business_function_id: null, product_category_id: 11 }] }),
+      )
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects a row missing only product_category_id', () => {
+      const schema = buildCreateOpportunitySchema(i18n.t)
+      const result = schema.safeParse(
+        baseValues({ product_lines: [{ business_function_id: 1, product_category_id: null }] }),
+      )
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects the whole collection when only one of several rows is incomplete', () => {
+      const schema = buildCreateOpportunitySchema(i18n.t)
+      const result = schema.safeParse(
+        baseValues({
+          product_lines: [
+            { business_function_id: 1, product_category_id: 11 },
+            { business_function_id: 2, product_category_id: null },
+          ],
+        }),
+      )
+      expect(result.success).toBe(false)
+    })
+  })
+
   it('accepts every truly optional field when set', () => {
     const schema = buildCreateOpportunitySchema(i18n.t)
     const result = schema.safeParse(
       baseValues({
-        business_function_id: 5,
         referent_id: 6,
         commercial_id: 7,
         reporter_id: 8,
         supervisor_id: 9,
         source_id: 10,
-        product_category_id: 11,
+        product_lines: [{ business_function_id: 5, product_category_id: 11 }],
         manager_slots: [9, null, 12],
         start_date: '2026-01-01',
         expected_close_date: '2026-06-30',

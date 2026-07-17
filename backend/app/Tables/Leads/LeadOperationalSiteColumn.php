@@ -142,7 +142,7 @@ final class LeadOperationalSiteColumn
             return '';
         }
 
-        $city = $address->city?->name;
+        $city = $address->city?->localizedName();
 
         return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
     }

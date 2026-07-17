@@ -185,6 +185,32 @@ it('filters rows by the derived province set filter (whereHas by name)', functio
     expect($names->all())->toBe(['Team Milano']);
 });
 
+it('geo set filter: an English-stored name is shown and filtered by its Italian value', function () {
+    $actor = userWithCompanyAbilities(['viewAny']);
+    // Production reference data (world.sql) stores the province anglicized.
+    $naples = companyTableGeoChain('Naples', 'Naples', 'Campania', 'Italy');
+    $roma = companyTableGeoChain('Roma', 'Roma', 'Lazio', 'Italy');
+    $companyA = Company::factory()->create(['denomination' => 'Team Napoli']);
+    Address::factory()->primary()->forCity($naples['city'])->for($companyA, 'addressable')->create();
+    $companyB = Company::factory()->create(['denomination' => 'Team Roma']);
+    Address::factory()->primary()->forCity($roma['city'])->for($companyB, 'addressable')->create();
+    Sanctum::actingAs($actor);
+
+    // Row cell is localized to Italian...
+    $rows = collect($this->postJson('/api/tables/companies/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'))->keyBy('denomination');
+    expect($rows['Team Napoli']['province'])->toBe('Napoli');
+
+    // ...and the set filter, sent the Italian value, matches the English DB row.
+    $response = $this->postJson('/api/tables/companies/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['province' => ['filterType' => 'set', 'values' => ['Napoli']]],
+    ])->assertOk();
+
+    expect(collect($response->json('items'))->pluck('denomination')->all())->toBe(['Team Napoli']);
+});
+
 it('filters rows by the derived postal_code text filter', function () {
     $actor = userWithCompanyAbilities(['viewAny']);
     $companyA = Company::factory()->create(['denomination' => 'Has 20100']);

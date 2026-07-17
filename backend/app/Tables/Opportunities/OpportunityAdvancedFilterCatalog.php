@@ -11,6 +11,10 @@ use App\Enums\AdvancedFilterType;
  * OpportunitiesTableDefinition::baseQuery() — no invented column/relation.
  * `target` is the relation accessor name (generic whereHas-by-id via
  * AdvancedFilterApplier for every `relation` entry) or the real DB column.
+ * `product_category`/`business_function` (amendment rev.3) target a NESTED
+ * dot-path (`productLines.productCategory`/`productLines.businessFunction`)
+ * — AdvancedFilterApplier's `whereHas($target, ...)` call needs no change:
+ * Eloquent's own `whereHas()` already supports dot-path nested relations.
  */
 final class OpportunityAdvancedFilterCatalog
 {
@@ -90,13 +94,25 @@ final class OpportunityAdvancedFilterCatalog
                 'width' => 'md',
                 'multiple' => true,
                 'source' => ['resource' => 'product-categories'],
-                'target' => 'productCategory',
+                'target' => 'productLines.productCategory',
+            ],
+            [
+                'name' => 'business_function',
+                'label' => 'opportunities.advancedFilters.businessFunction',
+                'type' => AdvancedFilterType::Relation,
+                'order' => 7,
+                'required' => false,
+                'visible' => true,
+                'width' => 'md',
+                'multiple' => true,
+                'source' => ['resource' => 'business-functions'],
+                'target' => 'productLines.businessFunction',
             ],
             [
                 'name' => 'value_range',
                 'label' => 'opportunities.advancedFilters.valueRange',
                 'type' => AdvancedFilterType::NumberRange,
-                'order' => 7,
+                'order' => 8,
                 'required' => false,
                 'visible' => true,
                 'width' => 'sm',
@@ -107,7 +123,7 @@ final class OpportunityAdvancedFilterCatalog
                 'name' => 'created_range',
                 'label' => 'opportunities.advancedFilters.createdRange',
                 'type' => AdvancedFilterType::DateRange,
-                'order' => 8,
+                'order' => 9,
                 'required' => false,
                 'visible' => true,
                 'width' => 'md',

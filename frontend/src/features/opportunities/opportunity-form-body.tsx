@@ -13,6 +13,7 @@ import { MetaField } from '@/features/authorization/MetaField'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { OpportunityRegistryField } from '@/features/opportunities/opportunity-registry-field'
 import { OpportunityClassificationSection } from '@/features/opportunities/opportunity-classification-section'
+import { OpportunityProductLinesSection } from '@/features/opportunities/opportunity-product-lines-section'
 import { OpportunityTeamSection } from '@/features/opportunities/opportunity-team-section'
 import { OpportunityPlanningSection } from '@/features/opportunities/opportunity-planning-section'
 import { OpportunityFromLeadBanner } from '@/features/opportunities/opportunity-from-lead-banner'
@@ -26,7 +27,8 @@ import {
 } from '@/features/opportunities/use-opportunity-form'
 import { useOpportunityLeadSelection } from '@/features/opportunities/use-opportunity-lead-selection'
 import { useOpportunitySelectedItems } from '@/features/opportunities/use-opportunity-selected-items'
-import type { OpportunityDetail, OpportunityFormMode } from '@/features/opportunities/types'
+import { useOpportunityNameAutofill } from '@/features/opportunities/use-opportunity-name-autofill'
+import type { OpportunityDetail, OpportunityFormMode, OpportunityProductLine } from '@/features/opportunities/types'
 
 interface OpportunityFormBodyProps {
   mode: OpportunityFormMode
@@ -61,6 +63,11 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
 
   const { form } = useOpportunityForm({ mode })
 
+  // AC-107: CREATE starts with the name auto-computed from the chosen
+  // product categories; EDIT starts already disabled — the loaded name is
+  // authoritative and must never be silently overwritten.
+  const nameAutofill = useOpportunityNameAutofill(mode.type === 'edit')
+
   // `useOpportunityLeadSelection` needs `form.setValue`, so it can only run
   // AFTER `useOpportunityForm` — and `leadSubmission` (below) can only be
   // computed after `leadSelection` exists. This ordering, not a ref, is what
@@ -76,6 +83,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
         }
       : null,
     form.setValue,
+    nameAutofill,
   )
 
   const leadIsBlocked = leadSelection.state.existingOpportunityId !== null
@@ -92,6 +100,13 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
 
   const { serverError, onSubmit } = useOpportunityFormSubmit({ form, mode, leadSubmission, onSuccess })
   const selectedItems = useOpportunitySelectedItems(mode, leadSelection.state)
+
+  // Amendment rev.3: rows whose label is already known without a fetch — the
+  // loaded instance (edit) or the from-lead prefill (deep-link create) at
+  // mount, plus whatever the in-form Lead picker resolves afterwards.
+  const mountProductLines: OpportunityProductLine[] =
+    mode.type === 'edit' ? mode.opportunity.product_lines : (mode.fromLead?.productLines ?? [])
+  const knownProductLines = [...mountProductLines, ...leadSelection.state.derivedProductLines]
 
   // BR-2: the fields derived from a linked Lead are immutable — both when
   // editing an opportunity that already has one, and while creating one
@@ -142,7 +157,17 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
             <MetaField control={form.control} name="name" metaKey="name" label={t('opportunities.form.name')}>
               {({ field, disabled, readOnly }) => (
                 <FormControl>
-                  <Input autoComplete="off" disabled={disabled} readOnly={readOnly} {...field} />
+                  <Input
+                    autoComplete="off"
+                    disabled={disabled}
+                    readOnly={readOnly}
+                    {...field}
+                    onChange={(event) => {
+                      // AC-107: a hand-edit permanently disables the name auto-fill.
+                      nameAutofill.disable()
+                      field.onChange(event)
+                    }}
+                  />
                 </FormControl>
               )}
             </MetaField>
@@ -215,17 +240,23 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
 
           <OpportunityClassificationSection
             control={form.control}
-            setValue={form.setValue}
-            getValues={form.getValues}
             selectedItems={selectedItems}
             lockedFields={lockedFields}
             className={sectionRevealClassName(1)}
           />
 
+          <OpportunityProductLinesSection
+            control={form.control}
+            setValue={form.setValue}
+            knownProductLines={knownProductLines}
+            nameAutofill={nameAutofill}
+            className={sectionRevealClassName(2)}
+          />
+
           <OpportunityTeamSection
             control={form.control}
             selectedItems={selectedItems}
-            className={sectionRevealClassName(2)}
+            className={sectionRevealClassName(3)}
           />
 
           <OpportunityPlanningSection
@@ -233,7 +264,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
             collapsible
             open={planningOpen || planningHasError}
             onOpenChange={setPlanningOpen}
-            className={sectionRevealClassName(3)}
+            className={sectionRevealClassName(4)}
           />
 
           {serverError && (

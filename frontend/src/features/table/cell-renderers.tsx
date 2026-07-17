@@ -13,6 +13,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { resolveEnumIcon } from '@/features/table/enum-icon-map'
+import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
 import { enumLabelOf } from '@/features/config/enum-label'
 import type { EnumBadge, PrimaryContact } from '@/features/table/types'
 
@@ -65,15 +66,24 @@ function enumIcon(name: string | null | undefined, className?: string): ReactNod
 }
 
 /** Shared cell wrapper: vertically centered with breathing room from the edges. */
-const CELL_WRAPPER = 'flex h-full w-full items-center justify-center px-2 py-1 overflow-hidden'
+export const CELL_WRAPPER = 'flex h-full w-full items-center justify-center px-2 py-1 overflow-hidden'
 
 /** Consistent pill height so icon+label and label-only badges align across rows. */
-const BADGE_BASE = 'h-5 min-h-5'
+export const BADGE_BASE = 'h-5 min-h-5'
 
-/** Em-dash placeholder for an empty/unknown cell value. */
-function EmptyCell() {
+/**
+ * Em-dash placeholder for an empty/unknown cell value. `align` matches the
+ * owning cell's text alignment so the dash sits where the value would (badges
+ * center; relations/dates read from the left).
+ */
+export function EmptyCell({ align = 'center' }: { align?: 'center' | 'left' } = {}) {
   return (
-    <div className="flex h-full w-full items-center justify-center px-2 py-1">
+    <div
+      className={cn(
+        'flex h-full w-full items-center px-2 py-1',
+        align === 'center' ? 'justify-center' : 'justify-start',
+      )}
+    >
       <span className="text-muted-foreground">—</span>
     </div>
   )
@@ -151,7 +161,7 @@ export function TagsCountCell({ value }: ICellRendererParams) {
  * so the table stays domain-agnostic: any enum-driven badge column reuses it.
  * Unknown/missing tokens fall back to the neutral `secondary` badge.
  */
-const BADGE_COLOR_CLASSES: Record<string, string> = {
+export const BADGE_COLOR_CLASSES: Record<string, string> = {
   slate: 'border-transparent bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
   gray: 'border-transparent bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200',
   red: 'border-transparent bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200',
@@ -166,6 +176,15 @@ const BADGE_COLOR_CLASSES: Record<string, string> = {
   violet: 'border-transparent bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200',
   purple: 'border-transparent bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200',
   pink: 'border-transparent bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-200',
+}
+
+/**
+ * Resolves a backend color token to its soft badge classes, `undefined` when the
+ * token is unset/unknown (neutral fallback). The single seam every colored badge
+ * — generic or per-domain — goes through, so status pills stay consistent.
+ */
+export function badgeColorClass(color: string | null | undefined): string | undefined {
+  return color ? BADGE_COLOR_CLASSES[color] : undefined
 }
 
 /** A `badge` column cell, carrying the column's backend-supplied badge metadata. */
@@ -191,13 +210,19 @@ export function BadgeCell({ value, badges, enumKey }: BadgeCellProps) {
     return <EmptyCell />
   }
 
-  const colorClass = meta.color ? BADGE_COLOR_CLASSES[meta.color] : undefined
+  const colorClass = badgeColorClass(meta.color)
+  // When the enum carries no icon, a small solid status dot (the token's strong
+  // shade) reads as a state indicator without widening the compact pill.
+  const dotClass = meta.icon ? undefined : swatchClassFor(meta.color)
   const label = enumKey ? enumLabelOf(enumKey, meta.value) : meta.label
 
   return (
     <div className={CELL_WRAPPER}>
-      <Badge variant="secondary" className={cn(BADGE_BASE, colorClass)}>
-        {enumIcon(meta.icon)}
+      <Badge variant="secondary" className={cn(BADGE_BASE, 'gap-1.5', colorClass)}>
+        {meta.icon ? enumIcon(meta.icon) : null}
+        {dotClass ? (
+          <span className={cn('size-1.5 shrink-0 rounded-full', dotClass)} aria-hidden="true" />
+        ) : null}
         {label}
       </Badge>
     </div>
@@ -228,7 +253,7 @@ export function CountCell({ value }: ICellRendererParams) {
 export function DateTimeCell({ value }: ICellRendererParams) {
   const formatted = formatDateTime(value)
   return formatted ? (
-    <span>{formatted}</span>
+    <span className="tabular-nums">{formatted}</span>
   ) : (
     <span className="text-muted-foreground">—</span>
   )

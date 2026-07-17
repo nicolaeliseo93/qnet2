@@ -153,9 +153,9 @@ class CompanySitesTableDefinition extends AbstractTableDefinition
                 ? ['id' => $row->company->id, 'name' => $row->company->denomination]
                 : null,
             'primary_contact' => $this->contactColumn->format($card?->contacts),
-            'city' => $address?->city?->name,
-            'province' => $address?->province?->name,
-            'region' => $address?->state?->name,
+            'city' => $address?->city?->localizedName(),
+            'province' => $address?->province?->localizedName(),
+            'region' => $address?->state?->localizedName(),
             'postal_code' => $address?->postal_code,
             'created_at' => $row->created_at,
             'logo_url' => $row->logoDataUri(),

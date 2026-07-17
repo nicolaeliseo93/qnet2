@@ -32,13 +32,13 @@ class OpportunityService
         'company',
         'companySite',
         'operationalSite.addresses.city',
-        'businessFunction',
         'referent',
         'commercial',
         'reporter',
         'supervisor',
         'source',
-        'productCategory',
+        'productLines.businessFunction',
+        'productLines.productCategory',
         'managers',
         'lead.registry',
         'lead.operationalSite.addresses.city',
@@ -58,7 +58,7 @@ class OpportunityService
     }
 
     /**
-     * Create a new opportunity. When `lead_id` is submitted, the 5 BR-1-
+     * Create a new opportunity. When `lead_id` is submitted, the 3 BR-1-
      * derivable attributes are overwritten with LeadOpportunityDefaultsResolver's
      * values (StoreOpportunityRequest already rejected a conflicting
      * submission as `prohibited`, so this only ever fills in fields the
@@ -77,6 +77,10 @@ class OpportunityService
 
             if ($data->hasManagerSlots()) {
                 $opportunity->managers()->sync($this->managerSyncMap($data->managerSlots));
+            }
+
+            if ($data->hasProductLines()) {
+                $this->syncProductLines($opportunity, $data->productLines);
             }
 
             return $opportunity;
@@ -102,6 +106,10 @@ class OpportunityService
             if ($data->hasManagerSlots()) {
                 $opportunity->managers()->sync($this->managerSyncMap($data->managerSlots));
             }
+
+            if ($data->hasProductLines()) {
+                $this->syncProductLines($opportunity, $data->productLines);
+            }
         });
 
         return $this->loadDetail($opportunity);
@@ -118,7 +126,7 @@ class OpportunityService
     }
 
     /**
-     * Overwrite $attributes' 5 BR-1-derivable keys with the linked lead's
+     * Overwrite $attributes' 3 BR-1-derivable keys with the linked lead's
      * current defaults, for every field whose derivation is non-null.
      *
      * @param  array<string, mixed>  $attributes
@@ -155,5 +163,23 @@ class OpportunityService
         }
 
         return $map;
+    }
+
+    /**
+     * Full-replace sync of $opportunity's product lines (spec 0040 amendment
+     * rev.3): delete-all + insert, idempotent within the surrounding
+     * transaction — StoreOpportunityRequest/UpdateOpportunityRequest already
+     * rejected duplicate pairs and a mismatched business-function/category
+     * pairing (withValidator), so every row here is already valid.
+     *
+     * @param  array<int, array{business_function_id: int, product_category_id: int}>  $lines
+     */
+    private function syncProductLines(Opportunity $opportunity, array $lines): void
+    {
+        $opportunity->productLines()->delete();
+
+        foreach ($lines as $line) {
+            $opportunity->productLines()->create($line);
+        }
     }
 }

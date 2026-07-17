@@ -219,10 +219,10 @@ class UsersTableDefinition extends AbstractTableDefinition
             'locale' => $row->locale,
             'is_active' => $row->is_active,
             'created_at' => $row->created_at,
-            'country' => $address?->country?->name,
-            'region' => $address?->state?->name,
-            'province' => $address?->province?->name,
-            'city' => $address?->city?->name,
+            'country' => $address?->country?->localizedName(),
+            'region' => $address?->state?->localizedName(),
+            'province' => $address?->province?->localizedName(),
+            'city' => $address?->city?->localizedName(),
         ], $this->personalDataColumns->mapRow($card, $address), $this->employmentColumns->mapRow($row->employment));
     }
 

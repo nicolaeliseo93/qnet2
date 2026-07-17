@@ -14,10 +14,30 @@ import {
 import { formatDateTime } from '@/features/table/cell-renderers'
 import { formatDecimal } from '@/features/products/column-renderers'
 import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
-import type { OpportunityDetailWithPermissions as OpportunityDetailData } from '@/features/opportunities/types'
+import type {
+  OpportunityDetailWithPermissions as OpportunityDetailData,
+  OpportunityProductLine,
+} from '@/features/opportunities/types'
 
 interface OpportunityDetailViewProps {
   opportunity: OpportunityDetailData
+}
+
+/** Read-only list of the opportunity's business-function + product-category rows (spec 0040 amendment rev.3, AC-101). */
+function ProductLinesList({ lines }: { lines: OpportunityProductLine[] }) {
+  if (lines.length === 0) {
+    return <DetailEmpty />
+  }
+  return (
+    <ul className="flex flex-col gap-1">
+      {lines.map((line) => (
+        <li key={line.id}>
+          <span className="font-medium">{line.business_function.name}</span>
+          <span className="text-muted-foreground"> — {line.product_category.name}</span>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 /** Formats a `Y-m-d` date column, blank when missing/invalid — mirrors the column renderer. */
@@ -78,17 +98,14 @@ export function OpportunityDetailView({ opportunity }: OpportunityDetailViewProp
           <DetailField label={t('opportunities.form.companySite')}>
             {opportunity.company_site?.name ?? <DetailEmpty />}
           </DetailField>
-          <DetailField label={t('opportunities.form.businessFunction')}>
-            {opportunity.business_function?.name ?? <DetailEmpty />}
-          </DetailField>
           <DetailField label={t('opportunities.form.operationalSite')}>
             {opportunity.operational_site?.label ?? <DetailEmpty />}
           </DetailField>
-          <DetailField label={t('opportunities.form.productCategory')}>
-            {opportunity.product_category?.name ?? <DetailEmpty />}
-          </DetailField>
           <DetailField label={t('opportunities.form.source')}>
             {opportunity.source?.name ?? <DetailEmpty />}
+          </DetailField>
+          <DetailField label={t('opportunities.form.sections.productLines.title')} full>
+            <ProductLinesList lines={opportunity.product_lines} />
           </DetailField>
         </DetailGrid>
       </DetailSection>

@@ -21,6 +21,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * write-path lock enforcement uses. Relies on OpportunityService::loadDetail()
  * having eager-loaded every relation this touches (including the lead's own
  * chain), so resolving any of them here never N+1s.
+ *
+ * Amendment rev.3: `business_function_id`/`business_function`/
+ * `product_category_id`/`product_category` are REPLACED by `product_lines`
+ * (one row per funzione-aziendale + categoria-prodotto pair).
  */
 class OpportunityResource extends JsonResource
 {
@@ -40,8 +44,6 @@ class OpportunityResource extends JsonResource
             'company_site' => $this->summarizeByName($this->companySite),
             'operational_site_id' => $this->operational_site_id,
             'operational_site' => $this->summarizeOperationalSite($this->operationalSite),
-            'business_function_id' => $this->business_function_id,
-            'business_function' => $this->summarizeByName($this->businessFunction),
             'referent_id' => $this->referent_id,
             'referent' => $this->summarizeByName($this->referent),
             'commercial_id' => $this->commercial_id,
@@ -52,8 +54,7 @@ class OpportunityResource extends JsonResource
             'supervisor' => $this->summarizeByName($this->supervisor),
             'source_id' => $this->source_id,
             'source' => $this->summarizeByName($this->source),
-            'product_category_id' => $this->product_category_id,
-            'product_category' => $this->summarizeByName($this->productCategory),
+            'product_lines' => $this->summarizeProductLines($this->productLines),
             'lead_id' => $this->lead_id,
             'lead' => $this->summarizeLead($this->lead),
             'managers' => $this->summarizeManagers($this->managers),
@@ -111,7 +112,7 @@ class OpportunityResource extends JsonResource
             return '';
         }
 
-        $city = $address->city?->name;
+        $city = $address->city?->localizedName();
 
         return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
     }
@@ -122,6 +123,20 @@ class OpportunityResource extends JsonResource
     private function summarizeLead(mixed $lead): ?array
     {
         return $lead === null ? null : ['id' => $lead->id, 'label' => $lead->registry?->name ?? ''];
+    }
+
+    /**
+     * @return array<int, array{id: int, business_function: array{id: int, name: string}|null, product_category: array{id: int, name: string}|null}>
+     */
+    private function summarizeProductLines(iterable $lines): array
+    {
+        return collect($lines)
+            ->map(fn (Model $line): array => [
+                'id' => $line->id,
+                'business_function' => $this->summarizeByName($line->businessFunction),
+                'product_category' => $this->summarizeByName($line->productCategory),
+            ])
+            ->all();
     }
 
     /**

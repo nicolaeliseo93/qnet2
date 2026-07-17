@@ -8,6 +8,7 @@ use App\Tables\Opportunities\OpportunityAdvancedFilterCatalog;
 use App\Tables\Opportunities\OpportunityColumnCatalog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -16,12 +17,14 @@ use Illuminate\Support\Facades\Gate;
  *
  * `name`/`estimated_value`/`success_probability`/`start_date`/
  * `expected_close_date`/`created_at` are real columns handled entirely by the
- * generic engine. `registry`/`referent`/`commercial`/`supervisor`/`source`/
- * `product_category` are simple relation-name derived columns (own FK on the
- * opportunity), resolved generically via DERIVED_RELATIONS — a `whereHas` set
- * filter (allow-listed columns only, never orderByRaw/whereRaw on raw input —
+ * generic engine. `registry`/`referent`/`commercial`/`supervisor`/`source`
+ * are simple relation-name derived columns (own FK on the opportunity),
+ * resolved generically via DERIVED_RELATIONS — a `whereHas` set filter
+ * (allow-listed columns only, never orderByRaw/whereRaw on raw input —
  * backend.md §8) and a correlated subquery sort, mirroring
- * LeadsTableDefinition.
+ * LeadsTableDefinition. Amendment rev.3: `product_category`/
+ * `business_function` are AGGREGATED to-many columns (via `productLines`,
+ * resolved via AGGREGATED_RELATIONS) — filterable but not sortable.
  */
 class OpportunitiesTableDefinition extends AbstractTableDefinition
 {
@@ -45,7 +48,20 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
         'commercial' => ['relation' => 'commercial', 'table' => 'referents', 'fk' => 'commercial_id'],
         'supervisor' => ['relation' => 'supervisor', 'table' => 'users', 'fk' => 'supervisor_id'],
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
-        'product_category' => ['relation' => 'productCategory', 'table' => 'product_categories', 'fk' => 'product_category_id'],
+    ];
+
+    /**
+     * Aggregated (to-many, via `productLines`) derived columns: the nested
+     * relation path, the related table and the FK column on
+     * `opportunity_product_lines` pointing to it (amendment rev.3 — the
+     * former single `business_function_id`/`product_category_id` columns on
+     * `opportunities` no longer exist).
+     *
+     * @var array<string, array{relation: string, table: string, fk: string}>
+     */
+    private const array AGGREGATED_RELATIONS = [
+        'product_category' => ['relation' => 'productLines.productCategory', 'table' => 'product_categories', 'fk' => 'product_category_id'],
+        'business_function' => ['relation' => 'productLines.businessFunction', 'table' => 'business_functions', 'fk' => 'business_function_id'],
     ];
 
     public function domain(): string
@@ -71,7 +87,10 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
     public function baseQuery(): Builder
     {
         // Eager-load every relation mapRow touches to avoid N+1 across the page.
-        return Opportunity::query()->with(['registry', 'referent', 'commercial', 'supervisor', 'source', 'productCategory']);
+        return Opportunity::query()->with([
+            'registry', 'referent', 'commercial', 'supervisor', 'source',
+            'productLines.businessFunction', 'productLines.productCategory',
+        ]);
     }
 
     /**
@@ -141,7 +160,8 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
             'commercial' => $this->summarize($row->commercial),
             'supervisor' => $this->summarize($row->supervisor),
             'source' => $this->summarize($row->source),
-            'product_category' => $this->summarize($row->productCategory),
+            'product_category' => $this->summarizeNames($row->productLines->pluck('productCategory')),
+            'business_function' => $this->summarizeNames($row->productLines->pluck('businessFunction')),
             'estimated_value' => $row->estimated_value,
             'success_probability' => $row->success_probability,
             'start_date' => $row->start_date,
@@ -160,6 +180,19 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
         }
 
         return ['id' => $related->id, 'name' => $related->name];
+    }
+
+    /**
+     * Display value for an AGGREGATED to-many column (amendment rev.3): the
+     * distinct related names, comma-joined — null when there is none.
+     *
+     * @param  Collection<int, Model|null>  $related
+     */
+    private function summarizeNames(Collection $related): ?string
+    {
+        $names = $related->filter()->pluck('name')->unique()->values();
+
+        return $names->isEmpty() ? null : $names->implode(', ');
     }
 
     /**
@@ -191,9 +224,12 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Handle the `registry`/`referent`/`commercial`/`supervisor`/`source`/
-     * `product_category` set filters via whereHas on the related row's name.
-     * Every real column falls through to the generic engine.
+     * Handle the `registry`/`referent`/`commercial`/`supervisor`/`source`
+     * simple-relation set filters AND the `product_category`/
+     * `business_function` AGGREGATED (to-many) set filters, both via
+     * `whereHas` on the related row's name (nested dot-path relation for the
+     * latter — Eloquent's own `whereHas` support, no raw SQL). Every real
+     * column falls through to the generic engine.
      *
      * @param  Builder<Opportunity>  $query
      * @param  array<string, mixed>  $columnConfig
@@ -201,7 +237,7 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
      */
     public function applyDerivedFilter(Builder $query, string $columnId, array $columnConfig, array $filter): bool
     {
-        $config = self::DERIVED_RELATIONS[$columnId] ?? null;
+        $config = self::DERIVED_RELATIONS[$columnId] ?? self::AGGREGATED_RELATIONS[$columnId] ?? null;
 
         if ($config === null) {
             return false;
@@ -238,7 +274,9 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
 
     /**
      * ORDER BY the related row's name via a correlated subquery for every one
-     * of the 6 derived columns.
+     * of the 5 simple-relation derived columns. The 2 AGGREGATED (to-many)
+     * columns are NOT sortable (falls through, returns false — no single
+     * related row to order by).
      *
      * @param  Builder<Opportunity>  $query
      */
@@ -262,7 +300,9 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
 
     /**
      * Excel-like distinct values (spec 0004/0005): the related row's name for
-     * each of the 6 derived columns, scoped to the rows matching $query.
+     * each of the 5 simple-relation derived columns, plus the 2 AGGREGATED
+     * (to-many) columns via a join through `opportunity_product_lines` —
+     * scoped to the rows matching $query.
      *
      * @param  Builder<Opportunity>  $query
      * @param  array<string, mixed>  $columnConfig
@@ -270,6 +310,10 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
      */
     public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
     {
+        if (array_key_exists($columnId, self::AGGREGATED_RELATIONS)) {
+            return $this->distinctAggregatedValues(self::AGGREGATED_RELATIONS[$columnId], $search, $query, $limit);
+        }
+
         $config = self::DERIVED_RELATIONS[$columnId] ?? null;
 
         if ($config === null) {
@@ -287,6 +331,29 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
             ->orderBy('name')
             ->limit($limit)
             ->pluck('name')
+            ->map(static fn (mixed $name): string => (string) $name)
+            ->all();
+    }
+
+    /**
+     * @param  array{relation: string, table: string, fk: string}  $config
+     * @param  Builder<Opportunity>  $query
+     * @return array<int, string>
+     */
+    private function distinctAggregatedValues(array $config, ?string $search, Builder $query, int $limit): array
+    {
+        $opportunityIds = (clone $query)->select('id');
+
+        return DB::table('opportunity_product_lines')
+            ->join($config['table'], "{$config['table']}.id", '=', "opportunity_product_lines.{$config['fk']}")
+            ->whereIn('opportunity_product_lines.opportunity_id', $opportunityIds)
+            ->when($search !== null && $search !== '', function ($builder) use ($config, $search): void {
+                $builder->where("{$config['table']}.name", 'like', '%'.$this->escapeLike($search).'%');
+            })
+            ->distinct()
+            ->orderBy("{$config['table']}.name")
+            ->limit($limit)
+            ->pluck("{$config['table']}.name")
             ->map(static fn (mixed $name): string => (string) $name)
             ->all();
     }

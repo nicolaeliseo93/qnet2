@@ -15,11 +15,10 @@ const IMPORT_RUNS_DOMAIN = 'import-runs'
 /**
  * Landing page of the Import module (spec 0034, AC-011): the dedicated
  * lead-import history, now treated as a standard module — stats toggle +
- * panel, a "New import" action gated on its own CRUD permission, and the
- * backend-driven history table (export included automatically by
- * `<TableView>`). Gated behind `import-runs.viewAny` (`<Can>`, UI-only — the
- * backend re-checks the same ability fail-closed on every table/stats/export
- * endpoint of the domain).
+ * panel, a "New import" action, and the backend-driven history table
+ * (export included automatically by `<TableView>`). Gated behind
+ * `leads.import` (`<Can>`, UI-only — the backend re-checks the same
+ * ability fail-closed on every table/stats/export endpoint of the domain).
  */
 export default function LeadImportHistoryPage() {
   const { t } = useTranslation()
@@ -28,7 +27,7 @@ export default function LeadImportHistoryPage() {
 
   return (
     <Can
-      permission="import-runs.viewAny"
+      permission="leads.import"
       fallback={<p className="text-sm text-muted-foreground">{t('leadImports.forbidden')}</p>}
     >
       <div className="flex flex-1 flex-col gap-4">
@@ -40,12 +39,10 @@ export default function LeadImportHistoryPage() {
                 isOpen={stats.isOpen}
                 onToggle={stats.toggle}
               />
-              <Can permission="import-runs.create">
-                <Button onClick={() => void navigate('/imports/new')}>
-                  <Plus aria-hidden="true" />
-                  {t('leadImports.newImport')}
-                </Button>
-              </Can>
+              <Button onClick={() => void navigate('/imports/new')}>
+                <Plus aria-hidden="true" />
+                {t('leadImports.newImport')}
+              </Button>
             </>
           }
         />

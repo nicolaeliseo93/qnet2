@@ -6,6 +6,7 @@ use App\Enums\GeoScopeLevel;
 use App\Models\Campaign;
 use App\Models\Project;
 use App\Models\User;
+use App\Support\Geo\GeoNameLocalizer;
 use App\Tables\Campaigns\CampaignAdvancedFilterCatalog;
 use App\Tables\Campaigns\CampaignColumnCatalog;
 use App\Tables\Campaigns\CampaignPipelineStatusResolver;
@@ -176,10 +177,10 @@ class CampaignsTableDefinition extends AbstractTableDefinition
             'registry' => $this->summarize($row->registry),
             'pipeline_status' => $this->summarize($this->pipelineStatusResolver->effectiveStatus($row)),
             'source' => $this->summarize($row->source),
-            'country' => $this->summarize($country),
-            'state' => $this->summarize($state),
-            'province' => $this->summarize($province),
-            'city' => $this->summarize($city),
+            'country' => $this->summarize($country, geo: true),
+            'state' => $this->summarize($state, geo: true),
+            'province' => $this->summarize($province, geo: true),
+            'city' => $this->summarize($city, geo: true),
             'geo_scope' => GeoScopeLevel::for($country?->id, $state?->id, $province?->id, $city?->id)?->value,
             'start_date' => $row->start_date,
             'end_date' => $row->end_date,
@@ -203,15 +204,21 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     }
 
     /**
+     * A related row projected to {id, name}. `$geo` localizes the name to
+     * Italian (country/state/province/city) — never applied to the other
+     * relations, whose names are user data.
+     *
      * @return array{id: int, name: string}|null
      */
-    private function summarize(?Model $related): ?array
+    private function summarize(?Model $related, bool $geo = false): ?array
     {
         if ($related === null) {
             return null;
         }
 
-        return ['id' => $related->id, 'name' => $related->name];
+        $name = $geo ? GeoNameLocalizer::toItalian($related->name) : $related->name;
+
+        return ['id' => $related->id, 'name' => $name];
     }
 
     /**

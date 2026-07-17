@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Enums\GeoScopeLevel;
 use App\Models\Campaign;
 use App\Models\Project;
+use App\Support\Geo\GeoNameLocalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -78,13 +79,13 @@ class CampaignResource extends JsonResource
             'business_function_id' => $businessFunction?->id,
             'business_function' => $this->summarize($businessFunction),
             'country_id' => $country?->id,
-            'country' => $this->summarize($country),
+            'country' => $this->summarize($country, geo: true),
             'state_id' => $state?->id,
-            'state' => $this->summarize($state),
+            'state' => $this->summarize($state, geo: true),
             'province_id' => $province?->id,
-            'province' => $this->summarize($province),
+            'province' => $this->summarize($province, geo: true),
             'city_id' => $city?->id,
-            'city' => $this->summarize($city),
+            'city' => $this->summarize($city, geo: true),
             'geo_scope' => GeoScopeLevel::for($country?->id, $state?->id, $province?->id, $city?->id)?->value,
             'geo_locked_levels' => $this->geoLockedLevels($project),
             'product_category_id' => $productCategory?->id,
@@ -118,14 +119,20 @@ class CampaignResource extends JsonResource
     }
 
     /**
+     * A related row projected to {id, name}. `$geo` localizes the name to
+     * Italian (country/state/province/city only) — never applied to the other
+     * relations, whose names are user data (a company could be named "Milan").
+     *
      * @return array{id: int, name: string}|null
      */
-    private function summarize(?Model $related): ?array
+    private function summarize(?Model $related, bool $geo = false): ?array
     {
         if ($related === null) {
             return null;
         }
 
-        return ['id' => $related->id, 'name' => $related->name];
+        $name = $geo ? GeoNameLocalizer::toItalian($related->name) : $related->name;
+
+        return ['id' => $related->id, 'name' => $name];
     }
 }

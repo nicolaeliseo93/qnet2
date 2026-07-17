@@ -292,7 +292,7 @@ it('resolves a geo derived column (city) via the definition — non-regression',
 
     $response = $this->postJson('/api/tables/users/values', ['columnId' => 'city'])->assertOk();
 
-    expect($response->json('data.values'))->toContain('Rome');
+    expect($response->json('data.values'))->toContain('Roma');
 });
 
 // AC-016/017/018 (spec 0004/0005 bugfix): AGGREGATE/COMPUTED columns with NO

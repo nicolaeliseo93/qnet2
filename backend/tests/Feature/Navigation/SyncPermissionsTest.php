@@ -41,16 +41,15 @@ it('creates the standard CRUD permissions declared by resource policies', functi
     ])->count())->toBe(5);
 });
 
-it('AC-001: creates the import-runs.* module permissions, excluding import-runs.import', function () {
+it('mints no import-runs.* permissions — the import module reuses leads.import', function () {
     config(['navigation.items' => []]); // isolate: only policy permissions
 
     $this->artisan('permissions:sync')->assertSuccessful();
 
-    expect(Permission::whereIn('name', [
-        'import-runs.viewAny', 'import-runs.view', 'import-runs.create',
-        'import-runs.update', 'import-runs.delete', 'import-runs.export',
-    ])->count())->toBe(6)
-        ->and(Permission::where('name', 'import-runs.import')->exists())->toBeFalse();
+    // The dedicated `import-runs.*` set was removed (2026-07-17): ImportRunPolicy
+    // contributes nothing to the catalog and the whole module rides `leads.import`.
+    expect(Permission::where('name', 'like', 'import-runs.%')->exists())->toBeFalse()
+        ->and(Permission::where('name', 'leads.import')->exists())->toBeTrue();
 });
 
 it('is idempotent and does not duplicate permissions', function () {

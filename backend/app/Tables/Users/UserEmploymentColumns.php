@@ -343,7 +343,7 @@ class UserEmploymentColumns
             return null;
         }
 
-        $city = $address->city?->name;
+        $city = $address->city?->localizedName();
 
         return $city !== null ? "{$address->line1} - {$city}" : $address->line1;
     }

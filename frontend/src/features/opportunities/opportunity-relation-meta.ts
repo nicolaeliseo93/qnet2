@@ -3,7 +3,6 @@ import { fetchForSelect } from '@/features/for-select/api'
 import type { ForSelectItem } from '@/features/for-select/types'
 import type { RelationFieldRef } from '@/components/form/relation-select-field'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
-import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
 import type { OpportunityManagerRef } from '@/features/opportunities/types'
 
 /** The registry `meta` block feeding the Opportunity form's prefill (spec 0040 BR-4 + A-5). */
@@ -24,11 +23,6 @@ interface RegistryForSelectItem extends ForSelectItem {
   meta?: RegistryMeta
 }
 
-/** `product-categories/for-select` item extended with the `meta.business_function` marker (spec 0040, BR-4). */
-interface ProductCategoryForSelectItem extends ForSelectItem {
-  meta?: { business_function: RelationFieldRef | null }
-}
-
 /**
  * Imperative one-shot fetch of the newly selected registry's `meta` block
  * (BR-4: prefill of commercial/reporter), run as a direct consequence of the
@@ -44,21 +38,5 @@ export async function fetchOpportunityRegistryMeta(
     queryFn: () => fetchForSelect(REGISTRIES_FOR_SELECT_RESOURCE, { ids: [registryId] }),
   })
   const item = page.items[0] as RegistryForSelectItem | undefined
-  return item?.meta ?? null
-}
-
-/**
- * Imperative one-shot fetch of the newly selected product category's `meta`
- * block (BR-4: prefill of the business function, only when currently empty).
- */
-export async function fetchOpportunityProductCategoryMeta(
-  queryClient: QueryClient,
-  productCategoryId: number,
-): Promise<{ business_function: RelationFieldRef | null } | null> {
-  const page = await queryClient.fetchQuery({
-    queryKey: ['product-categories', 'meta-for-opportunity', productCategoryId],
-    queryFn: () => fetchForSelect(PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE, { ids: [productCategoryId] }),
-  })
-  const item = page.items[0] as ProductCategoryForSelectItem | undefined
   return item?.meta ?? null
 }

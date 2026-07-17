@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Abstracts\BaseModel;
+use App\Models\Concerns\LocalizesGeoName;
 use Database\Factories\CountryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +12,8 @@ class Country extends BaseModel
 {
     /** @use HasFactory<CountryFactory> */
     use HasFactory;
+
+    use LocalizesGeoName;
 
     protected $fillable = [
         'iso2',

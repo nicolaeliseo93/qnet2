@@ -6,6 +6,7 @@ use App\DataObjects\Opportunities\CreateOpportunityData;
 use App\DataObjects\Opportunities\LeadOpportunityDefaults;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ValidatesManagerSlots;
+use App\Http\Requests\Concerns\ValidatesProductLines;
 use App\Models\Lead;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
 use Illuminate\Contracts\Validation\Validator;
@@ -18,24 +19,28 @@ use Illuminate\Validation\Rule;
  * `company_id`/`company_site_id` are always required (D-4, amendment rev.1
  * A-2 — NEITHER is BR-1-derivable, no lead/campaign chain to either);
  * `registry_id`/`operational_site_id` are required UNLESS `lead_id` derives
- * them (BR-1). The 5 BR-1-derivable fields (source_id/operational_site_id/
- * registry_id/business_function_id/product_category_id) become `prohibited`
- * when `lead_id` derives a non-null value for them — LeadOpportunityDefaultsResolver
- * is the single source of truth for which ones, shared verbatim with
- * OpportunityService's write-side derivation and the
- * GET /api/leads/{lead}/opportunity-defaults prefill. `referent_id` is NOT
- * derivable (spec 0041 D-1/D-3): it stays a plain, always-editable field
- * scoped to the chosen registry (BR-4, spec 0040).
+ * them (BR-1). The 3 BR-1-derivable fields (source_id/operational_site_id/
+ * registry_id) become `prohibited` when `lead_id` derives a non-null value
+ * for them — LeadOpportunityDefaultsResolver is the single source of truth
+ * for which ones, shared verbatim with OpportunityService's write-side
+ * derivation and the GET /api/leads/{lead}/opportunity-defaults prefill.
+ * `referent_id` is NOT derivable (spec 0041 D-1/D-3): it stays a plain,
+ * always-editable field scoped to the chosen registry (BR-4, spec 0040).
  *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Opportunity::class)). EnforcesFieldPermissions
  * (spec 0004) additionally rejects any submitted field the actor cannot edit
  * (create-context, model = null).
+ *
+ * Amendment rev.3: `business_function_id`/`product_category_id` are REPLACED
+ * by `product_lines` (ValidatesProductLines) — no longer BR-1-derivable/
+ * lockable scalars.
  */
 class StoreOpportunityRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
     use ValidatesManagerSlots;
+    use ValidatesProductLines;
 
     private ?LeadOpportunityDefaults $leadDefaultsCache = null;
 
@@ -60,19 +65,17 @@ class StoreOpportunityRequest extends FormRequest
             'company_id' => ['required', 'integer', Rule::exists('companies', 'id')],
             'company_site_id' => ['required', 'integer', Rule::exists('company_sites', 'id')],
             'operational_site_id' => $this->derivableRule($locked, 'operational_site_id', required: true, table: 'operational_sites'),
-            'business_function_id' => $this->derivableRule($locked, 'business_function_id', required: false, table: 'business_functions'),
             'referent_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'commercial_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'reporter_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'supervisor_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'source_id' => $this->derivableRule($locked, 'source_id', required: false, table: 'sources'),
-            'product_category_id' => $this->derivableRule($locked, 'product_category_id', required: false, table: 'product_categories'),
             'lead_id' => ['nullable', 'integer', Rule::exists('leads', 'id'), Rule::unique('opportunities', 'lead_id')],
             'start_date' => ['nullable', 'date'],
             'estimated_value' => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
             'expected_close_date' => ['nullable', 'date'],
             'success_probability' => ['nullable', 'integer', 'between:0,100'],
-        ], $this->managerSlotsRules());
+        ], $this->managerSlotsRules(), $this->productLinesRules());
     }
 
     /**
@@ -120,6 +123,7 @@ class StoreOpportunityRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->validateManagerSlots($validator);
+            $this->validateProductLines($validator);
             $this->enforceFieldPermissions($validator);
         });
     }

@@ -301,14 +301,14 @@ it('resolves geo set-filter options from the names actually in use', function ()
     $columns = collect($data['columns'])->keyBy('id');
 
     // Names in use, sorted; province has no values in use → empty.
-    expect($columns['country']['options'])->toBe(['France', 'Italy'])
+    expect($columns['country']['options'])->toBe(['France', 'Italia'])
         ->and($columns['region']['options'])->toBe(['Bretagne', 'Lazio'])
-        ->and($columns['city']['options'])->toBe(['Paris', 'Rome'])
+        ->and($columns['city']['options'])->toBe(['Paris', 'Roma'])
         ->and($columns['province']['options'])->toBe([]);
 
     // The same options are mirrored onto the filter catalogue entries.
     $cityFilter = collect($data['filters'])->firstWhere('columnId', 'city');
-    expect($cityFilter['options'])->toBe(['Paris', 'Rome']);
+    expect($cityFilter['options'])->toBe(['Paris', 'Roma']);
 });
 
 it('hides action keys the user has no permission for in the config catalogue', function () {

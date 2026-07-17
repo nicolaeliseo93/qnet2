@@ -13,6 +13,9 @@ namespace App\DataObjects\Shared;
  * - `offset` / `limit`: pagination (limit capped by the FormRequest at MAX_LIMIT).
  * - `ids`: edit-mode hydration — these ids are appended deduplicated, bypass the
  *   search filter and do NOT inflate the total.
+ * - `businessFunctionId` (spec 0040 amendment rev.3): ADDITIVE, consumed ONLY
+ *   by ProductCategoryService::forSelect — every other for-select consumer
+ *   defaults it to null (retrocompatible, no behaviour change).
  */
 final readonly class ForSelectQuery
 {
@@ -24,6 +27,7 @@ final readonly class ForSelectQuery
         public int $offset,
         public int $limit,
         public array $ids,
+        public ?int $businessFunctionId = null,
     ) {}
 
     /**
@@ -46,6 +50,7 @@ final readonly class ForSelectQuery
             offset: (int) ($data['offset'] ?? 0),
             limit: (int) ($data['limit'] ?? 25),
             ids: $ids,
+            businessFunctionId: isset($data['business_function_id']) ? (int) $data['business_function_id'] : null,
         );
     }
 

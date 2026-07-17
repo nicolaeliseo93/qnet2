@@ -7,6 +7,7 @@ use App\Models\Country;
 use App\Models\PersonalData;
 use App\Models\Province;
 use App\Models\State;
+use App\Support\Geo\GeoNameLocalizer;
 use App\Tables\Users\Concerns\CorrelatesPersonalDataToUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -53,9 +54,11 @@ class UserGeoColumns
 
     /**
      * Distinct geo NAMES actually present among users' primary addresses,
-     * sorted. Resolving from values-in-use (rather than the full geo tables,
-     * which can be huge — e.g. every city) keeps the set-filter option list
-     * small and relevant. Runs once per GET /columns, not per row.
+     * localized to Italian and sorted. Resolving from values-in-use (rather
+     * than the full geo tables, which can be huge — e.g. every city) keeps the
+     * set-filter option list small and relevant. The list is shown in Italian;
+     * applyFilter() reverses a selected value back to the English DB name.
+     * Runs once per GET /columns, not per row.
      *
      * @return array<int, string>
      */
@@ -73,8 +76,10 @@ class UserGeoColumns
                     // Morph alias (enforced morphMap), not the FQCN.
                     ->where('addressable_type', (new PersonalData)->getMorphClass());
             })
-            ->orderBy('name')
             ->pluck('name')
+            ->map(GeoNameLocalizer::toItalian(...))
+            ->sort()
+            ->values()
             ->all();
     }
 
@@ -123,12 +128,15 @@ class UserGeoColumns
             return;
         }
 
+        // The option list is Italian; match on the DB name (English or already-Italian).
+        $matchNames = GeoNameLocalizer::filterMatchNames($names);
+
         $relation = self::COLUMNS[$columnId]['relation'];
 
-        $query->whereHas('personalData.addresses', static function (Builder $addressQuery) use ($relation, $names): void {
+        $query->whereHas('personalData.addresses', static function (Builder $addressQuery) use ($relation, $matchNames): void {
             $addressQuery->where('is_primary', true)
-                ->whereHas($relation, static function (Builder $geoQuery) use ($names): void {
-                    $geoQuery->whereIn('name', $names);
+                ->whereHas($relation, static function (Builder $geoQuery) use ($matchNames): void {
+                    $geoQuery->whereIn('name', $matchNames);
                 });
         });
     }

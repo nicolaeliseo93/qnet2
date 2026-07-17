@@ -109,6 +109,11 @@ class ProductCategoryService
      * SourceService::forSelect. Every returned item carries its EFFECTIVE
      * business function (spec 0040 BR-4) as `meta.business_function`,
      * resolved in ONE batched CategoryHierarchy call (never a query per row).
+     *
+     * Amendment rev.3: when `$query->businessFunctionId` is set, the base
+     * query is scoped to the ids whose EFFECTIVE business function matches
+     * (same batched CategoryHierarchy call, no query per row) — additive,
+     * identical behaviour when the param is absent.
      */
     public function forSelect(ForSelectQuery $query): ForSelectResult
     {
@@ -116,6 +121,10 @@ class ProductCategoryService
 
         if ($query->hasSearch()) {
             $base->where('name', 'like', '%'.$query->search.'%');
+        }
+
+        if ($query->businessFunctionId !== null) {
+            $base->whereIn('id', $this->categoryIdsForBusinessFunction($query->businessFunctionId));
         }
 
         $total = (clone $base)->count();
@@ -137,6 +146,23 @@ class ProductCategoryService
             offset: $query->offset,
             limit: $query->limit,
         );
+    }
+
+    /**
+     * Every category id whose EFFECTIVE business function is
+     * $businessFunctionId (spec 0040 amendment rev.3) — a single batched
+     * CategoryHierarchy call, never a query per row.
+     *
+     * @return array<int, int>
+     */
+    private function categoryIdsForBusinessFunction(int $businessFunctionId): array
+    {
+        $summaries = $this->hierarchy->effectiveBusinessFunctionSummaries();
+
+        return array_keys(array_filter(
+            $summaries,
+            static fn (?array $summary): bool => ($summary['id'] ?? null) === $businessFunctionId,
+        ));
     }
 
     /**

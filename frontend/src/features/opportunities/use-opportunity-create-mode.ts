@@ -41,6 +41,7 @@ export function useOpportunityCreateMode(leadId: number | null): OpportunityCrea
         values: defaults.values,
         references: defaults.references,
         lockedFields: defaults.locked_fields,
+        productLines: defaults.product_lines,
       },
     },
   }

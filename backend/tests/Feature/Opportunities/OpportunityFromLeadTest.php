@@ -62,38 +62,48 @@ if (! function_exists('opportunityFromLeadActor')) {
     }
 }
 
-/**
- * A lead with its own registry (spec 0041 D-3) and NOT NULL on every other
- * BR-1-derivable source column, so every one of the 5 fields locks.
- */
-function completeLead(): Lead
-{
-    $registry = Registry::factory()->create();
-    $source = Source::factory()->create();
-    $businessFunction = BusinessFunction::factory()->create();
-    $productCategory = ProductCategory::factory()->create();
+if (! function_exists('completeLead')) {
+    /**
+     * A lead with its own registry (spec 0041 D-3) and NOT NULL on every
+     * other BR-1-derivable source column, so every one of the 3 locked
+     * fields locks. The category's OWN business_function_id matches the
+     * campaign's (amendment rev.3): the product_lines row the defaults
+     * endpoint prefills must satisfy the SAME
+     * CategoryHierarchy::effectiveBusinessFunction() check the write path
+     * enforces, so the two never drift apart in this fixture. Shared with
+     * OpportunityFromLeadProductLinesTest (file-size split, engineering.md §6).
+     */
+    function completeLead(): Lead
+    {
+        $registry = Registry::factory()->create();
+        $source = Source::factory()->create();
+        $businessFunction = BusinessFunction::factory()->create();
+        $productCategory = ProductCategory::factory()->create(['business_function_id' => $businessFunction->id]);
 
-    $campaign = Campaign::factory()->create([
-        'source_id' => $source->id,
-        'business_function_id' => $businessFunction->id,
-        'product_category_id' => $productCategory->id,
-    ]);
+        $campaign = Campaign::factory()->create([
+            'source_id' => $source->id,
+            'business_function_id' => $businessFunction->id,
+            'product_category_id' => $productCategory->id,
+        ]);
 
-    return Lead::factory()->create([
-        'campaign_id' => $campaign->id,
-        'registry_id' => $registry->id,
-        'operational_site_id' => OperationalSite::factory()->withAddress()->create()->id,
-        'source_id' => null,
-    ]);
+        return Lead::factory()->create([
+            'campaign_id' => $campaign->id,
+            'registry_id' => $registry->id,
+            'operational_site_id' => OperationalSite::factory()->withAddress()->create()->id,
+            'source_id' => null,
+        ]);
+    }
 }
 
 // ---------------------------------------------------------------------------
-// AC-060 — GET opportunity-defaults, lead completo -> 5 campi valorizzati e bloccati
-// (spec 0041 D-3: referent_id is no longer derivable, registry_id comes from
-// the lead itself, not the campaign)
+// AC-060 — GET opportunity-defaults, lead completo -> 3 campi valorizzati e
+// bloccati (spec 0041 D-3: referent_id is no longer derivable, registry_id
+// comes from the lead itself, not the campaign; amendment rev.3:
+// business_function_id/product_category_id are NO LONGER locked scalars —
+// they surface as `product_lines`, see AC-102/103 below)
 // ---------------------------------------------------------------------------
 
-it('opportunity-defaults: a complete lead locks all 5 derivable fields (AC-060, AC-050 spec 0041)', function () {
+it('opportunity-defaults: a complete lead locks all 3 derivable fields (AC-060, AC-050 spec 0041)', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
     Sanctum::actingAs($actor);
@@ -105,44 +115,17 @@ it('opportunity-defaults: a complete lead locks all 5 derivable fields (AC-060, 
     expect($response->json('data.values.operational_site_id'))->toBe($lead->operational_site_id);
     expect($response->json('data.values.registry_id'))->toBe($lead->registry_id);
     expect($response->json('data.values.source_id'))->toBe($lead->campaign->source_id);
-    expect($response->json('data.values.business_function_id'))->toBe($lead->campaign->business_function_id);
-    expect($response->json('data.values.product_category_id'))->toBe($lead->campaign->product_category_id);
+    expect($response->json('data.values'))->not->toHaveKey('business_function_id');
+    expect($response->json('data.values'))->not->toHaveKey('product_category_id');
     expect($response->json('data.locked_fields'))->toEqualCanonicalizing([
-        'source_id', 'operational_site_id', 'registry_id', 'business_function_id', 'product_category_id',
+        'source_id', 'operational_site_id', 'registry_id',
     ]);
     expect($response->json('data.locked_fields'))->not->toContain('referent_id');
     expect($response->json('data.references.registry.id'))->toBe($lead->registry_id);
 });
 
-// ---------------------------------------------------------------------------
-// AC-061 — campaign linked to a project: effective values; a null-derivable
-// field is neither in values nor locked_fields
-// ---------------------------------------------------------------------------
-
-it('opportunity-defaults: business_function/product_category come from the linked PROJECT\'s effective values (AC-061)', function () {
-    $actor = opportunityFromLeadActor(['create'], ['view']);
-    $businessFunction = BusinessFunction::factory()->create();
-    $productCategory = ProductCategory::factory()->create();
-
-    $project = Project::factory()->create([
-        'business_function_id' => $businessFunction->id,
-        'product_category_id' => $productCategory->id,
-    ]);
-    $campaign = Campaign::factory()->forProject($project)->create();
-
-    $lead = Lead::factory()->create([
-        'campaign_id' => $campaign->id,
-        'operational_site_id' => null,
-    ]);
-    Sanctum::actingAs($actor);
-
-    $response = $this->getJson("/api/leads/{$lead->id}/opportunity-defaults")->assertOk();
-
-    expect($response->json('data.values.business_function_id'))->toBe($businessFunction->id);
-    expect($response->json('data.values.product_category_id'))->toBe($productCategory->id);
-    expect($response->json('data.values.operational_site_id'))->toBeNull();
-    expect($response->json('data.locked_fields'))->not->toContain('operational_site_id');
-});
+// AC-102/AC-103 product_lines derivation coverage lives in
+// OpportunityFromLeadProductLinesTest (file-size split, engineering.md §6).
 
 // ---------------------------------------------------------------------------
 // AC-062 — authz + existing_opportunity_id
@@ -202,10 +185,11 @@ it('create with lead_id: the server writes the derived attributes (AC-063)', fun
         'operational_site_id' => $lead->operational_site_id,
         'registry_id' => $lead->registry_id,
         'source_id' => $lead->campaign->source_id,
-        'business_function_id' => $lead->campaign->business_function_id,
-        'product_category_id' => $lead->campaign->product_category_id,
     ]);
 });
+
+// AC-102/AC-103 create-with-lead product_lines coverage lives in
+// OpportunityFromLeadProductLinesTest (file-size split, engineering.md §6).
 
 it('create with lead_id: referent_id is NOT derived/prohibited, freely chosen even with a complete lead (spec 0041 D-3)', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
@@ -419,7 +403,7 @@ it('detail: an opportunity from a lead exposes lead {id,label} and locked_fields
         ->assertJsonPath('data.lead.id', $lead->id)
         ->assertJsonPath('data.lead.label', $lead->registry->name)
         ->assertJsonPath('data.locked_fields', [
-            'source_id', 'operational_site_id', 'registry_id', 'business_function_id', 'product_category_id',
+            'source_id', 'operational_site_id', 'registry_id',
         ]);
 });
 

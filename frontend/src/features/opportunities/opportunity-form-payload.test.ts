@@ -12,13 +12,12 @@ function values(overrides: Partial<OpportunityFormValues> = {}): OpportunityForm
     company_id: 2,
     company_site_id: 3,
     operational_site_id: 4,
-    business_function_id: null,
     referent_id: null,
     commercial_id: null,
     reporter_id: null,
     supervisor_id: null,
     source_id: null,
-    product_category_id: null,
+    product_lines: [],
     manager_slots: [],
     start_date: null,
     expected_close_date: null,
@@ -41,8 +40,6 @@ function original(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail
     company_site: { id: 3, name: 'HQ' },
     operational_site_id: 4,
     operational_site: { id: 4, label: 'Via Roma 1 - Milano' },
-    business_function_id: null,
-    business_function: null,
     referent_id: null,
     referent: null,
     commercial_id: null,
@@ -53,8 +50,7 @@ function original(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail
     supervisor: null,
     source_id: null,
     source: null,
-    product_category_id: null,
-    product_category: null,
+    product_lines: [],
     lead_id: null,
     lead: null,
     managers: [],
@@ -79,19 +75,36 @@ describe('buildCreatePayload', () => {
       company_id: 2,
       company_site_id: 3,
       operational_site_id: 4,
-      business_function_id: null,
       referent_id: null,
       commercial_id: null,
       reporter_id: null,
       supervisor_id: null,
       source_id: null,
-      product_category_id: null,
+      product_lines: [],
       manager_slots: [],
       start_date: null,
       expected_close_date: null,
       estimated_value: null,
       success_probability: 0,
     })
+  })
+
+  /** Amendment rev.3 (AC-099/107): `product_lines` is always sent in full, never locked, even from a lead. */
+  it('always sends product_lines in full, unlocked even when creating from a lead', () => {
+    const payload = buildCreatePayload(
+      values({
+        product_lines: [
+          { business_function_id: 40, product_category_id: 50 },
+          { business_function_id: 41, product_category_id: 51 },
+        ],
+      }),
+      { leadId: 9, lockedFields: ['registry_id'] },
+    )
+
+    expect(payload.product_lines).toEqual([
+      { business_function_id: 40, product_category_id: 50 },
+      { business_function_id: 41, product_category_id: 51 },
+    ])
   })
 
   it('trims the name and includes every set relation/estimate', () => {
@@ -122,13 +135,11 @@ describe('buildCreatePayload', () => {
           registry_id: 30,
           referent_id: 10,
           source_id: 20,
-          business_function_id: 40,
-          product_category_id: 50,
           operational_site_id: null,
         }),
         {
           leadId: 9,
-          lockedFields: ['registry_id', 'referent_id', 'source_id', 'business_function_id', 'product_category_id'],
+          lockedFields: ['registry_id', 'referent_id', 'source_id'],
         },
       )
 
@@ -136,8 +147,6 @@ describe('buildCreatePayload', () => {
       expect(payload).not.toHaveProperty('registry_id')
       expect(payload).not.toHaveProperty('referent_id')
       expect(payload).not.toHaveProperty('source_id')
-      expect(payload).not.toHaveProperty('business_function_id')
-      expect(payload).not.toHaveProperty('product_category_id')
       // The lead had no operational site (derivation null, BR-2): the field stays free and IS sent.
       expect(payload).toHaveProperty('operational_site_id', null)
     })
@@ -213,6 +222,58 @@ describe('buildUpdatePayload', () => {
       original({ success_probability: 40 }),
     )
     expect(payload).toEqual({ success_probability: 80 })
+  })
+
+  describe('product_lines (unordered set diff, amendment rev.3)', () => {
+    it('omits product_lines when the set is unchanged, even reordered', () => {
+      const payload = buildUpdatePayload(
+        values({
+          product_lines: [
+            { business_function_id: 2, product_category_id: 22 },
+            { business_function_id: 1, product_category_id: 11 },
+          ],
+        }),
+        original({
+          product_lines: [
+            {
+              id: 100,
+              business_function: { id: 1, name: 'Sales' },
+              product_category: { id: 11, name: 'Consulting' },
+            },
+            {
+              id: 101,
+              business_function: { id: 2, name: 'Marketing' },
+              product_category: { id: 22, name: 'Training' },
+            },
+          ],
+        }),
+      )
+      expect(payload).toEqual({})
+    })
+
+    it('includes product_lines when a row was added', () => {
+      const payload = buildUpdatePayload(
+        values({ product_lines: [{ business_function_id: 1, product_category_id: 11 }] }),
+        original({ product_lines: [] }),
+      )
+      expect(payload).toEqual({ product_lines: [{ business_function_id: 1, product_category_id: 11 }] })
+    })
+
+    it('includes product_lines when every row is removed', () => {
+      const payload = buildUpdatePayload(
+        values({ product_lines: [] }),
+        original({
+          product_lines: [
+            {
+              id: 100,
+              business_function: { id: 1, name: 'Sales' },
+              product_category: { id: 11, name: 'Consulting' },
+            },
+          ],
+        }),
+      )
+      expect(payload).toEqual({ product_lines: [] })
+    })
   })
 
   describe('manager_slots (position- and gap-sensitive, rebuilt from `managers` refs)', () => {

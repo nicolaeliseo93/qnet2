@@ -2,6 +2,7 @@ import type {
   CreateOpportunityPayload,
   OpportunityDetail,
   OpportunityManagerRef,
+  OpportunityProductLineInput,
   UpdateOpportunityPayload,
 } from '@/features/opportunities/types'
 import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
@@ -20,11 +21,13 @@ export interface CreatePayloadFromLead {
  * are NEVER derivable from a Lead (amendment A-2) so they are always sent.
  * `registry_id`/`operational_site_id` are the exception: sent as-is UNLESS
  * locked (`fromLead`, BR-1) — either way the RHF value is always present at
- * submit time, just not always sent. The other 4 BR-1-derivable fields
- * (referent/source/business_function/product_category) are nullable either
- * way and sent as-is when not locked. When creating from a Lead (spec 0040
- * MT-6/A-1), every field named in `fromLead.lockedFields` is OMITTED
- * entirely (not merely repeated) and `lead_id` is appended.
+ * submit time, just not always sent. `product_lines` (amendment rev.3) is
+ * NEVER locked — even the row derived from a linked Lead is a normal,
+ * editable/removable row (AC-102/103) — so it is always sent as-is, in
+ * full (the server replaces the entire collection, AC-099). When creating
+ * from a Lead (spec 0040 MT-6/A-1), every field named in
+ * `fromLead.lockedFields` is OMITTED entirely (not merely repeated) and
+ * `lead_id` is appended.
  */
 export function buildCreatePayload(
   values: OpportunityFormValues,
@@ -39,6 +42,7 @@ export function buildCreatePayload(
     commercial_id: values.commercial_id,
     reporter_id: values.reporter_id,
     supervisor_id: values.supervisor_id,
+    product_lines: completeProductLines(values.product_lines),
     manager_slots: values.manager_slots,
     start_date: values.start_date,
     expected_close_date: values.expected_close_date,
@@ -57,12 +61,6 @@ export function buildCreatePayload(
   }
   if (!locked.has('operational_site_id')) {
     payload.operational_site_id = values.operational_site_id as number
-  }
-  if (!locked.has('business_function_id')) {
-    payload.business_function_id = values.business_function_id
-  }
-  if (!locked.has('product_category_id')) {
-    payload.product_category_id = values.product_category_id
   }
 
   if (fromLead) {
@@ -103,9 +101,6 @@ export function buildUpdatePayload(
   if (values.operational_site_id !== original.operational_site_id) {
     payload.operational_site_id = values.operational_site_id as number
   }
-  if (values.business_function_id !== original.business_function_id) {
-    payload.business_function_id = values.business_function_id
-  }
   if (values.referent_id !== original.referent_id) {
     payload.referent_id = values.referent_id
   }
@@ -121,8 +116,16 @@ export function buildUpdatePayload(
   if (values.source_id !== original.source_id) {
     payload.source_id = values.source_id
   }
-  if (values.product_category_id !== original.product_category_id) {
-    payload.product_category_id = values.product_category_id
+  // Amendment rev.3: the server replaces the entire row SET (AC-099) — diff
+  // as an unordered collection of pairs, never positionally (row order in
+  // the form carries no meaning beyond the auto-computed name, AC-107).
+  const originalProductLines = original.product_lines.map((line) => ({
+    business_function_id: line.business_function.id,
+    product_category_id: line.product_category.id,
+  }))
+  const currentProductLines = completeProductLines(values.product_lines)
+  if (!sameProductLines(currentProductLines, originalProductLines)) {
+    payload.product_lines = currentProductLines
   }
   // Manager slots are ORDER- and GAP-sensitive (a slot's G.A. position is
   // meaningful), so compare positionally, not as an unordered set.
@@ -146,6 +149,43 @@ export function buildUpdatePayload(
   }
 
   return payload
+}
+
+/**
+ * Filters out any row still missing an id and casts the rest to the wire
+ * shape. Defensive only: the schema's `superRefine` (spec 0040 amendment
+ * rev.3) already blocks submit on an incomplete row, so this never actually
+ * drops a row in practice — it exists because `OpportunityFormValues.product_lines`
+ * stays nullable-per-id at the type level (each row is inline-editable).
+ */
+function completeProductLines(rows: OpportunityFormValues['product_lines']): OpportunityProductLineInput[] {
+  return rows.filter(
+    (row): row is OpportunityProductLineInput =>
+      row.business_function_id !== null && row.product_category_id !== null,
+  )
+}
+
+/** Order-independent key of a product-line pair, for set comparison. */
+function productLineKey(line: OpportunityProductLineInput): string {
+  return `${line.business_function_id}:${line.product_category_id}`
+}
+
+/** Order-independent, duplicate-safe comparison of two product-line collections. */
+function sameProductLines(a: OpportunityProductLineInput[], b: OpportunityProductLineInput[]): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  const keysA = new Set(a.map(productLineKey))
+  const keysB = new Set(b.map(productLineKey))
+  if (keysA.size !== keysB.size) {
+    return false
+  }
+  for (const key of keysA) {
+    if (!keysB.has(key)) {
+      return false
+    }
+  }
+  return true
 }
 
 /**

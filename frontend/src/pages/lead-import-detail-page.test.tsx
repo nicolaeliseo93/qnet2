@@ -11,7 +11,7 @@ import type { ImportRunDetail } from '@/features/imports/wizard/types'
  * fresh for the `:runId` param, renders the (separately covered)
  * presentational view, shows a "Resume import" action only for a resumable
  * run, never a blank page on a failed fetch, a not-found page on an invalid
- * id, and is gated behind `import-runs.view`. The data hook and the
+ * id, and is gated behind `leads.import`. The data hook and the
  * presentational view are stubbed: what is under test is the page wiring.
  */
 
@@ -107,7 +107,7 @@ describe('LeadImportDetailPage', () => {
     expect(useLeadImportDetailMock).toHaveBeenCalledWith(null)
   })
 
-  it('shows the forbidden fallback without import-runs.view', () => {
+  it('shows the forbidden fallback without leads.import', () => {
     canMock.mockReturnValue(false)
 
     renderAt('/imports/12')

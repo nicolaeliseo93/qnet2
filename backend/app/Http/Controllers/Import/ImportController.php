@@ -34,17 +34,17 @@ use Throwable;
 
 /**
  * Generic, domain-driven import endpoints (spec 0012, extended by the
- * unified wizard flow spec 0033, DOUBLE-GATED by spec 0034). One controller
- * serves every domain; {domain} resolves through the registry (unknown →
- * 404), mirroring App\Http\Controllers\Table\TableController.
+ * unified wizard flow spec 0033). One controller serves every domain;
+ * {domain} resolves through the registry (unknown → 404), mirroring
+ * App\Http\Controllers\Table\TableController.
  *
- * Every action now enforces TWO independent gates (spec 0034):
- *  - the MODULE gate — `$this->authorize()` against ImportRun's own
- *    `import-runs.{viewAny,view,create,update}` ability (ImportRunPolicy).
- *    Reads (index/show/rows/summary/errors) stop here.
- *  - the DOMAIN gate — `authorizeImport()`, the definition's
- *    `{resource}.import` ability, kept ONLY on writes (template/upload/
- *    configure/updateRow/confirm).
+ * Every action is gated by the domain's `{resource}.import` ability — for the
+ * only registered domain (`leads`) that is `leads.import`. `$this->authorize()`
+ * against ImportRun resolves through ImportRunPolicy, which itself checks
+ * `leads.import` (the former dedicated `import-runs.*` module set was a
+ * duplicate, removed 2026-07-17); writes additionally call `authorizeImport()`
+ * (the definition's own `{resource}.import`), the same ability — a redundant
+ * but harmless second gate on template/upload/configure/updateRow/confirm.
  * A bound {importRun} that does not belong to the actor OR whose resource
  * does not match {domain} 404s (never 403) — assertOwnedRun() always runs
  * BEFORE any gate, so ownership/domain mismatch never leaks as a 403,

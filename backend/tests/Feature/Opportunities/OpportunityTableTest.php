@@ -1,8 +1,10 @@
 <?php
 
 use App\Jobs\GenerateExportJob;
+use App\Models\BusinessFunction;
 use App\Models\ExportRun;
 use App\Models\Opportunity;
+use App\Models\ProductCategory;
 use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\User;
@@ -56,13 +58,21 @@ it('GET /api/tables/opportunities/columns: 200 with the declared columns, 403 wi
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
         'name', 'registry', 'referent', 'commercial', 'supervisor', 'source', 'product_category',
-        'estimated_value', 'success_probability', 'start_date', 'expected_close_date', 'created_at',
+        'business_function', 'estimated_value', 'success_probability', 'start_date',
+        'expected_close_date', 'created_at',
     ]);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['registry']['sortable'])->toBeTrue()
         ->and($columns['registry']['filterType'])->toBe('set')
         ->and($columns['estimated_value']['filterType'])->toBe('number');
+
+    // Amendment rev.3: the 2 AGGREGATED (to-many) columns are filterable but
+    // NOT sortable — no single related row to order by (AC-105).
+    expect($columns['product_category']['filterType'])->toBe('set')
+        ->and($columns['product_category']['sortable'])->toBeFalse()
+        ->and($columns['business_function']['filterType'])->toBe('set')
+        ->and($columns['business_function']['sortable'])->toBeFalse();
 });
 
 // ---------------------------------------------------------------------------
@@ -117,7 +127,47 @@ it('rows: an unknown sort column is rejected (allow-list, no raw SQL escape hatc
     ])->assertStatus(422);
 });
 
-it('rows: registry/referent/commercial/supervisor/source/product_category surface as {id, name} summaries', function () {
+it('rows: an unknown sort column is rejected for the AGGREGATED product_category column too (not sortable, AC-105)', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/tables/opportunities/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'product_category', 'sort' => 'asc']],
+    ])->assertStatus(422);
+});
+
+it('rows: product_category/business_function are comma-joined display strings and filter via whereHas (AC-105)', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    $businessFunction = BusinessFunction::factory()->create(['name' => 'Vendite']);
+    $categoryOne = ProductCategory::factory()->create(['name' => 'Cloud', 'business_function_id' => $businessFunction->id]);
+    $categoryTwo = ProductCategory::factory()->create(['name' => 'On-Prem', 'business_function_id' => $businessFunction->id]);
+    $matching = Opportunity::factory()->create();
+    $matching->productLines()->createMany([
+        ['business_function_id' => $businessFunction->id, 'product_category_id' => $categoryOne->id],
+        ['business_function_id' => $businessFunction->id, 'product_category_id' => $categoryTwo->id],
+    ]);
+    Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/opportunities/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $matching->id);
+
+    expect($row['product_category'])->toBe('Cloud, On-Prem');
+    expect($row['business_function'])->toBe('Vendite');
+
+    $filtered = $this->postJson('/api/tables/opportunities/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['product_category' => ['filterType' => 'set', 'values' => ['Cloud']]],
+    ])->assertOk();
+
+    $ids = collect($filtered->json('items'))->pluck('id');
+    expect($ids->all())->toBe([$matching->id]);
+});
+
+it('rows: registry/referent/commercial/supervisor/source surface as {id, name} summaries', function () {
     $actor = opportunityTableUserWith(['viewAny']);
     $registry = Registry::factory()->create(['name' => 'Acme Spa']);
     $opportunity = Opportunity::factory()->create(['registry_id' => $registry->id]);

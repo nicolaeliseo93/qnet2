@@ -19,6 +19,7 @@ export const table = {
   confirmAction: 'Sei sicuro di voler eseguire questa azione?',
   loadError: 'Impossibile caricare la tabella. Riprova.',
   emptyConfig: 'Nessuna colonna disponibile per questa tabella.',
+  noRows: 'Nessun record da mostrare.',
   resetLayout: 'Ripristina layout',
   layoutReset: 'Layout della tabella ripristinato ai valori predefiniti.',
   layoutError: 'Impossibile aggiornare il layout della tabella.',

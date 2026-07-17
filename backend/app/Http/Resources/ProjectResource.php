@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Enums\GeoScopeLevel;
 use App\Models\Project;
+use App\Support\Geo\GeoNameLocalizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -37,13 +38,13 @@ class ProjectResource extends JsonResource
             'business_function_id' => $this->business_function_id,
             'business_function' => $this->summarize($this->businessFunction),
             'country_id' => $this->country_id,
-            'country' => $this->summarize($this->country),
+            'country' => $this->summarize($this->country, geo: true),
             'state_id' => $this->state_id,
-            'state' => $this->summarize($this->state),
+            'state' => $this->summarize($this->state, geo: true),
             'province_id' => $this->province_id,
-            'province' => $this->summarize($this->province),
+            'province' => $this->summarize($this->province, geo: true),
             'city_id' => $this->city_id,
-            'city' => $this->summarize($this->city),
+            'city' => $this->summarize($this->city, geo: true),
             'geo_scope' => GeoScopeLevel::for($this->country_id, $this->state_id, $this->province_id, $this->city_id)?->value,
             'product_category_id' => $this->product_category_id,
             'product_category' => $this->summarize($this->productCategory),
@@ -62,15 +63,21 @@ class ProjectResource extends JsonResource
     }
 
     /**
+     * A related row projected to {id, name}. `$geo` localizes the name to
+     * Italian (country/state/province/city only) — never applied to the other
+     * relations, whose names are user data (a company could be named "Milan").
+     *
      * @return array{id: int, name: string}|null
      */
-    private function summarize(?Model $related): ?array
+    private function summarize(?Model $related, bool $geo = false): ?array
     {
         if ($related === null) {
             return null;
         }
 
-        return ['id' => $related->id, 'name' => $related->name];
+        $name = $geo ? GeoNameLocalizer::toItalian($related->name) : $related->name;
+
+        return ['id' => $related->id, 'name' => $name];
     }
 
     private function formatMoney(float $value): string

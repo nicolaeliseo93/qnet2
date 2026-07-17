@@ -25,8 +25,8 @@ class StateForSelectResource extends ForSelectResource
     {
         return [
             'id' => $this->id,
-            'label' => $this->name,
-            'subtitle' => $this->country?->name,
+            'label' => $this->localizedName(),
+            'subtitle' => $this->country?->localizedName(),
         ];
     }
 }

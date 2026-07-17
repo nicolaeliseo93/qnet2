@@ -23,9 +23,11 @@ use Throwable;
  * controller serves every import domain, {domain} resolves through the
  * registry (unknown → 404), mirroring ImportController.
  *
- * List/create enforce the SAME double gate as ImportController::template()
- * (the CSV template download) — `import-runs.create` (module) +
- * `{resource}.import` (domain); delete is owner-only via
+ * List/create enforce the SAME gate as ImportController::template() (the CSV
+ * template download) — the domain's `{resource}.import` ability (`leads.import`
+ * for the only registered domain), resolved both via `$this->authorize()`
+ * against ImportRun (ImportRunPolicy → `leads.import`) and `authorizeImportGate()`
+ * (the definition's own `{resource}.import`). Delete is owner-only via
  * ImportMappingTemplatePolicy (no gate duplication: Gate::before covers the
  * super-admin bypass). A bound {mappingTemplate} whose `resource` does not
  * match {domain} 404s, mirroring TableFilterViewController::

@@ -9,18 +9,17 @@ import { ImportWizard } from '@/features/imports/wizard/import-wizard'
 const LEADS_IMPORT_DOMAIN = 'leads'
 
 /**
- * Advanced lead import wizard page (spec 0034: gated on the module's own
- * `import-runs.create` — the backend still additionally requires `leads.import`
- * on every write endpoint of the wizard, the doubly-gated authz of spec 0034).
- * All orchestration lives in `ImportWizard`; this page only supplies the
- * chrome (breadcrumb, gate, i18n).
+ * Advanced lead import wizard page (spec 0034): gated on `leads.import`,
+ * the same ability the backend enforces on every write endpoint of the
+ * wizard. All orchestration lives in `ImportWizard`; this page only
+ * supplies the chrome (breadcrumb, gate, i18n).
  */
 export default function LeadImportPage() {
   const { t } = useTranslation('importWizard')
 
   return (
     <Can
-      permission="import-runs.create"
+      permission="leads.import"
       fallback={<p className="text-sm text-muted-foreground">{t('page.forbidden')}</p>}
     >
       <div className="flex flex-1 flex-col gap-4">

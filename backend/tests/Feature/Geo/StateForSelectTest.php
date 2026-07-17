@@ -42,7 +42,7 @@ it('maps a state to { id, label: name, subtitle: country.name }', function () {
     $response = $this->getJson('/api/states/for-select?search=Veneto')->assertOk();
     $item = collect($response->json('items'))->firstWhere('id', $target->id);
 
-    expect($item)->toMatchArray(['id' => $target->id, 'label' => 'Veneto', 'subtitle' => 'Italy'])
+    expect($item)->toMatchArray(['id' => $target->id, 'label' => 'Veneto', 'subtitle' => 'Italia'])
         ->and(array_keys($item))->toEqualCanonicalizing(['id', 'label', 'subtitle']);
 });
 

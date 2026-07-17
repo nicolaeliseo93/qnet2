@@ -42,6 +42,7 @@ class LeadOpportunityDefaultsController extends BaseApiController
                 'values' => $defaults->values,
                 'references' => $defaults->references,
                 'locked_fields' => $defaults->lockedFields,
+                'product_lines' => $defaults->productLines,
             ]);
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['lead' => $lead->id]);

@@ -8,6 +8,7 @@ use App\Models\CompanySite;
 use App\Models\PersonalData;
 use App\Models\Province;
 use App\Models\State;
+use App\Support\Geo\GeoNameLocalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -80,8 +81,10 @@ class CompanySiteAddressColumns
                             ->where('personable_type', (new CompanySite)->getMorphClass());
                     });
             })
-            ->orderBy('name')
             ->pluck('name')
+            ->map(GeoNameLocalizer::toItalian(...))
+            ->sort()
+            ->values()
             ->all();
     }
 
@@ -120,12 +123,15 @@ class CompanySiteAddressColumns
             return;
         }
 
+        // The option list is Italian; match on the DB name (English or already-Italian).
+        $matchNames = GeoNameLocalizer::filterMatchNames($names);
+
         $relation = self::GEO_COLUMNS[$columnId]['relation'];
 
-        $query->whereHas('personalData.addresses', static function (Builder $addressQuery) use ($relation, $names): void {
+        $query->whereHas('personalData.addresses', static function (Builder $addressQuery) use ($relation, $matchNames): void {
             $addressQuery->where('is_primary', true)
-                ->whereHas($relation, static function (Builder $geoQuery) use ($names): void {
-                    $geoQuery->whereIn('name', $names);
+                ->whereHas($relation, static function (Builder $geoQuery) use ($matchNames): void {
+                    $geoQuery->whereIn('name', $matchNames);
                 });
         });
     }

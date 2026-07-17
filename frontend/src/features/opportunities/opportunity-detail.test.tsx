@@ -20,8 +20,6 @@ function opportunity(
     company_site: { id: 30, name: 'HQ' },
     operational_site_id: 40,
     operational_site: { id: 40, label: 'Via Roma 1 - Milano' },
-    business_function_id: 50,
-    business_function: { id: 50, name: 'Sales' },
     referent_id: 60,
     referent: { id: 60, name: 'Mario Rossi' },
     commercial_id: 70,
@@ -32,8 +30,13 @@ function opportunity(
     supervisor: { id: 90, name: 'Paolo Blu' },
     source_id: 100,
     source: { id: 100, name: 'Web' },
-    product_category_id: 110,
-    product_category: { id: 110, name: 'Consulting' },
+    product_lines: [
+      {
+        id: 500,
+        business_function: { id: 50, name: 'Sales' },
+        product_category: { id: 110, name: 'Consulting' },
+      },
+    ],
     lead_id: null,
     lead: null,
     managers: [
@@ -76,7 +79,7 @@ describe('OpportunityDetailView — read-only (AC-077)', () => {
     expect(screen.getByText('Giulia Neri')).toBeInTheDocument()
     expect(screen.getByText('Paolo Blu')).toBeInTheDocument()
     expect(screen.getByText('Web')).toBeInTheDocument()
-    expect(screen.getByText('Consulting')).toBeInTheDocument()
+    expect(screen.getByText(/Consulting/)).toBeInTheDocument()
     expect(screen.getByText('Anna Bianchi')).toBeInTheDocument()
     expect(screen.getByText('Marco Gialli')).toBeInTheDocument()
     expect(screen.getByText('60%')).toBeInTheDocument()
@@ -100,8 +103,6 @@ describe('OpportunityDetailView — read-only (AC-077)', () => {
           company: null,
           company_site: null,
           operational_site: null,
-          business_function_id: null,
-          business_function: null,
           referent_id: null,
           referent: null,
           commercial_id: null,
@@ -112,8 +113,7 @@ describe('OpportunityDetailView — read-only (AC-077)', () => {
           supervisor: null,
           source_id: null,
           source: null,
-          product_category_id: null,
-          product_category: null,
+          product_lines: [],
           managers: [],
           start_date: null,
           estimated_value: null,

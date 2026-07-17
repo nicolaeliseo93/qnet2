@@ -20,18 +20,22 @@ use Illuminate\Database\Eloquent\Model;
  * `registry_id`/`operational_site_id` come straight off the lead (spec 0041
  * D-3: `registry_id` is now the LEAD's own, no longer the campaign's);
  * `source_id` falls back to the campaign's own source when the lead has
- * none; `business_function_id`/`product_category_id` are the campaign's
- * EFFECTIVE values — read through its linked Project when one exists, else
- * the campaign's own (the exact `project !== null ? project->x :
- * campaign->x` merge CampaignResource already uses for the same 2 columns,
- * spec 0023 BR-2 — no second implementation, this mirrors it). `referent_id`
- * is NOT derived (spec 0041 D-3): it stays a plain field, scoped to the
- * chosen registry (BR-4, spec 0040).
+ * none. `referent_id` is NOT derived (spec 0041 D-3): it stays a plain
+ * field, scoped to the chosen registry (BR-4, spec 0040).
+ *
+ * Amendment rev.3: business function/product category are NO LONGER
+ * BR-2-locked scalars — `productLines` carries the campaign's EFFECTIVE pair
+ * (read through its linked Project when one exists, else the campaign's own
+ * — the exact `project !== null ? project->x : campaign->x` merge
+ * CampaignResource already uses for the same 2 columns, spec 0023 BR-2, no
+ * second implementation) as a single EDITABLE/removable row, only when BOTH
+ * are present.
  */
 final class LeadOpportunityDefaultsResolver
 {
     /**
-     * The 5 BR-1-derivable field keys, in the contract's declared order.
+     * The 3 BR-1-derivable/lockable field keys, in the contract's declared
+     * order.
      *
      * @var array<int, string>
      */
@@ -39,8 +43,6 @@ final class LeadOpportunityDefaultsResolver
         'source_id',
         'operational_site_id',
         'registry_id',
-        'business_function_id',
-        'product_category_id',
     ];
 
     /**
@@ -76,24 +78,41 @@ final class LeadOpportunityDefaultsResolver
             'source_id' => $effectiveSource?->id,
             'operational_site_id' => $lead->operational_site_id,
             'registry_id' => $lead->registry_id,
-            'business_function_id' => $effectiveBusinessFunction?->id,
-            'product_category_id' => $effectiveProductCategory?->id,
         ];
 
         $references = [
             'source' => $this->summarizeByName($effectiveSource),
             'operational_site' => $this->summarizeOperationalSite($lead->operationalSite),
             'registry' => $this->summarizeByName($lead->registry),
-            'business_function' => $this->summarizeByName($effectiveBusinessFunction),
-            'product_category' => $this->summarizeByName($effectiveProductCategory),
         ];
 
         return new LeadOpportunityDefaults(
             values: $values,
             references: $references,
             lockedFields: $this->lockedFields($values),
+            productLines: $this->productLines($effectiveBusinessFunction, $effectiveProductCategory),
             existingOpportunityId: $lead->opportunity?->id,
         );
+    }
+
+    /**
+     * A single derived row {business_function, product_category} when BOTH
+     * the campaign/project's effective business function AND product
+     * category are present, else an empty list (amendment rev.3: this row is
+     * EDITABLE/removable in the form, never BR-2-locked).
+     *
+     * @return array<int, array{business_function: array{id: int, name: string}, product_category: array{id: int, name: string}}>
+     */
+    private function productLines(?Model $businessFunction, ?Model $productCategory): array
+    {
+        if ($businessFunction === null || $productCategory === null) {
+            return [];
+        }
+
+        return [[
+            'business_function' => ['id' => $businessFunction->id, 'name' => $businessFunction->name],
+            'product_category' => ['id' => $productCategory->id, 'name' => $productCategory->name],
+        ]];
     }
 
     /**
@@ -141,7 +160,7 @@ final class LeadOpportunityDefaultsResolver
             return '';
         }
 
-        $city = $address->city?->name;
+        $city = $address->city?->localizedName();
 
         return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
     }

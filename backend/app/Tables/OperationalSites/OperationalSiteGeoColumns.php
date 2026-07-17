@@ -7,6 +7,7 @@ use App\Models\City;
 use App\Models\OperationalSite;
 use App\Models\Province;
 use App\Models\State;
+use App\Support\Geo\GeoNameLocalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -82,8 +83,10 @@ class OperationalSiteGeoColumns
                     // Morph alias (enforced morphMap), not the FQCN.
                     ->where('addressable_type', (new OperationalSite)->getMorphClass());
             })
-            ->orderBy('name')
             ->pluck('name')
+            ->map(GeoNameLocalizer::toItalian(...))
+            ->sort()
+            ->values()
             ->all();
     }
 
@@ -122,12 +125,15 @@ class OperationalSiteGeoColumns
             return;
         }
 
+        // The option list is Italian; match on the DB name (English or already-Italian).
+        $matchNames = GeoNameLocalizer::filterMatchNames($names);
+
         $relation = self::GEO_COLUMNS[$columnId]['relation'];
 
-        $query->whereHas('addresses', static function (Builder $addressQuery) use ($relation, $names): void {
+        $query->whereHas('addresses', static function (Builder $addressQuery) use ($relation, $matchNames): void {
             $addressQuery->where('is_primary', true)
-                ->whereHas($relation, static function (Builder $geoQuery) use ($names): void {
-                    $geoQuery->whereIn('name', $names);
+                ->whereHas($relation, static function (Builder $geoQuery) use ($matchNames): void {
+                    $geoQuery->whereIn('name', $matchNames);
                 });
         });
     }
@@ -215,14 +221,31 @@ class OperationalSiteGeoColumns
      */
     private function applySearchGeo(Builder $query, string $relation, string $pattern): bool
     {
-        $query->orWhereHas('addresses', function (Builder $addressQuery) use ($relation, $pattern): void {
+        // The column shows Italian; a search typed in Italian must also reach
+        // rows whose English DB name it localizes to (e.g. "napoli" -> Naples).
+        $englishMatches = GeoNameLocalizer::englishNamesMatching($this->searchNeedle($pattern));
+
+        $query->orWhereHas('addresses', function (Builder $addressQuery) use ($relation, $pattern, $englishMatches): void {
             $addressQuery->where('is_primary', true)
-                ->whereHas($relation, function (Builder $geoQuery) use ($pattern): void {
-                    $geoQuery->where('name', 'like', $pattern);
+                ->whereHas($relation, function (Builder $geoQuery) use ($pattern, $englishMatches): void {
+                    $geoQuery->where('name', 'like', $pattern)
+                        ->when($englishMatches !== [], fn (Builder $inner) => $inner->orWhereIn('name', $englishMatches));
                 });
         });
 
         return true;
+    }
+
+    /**
+     * Recover the raw needle from the engine's escaped `%needle%` quick-search
+     * pattern so it can be tested against the Italian display names — the
+     * inverse of escapeLike() plus the `%...%` the generic engine wraps it in.
+     */
+    private function searchNeedle(string $pattern): string
+    {
+        $inner = trim($pattern, '%');
+
+        return str_replace(['\\%', '\\_', '\\\\'], ['%', '_', '\\'], $inner);
     }
 
     /**

@@ -86,7 +86,7 @@ class EmploymentResource extends JsonResource
     private function operationalSiteLabel(OperationalSite $site): string
     {
         $address = $site->primaryAddress;
-        $city = $address?->city?->name;
+        $city = $address?->city?->localizedName();
 
         return $city !== null ? "{$address->line1} - {$city}" : (string) $address?->line1;
     }

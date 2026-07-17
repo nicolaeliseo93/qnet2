@@ -1,19 +1,19 @@
 <?php
 
-use App\Models\BusinessFunction;
 use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\Concerns\LogsModelActivity;
 use App\Models\Lead;
 use App\Models\OperationalSite;
 use App\Models\Opportunity;
-use App\Models\ProductCategory;
+use App\Models\OpportunityProductLine;
 use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -33,13 +33,22 @@ it('creates the opportunities table with the expected columns', function () {
     expect(Schema::hasTable('opportunities'))->toBeTrue();
     expect(Schema::hasColumns('opportunities', [
         'id', 'name', 'registry_id', 'company_id', 'company_site_id', 'operational_site_id',
-        'business_function_id', 'referent_id', 'commercial_id', 'reporter_id', 'supervisor_id',
-        'source_id', 'product_category_id', 'lead_id', 'start_date', 'estimated_value',
+        'referent_id', 'commercial_id', 'reporter_id', 'supervisor_id',
+        'source_id', 'lead_id', 'start_date', 'estimated_value',
         'expected_close_date', 'success_probability', 'created_at', 'updated_at',
     ]))->toBeTrue();
 
+    // Amendment rev.3: the former single scalar columns are DROPPED.
+    expect(Schema::hasColumn('opportunities', 'business_function_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'product_category_id'))->toBeFalse();
+
     expect(Schema::hasTable('opportunity_user'))->toBeTrue();
     expect(Schema::hasColumns('opportunity_user', ['id', 'opportunity_id', 'user_id', 'position']))->toBeTrue();
+
+    expect(Schema::hasTable('opportunity_product_lines'))->toBeTrue();
+    expect(Schema::hasColumns('opportunity_product_lines', [
+        'id', 'opportunity_id', 'business_function_id', 'product_category_id', 'created_at', 'updated_at',
+    ]))->toBeTrue();
 });
 
 it('the 5 mandatory fields are NOT NULL, every other relation is nullable (AC-001/AC-081)', function () {
@@ -59,12 +68,13 @@ it('the 5 mandatory fields are NOT NULL, every other relation is nullable (AC-00
         ->toThrow(QueryException::class);
 
     $opportunity = Opportunity::factory()->create([
-        'business_function_id' => null, 'referent_id' => null, 'commercial_id' => null,
+        'referent_id' => null, 'commercial_id' => null,
         'reporter_id' => null, 'supervisor_id' => null, 'source_id' => null,
-        'product_category_id' => null, 'lead_id' => null,
+        'lead_id' => null,
     ]);
 
     expect($opportunity->exists)->toBeTrue();
+    expect($opportunity->productLines)->toBeEmpty();
 });
 
 it('lead_id is UNIQUE: a second opportunity for the same lead violates the constraint', function () {
@@ -109,25 +119,71 @@ it('a lead with a linked opportunity cannot be deleted at the schema level (rest
         ->toThrow(QueryException::class);
 });
 
+it('opportunity_product_lines: business_function_id/product_category_id are restrictOnDelete, opportunity_id cascades (AC-097)', function () {
+    $line = OpportunityProductLine::factory()->create();
+
+    expect(fn () => DB::table('business_functions')->where('id', $line->business_function_id)->delete())
+        ->toThrow(QueryException::class);
+
+    expect(fn () => DB::table('product_categories')->where('id', $line->product_category_id)->delete())
+        ->toThrow(QueryException::class);
+
+    $opportunityId = $line->opportunity_id;
+    Opportunity::destroy($opportunityId);
+
+    expect(DB::table('opportunity_product_lines')->where('id', $line->id)->exists())->toBeFalse();
+});
+
+it('opportunity_product_lines: unique(opportunity_id, business_function_id, product_category_id)', function () {
+    $line = OpportunityProductLine::factory()->create();
+
+    expect(fn () => OpportunityProductLine::factory()->create([
+        'opportunity_id' => $line->opportunity_id,
+        'business_function_id' => $line->business_function_id,
+        'product_category_id' => $line->product_category_id,
+    ]))->toThrow(QueryException::class);
+});
+
 // ---------------------------------------------------------------------------
 // migration reversibility (AC-003)
 // ---------------------------------------------------------------------------
 
 it('down() reverses opportunity_user then opportunities, up() recreates both', function () {
     $pivotMigration = require database_path('migrations/2026_07_16_140100_create_opportunity_user_table.php');
+    $productLinesMigration = require database_path('migrations/2026_07_17_150000_create_opportunity_product_lines_table.php');
     $tableMigration = require database_path('migrations/2026_07_16_140000_create_opportunities_table.php');
 
     $pivotMigration->down();
+    $productLinesMigration->down();
     $tableMigration->down();
 
     expect(Schema::hasTable('opportunity_user'))->toBeFalse();
+    expect(Schema::hasTable('opportunity_product_lines'))->toBeFalse();
     expect(Schema::hasTable('opportunities'))->toBeFalse();
 
     $tableMigration->up();
+    $productLinesMigration->up();
     $pivotMigration->up();
 
     expect(Schema::hasTable('opportunities'))->toBeTrue();
+    expect(Schema::hasTable('opportunity_product_lines'))->toBeTrue();
     expect(Schema::hasTable('opportunity_user'))->toBeTrue();
+});
+
+it('opportunity_product_lines is reversible standalone: down() then up() (AC-097)', function () {
+    $migration = require database_path('migrations/2026_07_17_150000_create_opportunity_product_lines_table.php');
+
+    $migration->down();
+
+    expect(Schema::hasTable('opportunity_product_lines'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'business_function_id'))->toBeTrue();
+    expect(Schema::hasColumn('opportunities', 'product_category_id'))->toBeTrue();
+
+    $migration->up();
+
+    expect(Schema::hasTable('opportunity_product_lines'))->toBeTrue();
+    expect(Schema::hasColumn('opportunities', 'business_function_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'product_category_id'))->toBeFalse();
 });
 
 // ---------------------------------------------------------------------------
@@ -145,16 +201,19 @@ it('every to-one relation is a BelongsTo to the expected model', function () {
         ->and($opportunity->companySite()->getRelated())->toBeInstanceOf(CompanySite::class)
         ->and($opportunity->operationalSite())->toBeInstanceOf(BelongsTo::class)
         ->and($opportunity->operationalSite()->getRelated())->toBeInstanceOf(OperationalSite::class)
-        ->and($opportunity->businessFunction())->toBeInstanceOf(BelongsTo::class)
-        ->and($opportunity->businessFunction()->getRelated())->toBeInstanceOf(BusinessFunction::class)
         ->and($opportunity->referent())->toBeInstanceOf(BelongsTo::class)
         ->and($opportunity->referent()->getRelated())->toBeInstanceOf(Referent::class)
         ->and($opportunity->source())->toBeInstanceOf(BelongsTo::class)
         ->and($opportunity->source()->getRelated())->toBeInstanceOf(Source::class)
-        ->and($opportunity->productCategory())->toBeInstanceOf(BelongsTo::class)
-        ->and($opportunity->productCategory()->getRelated())->toBeInstanceOf(ProductCategory::class)
         ->and($opportunity->lead())->toBeInstanceOf(BelongsTo::class)
         ->and($opportunity->lead()->getRelated())->toBeInstanceOf(Lead::class);
+});
+
+it('productLines() is a HasMany OpportunityProductLine (amendment rev.3, AC-098)', function () {
+    $opportunity = new Opportunity;
+
+    expect($opportunity->productLines())->toBeInstanceOf(HasMany::class)
+        ->and($opportunity->productLines()->getRelated())->toBeInstanceOf(OpportunityProductLine::class);
 });
 
 it('commercial()/reporter() are BelongsTo Referent via their own FK', function () {

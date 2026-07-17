@@ -19,6 +19,7 @@ export const table = {
   confirmAction: 'Are you sure you want to perform this action?',
   loadError: 'Unable to load the table. Please try again.',
   emptyConfig: 'No columns are available for this table.',
+  noRows: 'No records to show.',
   resetLayout: 'Reset layout',
   layoutReset: 'Table layout reset to default.',
   layoutError: 'Unable to update the table layout.',

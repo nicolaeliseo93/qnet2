@@ -85,10 +85,14 @@ it('an operational site referenced by an opportunity cannot be deleted: 409, not
     $this->assertDatabaseHas('operational_sites', ['id' => $site->id]);
 });
 
-it('a business function referenced by an opportunity cannot be deleted: 409, not deleted (AC-021)', function () {
+it('a business function referenced by an opportunity (via a product line) cannot be deleted: 409, not deleted (AC-021, amendment rev.3)', function () {
     $actor = grantDeleteAbility('business-functions');
     $businessFunction = BusinessFunction::factory()->create();
-    Opportunity::factory()->create(['business_function_id' => $businessFunction->id]);
+    $opportunity = Opportunity::factory()->create();
+    $opportunity->productLines()->create([
+        'business_function_id' => $businessFunction->id,
+        'product_category_id' => ProductCategory::factory()->create()->id,
+    ]);
     Sanctum::actingAs($actor);
 
     $this->deleteJson("/api/business-functions/{$businessFunction->id}")->assertStatus(409);
@@ -153,10 +157,14 @@ it('a source referenced by an opportunity cannot be deleted: 409 (AC-023)', func
     $this->assertDatabaseHas('sources', ['id' => $source->id]);
 });
 
-it('a product category referenced by an opportunity cannot be deleted: 409 (AC-023)', function () {
+it('a product category referenced by an opportunity (via a product line) cannot be deleted: 409 (AC-023, amendment rev.3)', function () {
     $actor = grantDeleteAbility('product-categories');
     $productCategory = ProductCategory::factory()->create();
-    Opportunity::factory()->create(['product_category_id' => $productCategory->id]);
+    $opportunity = Opportunity::factory()->create();
+    $opportunity->productLines()->create([
+        'business_function_id' => BusinessFunction::factory()->create()->id,
+        'product_category_id' => $productCategory->id,
+    ]);
     Sanctum::actingAs($actor);
 
     $this->deleteJson("/api/product-categories/{$productCategory->id}")->assertStatus(409);

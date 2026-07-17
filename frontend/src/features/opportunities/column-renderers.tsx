@@ -15,13 +15,25 @@ function EmptyCell() {
   )
 }
 
-/** Renders a hydrated `{id, name}` relation column (registry, referent, commercial, supervisor, source, product_category): the name, or an em dash. */
+/** Renders a hydrated `{id, name}` relation column (registry, referent, commercial, supervisor, source): the name, or an em dash. */
 function RelationCell({ value }: ICellRendererParams) {
   const relation = value as OpportunityRelationRef | null | undefined
   if (!relation) {
     return <EmptyCell />
   }
   return <span>{relation.name}</span>
+}
+
+/**
+ * Renders an AGGREGATED to-many column (`product_category`/`business_function`,
+ * amendment rev.3): the backend maps these to a comma-joined string of the
+ * opportunity's product-line names (or null), not a single `{id, name}` ref.
+ */
+function NamesCell({ value }: ICellRendererParams) {
+  if (typeof value !== 'string' || value === '') {
+    return <EmptyCell />
+  }
+  return <span className="truncate">{value}</span>
 }
 
 /** Renders a `Y-m-d` date column, no time part. */
@@ -61,7 +73,8 @@ export const opportunityColumnRenderers: TableRendererMap = {
   commercial: (params) => <RelationCell {...params} />,
   supervisor: (params) => <RelationCell {...params} />,
   source: (params) => <RelationCell {...params} />,
-  product_category: (params) => <RelationCell {...params} />,
+  product_category: (params) => <NamesCell {...params} />,
+  business_function: (params) => <NamesCell {...params} />,
   estimated_value: (params) => <EstimatedValueCell {...params} />,
   success_probability: (params) => <SuccessProbabilityCell {...params} />,
   start_date: (params) => <DateCell {...params} />,

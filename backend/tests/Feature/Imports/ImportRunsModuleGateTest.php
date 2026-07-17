@@ -13,33 +13,31 @@ use Spatie\Permission\Models\Permission;
 uses(RefreshDatabase::class);
 
 /**
- * @param  array<int, string>  $leadsAbilities
- * @param  array<int, string>  $importRunAbilities
+ * An actor for the import module. The dedicated `import-runs.*` set was removed
+ * (2026-07-17): reads, writes, delete and export are ALL gated by the lead
+ * module's single `leads.import` ability. Pass false for an authenticated actor
+ * without it. Ownership (view/delete) is enforced separately by the run's
+ * `user_id`.
  */
-function moduleGateLeadsActor(array $leadsAbilities, array $importRunAbilities): User
+function leadsImportActor(bool $granted = true): User
 {
-    foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import'] as $ability) {
-        Permission::findOrCreate("leads.{$ability}");
-    }
+    Permission::findOrCreate('leads.import');
 
     $user = User::factory()->create();
 
-    foreach ($leadsAbilities as $ability) {
-        $user->givePermissionTo("leads.{$ability}");
+    if ($granted) {
+        $user->givePermissionTo('leads.import');
     }
-
-    grantImportRunsPermissions($user, $importRunAbilities);
 
     return $user;
 }
 
 // ---------------------------------------------------------------------------
-// AC-004 — reads (index/show/rows/summary/errors) succeed with import-runs.*
-// alone, no {resource}.import required.
+// Reads (index/show/rows/summary/errors) require `leads.import`.
 // ---------------------------------------------------------------------------
 
-it('AC-004: show/index succeed with import-runs.view(Any) alone, WITHOUT leads.import', function () {
-    $actor = moduleGateLeadsActor([], ['viewAny', 'view']);
+it('show/index succeed with leads.import', function () {
+    $actor = leadsImportActor();
     $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Reviewing]);
     Sanctum::actingAs($actor);
 
@@ -47,16 +45,16 @@ it('AC-004: show/index succeed with import-runs.view(Any) alone, WITHOUT leads.i
     $this->getJson('/api/imports/leads')->assertOk();
 });
 
-it('AC-004: show 403 without the module permission, even WITH leads.import', function () {
-    $actor = moduleGateLeadsActor(['import'], []);
+it('show 403 without leads.import', function () {
+    $actor = leadsImportActor(granted: false);
     $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Reviewing]);
     Sanctum::actingAs($actor);
 
     $this->getJson("/api/imports/leads/{$run->id}")->assertForbidden();
 });
 
-it('AC-004: show 404 for a run belonging to another user, even WITH import-runs.view', function () {
-    $actor = moduleGateLeadsActor([], ['view']);
+it('show 404 for a run belonging to another user, even WITH leads.import', function () {
+    $actor = leadsImportActor();
     $otherUser = User::factory()->create();
     $run = ImportRun::factory()->create(['user_id' => $otherUser->id, 'resource' => 'leads']);
     Sanctum::actingAs($actor);
@@ -65,14 +63,13 @@ it('AC-004: show 404 for a run belonging to another user, even WITH import-runs.
 });
 
 // ---------------------------------------------------------------------------
-// AC-005 — writes double-gated: import-runs.create AND the domain's own
-// `{resource}.import`, isolated independently on `leads` (the only domain
-// registered after the 2026-07-16 legacy-domains removal).
+// Writes (upload/configure/updateRow/confirm) require `leads.import` too — the
+// single gate, isolated on `leads` (the only registered import domain).
 // ---------------------------------------------------------------------------
 
-it('AC-005: leads upload 403 with import-runs.create but WITHOUT leads.import', function () {
+it('leads upload 403 without leads.import', function () {
     Queue::fake();
-    $actor = moduleGateLeadsActor([], ['create']);
+    $actor = leadsImportActor(granted: false);
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/imports/leads', [
@@ -80,19 +77,9 @@ it('AC-005: leads upload 403 with import-runs.create but WITHOUT leads.import', 
     ])->assertForbidden();
 });
 
-it('AC-005: leads upload 403 WITH leads.import but WITHOUT import-runs.create', function () {
+it('leads upload 201 with leads.import', function () {
     Queue::fake();
-    $actor = moduleGateLeadsActor(['import'], []);
-    Sanctum::actingAs($actor);
-
-    $this->postJson('/api/imports/leads', [
-        'file' => UploadedFile::fake()->create('leads.csv', 5, 'text/csv'),
-    ])->assertForbidden();
-});
-
-it('AC-005: leads upload 201 with BOTH import-runs.create AND leads.import', function () {
-    Queue::fake();
-    $actor = moduleGateLeadsActor(['import'], ['create']);
+    $actor = leadsImportActor();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/imports/leads', [
@@ -101,12 +88,12 @@ it('AC-005: leads upload 201 with BOTH import-runs.create AND leads.import', fun
 });
 
 // ---------------------------------------------------------------------------
-// AC-006 — rows/summary readable in reviewing|completed|failed; updateRow
-// strictly reviewing-only.
+// rows/summary readable in reviewing|completed|failed; updateRow strictly
+// reviewing-only.
 // ---------------------------------------------------------------------------
 
-it('AC-006: rows/summary return 200 on a completed run (read-only detail view)', function () {
-    $actor = moduleGateLeadsActor([], ['view']);
+it('rows/summary return 200 on a completed run (read-only detail view)', function () {
+    $actor = leadsImportActor();
     $run = ImportRun::factory()->create([
         'user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Completed,
         'column_mapping' => ['Email' => 'email'],
@@ -118,8 +105,8 @@ it('AC-006: rows/summary return 200 on a completed run (read-only detail view)',
     $this->getJson("/api/imports/leads/{$run->id}/summary")->assertOk();
 });
 
-it('AC-006: rows/summary return 200 on a failed run (read-only detail view)', function () {
-    $actor = moduleGateLeadsActor([], ['view']);
+it('rows/summary return 200 on a failed run (read-only detail view)', function () {
+    $actor = leadsImportActor();
     $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Failed]);
     Sanctum::actingAs($actor);
 
@@ -127,8 +114,8 @@ it('AC-006: rows/summary return 200 on a failed run (read-only detail view)', fu
     $this->getJson("/api/imports/leads/{$run->id}/summary")->assertOk();
 });
 
-it('AC-006: rows/summary still 422 outside reviewing|completed|failed (e.g. staging)', function () {
-    $actor = moduleGateLeadsActor([], ['view']);
+it('rows/summary still 422 outside reviewing|completed|failed (e.g. staging)', function () {
+    $actor = leadsImportActor();
     $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Staging]);
     Sanctum::actingAs($actor);
 
@@ -136,8 +123,8 @@ it('AC-006: rows/summary still 422 outside reviewing|completed|failed (e.g. stag
     $this->getJson("/api/imports/leads/{$run->id}/summary")->assertStatus(422);
 });
 
-it('AC-006: updateRow stays 422 on a completed run (edit only allowed in reviewing)', function () {
-    $actor = moduleGateLeadsActor(['import'], ['update']);
+it('updateRow stays 422 on a completed run (edit only allowed in reviewing)', function () {
+    $actor = leadsImportActor();
     $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Completed]);
     $row = ImportRunRow::factory()->create(['import_run_id' => $run->id]);
     Sanctum::actingAs($actor);

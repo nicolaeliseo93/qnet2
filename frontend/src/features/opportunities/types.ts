@@ -38,6 +38,23 @@ export interface OpportunityManagerRef {
 }
 
 /**
+ * A confirmed business-function + product-category pair (spec 0040 amendment
+ * rev.3, AC-097/098/101): replaces the former single `business_function_id`/
+ * `product_category_id` columns with a one-to-many collection of rows.
+ */
+export interface OpportunityProductLine {
+  id: number
+  business_function: OpportunityRelationRef
+  product_category: OpportunityRelationRef
+}
+
+/** A product-line row as sent to the server (create/update payload, AC-099). */
+export interface OpportunityProductLineInput {
+  business_function_id: number
+  product_category_id: number
+}
+
+/**
  * Single opportunity detail returned by GET/POST/PATCH /opportunities
  * (envelope `data`). Matches `OpportunityResource`.
  */
@@ -55,8 +72,6 @@ export interface OpportunityDetail {
   /** Mandatory since spec 0040 amendment A-2; still derivable+lockable from a Lead that owns one (BR-1/BR-2). */
   operational_site_id: number
   operational_site: OpportunityOperationalSiteRef | null
-  business_function_id: number | null
-  business_function: OpportunityRelationRef | null
   referent_id: number | null
   referent: OpportunityRelationRef | null
   commercial_id: number | null
@@ -67,8 +82,8 @@ export interface OpportunityDetail {
   supervisor: OpportunityRelationRef | null
   source_id: number | null
   source: OpportunityRelationRef | null
-  product_category_id: number | null
-  product_category: OpportunityRelationRef | null
+  /** Amendment rev.3: replaces the former single `product_category`/`business_function` pair (AC-101). */
+  product_lines: OpportunityProductLine[]
   lead_id: number | null
   lead: OpportunityLeadRef | null
   /** Filled manager ids as ordered "G.A. n" cards (name + position), mirrors registries. */
@@ -123,13 +138,11 @@ export interface CreateOpportunityPayload {
    * entirely when locked, never merely repeated.
    */
   operational_site_id?: number
-  business_function_id?: number | null
   referent_id?: number | null
   commercial_id?: number | null
   reporter_id?: number | null
   supervisor_id?: number | null
   source_id?: number | null
-  product_category_id?: number | null
   lead_id?: number | null
   /** Ordered, gap-aware G.A. slots: index+1 = G.A. n, `null` = empty slot. */
   manager_slots?: (number | null)[]
@@ -137,6 +150,12 @@ export interface CreateOpportunityPayload {
   estimated_value?: number | null
   expected_close_date?: string | null
   success_probability?: number | null
+  /**
+   * Amendment rev.3 (AC-099): the server REPLACES the entire row collection
+   * on every write. Always sent in full on create (even empty); the update
+   * builder only includes it when the row SET actually changed.
+   */
+  product_lines: OpportunityProductLineInput[]
 }
 
 /**
@@ -147,17 +166,18 @@ export interface CreateOpportunityPayload {
 export type UpdateOpportunityPayload = Partial<Omit<CreateOpportunityPayload, 'lead_id'>>
 
 /**
- * BR-1: the 6 fields a Lead's campaign can derive. `null` = the derivation
+ * BR-1: the fields a Lead's campaign can derive. `null` = the derivation
  * itself is null (e.g. the lead has no operational site) — the field then
- * stays free, per BR-2, and is NOT part of `locked_fields`.
+ * stays free, per BR-2, and is NOT part of `locked_fields`. Amendment rev.3:
+ * `business_function_id`/`product_category_id` are REMOVED from here — the
+ * lead's derived function+category, when both exist, is exposed instead as
+ * a `product_lines` row (see `OpportunityDefaults`), never locked.
  */
 export interface OpportunityDefaultValues {
   referent_id: number | null
   source_id: number | null
   operational_site_id: number | null
   registry_id: number | null
-  business_function_id: number | null
-  product_category_id: number | null
 }
 
 /**
@@ -169,11 +189,9 @@ export interface OpportunityDefaultReferences {
   source: OpportunityRelationRef | null
   operational_site: OpportunityOperationalSiteRef | null
   registry: OpportunityRelationRef | null
-  business_function: OpportunityRelationRef | null
-  product_category: OpportunityRelationRef | null
 }
 
-/** Response of `GET /leads/{lead}/opportunity-defaults` (spec 0040 MT-6), already unwrapped from the envelope. */
+/** Response of `GET /leads/{lead}/opportunity-defaults` (spec 0040 MT-6, amendment rev.3), already unwrapped from the envelope. */
 export interface OpportunityDefaults {
   lead_id: number
   /** Non-null when the lead already has an opportunity (D-2: at most one per lead) — the create page then offers to go there instead. */
@@ -182,6 +200,12 @@ export interface OpportunityDefaults {
   references: OpportunityDefaultReferences
   /** Keys of `values` whose derivation is non-null (BR-2): locked in the form, `prohibited` if sent to the server. */
   locked_fields: string[]
+  /**
+   * AC-102/103: 0 or 1 seed row — present only when BOTH the lead/campaign's
+   * effective business function AND product category exist. EDITABLE and
+   * REMOVABLE in the form, never part of `locked_fields`.
+   */
+  product_lines: OpportunityProductLine[]
 }
 
 /**
@@ -194,6 +218,8 @@ export interface OpportunityFromLeadContext {
   values: OpportunityDefaultValues
   references: OpportunityDefaultReferences
   lockedFields: string[]
+  /** AC-102/103: the lead's 0/1 seed row, editable/removable, never locked. */
+  productLines: OpportunityProductLine[]
 }
 
 /** Discriminated form mode shared by the form hook/meta-resolver and `OpportunityForm`. */

@@ -74,14 +74,16 @@ class ProductCategory extends BaseModel
     }
 
     /**
-     * The opportunities against this product category (spec 0040, BR-3:
+     * The opportunities against this product category, via at least one
+     * `opportunity_product_lines` row (spec 0040 amendment rev.3, BR-3:
      * restrict-on-delete — ProductCategoryService::delete() guards on this
-     * before deleting).
+     * before deleting). A BelongsToMany rather than a direct HasMany since
+     * the FK now lives on the pivot row, not on `opportunities` itself.
      *
-     * @return HasMany<Opportunity, $this>
+     * @return BelongsToMany<Opportunity, $this>
      */
-    public function opportunities(): HasMany
+    public function opportunities(): BelongsToMany
     {
-        return $this->hasMany(Opportunity::class);
+        return $this->belongsToMany(Opportunity::class, 'opportunity_product_lines');
     }
 }

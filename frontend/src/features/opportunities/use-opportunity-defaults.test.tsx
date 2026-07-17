@@ -28,17 +28,21 @@ function defaults(overrides: Partial<OpportunityDefaults> = {}): OpportunityDefa
       source_id: 20,
       operational_site_id: null,
       registry_id: 30,
-      business_function_id: 40,
-      product_category_id: 50,
     },
     references: {
       source: { id: 20, name: 'Web' },
       operational_site: null,
       registry: { id: 30, name: 'Acme S.p.A.' },
-      business_function: { id: 40, name: 'Sales' },
-      product_category: { id: 50, name: 'Consulting' },
     },
-    locked_fields: ['source_id', 'registry_id', 'business_function_id', 'product_category_id'],
+    locked_fields: ['source_id', 'registry_id'],
+    // Amendment rev.3 (AC-102/103): 0/1 seed row, editable/removable, never locked.
+    product_lines: [
+      {
+        id: 900,
+        business_function: { id: 40, name: 'Sales' },
+        product_category: { id: 50, name: 'Consulting' },
+      },
+    ],
     ...overrides,
   }
 }

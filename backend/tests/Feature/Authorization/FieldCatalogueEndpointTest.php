@@ -70,14 +70,16 @@ it('200 with the catalogue for users and roles, keys matching each resolver\'s f
     // `sources`, `sectors` AND `company-sites`, spec 0019 `tags`, spec 0020
     // `registries`, spec 0021 `custom-fields`, spec 0023 `pipeline-statuses`,
     // `projects` AND `campaigns`, spec 0024 `leads`, spec 0029
-    // `lead-statuses`, spec 0034 `import-runs`, spec 0040 `opportunities`,
+    // `lead-statuses`, spec 0040 `opportunities`,
     // `vat-rates` (VAT-rate lookup for products), all in the same generic
     // registry (config/authorization.php), so this registry-driven catalogue
-    // legitimately grows to include them.
+    // legitimately grows to include them. `import-runs` is NOT here: its meta
+    // definition was removed (2026-07-17) when the module collapsed onto
+    // `leads.import` — an import run has no editable form.
     expect($resources->keys()->all())->toEqualCanonicalizing([
         'users', 'roles', 'business-functions', 'companies', 'company-sites', 'operational-sites', 'referent-types',
         'referents', 'attributes', 'custom-fields', 'product-categories', 'products', 'sources', 'sectors', 'tags',
-        'registries', 'pipeline-statuses', 'projects', 'campaigns', 'leads', 'lead-statuses', 'import-runs',
+        'registries', 'pipeline-statuses', 'projects', 'campaigns', 'leads', 'lead-statuses',
         'opportunities', 'vat-rates',
     ]);
 

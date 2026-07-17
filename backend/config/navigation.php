@@ -89,15 +89,16 @@ return [
                     'permission' => 'leads.view',
                     'children' => [
                         [
-                            // Import (spec 0034): dedicated, standalone import
-                            // module — the history table of every import run plus
-                            // the multi-step wizard. Gated by the module's own
-                            // permission set (import-runs.*).
+                            // Import (spec 0034): the history table of every
+                            // import run plus the multi-step wizard. Gated by the
+                            // lead module's `leads.import` ability (the former
+                            // dedicated `import-runs.*` set was a duplicate,
+                            // removed 2026-07-17).
                             'key' => 'imports',
                             'label' => 'navigation.imports',
                             'icon' => 'file-up',
                             'route' => '/imports',
-                            'permission' => 'import-runs.viewAny',
+                            'permission' => 'leads.import',
                         ],
                     ],
                 ],

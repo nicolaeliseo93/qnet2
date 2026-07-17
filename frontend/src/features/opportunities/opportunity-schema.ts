@@ -51,13 +51,33 @@ function baseFields(t: TFunction) {
     // A-2: still required when derived from a lead that owns one (BR-1
     // prefills it, non-null) — free and required when the lead has none.
     operational_site_id: requiredRelationId(t('opportunities.form.operationalSiteRequired')),
-    business_function_id: z.number().nullable(),
     referent_id: z.number().nullable(),
     commercial_id: z.number().nullable(),
     reporter_id: z.number().nullable(),
     supervisor_id: z.number().nullable(),
     source_id: z.number().nullable(),
-    product_category_id: z.number().nullable(),
+    // Amendment rev.3 (AC-097/099): replaces the former single
+    // `business_function_id`/`product_category_id` with an inline-editable
+    // row collection (mirrors `manager_slots`: "Add" appends an EMPTY row).
+    // Each id is individually nullable (a row starts empty and fills in
+    // place), but `superRefine` below requires BOTH non-null per row before
+    // submit — an incomplete row (including a freshly-added empty one)
+    // blocks the form, surfaced as a single error on the collection.
+    product_lines: z
+      .array(
+        z.object({
+          business_function_id: z.number().nullable(),
+          product_category_id: z.number().nullable(),
+        }),
+      )
+      .superRefine((rows, ctx) => {
+        const hasIncompleteRow = rows.some(
+          (row) => row.business_function_id === null || row.product_category_id === null,
+        )
+        if (hasIncompleteRow) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('opportunities.form.productLines.rowIncomplete') })
+        }
+      }),
     // Ordered, gap-aware "G.A. n" manager slots: index+1 = G.A. number, `null`
     // = an intentionally empty slot. At most MAX_MANAGERS filled.
     manager_slots: z

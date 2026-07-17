@@ -143,7 +143,7 @@ export function LeadsTable() {
               isOpen={stats.isOpen}
               onToggle={stats.toggle}
             />
-            <Can permission="import-runs.viewAny">
+            <Can permission="leads.import">
               <Button variant="outline" className="bg-white" onClick={() => void navigate('/imports')}>
                 <FileUp aria-hidden="true" />
                 {t('leads.form.importLeads')}

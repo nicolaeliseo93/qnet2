@@ -7,17 +7,12 @@ use App\Policies\Abstracts\BasePolicy;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Standard CRUD policy for the `import-runs` module (spec 0034): the import
- * engine is shared by every domain (leads + 5 legacy), but the RUN itself is
- * now a first-class resource with its own permission set
- * (`import-runs.{viewAny,view,create,update,delete,export}`), independent of
- * each domain's own `{resource}.import` write ability that ImportController
- * still enforces on top (the "double gate": module + domain).
- *
- * `import` is dropped from the generated set (BasePolicy::abilities()
- * override): "importing an import-run" is meaningless — the module has no
- * such ability. `viewActivity` is dropped too: ImportRun carries no
- * activitylog (spec 0034 explicitly excludes it).
+ * Authorization policy for the import module (spec 0034). The module has NO
+ * permission set of its own: every surface (history, detail, wizard, export)
+ * is gated by the lead module's single `leads.import` ability — the former
+ * dedicated `import-runs.*` set was a duplicate and was removed (user decision
+ * 2026-07-17). `leads` is the only registered import domain (config/imports.php),
+ * so reusing its `import` ability is exact, not an approximation.
  *
  * `view`/`delete` additionally require OWNERSHIP (defense in depth): the
  * history table's baseQuery and ImportController's assertOwnedRun() already
@@ -28,26 +23,54 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ImportRunPolicy extends BasePolicy
 {
+    /**
+     * The import module rides the lead module's permission namespace; it never
+     * mints `import-runs.*` strings (see abilities() below).
+     */
     protected function resource(): string
     {
-        return 'import-runs';
+        return 'leads';
+    }
+
+    public function viewAny(User $user): bool
+    {
+        return $user->can('leads.import');
     }
 
     public function view(User $user, Model $model): bool
     {
-        return parent::view($user, $model) && $model->user_id === $user->id;
+        return $user->can('leads.import') && $model->user_id === $user->id;
+    }
+
+    public function create(User $user): bool
+    {
+        return $user->can('leads.import');
+    }
+
+    public function update(User $user, Model $model): bool
+    {
+        return $user->can('leads.import');
     }
 
     public function delete(User $user, Model $model): bool
     {
-        return parent::delete($user, $model) && $model->user_id === $user->id;
+        return $user->can('leads.import') && $model->user_id === $user->id;
+    }
+
+    public function export(User $user): bool
+    {
+        return $user->can('leads.import');
     }
 
     /**
+     * The module contributes NO permissions to the catalog: it reuses
+     * `leads.import` (minted by LeadPolicy). Empty here so SyncPermissions
+     * generates no `import-runs.*` strings.
+     *
      * @return array<int, string>
      */
     public static function abilities(): array
     {
-        return ['viewAny', 'view', 'create', 'update', 'delete', 'export'];
+        return [];
     }
 }

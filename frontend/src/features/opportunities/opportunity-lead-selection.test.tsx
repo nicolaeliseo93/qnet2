@@ -10,10 +10,13 @@ import type { ResourceMeta } from '@/features/authorization/types'
 
 /**
  * Amendment rev.1, A-1: the in-form "Lead" select (AC-086/087) and the EDIT
- * form's read-only Lead field (AC-088). Split out of `opportunity-form-body.test.tsx`
- * for file size (engineering.md §6) — every other field's own behavior
- * (BR-4 scoping, field permissions, deep-link create-from-lead) is covered
- * there; here only the Lead field itself is under test.
+ * form's read-only Lead field (AC-088). Amendment rev.3: the lead's derived
+ * function+category is no longer a locked single field — it seeds a
+ * `product_lines` ROW instead (AC-102/103), always editable/removable. Split
+ * out of `opportunity-form-body.test.tsx` for file size (engineering.md §6) —
+ * every other field's own behavior (BR-4 scoping, field permissions,
+ * deep-link create-from-lead) is covered there; here only the Lead field
+ * itself is under test.
  */
 
 const createOpportunityMock = vi.fn()
@@ -131,8 +134,6 @@ function editOpportunity(
     company_site: { id: 1, name: 'HQ' },
     operational_site_id: 30,
     operational_site: { id: 30, label: 'Via Roma 1 - Milano' },
-    business_function_id: 40,
-    business_function: { id: 40, name: 'Sales' },
     referent_id: 10,
     referent: { id: 10, name: 'Mario Rossi' },
     commercial_id: null,
@@ -143,8 +144,13 @@ function editOpportunity(
     supervisor: null,
     source_id: 20,
     source: { id: 20, name: 'Web' },
-    product_category_id: 50,
-    product_category: { id: 50, name: 'Consulting' },
+    product_lines: [
+      {
+        id: 500,
+        business_function: { id: 40, name: 'Sales' },
+        product_category: { id: 50, name: 'Consulting' },
+      },
+    ],
     lead_id: 900,
     lead: { id: 900, label: 'Mario Rossi' },
     managers: [],
@@ -152,14 +158,7 @@ function editOpportunity(
     estimated_value: null,
     expected_close_date: null,
     success_probability: null,
-    locked_fields: [
-      'referent_id',
-      'source_id',
-      'operational_site_id',
-      'registry_id',
-      'business_function_id',
-      'product_category_id',
-    ],
+    locked_fields: ['referent_id', 'source_id', 'operational_site_id', 'registry_id'],
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     permissions: FULL_PERMISSIONS,
@@ -185,22 +184,10 @@ beforeEach(() => {
       return {
         lead_id: leadId,
         existing_opportunity_id: 777,
-        values: {
-          referent_id: null,
-          source_id: null,
-          operational_site_id: null,
-          registry_id: null,
-          business_function_id: null,
-          product_category_id: null,
-        },
-        references: {
-          source: null,
-          operational_site: null,
-          registry: null,
-          business_function: null,
-          product_category: null,
-        },
+        values: { referent_id: null, source_id: null, operational_site_id: null, registry_id: null },
+        references: { source: null, operational_site: null, registry: null },
         locked_fields: [],
+        product_lines: [],
       }
     }
     return {
@@ -212,22 +199,20 @@ beforeEach(() => {
         source_id: 20,
         operational_site_id: 30,
         registry_id: TEST_REGISTRY_ID,
-        business_function_id: 40,
-        product_category_id: 50,
       },
       references: {
         source: { id: 20, name: 'Web' },
         operational_site: { id: 30, label: 'Via Roma 1 - Milano' },
         registry: { id: TEST_REGISTRY_ID, name: 'Acme S.p.A.' },
-        business_function: { id: 40, name: 'Sales' },
-        product_category: { id: 50, name: 'Consulting' },
       },
-      locked_fields: [
-        'source_id',
-        'operational_site_id',
-        'registry_id',
-        'business_function_id',
-        'product_category_id',
+      locked_fields: ['source_id', 'operational_site_id', 'registry_id'],
+      // Amendment rev.3 (AC-102/103): editable/removable seed row, never locked.
+      product_lines: [
+        {
+          id: 900,
+          business_function: { id: 40, name: 'Sales' },
+          product_category: { id: 50, name: 'Consulting' },
+        },
       ],
     }
   })
@@ -254,10 +239,12 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     expect(screen.getByTestId('disabled-Source')).toHaveTextContent('true')
     expect(screen.getByTestId('value-Operational site')).toHaveTextContent('30')
     expect(screen.getByTestId('disabled-Operational site')).toHaveTextContent('true')
-    expect(screen.getByTestId('value-Business function')).toHaveTextContent('40')
-    expect(screen.getByTestId('disabled-Business function')).toHaveTextContent('true')
-    expect(screen.getByTestId('value-Product category')).toHaveTextContent('50')
-    expect(screen.getByTestId('disabled-Product category')).toHaveTextContent('true')
+    // Amendment rev.3 (AC-102/103): the derived function+category is a
+    // normal, editable/removable product-line row — never a locked field.
+    expect(screen.getByText('Sales')).toBeInTheDocument()
+    expect(screen.getByText(/Consulting/)).toBeInTheDocument()
+    // AC-107: the name auto-computes from the seeded row's category.
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Consulting')
     // AC-051: the origin banner also sources its name from the registry now.
     expect(screen.getByRole('status')).toHaveTextContent('Acme S.p.A.')
   })
@@ -280,10 +267,13 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     expect(screen.getByTestId('value-Contact')).toHaveTextContent('')
     expect(screen.getByTestId('value-Operational site')).toHaveTextContent('')
     expect(screen.getByTestId('disabled-Operational site')).toHaveTextContent('false')
+    // The derived product-line row is cleared away too (rev.3, "least surprising" whole-field reset).
+    expect(screen.queryByText('Sales')).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
-  it('sends lead_id and omits the locked fields when submitting from a picked lead', async () => {
+  it('sends lead_id, keeps product_lines and omits the other locked fields when submitting from a picked lead', async () => {
     createOpportunityMock.mockResolvedValue({ id: 1 })
 
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
@@ -297,7 +287,6 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     // company_id/company_site_id are never derivable (A-2): still required, filled manually.
     screen.getByRole('button', { name: 'select Company 1' }).click()
     screen.getByRole('button', { name: 'select Company site 1' }).click()
-    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Enterprise deal' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -310,8 +299,8 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     expect(payload.referent_id).toBeNull()
     expect(payload).not.toHaveProperty('source_id')
     expect(payload).not.toHaveProperty('operational_site_id')
-    expect(payload).not.toHaveProperty('business_function_id')
-    expect(payload).not.toHaveProperty('product_category_id')
+    // Amendment rev.3: product_lines is NEVER locked — always sent, in full.
+    expect(payload.product_lines).toEqual([{ business_function_id: 40, product_category_id: 50 }])
     expect(payload.company_id).toBe(1)
     expect(payload.company_site_id).toBe(1)
   })
@@ -352,7 +341,7 @@ describe('OpportunityFormBody — edit mode Lead field (AC-088)', () => {
     expect(screen.queryByTestId('select-Lead')).not.toBeInTheDocument()
   })
 
-  it('renders no Lead field at all for an opportunity with no linked lead', async () => {
+  it('renders the loaded opportunity for an opportunity with no linked lead', async () => {
     render(
       <OpportunityForm
         mode={{ type: 'edit', opportunity: editOpportunity({ lead_id: null, lead: null }) }}
@@ -362,8 +351,11 @@ describe('OpportunityFormBody — edit mode Lead field (AC-088)', () => {
       { wrapper: wrapper() },
     )
 
-    await screen.findByTestId('select-Business function')
+    await screen.findByTestId('select-Business function 1')
     expect(screen.queryByText('Lead')).not.toBeInTheDocument()
     expect(screen.queryByTestId('select-Lead')).not.toBeInTheDocument()
+    // The edit form's loaded product line still renders, hydrated.
+    expect(screen.getByTestId('value-Business function 1')).toHaveTextContent('40')
+    expect(screen.getByTestId('value-Product category 1')).toHaveTextContent('50')
   })
 })

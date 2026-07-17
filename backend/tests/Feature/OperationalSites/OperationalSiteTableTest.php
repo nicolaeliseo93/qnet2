@@ -268,6 +268,30 @@ it('matches the derived quick-search on city (comune)', function () {
     expect($ids->all())->toBe([$siteA->id]);
 });
 
+it('matches the derived city quick-search typed in Italian against an English-stored name', function () {
+    $actor = userWithSiteAbilities(['viewAny']);
+    // The reference dataset stores this city anglicized; the grid shows "Napoli".
+    $naples = siteTableGeoChain('Naples', 'Prov', 'Reg', 'Country');
+    $rome = siteTableGeoChain('Roma', 'Prov2', 'Reg2', 'Country2');
+    $siteA = OperationalSite::factory()->create();
+    Address::factory()->primary()->forCity($naples['city'])->for($siteA, 'addressable')->create();
+    $siteB = OperationalSite::factory()->create();
+    Address::factory()->primary()->forCity($rome['city'])->for($siteB, 'addressable')->create();
+    Sanctum::actingAs($actor);
+
+    $italian = collect($this->postJson('/api/tables/operational-sites/rows', [
+        'startRow' => 0, 'endRow' => 25, 'search' => 'napoli',
+    ])->assertOk()->json('items'))->pluck('id');
+
+    // Searching in English still works too (the plain LIKE is kept alongside).
+    $english = collect($this->postJson('/api/tables/operational-sites/rows', [
+        'startRow' => 0, 'endRow' => 25, 'search' => 'naples',
+    ])->assertOk()->json('items'))->pluck('id');
+
+    expect($italian->all())->toBe([$siteA->id])
+        ->and($english->all())->toBe([$siteA->id]);
+});
+
 it('matches the derived quick-search on street (via)', function () {
     $actor = userWithSiteAbilities(['viewAny']);
     $siteA = OperationalSite::factory()->create();

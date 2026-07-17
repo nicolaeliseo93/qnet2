@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Opportunity entity (spec 0040): a commercial deal against an Anagrafica
@@ -17,10 +18,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * `registry_id`/`company_id`/`company_site_id`/`operational_site_id` are
  * mandatory (D-4, amendment rev.1 A-2); every other relation is optional.
  * `commercial`/`reporter` mirror Registry's own referent fields; `referent`
- * is BR-1-derivable from the linked lead, like `source`/`operational_site`/
- * `business_function`/`product_category` — `company`/`company_site` are NOT
- * derivable (no lead/campaign chain to either), always freely required. No
- * `code` (D-3: no opportunity status/sequence in this iteration).
+ * is BR-1-derivable from the linked lead, like `source`/`operational_site`
+ * — `company`/`company_site` are NOT derivable (no lead/campaign chain to
+ * either), always freely required. No `code` (D-3: no opportunity status/
+ * sequence in this iteration). Amendment rev.3: the former single
+ * `business_function_id`/`product_category_id` columns are REPLACED by
+ * `productLines()`, a one-to-many collection (see OpportunityProductLine).
  */
 #[Fillable([
     'name',
@@ -28,13 +31,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
     'company_id',
     'company_site_id',
     'operational_site_id',
-    'business_function_id',
     'referent_id',
     'commercial_id',
     'reporter_id',
     'supervisor_id',
     'source_id',
-    'product_category_id',
     'lead_id',
     'start_date',
     'estimated_value',
@@ -79,11 +80,6 @@ class Opportunity extends BaseModel
         return $this->belongsTo(OperationalSite::class);
     }
 
-    public function businessFunction(): BelongsTo
-    {
-        return $this->belongsTo(BusinessFunction::class);
-    }
-
     /**
      * The contact person driving the deal (BR-1-derivable from the linked
      * lead's own referent).
@@ -117,9 +113,16 @@ class Opportunity extends BaseModel
         return $this->belongsTo(Source::class);
     }
 
-    public function productCategory(): BelongsTo
+    /**
+     * The funzione-aziendale + categoria-prodotto rows against this
+     * opportunity (spec 0040, amendment rev.3): REPLACES the former single
+     * `business_function_id`/`product_category_id` columns.
+     *
+     * @return HasMany<OpportunityProductLine, $this>
+     */
+    public function productLines(): HasMany
     {
-        return $this->belongsTo(ProductCategory::class);
+        return $this->hasMany(OpportunityProductLine::class);
     }
 
     /**

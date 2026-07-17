@@ -23,6 +23,7 @@ import {
   AG_GRID_LOCALE_IT,
 } from '@ag-grid-community/locale'
 import { toast } from 'sonner'
+import { Inbox } from 'lucide-react'
 import { buildColumnFilter } from '@/components/data-table/column-filters'
 import {
   defaultValueFormatter,
@@ -133,6 +134,24 @@ export function SkeletonLoadingCell({ colDef }: ICellRendererParams) {
   return (
     <div className="flex h-full items-center">
       <Skeleton className={`h-4 ${width}`} />
+    </div>
+  )
+}
+
+/**
+ * "No rows" overlay: an inbox glyph in a soft disc plus a localized message,
+ * replacing AG Grid's plain default text so an empty grid reads as an
+ * intentional state rather than a blank surface. Rendered by AG Grid inside the
+ * React tree, so `useTranslation` works and it tracks the active language.
+ */
+export function TableEmptyOverlay() {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+      <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Inbox aria-hidden="true" className="size-5" />
+      </span>
+      <p className="text-sm font-medium text-muted-foreground">{t('table.noRows')}</p>
     </div>
   )
 }
@@ -412,6 +431,8 @@ export function DataTable({
       // per cell, so the placeholder mirrors the real column layout.
       suppressServerSideFullWidthLoadingRow: true,
       loadingCellRenderer: SkeletonLoadingCell,
+      // Friendlier empty state than the stock "No Rows To Show" text.
+      noRowsOverlayComponent: TableEmptyOverlay,
       // Render a full page of loading rows on the initial load too: without this,
       // SSRM shows a single loading row until the first response reveals the row
       // count. Seeding the count with the page size makes the grid paint

@@ -10,8 +10,10 @@ uses(RefreshDatabase::class);
 
 if (! function_exists('importRunsTableUserWith')) {
     /**
-     * @param  array<int, string>  $abilities  the `import-runs.*` MODULE abilities
-     *                                         (spec 0034) to grant, e.g. ['viewAny', 'delete']
+     * @param  array<int, string>  $abilities  a non-empty list grants the import
+     *                                         module's single `leads.import` ability
+     *                                         (the former `import-runs.*` set was
+     *                                         removed 2026-07-17); [] grants nothing.
      */
     function importRunsTableUserWith(array $abilities): User
     {
@@ -23,11 +25,12 @@ if (! function_exists('importRunsTableUserWith')) {
 }
 
 // ---------------------------------------------------------------------------
-// Authorization — dominio `import-runs` (spec 0034: rinominato da `lead-imports`,
-// permessi CRUD dedicati import-runs.* invece del riuso di leads.import)
+// Authorization — dominio `import-runs` (spec 0034: rinominato da `lead-imports`).
+// Il set dedicato import-runs.* e' stato rimosso (2026-07-17): la tabella e'
+// gated dal `leads.import` del modulo lead, via ImportRunPolicy::viewAny.
 // ---------------------------------------------------------------------------
 
-it('GET /api/tables/import-runs/columns: 403 without import-runs.viewAny, 200 with it', function () {
+it('GET /api/tables/import-runs/columns: 403 without leads.import, 200 with it', function () {
     Sanctum::actingAs(importRunsTableUserWith([]));
     $this->getJson('/api/tables/import-runs/columns')->assertForbidden();
 
@@ -46,7 +49,7 @@ it('GET /api/tables/import-runs/columns: 403 without import-runs.viewAny, 200 wi
     expect($ids)->toBe(['created_at', 'original_filename', 'total_rows', 'imported_rows', 'invalid_rows', 'status']);
 });
 
-it('POST /api/tables/import-runs/rows: 403 without import-runs.viewAny', function () {
+it('POST /api/tables/import-runs/rows: 403 without leads.import', function () {
     Sanctum::actingAs(importRunsTableUserWith([]));
     $this->postJson('/api/tables/import-runs/rows', ['startRow' => 0, 'endRow' => 25])->assertForbidden();
 });
@@ -107,18 +110,6 @@ it('rows expose the mapped fields + per-row actions, scoped to own leads runs', 
         ->and($row['actions'])->toEqualCanonicalizing(['view', 'delete']);
 });
 
-it('the view action is exposed with import-runs.view alone; delete requires import-runs.delete too', function () {
-    $actor = importRunsTableUserWith(['viewAny', 'view']);
-    ImportRun::factory()->create(['resource' => 'leads', 'user_id' => $actor->id]);
-    Sanctum::actingAs($actor);
-
-    $row = $this->postJson('/api/tables/import-runs/rows', ['startRow' => 0, 'endRow' => 25])
-        ->assertOk()
-        ->json('items.0');
-
-    expect($row['actions'])->toBe(['view']);
-});
-
 // ---------------------------------------------------------------------------
 // delete — through the generic bulk-delete engine (ImportRunPolicy)
 // ---------------------------------------------------------------------------
@@ -141,17 +132,16 @@ it('bulk-delete removes an own leads run, and cannot reach another user run', fu
     expect(collect($result['failed'])->firstWhere('id', $foreign->id)['reason'])->toBe('not_found');
 });
 
-it('bulk-delete denies an own run without import-runs.delete', function () {
-    $actor = importRunsTableUserWith(['viewAny']);
+it('bulk-delete 403 without leads.import, leaving the run untouched', function () {
+    $actor = importRunsTableUserWith([]);
     $own = ImportRun::factory()->create(['resource' => 'leads', 'user_id' => $actor->id]);
 
     Sanctum::actingAs($actor);
 
-    $result = $this->postJson('/api/tables/import-runs/bulk-delete', ['ids' => [$own->id]])
-        ->assertOk()
-        ->json('data');
-
-    expect($result['deleted'])->toBe(0);
+    // No leads.import -> the table's viewAny gate (ImportRunPolicy) denies the
+    // whole endpoint before any per-row check. With a single gate there is no
+    // longer a "has table access but not delete" state to produce a per-row
+    // 'forbidden' reason.
+    $this->postJson('/api/tables/import-runs/bulk-delete', ['ids' => [$own->id]])->assertForbidden();
     $this->assertDatabaseHas('import_runs', ['id' => $own->id]);
-    expect(collect($result['failed'])->firstWhere('id', $own->id)['reason'])->toBe('forbidden');
 });

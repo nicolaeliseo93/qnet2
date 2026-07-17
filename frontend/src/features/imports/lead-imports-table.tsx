@@ -7,6 +7,7 @@ import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import { bulkDeleteTableRows } from '@/features/table/api'
 import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { isConcludedImportRun } from '@/features/imports/lead-import-status'
+import { importRunColumnRenderers } from '@/features/imports/column-renderers'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
 
@@ -82,6 +83,12 @@ export function LeadImportsTable() {
   const isBusy = useCallback((row: TableRow) => row.id === deletingId, [deletingId])
 
   return (
-    <TableView ref={tableRef} domain={IMPORT_RUNS_DOMAIN} onAction={handleAction} isBusy={isBusy} />
+    <TableView
+      ref={tableRef}
+      domain={IMPORT_RUNS_DOMAIN}
+      renderers={importRunColumnRenderers}
+      onAction={handleAction}
+      isBusy={isBusy}
+    />
   )
 }

@@ -124,7 +124,7 @@ it('provinces: 200 returns only the state provinces, ordered by name, with the r
         ->assertOk()
         ->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.name', 'Caserta')
-        ->assertJsonPath('data.1.name', 'Naples')
+        ->assertJsonPath('data.1.name', 'Napoli')
         ->assertJsonPath('data.0.state_id', $state->id)
         ->assertJsonStructure(['data' => [['id', 'name', 'state_id']]]);
 
@@ -181,7 +181,7 @@ it('cities: search filters by a name LIKE prefix', function () {
     $this->getJson("/api/cities?state_id={$state->id}&search=Ve")
         ->assertOk()
         ->assertJsonCount(2, 'data')
-        ->assertJsonPath('data.0.name', 'Venice')
+        ->assertJsonPath('data.0.name', 'Venezia')
         ->assertJsonPath('data.1.name', 'Verona');
 });
 

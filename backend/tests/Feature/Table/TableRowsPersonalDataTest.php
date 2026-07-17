@@ -122,12 +122,12 @@ it('maps the personal-data columns and never leaks the underlying sensitive fiel
         'user_type', 'primary_address', 'country', 'region', 'province', 'city', 'primary_contact',
     ])
         ->and($row['user_type'])->toBe('company')
-        ->and($row['country'])->toBe('Italy')
+        ->and($row['country'])->toBe('Italia')
         ->and($row['region'])->toBe('Lazio')
-        ->and($row['city'])->toBe('Rome')
+        ->and($row['city'])->toBe('Roma')
         ->and($row['province'])->toBeNull()
         ->and($row['primary_address'])->toContain('Via Verdi 9')
-        ->and($row['primary_address'])->toContain('Rome')
+        ->and($row['primary_address'])->toContain('Roma')
         // primary_contact is the array of ALL primary contacts (one per type),
         // each a structured {type, icon, label, value} for icon+label rendering.
         ->and($row['primary_contact'])->toBeArray()->toHaveCount(1);
@@ -188,13 +188,14 @@ it('filters by a geo set column (city) on the primary address', function () {
 
     $response = $this->postJson('/api/tables/users/rows', rowsPayload([
         'filterModel' => [
-            'city' => ['filterType' => 'set', 'values' => ['Rome']],
+            // Client sends the Italian option; the filter matches the English DB name.
+            'city' => ['filterType' => 'set', 'values' => ['Roma']],
         ],
     ]))->assertOk();
 
     expect($response->json('pagination.total'))->toBe(1)
         ->and($response->json('items.0.id'))->toBe($rome->id)
-        ->and($response->json('items.0.city'))->toBe('Rome');
+        ->and($response->json('items.0.city'))->toBe('Roma');
 });
 
 it('filters by primary_address (text contains) via the relation', function () {
@@ -336,8 +337,8 @@ it('sorts by a geo column (city) via the derived subquery', function () {
         ->values()
         ->all();
 
-    // desc → Rome before Paris.
-    expect($orderedCities)->toBe(['Rome', 'Paris'])
+    // desc → Rome before Paris (sort keys on the English DB name; display is Italian).
+    expect($orderedCities)->toBe(['Roma', 'Paris'])
         ->and($rome->id)->not->toBe($paris->id);
 });
 

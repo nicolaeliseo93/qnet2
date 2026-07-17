@@ -10,7 +10,7 @@ import { LeadsTable } from '@/features/leads/leads-table'
  * Import affordance on the Leads module. The inline import wizard (spec 0034
  * `importSlot`) stays fully removed — the import module is standalone. What the
  * Leads page now offers is a plain navigation button to that standalone module
- * (`/imports`), gated on `import-runs.viewAny` (UI-only; the module re-checks
+ * (`/imports`), gated on `leads.import` (UI-only; the module re-checks
  * the same ability). This guard asserts both: no `importSlot` is threaded to
  * `<TableView>`, and the navigation button appears only when authorized.
  */
@@ -82,8 +82,8 @@ describe('LeadsTable — import affordance', () => {
     expect(navigateMock).toHaveBeenCalledWith('/imports')
   })
 
-  it('hides the import button when the actor lacks import-runs.viewAny', () => {
-    canMock.mockImplementation((permission) => permission !== 'import-runs.viewAny')
+  it('hides the import button when the actor lacks leads.import', () => {
+    canMock.mockImplementation((permission) => permission !== 'leads.import')
     renderTable()
 
     expect(screen.queryByRole('button', { name: 'Import leads' })).not.toBeInTheDocument()

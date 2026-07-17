@@ -7,12 +7,12 @@ import LeadImportHistoryPage from '@/pages/lead-import-history-page'
 
 /**
  * Spec 0034 AC-011: the history page is the landing of the Import module —
- * gated behind `import-runs.viewAny`, a "New import" action gated on its own
- * `import-runs.create`, the stats toggle + panel (domain `import-runs`) and
- * the backend-driven history table (export lives inside `<TableView>` itself,
- * covered by that component's own suite). `PageHeader` (needs router/query
- * context for its breadcrumb), `LeadImportsTable` and `ModuleStatsPanel` are
- * stubbed — their own suites cover the breadcrumb/grid/panel, mirroring
+ * gated behind `leads.import`, which also shows the "New import" action, the
+ * stats toggle + panel (domain `import-runs`) and the backend-driven history
+ * table (export lives inside `<TableView>` itself, covered by that
+ * component's own suite). `PageHeader` (needs router/query context for its
+ * breadcrumb), `LeadImportsTable` and `ModuleStatsPanel` are stubbed — their
+ * own suites cover the breadcrumb/grid/panel, mirroring
  * `pages/lead-import-page.test.tsx`.
  */
 
@@ -69,7 +69,7 @@ beforeEach(() => {
 })
 
 describe('LeadImportHistoryPage', () => {
-  it('shows the forbidden fallback and does not mount the table without import-runs.viewAny', () => {
+  it('shows the forbidden fallback and does not mount the table without leads.import', () => {
     canMock.mockReturnValue(false)
 
     renderPage()
@@ -78,29 +78,20 @@ describe('LeadImportHistoryPage', () => {
     expect(screen.queryByRole('region', { name: 'table-import-runs' })).not.toBeInTheDocument()
   })
 
-  it('mounts the stats toggle and the history table with import-runs.viewAny', () => {
-    canMock.mockImplementation((permission) => permission === 'import-runs.viewAny')
+  it('mounts the stats toggle, the "New import" action and the history table with leads.import', () => {
+    canMock.mockImplementation((permission) => permission === 'leads.import')
 
     renderPage()
 
     expect(screen.queryByText('Import history')).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'table-import-runs' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Statistics' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'New import' })).toBeInTheDocument()
     expect(statsPanelMock).toHaveBeenCalledWith('import-runs', false)
   })
 
-  it('does not show "New import" without import-runs.create', () => {
-    canMock.mockImplementation((permission) => permission === 'import-runs.viewAny')
-
-    renderPage()
-
-    expect(screen.queryByRole('button', { name: 'New import' })).not.toBeInTheDocument()
-  })
-
-  it('navigates to the wizard when "New import" is clicked, with import-runs.create', () => {
-    canMock.mockImplementation(
-      (permission) => permission === 'import-runs.viewAny' || permission === 'import-runs.create',
-    )
+  it('navigates to the wizard when "New import" is clicked, with leads.import', () => {
+    canMock.mockImplementation((permission) => permission === 'leads.import')
 
     renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'New import' }))

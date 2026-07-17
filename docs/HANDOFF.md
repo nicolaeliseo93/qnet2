@@ -2,6 +2,250 @@
 
 > Injected at session start. Update at every green state.
 
+## FE: RESTYLE GRAFICO/UX TABELLE (Progetti/Campagne/Lead/Import Lead/Config Stati) + Filtri Avanzati (2026-07-17) — GREEN, NON COMMITTATO
+
+Refactoring ESCLUSIVAMENTE grafico/UX della rappresentazione di colonne/celle dei 6 moduli
+tabellari + restyle grafico del pannello Filtri Avanzati condiviso. NESSUN cambio a logica, API,
+backend, query, filtri, ordinamenti, export, permessi, layout tabella o comportamento. Scelte
+utente: (A) blast radius APP-WIDE sui renderer condivisi (tutte le ~20 tabelle diventano coerenti);
+(B) avatar con iniziali per le colonne persona.
+
+COSA FATTO:
+- Nuova LIBRERIA CELL CONDIVISI `frontend/src/features/table/rich-cells.tsx` (stesso componente per
+  stesso tipo-dato in tutti i moduli): `RelationCell` (icona kind opzionale + truncate + title),
+  `StatusBadgeCell` (badge colorato + dot stato), `DateCell`, `CurrencyCell`, `BooleanBadgeCell`,
+  `UserAvatarCell` (avatar iniziali, tono deterministico dal nome), `ColorSwatchCell`, `GroupCell`
+  (labelPrefix per namespace), `GeoScopeCell` (withPlace). Tutti attingono alla mappa colore UNICA.
+- CONSOLIDAMENTO mappa colore: `cell-renderers.tsx` ora ESPORTA `BADGE_COLOR_CLASSES`, `badgeColorClass()`,
+  `CELL_WRAPPER`, `BADGE_BASE`, `EmptyCell` (con `align`). Le copie locali in projects/leads
+  column-renderers sono RIMOSSE; `leads/column-renderers.tsx` ri-esporta `LEAD_STATUS_BADGE_CLASSES`
+  come alias del map condiviso (l'import di `lead-detail.tsx` resta invariato). NON toccato
+  `projects/status-badge-classes.ts` (card grid, fuori scope).
+- RENDERER GLOBALI (app-wide, `cell-renderers.tsx`): `BadgeCell` ora mostra un dot di stato quando
+  l'enum ha colore ma NON icona; `DateTimeCell` con `tabular-nums`. Test esistenti verdi (color
+  class `bg-blue-100`, icona svg, em-dash preservati).
+- RICABLATI i 6 moduli sui cell condivisi (mappa columnId->renderer INVARIATA):
+  projects/campaigns/leads/pipeline-statuses/lead-statuses + NUOVO
+  `frontend/src/features/imports/column-renderers.tsx` (Import Lead: date->DateTimeCell,
+  conteggi->CountCell; status badge si moderna dal BadgeCell globale) cablato in `lead-imports-table.tsx`.
+- FILTRI AVANZATI `advanced-filters/advanced-filter-panel.tsx`: solo grafica/UX (icone RotateCcw/Check
+  sui pulsanti Reset/Applica, label con truncate, footer `bg-background/40`). Layout/registry/logica
+  invariati. Test panel verde.
+- GRIGLIA `components/data-table/data-table.tsx`: nuovo `TableEmptyOverlay` (icona Inbox + messaggio)
+  registrato come `noRowsOverlayComponent`; chiavi i18n additive `table.noRows` (it/en-table.ts).
+
+ALLINEAMENTO ALIGNMENT (unificazione voluta): campaigns `geo_scope` ora centrato come projects
+(prima bare/left) — coerenza cross-modulo. Le celle relazione/data/valuta restano LEFT come prima.
+
+VERIFICATO (eseguito davvero): FE suite completa `vitest run` 1632/1635 (i 3 rossi = ContactsCell
+PRE-ESISTENTI aria-label lingua-dipendente, documentati, NON toccati). 21 nuovi test in
+`rich-cells.test.tsx` verdi. `tsc -b` PULITO fuori da opportunities. ESLint PULITO sui file toccati.
+
+ATTENZIONE: il modulo `opportunities` (product_lines form) è in lavorazione ATTIVA da altri e ha
+errori tsc TRANSITORI (l'hook Stop li segnala a ogni turno) — NON miei, NON toccati, fuori scope.
+NIENTE COMMIT (in attesa di via libera).
+
+## GEO: NOMI PAESI/REGIONI/PROVINCE/CITTA' IN ITALIANO (display) (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente: le colonne e i select che mostrano nazioni/regioni/province/citta' erano in
+INGLESE (i valori, non le label — le label i18n erano gia' italiane). Causa: i valori vengono dai
+dati di riferimento (world.sql) memorizzati anglicizzati (Italy/Lombardy/Naples...). Decisioni
+utente: (1) SCOPE solo Italia + sue regioni/province/citta'; (2) display + filtri + ricerca
+coerenti (nessun desync). VINCOLO: DB e codice restano in INGLESE, italiano SOLO a display.
+
+APPROCCIO (nessuna migration, nessun cambio DB):
+- Nuovo `App\Support\Geo\GeoNameLocalizer` (static, single source of truth): mappa EN->IT dei
+  soli delta anglicizzati per l'Italia (inverso di ItalianGeoLocalizer + nomi province). Metodi:
+  toItalian (display), toEnglish/toEnglishValues (reverse per i valori dei set-filter),
+  filterMatchNames (match su ENTRAMBI reverse-EN e valore originale -> robusto sia con DB in
+  inglese, norma world.sql, sia con righe gia' italiane da seed/import), englishNamesMatching
+  (quick-search digitato in italiano trova la riga EN, es. "napoli"->Naples).
+- Trait `App\Models\Concerns\LocalizesGeoName` -> `localizedName()` su Country/State/Province/City.
+  La colonna `name` NON e' toccata: ogni match SQL (import, filtri, sort) resta sull'inglese; solo
+  le letture PHP a display chiamano localizedName(). NON ho fatto override dell'accessor `name`
+  perche' GeoFuzzyMatcher legge getAttribute('name') e si sarebbe rotto il matching import.
+
+SUPERFICI (tutte display flow dal BE, ZERO modifiche FE):
+- Resources: Country/State/Province/City, CompanyAddress, Address(toGeoRef), StateForSelect,
+  Project/Campaign/ProjectForSelect (summarize con flag `geo:` -> traduce SOLO geo, mai
+  registry/source/... perche' una company puo' chiamarsi "Milan"), Lead/OperationalSiteForSelect/
+  Employment/BusinessFunction/Opportunity (label citta').
+- Tables mapRow: Users/Companies/CompanySites/OperationalSites (geo ?->localizedName());
+  Projects/Campaigns (summarize geo-flag); UserPersonalDataColumns/UserEmploymentColumns/
+  BusinessFunctionOperationalSitesColumn/LeadOperationalSiteColumn; LeadOpportunityDefaultsResolver.
+- Filtri/opzioni: UserGeoColumns/CompanyAddressColumns/CompanySiteAddressColumns/
+  OperationalSiteGeoColumns + ProjectsTableDefinition (geo only): options()/distinctValues() ->
+  etichette IT ordinate; applyFilter -> filterMatchNames(valori). Sort resta su `name` EN
+  (differenza d'ordine solo per Puglia/Valle d'Aosta, trascurabile). OperationalSite city
+  quick-search reso IT-aware (LIKE EN + orWhereIn englishNamesMatching).
+
+VERIFICATO (eseguito davvero): suite ampia
+`--filter=Geo|Company|CompanySite|OperationalSite|Project|Campaign|User|Lead|Opportunit|Table|Employment|BusinessFunction|Registry`
+1682 passed / 0 failed / 1 skipped; import GeoResolver+Fuzzy+ItalianGeoLocalizer 24/24 (accessor
+non rompe l'import); nuovo GeoNameLocalizerTest 5/5; nuovi test roundtrip (OperationalSite
+quick-search IT su nome EN; Companies set-filter IT su nome EN) verdi. Pint pulito. Test aggiornati
+per requisito cambiato (display IT), dichiarato: GeoLookup/StateForSelect/TableConfig/
+TableRowsPersonalData/TableValues. NIENTE COMMIT (in attesa di via libera).
+
+## FE INTEGRATION: Opportunities product_lines grid + i18n (2026-07-17) — GREEN, NON COMMITTATO
+
+Chiusura del gap di integrazione BE<->FE dopo i due teammate (backend + frontend) sulla feature
+righe multiple funzione aziendale + categoria prodotto. La tabella opportunities ora mappa
+`product_category`/`business_function` come STRINGHE (nomi concatenati ", " via
+OpportunitiesTableDefinition::summarizeNames), non piu' `{id,name}`. Fix applicati:
+- `frontend/src/features/opportunities/column-renderers.tsx`: nuovo `NamesCell` (rende la stringa
+  o em-dash); `product_category` passato da `RelationCell` a `NamesCell`; aggiunto renderer
+  `business_function` -> `NamesCell`.
+- i18n `it/en-opportunities.ts`: aggiunte `columns.businessFunction` e
+  `advancedFilters.businessFunction` (le referenziano OpportunityColumnCatalog/AdvancedFilterCatalog).
+- SEZIONE A PARTE (richiesta utente): "Funzioni aziendali e categorie prodotto" estratta dalla
+  sezione Classificazione in una `FormSection` dedicata `opportunity-product-lines-section.tsx`
+  (icona Boxes, chiavi i18n `form.sections.productLines.*` gia' presenti), renderizzata tra
+  Classificazione e Team in `opportunity-form-body.tsx` (reveal index 2; team->3, planning->4).
+  `opportunity-classification-section.tsx` non riceve piu' setValue/knownProductLines/nameAutofill;
+  descrizione i18n classificazione ridotta a "Societa', sede e fonte".
+
+VERIFICATO (eseguito davvero): FE `vitest run src/features/opportunities` 81/81; FE full suite
+1610/1613 (unico rosso PRE-ESISTENTE e scorrelato: `src/features/table/cell-renderers.test.tsx`
+3 test — aria-label contatti dipendente dalla lingua i18n di default, fallisce anche in isolamento,
+nessun file della feature toccato). `tsc --noEmit` pulito; eslint pulito sui file toccati. BE
+`pest --filter="Opportunit|ProductCategor|BusinessFunction"` 324/324 (1341 assert).
+
+ATTENZIONE — nel working tree sono presenti modifiche NON di questa feature (refactor modulo
+import/lead-import cross-stack: `ImportRunsAuthorization` cancellato, `ImportController`/
+`ImportMappingTemplateController`/`ImportRunPolicy`/`config/navigation.php`/`config/authorization.php`,
+`LeadImports*`, pagine FE lead-import) — NON autored da me, lasciate intatte. Da NON committare
+insieme alla feature senza decisione dell'utente. NIENTE COMMIT (in attesa di via libera).
+
+## BACKEND: Opportunities product_lines (spec 0040 amendment rev.3, AC-097..108) (2026-07-17) — GREEN, NON COMMITTATO
+
+Sostituiti i campi SINGOLI `business_function_id`+`product_category_id` sull'opportunita' con
+una collezione UNO-A-MOLTI (`opportunity_product_lines`): stessa BF ammessa con categorie
+diverse, unica solo la coppia esatta, entrambi obbligatori per riga. `name` lato server invariato
+(required, max:255 — calcolato dal FE).
+
+CONTRATTO:
+- Nuova tabella `opportunity_product_lines` (`opportunity_id` cascadeOnDelete,
+  `business_function_id`/`product_category_id` restrictOnDelete, unique triple,
+  indici su entrambe le FK) — migration `2026_07_17_150000_create_opportunity_product_lines_table`
+  droppa le 2 colonne da `opportunities` nella STESSA migration (backfill best-effort 1 riga dove
+  entrambe non-null prima del drop). down() ripristina le colonne + droppa la tabella.
+- POST/PUT `/api/opportunities`: `product_lines: [{business_function_id, product_category_id}]`
+  (sostituisce i 2 campi singoli). Server-side: coppia duplicata -> 422; categoria la cui BF
+  EFFICACE (`CategoryHierarchy::effectiveBusinessFunction`) != business_function_id della riga ->
+  422. Sync = delete-all + insert in transazione (idempotente), sia su create che update
+  (update: `product_lines` assente = non toccato, `[]` = svuota tutto).
+  `OpportunityResource.product_lines` = `[{id, business_function:{id,name}, product_category:{id,name}}]`.
+- `GET /api/leads/{lead}/opportunity-defaults`: DERIVED_FIELDS/locked_fields ora SOLO
+  `source_id`/`operational_site_id`/`registry_id` (business_function_id/product_category_id
+  RIMOSSI — non piu' derivabili/lockati). Nuova chiave `product_lines` (0 o 1 riga, dalla coppia
+  EFFICACE campagna/progetto) — SEMPRE editabile/rimovibile lato form, MAI scritta
+  automaticamente server-side su create (il client deve inviarla esplicitamente se la vuole).
+- Tabella opportunities: `product_category` (FK sparita) ora colonna AGGREGATA to-many (nomi
+  concatenati "A, B"), + nuova colonna `business_function` analoga — entrambe filterType `set`
+  via `whereHas('productLines.productCategory'|'productLines.businessFunction', ...)`, NON
+  sortable (rimosse da sortableColumnIds, nessun single related row da ordinare). Advanced
+  filters: stesso target nested dot-path — `AdvancedFilterApplier` generico gia' supporta
+  `whereHas()` nested via Eloquent, NESSUNA modifica necessaria al servizio generico.
+- `product-categories/for-select`: nuovo param opzionale `business_function_id` (ADDITIVO) ->
+  filtra alle categorie la cui BF EFFICACE combacia (via `effectiveBusinessFunctionSummaries()`
+  batchato). Senza il param: comportamento identico (suite esistente verde).
+  `ForSelectQuery` esteso con `businessFunctionId` nullable (default null per tutti gli altri
+  consumatori, nessun impatto).
+- `BusinessFunction::opportunities()`/`ProductCategory::opportunities()`: da `HasMany` diretto a
+  `BelongsToMany` via pivot `opportunity_product_lines` (la FK ora vive sulla riga pivot, non su
+  `opportunities`) — i guard 409 nei rispettivi Service (`->opportunities()->exists()`) restano
+  invariati, nessuna modifica ai Service stessi.
+
+FILE CHIAVE:
+- BE nuovi: `app/Models/OpportunityProductLine.php`, `database/factories/OpportunityProductLineFactory.php`,
+  `database/migrations/2026_07_17_150000_create_opportunity_product_lines_table.php`,
+  `app/Http/Requests/Concerns/ValidatesProductLines.php` (trait condiviso Store/Update).
+- BE modificati: `Opportunity.php` (Fillable, productLines() HasMany, rimossi businessFunction()/
+  productCategory()), `BusinessFunction.php`/`ProductCategory.php` (opportunities() BelongsToMany),
+  `CreateOpportunityData`/`UpdateOpportunityData`/`LeadOpportunityDefaults` (productLines DTO
+  field), `StoreOpportunityRequest`/`UpdateOpportunityRequest`, `OpportunityService`
+  (syncProductLines), `LeadOpportunityDefaultsResolver`, `LeadOpportunityDefaultsController`,
+  `OpportunityResource`, `OpportunitiesAuthorization` (campo `product_lines` sostituisce i 2
+  singoli — 16 campi totali, non piu' 17), `OpportunitiesTableDefinition` +
+  `OpportunityColumnCatalog` + `OpportunityAdvancedFilterCatalog`, `ProductCategoryService`
+  (forSelect scoping), `ProductCategoryForSelectRequest`, `ForSelectQuery` (DataObjects/Shared),
+  `OpportunityFactory`, `DemoOpportunitySeeder` (productLineCandidates via CategoryHierarchy).
+- Test aggiornati: `Unit/Models/OpportunityTest.php` (+reversibilita' opportunity_product_lines),
+  nuovo `Unit/Models/OpportunityProductLineTest.php`; `Feature/Opportunities/OpportunityCrudTest.php`,
+  nuovo `OpportunityProductLinesTest.php` (AC-099/100, split per limite 500 righe), nuovo
+  `OpportunityFromLeadProductLinesTest.php` (AC-102/103, split da OpportunityFromLeadTest),
+  `OpportunityFromLeadTest.php`, `OpportunityMetaTest.php`, `OpportunityRelationDeleteGuardTest.php`
+  (guard BF/PC via productLines()->create), `OpportunityTableTest.php` (colonne aggregate),
+  `Feature/ProductCategories/ProductCategoryForSelectTest.php` (AC-104).
+
+NOTA (limite noto, non bloccante): `EnforcesFieldPermissions` (trait condiviso spec 0004) confronta
+il campo bare `product_lines` come lista di ID (branch generico "to-many relation" pensato per
+`roles`), mentre il payload reale e' una lista di dict `{business_function_id,product_category_id}`
+— per un ruolo con `product_lines` reso non-editable, QUALSIASI submission verrebbe considerata
+"cambiata" (blocca sempre, mai un falso permesso — direzione sicura, ma UX-sub-ottimale per un
+resubmit identico). Nessun test attuale esercita questo path (nessun ruolo con field-permission
+restrittiva su product_lines); da rivedere se il FE introduce quello scenario.
+
+VERIFICATO (eseguito davvero): `php artisan migrate:fresh --seed` OK; `db:seed --class=DemoDataSeeder`
+OK (DemoOpportunitySeeder incluso). Pest `--filter=Opportunit` 127/127 verdi (584 assert); Pest
+`--filter=ProductCategory` 82/82 verdi; Pest `--filter=BusinessFunction` 126/126 verdi; suite
+INTERA 2915/2917 verdi (1 fallimento PRE-ESISTENTE e scorrelato — `AbstractMigrationSourcePreviewTest`
+su `RolesSource`, nessun file toccato da questo lavoro, riconducibile al lavoro non committato
+0036-0039 gia' presente sul branch). Pint pulito su tutti i file toccati da questo lavoro (`--test`
+mirato, zero fix necessari) — nota: `pint --dirty` (girato una volta per verifica complessiva) ha
+anche riformattato `tests/Feature/Tables/ImportRunsTableTest.php`, un file GIA' dirty per lavoro
+altrui non committato (0036-0039): tocco SOLO di stile (whitespace/allineamento docblock, zero
+impatto semantico), NON toccato il contenuto sostanziale di quel file. NIENTE COMMIT (in attesa di
+via libera esplicito).
+
+PROSSIMO OWNER: teammate `frontend` risulta gia' avere implementato in parallelo
+`opportunity-product-lines-field.tsx`/`use-opportunity-product-lines.ts`/
+`use-opportunity-name-autofill.ts` (visti come file non tracciati sul branch al momento di questo
+lavoro) — verificare il contratto FE contro quanto sopra (`product_lines` request/response shape,
+`GET .../opportunity-defaults` risposta con `product_lines` invece di business_function/
+product_category). Nuove i18n key BE-side da aggiungere lato FE: `opportunities.columns.businessFunction`,
+`opportunities.advancedFilters.businessFunction`.
+
+## IMPORT: COLLASSO permessi `import-runs.*` -> `leads.import` (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente: la pagina import lead deve essere visibile col permesso `import` del modulo
+lead; eliminare eventuali permessi "modulo import" separati (duplicati). Il modulo import aveva
+un set dedicato `import-runs.{viewAny,view,create,update,delete,export}` (spec 0034, doppio gate:
+modulo import-runs.* + dominio leads.import). Decisione utente: (1) rimuovere SOLO i permessi
+import-runs.* mantenendo la funzionalita' (cronologia + wizard); (2) gate UNICO su `leads.import`
+ovunque. `leads` e' l'unico dominio import registrato (config/imports.php), quindi il riuso e'
+esatto. SOVRASCRIVE il "double gate" di spec 0034.
+
+CONTRATTO NUOVO (nessuna migration): il set `import-runs.*` NON esiste piu' nel catalogo.
+Ogni superficie import (nav, tabella cronologia, dettaglio, wizard, bottone "Importa", export,
+bulk-delete) e' gated da `leads.import`. `view`/`delete` mantengono l'ownership (user_id del run).
+Il DOMINIO-key `import-runs` (tabella/stats/query-key) RESTA: e' identita' del modulo tabellare,
+non un permesso. Il meta endpoint `/api/meta/import-runs` e' RIMOSSO (un import run non ha form).
+
+FILE TOCCATI (BE): `ImportRunPolicy` (thin policy -> leads.import + ownership, abilities()=[] cosi'
+SyncPermissions non genera import-runs.*); `config/authorization.php` (rimosso import-runs dal
+registro meta) + DELETE `app/Authorization/ImportRunsAuthorization.php`; `config/navigation.php`
+(imports -> leads.import); `LeadImportColumnCatalog` (azioni view/delete -> leads.import);
+`LeadImportsTableDefinition` + `ImportController` + `ImportMappingTemplateController` (docblock).
+Table/Stats/Export passano automaticamente via Gate::allows(...ImportRun::class) -> policy.
+FILE TOCCATI (FE): `lead-import-page.tsx`, `lead-import-history-page.tsx` (rimosso Can interno
+ridondante su "New import"), `lead-import-detail-page.tsx`, `leads-table.tsx` -> tutti `<Can
+permission="leads.import">`. Domain-key `import-runs` intatto ovunque.
+TEST: helper `grantImportRunsPermissions` -> leads.import; riscritti ImportRunPolicyTest,
+ImportRunsModuleGateTest (gate unico), ImportRunsTableTest (rimosso test view/delete obsoleto;
+deny = 403 senza leads.import), SyncPermissionsTest AC-001 (nessun import-runs.*), StatsEndpointTest
+(import-runs -> leads.import), FieldCatalogueEndpointTest (import-runs fuori dal catalogo);
+DELETE ImportRunsMetaTest. FE test aggiornati (4 file).
+
+VERIFICATO (eseguito davvero): Pest suite import/tables/policies/navigation/stats mirata 153/153;
+suite completa 2914 pass / 2 fail ENTRAMBI PREESISTENTI ED ESTRANEI (AbstractMigrationSourcePreview
+`roles.description`, riprodotto anche senza le mie modifiche; CampaignCrudTest budget flaky da
+faker). Pint pulito. FE Vitest 14/14 sui file import, ESLint pulito. NB: `tsc -b` FE ha 3 errori
+PREESISTENTI in `features/opportunities/*.test.tsx` (lavoro opportunities/product-lines in-flight
+nel working tree, `business_function_id/business_function` mancanti sui type) — NON di questo task.
+NIENTE COMMIT (in attesa di via libera).
+
 ## LEAD: COLONNA "is_converted" nella tabella lead (2026-07-17) — GREEN, NON COMMITTATO
 
 Richiesta utente: colonna nella tabella lead per capire se un lead e' stato convertito in

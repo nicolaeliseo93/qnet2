@@ -132,11 +132,11 @@ class OperationalSitesTableDefinition extends AbstractTableDefinition
         return [
             'id' => $row->id,
             'alias' => $row->alias,
-            'city' => $address?->city?->name,
+            'city' => $address?->city?->localizedName(),
             'street' => $address?->line1,
             'postal_code' => $address?->postal_code,
-            'province' => $address?->province?->name,
-            'region' => $address?->state?->name,
+            'province' => $address?->province?->localizedName(),
+            'region' => $address?->state?->localizedName(),
             'created_at' => $row->created_at,
         ];
     }

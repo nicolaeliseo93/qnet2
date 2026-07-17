@@ -90,21 +90,20 @@ function geoChain(): array
 }
 
 /**
- * Grant the given `import-runs.*` MODULE abilities (spec 0034) to $user,
- * creating every standard permission on demand. The module gate
- * (ImportRunPolicy/BasePolicy) is independent of each import domain's own
- * `{resource}.import` write gate, so every import test suite composes the
- * two separately: this helper only ever touches the `import-runs.*` side.
+ * Grant the import module ability to $user. The dedicated `import-runs.*` set
+ * was removed (2026-07-17): the whole module — reads, writes, delete, export —
+ * is now gated by the lead module's single `leads.import` ability, so any
+ * non-empty $abilities request maps to granting `leads.import` once. The
+ * parameter is kept so existing call sites read unchanged; ownership (for
+ * view/delete) is enforced separately by the run's `user_id`.
  *
  * @param  array<int, string>  $abilities
  */
 function grantImportRunsPermissions(User $user, array $abilities): void
 {
-    foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export'] as $ability) {
-        Permission::findOrCreate("import-runs.{$ability}");
-    }
+    Permission::findOrCreate('leads.import');
 
-    foreach ($abilities as $ability) {
-        $user->givePermissionTo("import-runs.{$ability}");
+    if ($abilities !== []) {
+        $user->givePermissionTo('leads.import');
     }
 }

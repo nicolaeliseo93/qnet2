@@ -10,9 +10,12 @@ namespace App\Tables\Opportunities;
  * `name`/`estimated_value`/`success_probability`/`start_date`/
  * `expected_close_date`/`created_at` are real DB columns handled entirely by
  * the generic engine. `registry`/`referent`/`commercial`/`supervisor`/
- * `source`/`product_category` are STANDARD relation-name derived columns
- * (own FK on the opportunity), resolved by OpportunitiesTableDefinition —
- * all 6 sortable (a correlated subquery), mirroring LeadColumnCatalog.
+ * `source` are STANDARD relation-name derived columns (own FK on the
+ * opportunity), resolved by OpportunitiesTableDefinition — all 5 sortable (a
+ * correlated subquery), mirroring LeadColumnCatalog. Amendment rev.3:
+ * `product_category`/`business_function` are AGGREGATED to-many columns
+ * (via `productLines`) — filterable (`set`, `whereHas`) but NOT sortable (no
+ * single related row to order by).
  */
 final class OpportunityColumnCatalog
 {
@@ -37,7 +40,8 @@ final class OpportunityColumnCatalog
             self::derivedColumn('commercial', 'opportunities.columns.commercial'),
             self::derivedColumn('supervisor', 'opportunities.columns.supervisor'),
             self::derivedColumn('source', 'opportunities.columns.source'),
-            self::derivedColumn('product_category', 'opportunities.columns.productCategory'),
+            self::aggregatedColumn('product_category', 'opportunities.columns.productCategory'),
+            self::aggregatedColumn('business_function', 'opportunities.columns.businessFunction'),
             [
                 'id' => 'estimated_value',
                 'label' => 'opportunities.columns.estimatedValue',
@@ -88,7 +92,7 @@ final class OpportunityColumnCatalog
 
     /**
      * A DERIVED (related-row-name) column declaration: filterable via the
-     * `set` widget and sortable (every one of the 6 relational columns here
+     * `set` widget and sortable (every one of the 5 relational columns here
      * has a correlated-subquery sort), mirroring LeadColumnCatalog.
      *
      * @return array<string, mixed>
@@ -101,6 +105,26 @@ final class OpportunityColumnCatalog
             'type' => 'text',
             'visible' => true,
             'sortable' => true,
+            'filterable' => true,
+            'filterType' => 'set',
+        ];
+    }
+
+    /**
+     * A to-many AGGREGATED (via `productLines`) column declaration: filterable
+     * via `set` (whereHas on the related row's name) but never sortable — no
+     * single related row to order by (amendment rev.3).
+     *
+     * @return array<string, mixed>
+     */
+    private static function aggregatedColumn(string $id, string $label): array
+    {
+        return [
+            'id' => $id,
+            'label' => $label,
+            'type' => 'text',
+            'visible' => true,
+            'sortable' => false,
             'filterable' => true,
             'filterType' => 'set',
         ];

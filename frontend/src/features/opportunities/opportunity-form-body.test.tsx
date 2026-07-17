@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { OpportunityForm } from '@/features/opportunities/opportunity-form'
@@ -9,9 +9,9 @@ import type { ResourceMeta } from '@/features/authorization/types'
 /**
  * AC-071 (every field of the contract renders), AC-072 (referent/commercial/
  * reporter disabled without a registry, scoped by `registry_id` once chosen,
- * reset+prefilled on registry change), AC-073 (`company_site`/`operational_site`
- * scoped params, product category -> business function prefill only when
- * empty) and AC-074 (field permissions: hidden vs disabled).
+ * reset+prefilled on registry change), AC-074 (field permissions: hidden vs
+ * disabled), AC-107/108 (amendment rev.3: the name auto-fill override and
+ * `operational_site` no longer scoped by business function).
  */
 
 const createOpportunityMock = vi.fn()
@@ -43,12 +43,14 @@ vi.mock('@/features/authorization/api', () => ({
 
 const TEST_REGISTRY_WITH_DEFAULTS = 10
 const TEST_REGISTRY_WITHOUT_DEFAULTS = 20
+const TEST_BUSINESS_FUNCTION = 40
 const TEST_PRODUCT_CATEGORY = 500
 
 /** Fixed selection ids exposed per field (by accessible trigger label), so BR-4 side effects are exercisable without a real dropdown. */
 const SELECT_IDS: Record<string, number[]> = {
   Registry: [TEST_REGISTRY_WITH_DEFAULTS, TEST_REGISTRY_WITHOUT_DEFAULTS],
-  'Product category': [TEST_PRODUCT_CATEGORY],
+  'Business function 1': [TEST_BUSINESS_FUNCTION],
+  'Product category 1': [TEST_PRODUCT_CATEGORY],
 }
 
 /**
@@ -86,8 +88,8 @@ vi.mock('@/components/ui/async-paginated-select', () => ({
 }))
 
 /**
- * Controls the one-shot `meta` fetch behind the registry/product-category
- * prefills (BR-4): `fetchOpportunityRegistryMeta`/`fetchOpportunityProductCategoryMeta`
+ * Controls the one-shot `meta` fetch behind the registry prefill (BR-4/A-5)
+ * and the product-lines draft picker's label resolution (amendment rev.3):
  * both go through the generic `fetchForSelect`, mocked here per resource+id.
  */
 const fetchForSelectMock = vi.fn()
@@ -154,13 +156,11 @@ beforeEach(() => {
         ],
       }
     }
+    if (resource === 'business-functions' && params?.ids?.includes(TEST_BUSINESS_FUNCTION)) {
+      return { ...EMPTY_PAGE, items: [{ id: TEST_BUSINESS_FUNCTION, label: 'Sales' }] }
+    }
     if (resource === 'product-categories' && params?.ids?.includes(TEST_PRODUCT_CATEGORY)) {
-      return {
-        ...EMPTY_PAGE,
-        items: [
-          { id: TEST_PRODUCT_CATEGORY, label: 'Consulting', meta: { business_function: { id: 55, name: 'Sales' } } },
-        ],
-      }
+      return { ...EMPTY_PAGE, items: [{ id: TEST_PRODUCT_CATEGORY, label: 'Consulting' }] }
     }
     return EMPTY_PAGE
   })
@@ -179,12 +179,13 @@ describe('OpportunityFormBody — fields render (AC-071)', () => {
     expect(screen.getByTestId('select-Reporter')).toBeInTheDocument()
     expect(screen.getByTestId('select-Company')).toBeInTheDocument()
     expect(screen.getByTestId('select-Company site')).toBeInTheDocument()
-    expect(screen.getByTestId('select-Business function')).toBeInTheDocument()
     expect(screen.getByTestId('select-Operational site')).toBeInTheDocument()
-    expect(screen.getByTestId('select-Product category')).toBeInTheDocument()
     expect(screen.getByTestId('select-Source')).toBeInTheDocument()
     expect(screen.getByTestId('select-Supervisor')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add account manager' })).toBeInTheDocument()
+    // Amendment rev.3: no product-line row renders until "Add" is clicked (mirrors manager slots).
+    expect(screen.getByRole('button', { name: 'Add product line' })).toBeInTheDocument()
+    expect(screen.queryByTestId('select-Business function 1')).not.toBeInTheDocument()
   })
 })
 
@@ -259,7 +260,7 @@ describe('OpportunityFormBody — referent scoping + free commercial/reporter (A
   })
 })
 
-describe('OpportunityFormBody — site/classification scoping (BR-4, AC-073)', () => {
+describe('OpportunityFormBody — site scoping (BR-4)', () => {
   it('scopes company_site by company_id once a company is chosen', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
@@ -275,50 +276,83 @@ describe('OpportunityFormBody — site/classification scoping (BR-4, AC-073)', (
     )
   })
 
-  it('scopes operational_site by business_function_id once a function is chosen', async () => {
+  /** Amendment rev.3, AC-108: operational_site is no longer scoped by a single business_function_id. */
+  it('never scopes operational_site by business function, even after picking one in a product-line row', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByTestId('select-Business function')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add product line' })).toBeInTheDocument())
     expect(screen.getByTestId('params-Operational site')).toHaveTextContent('null')
 
-    screen.getByRole('button', { name: 'select Business function 1' }).click()
+    fireEvent.click(screen.getByRole('button', { name: 'Add product line' }))
+    screen.getByRole('button', { name: `select Business function 1 ${TEST_BUSINESS_FUNCTION}` }).click()
 
     await waitFor(() =>
-      expect(screen.getByTestId('params-Operational site')).toHaveTextContent(
-        JSON.stringify({ business_function_id: 1 }),
-      ),
+      expect(screen.getByTestId('value-Business function 1')).toHaveTextContent(String(TEST_BUSINESS_FUNCTION)),
+    )
+    expect(screen.getByTestId('params-Operational site')).toHaveTextContent('null')
+  })
+})
+
+describe('OpportunityFormBody — product lines + name auto-fill (AC-106/107)', () => {
+  it('scopes the row category by the row own business function', async () => {
+    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add product line' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Add product line' }))
+    expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('true')
+
+    screen.getByRole('button', { name: `select Business function 1 ${TEST_BUSINESS_FUNCTION}` }).click()
+
+    await waitFor(() => expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('false'))
+    expect(screen.getByTestId('params-Product category 1')).toHaveTextContent(
+      JSON.stringify({ business_function_id: TEST_BUSINESS_FUNCTION }),
     )
   })
 
-  it('prefills the business function from the chosen product category when it is still empty', async () => {
+  it('auto-fills the name from the added row, then keeps the manual override after a hand-edit', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByTestId('select-Product category')).toBeInTheDocument())
-    expect(screen.getByTestId('value-Business function')).toHaveTextContent('')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add product line' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Add product line' }))
+    screen.getByRole('button', { name: `select Business function 1 ${TEST_BUSINESS_FUNCTION}` }).click()
+    await waitFor(() => expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('false'))
+    screen.getByRole('button', { name: `select Product category 1 ${TEST_PRODUCT_CATEGORY}` }).click()
 
-    screen.getByRole('button', { name: `select Product category ${TEST_PRODUCT_CATEGORY}` }).click()
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Consulting'))
 
-    await waitFor(() => expect(screen.getByTestId('value-Business function')).toHaveTextContent('55'))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'My own name' } })
+
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('My own name')
   })
 
-  it('never overwrites an already-chosen business function', async () => {
+  it('blocks the submit and shows an error when a row is left incomplete', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByTestId('select-Business function')).toBeInTheDocument())
-    screen.getByRole('button', { name: 'select Business function 1' }).click()
-    await waitFor(() => expect(screen.getByTestId('value-Business function')).toHaveTextContent('1'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add product line' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Add product line' }))
+    screen.getByRole('button', { name: `select Business function 1 ${TEST_BUSINESS_FUNCTION}` }).click()
+    await waitFor(() => expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('false'))
+    // The row's category is left unset on purpose.
 
-    screen.getByRole('button', { name: `select Product category ${TEST_PRODUCT_CATEGORY}` }).click()
+    screen.getByRole('button', { name: 'select Company 1' }).click()
+    screen.getByRole('button', { name: 'select Company site 1' }).click()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Enterprise deal' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    // Give the (never-fired, since already non-null) prefill a tick to prove it truly never applies.
-    await waitFor(() => expect(screen.getByTestId('value-Product category')).toHaveTextContent(String(TEST_PRODUCT_CATEGORY)))
-    expect(screen.getByTestId('value-Business function')).toHaveTextContent('1')
+    await waitFor(() =>
+      expect(
+        screen.getByText('Each row requires both a business function and a product category.'),
+      ).toBeInTheDocument(),
+    )
+    expect(createOpportunityMock).not.toHaveBeenCalled()
   })
 })
 
@@ -378,7 +412,7 @@ describe('OpportunityFormBody — field permissions (AC-074)', () => {
 
 /** AC-075: create-from-lead mode (spec 0040 MT-6) — locked fields precompiled + forceDisabled, banner shown, free fields stay editable. */
 describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
-  it('shows the origin banner and locks the derived fields, precompiled', async () => {
+  it('shows the origin banner, locks the derived fields precompiled, and seeds the editable product-line row', async () => {
     render(
       <OpportunityForm
         mode={{
@@ -391,17 +425,20 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
               source_id: 20,
               operational_site_id: null,
               registry_id: 30,
-              business_function_id: 40,
-              product_category_id: 50,
             },
             references: {
               source: { id: 20, name: 'Web' },
               operational_site: null,
               registry: { id: 30, name: 'Acme S.p.A.' },
-              business_function: { id: 40, name: 'Sales' },
-              product_category: { id: 50, name: 'Consulting' },
             },
-            lockedFields: ['registry_id', 'source_id', 'business_function_id', 'product_category_id'],
+            lockedFields: ['registry_id', 'source_id'],
+            productLines: [
+              {
+                id: 900,
+                business_function: { id: 40, name: 'Sales' },
+                product_category: { id: 50, name: 'Consulting' },
+              },
+            ],
           },
         }}
         onSuccess={vi.fn()}
@@ -422,14 +459,19 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
     expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('false')
     expect(screen.getByTestId('value-Source')).toHaveTextContent('20')
     expect(screen.getByTestId('disabled-Source')).toHaveTextContent('true')
-    expect(screen.getByTestId('value-Business function')).toHaveTextContent('40')
-    expect(screen.getByTestId('disabled-Business function')).toHaveTextContent('true')
-    expect(screen.getByTestId('value-Product category')).toHaveTextContent('50')
-    expect(screen.getByTestId('disabled-Product category')).toHaveTextContent('true')
 
     // The lead had no operational site (derivation null, BR-2): stays free and editable.
     expect(screen.getByTestId('value-Operational site')).toHaveTextContent('')
     expect(screen.getByTestId('disabled-Operational site')).toHaveTextContent('false')
+
+    // Amendment rev.3 (AC-102/103): the seeded row is editable/removable —
+    // never disabled — and its category already auto-fills the name.
+    expect(screen.getByTestId('value-Business function 1')).toHaveTextContent('40')
+    expect(screen.getByTestId('disabled-Business function 1')).toHaveTextContent('false')
+    expect(screen.getByTestId('value-Product category 1')).toHaveTextContent('50')
+    expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('false')
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Consulting')
+    expect(screen.getByRole('button', { name: 'Remove product line' })).toBeInTheDocument()
   })
 
   it('renders no banner and no locked field for a plain manual create', async () => {

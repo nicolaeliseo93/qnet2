@@ -32,10 +32,10 @@ class CompanyAddressResource extends JsonResource
             'state_id' => $this->state_id,
             'province_id' => $this->province_id,
             'city_id' => $this->city_id,
-            'country' => $this->country?->name,
-            'region' => $this->state?->name,
-            'province' => $this->province?->name,
-            'city' => $this->city?->name,
+            'country' => $this->country?->localizedName(),
+            'region' => $this->state?->localizedName(),
+            'province' => $this->province?->localizedName(),
+            'city' => $this->city?->localizedName(),
             'is_primary' => $this->is_primary,
         ];
     }

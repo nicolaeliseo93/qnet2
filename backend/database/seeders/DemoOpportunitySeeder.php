@@ -3,18 +3,17 @@
 namespace Database\Seeders;
 
 use App\DataObjects\Opportunities\CreateOpportunityData;
-use App\Models\BusinessFunction;
 use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\Lead;
 use App\Models\OperationalSite;
 use App\Models\Opportunity;
-use App\Models\ProductCategory;
 use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
 use App\Services\OpportunityService;
+use App\Services\ProductCategories\CategoryHierarchy;
 use Faker\Factory as FakerFactory;
 use Faker\Generator;
 use Illuminate\Database\Seeder;
@@ -39,6 +38,11 @@ use Illuminate\Support\Collection;
  * DemoReferentSeeder/DemoUsersSeeder/DemoSourceSeeder/DemoProductCatalogSeeder/
  * DemoLeadSeeder (optional, seeded earlier in DemoDataSeeder) — a no-op
  * (nothing to seed) if any of the 4 mandatory lookups is empty.
+ *
+ * Amendment rev.3: `business_function_id`/`product_category_id` are REPLACED
+ * by `product_lines` — a category is only ever picked alongside its own
+ * EFFECTIVE business function (see `productLineCandidates`), so every seeded
+ * row already satisfies the withValidator pairing rule.
  */
 class DemoOpportunitySeeder extends Seeder
 {
@@ -48,7 +52,10 @@ class DemoOpportunitySeeder extends Seeder
 
     private const int MAX_MANAGER_SLOTS = 3;
 
-    public function __construct(private readonly OpportunityService $opportunities) {}
+    public function __construct(
+        private readonly OpportunityService $opportunities,
+        private readonly CategoryHierarchy $hierarchy,
+    ) {}
 
     public function run(): void
     {
@@ -67,16 +74,15 @@ class DemoOpportunitySeeder extends Seeder
             return;
         }
 
-        $businessFunctions = BusinessFunction::query()->orderBy('id')->get();
         $referents = Referent::query()->orderBy('id')->get();
         $supervisors = User::query()->orderBy('id')->get();
         $sources = Source::query()->orderBy('id')->get();
-        $productCategories = ProductCategory::query()->orderBy('id')->get();
+        $productLineCandidates = $this->productLineCandidates();
 
         for ($index = 0; $index < self::STANDALONE_OPPORTUNITIES; $index++) {
             $this->createStandalone(
                 $faker, $index, $registries, $companies, $companySites, $operationalSites,
-                $businessFunctions, $referents, $supervisors, $sources, $productCategories,
+                $referents, $supervisors, $sources, $productLineCandidates,
             );
         }
 
@@ -84,15 +90,36 @@ class DemoOpportunitySeeder extends Seeder
     }
 
     /**
+     * Every {business_function_id, product_category_id} pair a demo
+     * opportunity may legitimately carry (amendment rev.3): a category whose
+     * EFFECTIVE business function is null (neither its own nor an
+     * inherited one) has no valid pairing and is excluded — a single
+     * batched CategoryHierarchy call, never a query per row.
+     *
+     * @return array<int, array{business_function_id: int, product_category_id: int}>
+     */
+    private function productLineCandidates(): array
+    {
+        $candidates = [];
+
+        foreach ($this->hierarchy->effectiveBusinessFunctionSummaries() as $categoryId => $summary) {
+            if ($summary !== null) {
+                $candidates[] = ['business_function_id' => $summary['id'], 'product_category_id' => $categoryId];
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
      * @param  Collection<int, Registry>  $registries
      * @param  Collection<int, Company>  $companies
      * @param  Collection<int, CompanySite>  $companySites
      * @param  Collection<int, OperationalSite>  $operationalSites
-     * @param  Collection<int, BusinessFunction>  $businessFunctions
      * @param  Collection<int, Referent>  $referents
      * @param  Collection<int, User>  $supervisors
      * @param  Collection<int, Source>  $sources
-     * @param  Collection<int, ProductCategory>  $productCategories
+     * @param  array<int, array{business_function_id: int, product_category_id: int}>  $productLineCandidates
      */
     private function createStandalone(
         Generator $faker,
@@ -101,11 +128,10 @@ class DemoOpportunitySeeder extends Seeder
         Collection $companies,
         Collection $companySites,
         Collection $operationalSites,
-        Collection $businessFunctions,
         Collection $referents,
         Collection $supervisors,
         Collection $sources,
-        Collection $productCategories,
+        array $productLineCandidates,
     ): void {
         $data = new CreateOpportunityData(
             name: $faker->catchPhrase(),
@@ -113,15 +139,14 @@ class DemoOpportunitySeeder extends Seeder
             companyId: $companies[$index % $companies->count()]->id,
             companySiteId: $companySites[$index % $companySites->count()]->id,
             operationalSiteId: $operationalSites[$index % $operationalSites->count()]->id,
-            businessFunctionId: $this->maybePick($businessFunctions, $index + 3, $faker, 50)?->id,
             referentId: $this->maybePick($referents, $index + 4, $faker, 60)?->id,
             commercialId: $this->maybePick($referents, $index + 5, $faker, 40)?->id,
             reporterId: $this->maybePick($referents, $index + 6, $faker, 30)?->id,
             supervisorId: $this->maybePick($supervisors, $index + 7, $faker, 60)?->id,
             sourceId: $this->maybePick($sources, $index + 8, $faker, 50)?->id,
-            productCategoryId: $this->maybePick($productCategories, $index + 9, $faker, 50)?->id,
             leadId: null,
             managerSlots: $this->maybeManagerSlots($supervisors, $faker),
+            productLines: $this->maybeProductLines($productLineCandidates, $index + 9, $faker, 50),
             startDate: $faker->optional()->date(),
             estimatedValue: $faker->optional()->randomFloat(2, 1000, 200000),
             expectedCloseDate: $faker->optional()->date(),
@@ -163,15 +188,14 @@ class DemoOpportunitySeeder extends Seeder
                 companyId: $companies[$index % $companies->count()]->id,
                 companySiteId: $companySites[$index % $companySites->count()]->id,
                 operationalSiteId: $lead->operational_site_id ?? $operationalSites[$index % $operationalSites->count()]->id,
-                businessFunctionId: null,
                 referentId: null,
                 commercialId: null,
                 reporterId: null,
                 supervisorId: $this->maybePick($supervisors, $index, $faker, 50)?->id,
                 sourceId: null,
-                productCategoryId: null,
                 leadId: $lead->id,
                 managerSlots: $this->maybeManagerSlots($supervisors, $faker),
+                productLines: null,
                 startDate: $faker->optional()->date(),
                 estimatedValue: $faker->optional()->randomFloat(2, 1000, 200000),
                 expectedCloseDate: $faker->optional()->date(),
@@ -195,6 +219,22 @@ class DemoOpportunitySeeder extends Seeder
         }
 
         return $items[$index % $items->count()];
+    }
+
+    /**
+     * A single {business_function_id, product_category_id} product line
+     * ~$probability% of the time, null (not submitted) otherwise.
+     *
+     * @param  array<int, array{business_function_id: int, product_category_id: int}>  $candidates
+     * @return array<int, array{business_function_id: int, product_category_id: int}>|null
+     */
+    private function maybeProductLines(array $candidates, int $index, Generator $faker, int $probability): ?array
+    {
+        if ($candidates === [] || ! $faker->boolean($probability)) {
+            return null;
+        }
+
+        return [$candidates[$index % count($candidates)]];
     }
 
     /**

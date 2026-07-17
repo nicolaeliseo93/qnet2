@@ -8,7 +8,10 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Validates the query for GET /api/product-categories/for-select (ADR 0011),
- * mirroring SourceForSelectRequest.
+ * mirroring SourceForSelectRequest. `business_function_id` (spec 0040
+ * amendment rev.3, optional): scopes the results to categories whose
+ * EFFECTIVE business function matches — additive/retrocompatible, absent by
+ * default.
  *
  * Authorization is intentionally NOT handled here (it stays in the controller
  * via authorize('viewAny', ProductCategory::class)). Pagination bounds mirror
@@ -35,6 +38,7 @@ class ProductCategoryForSelectRequest extends FormRequest
             'limit' => ['sometimes', 'integer', 'min:1', "max:{$maxLimit}"],
             'ids' => ['sometimes', 'array'],
             'ids.*' => ['integer'],
+            'business_function_id' => ['sometimes', 'nullable', 'integer', 'exists:business_functions,id'],
         ];
     }
 
