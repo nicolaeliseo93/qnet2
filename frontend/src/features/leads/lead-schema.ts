@@ -38,10 +38,10 @@ function extraFieldEntrySchema(t: TFunction) {
  */
 function baseFields(t: TFunction) {
   return {
-    referent_id: z
+    registry_id: z
       .number()
       .nullable()
-      .refine((value): boolean => value !== null, { message: t('leads.form.referentRequired') }),
+      .refine((value): boolean => value !== null, { message: t('leads.form.registryRequired') }),
     campaign_id: z
       .number()
       .nullable()

@@ -55,16 +55,19 @@ vi.mock('@/components/ui/async-paginated-select', () => ({
     value,
     onChange,
     disabled,
+    selectedItem,
     labels,
   }: {
     value: number | null
     onChange: (value: number | null) => void
     disabled?: boolean
+    selectedItem?: { id: number; label: string } | null
     labels: { triggerLabel: string }
   }) => (
     <div data-testid={`select-${labels.triggerLabel}`}>
       <span data-testid={`value-${labels.triggerLabel}`}>{value ?? ''}</span>
       <span data-testid={`disabled-${labels.triggerLabel}`}>{String(Boolean(disabled))}</span>
+      <span data-testid={`label-${labels.triggerLabel}`}>{selectedItem?.label ?? ''}</span>
       {(SELECT_IDS[labels.triggerLabel] ?? [1]).map((id) => (
         <button key={id} type="button" onClick={() => onChange(id)}>
           {`select ${labels.triggerLabel} ${id}`}
@@ -191,7 +194,6 @@ beforeEach(() => {
           product_category_id: null,
         },
         references: {
-          referent: { id: 1, name: 'Mario Rossi' },
           source: null,
           operational_site: null,
           registry: null,
@@ -205,7 +207,8 @@ beforeEach(() => {
       lead_id: leadId,
       existing_opportunity_id: null,
       values: {
-        referent_id: 10,
+        // spec 0041 D-3/AC-050: no longer a derived field — the resolver never writes it.
+        referent_id: null,
         source_id: 20,
         operational_site_id: 30,
         registry_id: TEST_REGISTRY_ID,
@@ -213,7 +216,6 @@ beforeEach(() => {
         product_category_id: 50,
       },
       references: {
-        referent: { id: 10, name: 'Mario Rossi' },
         source: { id: 20, name: 'Web' },
         operational_site: { id: 30, label: 'Via Roma 1 - Milano' },
         registry: { id: TEST_REGISTRY_ID, name: 'Acme S.p.A.' },
@@ -221,7 +223,6 @@ beforeEach(() => {
         product_category: { id: 50, name: 'Consulting' },
       },
       locked_fields: [
-        'referent_id',
         'source_id',
         'operational_site_id',
         'registry_id',
@@ -243,8 +244,12 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
 
     await waitFor(() => expect(screen.getByTestId('value-Registry')).toHaveTextContent(String(TEST_REGISTRY_ID)))
     expect(screen.getByTestId('disabled-Registry')).toHaveTextContent('true')
-    expect(screen.getByTestId('value-Contact')).toHaveTextContent('10')
-    expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('true')
+    // AC-051: the registry's label hydrates the trigger from `references.registry`.
+    expect(screen.getByTestId('label-Registry')).toHaveTextContent('Acme S.p.A.')
+    // AC-051: referent_id is no longer derived/locked by a picked lead — free
+    // and editable, gated only by the registry now being chosen.
+    expect(screen.getByTestId('value-Contact')).toHaveTextContent('')
+    expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('false')
     expect(screen.getByTestId('value-Source')).toHaveTextContent('20')
     expect(screen.getByTestId('disabled-Source')).toHaveTextContent('true')
     expect(screen.getByTestId('value-Operational site')).toHaveTextContent('30')
@@ -253,7 +258,8 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     expect(screen.getByTestId('disabled-Business function')).toHaveTextContent('true')
     expect(screen.getByTestId('value-Product category')).toHaveTextContent('50')
     expect(screen.getByTestId('disabled-Product category')).toHaveTextContent('true')
-    expect(screen.getByRole('status')).toHaveTextContent('Mario Rossi')
+    // AC-051: the origin banner also sources its name from the registry now.
+    expect(screen.getByRole('status')).toHaveTextContent('Acme S.p.A.')
   })
 
   it('resets and unlocks the derived fields when the lead selection is cleared', async () => {
@@ -299,7 +305,9 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     const payload = createOpportunityMock.mock.calls[0][0]
     expect(payload.lead_id).toBe(TEST_LEAD_ID)
     expect(payload).not.toHaveProperty('registry_id')
-    expect(payload).not.toHaveProperty('referent_id')
+    // AC-051: referent_id is no longer among the locked fields — it is sent
+    // like any other free field (here still unset by the user).
+    expect(payload.referent_id).toBeNull()
     expect(payload).not.toHaveProperty('source_id')
     expect(payload).not.toHaveProperty('operational_site_id')
     expect(payload).not.toHaveProperty('business_function_id')

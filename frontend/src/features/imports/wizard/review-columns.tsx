@@ -180,7 +180,7 @@ function resolveEditableFields(run: ImportRunDetail): Array<{ id: string; label:
  * the backend's own `PATCH .../rows/{row}` 422 outside `reviewing`.
  *
  * A `resolution` column (spec 0036 AC-008) follows `status`: it renders the
- * matched referent + skip/create/update select for `duplicate` rows via
+ * matched anagrafica + skip/create/update select for `duplicate` rows via
  * `ReviewResolutionCell`, an em dash for every other row, and stays disabled
  * (no `onResolve`) in `readOnly` mode.
  */

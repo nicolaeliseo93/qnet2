@@ -141,10 +141,17 @@ class RegistryService
      *
      * Restrictive (spec 0040, BR-3): a registry referenced by at least one
      * opportunity cannot be removed, mirroring the other 9 guards this rule
-     * introduces.
+     * introduces. Restrictive (spec 0041, D-1/BR-2): a registry referenced by
+     * at least one lead cannot be removed either — this guard replaces the
+     * one that used to live on ReferentService (the Lead's contact is now an
+     * Anagrafica, not a Referent).
      */
     public function delete(Registry $registry): void
     {
+        if ($registry->leads()->exists()) {
+            abort(409, 'This registry has leads and cannot be deleted.');
+        }
+
         if ($registry->opportunities()->exists()) {
             abort(409, 'This registry has opportunities and cannot be deleted.');
         }
@@ -157,10 +164,19 @@ class RegistryService
      * standard (spec 0023, ADR 0011), mirroring SourceService::forSelect.
      * commercial/reporter are eager-loaded so RegistryForSelectResource's
      * `meta` (spec 0040 BR-4) never N+1s.
+     *
+     * $onlySuppliers (product supplier picker) constrains the base query to
+     * `is_supplier = true` when true; false/omitted is BYTE-IDENTICAL to the
+     * pre-existing behavior (e.g. the opportunity registry select), so this
+     * extra param never changes the default result set.
      */
-    public function forSelect(ForSelectQuery $query): ForSelectResult
+    public function forSelect(ForSelectQuery $query, bool $onlySuppliers = false): ForSelectResult
     {
         $base = $this->forSelectBaseQuery();
+
+        if ($onlySuppliers) {
+            $base->where('is_supplier', true);
+        }
 
         if ($query->hasSearch()) {
             $base->where('name', 'like', '%'.$query->search.'%');

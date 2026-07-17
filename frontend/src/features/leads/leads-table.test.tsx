@@ -22,8 +22,8 @@ import type { LeadDetailWithPermissions } from '@/features/leads/types'
 
 const mockLead: LeadDetailWithPermissions = {
   id: 33,
-  referent_id: 5,
-  referent: { id: 5, name: 'Jane Doe' },
+  registry_id: 5,
+  registry: { id: 5, name: 'Jane Doe' },
   campaign_id: 21,
   campaign: { id: 21, code: 'CMP-0021', name: 'Spring outreach' },
   lead_status_id: 7,

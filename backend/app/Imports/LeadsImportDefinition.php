@@ -16,15 +16,16 @@ use App\Models\User;
 use RuntimeException;
 
 /**
- * Import definition for `leads` (spec 0033): the first — and only — domain
- * riding the mapping-driven wizard. One row = one Referent anagraphic
- * (identity + contacts + address) + one Lead tying it to the campaign/status/
- * source/operator picked once in the configuration step (globalConfig()).
+ * Import definition for `leads` (spec 0033, spec 0041 D-1): the first — and
+ * only — domain riding the mapping-driven wizard. One row = one Registry
+ * anagraphic (identity + contacts + address) + one Lead tying it to the
+ * campaign/status/source/operator picked once in the configuration step
+ * (globalConfig()).
  *
  * A thin orchestrator: the field/global catalogue (LeadImportFieldCatalog),
  * the row's own-field validation (LeadRowValidator), the duplicate match
  * (LeadDuplicateMatcher) and the actual write (LeadRowPersister — delegating
- * to ReferentService/LeadService, never duplicated anagraphic logic) each
+ * to RegistryService/LeadService, never duplicated anagraphic logic) each
  * live in their own collaborator under `App\Imports\Leads`, keeping this
  * class under the 300-line soft limit (engineering.md §6).
  */
@@ -128,7 +129,7 @@ class LeadsImportDefinition extends AbstractImportDefinition
 
     /**
      * No legacy natural key: dedup for `leads` is entirely driven by
-     * resolveDuplicate() (Referent contact match) + the chosen strategy, not
+     * resolveDuplicate() (Registry contact match) + the chosen strategy, not
      * by the pre-0033 single-column dedupKey()/existsInDatabase() pair.
      *
      * @param  array<string, string>  $row
@@ -163,13 +164,13 @@ class LeadsImportDefinition extends AbstractImportDefinition
      */
     public function resolveDuplicate(array $mapped): ?int
     {
-        return $this->duplicateMatcher->match($mapped)?->referentId;
+        return $this->duplicateMatcher->match($mapped)?->registryId;
     }
 
     /**
      * @param  array<string, mixed>  $mapped
      * @param  array<string, mixed>  $globalConfig
-     * @return array{id: ?int, meta: ?array{referent_id: int, referent_name: string, lead_id: ?int, matched_on: array<int, string>}}
+     * @return array{id: ?int, meta: ?array{registry_id: int, registry_name: string, lead_id: ?int, matched_on: array<int, string>}}
      */
     public function resolveDuplicateMatch(array $mapped, array $globalConfig): array
     {
@@ -180,11 +181,11 @@ class LeadsImportDefinition extends AbstractImportDefinition
         }
 
         return [
-            'id' => $match->referentId,
+            'id' => $match->registryId,
             'meta' => [
-                'referent_id' => $match->referentId,
-                'referent_name' => $match->referentName,
-                'lead_id' => $this->duplicateMatcher->existingLeadId($match->referentId, $globalConfig),
+                'registry_id' => $match->registryId,
+                'registry_name' => $match->registryName,
+                'lead_id' => $this->duplicateMatcher->existingLeadId($match->registryId, $globalConfig),
                 'matched_on' => $match->matchedOn,
             ],
         ];
@@ -203,25 +204,25 @@ class LeadsImportDefinition extends AbstractImportDefinition
         }
 
         $mapped = array_merge($row->mapped_values ?? [], $row->resolved ?? []);
-        $duplicateReferentId = $row->duplicate_of_id ?? $this->duplicateMatcher->match($mapped)?->referentId;
-        $shouldUpdateReferent = $mode === ImportDedupMode::UpdateExisting;
+        $duplicateRegistryId = $row->duplicate_of_id ?? $this->duplicateMatcher->match($mapped)?->registryId;
+        $shouldUpdateRegistry = $mode === ImportDedupMode::UpdateExisting;
 
         // Step 2: a `manual` row parked on a match is governed by the
         // operator's per-row `resolution` (spec 0036), not the run's global
         // strategy: no resolution (or `skip`) never writes — the previous
         // defensive no-op, now explicit; `create` forces a brand-new
-        // Referent+Lead, ignoring the match; `update` targets the matched
-        // Referent's own Lead.
-        if ($mode === ImportDedupMode::Manual && $duplicateReferentId !== null) {
+        // Registry+Lead, ignoring the match; `update` targets the matched
+        // Registry's own Lead.
+        if ($mode === ImportDedupMode::Manual && $duplicateRegistryId !== null) {
             if ($row->resolution !== ImportRowResolution::Create && $row->resolution !== ImportRowResolution::Update) {
                 return;
             }
 
-            $shouldUpdateReferent = $row->resolution === ImportRowResolution::Update;
-            $duplicateReferentId = $shouldUpdateReferent ? $duplicateReferentId : null;
+            $shouldUpdateRegistry = $row->resolution === ImportRowResolution::Update;
+            $duplicateRegistryId = $shouldUpdateRegistry ? $duplicateRegistryId : null;
         }
 
-        // Step 3: update the matched Referent, or create a new one
+        // Step 3: update the matched Registry, or create a new one
         // (create_new always inserts; update_existing with no match falls
         // back to create_new, per spec), then attach the Lead to the
         // configured campaign.
@@ -230,8 +231,8 @@ class LeadsImportDefinition extends AbstractImportDefinition
             $globalConfig,
             $mapped,
             $row->extra_values ?? [],
-            $shouldUpdateReferent,
-            $duplicateReferentId,
+            $shouldUpdateRegistry,
+            $duplicateRegistryId,
         );
     }
 }

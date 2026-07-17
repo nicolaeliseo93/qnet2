@@ -21,7 +21,13 @@ import { useProductCategoryTree } from '@/features/product-categories/use-produc
 import { flattenCategoryTree } from '@/features/product-categories/flatten-tree'
 import { useProductForm } from '@/features/products/use-product-form'
 import { CustomFieldsSection } from '@/features/custom-fields/CustomFieldsSection'
+import { RelationSelectField } from '@/components/form/relation-select-field'
+import { VAT_RATES_FOR_SELECT_RESOURCE } from '@/features/vat-rates/for-select-api'
+import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import type { ProductDetail, ProductFormMode, ProductType } from '@/features/products/types'
+
+/** Filters the supplier picker's `registries` for-select to `is_supplier` records only. */
+const SUPPLIER_PARAMS: Record<string, string | number> = { is_supplier: 1 }
 
 interface ProductFormBodyProps {
   mode: ProductFormMode
@@ -52,13 +58,20 @@ export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyPr
     [treeQuery.data],
   )
 
+  // Edit-mode hydration for the relation pickers below: the loaded product's
+  // `{id, name}` projections, already the shape `RelationSelectField` expects.
+  const selectedVatRate = mode.type === 'edit' ? mode.product.vat_rate : null
+  const selectedSupplier = mode.type === 'edit' ? mode.product.supplier : null
+
   const identityVisible =
     fieldPermission('name').visible ||
     fieldPermission('description').visible ||
     fieldPermission('cost').visible ||
     fieldPermission('price').visible ||
     fieldPermission('category_id').visible ||
-    fieldPermission('product_type').visible
+    fieldPermission('product_type').visible ||
+    fieldPermission('vat_rate_id').visible ||
+    fieldPermission('supplier_id').visible
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -187,6 +200,37 @@ export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyPr
                 )}
               </MetaField>
 
+              <RelationSelectField
+                control={form.control}
+                name="vat_rate_id"
+                metaKey="vat_rate_id"
+                label={t('products.form.vatRate')}
+                resource={VAT_RATES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('products.form.vatRateSearch')}
+                selected={selectedVatRate}
+                placeholder={t('products.form.vatRatePlaceholder')}
+                emptyLabel={t('products.form.vatRateEmpty')}
+                errorLabel={t('products.form.vatRateError')}
+                clearLabel={t('common.clear')}
+                retryLabel={t('common.retry')}
+              />
+
+              <RelationSelectField
+                control={form.control}
+                name="supplier_id"
+                metaKey="supplier_id"
+                label={t('products.form.supplier')}
+                resource={REGISTRIES_FOR_SELECT_RESOURCE}
+                params={SUPPLIER_PARAMS}
+                searchPlaceholder={t('products.form.supplierSearch')}
+                selected={selectedSupplier}
+                placeholder={t('products.form.supplierPlaceholder')}
+                emptyLabel={t('products.form.supplierEmpty')}
+                errorLabel={t('products.form.supplierError')}
+                clearLabel={t('common.clear')}
+                retryLabel={t('common.retry')}
+              />
+
               <MetaField
                 control={form.control}
                 name="product_type"
@@ -228,7 +272,7 @@ export function ProductFormBody({ mode, onSuccess, onCancel }: ProductFormBodyPr
           <div className="mt-auto flex justify-end gap-2 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="outline" className="bg-card"
               onClick={onCancel}
               disabled={form.formState.isSubmitting}
             >

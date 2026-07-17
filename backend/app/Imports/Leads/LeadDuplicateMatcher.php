@@ -6,15 +6,16 @@ use App\Enums\ContactTypeEnum;
 use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\PersonalData;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Support\ContactValueNormalizer;
 
 /**
- * Resolves the EXISTING Referent a staged row collides with, by email/phone/
- * mobile (spec 0033 decision) or, additionally (spec 0036), by
- * `personal_data.tax_code`. Values are compared NORMALIZED (case/whitespace
- * for email/tax_code, digits-only for phone/mobile) rather than via a raw SQL
- * LIKE/collation trick, mirroring GeoResolver::findByName()/
+ * Resolves the EXISTING Registry (Anagrafica) a staged row collides with, by
+ * email/phone/mobile (spec 0033 decision) or, additionally (spec 0036), by
+ * `personal_data.tax_code`. Spec 0041 D-1: the contact matched is a Registry,
+ * not a Referent. Values are compared NORMALIZED (case/whitespace for email/
+ * tax_code, digits-only for phone/mobile) rather than via a raw SQL LIKE/
+ * collation trick, mirroring GeoResolver::findByName()/
  * CompaniesImportDefinition::existsInDatabase() — fetch the (bounded)
  * candidate set via Eloquent, compare in PHP, never interpolate the row's
  * value into SQL. Backs `LeadsImportDefinition::resolveDuplicate()`/
@@ -26,7 +27,7 @@ final class LeadDuplicateMatcher
     private const array MATCH_ORDER = ['email', 'phone', 'mobile', 'tax_code'];
 
     /**
-     * The row's dominant Referent match — id, display name, and every
+     * The row's dominant Registry match — id, display name, and every
      * channel that matches it, cumulative — or null when nothing matches.
      *
      * @param  array<string, mixed>  $mapped  field id => resolved value (after recognizers)
@@ -36,25 +37,25 @@ final class LeadDuplicateMatcher
         // Step 1: an email/phone/mobile Contact match takes priority
         // (unchanged pre-0036 lookup); tax_code is tried only when no
         // contact channel hits, keeping the existing semantics intact.
-        $referentId = $this->matchByContact($mapped) ?? $this->matchByTaxCode($mapped);
+        $registryId = $this->matchByContact($mapped) ?? $this->matchByTaxCode($mapped);
 
-        if ($referentId === null) {
+        if ($registryId === null) {
             return null;
         }
 
         // Step 2: report every channel that ALSO matches the winning
-        // referent (cumulative), not just whichever one found it first.
-        return $this->buildMatch($referentId, $mapped);
+        // registry (cumulative), not just whichever one found it first.
+        return $this->buildMatch($registryId, $mapped);
     }
 
     /**
-     * The id of the Lead already tying the given Referent to the run's
+     * The id of the Lead already tying the given Registry to the run's
      * campaign, or null when none exists (either no lead at all, or only on
      * a DIFFERENT campaign) — spec 0036 AC-002.
      *
      * @param  array<string, mixed>  $globalConfig
      */
-    public function existingLeadId(int $referentId, array $globalConfig): ?int
+    public function existingLeadId(int $registryId, array $globalConfig): ?int
     {
         $campaignId = $this->campaignId($globalConfig);
 
@@ -64,7 +65,7 @@ final class LeadDuplicateMatcher
 
         /** @var int|null $leadId */
         $leadId = Lead::query()
-            ->where('referent_id', $referentId)
+            ->where('registry_id', $registryId)
             ->where('campaign_id', $campaignId)
             ->value('id');
 
@@ -99,10 +100,10 @@ final class LeadDuplicateMatcher
                 continue;
             }
 
-            $referentId = $this->referentIdForCard((int) $contact->contactable_id);
+            $registryId = $this->registryIdForCard((int) $contact->contactable_id);
 
-            if ($referentId !== null) {
-                return $referentId;
+            if ($registryId !== null) {
+                return $registryId;
             }
         }
 
@@ -121,7 +122,7 @@ final class LeadDuplicateMatcher
         }
 
         $cards = PersonalData::query()
-            ->where('personable_type', (new Referent)->getMorphClass())
+            ->where('personable_type', (new Registry)->getMorphClass())
             ->whereNotNull('tax_code')
             ->get(['id', 'tax_code', 'personable_id']);
 
@@ -137,15 +138,15 @@ final class LeadDuplicateMatcher
     /**
      * @param  array<string, mixed>  $mapped
      */
-    private function buildMatch(int $referentId, array $mapped): LeadDuplicateMatch
+    private function buildMatch(int $registryId, array $mapped): LeadDuplicateMatch
     {
-        /** @var Referent|null $referent */
-        $referent = Referent::query()->with('personalData.contacts')->find($referentId);
+        /** @var Registry|null $registry */
+        $registry = Registry::query()->with('personalData.contacts')->find($registryId);
 
         return new LeadDuplicateMatch(
-            referentId: $referentId,
-            referentName: $referent?->name ?? '',
-            matchedOn: $this->matchedOn($referent?->personalData, $mapped),
+            registryId: $registryId,
+            registryName: $registry?->name ?? '',
+            matchedOn: $this->matchedOn($registry?->personalData, $mapped),
         );
     }
 
@@ -218,16 +219,16 @@ final class LeadDuplicateMatcher
     }
 
     /**
-     * The Referent id owning the given personal-data card, or null when the
+     * The Registry id owning the given personal-data card, or null when the
      * card belongs to a different owner (e.g. a User) — a leads import can
-     * only ever match a Referent.
+     * only ever match a Registry (spec 0041 D-1).
      */
-    private function referentIdForCard(int $cardId): ?int
+    private function registryIdForCard(int $cardId): ?int
     {
         /** @var PersonalData|null $card */
         $card = PersonalData::query()->find($cardId, ['id', 'personable_type', 'personable_id']);
 
-        if ($card === null || $card->personable_type !== (new Referent)->getMorphClass()) {
+        if ($card === null || $card->personable_type !== (new Registry)->getMorphClass()) {
             return null;
         }
 

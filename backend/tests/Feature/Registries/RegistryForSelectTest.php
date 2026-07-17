@@ -183,3 +183,48 @@ it('exposes meta.managers as [] when the registry has no account managers', func
 
     expect($item['meta']['managers'])->toBe([]);
 });
+
+// ---------------------------------------------------------------------------
+// is_supplier filter (product supplier picker) — the flag stays OUT of the
+// shared ForSelectQuery DTO; RegistryForSelectController reads it straight
+// off the request and threads it as RegistryService::forSelect()'s 2nd arg.
+// ---------------------------------------------------------------------------
+
+it('is_supplier=1 returns only suppliers', function () {
+    $actor = registryUserWith(['viewAny']);
+    $supplier = Registry::factory()->create(['name' => 'Supplier Registry', 'is_supplier' => true]);
+    $nonSupplier = Registry::factory()->create(['name' => 'Client Registry', 'is_supplier' => false]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/registries/for-select?is_supplier=1')->assertOk();
+    $ids = collect($response->json('items'))->pluck('id');
+
+    expect($ids)->toContain($supplier->id)
+        ->and($ids)->not->toContain($nonSupplier->id);
+});
+
+it('regression: an absent is_supplier returns every registry (suppliers and non-suppliers alike)', function () {
+    $actor = registryUserWith(['viewAny']);
+    $supplier = Registry::factory()->create(['name' => 'Supplier Registry Unfiltered', 'is_supplier' => true]);
+    $nonSupplier = Registry::factory()->create(['name' => 'Client Registry Unfiltered', 'is_supplier' => false]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/registries/for-select?search=Unfiltered')->assertOk();
+    $ids = collect($response->json('items'))->pluck('id');
+
+    expect($ids)->toContain($supplier->id)
+        ->and($ids)->toContain($nonSupplier->id);
+});
+
+it('is_supplier=0 is identical to omitting the flag (returns every registry)', function () {
+    $actor = registryUserWith(['viewAny']);
+    $supplier = Registry::factory()->create(['name' => 'Supplier Registry Zero', 'is_supplier' => true]);
+    $nonSupplier = Registry::factory()->create(['name' => 'Client Registry Zero', 'is_supplier' => false]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson('/api/registries/for-select?is_supplier=0&search=Zero')->assertOk();
+    $ids = collect($response->json('items'))->pluck('id');
+
+    expect($ids)->toContain($supplier->id)
+        ->and($ids)->toContain($nonSupplier->id);
+});

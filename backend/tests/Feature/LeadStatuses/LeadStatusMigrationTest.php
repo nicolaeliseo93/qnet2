@@ -46,10 +46,10 @@ it('backfills lead_status_id for pre-existing leads and locks the column NOT NUL
     $migration->down();
     expect(Schema::hasColumn('leads', 'lead_status_id'))->toBeFalse();
 
-    $referentId = DB::table('referents')->insertGetId(['name' => 'Backfill Referent']);
+    $registryId = DB::table('registries')->insertGetId(['name' => 'Backfill Registry']);
     $campaignId = DB::table('campaigns')->insertGetId(['code' => 'CMP-BF01', 'name' => 'Backfill Campaign']);
     $leadId = DB::table('leads')->insertGetId([
-        'referent_id' => $referentId,
+        'registry_id' => $registryId,
         'campaign_id' => $campaignId,
     ]);
 
@@ -67,7 +67,7 @@ it('backfills lead_status_id for pre-existing leads and locks the column NOT NUL
     // The column is now NOT NULL: an insert that omits it must fail, not
     // silently store a null FK.
     $insertWithoutStatus = fn () => DB::table('leads')->insert([
-        'referent_id' => $referentId,
+        'registry_id' => $registryId,
         'campaign_id' => $campaignId,
     ]);
     expect($insertWithoutStatus)->toThrow(QueryException::class);

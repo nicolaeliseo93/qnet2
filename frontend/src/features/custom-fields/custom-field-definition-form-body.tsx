@@ -85,7 +85,7 @@ export function CustomFieldDefinitionFormBody({
           )}
 
           <div className="mt-auto flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}>
+            <Button type="button" variant="outline" className="bg-card" onClick={onCancel} disabled={form.formState.isSubmitting}>
               {t('customFields.form.cancel')}
             </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>

@@ -49,6 +49,7 @@ Feature-based: `features/<dominio>/{api.ts, types.ts, *-schema.ts, hooks, compon
 ## 9. Anti-pattern frontend
 
 - Non rifare componenti che shadcn/ui fornisce già: usa quelli in `components/ui/` (vedi `ui-design.md`).
+- **Un bottone non deve mai avere lo stesso colore del body/pagina.** Deve restare distinguibile dallo sfondo su cui poggia: mai lasciare un `Button` che si confonde col background (es. `variant="outline"`, che è `bg-transparent`, sopra una pagina chiara sembra "senza sfondo"). Dagli un fill proprio — variante con riempimento (`default`/`secondary`) oppure un background esplicito (`bg-white`/`bg-card`) sull'outline — così il bottone si stacca sempre dal body.
 - **Attenzione alla "casa di carte"**: il codice React generato sembra finito ma, aggiungendo auth/sorting/realtime, cresce a file da 1K+ righe ingestibili. Tieni i file piccoli (CORE §2) e **verifica eseguendo** (Vitest), non a vista.
 
 > Skill di riferimento on-demand in `.claude/skills/`: **`react-testing`**, **`vite-patterns`**, **`react-performance`**. Le regole `react-hooks.md` e `react-security.md` si auto-attaccano via `paths:` ai file `**/*.tsx`.

@@ -35,6 +35,7 @@ class RegistryForSelectRequest extends FormRequest
             'limit' => ['sometimes', 'integer', 'min:1', "max:{$maxLimit}"],
             'ids' => ['sometimes', 'array'],
             'ids.*' => ['integer'],
+            'is_supplier' => ['sometimes', 'boolean'],
         ];
     }
 

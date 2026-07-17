@@ -8,6 +8,8 @@ use App\Http\Controllers\Sources\SourceController;
 use App\Http\Controllers\Sources\SourceForSelectController;
 use App\Http\Controllers\Tags\TagController;
 use App\Http\Controllers\Tags\TagForSelectController;
+use App\Http\Controllers\VatRates\VatRateController;
+use App\Http\Controllers\VatRates\VatRateForSelectController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -94,3 +96,17 @@ Route::get('lead-statuses/{leadStatus}', [LeadStatusController::class, 'show']);
 Route::post('lead-statuses', [LeadStatusController::class, 'store']);
 Route::match(['put', 'patch'], 'lead-statuses/{leadStatus}', [LeadStatusController::class, 'update']);
 Route::delete('lead-statuses/{leadStatus}', [LeadStatusController::class, 'destroy']);
+
+// VAT rates CRUD: a standalone lookup used to assign a VAT percentage to a
+// Product. Authorization (vat-rates.view/create/update/delete) is enforced
+// server-side in VatRateController via VatRatePolicy on every endpoint.
+// Minimal searchable/paginated list for entity-backed selects (for-select
+// standard, ADR 0011). Declared ABOVE vat-rates/{vatRate} so the literal
+// `for-select` segment wins over the bound wildcard. Gated by
+// vat-rates.viewAny server-side in VatRateForSelectController.
+Route::get('vat-rates/for-select', VatRateForSelectController::class);
+
+Route::get('vat-rates/{vatRate}', [VatRateController::class, 'show']);
+Route::post('vat-rates', [VatRateController::class, 'store']);
+Route::match(['put', 'patch'], 'vat-rates/{vatRate}', [VatRateController::class, 'update']);
+Route::delete('vat-rates/{vatRate}', [VatRateController::class, 'destroy']);

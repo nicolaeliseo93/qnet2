@@ -221,7 +221,7 @@ export function ProductCategoryFormBody({ mode, onSuccess, onCancel }: ProductCa
           <div className="mt-auto flex justify-end gap-2 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="outline" className="bg-card"
               onClick={onCancel}
               disabled={form.formState.isSubmitting}
             >

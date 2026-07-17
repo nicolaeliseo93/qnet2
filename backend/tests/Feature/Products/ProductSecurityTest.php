@@ -3,6 +3,7 @@
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\VatRate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Permission;
@@ -101,6 +102,38 @@ it('update: an untouched non-editable field is a harmless no-op (unrelated field
     $this->patchJson("/api/products/{$product->id}", ['name' => 'After', 'description' => 'keep'])
         ->assertOk()
         ->assertJsonPath('data.name', 'After');
+});
+
+// ---------------------------------------------------------------------------
+// vat_rate_id — EnforcesFieldPermissions parity with the pre-existing fields
+// ---------------------------------------------------------------------------
+
+it('update: vat_rate_id made non-editable by the DB matrix and changed → 422', function () {
+    foreach (['viewAny', 'view', 'update'] as $ability) {
+        Permission::findOrCreate("products.{$ability}");
+    }
+
+    $role = Role::create(['name' => 'product-vat-rate-locked']);
+    $role->givePermissionTo(['products.view', 'products.update']);
+    $role->fieldPermissions()->create([
+        'resource' => 'products',
+        'field' => 'vat_rate_id',
+        'visible' => true,
+        'editable' => false,
+        'required' => false,
+    ]);
+
+    $actor = User::factory()->create();
+    $actor->assignRole($role);
+
+    $vatRate = VatRate::factory()->create();
+    $product = Product::factory()->create(['vat_rate_id' => null]);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/products/{$product->id}", ['vat_rate_id' => $vatRate->id])
+        ->assertStatus(422)->assertJsonValidationErrors('vat_rate_id');
+
+    expect($product->fresh()->vat_rate_id)->toBeNull();
 });
 
 // ---------------------------------------------------------------------------

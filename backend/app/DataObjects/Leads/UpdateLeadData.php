@@ -21,8 +21,8 @@ final readonly class UpdateLeadData
      * @param  array<string, string>|null  $extraFields
      */
     public function __construct(
-        public ?int $referentId = null,
-        public bool $referentIdSubmitted = false,
+        public ?int $registryId = null,
+        public bool $registryIdSubmitted = false,
         public ?int $campaignId = null,
         public bool $campaignIdSubmitted = false,
         public ?int $operationalSiteId = null,
@@ -47,8 +47,8 @@ final readonly class UpdateLeadData
     public static function fromValidated(array $data): self
     {
         return new self(
-            referentId: self::nullableInt($data, 'referent_id'),
-            referentIdSubmitted: array_key_exists('referent_id', $data),
+            registryId: self::nullableInt($data, 'registry_id'),
+            registryIdSubmitted: array_key_exists('registry_id', $data),
             campaignId: self::nullableInt($data, 'campaign_id'),
             campaignIdSubmitted: array_key_exists('campaign_id', $data),
             operationalSiteId: self::nullableInt($data, 'operational_site_id'),
@@ -76,8 +76,8 @@ final readonly class UpdateLeadData
     {
         $attributes = [];
 
-        if ($this->referentIdSubmitted) {
-            $attributes['referent_id'] = $this->referentId;
+        if ($this->registryIdSubmitted) {
+            $attributes['registry_id'] = $this->registryId;
         }
 
         if ($this->campaignIdSubmitted) {

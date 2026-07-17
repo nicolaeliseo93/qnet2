@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { RelationFieldRef } from '@/components/form/relation-select-field'
 import type { ForSelectItem } from '@/features/for-select/types'
 import type { OpportunityFormMode } from '@/features/opportunities/types'
+import type { OpportunityLeadSelectionState } from '@/features/opportunities/use-opportunity-lead-selection'
 
 /** Every relation picker's edit-mode hydration, resolved once by the form hook (mirrors `RegistrySelectedItems`). */
 export interface OpportunitySelectedItems {
@@ -40,8 +41,16 @@ const EMPTY_SELECTED_ITEMS: OpportunitySelectedItems = {
  * (spec 0040 MT-6) in a create-from-lead — so each `AsyncPaginatedSelect`
  * shows its (possibly locked) current selection immediately, no hydration
  * round-trip. A plain manual create has nothing to hydrate.
+ *
+ * `leadSelection.registry` (spec 0041 AC-051) takes precedence over
+ * `mode.fromLead.references.registry`: it reflects the in-form "Lead" picker,
+ * which can supersede the initial deep-link lead after mount, while the
+ * latter only ever hydrates the very first render.
  */
-export function useOpportunitySelectedItems(mode: OpportunityFormMode): OpportunitySelectedItems {
+export function useOpportunitySelectedItems(
+  mode: OpportunityFormMode,
+  leadSelection: OpportunityLeadSelectionState,
+): OpportunitySelectedItems {
   return useMemo(() => {
     if (mode.type === 'edit') {
       const { opportunity } = mode
@@ -62,20 +71,19 @@ export function useOpportunitySelectedItems(mode: OpportunityFormMode): Opportun
         managers: opportunity.managers.map((manager) => ({ id: manager.id, label: manager.name })),
       }
     }
-    if (!mode.fromLead) {
+    const references = mode.fromLead?.references
+    if (!references && !leadSelection.registry) {
       return EMPTY_SELECTED_ITEMS
     }
-    const { references } = mode.fromLead
     return {
       ...EMPTY_SELECTED_ITEMS,
-      registry: references.registry,
-      referent: references.referent,
-      source: references.source,
-      operationalSite: references.operational_site
+      registry: leadSelection.registry ?? references?.registry ?? null,
+      source: references?.source ?? null,
+      operationalSite: references?.operational_site
         ? { id: references.operational_site.id, name: references.operational_site.label }
         : null,
-      businessFunction: references.business_function,
-      productCategory: references.product_category,
+      businessFunction: references?.business_function ?? null,
+      productCategory: references?.product_category ?? null,
     }
-  }, [mode])
+  }, [mode, leadSelection.registry])
 }

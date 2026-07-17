@@ -33,7 +33,7 @@ class RegistryForSelectController extends BaseApiController
         try {
             $this->authorize('viewAny', Registry::class);
 
-            $result = $this->service->forSelect($request->toData());
+            $result = $this->service->forSelect($request->toData(), $request->boolean('is_supplier'));
 
             return $this->paginatedResponse(
                 RegistryForSelectResource::collection($result->items),

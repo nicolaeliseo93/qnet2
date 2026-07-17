@@ -17,7 +17,7 @@ use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\PersonalData;
 use App\Models\Province;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\Source;
 use App\Models\State;
 use App\Models\User;
@@ -57,10 +57,10 @@ function stagedLeadRow(array $mapped, array $resolved = [], array $extraValues =
 }
 
 // ---------------------------------------------------------------------------
-// AC-011 — create_new: Referent (card+contacts+geo address) + Lead
+// AC-011 — create_new: Registry (card+contacts+geo address) + Lead
 // ---------------------------------------------------------------------------
 
-it('AC-011: persistRow creates a Referent (card+contacts+geo address) and a Lead in the campaign (create_new)', function () {
+it('AC-011: persistRow creates a Registry (card+contacts+geo address) and a Lead in the campaign (create_new)', function () {
     $geo = leadsImportGeoChain();
     $actor = User::factory()->create();
     $campaign = Campaign::factory()->create();
@@ -96,17 +96,17 @@ it('AC-011: persistRow creates a Referent (card+contacts+geo address) and a Lead
         'lead_status_id' => $status->id,
     ], ImportDedupMode::CreateNew->value);
 
-    $referent = Referent::query()->where('name', 'Mario Rossi')->firstOrFail();
-    expect($referent->personalData->type)->toBe(PersonalDataTypeEnum::Individual)
-        ->and($referent->personalData->first_name)->toBe('Mario')
-        ->and($referent->personalData->last_name)->toBe('Rossi');
+    $registry = Registry::query()->where('name', 'Mario Rossi')->firstOrFail();
+    expect($registry->personalData->type)->toBe(PersonalDataTypeEnum::Individual)
+        ->and($registry->personalData->first_name)->toBe('Mario')
+        ->and($registry->personalData->last_name)->toBe('Rossi');
 
-    $emailContact = $referent->personalData->contacts->first(fn (Contact $contact): bool => $contact->type === ContactTypeEnum::Email);
-    $phoneContact = $referent->personalData->contacts->first(fn (Contact $contact): bool => $contact->type === ContactTypeEnum::Phone);
+    $emailContact = $registry->personalData->contacts->first(fn (Contact $contact): bool => $contact->type === ContactTypeEnum::Email);
+    $phoneContact = $registry->personalData->contacts->first(fn (Contact $contact): bool => $contact->type === ContactTypeEnum::Phone);
     expect($emailContact->value)->toBe('Mario.Rossi@Example.com')
         ->and($phoneContact->value)->toBe('+39 02 1234567');
 
-    $address = $referent->personalData->addresses->first();
+    $address = $registry->personalData->addresses->first();
     expect($address->line1)->toBe('Via Roma 1')
         ->and($address->postal_code)->toBe('20100')
         ->and($address->city_id)->toBe($geo['city']->id)
@@ -114,7 +114,7 @@ it('AC-011: persistRow creates a Referent (card+contacts+geo address) and a Lead
         ->and($address->state_id)->toBe($geo['state']->id)
         ->and($address->country_id)->toBe($geo['country']->id);
 
-    $lead = Lead::query()->where('referent_id', $referent->id)->where('campaign_id', $campaign->id)->firstOrFail();
+    $lead = Lead::query()->where('registry_id', $registry->id)->where('campaign_id', $campaign->id)->firstOrFail();
     expect($lead->source_id)->toBe($source->id)
         ->and($lead->operator_id)->toBe($operator->id)
         ->and($lead->lead_status_id)->toBe($status->id)
@@ -133,8 +133,8 @@ it('AC-011: a company-shaped row (company_name, no first/last) creates a company
         'lead_status_id' => $status->id,
     ], ImportDedupMode::CreateNew->value);
 
-    $referent = Referent::query()->where('name', 'Acme Srl')->firstOrFail();
-    expect($referent->personalData->type)->toBe(PersonalDataTypeEnum::Company);
+    $registry = Registry::query()->where('name', 'Acme Srl')->firstOrFail();
+    expect($registry->personalData->type)->toBe(PersonalDataTypeEnum::Company);
 });
 
 it('AC-011: an unidentifiable row (no name/company/contact) is rejected by validateRow()', function () {
@@ -157,27 +157,27 @@ it('AC-011: an invalid email format is rejected by validateRow()', function () {
 });
 
 // ---------------------------------------------------------------------------
-// AC-012 — the 4 dedup strategies + resolveDuplicate() (Referent match)
+// AC-012 — the 4 dedup strategies + resolveDuplicate() (Registry match)
 // ---------------------------------------------------------------------------
 
-it('AC-012: resolveDuplicate matches an existing Referent by normalized email', function () {
-    $referent = Referent::factory()->create();
-    $card = PersonalData::factory()->individual()->for($referent, 'personable')->create();
+it('AC-012: resolveDuplicate matches an existing Registry by normalized email', function () {
+    $registry = Registry::factory()->create();
+    $card = PersonalData::factory()->individual()->for($registry, 'personable')->create();
     Contact::factory()->email()->for($card, 'contactable')->create(['value' => 'match@example.com']);
 
     $definition = app(LeadsImportDefinition::class);
 
-    expect($definition->resolveDuplicate(['email' => ' Match@Example.com ']))->toBe($referent->id);
+    expect($definition->resolveDuplicate(['email' => ' Match@Example.com ']))->toBe($registry->id);
 });
 
-it('AC-012: resolveDuplicate matches an existing Referent by normalized phone (formatting-insensitive)', function () {
-    $referent = Referent::factory()->create();
-    $card = PersonalData::factory()->individual()->for($referent, 'personable')->create();
+it('AC-012: resolveDuplicate matches an existing Registry by normalized phone (formatting-insensitive)', function () {
+    $registry = Registry::factory()->create();
+    $card = PersonalData::factory()->individual()->for($registry, 'personable')->create();
     Contact::factory()->mobile()->for($card, 'contactable')->create(['value' => '333 123 4567']);
 
     $definition = app(LeadsImportDefinition::class);
 
-    expect($definition->resolveDuplicate(['mobile' => '3331234567']))->toBe($referent->id);
+    expect($definition->resolveDuplicate(['mobile' => '3331234567']))->toBe($registry->id);
 });
 
 it('AC-012: resolveDuplicate returns null when nothing matches', function () {
@@ -186,8 +186,8 @@ it('AC-012: resolveDuplicate returns null when nothing matches', function () {
     expect($definition->resolveDuplicate(['email' => 'nobody@example.com']))->toBeNull();
 });
 
-it('AC-012: create_new always inserts a new Referent, even when a duplicate matches', function () {
-    $existing = Referent::factory()->create();
+it('AC-012: create_new always inserts a new Registry, even when a duplicate matches', function () {
+    $existing = Registry::factory()->create();
     $card = PersonalData::factory()->individual()->for($existing, 'personable')->create();
     Contact::factory()->email()->for($card, 'contactable')->create(['value' => 'dup@example.com']);
 
@@ -200,12 +200,12 @@ it('AC-012: create_new always inserts a new Referent, even when a duplicate matc
         'lead_status_id' => $status->id,
     ], ImportDedupMode::CreateNew->value);
 
-    expect(Referent::query()->count())->toBe(2)
-        ->and(Lead::query()->where('referent_id', $existing->id)->exists())->toBeFalse();
+    expect(Registry::query()->count())->toBe(2)
+        ->and(Lead::query()->where('registry_id', $existing->id)->exists())->toBeFalse();
 });
 
-it('AC-012: update_existing updates the matched Referent card and preserves its OTHER contact types', function () {
-    $existing = Referent::factory()->create(['name' => 'Old Name']);
+it('AC-012: update_existing updates the matched Registry card and preserves its OTHER contact types', function () {
+    $existing = Registry::factory()->create(['name' => 'Old Name']);
     $card = PersonalData::factory()->individual()->for($existing, 'personable')->create(['first_name' => 'Old', 'last_name' => 'Name']);
     Contact::factory()->email()->for($card, 'contactable')->create(['value' => 'dup@example.com']);
     $pec = Contact::factory()->pec()->for($card, 'contactable')->create(['value' => 'old@pec.example.com']);
@@ -222,7 +222,7 @@ it('AC-012: update_existing updates the matched Referent card and preserves its 
         'lead_status_id' => $status->id,
     ], ImportDedupMode::UpdateExisting->value);
 
-    expect(Referent::query()->count())->toBe(1);
+    expect(Registry::query()->count())->toBe(1);
 
     $existing->refresh();
     expect($existing->personalData->first_name)->toBe('New')
@@ -231,7 +231,7 @@ it('AC-012: update_existing updates the matched Referent card and preserves its 
     $pec->refresh();
     expect($pec->value)->toBe('old@pec.example.com');
 
-    $lead = Lead::query()->where('referent_id', $existing->id)->where('campaign_id', $campaign->id)->firstOrFail();
+    $lead = Lead::query()->where('registry_id', $existing->id)->where('campaign_id', $campaign->id)->firstOrFail();
     expect($lead->lead_status_id)->toBe($status->id);
 });
 
@@ -245,7 +245,7 @@ it('AC-012: update_existing with NO match falls back to create_new', function ()
         'lead_status_id' => $status->id,
     ], ImportDedupMode::UpdateExisting->value);
 
-    expect(Referent::query()->count())->toBe(1)
+    expect(Registry::query()->count())->toBe(1)
         ->and(Lead::query()->count())->toBe(1);
 });
 
@@ -259,12 +259,12 @@ it('AC-012: ignore never persists anything', function () {
         'lead_status_id' => $status->id,
     ], ImportDedupMode::Ignore->value);
 
-    expect(Referent::query()->count())->toBe(0)
+    expect(Registry::query()->count())->toBe(0)
         ->and(Lead::query()->count())->toBe(0);
 });
 
 it('AC-012: manual with a resolved duplicate is defensively left untouched (parked for review)', function () {
-    $existing = Referent::factory()->create();
+    $existing = Registry::factory()->create();
     $card = PersonalData::factory()->individual()->for($existing, 'personable')->create();
     Contact::factory()->email()->for($card, 'contactable')->create(['value' => 'dup@example.com']);
 
@@ -277,7 +277,7 @@ it('AC-012: manual with a resolved duplicate is defensively left untouched (park
         'lead_status_id' => $status->id,
     ], ImportDedupMode::Manual->value);
 
-    expect(Referent::query()->count())->toBe(1)
+    expect(Registry::query()->count())->toBe(1)
         ->and(Lead::query()->count())->toBe(0);
 });
 
@@ -291,7 +291,7 @@ it('AC-012: manual with NO duplicate creates normally', function () {
         'lead_status_id' => $status->id,
     ], ImportDedupMode::Manual->value);
 
-    expect(Referent::query()->count())->toBe(1)
+    expect(Registry::query()->count())->toBe(1)
         ->and(Lead::query()->count())->toBe(1);
 });
 
@@ -316,8 +316,8 @@ it('AC-013: extra_values are persisted verbatim on leads.extra_fields, under the
     $lead = Lead::query()->latest('id')->firstOrFail();
     expect($lead->extra_fields)->toBe(['Origine Lead' => 'Fiera Milano', 'Note interne' => 'VIP']);
 
-    $referent = $lead->referent;
-    expect($referent->personalData->getAttributes())->not->toHaveKey('Origine Lead');
+    $registry = $lead->registry;
+    expect($registry->personalData->getAttributes())->not->toHaveKey('Origine Lead');
 });
 
 it('AC-013: no extra_values leaves leads.extra_fields null', function () {

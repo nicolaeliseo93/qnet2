@@ -20,6 +20,8 @@ final readonly class CreateProductData
         public float $price,
         public int $categoryId,
         public ProductType $productType,
+        public ?int $vatRateId = null,
+        public ?int $supplierId = null,
     ) {}
 
     /**
@@ -36,6 +38,8 @@ final readonly class CreateProductData
             price: (float) $data['price'],
             categoryId: (int) $data['category_id'],
             productType: ProductType::from((string) $data['product_type']),
+            vatRateId: array_key_exists('vat_rate_id', $data) && $data['vat_rate_id'] !== null ? (int) $data['vat_rate_id'] : null,
+            supplierId: array_key_exists('supplier_id', $data) && $data['supplier_id'] !== null ? (int) $data['supplier_id'] : null,
         );
     }
 }

@@ -91,7 +91,7 @@ function duplicateRowItem(overrides: Partial<ImportRunRowItem> = {}): ImportRunR
   return rowItem({
     status: 'duplicate',
     duplicate_of_id: 5,
-    duplicate_meta: { referent_id: 5, referent_name: 'Mario Rossi', lead_id: null, matched_on: ['email'] },
+    duplicate_meta: { registry_id: 5, registry_name: 'Mario Rossi', lead_id: null, matched_on: ['email'] },
     resolution: null,
     messages: [],
     ...overrides,

@@ -63,8 +63,8 @@ if (! function_exists('opportunityFromLeadActor')) {
 }
 
 /**
- * A lead whose campaign is standalone (no project) and NOT NULL on every
- * BR-1-derivable source column, so every one of the 6 fields locks.
+ * A lead with its own registry (spec 0041 D-3) and NOT NULL on every other
+ * BR-1-derivable source column, so every one of the 5 fields locks.
  */
 function completeLead(): Lead
 {
@@ -74,7 +74,6 @@ function completeLead(): Lead
     $productCategory = ProductCategory::factory()->create();
 
     $campaign = Campaign::factory()->create([
-        'registry_id' => $registry->id,
         'source_id' => $source->id,
         'business_function_id' => $businessFunction->id,
         'product_category_id' => $productCategory->id,
@@ -82,17 +81,19 @@ function completeLead(): Lead
 
     return Lead::factory()->create([
         'campaign_id' => $campaign->id,
-        'referent_id' => Referent::factory()->create()->id,
+        'registry_id' => $registry->id,
         'operational_site_id' => OperationalSite::factory()->withAddress()->create()->id,
         'source_id' => null,
     ]);
 }
 
 // ---------------------------------------------------------------------------
-// AC-060 — GET opportunity-defaults, lead completo -> 6 campi valorizzati e bloccati
+// AC-060 — GET opportunity-defaults, lead completo -> 5 campi valorizzati e bloccati
+// (spec 0041 D-3: referent_id is no longer derivable, registry_id comes from
+// the lead itself, not the campaign)
 // ---------------------------------------------------------------------------
 
-it('opportunity-defaults: a complete lead locks all 6 derivable fields (AC-060)', function () {
+it('opportunity-defaults: a complete lead locks all 5 derivable fields (AC-060, AC-050 spec 0041)', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
     Sanctum::actingAs($actor);
@@ -101,16 +102,16 @@ it('opportunity-defaults: a complete lead locks all 6 derivable fields (AC-060)'
 
     expect($response->json('data.lead_id'))->toBe($lead->id);
     expect($response->json('data.existing_opportunity_id'))->toBeNull();
-    expect($response->json('data.values.referent_id'))->toBe($lead->referent_id);
     expect($response->json('data.values.operational_site_id'))->toBe($lead->operational_site_id);
-    expect($response->json('data.values.registry_id'))->toBe($lead->campaign->registry_id);
+    expect($response->json('data.values.registry_id'))->toBe($lead->registry_id);
     expect($response->json('data.values.source_id'))->toBe($lead->campaign->source_id);
     expect($response->json('data.values.business_function_id'))->toBe($lead->campaign->business_function_id);
     expect($response->json('data.values.product_category_id'))->toBe($lead->campaign->product_category_id);
     expect($response->json('data.locked_fields'))->toEqualCanonicalizing([
-        'referent_id', 'source_id', 'operational_site_id', 'registry_id', 'business_function_id', 'product_category_id',
+        'source_id', 'operational_site_id', 'registry_id', 'business_function_id', 'product_category_id',
     ]);
-    expect($response->json('data.references.referent.id'))->toBe($lead->referent_id);
+    expect($response->json('data.locked_fields'))->not->toContain('referent_id');
+    expect($response->json('data.references.registry.id'))->toBe($lead->registry_id);
 });
 
 // ---------------------------------------------------------------------------
@@ -198,26 +199,40 @@ it('create with lead_id: the server writes the derived attributes (AC-063)', fun
     $this->assertDatabaseHas('opportunities', [
         'id' => $response->json('data.id'),
         'lead_id' => $lead->id,
-        'referent_id' => $lead->referent_id,
         'operational_site_id' => $lead->operational_site_id,
-        'registry_id' => $lead->campaign->registry_id,
+        'registry_id' => $lead->registry_id,
         'source_id' => $lead->campaign->source_id,
         'business_function_id' => $lead->campaign->business_function_id,
         'product_category_id' => $lead->campaign->product_category_id,
     ]);
 });
 
+it('create with lead_id: referent_id is NOT derived/prohibited, freely chosen even with a complete lead (spec 0041 D-3)', function () {
+    $actor = opportunityFromLeadActor(['create'], ['view']);
+    $lead = completeLead();
+    $referent = Referent::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/opportunities', array_merge([
+        'name' => 'Freely chosen referent',
+        'lead_id' => $lead->id,
+        'referent_id' => $referent->id,
+    ], nonDerivableOpportunityFks()))->assertCreated();
+
+    expect($response->json('data.referent_id'))->toBe($referent->id);
+});
+
 it('create with lead_id: sending a derivable field with a non-null derivation -> 422 prohibited (AC-063)', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
-    $otherReferent = Referent::factory()->create();
+    $otherRegistry = Registry::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/opportunities', array_merge([
-        'name' => 'Conflicting referent',
+        'name' => 'Conflicting registry',
         'lead_id' => $lead->id,
-        'referent_id' => $otherReferent->id,
-    ], nonDerivableOpportunityFks()))->assertStatus(422)->assertJsonValidationErrors('referent_id');
+        'registry_id' => $otherRegistry->id,
+    ], nonDerivableOpportunityFks()))->assertStatus(422)->assertJsonValidationErrors('registry_id');
 
     expect(Opportunity::count())->toBe(0);
 });
@@ -282,10 +297,10 @@ it('update: a locked field with a DIFFERENT value -> 422 (AC-064)', function () 
         ->assertCreated();
     $opportunityId = $created->json('data.id');
 
-    $otherReferent = Referent::factory()->create();
+    $otherRegistry = Registry::factory()->create();
 
-    $this->patchJson("/api/opportunities/{$opportunityId}", ['referent_id' => $otherReferent->id])
-        ->assertStatus(422)->assertJsonValidationErrors('referent_id');
+    $this->patchJson("/api/opportunities/{$opportunityId}", ['registry_id' => $otherRegistry->id])
+        ->assertStatus(422)->assertJsonValidationErrors('registry_id');
 });
 
 it('update: the SAME value for a locked field -> 200, no-op (AC-064)', function () {
@@ -297,9 +312,25 @@ it('update: the SAME value for a locked field -> 200, no-op (AC-064)', function 
         ->assertCreated();
     $opportunityId = $created->json('data.id');
 
-    $this->patchJson("/api/opportunities/{$opportunityId}", ['referent_id' => $lead->referent_id])
+    $this->patchJson("/api/opportunities/{$opportunityId}", ['registry_id' => $lead->registry_id])
         ->assertOk()
-        ->assertJsonPath('data.referent_id', $lead->referent_id);
+        ->assertJsonPath('data.registry_id', $lead->registry_id);
+});
+
+it('update: referent_id is freely editable even when the opportunity has a lead (spec 0041 D-3)', function () {
+    $actor = opportunityFromLeadActor(['create', 'update'], ['view']);
+    $lead = completeLead();
+    Sanctum::actingAs($actor);
+
+    $created = $this->postJson('/api/opportunities', array_merge(['name' => 'Unlocked referent', 'lead_id' => $lead->id], nonDerivableOpportunityFks()))
+        ->assertCreated();
+    $opportunityId = $created->json('data.id');
+
+    $newReferent = Referent::factory()->create();
+
+    $this->patchJson("/api/opportunities/{$opportunityId}", ['referent_id' => $newReferent->id])
+        ->assertOk()
+        ->assertJsonPath('data.referent_id', $newReferent->id);
 });
 
 it('update: lead_id is prohibited (AC-064)', function () {
@@ -320,6 +351,9 @@ it('update: a field with a NULL derivation stays freely editable (AC-064)', func
         'product_category_id' => ProductCategory::factory(),
     ]);
     $campaign = Campaign::factory()->forProject($project)->create();
+    // registry_id is omitted here: it is ALWAYS non-null on a Lead (BR-1,
+    // spec 0041 D-1), so it always locks — unlike operational_site_id below,
+    // which stays a valid null derivation when the lead has no site.
     $lead = Lead::factory()->create(['campaign_id' => $campaign->id, 'operational_site_id' => null]);
     Sanctum::actingAs($actor);
 
@@ -328,7 +362,6 @@ it('update: a field with a NULL derivation stays freely editable (AC-064)', func
     $created = $this->postJson('/api/opportunities', array_merge([
         'name' => 'Unlocked site',
         'lead_id' => $lead->id,
-        'registry_id' => Registry::factory()->create()->id,
         'operational_site_id' => $initialSite->id,
     ], nonDerivableOpportunityFks()))->assertCreated();
     $opportunityId = $created->json('data.id');
@@ -384,9 +417,9 @@ it('detail: an opportunity from a lead exposes lead {id,label} and locked_fields
     $this->getJson("/api/opportunities/{$opportunityId}")
         ->assertOk()
         ->assertJsonPath('data.lead.id', $lead->id)
-        ->assertJsonPath('data.lead.label', $lead->referent->name)
+        ->assertJsonPath('data.lead.label', $lead->registry->name)
         ->assertJsonPath('data.locked_fields', [
-            'referent_id', 'source_id', 'operational_site_id', 'registry_id', 'business_function_id', 'product_category_id',
+            'source_id', 'operational_site_id', 'registry_id', 'business_function_id', 'product_category_id',
         ]);
 });
 

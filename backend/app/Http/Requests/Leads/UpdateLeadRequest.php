@@ -10,9 +10,9 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Validates the payload for PUT/PATCH /api/leads/{lead} (spec 0024). Every
- * field is `sometimes` (partial PATCH); `referent_id`/`campaign_id`/
- * `lead_status_id`, IF submitted, cannot be null (BR-1, spec 0029 D-1 —
+ * Validates the payload for PUT/PATCH /api/leads/{lead} (spec 0024, spec 0041
+ * D-1). Every field is `sometimes` (partial PATCH); `registry_id`/
+ * `campaign_id`/`lead_status_id`, IF submitted, cannot be null (BR-1, spec 0029 D-1 —
  * mandatory fields never accept an empty value once touched).
  *
  * Authorization is intentionally NOT handled here (it stays in the
@@ -36,7 +36,7 @@ class UpdateLeadRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'referent_id' => ['sometimes', 'required', 'integer', Rule::exists('referents', 'id')],
+            'registry_id' => ['sometimes', 'required', 'integer', Rule::exists('registries', 'id')],
             'campaign_id' => ['sometimes', 'required', 'integer', Rule::exists('campaigns', 'id')],
             'operational_site_id' => ['sometimes', 'nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'source_id' => ['sometimes', 'nullable', 'integer', Rule::exists('sources', 'id')],

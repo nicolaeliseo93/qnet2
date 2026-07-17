@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { UseFormSetValue } from 'react-hook-form'
+import type { RelationFieldRef } from '@/components/form/relation-select-field'
 import { fetchOpportunityDefaultsOnce } from '@/features/opportunities/opportunity-defaults-api'
 import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
 
-/** The 6 BR-1 fields a lead selection writes to (or clears from) the form. */
+/**
+ * The 5 BR-1 fields a lead selection writes to (or clears from) the form.
+ * `referent_id` is NOT among them (spec 0041 D-3): it stays a free,
+ * anagrafica-scoped pick (BR-4 spec 0040), never derived/locked by the lead.
+ */
 const DERIVED_FIELDS = [
-  'referent_id',
   'source_id',
   'operational_site_id',
   'registry_id',
@@ -20,8 +24,8 @@ export interface OpportunityLeadSelectionState {
   lockedFields: string[]
   /** D-2: the lead is already linked to another opportunity — the form must block the submit, never write derived values. */
   existingOpportunityId: number | null
-  /** The lead's referent name (its identity, D-3), for the select's trigger label and the origin banner. */
-  referentName: string | null
+  /** The lead's anagrafica (its identity, spec 0041 D-3): the single source for both the Lead select's own trigger label and the registry picker's. */
+  registry: RelationFieldRef | null
   /** True while the one-shot defaults fetch triggered by a fresh selection is in flight. */
   isApplying: boolean
   /** The defaults fetch failed; the selection was rolled back to "none". */
@@ -32,7 +36,7 @@ const EMPTY_STATE: OpportunityLeadSelectionState = {
   leadId: null,
   lockedFields: [],
   existingOpportunityId: null,
-  referentName: null,
+  registry: null,
   isApplying: false,
   isError: false,
 }
@@ -40,7 +44,7 @@ const EMPTY_STATE: OpportunityLeadSelectionState = {
 export interface OpportunityLeadSelectionInitial {
   leadId: number
   lockedFields: string[]
-  referentName: string | null
+  registry: RelationFieldRef | null
 }
 
 /**
@@ -48,7 +52,7 @@ export interface OpportunityLeadSelectionInitial {
  * picking a lead applies BR-1's derived values and BR-2's locks EXACTLY like
  * the `?lead_id=N` deep-link — same one-shot fetch, same cache entry as
  * `useOpportunityDefaults` (`fetchOpportunityDefaultsOnce`), no second
- * implementation. Clearing the selection resets and unlocks the 6 derived
+ * implementation. Clearing the selection resets and unlocks the 5 derived
  * fields (the least surprising behavior: a field that no longer has a source
  * of truth should not silently keep looking "derived"). A lead already linked
  * to another opportunity (D-2) is surfaced without ever writing to the form.
@@ -64,7 +68,7 @@ export function useOpportunityLeadSelection(
           ...EMPTY_STATE,
           leadId: initial.leadId,
           lockedFields: initial.lockedFields,
-          referentName: initial.referentName,
+          registry: initial.registry,
         }
       : EMPTY_STATE,
   )
@@ -91,12 +95,11 @@ export function useOpportunityLeadSelection(
           ...EMPTY_STATE,
           leadId,
           existingOpportunityId: defaults.existing_opportunity_id,
-          referentName: defaults.references.referent?.name ?? null,
+          registry: defaults.references.registry,
         })
         return
       }
 
-      setValue('referent_id', defaults.values.referent_id, { shouldDirty: true })
       setValue('source_id', defaults.values.source_id, { shouldDirty: true })
       setValue('operational_site_id', defaults.values.operational_site_id, { shouldDirty: true })
       setValue('registry_id', defaults.values.registry_id, { shouldDirty: true })
@@ -107,7 +110,7 @@ export function useOpportunityLeadSelection(
         leadId,
         lockedFields: defaults.locked_fields,
         existingOpportunityId: null,
-        referentName: defaults.references.referent?.name ?? null,
+        registry: defaults.references.registry,
         isApplying: false,
         isError: false,
       })

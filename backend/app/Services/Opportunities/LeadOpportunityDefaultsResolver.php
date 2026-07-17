@@ -10,29 +10,32 @@ use App\Models\Lead;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * BR-1 (spec 0040): resolves the values an Opportunity inherits from a Lead
- * and its Campaign — the SINGLE derivation point consumed both by the
- * `GET /api/leads/{lead}/opportunity-defaults` prefill endpoint and by the
- * OpportunityService/StoreOpportunityRequest/UpdateOpportunityRequest lock
- * enforcement (BR-2), so the two can never drift apart.
+ * BR-1 (spec 0040, spec 0041 D-3): resolves the values an Opportunity
+ * inherits from a Lead and its Campaign — the SINGLE derivation point
+ * consumed both by the `GET /api/leads/{lead}/opportunity-defaults` prefill
+ * endpoint and by the OpportunityService/StoreOpportunityRequest/
+ * UpdateOpportunityRequest lock enforcement (BR-2), so the two can never
+ * drift apart.
  *
- * `referent_id`/`operational_site_id` come straight off the lead;
+ * `registry_id`/`operational_site_id` come straight off the lead (spec 0041
+ * D-3: `registry_id` is now the LEAD's own, no longer the campaign's);
  * `source_id` falls back to the campaign's own source when the lead has
- * none; `registry_id`/`business_function_id`/`product_category_id` are the
- * campaign's EFFECTIVE values — read through its linked Project when one
- * exists, else the campaign's own (the exact `project !== null ? project->x
- * : campaign->x` merge CampaignResource already uses for the same 3
- * columns, spec 0023 BR-2 — no second implementation, this mirrors it).
+ * none; `business_function_id`/`product_category_id` are the campaign's
+ * EFFECTIVE values — read through its linked Project when one exists, else
+ * the campaign's own (the exact `project !== null ? project->x :
+ * campaign->x` merge CampaignResource already uses for the same 2 columns,
+ * spec 0023 BR-2 — no second implementation, this mirrors it). `referent_id`
+ * is NOT derived (spec 0041 D-3): it stays a plain field, scoped to the
+ * chosen registry (BR-4, spec 0040).
  */
 final class LeadOpportunityDefaultsResolver
 {
     /**
-     * The 6 BR-1-derivable field keys, in the contract's declared order.
+     * The 5 BR-1-derivable field keys, in the contract's declared order.
      *
      * @var array<int, string>
      */
     private const array DERIVED_FIELDS = [
-        'referent_id',
         'source_id',
         'operational_site_id',
         'registry_id',
@@ -47,12 +50,11 @@ final class LeadOpportunityDefaultsResolver
      * @var array<int, string>
      */
     private const array REQUIRED_RELATIONS = [
-        'referent',
+        'registry',
         'operationalSite.addresses.city',
         'source',
         'opportunity',
         'campaign.source',
-        'campaign.registry',
         'campaign.businessFunction',
         'campaign.productCategory',
         'campaign.project.businessFunction',
@@ -71,19 +73,17 @@ final class LeadOpportunityDefaultsResolver
         $effectiveProductCategory = $project !== null ? $project->productCategory : $campaign->productCategory;
 
         $values = [
-            'referent_id' => $lead->referent_id,
             'source_id' => $effectiveSource?->id,
             'operational_site_id' => $lead->operational_site_id,
-            'registry_id' => $campaign->registry_id,
+            'registry_id' => $lead->registry_id,
             'business_function_id' => $effectiveBusinessFunction?->id,
             'product_category_id' => $effectiveProductCategory?->id,
         ];
 
         $references = [
-            'referent' => $this->summarizeByName($lead->referent),
             'source' => $this->summarizeByName($effectiveSource),
             'operational_site' => $this->summarizeOperationalSite($lead->operationalSite),
-            'registry' => $this->summarizeByName($campaign->registry),
+            'registry' => $this->summarizeByName($lead->registry),
             'business_function' => $this->summarizeByName($effectiveBusinessFunction),
             'product_category' => $this->summarizeByName($effectiveProductCategory),
         ];

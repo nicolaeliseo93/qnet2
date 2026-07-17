@@ -21,7 +21,7 @@ class ProductService
      *
      * @var array<int, string>
      */
-    private const array HYDRATED_RELATIONS = ['category'];
+    private const array HYDRATED_RELATIONS = ['category', 'vatRate', 'supplier'];
 
     public function __construct(private readonly CategoryHierarchy $hierarchy) {}
 
@@ -59,6 +59,8 @@ class ProductService
             'price' => $data->price,
             'category_id' => $data->categoryId,
             'product_type' => $data->productType,
+            'vat_rate_id' => $data->vatRateId,
+            'supplier_id' => $data->supplierId,
         ]);
 
         return $product->fresh(self::HYDRATED_RELATIONS);

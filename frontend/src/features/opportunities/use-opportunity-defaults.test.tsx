@@ -23,7 +23,8 @@ function defaults(overrides: Partial<OpportunityDefaults> = {}): OpportunityDefa
     lead_id: 9,
     existing_opportunity_id: null,
     values: {
-      referent_id: 10,
+      // spec 0041 D-3/AC-050: no longer a derived field.
+      referent_id: null,
       source_id: 20,
       operational_site_id: null,
       registry_id: 30,
@@ -31,14 +32,13 @@ function defaults(overrides: Partial<OpportunityDefaults> = {}): OpportunityDefa
       product_category_id: 50,
     },
     references: {
-      referent: { id: 10, name: 'Mario Rossi' },
       source: { id: 20, name: 'Web' },
       operational_site: null,
       registry: { id: 30, name: 'Acme S.p.A.' },
       business_function: { id: 40, name: 'Sales' },
       product_category: { id: 50, name: 'Consulting' },
     },
-    locked_fields: ['referent_id', 'source_id', 'registry_id', 'business_function_id', 'product_category_id'],
+    locked_fields: ['source_id', 'registry_id', 'business_function_id', 'product_category_id'],
     ...overrides,
   }
 }

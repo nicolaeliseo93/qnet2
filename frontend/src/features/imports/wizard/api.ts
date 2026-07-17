@@ -117,8 +117,8 @@ export async function updateImportRunRow(
 
 /**
  * Resolves a `duplicate` staged row (`PATCH .../rows/{row}/resolution`,
- * spec 0036): skip it, create a new referent+lead anyway, or update the
- * matched referent's lead. Valid only for a `duplicate` row of a `reviewing`
+ * spec 0036): skip it, create a new anagrafica+lead anyway, or update the
+ * matched anagrafica's lead. Valid only for a `duplicate` row of a `reviewing`
  * run — same envelope/response shape as `updateImportRunRow`.
  */
 export async function resolveImportRunRow(

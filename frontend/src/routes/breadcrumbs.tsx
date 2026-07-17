@@ -35,6 +35,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'product-categories': 'navigation.productCategories',
   sectors: 'navigation.sectors',
   products: 'navigation.products',
+  'vat-rates': 'navigation.vatRates',
   projects: 'navigation.projects',
   campaigns: 'navigation.campaigns',
   leads: 'navigation.leads',

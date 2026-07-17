@@ -36,6 +36,7 @@ class DemoDataSeeder extends Seeder
         $this->call(DemoReferentTypeSeeder::class);
         $this->call(DemoReferentSeeder::class);
         $this->call(DemoSourceSeeder::class);
+        $this->call(DemoVatRateSeeder::class);
         $this->call(DemoSectorSeeder::class);
         $this->call(DemoTagSeeder::class);
         $this->call(DemoRolesSeeder::class);

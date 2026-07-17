@@ -108,18 +108,15 @@ class ReferentService
     }
 
     /**
-     * Restrictive delete (spec 0024 BR-2/D-4): a referent referenced by at
-     * least one lead cannot be removed. Also restrictive (spec 0040, BR-3)
-     * when the referent is an opportunity's own referent, commercial OR
-     * reporter. Otherwise its personal-data card (and the card's own
-     * contacts/addresses) cascade away via HasPersonalData.
+     * Restrictive delete (spec 0040, BR-3): a referent referenced as an
+     * opportunity's own referent, commercial OR reporter cannot be removed.
+     * Otherwise its personal-data card (and the card's own contacts/
+     * addresses) cascade away via HasPersonalData. The former lead guard
+     * (spec 0024 BR-2/D-4) moved to RegistryService::delete() — spec 0041
+     * D-1: a Lead's contact is now an Anagrafica, not a Referent.
      */
     public function delete(Referent $referent): void
     {
-        if ($referent->leads()->exists()) {
-            abort(409, 'This referent has leads and cannot be deleted.');
-        }
-
         if ($referent->opportunities()->exists() || $referent->opportunitiesAsCommercial()->exists() || $referent->opportunitiesAsReporter()->exists()) {
             abort(409, 'This referent has opportunities and cannot be deleted.');
         }

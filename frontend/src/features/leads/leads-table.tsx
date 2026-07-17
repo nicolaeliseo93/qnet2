@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { Plus } from 'lucide-react'
+import { FileUp, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -53,6 +54,7 @@ type SheetState =
  */
 export function LeadsTable() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const stats = useStatsPanel(LEADS_DOMAIN)
   const invalidateStats = useInvalidateModuleStats(LEADS_DOMAIN)
   const queryClient = useQueryClient()
@@ -141,6 +143,12 @@ export function LeadsTable() {
               isOpen={stats.isOpen}
               onToggle={stats.toggle}
             />
+            <Can permission="import-runs.viewAny">
+              <Button variant="outline" className="bg-white" onClick={() => void navigate('/imports')}>
+                <FileUp aria-hidden="true" />
+                {t('leads.form.importLeads')}
+              </Button>
+            </Can>
             <Can permission="leads.create">
               <Button onClick={() => setSheet({ kind: 'create' })}>
                 <Plus aria-hidden="true" />

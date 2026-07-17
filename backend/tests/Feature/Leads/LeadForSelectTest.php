@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\Lead;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -30,7 +30,7 @@ if (! function_exists('leadForSelectUserWith')) {
 }
 
 // ---------------------------------------------------------------------------
-// AC-085 — auth + shape (envelope ADR 0011, label = referent name)
+// AC-085 — auth + shape (envelope ADR 0011, label = registry name)
 // ---------------------------------------------------------------------------
 
 it('requires authentication (401)', function () {
@@ -46,9 +46,9 @@ it('forbids actors without leads.viewAny (403)', function () {
 
 it('200: envelope {items, export_link, pagination} with {id, label, subtitle} items, filtered by search (AC-085)', function () {
     $actor = leadForSelectUserWith(['viewAny']);
-    $matchingReferent = Referent::factory()->create(['name' => 'Ada Contact']);
-    $match = Lead::factory()->create(['referent_id' => $matchingReferent->id]);
-    Lead::factory()->create(['referent_id' => Referent::factory()->create(['name' => 'Zed Other'])->id]);
+    $matchingRegistry = Registry::factory()->create(['name' => 'Ada Contact']);
+    $match = Lead::factory()->create(['registry_id' => $matchingRegistry->id]);
+    Lead::factory()->create(['registry_id' => Registry::factory()->create(['name' => 'Zed Other'])->id]);
     Sanctum::actingAs($actor);
 
     $response = $this->getJson('/api/leads/for-select?search=Ada')->assertOk();
@@ -71,7 +71,7 @@ it('200: envelope {items, export_link, pagination} with {id, label, subtitle} it
 
 it('ids[] hydrates a lead present even though it does not match the search (AC-085)', function () {
     $actor = leadForSelectUserWith(['viewAny']);
-    $hydrated = Lead::factory()->create(['referent_id' => Referent::factory()->create(['name' => 'Legacy Contact'])->id]);
+    $hydrated = Lead::factory()->create(['registry_id' => Registry::factory()->create(['name' => 'Legacy Contact'])->id]);
     Sanctum::actingAs($actor);
 
     $response = $this->getJson("/api/leads/for-select?search=NoMatch&ids[]={$hydrated->id}")->assertOk();

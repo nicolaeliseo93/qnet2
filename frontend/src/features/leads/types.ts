@@ -7,7 +7,7 @@
 
 import type { ResourcePermissions } from '@/features/authorization/types'
 
-/** Hydrated `{id, name}` relation shared by referent/source/operator. */
+/** Hydrated `{id, name}` relation shared by registry/source/operator. */
 export interface LeadRelationRef {
   id: number
   name: string
@@ -52,8 +52,9 @@ export interface LeadOpportunityRef {
 
 /**
  * Single lead detail returned by GET/POST/PATCH /leads (envelope `data`).
- * Matches `LeadResource`. `referent_id`/`campaign_id`/`lead_status_id` are
- * always set (BR-1, D-1); the other 3 fields are nullable.
+ * Matches `LeadResource`. `registry_id`/`campaign_id`/`lead_status_id` are
+ * always set (BR-1, D-1; spec 0041 D-1: the contact is the anagrafica, not
+ * the referent); the other 3 fields are nullable.
  *
  * `extra_fields` (spec 0033, AC-014) is a free-form key/value store: no
  * fixed shape, no per-field permissions. Keys either mirror an imported
@@ -66,8 +67,8 @@ export interface LeadOpportunityRef {
  */
 export interface LeadDetail {
   id: number
-  referent_id: number
-  referent: LeadRelationRef | null
+  registry_id: number
+  registry: LeadRelationRef | null
   campaign_id: number
   campaign: LeadCampaignRef | null
   lead_status_id: number
@@ -95,13 +96,13 @@ export interface LeadDetailWithPermissions extends LeadDetail {
 }
 
 /**
- * Payload for POST /leads (create). `referent_id`/`campaign_id` are required
+ * Payload for POST /leads (create). `registry_id`/`campaign_id` are required
  * (BR-1, D-1); `lead_status_id` is nullable/optional (spec 0039 D-3: the
  * server falls back to the system "Nuovo" status when omitted); the other 3
  * fields are optional/nullable.
  */
 export interface CreateLeadPayload {
-  referent_id: number
+  registry_id: number
   campaign_id: number
   lead_status_id?: number | null
   operational_site_id?: number | null

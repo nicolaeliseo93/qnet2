@@ -23,6 +23,7 @@ use App\Tables\SectorsTableDefinition;
 use App\Tables\SourcesTableDefinition;
 use App\Tables\TagsTableDefinition;
 use App\Tables\UsersTableDefinition;
+use App\Tables\VatRatesTableDefinition;
 
 return [
 
@@ -70,6 +71,7 @@ return [
         'lead-statuses' => LeadStatusesTableDefinition::class,
         'import-runs' => LeadImportsTableDefinition::class,
         'opportunities' => OpportunitiesTableDefinition::class,
+        'vat-rates' => VatRatesTableDefinition::class,
     ],
 
 ];

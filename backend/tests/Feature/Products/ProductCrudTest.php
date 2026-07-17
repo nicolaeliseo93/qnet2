@@ -5,7 +5,9 @@ use App\Models\BusinessFunction;
 use App\Models\CustomFieldDefinition;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Registry;
 use App\Models\User;
+use App\Models\VatRate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Permission;
@@ -104,6 +106,111 @@ it('create/update: a submitted business_function_id is ignored — no column, re
     $this->patchJson("/api/products/{$product->id}", ['business_function_id' => 999999])
         ->assertOk()
         ->assertJsonPath('data.business_function.id', $function->id);
+});
+
+// ---------------------------------------------------------------------------
+// vat_rate_id / supplier_id (nullable references)
+// ---------------------------------------------------------------------------
+
+it('show: exposes vat_rate/supplier summaries when set, null when unset', function () {
+    $actor = productUserWith(['view']);
+    $vatRate = VatRate::factory()->create(['name' => 'IVA 22%', 'rate' => 22]);
+    $supplier = Registry::factory()->create(['name' => 'Acme Supplies']);
+    $product = Product::factory()->create(['vat_rate_id' => $vatRate->id, 'supplier_id' => $supplier->id]);
+    $bare = Product::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/products/{$product->id}")
+        ->assertOk()
+        ->assertJsonPath('data.vat_rate_id', $vatRate->id)
+        ->assertJsonPath('data.vat_rate.id', $vatRate->id)
+        ->assertJsonPath('data.vat_rate.name', 'IVA 22%')
+        ->assertJsonPath('data.vat_rate.rate', '22.00')
+        ->assertJsonPath('data.supplier_id', $supplier->id)
+        ->assertJsonPath('data.supplier.id', $supplier->id)
+        ->assertJsonPath('data.supplier.name', 'Acme Supplies');
+
+    $this->getJson("/api/products/{$bare->id}")
+        ->assertOk()
+        ->assertJsonPath('data.vat_rate_id', null)
+        ->assertJsonPath('data.vat_rate', null)
+        ->assertJsonPath('data.supplier_id', null)
+        ->assertJsonPath('data.supplier', null);
+});
+
+it('show: no N+1 on the vatRate/supplier relations', function () {
+    $actor = productUserWith(['view']);
+    $vatRate = VatRate::factory()->create();
+    $supplier = Registry::factory()->create();
+    $product = Product::factory()->create(['vat_rate_id' => $vatRate->id, 'supplier_id' => $supplier->id]);
+    Sanctum::actingAs($actor);
+
+    Product::preventLazyLoading();
+
+    $this->getJson("/api/products/{$product->id}")->assertOk();
+
+    Product::preventLazyLoading(false);
+});
+
+it('create: accepts nullable vat_rate_id/supplier_id and persists them', function () {
+    $actor = productUserWith(['create']);
+    $category = ProductCategory::factory()->create();
+    $vatRate = VatRate::factory()->create();
+    $supplier = Registry::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/products', productGenericFields([
+        'name' => 'Widget', 'category_id' => $category->id,
+        'vat_rate_id' => $vatRate->id, 'supplier_id' => $supplier->id,
+    ]))->assertCreated()
+        ->assertJsonPath('data.vat_rate_id', $vatRate->id)
+        ->assertJsonPath('data.supplier_id', $supplier->id);
+
+    $product = Product::where('name', 'Widget')->firstOrFail();
+    expect($product->vat_rate_id)->toBe($vatRate->id)
+        ->and($product->supplier_id)->toBe($supplier->id);
+});
+
+it('create: 422 when vat_rate_id/supplier_id reference a non-existent row', function () {
+    $actor = productUserWith(['create']);
+    $category = ProductCategory::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/products', productGenericFields([
+        'name' => 'Widget', 'category_id' => $category->id, 'vat_rate_id' => 999999,
+    ]))->assertStatus(422)->assertJsonValidationErrors('vat_rate_id');
+
+    $this->postJson('/api/products', productGenericFields([
+        'name' => 'Widget', 'category_id' => $category->id, 'supplier_id' => 999999,
+    ]))->assertStatus(422)->assertJsonValidationErrors('supplier_id');
+});
+
+it('update: PATCH sets and clears vat_rate_id/supplier_id', function () {
+    $actor = productUserWith(['update']);
+    $vatRate = VatRate::factory()->create();
+    $product = Product::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/products/{$product->id}", ['vat_rate_id' => $vatRate->id])
+        ->assertOk()
+        ->assertJsonPath('data.vat_rate_id', $vatRate->id);
+
+    expect($product->fresh()->vat_rate_id)->toBe($vatRate->id);
+
+    $this->patchJson("/api/products/{$product->id}", ['vat_rate_id' => null])
+        ->assertOk()
+        ->assertJsonPath('data.vat_rate_id', null);
+
+    expect($product->fresh()->vat_rate_id)->toBeNull();
+});
+
+it('update: 422 when vat_rate_id references a non-existent row', function () {
+    $actor = productUserWith(['update']);
+    $product = Product::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/products/{$product->id}", ['vat_rate_id' => 999999])
+        ->assertStatus(422)->assertJsonValidationErrors('vat_rate_id');
 });
 
 it('show: 403 without products.view / 404 for a non-existent product', function () {

@@ -20,7 +20,7 @@ import type { LeadDetail, LeadFormMode } from '@/features/leads/types'
 
 /** Server-side field names mapped onto the form for 422 handling. */
 const SERVER_ERROR_FIELDS = [
-  'referent_id',
+  'registry_id',
   'campaign_id',
   'lead_status_id',
   'operational_site_id',
@@ -58,7 +58,7 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
     if (mode.type === 'edit') {
       const { lead } = mode
       return {
-        referent_id: lead.referent_id,
+        registry_id: lead.registry_id,
         campaign_id: lead.campaign_id,
         lead_status_id: lead.lead_status_id,
         operational_site_id: lead.operational_site_id,
@@ -69,7 +69,7 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
       }
     }
     return {
-      referent_id: null,
+      registry_id: null,
       campaign_id: null,
       lead_status_id: null,
       operational_site_id: null,

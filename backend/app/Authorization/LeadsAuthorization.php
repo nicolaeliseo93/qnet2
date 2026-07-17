@@ -13,8 +13,8 @@ use Illuminate\Database\Eloquent\Model;
  *
  * No contextual rules: every field's ceiling is simply visible+editable when
  * the actor may write (create/update), else visible+readonly, mirroring
- * CampaignsAuthorization. `referent_id`/`campaign_id` are the mandatory
- * fields (BR-1); no `code` field exists for a Lead (D-3).
+ * CampaignsAuthorization. `registry_id`/`campaign_id` are the mandatory
+ * fields (BR-1, spec 0041 D-1); no `code` field exists for a Lead (D-3).
  *
  * spec 0039, D-3: `lead_status_id` is NO LONGER mandatory — the FK went from
  * `required` to `nullable` in StoreLeadRequest (server-side fallback to the
@@ -38,7 +38,7 @@ class LeadsAuthorization extends AbstractResourceAuthorization
     public function fields(): array
     {
         return [
-            new FieldDefinition('referent_id', 'select', mandatory: true),
+            new FieldDefinition('registry_id', 'select', mandatory: true),
             new FieldDefinition('campaign_id', 'select', mandatory: true),
             new FieldDefinition('operational_site_id', 'select'),
             new FieldDefinition('source_id', 'select'),
@@ -65,7 +65,7 @@ class LeadsAuthorization extends AbstractResourceAuthorization
         $mayWrite = $this->actorMayWrite($actor, $model);
 
         return [
-            'referent_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
+            'registry_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'campaign_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'operational_site_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),

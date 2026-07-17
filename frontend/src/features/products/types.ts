@@ -22,6 +22,19 @@ export interface ProductBusinessFunctionSummary {
   name: string
 }
 
+/** Minimal VAT rate projection hydrating the product's form/detail. */
+export interface ProductVatRateSummary {
+  id: number
+  name: string
+  rate: number
+}
+
+/** Minimal supplier (registry) projection hydrating the product's form/detail. */
+export interface ProductSupplierSummary {
+  id: number
+  name: string
+}
+
 /**
  * Single product detail returned by GET/POST/PATCH /products (envelope
  * `data`). Matches `ProductResource`.
@@ -44,6 +57,12 @@ export interface ProductDetail {
    * fixture that predates this field.
    */
   business_function?: ProductBusinessFunctionSummary | null
+  /** The product's VAT rate, if assigned. */
+  vat_rate_id: number | null
+  vat_rate: ProductVatRateSummary | null
+  /** The product's supplier (a registry flagged `is_supplier`), if assigned. */
+  supplier_id: number | null
+  supplier: ProductSupplierSummary | null
   /** Custom field values keyed by their raw (un-namespaced) key (spec 0021). */
   custom_fields?: Record<string, CustomFieldValue>
 }
@@ -65,6 +84,8 @@ export interface CreateProductPayload {
   price: number
   category_id: number
   product_type: ProductType
+  vat_rate_id: number | null
+  supplier_id: number | null
   /** All valued custom fields, keyed by raw key (spec 0021, create = full set). */
   custom_fields?: Record<string, CustomFieldValue>
 }

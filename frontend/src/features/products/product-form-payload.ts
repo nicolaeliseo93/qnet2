@@ -18,6 +18,8 @@ export function buildCreatePayload(values: ProductFormValues): CreateProductPayl
     price: values.price as number,
     category_id: values.category_id as number,
     product_type: values.product_type,
+    vat_rate_id: values.vat_rate_id,
+    supplier_id: values.supplier_id,
     ...(Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
   }
 }
@@ -51,6 +53,12 @@ export function buildUpdatePayload(
   }
   if (values.product_type !== original.product_type) {
     payload.product_type = values.product_type
+  }
+  if (values.vat_rate_id !== original.vat_rate_id) {
+    payload.vat_rate_id = values.vat_rate_id
+  }
+  if (values.supplier_id !== original.supplier_id) {
+    payload.supplier_id = values.supplier_id
   }
 
   const customFields = buildCustomFieldsUpdate(values.custom_fields, original.custom_fields ?? {})

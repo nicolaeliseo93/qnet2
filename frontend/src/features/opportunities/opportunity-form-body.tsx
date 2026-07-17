@@ -72,7 +72,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
       ? {
           leadId: initialLead.leadId,
           lockedFields: initialLead.lockedFields,
-          referentName: initialLead.references.referent?.name ?? null,
+          registry: initialLead.references.registry,
         }
       : null,
     form.setValue,
@@ -91,7 +91,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
       : NO_LEAD_SUBMISSION
 
   const { serverError, onSubmit } = useOpportunityFormSubmit({ form, mode, leadSubmission, onSuccess })
-  const selectedItems = useOpportunitySelectedItems(mode)
+  const selectedItems = useOpportunitySelectedItems(mode, leadSelection.state)
 
   // BR-2: the fields derived from a linked Lead are immutable — both when
   // editing an opportunity that already has one, and while creating one
@@ -136,7 +136,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
             ) : null}
 
             {mode.type === 'create' && leadSelection.state.leadId !== null && !leadIsBlocked ? (
-              <OpportunityFromLeadBanner referentName={leadSelection.state.referentName} />
+              <OpportunityFromLeadBanner registryName={leadSelection.state.registry?.name ?? null} />
             ) : null}
 
             <MetaField control={form.control} name="name" metaKey="name" label={t('opportunities.form.name')}>
@@ -247,7 +247,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
           )}
 
           <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+            <Button type="button" variant="outline" className="bg-card" onClick={onCancel} disabled={isSubmitting}>
               {t('opportunities.form.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting || leadIsBlocked}>

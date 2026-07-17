@@ -3,14 +3,14 @@ import type { CreateLeadPayload, LeadDetail, UpdateLeadPayload } from '@/feature
 import type { LeadFormValues } from '@/features/leads/use-lead-form'
 
 /**
- * Builds the create payload. `referent_id`/`campaign_id` are validated
+ * Builds the create payload. `registry_id`/`campaign_id` are validated
  * non-null by the schema's refine before submit (BR-1, D-1); `lead_status_id`
  * is sent as-is (spec 0039 D-3: `null` falls back to the system "Nuovo"
  * status server-side).
  */
 export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
   return {
-    referent_id: values.referent_id as number,
+    registry_id: values.registry_id as number,
     campaign_id: values.campaign_id as number,
     lead_status_id: values.lead_status_id,
     operational_site_id: values.operational_site_id,
@@ -23,7 +23,7 @@ export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
 
 /**
  * Builds a partial PATCH payload carrying only fields that changed from the
- * original lead (spec 0024, sparse diff, mirrors campaigns). `referent_id`/
+ * original lead (spec 0024, sparse diff, mirrors campaigns). `registry_id`/
  * `campaign_id`, when changed, are always non-null (the schema forbids
  * clearing either, BR-1, D-1). `lead_status_id` may be cleared to `null`
  * (spec 0039 D-3), the server then falls back to the system "Nuovo" status.
@@ -31,8 +31,8 @@ export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
 export function buildUpdatePayload(values: LeadFormValues, original: LeadDetail): UpdateLeadPayload {
   const payload: UpdateLeadPayload = {}
 
-  if (values.referent_id !== original.referent_id) {
-    payload.referent_id = values.referent_id as number
+  if (values.registry_id !== original.registry_id) {
+    payload.registry_id = values.registry_id as number
   }
   if (values.campaign_id !== original.campaign_id) {
     payload.campaign_id = values.campaign_id as number

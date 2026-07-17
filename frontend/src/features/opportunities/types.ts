@@ -160,9 +160,12 @@ export interface OpportunityDefaultValues {
   product_category_id: number | null
 }
 
-/** Hydrated `{id, name|label}` projection of each `OpportunityDefaultValues` entry, for the picker's edit-mode-style hydration. */
+/**
+ * Hydrated `{id, name|label}` projection of each `OpportunityDefaultValues`
+ * entry, for the picker's edit-mode-style hydration. No `referent` (spec 0041
+ * D-3): the lead's identity is its anagrafica now, not its referent.
+ */
 export interface OpportunityDefaultReferences {
-  referent: OpportunityRelationRef | null
   source: OpportunityRelationRef | null
   operational_site: OpportunityOperationalSiteRef | null
   registry: OpportunityRelationRef | null

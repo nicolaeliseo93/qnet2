@@ -41,6 +41,8 @@ class UpdateProductRequest extends FormRequest
             'price' => ['sometimes', 'required', 'numeric'],
             'category_id' => ['sometimes', 'required', 'integer', 'exists:product_categories,id'],
             'product_type' => ['sometimes', 'required', Rule::enum(ProductType::class)],
+            'vat_rate_id' => ['sometimes', 'nullable', 'integer', 'exists:vat_rates,id'],
+            'supplier_id' => ['sometimes', 'nullable', 'integer', 'exists:registries,id'],
         ];
     }
 

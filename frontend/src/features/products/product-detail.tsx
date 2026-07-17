@@ -58,6 +58,12 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
               {product.business_function.name}
             </DetailField>
           )}
+          {product.vat_rate && (
+            <DetailField label={t('products.form.vatRate')}>{product.vat_rate.name}</DetailField>
+          )}
+          {product.supplier && (
+            <DetailField label={t('products.form.supplier')}>{product.supplier.name}</DetailField>
+          )}
         </DetailGrid>
       </DetailSection>
 

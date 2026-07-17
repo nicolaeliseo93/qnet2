@@ -13,6 +13,7 @@ import {
   MapPin,
   Megaphone,
   Package,
+  Percent,
   Puzzle,
   ShieldCheck,
   SlidersHorizontal,
@@ -49,6 +50,7 @@ const iconMap: Record<string, LucideIcon> = {
   'sliders-horizontal': SlidersHorizontal,
   'list-tree': ListTree,
   package: Package,
+  percent: Percent,
   puzzle: Puzzle,
   'user-plus': UserPlus,
 }

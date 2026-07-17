@@ -121,7 +121,7 @@ class OpportunityResource extends JsonResource
      */
     private function summarizeLead(mixed $lead): ?array
     {
-        return $lead === null ? null : ['id' => $lead->id, 'label' => $lead->referent?->name ?? ''];
+        return $lead === null ? null : ['id' => $lead->id, 'label' => $lead->registry?->name ?? ''];
     }
 
     /**

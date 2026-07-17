@@ -127,4 +127,16 @@ class Registry extends BaseModel
     {
         return $this->hasMany(Opportunity::class);
     }
+
+    /**
+     * The leads that name this registry as their contact (spec 0041, D-1/
+     * BR-2: restrict-on-delete — RegistryService::delete() guards on this
+     * before deleting).
+     *
+     * @return HasMany<Lead, $this>
+     */
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class);
+    }
 }

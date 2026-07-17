@@ -85,7 +85,7 @@ export const importWizard = {
     },
     dedupModes: {
       create_new: 'Always create a new lead',
-      update_existing: 'Update the matching referent',
+      update_existing: 'Update the matching registry',
       ignore: 'Skip matching rows',
       manual: 'Decide during review',
     },
@@ -142,7 +142,7 @@ export const importWizard = {
     resolution: {
       label: 'Resolution',
       placeholder: 'Choose…',
-      leadInCampaign: 'This referent already has a lead in the selected campaign.',
+      leadInCampaign: 'This registry already has a lead in the selected campaign.',
       options: {
         skip: 'Skip',
         create: 'Create new',

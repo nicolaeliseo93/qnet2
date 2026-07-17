@@ -8,7 +8,7 @@ export const leads = {
   subtitle: "Sfoglia, filtra e gestisci i lead generati dalle campagne dell'organizzazione.",
   forbidden: 'Non hai il permesso di visualizzare i lead.',
   columns: {
-    referent: 'Contatto',
+    registry: 'Contatto',
     campaign: 'Campagna',
     leadStatus: 'Stato lead',
     operationalSite: 'Sede',
@@ -21,7 +21,7 @@ export const leads = {
   advancedFilters: {
     leadStatus: 'Stato lead',
     campaign: 'Campagna',
-    referent: 'Contatto',
+    registry: 'Contatto',
     source: 'Fonte',
     operator: 'Operatore',
     operationalSite: 'Sede',
@@ -31,7 +31,7 @@ export const leads = {
     title: 'Dettagli lead',
     subtitle: 'Visualizzazione in sola lettura del lead selezionato.',
     loadError: 'Impossibile caricare il lead. Riprova.',
-    unknownReferent: 'Contatto sconosciuto',
+    unknownRegistry: 'Contatto sconosciuto',
     importedData: {
       title: 'Dati importati',
     },
@@ -40,6 +40,7 @@ export const leads = {
   },
   form: {
     newLead: 'Nuovo lead',
+    importLeads: 'Importa lead',
     createTitle: 'Crea lead',
     createSubtitle: "Aggiungi un nuovo lead all'organizzazione.",
     editTitle: 'Modifica lead',
@@ -62,9 +63,9 @@ export const leads = {
         description: 'Coppie chiave/valore libere, di solito provenienti da un import.',
       },
     },
-    referent: 'Contatto',
-    referentSearch: 'Cerca contatti…',
-    referentRequired: 'Il contatto è obbligatorio.',
+    registry: 'Contatto',
+    registrySearch: 'Cerca contatti…',
+    registryRequired: 'Il contatto è obbligatorio.',
     campaign: 'Campagna',
     campaignSearch: 'Cerca campagne…',
     campaignRequired: 'La campagna è obbligatoria.',

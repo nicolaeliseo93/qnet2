@@ -17,8 +17,8 @@ import NotFoundPage from '@/pages/not-found-page'
  * Fetches the fresh, re-authorized detail on mount and renders the unchanged
  * presentational `LeadDetailView`. The "Edit" action is gated by the
  * `permissions` block of THIS response, not by a static ability: the backend
- * remains the authority. The referent's name (the lead's closest thing to an
- * identity, D-3) drives the breadcrumb.
+ * remains the authority. The registry's name (the lead's closest thing to an
+ * identity, D-3/spec 0041 D-1) drives the breadcrumb.
  */
 export default function LeadDetailPage() {
   const { t } = useTranslation()
@@ -32,7 +32,7 @@ export default function LeadDetailPage() {
     refetch,
   } = useEntityDetail(leadDetailQueryKey(leadId), () => fetchLead(leadId as number), leadId !== null)
 
-  useBreadcrumbTitle(`/leads/${id}`, lead?.referent?.name)
+  useBreadcrumbTitle(`/leads/${id}`, lead?.registry?.name)
 
   if (leadId === null) {
     return <NotFoundPage />

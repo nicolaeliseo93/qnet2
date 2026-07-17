@@ -44,6 +44,8 @@ class StoreProductRequest extends FormRequest
             'price' => ['required', 'numeric'],
             'category_id' => ['required', 'integer', 'exists:product_categories,id'],
             'product_type' => ['required', Rule::enum(ProductType::class)],
+            'vat_rate_id' => ['nullable', 'integer', 'exists:vat_rates,id'],
+            'supplier_id' => ['nullable', 'integer', 'exists:registries,id'],
         ];
     }
 

@@ -9,8 +9,8 @@ import type { LeadDetailWithPermissions } from '@/features/leads/types'
 function lead(overrides: Partial<LeadDetailWithPermissions> = {}): LeadDetailWithPermissions {
   return {
     id: 1,
-    referent_id: 10,
-    referent: { id: 10, name: 'Mario Rossi' },
+    registry_id: 10,
+    registry: { id: 10, name: 'Mario Rossi' },
     campaign_id: 20,
     campaign: { id: 20, code: 'CMP-0001', name: 'Spring push' },
     lead_status_id: 60,
@@ -77,8 +77,8 @@ describe('LeadDetailView — read-only (AC-065)', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(4)
   })
 
-  it('falls back to a placeholder heading when the referent relation is missing', () => {
-    render(<LeadDetailView lead={lead({ referent_id: 10, referent: null })} />)
+  it('falls back to a placeholder heading when the registry relation is missing', () => {
+    render(<LeadDetailView lead={lead({ registry_id: 10, registry: null })} />)
 
     expect(screen.getByRole('heading', { name: 'Unknown contact' })).toBeInTheDocument()
   })

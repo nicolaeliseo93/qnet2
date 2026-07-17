@@ -140,7 +140,7 @@ export function ImportPreview({
       ) : null}
 
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isConfirming}>
+        <Button type="button" variant="outline" className="bg-card" onClick={onCancel} disabled={isConfirming}>
           {t('common.cancel')}
         </Button>
         <Button type="button" onClick={onConfirm} disabled={isConfirming}>

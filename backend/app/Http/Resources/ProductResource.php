@@ -4,6 +4,8 @@ namespace App\Http\Resources;
 
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Registry;
+use App\Models\VatRate;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -40,6 +42,10 @@ class ProductResource extends JsonResource
             'category_id' => $this->category_id,
             'category' => $this->categorySummary($this->category),
             'product_type' => $this->product_type,
+            'vat_rate_id' => $this->vat_rate_id,
+            'vat_rate' => $this->vatRateSummary($this->vatRate),
+            'supplier_id' => $this->supplier_id,
+            'supplier' => $this->supplierSummary($this->supplier),
             // Read-only, derived from the category (spec 0023): never
             // writable via POST/PATCH (not in $fillable, no FormRequest rule).
             'business_function' => $this->effectiveBusinessFunction,
@@ -57,5 +63,29 @@ class ProductResource extends JsonResource
         }
 
         return ['id' => $category->id, 'name' => $category->name];
+    }
+
+    /**
+     * @return array{id: int, name: string, rate: mixed}|null
+     */
+    private function vatRateSummary(?VatRate $vatRate): ?array
+    {
+        if ($vatRate === null) {
+            return null;
+        }
+
+        return ['id' => $vatRate->id, 'name' => $vatRate->name, 'rate' => $vatRate->rate];
+    }
+
+    /**
+     * @return array{id: int, name: string}|null
+     */
+    private function supplierSummary(?Registry $supplier): ?array
+    {
+        if ($supplier === null) {
+            return null;
+        }
+
+        return ['id' => $supplier->id, 'name' => $supplier->name];
     }
 }

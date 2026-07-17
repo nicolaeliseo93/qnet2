@@ -14,7 +14,7 @@ use App\Models\ImportRunRow;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\PersonalData;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\User;
 use App\Services\ImportService;
 use App\Support\Import\ImportRunSummaryBuilder;
@@ -151,12 +151,12 @@ it('AC-003: 403 without leads.import', function () {
 // AC-004 — confirm honors the per-row resolution
 // ---------------------------------------------------------------------------
 
-it('AC-004: skip writes nothing, create makes a brand-new referent+lead, update updates the matched referent/lead', function () {
+it('AC-004: skip writes nothing, create makes a brand-new registry+lead, update updates the matched registry/lead', function () {
     $actor = User::factory()->create();
     $campaign = Campaign::factory()->create();
     $status = LeadStatus::factory()->create();
 
-    $existing = Referent::factory()->create(['name' => 'Old Name']);
+    $existing = Registry::factory()->create(['name' => 'Old Name']);
     $card = PersonalData::factory()->individual()->for($existing, 'personable')->create(['first_name' => 'Old', 'last_name' => 'Name']);
     Contact::factory()->email()->for($card, 'contactable')->create(['value' => 'dup@example.com']);
 
@@ -178,8 +178,8 @@ it('AC-004: skip writes nothing, create makes a brand-new referent+lead, update 
     expect($fresh->status)->toBe(ImportStatus::Completed)
         ->and($fresh->imported_rows)->toBe(2); // create + update, NOT skip
 
-    expect(Referent::query()->count())->toBe(2)
-        ->and(Referent::query()->where('name', 'Force Create')->exists())->toBeTrue();
+    expect(Registry::query()->count())->toBe(2)
+        ->and(Registry::query()->where('name', 'Force Create')->exists())->toBeTrue();
 
     $existing->refresh();
     expect($existing->personalData->first_name)->toBe('New');
@@ -196,7 +196,7 @@ it('AC-005: an unresolved duplicate row is never written, never counted as impor
     $campaign = Campaign::factory()->create();
     $status = LeadStatus::factory()->create();
 
-    $existing = Referent::factory()->create();
+    $existing = Registry::factory()->create();
     $card = PersonalData::factory()->individual()->for($existing, 'personable')->create();
     Contact::factory()->email()->for($card, 'contactable')->create(['value' => 'unresolved@example.com']);
 
@@ -212,7 +212,7 @@ it('AC-005: an unresolved duplicate row is never written, never counted as impor
     runProcessStagedImportJobForDuplicates($run);
 
     expect($run->fresh()->imported_rows)->toBe(0)
-        ->and(Referent::query()->count())->toBe(1)
+        ->and(Registry::query()->count())->toBe(1)
         ->and(Lead::query()->count())->toBe(0);
 
     $summary = app(ImportRunSummaryBuilder::class)->summary($run->fresh());
@@ -231,11 +231,11 @@ it('AC-007: legacy ignore/create_new dedup strategies persist exactly as before 
     $ignoreRun = ImportRun::factory()->create(['resource' => 'leads']);
     $ignoreRow = ImportRunRow::factory()->for($ignoreRun)->create(['mapped_values' => ['first_name' => 'Ign', 'last_name' => 'Ore', 'email' => 'ignore@example.com']]);
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $ignoreRow, ['campaign_id' => $campaign->id, 'lead_status_id' => $status->id], ImportDedupMode::Ignore->value);
-    expect(Referent::query()->count())->toBe(0);
+    expect(Registry::query()->count())->toBe(0);
 
     $createRun = ImportRun::factory()->create(['resource' => 'leads']);
     $createRow = ImportRunRow::factory()->for($createRun)->create(['mapped_values' => ['first_name' => 'Cre', 'last_name' => 'Ate', 'email' => 'create@example.com']]);
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $createRow, ['campaign_id' => $campaign->id, 'lead_status_id' => $status->id], ImportDedupMode::CreateNew->value);
-    expect(Referent::query()->count())->toBe(1)
+    expect(Registry::query()->count())->toBe(1)
         ->and(Lead::query()->where('campaign_id', $campaign->id)->count())->toBe(1);
 });

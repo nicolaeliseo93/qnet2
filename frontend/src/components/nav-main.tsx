@@ -11,6 +11,7 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -132,27 +133,47 @@ function NavNode({ item }: { item: NavigationItem }) {
 }
 
 // A sub-item inside a collapsible group. A leaf renders a navigable link; a
-// sub-item that itself has children stays navigable AND nests its own children
-// one level deeper (e.g. Leads → Import).
+// sub-item that itself has children stays navigable AND collapses its nested
+// children behind a dedicated chevron (e.g. Leads → Import): the label keeps
+// navigating, the chevron toggles the list, default collapsed.
 function NavSubNode({ item }: { item: NavigationItem }) {
   const { t } = useTranslation()
   const location = useLocation()
+  const label = t(item.label)
+
+  const link = (
+    <SidebarMenuSubButton asChild size="sm" isActive={isActive(item, location.pathname)} className={cn(NAV_ITEM_CLASS, NAV_LEAF_CLASS)}>
+      <NavLink to={item.route ?? '#'}>
+        <span>{label}</span>
+      </NavLink>
+    </SidebarMenuSubButton>
+  )
+
+  if (item.children.length === 0) {
+    return <SidebarMenuSubItem>{link}</SidebarMenuSubItem>
+  }
+
+  const keepOpen = hasActiveDescendant(item, location.pathname)
 
   return (
-    <SidebarMenuSubItem>
-      <SidebarMenuSubButton asChild size="sm" isActive={isActive(item, location.pathname)} className={cn(NAV_ITEM_CLASS, NAV_LEAF_CLASS)}>
-        <NavLink to={item.route ?? '#'}>
-          <span>{t(item.label)}</span>
-        </NavLink>
-      </SidebarMenuSubButton>
-      {item.children.length > 0 && (
-        <SidebarMenuSub>
-          {item.children.map((child) => (
-            <NavSubNode key={child.key} item={child} />
-          ))}
-        </SidebarMenuSub>
-      )}
-    </SidebarMenuSubItem>
+    <Collapsible asChild defaultOpen={keepOpen} className="group/subcollapsible">
+      <SidebarMenuSubItem>
+        {link}
+        <CollapsibleTrigger asChild>
+          <SidebarMenuAction className="top-1 [&>svg]:size-3.5">
+            <ChevronRight className="transition-transform duration-200 group-data-[state=open]/subcollapsible:rotate-90" />
+            <span className="sr-only">{label}</span>
+          </SidebarMenuAction>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <SidebarMenuSub>
+            {item.children.map((child) => (
+              <NavSubNode key={child.key} item={child} />
+            ))}
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </SidebarMenuSubItem>
+    </Collapsible>
   )
 }
 

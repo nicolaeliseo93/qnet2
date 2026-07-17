@@ -10,8 +10,8 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Validates the payload for POST /api/leads (spec 0024). `referent_id`/
- * `campaign_id` are required (BR-1); the other 3 relations are optional,
+ * Validates the payload for POST /api/leads (spec 0024, spec 0041 D-1).
+ * `registry_id`/`campaign_id` are required (BR-1); the other 3 relations are optional,
  * `notes` is a plain nullable text. spec 0039, D-3: `lead_status_id` went
  * from `required` to `nullable` — an omitted/null FK falls back to the
  * system_key='new' status in LeadService::create() (server-side default).
@@ -37,7 +37,7 @@ class StoreLeadRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'referent_id' => ['required', 'integer', Rule::exists('referents', 'id')],
+            'registry_id' => ['required', 'integer', Rule::exists('registries', 'id')],
             'campaign_id' => ['required', 'integer', Rule::exists('campaigns', 'id')],
             'operational_site_id' => ['nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],

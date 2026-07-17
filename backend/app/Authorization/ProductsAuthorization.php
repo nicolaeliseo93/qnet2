@@ -40,6 +40,8 @@ class ProductsAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('price', 'number', mandatory: true),
             new FieldDefinition('category_id', 'select', mandatory: true),
             new FieldDefinition('product_type', 'select', mandatory: true),
+            new FieldDefinition('vat_rate_id', 'select'),
+            new FieldDefinition('supplier_id', 'select'),
         ];
     }
 
@@ -65,6 +67,8 @@ class ProductsAuthorization extends AbstractResourceAuthorization
             'price' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'category_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'product_type' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
+            'vat_rate_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'supplier_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];
     }
 

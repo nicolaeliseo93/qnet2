@@ -4,7 +4,7 @@ use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\Lead;
 use App\Models\LeadStatus;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -14,8 +14,8 @@ use Spatie\Permission\Models\Permission;
 uses(RefreshDatabase::class);
 
 /**
- * FK-label extension of spec 0034 (client-reported: `referent_id: — → 206`
- * instead of the referent's name; noise rows like
+ * FK-label extension of spec 0034 (client-reported: `registry_id: — → 206`
+ * instead of the registry's name; noise rows like
  * `operational_site_id: — → —` for fields left null at creation). Mirrors the
  * other ActivityLog test files' self-contained `activityLogActor` helper.
  *
@@ -44,7 +44,7 @@ if (! function_exists('fkLabelActor')) {
 
 it('a created lead resolves FK labels for populated fields and drops null-null noise', function () {
     $actor = fkLabelActor('leads', ['view', 'viewActivity']);
-    $referent = Referent::factory()->create(['name' => 'Jane Referent']);
+    $registry = Registry::factory()->create(['name' => 'Jane Registry']);
     $campaign = Campaign::factory()->create(['name' => 'Spring Campaign']);
     $leadStatus = LeadStatus::factory()->create(['name' => 'New']);
     Sanctum::actingAs($actor);
@@ -52,7 +52,7 @@ it('a created lead resolves FK labels for populated fields and drops null-null n
     // operational_site_id/source_id/operator_id stay null (LeadFactory default),
     // exactly the customer-reported noise ("operational_site_id: — → —").
     $lead = Lead::factory()->create([
-        'referent_id' => $referent->id,
+        'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
         'lead_status_id' => $leadStatus->id,
         'notes' => 'Inbound call',
@@ -64,8 +64,8 @@ it('a created lead resolves FK labels for populated fields and drops null-null n
 
     expect($byField->keys()->all())->not->toContain('operational_site_id', 'source_id', 'operator_id');
 
-    expect($byField['referent_id']['old_display'])->toBeNull()
-        ->and($byField['referent_id']['new_display'])->toBe('Jane Referent')
+    expect($byField['registry_id']['old_display'])->toBeNull()
+        ->and($byField['registry_id']['new_display'])->toBe('Jane Registry')
         ->and($byField['campaign_id']['new_display'])->toBe('Spring Campaign')
         ->and($byField['lead_status_id']['new_display'])->toBe('New');
 
@@ -80,21 +80,21 @@ it('a created lead resolves FK labels for populated fields and drops null-null n
 
 it('an updated FK field resolves both old_display and new_display', function () {
     $actor = fkLabelActor('leads', ['view', 'viewActivity']);
-    $referentA = Referent::factory()->create(['name' => 'Referent A']);
-    $referentB = Referent::factory()->create(['name' => 'Referent B']);
-    $lead = Lead::factory()->create(['referent_id' => $referentA->id]);
+    $registryA = Registry::factory()->create(['name' => 'Registry A']);
+    $registryB = Registry::factory()->create(['name' => 'Registry B']);
+    $lead = Lead::factory()->create(['registry_id' => $registryA->id]);
     Sanctum::actingAs($actor);
 
-    $lead->update(['referent_id' => $referentB->id]);
+    $lead->update(['registry_id' => $registryB->id]);
 
     $items = collect($this->getJson("/api/activity-log/leads/{$lead->id}")->assertOk()->json('data.items'));
     $updated = $items->firstWhere('event', 'updated');
-    $change = collect($updated['changes'])->firstWhere('field', 'referent_id');
+    $change = collect($updated['changes'])->firstWhere('field', 'registry_id');
 
-    expect($change['old_value'])->toBe($referentA->id)
-        ->and($change['new_value'])->toBe($referentB->id)
-        ->and($change['old_display'])->toBe('Referent A')
-        ->and($change['new_display'])->toBe('Referent B');
+    expect($change['old_value'])->toBe($registryA->id)
+        ->and($change['new_value'])->toBe($registryB->id)
+        ->and($change['old_display'])->toBe('Registry A')
+        ->and($change['new_display'])->toBe('Registry B');
 });
 
 // ---------------------------------------------------------------------------
@@ -126,15 +126,15 @@ it('an FK pointing to a since-deleted record resolves to a null display, keeping
 
 it('resolves FK labels with one batched query per related class, never per row/field', function () {
     $actor = fkLabelActor('leads', ['view', 'viewActivity']);
-    $referents = Referent::factory()->count(3)->create();
+    $registries = Registry::factory()->count(3)->create();
     $campaign = Campaign::factory()->create();
-    $lead = Lead::factory()->create(['referent_id' => $referents[0]->id, 'campaign_id' => $campaign->id]);
+    $lead = Lead::factory()->create(['registry_id' => $registries[0]->id, 'campaign_id' => $campaign->id]);
     Sanctum::actingAs($actor);
 
-    // 3 more referent_id updates -> 4 distinct referent ids across 4 activity
-    // rows (1 created + 3 updated), all resolved by a SINGLE `referents` query.
+    // 3 more registry_id updates -> 4 distinct registry ids across 4 activity
+    // rows (1 created + 3 updated), all resolved by a SINGLE `registries` query.
     foreach ([1, 2, 0] as $index) {
-        $lead->update(['referent_id' => $referents[$index]->id]);
+        $lead->update(['registry_id' => $registries[$index]->id]);
     }
 
     DB::enableQueryLog();
@@ -146,6 +146,6 @@ it('resolves FK labels with one batched query per related class, never per row/f
         fn (array $query): bool => str_contains($query['query'], "from \"{$table}\"") && str_contains($query['query'], ' in (')
     )->count();
 
-    expect($labelQueries('referents'))->toBe(1)
+    expect($labelQueries('registries'))->toBe(1)
         ->and($labelQueries('campaigns'))->toBe(1);
 });

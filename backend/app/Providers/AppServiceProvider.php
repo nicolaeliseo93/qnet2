@@ -35,6 +35,7 @@ use App\Models\Source;
 use App\Models\Tag;
 use App\Models\User;
 use App\Models\UserTablePreference;
+use App\Models\VatRate;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -119,6 +120,7 @@ class AppServiceProvider extends ServiceProvider
             'lead' => Lead::class,
             'lead_status' => LeadStatus::class,
             'opportunity' => Opportunity::class,
+            'vat_rate' => VatRate::class,
         ]);
 
         Gate::before(function (User $user, string $ability): ?bool {

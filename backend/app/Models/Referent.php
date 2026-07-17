@@ -53,18 +53,6 @@ class Referent extends BaseModel
     }
 
     /**
-     * The leads that name this referent as their contact (spec 0024,
-     * BR-2/D-4: restrict-on-delete — ReferentService::delete() guards on this
-     * before deleting).
-     *
-     * @return HasMany<Lead, $this>
-     */
-    public function leads(): HasMany
-    {
-        return $this->hasMany(Lead::class);
-    }
-
-    /**
      * The registries (anagrafiche) this referent is associated to ("Referenti
      * per azienda" — spec 0020), inverse of Registry::referents(). Feeds the
      * referents/for-select `registry_id` scope (spec 0040 BR-4).

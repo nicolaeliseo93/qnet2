@@ -9,9 +9,9 @@ namespace App\DataObjects\Leads;
  *
  * Declared DTO (no "magic flying array") so the StoreLeadRequest ->
  * LeadService contract is explicit — see standards/architecture.md → Data
- * Transfer Objects. `referent_id`/`campaign_id` are mandatory (BR-1); no
- * `code` field exists for a Lead (D-3). `extra_fields` (spec 0033) is an
- * optional free-form key/value store, also populated by
+ * Transfer Objects. `registry_id`/`campaign_id` are mandatory (BR-1, spec
+ * 0041 D-1); no `code` field exists for a Lead (D-3). `extra_fields` (spec
+ * 0033) is an optional free-form key/value store, also populated by
  * LeadsImportDefinition::persistRow() for imported rows.
  *
  * spec 0039, D-3: `lead_status_id` is now NULLABLE — an omitted FK falls
@@ -25,7 +25,7 @@ final readonly class CreateLeadData
      * @param  array<string, string>|null  $extraFields
      */
     public function __construct(
-        public int $referentId,
+        public int $registryId,
         public int $campaignId,
         public ?int $operationalSiteId,
         public ?int $sourceId,
@@ -43,7 +43,7 @@ final readonly class CreateLeadData
     public static function fromValidated(array $data): self
     {
         return new self(
-            referentId: (int) $data['referent_id'],
+            registryId: (int) $data['registry_id'],
             campaignId: (int) $data['campaign_id'],
             operationalSiteId: isset($data['operational_site_id']) ? (int) $data['operational_site_id'] : null,
             sourceId: isset($data['source_id']) ? (int) $data['source_id'] : null,
@@ -63,7 +63,7 @@ final readonly class CreateLeadData
     public function attributes(): array
     {
         return [
-            'referent_id' => $this->referentId,
+            'registry_id' => $this->registryId,
             'campaign_id' => $this->campaignId,
             'operational_site_id' => $this->operationalSiteId,
             'source_id' => $this->sourceId,

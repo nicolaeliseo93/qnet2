@@ -10,7 +10,7 @@ import { Form, FormControl } from '@/components/ui/form'
 import { RelationSelectField } from '@/components/form/relation-select-field'
 import { cn } from '@/lib/utils'
 import { MetaField } from '@/features/authorization/MetaField'
-import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
+import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-api'
 import { LEAD_STATUSES_FOR_SELECT_RESOURCE } from '@/features/lead-statuses/for-select-api'
 import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
@@ -69,14 +69,13 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
           >
             <RelationSelectField
               control={form.control}
-              name="referent_id"
-              metaKey="referent_id"
-              label={t('leads.form.referent')}
-              resource={REFERENTS_FOR_SELECT_RESOURCE}
-              searchPlaceholder={t('leads.form.referentSearch')}
-              selected={original?.referent ?? null}
+              name="registry_id"
+              metaKey="registry_id"
+              label={t('leads.form.registry')}
+              resource={REGISTRIES_FOR_SELECT_RESOURCE}
+              searchPlaceholder={t('leads.form.registrySearch')}
+              selected={original?.registry ?? null}
               required
-              showAvatar
               {...selectLabels}
             />
 
@@ -216,7 +215,7 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
           )}
 
           <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+            <Button type="button" variant="outline" className="bg-card" onClick={onCancel} disabled={isSubmitting}>
               {t('leads.form.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting}>

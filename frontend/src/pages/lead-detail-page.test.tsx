@@ -23,7 +23,7 @@ vi.mock('@/features/leads/api', () => ({
 }))
 
 vi.mock('@/features/leads/lead-detail', () => ({
-  LeadDetailView: ({ lead }: { lead: LeadDetail }) => <h2>{lead.referent?.name}</h2>,
+  LeadDetailView: ({ lead }: { lead: LeadDetail }) => <h2>{lead.registry?.name}</h2>,
 }))
 
 vi.mock('@/components/page-header', () => ({
@@ -38,8 +38,8 @@ vi.mock('@/features/auth/use-abilities', () => ({
 function lead(overrides: Partial<LeadDetail> = {}): LeadDetail {
   return {
     id: 9,
-    referent_id: 10,
-    referent: { id: 10, name: 'Mario Rossi' },
+    registry_id: 10,
+    registry: { id: 10, name: 'Mario Rossi' },
     campaign_id: 20,
     campaign: { id: 20, code: 'CMP-0001', name: 'Spring push' },
     lead_status_id: 30,

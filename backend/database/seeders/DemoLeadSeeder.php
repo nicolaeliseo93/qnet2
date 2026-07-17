@@ -7,7 +7,7 @@ use App\Models\Campaign;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\OperationalSite;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
 use App\Services\LeadService;
@@ -17,21 +17,21 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
 
 /**
- * Development seed for the leads module (spec 0024): round-robins existing
- * referents/campaigns/lead-statuses (BR-1/D-1, mandatory) against the
- * optional site/source/operator lookups, so the demo grid exercises every
- * derived table column (referent/campaign/lead_status/operational_site/
- * source/operator) with realistic, varied values.
+ * Development seed for the leads module (spec 0024, spec 0041 D-1):
+ * round-robins existing registries/campaigns/lead-statuses (BR-1, mandatory)
+ * against the optional site/source/operator lookups, so the demo grid
+ * exercises every derived table column (registry/campaign/lead_status/
+ * operational_site/source/operator) with realistic, varied values.
  *
  * Every lead is created through LeadService::create() — the same path
  * POST /api/leads uses — so this exercises the real write path, not a raw
  * insert. Idempotent: existing leads are cleared first (harmless — nothing
  * else references a Lead, restrictOnDelete only runs the OTHER way).
  *
- * Depends on DemoReferentSeeder, DemoCampaignSeeder, DemoLeadStatusSeeder,
+ * Depends on DemoRegistrySeeder, DemoCampaignSeeder, DemoLeadStatusSeeder,
  * DemoOperationalSiteSeeder, DemoSourceSeeder and DemoUsersSeeder (all
  * seeded earlier in DemoDataSeeder) — a no-op (nothing to seed) if
- * referents, campaigns or lead statuses are empty.
+ * registries, campaigns or lead statuses are empty.
  */
 class DemoLeadSeeder extends Seeder
 {
@@ -46,12 +46,12 @@ class DemoLeadSeeder extends Seeder
         $faker = FakerFactory::create('it_IT');
         $faker->seed(20260713);
 
-        $referents = Referent::query()->orderBy('id')->get();
+        $registries = Registry::query()->orderBy('id')->get();
         $campaigns = Campaign::query()->orderBy('id')->get();
         $statuses = LeadStatus::query()->orderBy('sort_order')->get();
 
-        if ($referents->isEmpty() || $campaigns->isEmpty() || $statuses->isEmpty()) {
-            // Nothing sensible to seed without the 3 mandatory relations (BR-1, D-1).
+        if ($registries->isEmpty() || $campaigns->isEmpty() || $statuses->isEmpty()) {
+            // Nothing sensible to seed without the 3 mandatory relations (BR-1).
             return;
         }
 
@@ -60,12 +60,12 @@ class DemoLeadSeeder extends Seeder
         $operators = User::query()->orderBy('id')->get();
 
         for ($index = 0; $index < self::LEADS; $index++) {
-            $this->createLead($faker, $index, $referents, $campaigns, $statuses, $sites, $sources, $operators);
+            $this->createLead($faker, $index, $registries, $campaigns, $statuses, $sites, $sources, $operators);
         }
     }
 
     /**
-     * @param  Collection<int, Referent>  $referents
+     * @param  Collection<int, Registry>  $registries
      * @param  Collection<int, Campaign>  $campaigns
      * @param  Collection<int, LeadStatus>  $statuses
      * @param  Collection<int, OperationalSite>  $sites
@@ -75,7 +75,7 @@ class DemoLeadSeeder extends Seeder
     private function createLead(
         Generator $faker,
         int $index,
-        Collection $referents,
+        Collection $registries,
         Collection $campaigns,
         Collection $statuses,
         Collection $sites,
@@ -83,7 +83,7 @@ class DemoLeadSeeder extends Seeder
         Collection $operators,
     ): void {
         $data = new CreateLeadData(
-            referentId: $referents[$index % $referents->count()]->id,
+            registryId: $registries[$index % $registries->count()]->id,
             campaignId: $campaigns[$index % $campaigns->count()]->id,
             operationalSiteId: $this->maybePick($sites, $index, $faker, 60)?->id,
             sourceId: $this->maybePick($sources, $index + 1, $faker, 70)?->id,

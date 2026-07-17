@@ -182,7 +182,7 @@ interface ImportDefinition
 
     /**
      * Resolve the primary-key id of the EXISTING dominant record this staged
-     * row would collide with / update (for leads: the matching Referent id,
+     * row would collide with / update (for leads: the matching Registry id,
      * found by email/phone/mobile), or null when the row is new. Drives the
      * wizard's duplicate handling at staging: StageImportJob stores it on
      * import_run_rows.duplicate_of_id and maps it to a row status per the
@@ -197,7 +197,7 @@ interface ImportDefinition
 
     /**
      * Resolve BOTH resolveDuplicate()'s legacy id AND, for a definition that
-     * supports richer per-row duplicate reporting (spec 0036: leads' Referent
+     * supports richer per-row duplicate reporting (spec 0036: leads' Registry
      * match with matched channels + a same-campaign lead), the review-facing
      * meta a `duplicate` row's `import_run_rows.duplicate_meta` persists.
      * Defaults (in AbstractImportDefinition) to wrapping resolveDuplicate()
@@ -206,13 +206,13 @@ interface ImportDefinition
      *
      * @param  array<string, mixed>  $mapped
      * @param  array<string, mixed>  $globalConfig
-     * @return array{id: ?int, meta: ?array{referent_id: int, referent_name: string, lead_id: ?int, matched_on: array<int, string>}}
+     * @return array{id: ?int, meta: ?array{registry_id: int, registry_name: string, lead_id: ?int, matched_on: array<int, string>}}
      */
     public function resolveDuplicateMatch(array $mapped, array $globalConfig): array;
 
     /**
      * Field ids without which the domain record cannot be created at all
-     * (e.g. for leads: `first_name`/`last_name`, since a Referent's identity
+     * (e.g. for leads: `first_name`/`last_name`, since a Registry's identity
      * card needs one). Any of these still blank after recognizers() ran is
      * defaulted by StagedRowBuilder to `config('imports.placeholder')` and
      * flags the row for review, rather than rejecting it outright (spec 0033

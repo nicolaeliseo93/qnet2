@@ -18,12 +18,14 @@ use Illuminate\Validation\Rule;
  * `company_id`/`company_site_id` are always required (D-4, amendment rev.1
  * A-2 — NEITHER is BR-1-derivable, no lead/campaign chain to either);
  * `registry_id`/`operational_site_id` are required UNLESS `lead_id` derives
- * them (BR-1). The 6 BR-1-derivable fields (referent_id/source_id/
- * operational_site_id/registry_id/business_function_id/product_category_id)
- * become `prohibited` when `lead_id` derives a non-null value for them —
- * LeadOpportunityDefaultsResolver is the single source of truth for which
- * ones, shared verbatim with OpportunityService's write-side derivation and
- * the GET /api/leads/{lead}/opportunity-defaults prefill.
+ * them (BR-1). The 5 BR-1-derivable fields (source_id/operational_site_id/
+ * registry_id/business_function_id/product_category_id) become `prohibited`
+ * when `lead_id` derives a non-null value for them — LeadOpportunityDefaultsResolver
+ * is the single source of truth for which ones, shared verbatim with
+ * OpportunityService's write-side derivation and the
+ * GET /api/leads/{lead}/opportunity-defaults prefill. `referent_id` is NOT
+ * derivable (spec 0041 D-1/D-3): it stays a plain, always-editable field
+ * scoped to the chosen registry (BR-4, spec 0040).
  *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Opportunity::class)). EnforcesFieldPermissions
@@ -59,7 +61,7 @@ class StoreOpportunityRequest extends FormRequest
             'company_site_id' => ['required', 'integer', Rule::exists('company_sites', 'id')],
             'operational_site_id' => $this->derivableRule($locked, 'operational_site_id', required: true, table: 'operational_sites'),
             'business_function_id' => $this->derivableRule($locked, 'business_function_id', required: false, table: 'business_functions'),
-            'referent_id' => $this->derivableRule($locked, 'referent_id', required: false, table: 'referents'),
+            'referent_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'commercial_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'reporter_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'supervisor_id' => ['nullable', 'integer', Rule::exists('users', 'id')],

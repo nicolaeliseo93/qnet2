@@ -22,6 +22,7 @@ use App\Models\Sector;
 use App\Models\Source;
 use App\Models\Tag;
 use App\Models\User;
+use App\Models\VatRate;
 
 return [
 
@@ -118,6 +119,9 @@ return [
         'users' => [
             'model' => User::class,
             'relations' => ['personalData', 'personalData.contacts', 'personalData.addresses'],
+        ],
+        'vat-rates' => [
+            'model' => VatRate::class,
         ],
     ],
 

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0041-lead-registry-relation" status="approved" owner="nicola" date="2026-07-17">
+
+  <goal>
+    Correggere la relazione del Lead: oggi un Lead lega un Referente (`referent_id`), ma DEVE
+    legare un'Anagrafica (`registry_id`). La correzione va propagata a cascata su tre superfici:
+    (1) il modulo Lead (schema, model, DTO, request, resource, service, tabella, for-select,
+    seeder/factory), (2) l'importazione Lead (crea/aggiorna e collega un'Anagrafica invece di un
+    Referente, incluso il match duplicati e la duplicate-meta), (3) le Opportunita' (scegliendo un
+    Lead l'anagrafica si auto-seleziona da `lead.registry_id`, non piu' da `campaign.registry_id`).
+    Riusa integralmente l'infrastruttura `Registry`/`RegistryService`/`RegistryProfileWriter` gia'
+    esistente e gemella di quella `Referent`. Nessun pattern nuovo.
+  </goal>
+
+  <context>
+    Tutti i nomi qui sotto sono stati VERIFICATI sul codice reale, non ipotizzati.
+
+    DECISIONI PRESE DALL'UTENTE (2026-07-17):
+    - D-1: SOSTITUZIONE, non aggiunta. Il Lead perde `referent_id` e guadagna `registry_id`.
+      Questo SOVRASCRIVE la decisione D-1 della spec 0024 ("Contatto = Referent, non Registry"):
+      da ora il "contatto" del Lead e' l'Anagrafica (`Registry`).
+    - D-2: Dati demo/dev ricreabili. Nessun lead di produzione da preservare -> nessun backfill
+      referent->registry. La migrazione droppa `referent_id` e aggiunge `registry_id`; i seeder
+      `Demo*` e la `LeadFactory` si riadattano a `Registry`.
+    - D-3: Nell'Opportunita' l'anagrafica si deriva da `lead.registry_id` (non piu' da
+      `campaign.registry_id`). Il `referent_id` dell'Opportunita' NON e' piu' derivato/bloccato
+      dal Lead: resta un campo scelto a mano, scoped all'anagrafica (BR-4 spec 0040 invariato).
+
+    STATO ATTUALE VERIFICATO (da correggere):
+    - Lead: FK `referent_id` (NOT NULL, `restrictOnDelete` -> `referents`). Nessun `registry_id`.
+      Il Lead non ha nome proprio: e' etichettato/cercato/ordinato via il `name` del Referente
+      (`LeadService::referentNameSubquery`). Relazione `Lead::referent()` belongsTo Referent.
+    - Referente->Anagrafica e' M:N via pivot `referent_registry` (nessun FK owning). Irrilevante
+      per D-2 (niente backfill): si sostituisce la relazione, non la si deriva dalla vecchia.
+    - Registry HA una colonna `name` (label del `RegistryForSelectResource` = name), quindi
+      l'etichetta/ordinamento/ricerca del Lead passano al `name` dell'anagrafica in modo diretto,
+      col medesimo pattern oggi usato per il Referente.
+    - Import: `LeadRowPersister` crea/aggiorna un Referente via `ReferentService` e collega
+      `Lead.referent_id`; `LeadDuplicateMatcher` matcha su `PersonalData`/`Contact` con morph class
+      Referent; la duplicate-meta e' `{referent_id, referent_name, lead_id, matched_on}`.
+      Registry riusa lo stesso stack `HasPersonalData` -> il match e la creazione sono simmetrici.
+    - Opportunita': `LeadOpportunityDefaultsResolver::resolve(Lead)` deriva `registry_id` da
+      `campaign.registry_id` e `referent_id` da `lead.referent_id`; entrambi finiscono nei
+      `lockedFields`. Il FE (`use-opportunity-lead-selection.ts`) prefilla/azzera i DERIVED_FIELDS
+      (inclusi `referent_id` e `registry_id`) e blocca i campi derivati.
+
+    INFRASTRUTTURA RIUSATA (zero codice nuovo di framework):
+    - `Registry` / `RegistryService` / `RegistryProfileWriter` / `CreateRegistryData` /
+      `UpdateRegistryData` — gemelli di quelli Referent, gia' presenti.
+    - `RegistryForSelectResource` gia' espone `meta.commercial/reporter/managers` (usati
+      dall'Opportunita', BR-4/A-5 spec 0040): NON toccare quel contratto.
+    - Framework tabellare, permessi per campo, envelope: invariati.
+
+    REGOLE DI BUSINESS:
+    - BR-1: `registry_id` e' obbligatorio (NOT NULL a DB, `required` in validazione, `exists:registries,id`),
+      esattamente come lo era `referent_id`. `campaign_id`/`lead_status_id` restano obbligatori.
+    - BR-2: cancellazione BLOCCANTE Anagrafica<-Lead. A DB `restrictOnDelete` sulla nuova FK; nel
+      dominio guardia `abort(409, ...)` nel `delete()` di `RegistryService`, ESATTAMENTE come
+      l'attuale in `ReferentService` (spec 0024 BR-2). La vecchia guardia lead in `ReferentService`
+      va RIMOSSA (dead code: il Referente non e' piu' referenziato dal Lead) insieme alla relazione
+      orfana `Referent::leads()`. Va aggiunta `Registry::leads()` HasMany.
+    - BR-3: nell'import, un match duplicato risolve/crea un'Anagrafica; la duplicate-meta diventa
+      `{registry_id, registry_name, lead_id, matched_on}` end-to-end (BE docblock + FE types).
+    - BR-4: nell'Opportunita', scegliendo un Lead l'anagrafica si deriva da `lead.registry_id`;
+      `referent_id` esce dall'insieme dei campi derivati/locked (resta libero, scoped BR-4 spec 0040).
+  </context>
+
+  <scope>
+    <in>
+      <item>BE Lead: nuova migration (drop FK+colonna `referent_id`, add `registry_id` NOT NULL restrictOnDelete->registries); model `Lead` ($fillable, relazione `registry()`); DTO `CreateLeadData`/`UpdateLeadData` (`registryId`/`registry_id`); `StoreLeadRequest`/`UpdateLeadRequest` (`registry_id` required exists:registries); `LeadResource` (`registry_id`+`registry`); `LeadService` (relazione eager, subquery nome via registries); `LeadsTableDefinition`+`LeadColumnCatalog` (colonna derivata registry); `LeadForSelectResource` (label=registry name).</item>
+      <item>BE Registry/Referent: `Registry::leads()` HasMany + guardia 409 in `RegistryService::delete`; rimozione della guardia lead e della relazione `leads()` in Referent/`ReferentService` (dead code).</item>
+      <item>BE Import: `LeadRowPersister` (RegistryService al posto di ReferentService, `attachLead` su `registry_id`); `LeadProfileBuilder` (typehints Registry); `LeadDuplicateMatcher` (match morph Registry, `existingLeadId` per `registry_id`); `LeadDuplicateMatch` (`registryId`/`registryName`); `LeadsImportDefinition` (resolveDuplicate/resolveDuplicateMatch meta + persistRow vars); docblock `ImportDefinition`+`StageOutcome` (duplicate-meta `registry_*`).</item>
+      <item>BE Opportunita': `LeadOpportunityDefaultsResolver` (registry da `lead.registry_id`; rimozione `referent_id` dai derived/locked).</item>
+      <item>BE seeder/factory: `DemoLeadSeeder` + `LeadFactory` su `Registry`.</item>
+      <item>FE Opportunita': `use-opportunity-lead-selection.ts` (DERIVED_FIELDS senza `referent_id`); `use-opportunity-selected-items.ts` (idrata la label anagrafica da `references.registry` anche col lead scelto in-form).</item>
+      <item>FE Import: `types.ts` (`ImportRowDuplicateMeta` -> `registry_id`/`registry_name`); `review-resolution-cell.tsx`/`review-columns.tsx` (`meta.registry_name`); i18n `*-import-wizard.ts` ("referente"->"anagrafica").</item>
+      <item>FE Lead module (AMENDMENT 2026-07-17, mancava nello scope iniziale ma e' il consumatore primario del contratto Lead): `features/leads/` — types/api/schema (`referent_id`/`referent` -> `registry_id`/`registry`), form + campo relazionale "contatto" che punta ora al for-select `registries` invece che `referents`, `lead-detail`, renderer di colonna e definizioni tabella (colonna `registry`), consumo for-select, i18n `it-leads.ts`/`en-leads.ts` (`columns.referent`/`advancedFilters.referent` -> `registry`). Senza questo la pagina Lead si rompe a runtime.</item>
+      <item>Test: Pest (Lead model/CRUD/authz, tabella, for-select, import, opportunity-defaults, guardia 409 Registry) e Vitest (opportunity lead-selection/selected-items, import review) AGGIORNATI al nuovo contratto.</item>
+    </in>
+    <out>
+      <item>Backfill di dati esistenti referent->registry (D-2: dati ricreabili).</item>
+      <item>Modifiche al contratto `RegistryForSelectResource` (`meta.commercial/reporter/managers`): resta invariato.</item>
+      <item>Il `referent_id` proprio dell'Opportunita' e il suo scoping BR-4 (spec 0040): resta come e'; cambia SOLO che non e' piu' derivato dal Lead.</item>
+      <item>La relazione M:N `referent_registry` e i moduli Referent/Registry in quanto tali: non si toccano oltre a guardia/relazione lead.</item>
+      <item>Qualsiasi rinomina della colonna referent_id in tabelle diverse da `leads`.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <endpoint method="GET|POST" path="/api/leads/{lead} | /api/leads">
+      <request>
+        POST/PUT body: registry_id (required su POST, exists:registries,id) SOSTITUISCE referent_id.
+        Restano: campaign_id (required), operational_site_id/source_id/operator_id/lead_status_id (nullable),
+        notes, extra_fields.
+      </request>
+      <response status="200|201">
+        data: {
+          id, registry_id: number, registry: { id, name } | null,   // era referent_id/referent
+          campaign_id, campaign: {...} | null,
+          operational_site_id, operational_site: {...} | null,
+          source_id, source: {...} | null,
+          operator_id, operator: {...} | null,
+          lead_status_id, lead_status: {...} | null,
+          notes, extra_fields, created_at, updated_at
+        }, permissions: {...}
+      </response>
+      <errors>422 con registry_id inesistente (exists), non 500. 403 senza permesso.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/leads/{columns|rows|values}">
+      <response status="200">
+        Colonna relazionale `registry` (derivata standard su registries.name) SOSTITUISCE `referent`.
+        rows: item.registry = { id, name } | null. Sort/filter/distinct via registries.name (allow-list).
+      </response>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/leads/for-select">
+      <response status="200">items[].label = registry?.name (era referent?.name). subtitle invariato (campaign code/name).</response>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/leads/{lead}/opportunity-defaults">
+      <response status="200">
+        values.registry_id = lead.registry_id (era campaign.registry_id).
+        values.referent_id: RIMOSSO dai campi derivati. locked_fields: senza `referent_id`.
+        references.registry = { id, name } dal registry del lead. Gli altri derivati invariati.
+      </response>
+    </endpoint>
+
+    <contract name="import-duplicate-meta">
+      Shape end-to-end (BE StageOutcome/ImportDefinition docblock, DB duplicate_meta, FE ImportRowDuplicateMeta):
+      { registry_id: number, registry_name: string, lead_id: number | null, matched_on: string[] }
+      (era { referent_id, referent_name, lead_id, matched_on }).
+    </contract>
+
+  </data_contract>
+
+  <acceptance_criteria>
+
+    <!-- Schema e model Lead -->
+    <criterion id="AC-001">Dopo la migrazione, `leads` ha `registry_id` NOT NULL con FK restrictOnDelete->registries e NON ha piu' `referent_id`; `down()` poi `up()` resta reversibile. [Pest: Unit/Models/LeadTest, Feature migration]</criterion>
+    <criterion id="AC-002">`lead->registry` risolve BelongsTo Registry; `lead->referent` non esiste piu'. `registry_id` e' in `$fillable`, `referent_id` no. [Pest]</criterion>
+    <criterion id="AC-003">`Registry::leads()` risolve HasMany dei lead che la referenziano; `Referent::leads()` non esiste piu'. [Pest]</criterion>
+
+    <!-- CRUD + authz Lead -->
+    <criterion id="AC-010">Con `leads.create`, POST con `registry_id`+`campaign_id` validi -> 201 e Lead persistito con `registry_id` corretto. [Pest: Feature/Leads/LeadCrudTest]</criterion>
+    <criterion id="AC-011">POST senza `registry_id` -> 422 sul campo, nessuna riga creata. POST con `registry_id` inesistente -> 422 (exists), non 500. [Pest]</criterion>
+    <criterion id="AC-012">GET/POST leads NON espone mai `referent_id`/`referent`; espone `registry_id`/`registry: {id,name}|null`. [Pest: LeadResource]</criterion>
+
+    <!-- Guardia 409 Registry, rimozione dead code Referent -->
+    <criterion id="AC-020">Data un'Anagrafica referenziata da un Lead, DELETE di quell'Anagrafica -> 409 con messaggio esplicito, l'Anagrafica NON viene cancellata. [Pest: RegistryService delete guard]</criterion>
+    <criterion id="AC-021">Un Referente non piu' referenziato da alcun Lead e' cancellabile senza la vecchia guardia lead (rimossa); le suite delete di Referent restano verdi. [Pest]</criterion>
+
+    <!-- Tabella / for-select -->
+    <criterion id="AC-030">`POST /api/tables/leads/rows` restituisce la colonna `registry` = {id,name}; filtro/ordinamento su registry passano da `registries.name` via allow-list (nessun whereRaw/orderByRaw su input). [Pest: LeadTableTest]</criterion>
+    <criterion id="AC-031">`GET /api/leads/for-select` etichetta ogni item col `name` dell'anagrafica. [Pest]</criterion>
+
+    <!-- Import -->
+    <criterion id="AC-040">Importando una riga senza duplicato, viene creata un'Anagrafica (via RegistryService) e un Lead con `registry_id` che la referenzia (nessun Referente creato dal path lead-import). [Pest: import feature]</criterion>
+    <criterion id="AC-041">Il match duplicati risolve un `registry_id` da PersonalData/Contact con morph class Registry; `existingLeadId` filtra per `registry_id`+`campaign_id`. [Pest: LeadDuplicateMatcher]</criterion>
+    <criterion id="AC-042">La duplicate-meta prodotta e persistita ha shape `{registry_id, registry_name, lead_id, matched_on}`; nessuna chiave `referent_*` residua nel BE. [Pest]</criterion>
+    <criterion id="AC-043">In UpdateExisting, l'Anagrafica matchata viene aggiornata e il lead ricollegato/aggiornato, senza toccare Referent. [Pest]</criterion>
+
+    <!-- Opportunita' -->
+    <criterion id="AC-050">`GET /api/leads/{lead}/opportunity-defaults` restituisce `values.registry_id === lead.registry_id` e NON include `referent_id` tra i derived/locked; `references.registry` = {id,name} del registry del lead. [Pest: LeadOpportunityDefaultsResolver / controller test]</criterion>
+    <criterion id="AC-051">Nel form Opportunita' create, scegliendo un Lead: `registry_id` viene settato (shouldDirty) dal default e la label dell'anagrafica appare nel trigger (idratata da references.registry); `referent_id` NON viene prefillato ne' bloccato e resta editabile. [Vitest: use-opportunity-lead-selection / selected-items]</criterion>
+    <criterion id="AC-052">Scegliendo poi "nessun lead" (null), i campi derivati (registry_id incluso, referent_id escluso) vengono azzerati e sbloccati, senza errori. [Vitest]</criterion>
+
+    <!-- Import FE -->
+    <criterion id="AC-060">`ImportRowDuplicateMeta` espone `registry_id`/`registry_name`; la review cell mostra `meta.registry_name`; nessun `referent_*` residuo nel FE import. [Vitest: review-resolution-cell]</criterion>
+    <criterion id="AC-061">Le stringhe i18n della review import parlano di "anagrafica"/"registry" dove prima dicevano "referente"/"referent". [Vitest/ispezione]</criterion>
+
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm).</item>
+    <item>Identificatori in INGLESE: colonna `registry_id`, relazione `registry`, meta `registry_id`/`registry_name`. L'italiano vive solo nelle stringhe i18n.</item>
+    <item>Authz server-side su OGNI endpoint (invariato). Mai model Eloquent raw: sempre via Resource. Mai `$request->only()` senza validazione.</item>
+    <item>Zero `whereRaw`/`orderByRaw`/`groupByRaw` su input utente: sort/filtri da allow-list di colonne.</item>
+    <item>Dead code cancellato, non commentato: guardia lead in ReferentService e relazione `Referent::leads()` vanno rimosse, non lasciate orfane.</item>
+    <item>Mai modificare una migration committata: la sostituzione referent->registry su `leads` va in una NUOVA migration reversibile.</item>
+    <item>`DemoLeadSeeder` idempotente, agganciato solo a `DemoDataSeeder`.</item>
+    <item>Ownership disgiunta: teammate BE tocca solo `backend/`, teammate FE solo `frontend/src/`. Contratto sopra congelato: nessuna deviazione senza aggiornare la spec.</item>
+    <item>Definition of Done: Pest + Vitest ESEGUITI e verdi, `tsc --noEmit` pulito, Pint/ESLint puliti sul diff. Nessun commit finche' l'utente non lo chiede (CLAUDE.md §3.6).</item>
+  </constraints>
+
+</spec>

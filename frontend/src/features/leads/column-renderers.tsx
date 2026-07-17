@@ -45,7 +45,7 @@ function EmptyCell() {
   )
 }
 
-/** Renders a hydrated `{id, name}` relation column (referent, campaign, source, operator): the name, or an em dash. */
+/** Renders a hydrated `{id, name}` relation column (registry, campaign, source, operator): the name, or an em dash. */
 function RelationCell({ value }: ICellRendererParams) {
   const relation = value as LeadRelationRef | null | undefined
   if (!relation) {
@@ -123,7 +123,7 @@ function AssignedBadgeCell({ value }: ICellRendererParams) {
  * domain-agnostic renderer.
  */
 export const leadColumnRenderers: TableRendererMap = {
-  referent: (params) => <RelationCell {...params} />,
+  registry: (params) => <RelationCell {...params} />,
   campaign: (params) => <RelationCell {...params} />,
   lead_status: (params) => <LeadStatusCell {...params} />,
   operational_site: (params) => <OperationalSiteCell {...params} />,

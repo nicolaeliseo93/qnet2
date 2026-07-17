@@ -23,7 +23,7 @@ export function OpportunityLeadField({ state, onSelect }: OpportunityLeadFieldPr
   const { t } = useTranslation()
 
   const selectedItem =
-    state.leadId !== null ? { id: state.leadId, label: state.referentName ?? `#${state.leadId}` } : null
+    state.leadId !== null ? { id: state.leadId, label: state.registry?.name ?? `#${state.leadId}` } : null
 
   return (
     <div className="flex flex-col gap-2">

@@ -6,7 +6,7 @@ use App\Models\LeadStatus;
 
 /**
  * Static catalogue backing `LeadsImportDefinition::columns()/fields()/
- * globalConfig()` (spec 0033): the mappable Referent+Lead field ids and the
+ * globalConfig()` (spec 0033): the mappable Registry+Lead field ids and the
  * configuration-step global fields, kept off the main definition class to
  * stay under the 300-line soft limit (engineering.md §6).
  *
@@ -67,7 +67,7 @@ final class LeadImportFieldCatalog
     /**
      * Fields StagedRowBuilder defaults to `config('imports.placeholder')`
      * when still blank after recognizers ran (spec 0033 delta
-     * D-2026-07-15-placeholder-review-fields): a Referent's identity card
+     * D-2026-07-15-placeholder-review-fields): a Registry's identity card
      * needs a first/last name — NameSplitRecognizer supplies these from
      * `full_name` when possible, the placeholder covers what it cannot.
      *

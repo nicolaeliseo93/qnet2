@@ -240,6 +240,13 @@ return [
                     'permission' => 'sources.view',
                 ],
                 [
+                    'key' => 'vat-rates',
+                    'label' => 'navigation.vatRates',
+                    'icon' => 'percent',
+                    'route' => '/vat-rates',
+                    'permission' => 'vat-rates.view',
+                ],
+                [
                     'key' => 'product-categories',
                     'label' => 'navigation.productCategories',
                     'icon' => 'list-tree',

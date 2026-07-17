@@ -14,6 +14,7 @@ import { attributes, productCategories, products } from './it-products'
 import { customFields } from './it-custom-fields'
 import { sectors } from './it-sectors'
 import { sources } from './it-sources'
+import { vatRates } from './it-vat-rates'
 import { tags } from './it-tags'
 import { pipelineStatuses } from './it-pipeline-statuses'
 import { projects } from './it-projects'
@@ -75,6 +76,7 @@ export const it: TranslationResources = {
     sectors: 'Settori',
     products: 'Prodotti',
     sources: 'Fonti',
+    vatRates: 'IVA',
     tags: 'Tag',
     projects: 'Progetti',
     campaigns: 'Campagne',
@@ -426,6 +428,7 @@ export const it: TranslationResources = {
   sectors,
   products: { ...products, stats: moduleStats.products },
   sources,
+  vatRates,
   tags,
   projects: { ...projects, stats: moduleStats.projects },
   pipelineStatuses,

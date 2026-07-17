@@ -12,8 +12,8 @@ export const LEADS_FOR_SELECT_RESOURCE = 'leads'
 /**
  * Fetches a page of lead options from `GET /api/leads/for-select`. Thin
  * wrapper over the generic for-select fetcher, bound to the `leads` resource.
- * Items carry `label` (the lead's referent name, D-3: a lead has no name of
- * its own) and `subtitle` (the linked campaign's code/name).
+ * Items carry `label` (the lead's registry name, D-3/spec 0041 D-1: a lead
+ * has no name of its own) and `subtitle` (the linked campaign's code/name).
  */
 export function fetchLeadsForSelect(
   params: ForSelectParams = {},

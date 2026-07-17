@@ -27,6 +27,8 @@ function baseFields(t: TFunction) {
     price: z.number().nonnegative(t('products.form.priceInvalid')).nullable(),
     category_id: z.number().nullable(),
     product_type: z.enum(['SERVICE']),
+    vat_rate_id: z.number().nullable(),
+    supplier_id: z.number().nullable(),
   }
 }
 

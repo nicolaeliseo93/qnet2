@@ -11,7 +11,7 @@ import { buildCreateLeadSchema } from '@/features/leads/lead-schema'
 
 function baseValues(overrides: Record<string, unknown> = {}) {
   return {
-    referent_id: 1,
+    registry_id: 1,
     campaign_id: 2,
     lead_status_id: 3,
     operational_site_id: null,
@@ -34,12 +34,12 @@ describe('buildCreateLeadSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('rejects a missing referent_id (contact)', () => {
+  it('rejects a missing registry_id (contact)', () => {
     const schema = buildCreateLeadSchema(i18n.t)
-    const result = schema.safeParse(baseValues({ referent_id: null }))
+    const result = schema.safeParse(baseValues({ registry_id: null }))
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.issues.some((issue) => issue.path.join('.') === 'referent_id')).toBe(true)
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'registry_id')).toBe(true)
     }
   })
 

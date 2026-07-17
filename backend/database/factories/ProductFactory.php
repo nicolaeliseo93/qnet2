@@ -26,6 +26,8 @@ class ProductFactory extends Factory
             'price' => fake()->randomFloat(2, 1, 1000),
             'category_id' => ProductCategory::factory(),
             'product_type' => ProductType::Service,
+            'vat_rate_id' => null,
+            'supplier_id' => null,
         ];
     }
 }

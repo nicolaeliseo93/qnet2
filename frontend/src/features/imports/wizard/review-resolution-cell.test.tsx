@@ -7,9 +7,10 @@ import { ReviewResolutionCell, type ReviewResolutionCellParams } from '@/feature
 import type { ImportRunRowItem } from '@/features/imports/wizard/types'
 
 /**
- * Spec 0036 AC-008: a `duplicate` row shows the matched referent's name (with
- * a lead-in-campaign indicator when `duplicate_meta.lead_id` is set) and a
- * skip/create/update select; every other row renders an em dash instead.
+ * Spec 0036 AC-008: a `duplicate` row shows the matched anagrafica's name
+ * (with a lead-in-campaign indicator when `duplicate_meta.lead_id` is set)
+ * and a skip/create/update select; every other row renders an em dash
+ * instead. Shape updated by spec 0041 BR-3/AC-060 (`registry_*`, not `referent_*`).
  */
 
 function rowItem(overrides: Partial<ImportRunRowItem> = {}): ImportRunRowItem {
@@ -20,8 +21,8 @@ function rowItem(overrides: Partial<ImportRunRowItem> = {}): ImportRunRowItem {
     is_edited: false,
     duplicate_of_id: 5,
     duplicate_meta: {
-      referent_id: 5,
-      referent_name: 'Mario Rossi',
+      registry_id: 5,
+      registry_name: 'Mario Rossi',
       lead_id: null,
       matched_on: ['email'],
     },
@@ -59,7 +60,7 @@ describe('ReviewResolutionCell', () => {
     expect(screen.getByText('—')).toBeInTheDocument()
   })
 
-  it('shows the matched referent name and the resolution select for a duplicate row', () => {
+  it('shows the matched anagrafica name and the resolution select for a duplicate row', () => {
     renderCell()
     expect(screen.getByText('Mario Rossi')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Resolution' })).toBeInTheDocument()
@@ -72,10 +73,10 @@ describe('ReviewResolutionCell', () => {
           ICellRendererParams)}
       />,
     )
-    expect(withoutLead.querySelector('[title="This referent already has a lead in the selected campaign."]')).toBeNull()
+    expect(withoutLead.querySelector('[title="This registry already has a lead in the selected campaign."]')).toBeNull()
 
     const dataWithLead = rowItem({
-      duplicate_meta: { referent_id: 5, referent_name: 'Mario Rossi', lead_id: 42, matched_on: ['email'] },
+      duplicate_meta: { registry_id: 5, registry_name: 'Mario Rossi', lead_id: 42, matched_on: ['email'] },
     })
     const { container: withLead } = render(
       <ReviewResolutionCell
@@ -83,7 +84,7 @@ describe('ReviewResolutionCell', () => {
           ICellRendererParams)}
       />,
     )
-    expect(withLead.querySelector('[title="This referent already has a lead in the selected campaign."]')).not.toBeNull()
+    expect(withLead.querySelector('[title="This registry already has a lead in the selected campaign."]')).not.toBeNull()
   })
 
   it('reflects the row current resolution as the select value', () => {

@@ -135,14 +135,14 @@ export type ImportRowStatus = 'valid' | 'warning' | 'error' | 'duplicate' | 'ski
 export type ImportRowResolution = 'skip' | 'create' | 'update'
 
 /**
- * Which existing referent (and, if any, lead) a `duplicate` row matched
- * against (spec 0036 `data_contract`). Written server-side during
- * staging/revision; `lead_id` is set only when that referent already has a
- * lead on the run's campaign.
+ * Which existing anagrafica (and, if any, lead) a `duplicate` row matched
+ * against (spec 0036 `data_contract`, shape updated by spec 0041 BR-3).
+ * Written server-side during staging/revision; `lead_id` is set only when
+ * that anagrafica already has a lead on the run's campaign.
  */
 export interface ImportRowDuplicateMeta {
-  referent_id: number
-  referent_name: string
+  registry_id: number
+  registry_name: string
   lead_id: number | null
   matched_on: string[]
 }

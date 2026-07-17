@@ -2,6 +2,125 @@
 
 > Injected at session start. Update at every green state.
 
+## LEAD: RELAZIONE REFERENTE -> ANAGRAFICA (spec 0041) (2026-07-17) — GREEN, NON COMMITTATO
+
+Correzione richiesta dall'utente: un Lead NON ha piu' un Referente ma un'Anagrafica (Registry).
+Cascata su 3 superfici: modulo Lead, importazione Lead, Opportunita'. Contratto congelato in
+`docs/specs/0041-lead-registry-relation.xml` (con amendment 2026-07-17 per il modulo FE leads,
+inizialmente fuori scope). Decisioni utente: (D-1) SOSTITUZIONE referent_id->registry_id, non
+aggiunta; (D-2) dati demo/dev ricreabili, nessun backfill; (D-3) nell'Opportunita' la registry
+si deriva da `lead.registry_id` (non piu' da `campaign.registry_id`) e `referent_id` esce dai
+campi derivati/locked (resta il referent PROPRIO dell'opportunita', scelto a mano, BR-4 spec 0040).
+
+SOVRASCRIVE la decisione D-1 della spec 0024 ("Contatto del Lead = Referent"): ora e' Registry.
+
+CONTRATTO NUOVO:
+- Lead: `registry_id` (NOT NULL, FK restrictOnDelete->registries) SOSTITUISCE `referent_id`.
+  Resource espone `registry_id` + `registry:{id,name}|null`. Etichetta/ricerca/ordinamento del
+  lead ora dal `name` dell'anagrafica. Tabella: colonna derivata `registry` (era `referent`).
+  for-select leads: label = registry.name. i18n key BE `leads.columns.registry` /
+  `leads.advancedFilters.registry`.
+- Import duplicate-meta: `{registry_id, registry_name, lead_id, matched_on}` (era referent_*),
+  end-to-end BE (StageOutcome/ImportDefinition docblock, DB duplicate_meta) + FE
+  (ImportRowDuplicateMeta). L'import crea/aggiorna una Registry via RegistryService (non piu'
+  Referent), match duplicati su PersonalData/Contact morph class Registry.
+- opportunity-defaults (`GET /api/leads/{lead}/opportunity-defaults`): `values.registry_id` da
+  lead; `referent_id` NON piu' in derived/locked; `references.registry` = {id,name}; NIENTE piu'
+  `references.referent`.
+
+FILE TOCCATI (BE, teammate `be`): nuova migration
+`2026_07_17_100000_replace_referent_id_with_registry_id_on_leads_table.php`; Lead/Registry/Referent
+model (registry() / Registry::leads() HasMany / rimossa Referent::leads() dead code);
+Create/UpdateLeadData; Store/UpdateLeadRequest (registry_id exists:registries); LeadResource;
+LeadForSelectResource; LeadsAuthorization (campo permessi registry_id); LeadService
+(registryNameSubquery); LeadsTableDefinition + LeadColumnCatalog + LeadAdvancedFilterCatalog
+(colonna registry); RegistryService::delete (guardia 409 lead) / ReferentService::delete (guardia
+lead RIMOSSA); DemoLeadSeeder + LeadFactory su Registry; import
+(LeadRowPersister/LeadProfileBuilder/LeadDuplicateMatcher/LeadDuplicateMatch/LeadsImportDefinition
++ docblock ImportDefinition/AbstractImportDefinition/StageOutcome);
+LeadOpportunityDefaultsResolver (registry da lead, referent fuori); Store/UpdateOpportunityRequest
+(referent_id regola piatta, mai piu' prohibited); LeadOpportunityDefaults docblock; effetto a
+cascata NECESSARIO (Lead::referent() rimossa): OpportunityResource::summarizeLead +
+OpportunityService::DETAIL_RELATIONS (lead.referent->lead.registry).
+
+FILE TOCCATI (FE, teammate `fe` + 1 riga da main): opportunita'
+(use-opportunity-lead-selection.ts DERIVED_FIELDS senza referent_id + state.registry;
+use-opportunity-selected-items.ts registry idratato da leadSelection/fromLead, RIMOSSA la lettura
+di references.referent [riga applicata da main come tie-breaker sullo Stop-hook tsc -b];
+opportunity-form-body.tsx; opportunity-from-lead-banner.tsx registryName; opportunity-lead-field.tsx
+trigger da registry; types.ts OpportunityDefaultReferences senza referent); import wizard
+(types.ts ImportRowDuplicateMeta registry_*; review-resolution-cell/review-columns/api.ts;
+i18n it/en-import-wizard); modulo leads (features/leads/ types/lead-schema/lead-form-payload/
+use-lead-form/lead-form-body [for-select REGISTRIES_FOR_SELECT_RESOURCE]/lead-detail/
+column-renderers/for-select-api + i18n it/en-leads chiavi registry, COPY "Contatto"/"Contact"
+invariato); pages/lead-detail-page.tsx + lead-form-page.tsx + relativo test (breadcrumb da
+registry.name).
+
+VERIFICATO (verifier indipendente, eseguito davvero): `tsc -b` exit 0; Vitest 1591/1594 verdi;
+Pest 2892/2894 (13129 assert); Pint + ESLint puliti sul diff. I DUE rossi sono PRE-ESISTENTI ed
+estranei al diff 0041, confermati in isolamento: BE `AbstractMigrationSourcePreviewTest`
+(mismatch description su migration-preview) e FE `src/features/table/cell-renderers.test.tsx`
+(bug proprio: `afterAll` lascia i18n su 'it', ContactsCell si aspetta l'aria-label inglese —
+nulla a che vedere col rename registry). Zero residui `referent` tecnici sui percorsi
+lead/import/opportunita-da-lead; il `referent_id` PROPRIO dell'opportunita' (campo manuale) e'
+intatto. NIENTE COMMIT (in attesa di via libera utente).
+
+NOTA: nel working tree convivono modifiche NON pertinenti a 0041 (modulo vat-rate/prodotto sotto,
+fix contrasto bottoni, `.claude/rules/frontend.md`): lavoro precedente non committato, da tenere
+distinto se si committa 0041.
+
+## PRODUCT FORM — CAMPO IVA (nuovo modulo vat-rates) + FORNITORE (2026-07-17) — GREEN, NON COMMITTATO
+
+Aggiunti due campi al form Prodotto + nuovo modulo lookup `vat-rates`. Identificatori INGLESI
+(label UI "IVA"/"Fornitore" via i18n). Lavoro fatto in parallelo da 2 teammate (backend/frontend)
+a ownership disgiunta contro contratto congelato. NON COMMITTATO.
+
+CONTRATTO CONGELATO:
+- Nuova entita' `VatRate` (modulo completo, mirror di `sources`): tabella `vat_rates`
+  (id, name string, `rate` decimal(5,2), timestamps), model `App\Models\VatRate` morph `vat_rate`,
+  resource/route/permesso segment `vat-rates`. Endpoint identici a sources (tables columns/rows,
+  meta, CRUD, `GET /api/vat-rates/for-select` -> items {id,label:name}). Seed 22/10/5/4/0% via
+  `DemoVatRateSeeder` (in DemoDataSeeder dopo DemoSourceSeeder). Grid: name/rate/created_at.
+  Nav entry `vat-rates` icona `percent`. Permessi `vat-rates.*` auto-sync.
+- Product: 2 nuovi campi NULLABLE `vat_rate_id` (FK vat_rates nullOnDelete) + `supplier_id`
+  (FK registries nullOnDelete). Threaded: migration, Product #[Fillable]+relazioni
+  vatRate()/supplier(), Store/Update request (nullable|exists), Create/UpdateProductData
+  (*Submitted flags), ProductService (HYDRATED_RELATIONS +vatRate,+supplier), ProductResource
+  (vat_rate {id,name,rate} + supplier {id,name} summary), ProductsAuthorization (field defs +
+  ceiling, NON mandatory), ProductController::show loadMissing, ProductFactory (default null).
+  Colonne griglia prodotti FUORI SCOPE (solo form/detail).
+- Registry for-select: nuovo param opzionale `is_supplier` (RegistryForSelectRequest sometimes
+  boolean; RegistryService::forSelect(ForSelectQuery, bool $onlySuppliers=false) -> where
+  is_supplier=true; controller passa $request->boolean('is_supplier')). ASSENTE = comportamento
+  IDENTICO a prima (il select anagrafica dell'opportunita' NON e' toccato). Il select fornitore
+  del prodotto usa RelationSelectField con params={{is_supplier:1}}.
+- FE: nuovo `features/vat-rates/*` (mirror sources, +campo numerico `rate`), route `/vat-rates`,
+  i18n en/it-vat-rates, icon-map `percent`. Product form: 2 MetaField (VAT via RelationSelectField
+  resource vat-rates; Supplier via RelationSelectField resource registries params is_supplier=1);
+  types/schema/use-product-form/payload/detail estesi.
+
+FIX NON BANALE (lead, non teammate): Laravel `decimal:2` serializza `rate` come STRINGA "22.00"
+(test BE asseriscono `data.rate` == '22.00'). Il form vat-rate valida con `z.number()` ->
+in edit un valore non toccato arriverebbe stringa e fallirebbe la validazione (bug latente,
+non coperto dai mock numerici). `z.coerce.number()` ROMPE i tipi RHF (input diventa unknown).
+FIX: normalizzazione al confine API in `features/vat-rates/api.ts` (`normalizeVatRate` ->
+`rate: Number(...)` su fetch/create/update), schema resta `z.number()`. Test: nuovo
+`features/vat-rates/api.test.ts` (3 test coercion). NB: `cost`/`price` del prodotto hanno lo
+STESSO pattern latente pre-esistente (fuori scope, SEGNALATO all'utente, non toccato).
+
+VERIFICATO (eseguito dal lead): Pest `--filter="VatRate|Product|Registry"` 348/348 (1813 assert).
+Vitest vat-rates 23/23, products 47/47 (suite toccate). `tsc -b` PULITO project-wide. ESLint
+pulito sui file toccati. Pint pulito (teammate). NIENTE COMMIT.
+
+ATTENZIONE — LAVORO CONCORRENTE ENTANGLED NEL WORKING TREE (NON MIO): spec 0041
+`0041-lead-registry-relation.xml` + migration `..._replace_referent_id_with_registry_id_on_leads_table`
+(untracked) + molti file Lead/Referent/Registry/Imports/Opportunity modificati = il refactor
+"un Lead ha un'Anagrafica non un Referente" (era RIMANDATO, ora IN CORSO da altra sessione).
+Full-suite backend ~54 test ROSSI provengono TUTTI da li' (Lead::referent() undefined,
+leads no column referent_id, ecc.), NON dal mio lavoro. I file registry for-select condivisi
+coesistono (verificato: is_supplier presente e leads-refactor presente insieme). Non committare
+il tree mescolato: separare i due lavori.
+
 ## OPPORTUNITY FORM — RETTIFICHE (spec 0040 amendment rev.2) (2026-07-16) — GREEN, NON COMMITTATO
 
 Quattro rettifiche al form Opportunita' chieste dall'utente. Solo estensioni ADDITIVE al

@@ -47,7 +47,7 @@ class ProductController extends BaseApiController
         try {
             $this->authorize('view', $product);
 
-            $product->loadMissing('category');
+            $product->loadMissing('category', 'vatRate', 'supplier');
 
             return $this->okWithPermissions(
                 new ProductResource($product, $this->service->effectiveBusinessFunction($product)),

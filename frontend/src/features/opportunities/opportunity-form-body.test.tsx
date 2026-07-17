@@ -386,7 +386,8 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
           fromLead: {
             leadId: 9,
             values: {
-              referent_id: 10,
+              // spec 0041 D-3/AC-050: no longer a derived field.
+              referent_id: null,
               source_id: 20,
               operational_site_id: null,
               registry_id: 30,
@@ -394,14 +395,13 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
               product_category_id: 50,
             },
             references: {
-              referent: { id: 10, name: 'Mario Rossi' },
               source: { id: 20, name: 'Web' },
               operational_site: null,
               registry: { id: 30, name: 'Acme S.p.A.' },
               business_function: { id: 40, name: 'Sales' },
               product_category: { id: 50, name: 'Consulting' },
             },
-            lockedFields: ['registry_id', 'referent_id', 'source_id', 'business_function_id', 'product_category_id'],
+            lockedFields: ['registry_id', 'source_id', 'business_function_id', 'product_category_id'],
           },
         }}
         onSuccess={vi.fn()}
@@ -411,12 +411,15 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
     )
 
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
-    expect(screen.getByRole('status')).toHaveTextContent('Mario Rossi')
+    // AC-051: the origin banner sources its name from the registry, not the referent.
+    expect(screen.getByRole('status')).toHaveTextContent('Acme S.p.A.')
 
     expect(screen.getByTestId('value-Registry')).toHaveTextContent('30')
     expect(screen.getByTestId('disabled-Registry')).toHaveTextContent('true')
-    expect(screen.getByTestId('value-Contact')).toHaveTextContent('10')
-    expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('true')
+    // AC-051: referent_id is no longer derived/locked by the lead — free and
+    // editable, gated only by the registry now being chosen.
+    expect(screen.getByTestId('value-Contact')).toHaveTextContent('')
+    expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('false')
     expect(screen.getByTestId('value-Source')).toHaveTextContent('20')
     expect(screen.getByTestId('disabled-Source')).toHaveTextContent('true')
     expect(screen.getByTestId('value-Business function')).toHaveTextContent('40')

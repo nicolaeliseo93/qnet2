@@ -11,20 +11,22 @@ use App\DataObjects\Users\ProfileData;
 use App\Enums\ContactTypeEnum;
 use App\Enums\PersonalDataTypeEnum;
 use App\Models\Contact;
-use App\Models\Referent;
+use App\Models\Registry;
 
 /**
- * Builds the `ProfileData` (card + contacts + address) ReferentService needs
+ * Builds the `ProfileData` (card + contacts + address) RegistryService needs
  * from a staged leads-import row's merged mapped+recognized values (spec
  * 0033: `full_name`/`first_name`/`last_name`/`company_name`/`tax_code`/
  * `vat_number` for the card, `email`/`phone`/`mobile` for contacts,
  * `street`/`postal_code` + the GeoRecognizer's `*_id` for the address).
+ * spec 0041 D-1: the import row's contact is an Anagrafica (Registry), not a
+ * Referent.
  *
  * The `update_existing` strategy reuses the SAME shape but MERGES onto the
- * matched Referent's current contacts/addresses instead of replacing them
+ * matched Registry's current contacts/addresses instead of replacing them
  * wholesale: ContactService::sync()/AddressService::sync() are authoritative
  * (an omitted row is deleted), so a row that only carries an email must never
- * wipe out the Referent's existing phone/pec/website channels or its address
+ * wipe out the Registry's existing phone/pec/website channels or its address
  * — every currently-owned row not touched by this import is re-submitted
  * with its own id + unchanged data, only the matching type(s)/the address are
  * overwritten with the row's new value.
@@ -52,12 +54,12 @@ final class LeadProfileBuilder
      *
      * @param  array<string, mixed>  $mapped
      */
-    public function buildForUpdate(Referent $referent, array $mapped): ProfileData
+    public function buildForUpdate(Registry $registry, array $mapped): ProfileData
     {
         return new ProfileData(
             card: $this->buildCard($mapped),
-            contacts: $this->mergeContacts($referent, $mapped),
-            addresses: $this->mergeAddresses($referent, $mapped),
+            contacts: $this->mergeContacts($registry, $mapped),
+            addresses: $this->mergeAddresses($registry, $mapped),
         );
     }
 
@@ -108,10 +110,10 @@ final class LeadProfileBuilder
 
     /**
      * @param  array<string, mixed>  $mapped
-     * @return array<int, ContactInput>|null null leaves the Referent's
+     * @return array<int, ContactInput>|null null leaves the Registry's
      *                                       contacts entirely untouched (the row carries none of email/phone/mobile)
      */
-    private function mergeContacts(Referent $referent, array $mapped): ?array
+    private function mergeContacts(Registry $registry, array $mapped): ?array
     {
         $newValues = $this->contactValues($mapped);
 
@@ -119,7 +121,7 @@ final class LeadProfileBuilder
             return null;
         }
 
-        $owned = $referent->personalData?->contacts ?? collect();
+        $owned = $registry->personalData?->contacts ?? collect();
         $inputs = [];
         $touchedTypes = [];
 
@@ -193,10 +195,10 @@ final class LeadProfileBuilder
 
     /**
      * @param  array<string, mixed>  $mapped
-     * @return array<int, AddressInput>|null null leaves the Referent's
+     * @return array<int, AddressInput>|null null leaves the Registry's
      *                                       addresses untouched (the row carries no `street`)
      */
-    private function mergeAddresses(Referent $referent, array $mapped): ?array
+    private function mergeAddresses(Registry $registry, array $mapped): ?array
     {
         $address = $this->buildAddressData($mapped);
 
@@ -204,8 +206,8 @@ final class LeadProfileBuilder
             return null;
         }
 
-        $existing = $referent->personalData?->addresses?->firstWhere('is_primary', true)
-            ?? $referent->personalData?->addresses?->first();
+        $existing = $registry->personalData?->addresses?->firstWhere('is_primary', true)
+            ?? $registry->personalData?->addresses?->first();
 
         return [new AddressInput($existing?->id, $address)];
     }

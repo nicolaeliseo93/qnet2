@@ -25,27 +25,28 @@ interface LeadDetailViewProps {
  * Read-only detail of a single lead, fetched fresh from the (re-authorized)
  * detail endpoint. Composed from the shared detail kit; rendered by the
  * dedicated detail page (spec 0024, mirrors campaigns). A Lead has no
- * name/code of its own (D-3): the referent is the identity, the campaign is
- * the subtitle.
+ * name/code of its own (D-3, spec 0041 D-1: the identity is now the
+ * anagrafica, not the referent); the registry is the identity, the campaign
+ * is the subtitle.
  */
 export function LeadDetailView({ lead }: LeadDetailViewProps) {
   const { t } = useTranslation()
-  const referentName = lead.referent?.name ?? t('leads.detail.unknownReferent')
+  const registryName = lead.registry?.name ?? t('leads.detail.unknownRegistry')
   const createdAt = formatDateTime(lead.created_at)
   const extraFieldEntries = lead.extra_fields ? Object.entries(lead.extra_fields) : []
 
   return (
     <DetailPanel>
       <DetailHero
-        media={<DetailMonogram name={referentName} icon={<Contact />} />}
-        title={referentName}
+        media={<DetailMonogram name={registryName} icon={<Contact />} />}
+        title={registryName}
         subtitle={lead.campaign?.name}
       />
 
       <DetailSection title={t('leads.form.sections.contact.title')} icon={<Contact />}>
         <DetailGrid>
-          <DetailField label={t('leads.form.referent')}>
-            {lead.referent?.name ?? <DetailEmpty />}
+          <DetailField label={t('leads.form.registry')}>
+            {lead.registry?.name ?? <DetailEmpty />}
           </DetailField>
           <DetailField label={t('leads.form.campaign')}>
             {lead.campaign ? `${lead.campaign.code} — ${lead.campaign.name}` : <DetailEmpty />}

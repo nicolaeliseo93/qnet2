@@ -48,6 +48,16 @@ vi.mock('@/components/ui/searchable-select', () => ({
   ),
 }))
 
+// Isolates the form from the real VAT rate / supplier pickers with a
+// lightweight controllable stub (mirrors `registry-form-custom-fields.test.tsx`),
+// so this suite focuses on the form's own logic, not the network-backed
+// select (covered by its own component test).
+vi.mock('@/components/ui/async-paginated-select', () => ({
+  AsyncPaginatedSelect: ({ value }: { value: number | null }) => (
+    <div data-testid="product-select-value">{value ?? ''}</div>
+  ),
+}))
+
 const fetchResourceMetaMock = vi.fn<() => Promise<ResourceMeta>>()
 vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
@@ -106,6 +116,10 @@ function product(overrides: Partial<ProductDetailWithPermissions> = {}): Product
     category: { id: 3, name: 'Laptops' },
     product_type: 'SERVICE',
     created_at: '2026-01-01T00:00:00Z',
+    vat_rate_id: null,
+    vat_rate: null,
+    supplier_id: null,
+    supplier: null,
     permissions: permissionsWithNotes(),
     ...overrides,
   }

@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * values — the `attributes` catalogue (Attribute/ProductCategory) stays a
  * reusable template, decoupled from any per-product value storage.
  */
-#[Fillable(['name', 'description', 'cost', 'price', 'category_id', 'product_type'])]
+#[Fillable(['name', 'description', 'cost', 'price', 'category_id', 'product_type', 'vat_rate_id', 'supplier_id'])]
 class Product extends BaseModel
 {
     /** @use HasFactory<ProductFactory> */
@@ -37,5 +37,15 @@ class Product extends BaseModel
     public function category(): BelongsTo
     {
         return $this->belongsTo(ProductCategory::class, 'category_id');
+    }
+
+    public function vatRate(): BelongsTo
+    {
+        return $this->belongsTo(VatRate::class, 'vat_rate_id');
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Registry::class, 'supplier_id');
     }
 }

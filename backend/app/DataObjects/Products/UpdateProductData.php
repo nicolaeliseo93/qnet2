@@ -29,6 +29,10 @@ final readonly class UpdateProductData
         public bool $categoryIdSubmitted = false,
         public ?ProductType $productType = null,
         public bool $productTypeSubmitted = false,
+        public ?int $vatRateId = null,
+        public bool $vatRateIdSubmitted = false,
+        public ?int $supplierId = null,
+        public bool $supplierIdSubmitted = false,
     ) {}
 
     /**
@@ -50,6 +54,10 @@ final readonly class UpdateProductData
             categoryIdSubmitted: array_key_exists('category_id', $data),
             productType: array_key_exists('product_type', $data) && $data['product_type'] !== null ? ProductType::from((string) $data['product_type']) : null,
             productTypeSubmitted: array_key_exists('product_type', $data),
+            vatRateId: array_key_exists('vat_rate_id', $data) && $data['vat_rate_id'] !== null ? (int) $data['vat_rate_id'] : null,
+            vatRateIdSubmitted: array_key_exists('vat_rate_id', $data),
+            supplierId: array_key_exists('supplier_id', $data) && $data['supplier_id'] !== null ? (int) $data['supplier_id'] : null,
+            supplierIdSubmitted: array_key_exists('supplier_id', $data),
         );
     }
 
@@ -85,6 +93,14 @@ final readonly class UpdateProductData
 
         if ($this->productTypeSubmitted) {
             $attributes['product_type'] = $this->productType;
+        }
+
+        if ($this->vatRateIdSubmitted) {
+            $attributes['vat_rate_id'] = $this->vatRateId;
+        }
+
+        if ($this->supplierIdSubmitted) {
+            $attributes['supplier_id'] = $this->supplierId;
         }
 
         return $attributes;

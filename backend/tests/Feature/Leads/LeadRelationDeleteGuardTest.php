@@ -3,7 +3,7 @@
 use App\Models\Campaign;
 use App\Models\Lead;
 use App\Models\OperationalSite;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,23 +41,23 @@ it('a campaign referenced by a lead cannot be deleted: 409, not deleted (AC-020)
 });
 
 // ---------------------------------------------------------------------------
-// AC-021 — Referent
+// AC-021 — Registry (spec 0041 D-1: the Lead's contact is an Anagrafica)
 // ---------------------------------------------------------------------------
 
-it('a referent referenced by a lead cannot be deleted: 409, not deleted (AC-021)', function () {
+it('a registry referenced by a lead cannot be deleted: 409, not deleted (AC-021)', function () {
     foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import'] as $ability) {
-        Permission::findOrCreate("referents.{$ability}");
+        Permission::findOrCreate("registries.{$ability}");
     }
     $actor = User::factory()->create();
-    $actor->givePermissionTo('referents.delete');
+    $actor->givePermissionTo('registries.delete');
 
-    $referent = Referent::factory()->create();
-    Lead::factory()->create(['referent_id' => $referent->id]);
+    $registry = Registry::factory()->create();
+    Lead::factory()->create(['registry_id' => $registry->id]);
     Sanctum::actingAs($actor);
 
-    $this->deleteJson("/api/referents/{$referent->id}")->assertStatus(409);
+    $this->deleteJson("/api/registries/{$registry->id}")->assertStatus(409);
 
-    $this->assertDatabaseHas('referents', ['id' => $referent->id]);
+    $this->assertDatabaseHas('registries', ['id' => $registry->id]);
 });
 
 // ---------------------------------------------------------------------------

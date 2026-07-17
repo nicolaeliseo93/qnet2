@@ -26,8 +26,8 @@ class LeadResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'referent_id' => $this->referent_id,
-            'referent' => $this->summarizeByName($this->referent),
+            'registry_id' => $this->registry_id,
+            'registry' => $this->summarizeByName($this->registry),
             'campaign_id' => $this->campaign_id,
             'campaign' => $this->summarizeCampaign($this->campaign),
             'operational_site_id' => $this->operational_site_id,

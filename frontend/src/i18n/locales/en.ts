@@ -21,6 +21,7 @@ import { attributes, productCategories, products } from './en-products'
 import { customFields } from './en-custom-fields'
 import { sectors } from './en-sectors'
 import { sources } from './en-sources'
+import { vatRates } from './en-vat-rates'
 import { tags } from './en-tags'
 import { pipelineStatuses } from './en-pipeline-statuses'
 import { projects } from './en-projects'
@@ -82,6 +83,7 @@ export const en = {
     sectors: 'Sectors',
     products: 'Products',
     sources: 'Sources',
+    vatRates: 'VAT',
     tags: 'Tags',
     projects: 'Projects',
     campaigns: 'Campaigns',
@@ -443,6 +445,7 @@ export const en = {
   sectors,
   products: { ...products, stats: moduleStats.products },
   sources,
+  vatRates,
   tags,
   projects: { ...projects, stats: moduleStats.projects },
   pipelineStatuses,

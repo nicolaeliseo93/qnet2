@@ -15,8 +15,8 @@ export interface ReviewResolutionCellParams extends ICellRendererParams<ImportRu
 
 /**
  * Duplicate-row resolution cell (spec 0036 AC-008): shows the matched
- * referent's name — with a badge when that referent already has a lead on
- * the run's campaign (`duplicate_meta.lead_id`) — and a compact
+ * anagrafica's name — with a badge when that anagrafica already has a lead
+ * on the run's campaign (`duplicate_meta.lead_id`) — and a compact
  * skip/create/update select. Non-`duplicate` rows (or a `duplicate` row
  * whose match was cleared by a later edit) render an em dash, mirroring
  * `ReviewMessagesCell`'s empty state.
@@ -32,8 +32,8 @@ export function ReviewResolutionCell({ data, node, onResolve, readOnly }: Review
 
   return (
     <div className="flex h-full items-center gap-1.5 overflow-hidden">
-      <span className="min-w-0 flex-1 truncate text-xs" title={meta.referent_name}>
-        {meta.referent_name}
+      <span className="min-w-0 flex-1 truncate text-xs" title={meta.registry_name}>
+        {meta.registry_name}
       </span>
       {meta.lead_id != null ? (
         <Badge

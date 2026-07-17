@@ -140,7 +140,7 @@ export const importWizard = {
     resolution: {
       label: 'Risoluzione',
       placeholder: 'Scegli…',
-      leadInCampaign: 'Questo referente ha già un lead in questa campagna.',
+      leadInCampaign: 'Questa anagrafica ha già un lead in questa campagna.',
       options: {
         skip: 'Salta',
         create: 'Crea nuovo',

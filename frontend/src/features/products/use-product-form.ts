@@ -18,7 +18,16 @@ import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-
 import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 
 /** Server-side generic field names mapped onto the form for 422 handling. */
-const SERVER_ERROR_FIELDS = ['name', 'description', 'cost', 'price', 'category_id', 'product_type'] as const
+const SERVER_ERROR_FIELDS = [
+  'name',
+  'description',
+  'cost',
+  'price',
+  'category_id',
+  'product_type',
+  'vat_rate_id',
+  'supplier_id',
+] as const
 
 /** Default product type for a new product (SERVICE-only catalogue for now). */
 const DEFAULT_PRODUCT_TYPE = 'SERVICE' as const
@@ -72,6 +81,8 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
         price: product.price,
         category_id: product.category_id,
         product_type: product.product_type,
+        vat_rate_id: product.vat_rate_id,
+        supplier_id: product.supplier_id,
         custom_fields: customFields.defaultValues,
       }
     }
@@ -82,6 +93,8 @@ export function useProductForm({ mode, onSuccess }: UseProductFormArgs) {
       price: null,
       category_id: null,
       product_type: DEFAULT_PRODUCT_TYPE,
+      vat_rate_id: null,
+      supplier_id: null,
       custom_fields: customFields.defaultValues,
     }
   }, [mode, customFields.defaultValues])

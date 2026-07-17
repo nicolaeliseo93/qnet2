@@ -74,8 +74,8 @@ function wrapper() {
 function lead(overrides: Partial<LeadDetailWithPermissions> = {}): LeadDetailWithPermissions {
   return {
     id: 9,
-    referent_id: 10,
-    referent: { id: 10, name: 'Mario Rossi' },
+    registry_id: 10,
+    registry: { id: 10, name: 'Mario Rossi' },
     campaign_id: 20,
     campaign: { id: 20, code: 'CMP-0001', name: 'Spring push' },
     lead_status_id: 30,

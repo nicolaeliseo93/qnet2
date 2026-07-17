@@ -6,9 +6,9 @@ use App\Enums\ContactTypeEnum;
 
 /**
  * Single source of truth for the 3 mappable field ids the leads import wizard
- * treats as Referent contact channels (spec 0033 D-decision: "match su un
- * Referent esistente per email/telefono/cellulare"), shared by
- * LeadsImportDefinition::validateRow(), LeadDuplicateMatcher and
+ * treats as Registry contact channels (spec 0033 D-decision: "match su
+ * un'Anagrafica esistente per email/telefono/cellulare", spec 0041 D-1),
+ * shared by LeadsImportDefinition::validateRow(), LeadDuplicateMatcher and
  * LeadProfileBuilder so the 3 places can never drift.
  */
 final class LeadContactFields

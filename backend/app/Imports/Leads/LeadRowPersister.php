@@ -4,27 +4,27 @@ namespace App\Imports\Leads;
 
 use App\DataObjects\Leads\CreateLeadData;
 use App\DataObjects\Leads\UpdateLeadData;
-use App\DataObjects\Referents\CreateReferentData;
-use App\DataObjects\Referents\UpdateReferentData;
-use App\Enums\ReferentContactScopeEnum;
+use App\DataObjects\Registries\CreateRegistryData;
+use App\DataObjects\Registries\UpdateRegistryData;
 use App\Models\Lead;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\User;
 use App\Services\LeadService;
-use App\Services\ReferentService;
+use App\Services\RegistryService;
 use RuntimeException;
 
 /**
  * The write side of `LeadsImportDefinition::persistRow()` (spec 0033
- * AC-011/012): resolves/creates the Referent per dedup strategy — via
- * ReferentService + LeadProfileBuilder, never duplicated anagraphic logic —
- * then creates/updates the Lead in the configured campaign via LeadService.
- * Extracted to stay under the 300-line soft limit (engineering.md §6).
+ * AC-011/012, spec 0041 D-1): resolves/creates the Anagrafica (Registry) per
+ * dedup strategy — via RegistryService + LeadProfileBuilder, never
+ * duplicated anagraphic logic — then creates/updates the Lead in the
+ * configured campaign via LeadService. Extracted to stay under the 300-line
+ * soft limit (engineering.md §6).
  */
 final class LeadRowPersister
 {
     public function __construct(
-        private readonly ReferentService $referentService,
+        private readonly RegistryService $registryService,
         private readonly LeadService $leadService,
         private readonly LeadProfileBuilder $profileBuilder,
         private readonly LeadImportFieldCatalog $catalog,
@@ -40,24 +40,39 @@ final class LeadRowPersister
         array $globalConfig,
         array $mapped,
         array $extraValues,
-        bool $shouldUpdateReferent,
-        ?int $duplicateReferentId,
+        bool $shouldUpdateRegistry,
+        ?int $duplicateRegistryId,
     ): void {
-        $referent = $shouldUpdateReferent && $duplicateReferentId !== null
-            ? $this->updateReferent($actor, $duplicateReferentId, $mapped)
-            : $this->createReferent($actor, $mapped);
+        $registry = $shouldUpdateRegistry && $duplicateRegistryId !== null
+            ? $this->updateRegistry($actor, $duplicateRegistryId, $mapped)
+            : $this->createRegistry($actor, $mapped);
 
-        $this->attachLead($referent, $globalConfig, $mapped, $extraValues, $shouldUpdateReferent && $duplicateReferentId !== null);
+        $this->attachLead($registry, $globalConfig, $mapped, $extraValues, $shouldUpdateRegistry && $duplicateRegistryId !== null);
     }
 
     /**
      * @param  array<string, mixed>  $mapped
      */
-    private function createReferent(User $actor, array $mapped): Referent
+    private function createRegistry(User $actor, array $mapped): Registry
     {
-        return $this->referentService->create(
+        return $this->registryService->create(
             $actor,
-            new CreateReferentData(referentTypeId: null, contactScope: ReferentContactScopeEnum::External->value, notes: null),
+            new CreateRegistryData(
+                sourceId: null,
+                sectorIds: null,
+                referentIds: null,
+                managerSlots: null,
+                supervisorId: null,
+                commercialId: null,
+                reporterId: null,
+                vatGroup: null,
+                isSupplier: false,
+                isQualifiedSupplier: false,
+                agreementStatus: null,
+                agreementNotes: null,
+                sizeClass: null,
+                employeeCount: null,
+            ),
             $this->profileBuilder->build($mapped),
         );
     }
@@ -65,17 +80,17 @@ final class LeadRowPersister
     /**
      * @param  array<string, mixed>  $mapped
      */
-    private function updateReferent(User $actor, int $referentId, array $mapped): Referent
+    private function updateRegistry(User $actor, int $registryId, array $mapped): Registry
     {
-        $referent = Referent::query()
+        $registry = Registry::query()
             ->with(['personalData.contacts', 'personalData.addresses'])
-            ->findOrFail($referentId);
+            ->findOrFail($registryId);
 
-        return $this->referentService->update(
+        return $this->registryService->update(
             $actor,
-            $referent,
-            new UpdateReferentData,
-            $this->profileBuilder->buildForUpdate($referent, $mapped),
+            $registry,
+            new UpdateRegistryData,
+            $this->profileBuilder->buildForUpdate($registry, $mapped),
         );
     }
 
@@ -84,7 +99,7 @@ final class LeadRowPersister
      * @param  array<string, mixed>  $mapped
      * @param  array<string, mixed>  $extraValues
      */
-    private function attachLead(Referent $referent, array $globalConfig, array $mapped, array $extraValues, bool $shouldUpdate): void
+    private function attachLead(Registry $registry, array $globalConfig, array $mapped, array $extraValues, bool $shouldUpdate): void
     {
         $campaignId = $this->id($globalConfig, 'campaign_id');
 
@@ -105,7 +120,7 @@ final class LeadRowPersister
         $extraFields = $extraValues === [] ? null : $extraValues;
 
         $existingLead = $shouldUpdate
-            ? Lead::query()->where('referent_id', $referent->id)->where('campaign_id', $campaignId)->first()
+            ? Lead::query()->where('registry_id', $registry->id)->where('campaign_id', $campaignId)->first()
             : null;
 
         if ($existingLead !== null) {
@@ -128,7 +143,7 @@ final class LeadRowPersister
         }
 
         $this->leadService->create(new CreateLeadData(
-            referentId: $referent->id,
+            registryId: $registry->id,
             campaignId: $campaignId,
             operationalSiteId: $operationalSiteId,
             sourceId: $sourceId,

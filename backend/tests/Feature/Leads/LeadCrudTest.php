@@ -4,7 +4,7 @@ use App\Models\Campaign;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\OperationalSite;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,15 +37,15 @@ if (! function_exists('leadUserWith')) {
 // create (AC-010/AC-011/AC-012/AC-016)
 // ---------------------------------------------------------------------------
 
-it('create: with referent_id, campaign_id and lead_status_id only -> 201, the other 4 fields are null (AC-010)', function () {
+it('create: with registry_id, campaign_id and lead_status_id only -> 201, the other 4 fields are null (AC-010)', function () {
     $actor = leadUserWith(['create']);
-    $referent = Referent::factory()->create();
+    $registry = Registry::factory()->create();
     $campaign = Campaign::factory()->create();
     $status = LeadStatus::factory()->create();
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/leads', [
-        'referent_id' => $referent->id,
+        'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
         'lead_status_id' => $status->id,
     ])->assertCreated();
@@ -53,7 +53,7 @@ it('create: with referent_id, campaign_id and lead_status_id only -> 201, the ot
     $leadId = $response->json('data.id');
     $this->assertDatabaseHas('leads', [
         'id' => $leadId,
-        'referent_id' => $referent->id,
+        'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
         'operational_site_id' => null,
         'source_id' => null,
@@ -65,7 +65,7 @@ it('create: with referent_id, campaign_id and lead_status_id only -> 201, the ot
 
 it('create: 201, response shape matches the frozen contract', function () {
     $actor = leadUserWith(['create']);
-    $referent = Referent::factory()->create(['name' => 'Ada Contact']);
+    $registry = Registry::factory()->create(['name' => 'Ada Contact']);
     $campaign = Campaign::factory()->create(['name' => 'Spring Push']);
     $site = OperationalSite::factory()->create();
     $site->addresses()->create(['line1' => 'Via Roma 1', 'is_primary' => true]);
@@ -75,7 +75,7 @@ it('create: 201, response shape matches the frozen contract', function () {
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/leads', [
-        'referent_id' => $referent->id,
+        'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
         'operational_site_id' => $site->id,
         'source_id' => $source->id,
@@ -83,7 +83,7 @@ it('create: 201, response shape matches the frozen contract', function () {
         'lead_status_id' => $status->id,
         'notes' => 'Follow up next week',
     ])->assertCreated()
-        ->assertJsonPath('data.referent', ['id' => $referent->id, 'name' => 'Ada Contact'])
+        ->assertJsonPath('data.registry', ['id' => $registry->id, 'name' => 'Ada Contact'])
         ->assertJsonPath('data.campaign.id', $campaign->id)
         ->assertJsonPath('data.campaign.name', 'Spring Push')
         ->assertJsonPath('data.operational_site.label', 'Via Roma 1')
@@ -94,25 +94,25 @@ it('create: 201, response shape matches the frozen contract', function () {
         ->assertJsonPath('data.notes', 'Follow up next week');
 });
 
-it('create: missing referent_id -> 422 on that field, no row created (AC-011)', function () {
+it('create: missing registry_id -> 422 on that field, no row created (AC-011)', function () {
     $actor = leadUserWith(['create']);
     $campaign = Campaign::factory()->create();
     $status = LeadStatus::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/leads', ['campaign_id' => $campaign->id, 'lead_status_id' => $status->id])
-        ->assertStatus(422)->assertJsonValidationErrors('referent_id');
+        ->assertStatus(422)->assertJsonValidationErrors('registry_id');
 
     expect(Lead::count())->toBe(0);
 });
 
 it('create: missing campaign_id -> 422 on that field, no row created (AC-011)', function () {
     $actor = leadUserWith(['create']);
-    $referent = Referent::factory()->create();
+    $registry = Registry::factory()->create();
     $status = LeadStatus::factory()->create();
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/leads', ['referent_id' => $referent->id, 'lead_status_id' => $status->id])
+    $this->postJson('/api/leads', ['registry_id' => $registry->id, 'lead_status_id' => $status->id])
         ->assertStatus(422)->assertJsonValidationErrors('campaign_id');
 
     expect(Lead::count())->toBe(0);
@@ -124,11 +124,11 @@ it('create: missing lead_status_id -> 201, falls back to the system_key=new stat
     // back to the mandatory system_key='new' status (spec 0029 D-1/AC-011
     // is superseded).
     $actor = leadUserWith(['create']);
-    $referent = Referent::factory()->create();
+    $registry = Registry::factory()->create();
     $campaign = Campaign::factory()->create();
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/leads', ['referent_id' => $referent->id, 'campaign_id' => $campaign->id])
+    $this->postJson('/api/leads', ['registry_id' => $registry->id, 'campaign_id' => $campaign->id])
         ->assertCreated();
 
     $lead = Lead::query()->with('leadStatus')->sole();
@@ -137,13 +137,13 @@ it('create: missing lead_status_id -> 201, falls back to the system_key=new stat
 
 it('create: 403 without leads.create, no row created (AC-012)', function () {
     $actor = leadUserWith([]);
-    $referent = Referent::factory()->create();
+    $registry = Registry::factory()->create();
     $campaign = Campaign::factory()->create();
     $status = LeadStatus::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/leads', [
-        'referent_id' => $referent->id,
+        'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
         'lead_status_id' => $status->id,
     ])->assertForbidden();
@@ -153,12 +153,12 @@ it('create: 403 without leads.create, no row created (AC-012)', function () {
 
 it('create: a non-existent campaign_id -> 422 (exists), not 500 (AC-016)', function () {
     $actor = leadUserWith(['create']);
-    $referent = Referent::factory()->create();
+    $registry = Registry::factory()->create();
     $status = LeadStatus::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/leads', [
-        'referent_id' => $referent->id,
+        'registry_id' => $registry->id,
         'campaign_id' => 999999,
         'lead_status_id' => $status->id,
     ])->assertStatus(422)->assertJsonValidationErrors('campaign_id');
@@ -168,12 +168,12 @@ it('create: a non-existent campaign_id -> 422 (exists), not 500 (AC-016)', funct
 
 it('create: a non-existent lead_status_id -> 422 (exists), not 500 (spec 0029 D-1)', function () {
     $actor = leadUserWith(['create']);
-    $referent = Referent::factory()->create();
+    $registry = Registry::factory()->create();
     $campaign = Campaign::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/leads', [
-        'referent_id' => $referent->id,
+        'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
         'lead_status_id' => 999999,
     ])->assertStatus(422)->assertJsonValidationErrors('lead_status_id');
@@ -196,7 +196,7 @@ it('update: PATCH with only notes -> 200, only notes changes, the 6 FKs stay put
 
     $this->assertDatabaseHas('leads', [
         'id' => $lead->id,
-        'referent_id' => $lead->referent_id,
+        'registry_id' => $lead->registry_id,
         'campaign_id' => $lead->campaign_id,
         'operational_site_id' => $lead->operational_site_id,
         'source_id' => $lead->source_id,

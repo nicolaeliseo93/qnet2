@@ -14,10 +14,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Table definition for the `leads` domain (spec 0024).
+ * Table definition for the `leads` domain (spec 0024, spec 0041 D-1).
  *
  * `created_at` is the only real column handled entirely by the generic
- * engine. `referent`/`campaign`/`source`/`operator` are simple relation-name
+ * engine. `registry`/`campaign`/`source`/`operator` are simple relation-name
  * derived columns (own FK on the lead), resolved generically via
  * DERIVED_RELATIONS — a `whereHas` set filter (allow-listed columns only,
  * never orderByRaw/whereRaw on raw input — backend.md §8) and a correlated
@@ -52,7 +52,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
      * @var array<string, array{relation: string, table: string, fk: string}>
      */
     private const array DERIVED_RELATIONS = [
-        'referent' => ['relation' => 'referent', 'table' => 'referents', 'fk' => 'referent_id'],
+        'registry' => ['relation' => 'registry', 'table' => 'registries', 'fk' => 'registry_id'],
         'campaign' => ['relation' => 'campaign', 'table' => 'campaigns', 'fk' => 'campaign_id'],
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
         'operator' => ['relation' => 'operator', 'table' => 'users', 'fk' => 'operator_id'],
@@ -85,7 +85,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
     {
         // Eager-load every relation mapRow touches to avoid N+1 across the
         // page (operationalSite's address+city for the composed label, BR-3).
-        return Lead::query()->with(['referent', 'campaign', 'operationalSite.addresses.city', 'source', 'operator', 'leadStatus']);
+        return Lead::query()->with(['registry', 'campaign', 'operationalSite.addresses.city', 'source', 'operator', 'leadStatus']);
     }
 
     /**
@@ -151,7 +151,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
         /** @var Lead $row */
         return [
             'id' => $row->id,
-            'referent' => $this->summarize($row->referent),
+            'registry' => $this->summarize($row->registry),
             'campaign' => $this->summarize($row->campaign),
             'operational_site' => $this->operationalSiteColumn->summarize($row),
             'source' => $this->summarize($row->source),
@@ -246,7 +246,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Handle the `referent`/`campaign`/`source`/`operator` set filters via
+     * Handle the `registry`/`campaign`/`source`/`operator` set filters via
      * whereHas on the related row's name; `operational_site` is delegated to
      * LeadOperationalSiteColumn (BR-3). Every real column (created_at) falls
      * through to the generic engine.
@@ -365,7 +365,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Excel-like distinct values (spec 0004/0005). `referent`/`campaign`/
+     * Excel-like distinct values (spec 0004/0005). `registry`/`campaign`/
      * `source`/`operator` are plain related-row names; `operational_site`
      * (BR-3) is delegated to LeadOperationalSiteColumn.
      *

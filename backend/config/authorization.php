@@ -23,6 +23,7 @@ use App\Authorization\SectorsAuthorization;
 use App\Authorization\SourcesAuthorization;
 use App\Authorization\TagsAuthorization;
 use App\Authorization\UsersAuthorization;
+use App\Authorization\VatRatesAuthorization;
 
 return [
 
@@ -69,6 +70,7 @@ return [
         'lead-statuses' => LeadStatusesAuthorization::class,
         'opportunities' => OpportunitiesAuthorization::class,
         'import-runs' => ImportRunsAuthorization::class,
+        'vat-rates' => VatRatesAuthorization::class,
     ],
 
 ];

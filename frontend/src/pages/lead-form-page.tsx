@@ -35,7 +35,7 @@ export default function LeadFormPage() {
     refetch,
   } = useEntityDetail(leadDetailQueryKey(leadId), () => fetchLead(leadId as number), leadId !== null)
 
-  useBreadcrumbTitle(`/leads/${id}`, lead?.referent?.name)
+  useBreadcrumbTitle(`/leads/${id}`, lead?.registry?.name)
 
   const onSuccess = useCallback(
     (saved: LeadDetail) => {

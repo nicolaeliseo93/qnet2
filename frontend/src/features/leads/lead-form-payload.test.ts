@@ -7,7 +7,7 @@ import type { LeadFormValues } from '@/features/leads/use-lead-form'
 
 function values(overrides: Partial<LeadFormValues> = {}): LeadFormValues {
   return {
-    referent_id: 10,
+    registry_id: 10,
     campaign_id: 20,
     lead_status_id: 30,
     operational_site_id: null,
@@ -22,8 +22,8 @@ function values(overrides: Partial<LeadFormValues> = {}): LeadFormValues {
 function original(overrides: Partial<LeadDetail> = {}): LeadDetail {
   return {
     id: 1,
-    referent_id: 10,
-    referent: { id: 10, name: 'Mario Rossi' },
+    registry_id: 10,
+    registry: { id: 10, name: 'Mario Rossi' },
     campaign_id: 20,
     campaign: { id: 20, code: 'CMP-0001', name: 'Spring push' },
     lead_status_id: 30,
@@ -43,13 +43,13 @@ function original(overrides: Partial<LeadDetail> = {}): LeadDetail {
 }
 
 describe('buildCreatePayload', () => {
-  it('includes the required referent_id/campaign_id/lead_status_id and the 4 optional fields', () => {
+  it('includes the required registry_id/campaign_id/lead_status_id and the 4 optional fields', () => {
     const payload = buildCreatePayload(
       values({ operational_site_id: 3, source_id: 4, operator_id: 5, notes: 'Note' }),
     )
 
     expect(payload).toEqual({
-      referent_id: 10,
+      registry_id: 10,
       campaign_id: 20,
       lead_status_id: 30,
       operational_site_id: 3,
@@ -64,7 +64,7 @@ describe('buildCreatePayload', () => {
     const payload = buildCreatePayload(values())
 
     expect(payload).toEqual({
-      referent_id: 10,
+      registry_id: 10,
       campaign_id: 20,
       lead_status_id: 30,
       operational_site_id: null,
@@ -107,10 +107,10 @@ describe('buildUpdatePayload', () => {
 
   it('includes multiple changed fields together', () => {
     const payload = buildUpdatePayload(
-      values({ referent_id: 11, operational_site_id: 7 }),
+      values({ registry_id: 11, operational_site_id: 7 }),
       original(),
     )
-    expect(payload).toEqual({ referent_id: 11, operational_site_id: 7 })
+    expect(payload).toEqual({ registry_id: 11, operational_site_id: 7 })
   })
 
   it('includes a field cleared back to null', () => {

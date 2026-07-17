@@ -4,7 +4,7 @@ use App\Models\Campaign;
 use App\Models\Concerns\LogsModelActivity;
 use App\Models\Lead;
 use App\Models\OperationalSite;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,13 +27,13 @@ uses(TestCase::class, RefreshDatabase::class);
 it('creates the leads table with the expected columns', function () {
     expect(Schema::hasTable('leads'))->toBeTrue();
     expect(Schema::hasColumns('leads', [
-        'id', 'referent_id', 'campaign_id', 'operational_site_id', 'source_id',
+        'id', 'registry_id', 'campaign_id', 'operational_site_id', 'source_id',
         'operator_id', 'notes', 'created_at', 'updated_at',
     ]))->toBeTrue();
 });
 
-it('referent_id and campaign_id are NOT NULL, the other 4 columns are nullable (AC-001)', function () {
-    expect(fn () => Lead::factory()->make(['referent_id' => null])->saveQuietly())
+it('registry_id and campaign_id are NOT NULL, the other 4 columns are nullable (AC-001)', function () {
+    expect(fn () => Lead::factory()->make(['registry_id' => null])->saveQuietly())
         ->toThrow(QueryException::class);
 
     expect(fn () => Lead::factory()->make(['campaign_id' => null])->saveQuietly())
@@ -50,14 +50,15 @@ it('referent_id and campaign_id are NOT NULL, the other 4 columns are nullable (
 });
 
 // ---------------------------------------------------------------------------
-// BR-2/D-4: every referenced entity is restrictOnDelete at the schema level
+// BR-2: every referenced entity is restrictOnDelete at the schema level
+// (spec 0041 D-1: the contact guard moved from Referent to Registry)
 // ---------------------------------------------------------------------------
 
-it('a referent with leads cannot be deleted at the schema level (restrictOnDelete)', function () {
-    $referent = Referent::factory()->create();
-    Lead::factory()->create(['referent_id' => $referent->id]);
+it('a registry with leads cannot be deleted at the schema level (restrictOnDelete)', function () {
+    $registry = Registry::factory()->create();
+    Lead::factory()->create(['registry_id' => $registry->id]);
 
-    expect(fn () => DB::table('referents')->where('id', $referent->id)->delete())
+    expect(fn () => DB::table('registries')->where('id', $registry->id)->delete())
         ->toThrow(QueryException::class);
 });
 
@@ -70,7 +71,7 @@ it('a campaign with leads cannot be deleted at the schema level (restrictOnDelet
 });
 
 // ---------------------------------------------------------------------------
-// migration reversibility (AC-003)
+// migration reversibility (AC-001, AC-003)
 // ---------------------------------------------------------------------------
 
 it('down() reverses the migration, up() recreates it', function () {
@@ -85,15 +86,32 @@ it('down() reverses the migration, up() recreates it', function () {
     expect(Schema::hasTable('leads'))->toBeTrue();
 });
 
+it('the referent_id -> registry_id migration is reversible: down() restores referent_id, up() restores registry_id (AC-001)', function () {
+    $migration = require database_path('migrations/2026_07_17_100000_replace_referent_id_with_registry_id_on_leads_table.php');
+
+    expect(Schema::hasColumn('leads', 'registry_id'))->toBeTrue();
+    expect(Schema::hasColumn('leads', 'referent_id'))->toBeFalse();
+
+    $migration->down();
+
+    expect(Schema::hasColumn('leads', 'referent_id'))->toBeTrue();
+    expect(Schema::hasColumn('leads', 'registry_id'))->toBeFalse();
+
+    $migration->up();
+
+    expect(Schema::hasColumn('leads', 'registry_id'))->toBeTrue();
+    expect(Schema::hasColumn('leads', 'referent_id'))->toBeFalse();
+});
+
 // ---------------------------------------------------------------------------
 // model relations (AC-002)
 // ---------------------------------------------------------------------------
 
-it('referent() is a BelongsTo relation to Referent', function () {
-    $relation = (new Lead)->referent();
+it('registry() is a BelongsTo relation to Registry', function () {
+    $relation = (new Lead)->registry();
 
     expect($relation)->toBeInstanceOf(BelongsTo::class);
-    expect($relation->getRelated())->toBeInstanceOf(Referent::class);
+    expect($relation->getRelated())->toBeInstanceOf(Registry::class);
 });
 
 it('campaign() is a BelongsTo relation to Campaign', function () {
@@ -126,21 +144,21 @@ it('operator() is a BelongsTo relation to User via operator_id', function () {
 });
 
 it('a saved lead resolves all 5 relations (AC-002)', function () {
-    $referent = Referent::factory()->create();
+    $registry = Registry::factory()->create();
     $campaign = Campaign::factory()->create();
     $site = OperationalSite::factory()->create();
     $source = Source::factory()->create();
     $operator = User::factory()->create();
 
     $lead = Lead::factory()->create([
-        'referent_id' => $referent->id,
+        'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
         'operational_site_id' => $site->id,
         'source_id' => $source->id,
         'operator_id' => $operator->id,
     ]);
 
-    expect($lead->referent->is($referent))->toBeTrue()
+    expect($lead->registry->is($registry))->toBeTrue()
         ->and($lead->campaign->is($campaign))->toBeTrue()
         ->and($lead->operationalSite->is($site))->toBeTrue()
         ->and($lead->source->is($source))->toBeTrue()

@@ -21,8 +21,9 @@ use Illuminate\Support\Facades\DB;
  * delete. No sequential code (D-3, unlike Project/Campaign); the cross-entity
  * guard blocking cancellation of a lead's OWN referenced entities (BR-2/D-4)
  * lives in the 5 REFERENCED modules' Services, not here (see
- * CampaignService/ReferentService/OperationalSiteService/SourceService/
- * UserService). delete() carries its own guard for the INVERSE direction
+ * CampaignService/RegistryService/OperationalSiteService/SourceService/
+ * UserService — spec 0041 D-1: the contact guard moved from Referent to
+ * Registry). delete() carries its own guard for the INVERSE direction
  * (spec 0040, BR-3): a lead with a linked opportunity cannot itself be
  * removed.
  */
@@ -37,7 +38,7 @@ class LeadService
      * @var array<int, string>
      */
     private const array DETAIL_RELATIONS = [
-        'referent',
+        'registry',
         'campaign',
         'operationalSite.addresses.city',
         'source',
@@ -92,25 +93,25 @@ class LeadService
     /**
      * Minimal, searchable, paginated lead list for the for-select standard
      * (amendment rev.1 A-1, ADR 0011) — a Lead has no own name column, so
-     * search/order both go through the referent's name (mirrors
-     * OperationalSiteService::forSelect's primary-address subquery pattern).
-     * Feeds the Opportunity form's "Lead" select (spec 0040).
+     * search/order both go through the registry's name (spec 0041 D-1;
+     * mirrors OperationalSiteService::forSelect's primary-address subquery
+     * pattern). Feeds the Opportunity form's "Lead" select (spec 0040).
      */
     public function forSelect(ForSelectQuery $query): ForSelectResult
     {
-        $base = Lead::query()->with(['referent', 'campaign']);
+        $base = Lead::query()->with(['registry', 'campaign']);
 
         if ($query->hasSearch()) {
             $term = '%'.$query->search.'%';
-            $base->whereHas('referent', function (Builder $referentQuery) use ($term): void {
-                $referentQuery->where('name', 'like', $term);
+            $base->whereHas('registry', function (Builder $registryQuery) use ($term): void {
+                $registryQuery->where('name', 'like', $term);
             });
         }
 
         $total = (clone $base)->count();
 
         /** @var Collection<int, Lead> $page */
-        $page = $base->orderBy($this->referentNameSubquery())
+        $page = $base->orderBy($this->registryNameSubquery())
             ->orderBy('id')
             ->offset($query->offset)
             ->limit($query->limit)
@@ -127,15 +128,15 @@ class LeadService
     }
 
     /**
-     * Correlated subquery selecting the lead's referent name, the ORDER BY
+     * Correlated subquery selecting the lead's registry name, the ORDER BY
      * key for for-select (a Lead has no own name column). A plain query
      * builder (DB::table), NOT an Eloquent one — `orderBy()` accepts either.
      */
-    private function referentNameSubquery(): QueryBuilder
+    private function registryNameSubquery(): QueryBuilder
     {
-        return DB::table('referents')
+        return DB::table('registries')
             ->select('name')
-            ->whereColumn('referents.id', 'leads.referent_id')
+            ->whereColumn('registries.id', 'leads.registry_id')
             ->limit(1);
     }
 
@@ -162,9 +163,9 @@ class LeadService
 
         /** @var Collection<int, Lead> $hydrated */
         $hydrated = Lead::query()
-            ->with(['referent', 'campaign'])
+            ->with(['registry', 'campaign'])
             ->whereIn('id', $missingIds)
-            ->orderBy($this->referentNameSubquery())
+            ->orderBy($this->registryNameSubquery())
             ->orderBy('id')
             ->get();
 

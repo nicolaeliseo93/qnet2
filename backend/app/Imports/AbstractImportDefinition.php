@@ -163,7 +163,7 @@ abstract class AbstractImportDefinition implements ImportDefinition
      * Retro-compatible default: no existing dominant record is resolved by id.
      * The 5 legacy create-only domains keep rejecting DB-existing rows through
      * existsInDatabase()/dedupKey() at staging; only wizard definitions that
-     * support upsert (e.g. leads → Referent match) override this.
+     * support upsert (e.g. leads → Registry match) override this.
      *
      * @param  array<string, mixed>  $mapped
      */

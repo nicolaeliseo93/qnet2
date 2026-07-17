@@ -7,7 +7,7 @@ use App\Models\ExportRun;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\OperationalSite;
-use App\Models\Referent;
+use App\Models\Registry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -57,12 +57,12 @@ it('GET /api/tables/leads/columns: 200 with the declared columns, 403 without vi
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['referent', 'campaign', 'operational_site', 'source', 'operator', 'is_assigned', 'lead_status', 'created_at']);
+    expect($ids)->toBe(['registry', 'campaign', 'operational_site', 'source', 'operator', 'is_assigned', 'lead_status', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['operational_site']['sortable'])->toBeTrue()
         ->and($columns['operational_site']['filterType'])->toBe('set')
-        ->and($columns['referent']['sortable'])->toBeTrue()
+        ->and($columns['registry']['sortable'])->toBeTrue()
         ->and($columns['is_assigned']['type'])->toBe('boolean')
         ->and($columns['is_assigned']['filterType'])->toBe('set');
 });
@@ -169,16 +169,16 @@ it('rows: operational_site is null when the lead has no site', function () {
     expect($row['operational_site'])->toBeNull();
 });
 
-it('rows: referent/source/operator surface as {id, name} summaries', function () {
+it('rows: registry/source/operator surface as {id, name} summaries', function () {
     $actor = leadUserWith(['viewAny']);
-    $referent = Referent::factory()->create(['name' => 'Ada Contact']);
-    $lead = Lead::factory()->create(['referent_id' => $referent->id]);
+    $registry = Registry::factory()->create(['name' => 'Ada Contact']);
+    $lead = Lead::factory()->create(['registry_id' => $registry->id]);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/tables/leads/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
     $row = collect($response->json('items'))->firstWhere('id', $lead->id);
 
-    expect($row['referent'])->toMatchArray(['id' => $referent->id, 'name' => 'Ada Contact']);
+    expect($row['registry'])->toMatchArray(['id' => $registry->id, 'name' => 'Ada Contact']);
 });
 
 // ---------------------------------------------------------------------------
@@ -307,7 +307,7 @@ if (! function_exists('leadExportPayload')) {
         return [
             'format' => 'csv',
             'columns' => [
-                ['colId' => 'referent', 'header' => 'Referent'],
+                ['colId' => 'registry', 'header' => 'Registry'],
                 ['colId' => 'campaign', 'header' => 'Campaign'],
             ],
         ];

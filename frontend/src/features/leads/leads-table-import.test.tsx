@@ -1,20 +1,25 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { LeadsTable } from '@/features/leads/leads-table'
 
 /**
- * The Import module is now a standalone top-level module (`/imports*`, spec
- * 2026-07-16), no longer reachable from the Lead module: `LeadsTable` used to
- * carry an "Import lead" action wired to the generic table's `importSlot`
- * (spec 0034 AC-014). This regression guard asserts the leftover has been
- * fully removed rather than just hidden — no `importSlot` prop is threaded
- * to `<TableView>` at all, and no import-related affordance renders anywhere
- * in the leads page.
+ * Import affordance on the Leads module. The inline import wizard (spec 0034
+ * `importSlot`) stays fully removed — the import module is standalone. What the
+ * Leads page now offers is a plain navigation button to that standalone module
+ * (`/imports`), gated on `import-runs.viewAny` (UI-only; the module re-checks
+ * the same ability). This guard asserts both: no `importSlot` is threaded to
+ * `<TableView>`, and the navigation button appears only when authorized.
  */
+
+const navigateMock = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return { ...actual, useNavigate: () => navigateMock }
+})
 
 const canMock = vi.fn<(permission: string) => boolean>()
 vi.mock('@/features/auth/use-abilities', () => ({
@@ -57,10 +62,11 @@ beforeAll(async () => {
 beforeEach(() => {
   canMock.mockReset()
   canMock.mockReturnValue(true)
+  navigateMock.mockReset()
   capturedProps.length = 0
 })
 
-describe('LeadsTable — no import affordance', () => {
+describe('LeadsTable — import affordance', () => {
   it('does not thread an importSlot prop to the generic table', () => {
     renderTable()
 
@@ -68,10 +74,18 @@ describe('LeadsTable — no import affordance', () => {
     expect(capturedProps[0].importSlot).toBeUndefined()
   })
 
-  it('does not render any "Import lead" affordance', () => {
+  it('renders the import button and navigates to the standalone module when authorized', () => {
     renderTable()
 
-    expect(screen.queryByText('Import lead')).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: /import/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Import leads' }))
+
+    expect(navigateMock).toHaveBeenCalledWith('/imports')
+  })
+
+  it('hides the import button when the actor lacks import-runs.viewAny', () => {
+    canMock.mockImplementation((permission) => permission !== 'import-runs.viewAny')
+    renderTable()
+
+    expect(screen.queryByRole('button', { name: 'Import leads' })).not.toBeInTheDocument()
   })
 })

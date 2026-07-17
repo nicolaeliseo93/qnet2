@@ -30,6 +30,7 @@ const ProductsPage = lazy(() => import('@/pages/products-page'))
 const ProductDetailPage = lazy(() => import('@/pages/product-detail-page'))
 const ProductFormPage = lazy(() => import('@/pages/product-form-page'))
 const SourcesPage = lazy(() => import('@/pages/sources-page'))
+const VatRatesPage = lazy(() => import('@/pages/vat-rates-page'))
 const TagsPage = lazy(() => import('@/pages/tags-page'))
 const PipelineStatusesPage = lazy(() => import('@/pages/pipeline-statuses-page'))
 const ProjectsPage = lazy(() => import('@/pages/projects-page'))
@@ -171,6 +172,10 @@ export const router = createBrowserRouter([
           {
             path: 'sources',
             element: <SourcesPage />,
+          },
+          {
+            path: 'vat-rates',
+            element: <VatRatesPage />,
           },
           {
             path: 'tags',
