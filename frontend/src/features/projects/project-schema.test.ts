@@ -20,7 +20,6 @@ function baseValues() {
     code: 'PRJ-0001',
     name: 'New project',
     description: null,
-    registry_id: null,
     pipeline_status_id: 1,
     source_id: null,
     business_function_id: 5,

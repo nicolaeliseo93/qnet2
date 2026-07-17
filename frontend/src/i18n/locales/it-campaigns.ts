@@ -11,7 +11,6 @@ export const campaigns = {
     code: 'Codice',
     project: 'Progetto',
     name: 'Denominazione',
-    registry: 'Cliente',
     pipeline_status: 'Stato',
     source: 'Fonte',
     country: 'Nazione',
@@ -28,7 +27,6 @@ export const campaigns = {
   advancedFilters: {
     project: 'Progetto',
     pipelineStatus: 'Stato',
-    registry: 'Cliente',
     source: 'Fonte',
     partner: 'Partner',
     budgetRange: 'Budget',
@@ -55,7 +53,7 @@ export const campaigns = {
       },
       project: {
         title: 'Collegamento al progetto',
-        description: 'Collegando un progetto si precompilano Cliente, Fonte e Partner qui sotto.',
+        description: 'Collegando un progetto si precompilano Fonte e Partner qui sotto.',
       },
       classification: {
         title: 'Classificazione',
@@ -78,7 +76,7 @@ export const campaigns = {
       code: 'Precompilato con il prossimo codice sequenziale; modificalo se ne vuoi uno personalizzato.',
       project: 'Collegare un progetto precompila e blocca Classificazione e Geografia qui sotto.',
       classification: 'Ereditati dal progetto collegato.',
-      partner: 'Il partner è il soggetto referente che promuove la campagna, distinto dal Cliente target.',
+      partner: 'Compila se la campagna è richiesta dal partner (i costi sono imputati al partner).',
       geography:
         'Nazione, regione, provincia e città seguono una cascata dall\'alto in basso; i livelli valorizzati da un progetto collegato sono ereditati e bloccati.',
     },
@@ -94,8 +92,6 @@ export const campaigns = {
     projectSearch: 'Cerca progetti…',
     status: 'Stato',
     statusSearch: 'Cerca stati…',
-    registry: 'Cliente',
-    registrySearch: 'Cerca clienti…',
     source: 'Fonte',
     sourceSearch: 'Cerca fonti…',
     businessFunction: 'Funzione aziendale',

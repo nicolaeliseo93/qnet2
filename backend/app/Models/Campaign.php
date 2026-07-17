@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Campaign entity (spec 0023): optionally linked to a Project via
- * `project_id`. `registry_id`/`source_id`/`partner_id` are ALWAYS the
+ * `project_id`. `source_id`/`partner_id` are ALWAYS the
  * campaign's own. `pipeline_status_id`/`business_function_id`/
  * `product_category_id` are the DERIVED set (BR-2): forced NULL by the
  * service when linked to a project (their effective value is then read
@@ -31,7 +31,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'project_id',
     'name',
     'description',
-    'registry_id',
     'source_id',
     'partner_id',
     'pipeline_status_id',
@@ -70,11 +69,6 @@ class Campaign extends BaseModel
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
-    }
-
-    public function registry(): BelongsTo
-    {
-        return $this->belongsTo(Registry::class);
     }
 
     public function source(): BelongsTo

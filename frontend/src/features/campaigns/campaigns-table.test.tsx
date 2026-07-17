@@ -26,8 +26,6 @@ const mockCampaign: CampaignDetailWithPermissions = {
   project: null,
   name: 'Spring outreach',
   description: null,
-  registry_id: null,
-  registry: null,
   source_id: null,
   source: null,
   partner_id: null,

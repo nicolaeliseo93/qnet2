@@ -27,8 +27,6 @@ class ProjectResource extends JsonResource
             'code' => $this->code,
             'name' => $this->name,
             'description' => $this->description,
-            'registry_id' => $this->registry_id,
-            'registry' => $this->summarize($this->registry),
             'pipeline_status_id' => $this->pipeline_status_id,
             'pipeline_status' => $this->pipelineStatus !== null
                 ? ['id' => $this->pipelineStatus->id, 'name' => $this->pipelineStatus->name, 'color' => $this->pipelineStatus->color]

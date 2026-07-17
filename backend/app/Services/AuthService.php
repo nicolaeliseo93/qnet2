@@ -79,13 +79,24 @@ class AuthService
      * always $user by construction; any personable_* in the input is irrelevant.
      * A null $profile leaves the card untouched.
      *
+     * `module_open_preferences` (spec 0042) is written OUTSIDE `$attributes` on
+     * purpose: the column is guarded (not in `User::$fillable`, AC-008), so it
+     * is set via `forceFill()` — same pattern as the guarded `name`/`password`
+     * writes above — rather than mass assignment. A null value here leaves the
+     * stored preference untouched (client omitted the key).
+     *
      * @param  array<string, string>  $attributes  whitelisted account fields (locale)
+     * @param  array{mode: string, overrides: array<string, string>}|null  $moduleOpenPreferences
      */
-    public function updateProfile(User $user, array $attributes, ?ProfileData $profile = null): User
+    public function updateProfile(User $user, array $attributes, ?ProfileData $profile = null, ?array $moduleOpenPreferences = null): User
     {
-        return DB::transaction(function () use ($user, $attributes, $profile): User {
+        return DB::transaction(function () use ($user, $attributes, $profile, $moduleOpenPreferences): User {
             if ($attributes !== []) {
                 $user->update($attributes);
+            }
+
+            if ($moduleOpenPreferences !== null) {
+                $user->forceFill(['module_open_preferences' => $moduleOpenPreferences])->save();
             }
 
             $this->profileWriter->write($user, $profile);

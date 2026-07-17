@@ -12,6 +12,7 @@ use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Arr;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Permission;
 
@@ -39,19 +40,28 @@ if (! function_exists('opportunityUserWith')) {
 
 if (! function_exists('mandatoryOpportunityFks')) {
     /**
-     * The 4 mandatory relation FKs beyond `name` (amendment rev.1 A-2:
-     * registry_id/company_id/company_site_id/operational_site_id), each a
-     * freshly created row.
+     * The mandatory create payload beyond `name`: the 4 mandatory relation FKs
+     * (amendment rev.1 A-2: registry_id/company_id/company_site_id/
+     * operational_site_id) plus a valid one-row `product_lines` collection
+     * (user directive 2026-07-17: at least one row is required to create).
+     * Each a freshly created row. Tests asserting a specific `product_lines`
+     * payload merge this helper FIRST so their own value overrides it.
      *
-     * @return array{registry_id: int, company_id: int, company_site_id: int, operational_site_id: int}
+     * @return array{registry_id: int, company_id: int, company_site_id: int, operational_site_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
      */
     function mandatoryOpportunityFks(): array
     {
+        $businessFunction = BusinessFunction::factory()->create();
+        $category = ProductCategory::factory()->create(['business_function_id' => $businessFunction->id]);
+
         return [
             'registry_id' => Registry::factory()->create()->id,
             'company_id' => Company::factory()->create()->id,
             'company_site_id' => CompanySite::factory()->create()->id,
             'operational_site_id' => OperationalSite::factory()->create()->id,
+            'product_lines' => [
+                ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
+            ],
         ];
     }
 }
@@ -62,16 +72,19 @@ if (! function_exists('mandatoryOpportunityFks')) {
 // registry_id/company_id/company_site_id/operational_site_id)
 // ---------------------------------------------------------------------------
 
-it('create: with the 5 mandatory fields only -> 201, every other field is null (AC-082)', function () {
+it('create: with the mandatory fields only -> 201, every optional scalar null (AC-082)', function () {
     $actor = opportunityUserWith(['create']);
     $fks = mandatoryOpportunityFks();
+    // product_lines is a to-many relation, not an `opportunities` column: it
+    // is asserted on the response/pivot, not via assertDatabaseHas.
+    $scalarFks = Arr::except($fks, 'product_lines');
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/opportunities', array_merge(['name' => 'Deal Alpha'], $fks))
         ->assertCreated();
 
     $opportunityId = $response->json('data.id');
-    $this->assertDatabaseHas('opportunities', array_merge(['id' => $opportunityId, 'name' => 'Deal Alpha'], $fks, [
+    $this->assertDatabaseHas('opportunities', array_merge(['id' => $opportunityId, 'name' => 'Deal Alpha'], $scalarFks, [
         'referent_id' => null,
         'commercial_id' => null,
         'reporter_id' => null,
@@ -79,7 +92,7 @@ it('create: with the 5 mandatory fields only -> 201, every other field is null (
         'source_id' => null,
         'lead_id' => null,
     ]));
-    expect($response->json('data.product_lines'))->toBe([]);
+    expect($response->json('data.product_lines'))->toHaveCount(1);
 });
 
 it('create: 201, response shape matches the frozen contract', function () {

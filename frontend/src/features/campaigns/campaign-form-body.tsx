@@ -14,7 +14,6 @@ import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-status
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
-import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
 import { useCampaignForm } from '@/features/campaigns/use-campaign-form'
 import { CampaignProjectField } from '@/features/campaigns/campaign-project-field'
@@ -152,16 +151,6 @@ export function CampaignFormBody({ mode, onSuccess, onCancel, initialCode }: Cam
             />
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <CampaignRelationField
-                control={form.control}
-                name="registry_id"
-                metaKey="registry_id"
-                label={t('campaigns.form.registry')}
-                resource={REGISTRIES_FOR_SELECT_RESOURCE}
-                searchPlaceholder={t('campaigns.form.registrySearch')}
-                selected={original?.registry ?? null}
-              />
-
               <CampaignRelationField
                 control={form.control}
                 name="source_id"

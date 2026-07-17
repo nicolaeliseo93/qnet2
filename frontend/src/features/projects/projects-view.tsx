@@ -1,17 +1,16 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Can } from '@/features/auth/can'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
 import { useStatsPanel } from '@/features/stats/use-stats-panel'
+import { useModuleOpener } from '@/features/modules/use-module-opener'
 import { projectCardsQueryKeyPrefix } from '@/features/projects/api'
 import { ProjectCardGrid } from '@/features/projects/project-card-grid'
-import { ProjectForm } from '@/features/projects/project-form'
 import { ProjectsTable, type ProjectsTableHandle } from '@/features/projects/projects-table'
 import { ProjectsViewToggle } from '@/features/projects/projects-view-toggle'
 import { useProjectsViewPreference } from '@/features/projects/use-projects-view-preference'
@@ -30,11 +29,11 @@ const PROJECTS_DOMAIN = 'projects'
  *
  * Creation is owned here too (not by `ProjectsTable`, which the view mounts
  * with `hideHeader`): the "New project" button must work identically in both
- * views, but `ProjectsTable` — and the create Sheet nested inside it — is
- * only ever mounted in TABLE mode, so a create flow living there could never
- * be reached from GRID mode. `ProjectsTable`'s own create Sheet stays intact
- * and self-contained for any other, future standalone caller (`hideHeader`
- * defaults to `false`); this view simply doesn't exercise that path.
+ * views, and `ProjectsTable`'s own create flow is only ever mounted in TABLE
+ * mode. It delegates the open mode (modal Sheet vs dedicated page) to
+ * `useModuleOpener('projects')`, resolved from the user's preference (spec
+ * 0042); `ProjectsTable` keeps its own, self-contained opener for view/edit
+ * and for any future standalone caller (`hideHeader` defaults to `false`).
  */
 export function ProjectsView() {
   const { t } = useTranslation()
@@ -43,19 +42,15 @@ export function ProjectsView() {
   const stats = useStatsPanel(PROJECTS_DOMAIN)
   const projectsTableRef = useRef<ProjectsTableHandle>(null)
 
-  const [createOpen, setCreateOpen] = useState(false)
+  const handleCreateSuccess = useCallback(() => {
+    // Refresh whichever list is relevant: a no-op ref call if the table
+    // isn't mounted (grid view), a stale-marking invalidation that only
+    // refetches if the card grid is the one currently active.
+    projectsTableRef.current?.refresh()
+    void queryClient.invalidateQueries({ queryKey: projectCardsQueryKeyPrefix() })
+  }, [queryClient])
 
-  const handleCreateSuccess = useCallback(
-    () => {
-      setCreateOpen(false)
-      // Refresh whichever list is relevant: a no-op ref call if the table
-      // isn't mounted (grid view), a stale-marking invalidation that only
-      // refetches if the card grid is the one currently active.
-      projectsTableRef.current?.refresh()
-      void queryClient.invalidateQueries({ queryKey: projectCardsQueryKeyPrefix() })
-    },
-    [queryClient],
-  )
+  const { openCreate, sheet } = useModuleOpener(PROJECTS_DOMAIN, { onSaved: handleCreateSuccess })
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -65,7 +60,7 @@ export function ProjectsView() {
             <ProjectsViewToggle view={view} onChange={setView} />
             <StatsToggleButton domain={PROJECTS_DOMAIN} isOpen={stats.isOpen} onToggle={stats.toggle} />
             <Can permission="projects.create">
-              <Button onClick={() => setCreateOpen(true)}>
+              <Button onClick={openCreate}>
                 <Plus aria-hidden="true" />
                 {t('projects.form.newProject')}
               </Button>
@@ -78,19 +73,7 @@ export function ProjectsView() {
 
       {view === 'table' ? <ProjectsTable ref={projectsTableRef} hideHeader /> : <ProjectCardGrid />}
 
-      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent className="gap-0" storageKey={`sheet-width:${PROJECTS_DOMAIN}`}>
-          <SheetHeader>
-            <SheetTitle>{t('projects.form.createTitle')}</SheetTitle>
-            <SheetDescription>{t('projects.form.createSubtitle')}</SheetDescription>
-          </SheetHeader>
-          <ProjectForm
-            mode={{ type: 'create' }}
-            onSuccess={handleCreateSuccess}
-            onCancel={() => setCreateOpen(false)}
-          />
-        </SheetContent>
-      </Sheet>
+      {sheet}
     </div>
   )
 }

@@ -137,8 +137,6 @@ function project(
     code: 'PRJ-0007',
     name: 'Acme rollout',
     description: null,
-    registry_id: null,
-    registry: null,
     pipeline_status_id: 3,
     pipeline_status: { id: 3, name: 'Active', color: 'blue' },
     source_id: null,

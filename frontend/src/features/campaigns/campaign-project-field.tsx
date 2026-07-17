@@ -31,9 +31,9 @@ function toForSelectItemFromRef(ref: RelationFieldRef | null): ForSelectItem | n
 }
 
 /**
- * The campaign's optional Project link. Picking a project prefills Client
- * (`registry_id`), Fonte (`source_id`) and Partner (`partner_id`) — still
- * editable — plus the 3 BR-2 classification fields (which the sibling
+ * The campaign's optional Project link. Picking a project prefills Fonte
+ * (`source_id`) and Partner (`partner_id`) — still editable — plus the 3
+ * BR-2 classification fields (which the sibling
  * `CampaignRelationField`s then force read-only) and the geo levels the
  * project fills (BR-5, spec 0027: the sibling `<GeoSelect lockedLevels>`
  * then forces those read-only), straight from the picker's own `for-select`
@@ -66,7 +66,6 @@ export function CampaignProjectField({ control, setValue, selected }: CampaignPr
     if (!meta) {
       return
     }
-    setValue('registry_id', meta.registry?.id ?? null, { shouldDirty: true })
     setValue('source_id', meta.source?.id ?? null, { shouldDirty: true })
     setValue('partner_id', meta.partner?.id ?? null, { shouldDirty: true })
     setValue('pipeline_status_id', meta.pipeline_status.id, { shouldDirty: true, shouldValidate: true })

@@ -20,8 +20,8 @@ use Illuminate\Support\Facades\Gate;
  * Table definition for the `campaigns` domain (spec 0023).
  *
  * Real columns (code, name, start_date, end_date, total_budget, target_lead,
- * created_at) are handled entirely by the generic engine. `project`,
- * `registry` and `source` are simple relation-name derived columns (own FK on
+ * created_at) are handled entirely by the generic engine. `project` and
+ * `source` are simple relation-name derived columns (own FK on
  * the campaign), resolved generically via DERIVED_RELATIONS — a `whereHas`
  * set filter (allow-listed columns only, never orderByRaw/whereRaw on raw
  * input — backend.md §8) and, for `project` only (the sole sortable one), a
@@ -57,7 +57,6 @@ class CampaignsTableDefinition extends AbstractTableDefinition
      */
     private const array DERIVED_RELATIONS = [
         'project' => ['relation' => 'project', 'table' => 'projects', 'fk' => 'project_id'],
-        'registry' => ['relation' => 'registry', 'table' => 'registries', 'fk' => 'registry_id'],
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
     ];
 
@@ -95,7 +94,6 @@ class CampaignsTableDefinition extends AbstractTableDefinition
             'project.state',
             'project.province',
             'project.city',
-            'registry',
             'source',
             'pipelineStatus',
             'country',
@@ -175,7 +173,6 @@ class CampaignsTableDefinition extends AbstractTableDefinition
             'code' => $row->code,
             'project' => $this->summarizeProject($project),
             'name' => $row->name,
-            'registry' => $this->summarize($row->registry),
             'pipeline_status' => $this->summarizePipelineStatus($this->pipelineStatusResolver->effectiveStatus($row)),
             'source' => $this->summarize($row->source),
             'country' => $this->summarize($country, geo: true),
@@ -272,7 +269,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
      * the generic default: a linked campaign's OWN status is NULL, so it must
      * match the campaign's own status OR its linked project's — delegated to
      * CampaignPipelineStatusResolver::applyIdFilter(). Every other advanced
-     * filter declared in CampaignAdvancedFilterCatalog (`project`/`registry`/
+     * filter declared in CampaignAdvancedFilterCatalog (`project`/
      * `source`/`partner` relation-by-id, `budget_range`/`created_range`
      * direct-column) is handled by the generic default.
      *
@@ -295,7 +292,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Handle the `project`/`registry`/`source` set filters via whereHas on
+     * Handle the `project`/`source` set filters via whereHas on
      * the related row's name; `pipeline_status` is delegated to
      * CampaignPipelineStatusResolver (AC-032). Every real column falls
      * through to the generic engine.
@@ -350,7 +347,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     /**
      * ORDER BY the linked project's name via a correlated subquery — only
      * `project` is declared sortable (spec 0023 table_definitions);
-     * `registry`/`pipeline_status`/`source` are never asked to sort (not in
+     * `pipeline_status`/`source` are never asked to sort (not in
      * sortableColumnIds()).
      *
      * @param  Builder<Campaign>  $query
@@ -374,7 +371,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Excel-like distinct values (spec 0004/0005). `project`/`registry`/
+     * Excel-like distinct values (spec 0004/0005). `project`/
      * `source` are plain related-row names; `pipeline_status` is delegated to
      * CampaignPipelineStatusResolver (AC-032).
      *

@@ -23,11 +23,12 @@ uses(TestCase::class, RefreshDatabase::class);
 it('creates the campaigns table with the expected columns', function () {
     expect(Schema::hasTable('campaigns'))->toBeTrue();
     expect(Schema::hasColumns('campaigns', [
-        'id', 'code', 'project_id', 'name', 'description', 'registry_id',
+        'id', 'code', 'project_id', 'name', 'description',
         'source_id', 'partner_id', 'pipeline_status_id', 'business_function_id',
         'state_id', 'product_category_id', 'start_date', 'end_date',
         'total_budget', 'target_lead', 'created_at', 'updated_at',
     ]))->toBeTrue();
+    expect(Schema::hasColumn('campaigns', 'registry_id'))->toBeFalse();
 });
 
 it('code is unique at the database level', function () {

@@ -50,7 +50,6 @@ class StoreProjectRequest extends FormRequest
             'name' => ['required', 'string', 'max:191'],
             'pipeline_status_id' => ['nullable', 'integer', Rule::exists('pipeline_statuses', 'id')],
             'description' => ['nullable', 'string'],
-            'registry_id' => ['nullable', 'integer', Rule::exists('registries', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
             'business_function_id' => ['required', 'integer', Rule::exists('business_functions', 'id')],
             'country_id' => ['required', 'integer', Rule::exists('countries', 'id')],

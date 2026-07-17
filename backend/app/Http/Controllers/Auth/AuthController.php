@@ -126,6 +126,7 @@ class AuthController extends BaseApiController
             $request->user(),
             $request->accountAttributes(),
             $request->toProfile(),
+            $request->moduleOpenPreferences(),
         );
 
         return $this->ok(new UserResource($user), __('auth.profile_updated'));

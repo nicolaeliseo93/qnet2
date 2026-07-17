@@ -27,7 +27,6 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     project_id: null,
     name: 'New campaign',
     description: null,
-    registry_id: null,
     source_id: null,
     partner_id: null,
     pipeline_status_id: 1,

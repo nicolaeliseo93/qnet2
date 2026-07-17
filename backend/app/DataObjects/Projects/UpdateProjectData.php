@@ -28,8 +28,6 @@ final readonly class UpdateProjectData
         public ?int $pipelineStatusId = null,
         public ?string $description = null,
         public bool $descriptionSubmitted = false,
-        public ?int $registryId = null,
-        public bool $registryIdSubmitted = false,
         public ?int $sourceId = null,
         public bool $sourceIdSubmitted = false,
         public ?int $businessFunctionId = null,
@@ -68,8 +66,6 @@ final readonly class UpdateProjectData
             pipelineStatusId: array_key_exists('pipeline_status_id', $data) ? (int) $data['pipeline_status_id'] : null,
             description: array_key_exists('description', $data) ? $data['description'] : null,
             descriptionSubmitted: array_key_exists('description', $data),
-            registryId: self::nullableInt($data, 'registry_id'),
-            registryIdSubmitted: array_key_exists('registry_id', $data),
             sourceId: self::nullableInt($data, 'source_id'),
             sourceIdSubmitted: array_key_exists('source_id', $data),
             businessFunctionId: self::nullableInt($data, 'business_function_id'),
@@ -118,10 +114,6 @@ final readonly class UpdateProjectData
 
         if ($this->descriptionSubmitted) {
             $attributes['description'] = $this->description;
-        }
-
-        if ($this->registryIdSubmitted) {
-            $attributes['registry_id'] = $this->registryId;
         }
 
         if ($this->sourceIdSubmitted) {

@@ -52,7 +52,6 @@ export function buildCreatePayload(values: CampaignFormValues): CreateCampaignPa
     name: values.name,
     project_id: values.project_id,
     description: values.description,
-    registry_id: values.registry_id,
     source_id: values.source_id,
     partner_id: values.partner_id,
     ...(linked
@@ -125,9 +124,6 @@ export function buildUpdatePayload(
   }
   if (values.description !== original.description) {
     payload.description = values.description
-  }
-  if (values.registry_id !== original.registry_id) {
-    payload.registry_id = values.registry_id
   }
   if (values.source_id !== original.source_id) {
     payload.source_id = values.source_id

@@ -23,7 +23,6 @@ export const projects = {
   columns: {
     code: 'Codice',
     name: 'Denominazione',
-    registry: 'Cliente',
     pipeline_status: 'Stato',
     source: 'Fonte',
     business_function: 'Funzione aziendale',
@@ -41,7 +40,6 @@ export const projects = {
     created_at: 'Creato il',
   },
   advancedFilters: {
-    registry: 'Cliente',
     pipelineStatus: 'Stato',
     source: 'Fonte',
     businessFunction: 'Funzione aziendale',
@@ -74,7 +72,7 @@ export const projects = {
       },
       classification: {
         title: 'Classificazione',
-        description: 'Cliente, stato e le altre relazioni di classificazione.',
+        description: 'Stato e le altre relazioni di classificazione.',
       },
       geography: {
         title: 'Ambito geografico',
@@ -89,7 +87,7 @@ export const projects = {
       code: 'Precompilato con il prossimo codice sequenziale; modificalo se ne vuoi uno personalizzato.',
       totalBudget: 'Budget complessivo pianificato per il progetto.',
       targetLead: 'Numero di lead atteso da raggiungere.',
-      partner: "L'organizzazione partner coinvolta, distinta dal cliente.",
+      partner: 'Compila se il progetto è richiesto dal partner (i costi sono imputati al partner).',
       geography: 'Seleziona il paese, poi restringi a regione, provincia e città.',
     },
     code: 'Codice',
@@ -102,8 +100,6 @@ export const projects = {
     description: 'Descrizione',
     status: 'Stato',
     statusSearch: 'Cerca stati…',
-    registry: 'Cliente',
-    registrySearch: 'Cerca clienti…',
     source: 'Fonte',
     sourceSearch: 'Cerca fonti…',
     businessFunction: 'Funzione aziendale',

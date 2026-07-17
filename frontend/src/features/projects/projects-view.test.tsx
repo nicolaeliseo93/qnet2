@@ -47,8 +47,6 @@ const mockProject: ProjectDetail = {
   code: 'PRJ-0012',
   name: 'Acme rollout',
   description: null,
-  registry_id: null,
-  registry: null,
   pipeline_status_id: 1,
   pipeline_status: { id: 1, name: 'Active', color: null },
   source_id: null,

@@ -6,6 +6,7 @@ use App\Models\Lead;
 use App\Models\ProductCategory;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Arr;
 use Laravel\Sanctum\Sanctum;
 
 /**
@@ -74,38 +75,50 @@ it('opportunity-defaults: product_lines is empty when the campaign has neither b
 // AC-103 — create with lead_id: NOT auto-derived server-side, editable/removable
 // ---------------------------------------------------------------------------
 
-it('create with lead_id: product_lines is NOT auto-derived server-side — the client must submit it explicitly (AC-102/AC-103)', function () {
+it('create with lead_id: product_lines is NOT auto-derived server-side — the client must submit it explicitly, and it is required (AC-102/AC-103, user directive 2026-07-17)', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
+    // Drop the helper's default product_lines: this test proves the server does
+    // not auto-derive it from the lead, so an omitted collection now 422s.
+    $fks = Arr::except(nonDerivableOpportunityFks(), 'product_lines');
     Sanctum::actingAs($actor);
 
-    $response = $this->postJson('/api/opportunities', array_merge([
+    $this->postJson('/api/opportunities', array_merge([
         'name' => 'From lead, no product lines submitted',
         'lead_id' => $lead->id,
-    ], nonDerivableOpportunityFks()))->assertCreated();
+    ], $fks))->assertStatus(422)->assertJsonValidationErrors('product_lines');
 
-    expect($response->json('data.product_lines'))->toBe([]);
     $this->assertDatabaseCount('opportunity_product_lines', 0);
 });
 
-it('create with lead_id: the client-submitted product_lines (matching the defaults prefill) persists and is editable/removable (AC-102/AC-103)', function () {
+it('create with lead_id: the client-submitted product_lines (matching the defaults prefill) persists and is editable but not clearable (AC-102/AC-103, user directive 2026-07-17)', function () {
     $actor = opportunityFromLeadActor(['create', 'update'], ['view']);
     $lead = completeLead();
+    $otherBusinessFunction = BusinessFunction::factory()->create();
+    $otherCategory = ProductCategory::factory()->create(['business_function_id' => $otherBusinessFunction->id]);
     Sanctum::actingAs($actor);
 
-    $response = $this->postJson('/api/opportunities', array_merge([
+    // Helper FIRST so the explicit product_lines below overrides its default.
+    $response = $this->postJson('/api/opportunities', array_merge(nonDerivableOpportunityFks(), [
         'name' => 'From lead, product lines submitted',
         'lead_id' => $lead->id,
         'product_lines' => [
             ['business_function_id' => $lead->campaign->business_function_id, 'product_category_id' => $lead->campaign->product_category_id],
         ],
-    ], nonDerivableOpportunityFks()))->assertCreated();
+    ]))->assertCreated();
 
     $opportunityId = $response->json('data.id');
     expect($response->json('data.product_lines'))->toHaveCount(1);
 
-    // Editable/removable — NOT a BR-2-locked field: a subsequent PATCH clearing
-    // it succeeds (200), unlike a genuinely locked field which would 422.
-    $this->patchJson("/api/opportunities/{$opportunityId}", ['product_lines' => []])->assertOk();
-    $this->assertDatabaseCount('opportunity_product_lines', 0);
+    // Editable — NOT a BR-2-locked field: a PATCH to a DIFFERENT valid row
+    // succeeds (200), unlike a genuinely locked field which would 422.
+    $this->patchJson("/api/opportunities/{$opportunityId}", ['product_lines' => [
+        ['business_function_id' => $otherBusinessFunction->id, 'product_category_id' => $otherCategory->id],
+    ]])->assertOk();
+    $this->assertDatabaseCount('opportunity_product_lines', 1);
+
+    // But NOT clearable to empty (user directive 2026-07-17: always >=1 row).
+    $this->patchJson("/api/opportunities/{$opportunityId}", ['product_lines' => []])
+        ->assertStatus(422)->assertJsonValidationErrors('product_lines');
+    $this->assertDatabaseCount('opportunity_product_lines', 1);
 });

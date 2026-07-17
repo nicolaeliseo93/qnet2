@@ -6,6 +6,7 @@ import i18n from '@/i18n'
 import { ProfileForm } from '@/features/auth/profile-form'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import type { User } from '@/features/auth/types'
+import { DEFAULT_MODULE_OPEN_PREFERENCES } from '@/features/modules/types'
 import type { EnumOption } from '@/features/config/types'
 import type { PersonalDataCard } from '@/features/personal-data/types'
 
@@ -127,6 +128,7 @@ function user(overrides: Partial<User> = {}): User {
     avatar_url: null,
     personal_data: null,
     created_at: null,
+    module_open_preferences: DEFAULT_MODULE_OPEN_PREFERENCES,
     ...overrides,
   }
 }
@@ -191,6 +193,8 @@ describe('ProfileForm', () => {
     expect(payload.personal_data.first_name).toBe('Ada')
     expect(payload.personal_data.contacts).toHaveLength(1)
     expect(payload.personal_data.contacts[0].id).toBe(5)
+    // AC-015: the module open-mode preference travels in the same payload.
+    expect(payload.module_open_preferences).toEqual(DEFAULT_MODULE_OPEN_PREFERENCES)
   })
 
   it('blocks the save until the required personal-data fields are filled', async () => {

@@ -38,7 +38,10 @@ use Illuminate\Validation\Rule;
  *
  * Amendment rev.3: `business_function_id`/`product_category_id` are REPLACED
  * by `product_lines` (ValidatesProductLines) — no longer BR-1-derivable/
- * lockable scalars, a full-replace sync like `manager_slots`.
+ * lockable scalars, a full-replace sync like `manager_slots`. User directive
+ * 2026-07-17: `product_lines` may be OMITTED (partial PATCH, rows untouched)
+ * but may NOT be cleared to `[]` (`min:1`) — an opportunity always keeps at
+ * least one {business_function_id, product_category_id} row.
  */
 class UpdateOpportunityRequest extends FormRequest
 {
@@ -77,7 +80,7 @@ class UpdateOpportunityRequest extends FormRequest
             'estimated_value' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
             'expected_close_date' => ['sometimes', 'nullable', 'date'],
             'success_probability' => ['sometimes', 'nullable', 'integer', 'between:0,100'],
-        ], $this->managerSlotsRules(), $this->productLinesRules());
+        ], $this->managerSlotsRules(), $this->productLinesRules(required: false));
     }
 
     /**

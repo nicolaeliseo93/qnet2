@@ -18,14 +18,14 @@ use Illuminate\Support\Facades\Gate;
  * Table definition for the `projects` domain (spec 0023).
  *
  * Real columns (code, name, start_date, end_date, total_budget, target_lead,
- * created_at) are handled entirely by the generic engine. The 10
- * classification/geo FKs (registry, pipeline_status, source,
+ * created_at) are handled entirely by the generic engine. The 9
+ * classification/geo FKs (pipeline_status, source,
  * business_function, country, state, province, city, product_category,
  * partner) have no real column of their own — each is DERIVED against the
  * related row's `name`, resolved here generically via DERIVED_RELATIONS: a
  * `whereHas` set filter (allow-listed columns only, never orderByRaw/
  * whereRaw on raw input — backend.md §8), a correlated subquery sort
- * (registry/pipeline_status only, per the column catalogue) and a
+ * (pipeline_status only, per the column catalogue) and a
  * `SELECT DISTINCT` for the Excel-like filter list, mirroring
  * ReferentsTableDefinition's `referent_type` / ProductsTableDefinition's
  * `category`. `geo_scope` (spec 0027, D-2) is NOT in DERIVED_RELATIONS: it
@@ -41,7 +41,7 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     private const int MAX_FILTER_VALUES = 200;
 
     /**
-     * Allow-list of the 10 classification/geo FKs with no real column of
+     * Allow-list of the 9 classification/geo FKs with no real column of
      * their own: relation accessor, related table and owning FK column,
      * keyed by the derived column id. Single source of truth for
      * applyDerivedFilter/applyDerivedSort/distinctValues below.
@@ -49,7 +49,6 @@ class ProjectsTableDefinition extends AbstractTableDefinition
      * @var array<string, array{relation: string, table: string, fk: string}>
      */
     private const array DERIVED_RELATIONS = [
-        'registry' => ['relation' => 'registry', 'table' => 'registries', 'fk' => 'registry_id'],
         'pipeline_status' => ['relation' => 'pipelineStatus', 'table' => 'pipeline_statuses', 'fk' => 'pipeline_status_id'],
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
         'business_function' => ['relation' => 'businessFunction', 'table' => 'business_functions', 'fk' => 'business_function_id'],
@@ -291,8 +290,8 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     /**
      * ORDER BY a derived column's related-row name via a correlated
      * subquery, so sorting never needs a row-multiplying JOIN on the main
-     * query. Only `registry`/`pipeline_status` are declared sortable (spec
-     * 0023 table_definitions); the other 5 derived columns are never asked
+     * query. Only `pipeline_status` is declared sortable (spec
+     * 0023 table_definitions); the other derived columns are never asked
      * to sort (not in sortableColumnIds()).
      *
      * @param  Builder<Project>  $query

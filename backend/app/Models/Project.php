@@ -25,7 +25,6 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 #[Fillable([
     'name',
     'description',
-    'registry_id',
     'pipeline_status_id',
     'source_id',
     'business_function_id',
@@ -56,11 +55,6 @@ class Project extends BaseModel
             'total_budget' => 'decimal:2',
             'target_lead' => 'int',
         ];
-    }
-
-    public function registry(): BelongsTo
-    {
-        return $this->belongsTo(Registry::class);
     }
 
     public function pipelineStatus(): BelongsTo

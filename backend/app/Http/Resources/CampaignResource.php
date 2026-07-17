@@ -63,8 +63,6 @@ class CampaignResource extends JsonResource
             ],
             'name' => $this->name,
             'description' => $this->description,
-            'registry_id' => $this->registry_id,
-            'registry' => $this->summarize($this->registry),
             'source_id' => $this->source_id,
             'source' => $this->summarize($this->source),
             'partner_id' => $this->partner_id,

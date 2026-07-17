@@ -76,7 +76,6 @@ class UpdateCampaignRequest extends FormRequest
             'project_id' => ['sometimes', 'nullable', 'integer', Rule::exists('projects', 'id')],
             'name' => ['sometimes', 'required', 'string', 'max:191'],
             'description' => ['sometimes', 'nullable', 'string'],
-            'registry_id' => ['sometimes', 'nullable', 'integer', Rule::exists('registries', 'id')],
             'source_id' => ['sometimes', 'nullable', 'integer', Rule::exists('sources', 'id')],
             'partner_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
             'pipeline_status_id' => $this->derivedFieldRules('pipeline_statuses'),

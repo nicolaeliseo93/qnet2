@@ -141,6 +141,10 @@ class User extends Authenticatable implements HasLocalePreference
             // a migrated user, guarded (not in $fillable) so it is only ever
             // set by property assignment post-create, never mass-assigned.
             'old_id' => 'integer',
+            // Spec 0042 — per-user module open mode preference. Guarded (not in
+            // $fillable) on purpose: only the self-service /auth/me flow may set
+            // it, via forceFill() (AuthService::updateProfile), never mass assignment.
+            'module_open_preferences' => 'array',
         ];
     }
 }

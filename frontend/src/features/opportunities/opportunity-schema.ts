@@ -62,7 +62,9 @@ function baseFields(t: TFunction) {
     // Each id is individually nullable (a row starts empty and fills in
     // place), but `superRefine` below requires BOTH non-null per row before
     // submit — an incomplete row (including a freshly-added empty one)
-    // blocks the form, surfaced as a single error on the collection.
+    // blocks the form, surfaced as a single error on the collection. User
+    // directive 2026-07-17: at least one row is REQUIRED (an empty collection
+    // blocks submit), mirroring the backend `required|min:1`.
     product_lines: z
       .array(
         z.object({
@@ -71,6 +73,10 @@ function baseFields(t: TFunction) {
         }),
       )
       .superRefine((rows, ctx) => {
+        if (rows.length === 0) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('opportunities.form.productLines.required') })
+          return
+        }
         const hasIncompleteRow = rows.some(
           (row) => row.business_function_id === null || row.product_category_id === null,
         )

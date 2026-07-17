@@ -1,42 +1,22 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { Can } from '@/features/auth/can'
 import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
+import { useModuleOpener } from '@/features/modules/use-module-opener'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
-import { useEntityDetail } from '@/hooks/use-entity-detail'
-import { DetailError, DetailLoading } from '@/components/detail/detail-panel'
 import { projectColumnRenderers } from '@/features/projects/column-renderers'
-import { deleteProject, fetchProject, projectDetailQueryKey } from '@/features/projects/api'
-import { ProjectForm } from '@/features/projects/project-form'
-import { ProjectEditLoader } from '@/features/projects/project-edit-loader'
-import { ProjectDetailView } from '@/features/projects/project-detail'
-import type { ProjectDetail } from '@/features/projects/types'
+import { deleteProject } from '@/features/projects/api'
 
 /** Domain key used to mount the generic table for projects. */
 const PROJECTS_DOMAIN = 'projects'
-
-/** Which sheet (if any) is currently open and for which row. */
-type SheetState =
-  | { kind: 'none' }
-  | { kind: 'create' }
-  | { kind: 'view'; row: TableRow }
-  | { kind: 'edit'; row: TableRow }
 
 interface ProjectsTableProps {
   /**
@@ -57,17 +37,15 @@ export interface ProjectsTableHandle {
 /**
  * Thin Projects adapter over the generic table. It mounts `<TableView>` with
  * the `projects` domain, its custom cell renderers and a row-action handler,
- * and owns the CRUD flows: opening a Sheet for view/edit/create, confirming +
- * running the delete mutation, and refreshing the SSRM grid after every
- * mutation via the table's imperative handle (spec 0025 Parte B — the
- * dedicated pages remain as deep-links, this adapter only changes the mount
- * point). Permission gating is an affordance only; the backend re-authorizes
- * each call.
+ * and delegates the open mode (modal Sheet vs dedicated page) of view/edit/
+ * create to `useModuleOpener`, resolved from the user's preference (spec 0042).
+ * It still owns the delete flow (confirm + toast + grid refresh) and the SSRM
+ * grid refresh after every mutation via the table's imperative handle.
+ * Permission gating is an affordance only; the backend re-authorizes each call.
  */
 export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>(
   function ProjectsTable({ hideHeader = false }, forwardedRef) {
     const { t } = useTranslation()
-    const queryClient = useQueryClient()
     const invalidateStats = useInvalidateModuleStats(PROJECTS_DOMAIN)
 
     const tableRef = useRef<TableViewHandle>(null)
@@ -75,11 +53,18 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
 
     useImperativeHandle(forwardedRef, () => ({ refresh: refreshGrid }), [refreshGrid])
 
-    const [sheet, setSheet] = useState<SheetState>({ kind: 'none' })
     const [deletingId, setDeletingId] = useState<number | null>(null)
     const [activityRow, setActivityRow] = useState<TableRow | null>(null)
 
-    const closeSheet = useCallback(() => setSheet({ kind: 'none' }), [])
+    // After a modal create/edit succeeds the Sheet closes itself; the grid and
+    // the stats panel are this adapter's to refresh. The detail query is
+    // invalidated inside `ProjectFormScreen`. Page mode never calls this.
+    const onSaved = useCallback(() => {
+      refreshGrid()
+      invalidateStats()
+    }, [refreshGrid, invalidateStats])
+
+    const { openCreate, openView, openEdit, sheet } = useModuleOpener(PROJECTS_DOMAIN, { onSaved })
 
     const runDelete = useCallback(
       async (row: TableRow) => {
@@ -109,10 +94,10 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
       (action: TableActionDefinition, row: TableRow) => {
         switch (action.key) {
           case 'view':
-            setSheet({ kind: 'view', row })
+            openView(row)
             break
           case 'edit':
-            setSheet({ kind: 'edit', row })
+            openEdit(row)
             break
           case 'delete':
             void runDelete(row)
@@ -124,29 +109,10 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
             break
         }
       },
-      [runDelete],
+      [openView, openEdit, runDelete],
     )
 
     const isBusy = useCallback((row: TableRow) => row.id === deletingId, [deletingId])
-
-    const onSheetOpenChange = useCallback(
-      (open: boolean) => {
-        if (!open) {
-          closeSheet()
-        }
-      },
-      [closeSheet],
-    )
-
-    const onMutationSuccess = useCallback(
-      (project: ProjectDetail) => {
-        closeSheet()
-        refreshGrid()
-        invalidateStats()
-        queryClient.invalidateQueries({ queryKey: projectDetailQueryKey(project.id) })
-      },
-      [closeSheet, refreshGrid, queryClient, invalidateStats],
-    )
 
     return (
       <div className="flex flex-1 flex-col gap-4">
@@ -154,7 +120,7 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
           <PageHeader
             actions={
               <Can permission="projects.create">
-                <Button onClick={() => setSheet({ kind: 'create' })}>
+                <Button onClick={openCreate}>
                   <Plus aria-hidden="true" />
                   {t('projects.form.newProject')}
                 </Button>
@@ -171,47 +137,7 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
           isBusy={isBusy}
         />
 
-        <Sheet open={sheet.kind !== 'none'} onOpenChange={onSheetOpenChange}>
-          <SheetContent className="gap-0" storageKey={`sheet-width:${PROJECTS_DOMAIN}`}>
-            {sheet.kind === 'view' && (
-              <>
-                <SheetHeader className="sr-only">
-                  <SheetTitle>{t('projects.detail.title')}</SheetTitle>
-                  <SheetDescription>{t('projects.detail.subtitle')}</SheetDescription>
-                </SheetHeader>
-                <ViewProjectLoader projectId={sheet.row.id} />
-              </>
-            )}
-
-            {sheet.kind === 'create' && (
-              <>
-                <SheetHeader>
-                  <SheetTitle>{t('projects.form.createTitle')}</SheetTitle>
-                  <SheetDescription>{t('projects.form.createSubtitle')}</SheetDescription>
-                </SheetHeader>
-                <ProjectForm
-                  mode={{ type: 'create' }}
-                  onSuccess={onMutationSuccess}
-                  onCancel={closeSheet}
-                />
-              </>
-            )}
-
-            {sheet.kind === 'edit' && (
-              <>
-                <SheetHeader>
-                  <SheetTitle>{t('projects.form.editTitle')}</SheetTitle>
-                  <SheetDescription>{t('projects.form.editSubtitle')}</SheetDescription>
-                </SheetHeader>
-                <ProjectEditLoader
-                  projectId={sheet.row.id}
-                  onSuccess={onMutationSuccess}
-                  onCancel={closeSheet}
-                />
-              </>
-            )}
-          </SheetContent>
-        </Sheet>
+        {sheet}
 
         <ResourceActivityDialog
           resource={PROJECTS_DOMAIN}
@@ -226,38 +152,3 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
     )
   },
 )
-
-interface ViewProjectLoaderProps {
-  projectId: number
-}
-
-/**
- * Fetches the fresh project detail and hands it down to the (presentational)
- * `ProjectDetailView`, which owns no data-fetching state of its own.
- */
-function ViewProjectLoader({ projectId }: ViewProjectLoaderProps) {
-  const { t } = useTranslation()
-  const {
-    data: project,
-    isLoading,
-    isError,
-    refetch,
-  } = useEntityDetail(projectDetailQueryKey(projectId), () => fetchProject(projectId))
-
-  if (isError) {
-    return (
-      <DetailError
-        message={t('projects.detail.loadError')}
-        retryLabel={t('common.retry')}
-        onRetry={() => refetch()}
-      />
-    )
-  }
-
-  if (isLoading || !project) {
-    return <DetailLoading />
-  }
-
-  return <ProjectDetailView project={project} />
-}
-

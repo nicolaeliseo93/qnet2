@@ -65,7 +65,7 @@ it('200: field catalogue has the 16 contract fields, in order, lead_id absent (A
     }
 });
 
-it('200: create-context permissions.fields are editable when the actor may create, the 5 mandatory fields required (AC-031/AC-083)', function () {
+it('200: create-context permissions.fields are editable when the actor may create, the mandatory fields required (AC-031/AC-083)', function () {
     $actor = opportunityMetaUserWith(['viewAny', 'create']);
     Sanctum::actingAs($actor);
 
@@ -77,7 +77,7 @@ it('200: create-context permissions.fields are editable when the actor may creat
         ->assertJsonPath('permissions.fields.company_id.required', true)
         ->assertJsonPath('permissions.fields.company_site_id.required', true)
         ->assertJsonPath('permissions.fields.operational_site_id.required', true)
-        ->assertJsonPath('permissions.fields.product_lines.required', false)
+        ->assertJsonPath('permissions.fields.product_lines.required', true)
         ->assertJsonPath('permissions.fields.estimated_value.required', false);
 });
 

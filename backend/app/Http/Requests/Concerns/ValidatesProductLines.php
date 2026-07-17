@@ -12,7 +12,10 @@ use Illuminate\Validation\Rule;
  * Shared validation for the `product_lines` payload of the opportunity write
  * endpoints (spec 0040, amendment rev.3): a to-many collection of
  * {business_function_id, product_category_id} rows, REPLACING the former
- * single scalar columns. The base per-row rules live in
+ * single scalar columns. An opportunity must ALWAYS carry at least one row
+ * (user directive 2026-07-17): create REQUIRES a non-empty collection, and
+ * update — a full-replace sync — may omit `product_lines` (partial PATCH,
+ * untouched) but may NOT clear it to `[]`. The base per-row rules live in
  * productLinesRules(); the cross-row invariants (no duplicate pair, the
  * category's EFFECTIVE business function must match the row's own) run in
  * validateProductLines(), called from each request's own withValidator().
@@ -22,12 +25,17 @@ use Illuminate\Validation\Rule;
 trait ValidatesProductLines
 {
     /**
+     * @param  bool  $required  create passes true (collection mandatory);
+     *                          update passes false (`sometimes`, but `min:1`
+     *                          still bars a clear-to-empty).
      * @return array<string, array<int, mixed>>
      */
-    protected function productLinesRules(): array
+    protected function productLinesRules(bool $required): array
     {
         return [
-            'product_lines' => ['sometimes', 'array'],
+            'product_lines' => $required
+                ? ['required', 'array', 'min:1']
+                : ['sometimes', 'array', 'min:1'],
             'product_lines.*.business_function_id' => ['required', 'integer', Rule::exists('business_functions', 'id')],
             'product_lines.*.product_category_id' => ['required', 'integer', Rule::exists('product_categories', 'id')],
         ];

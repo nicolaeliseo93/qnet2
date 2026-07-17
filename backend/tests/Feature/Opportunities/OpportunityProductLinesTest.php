@@ -55,6 +55,29 @@ if (! function_exists('productLinesMandatoryOpportunityFks')) {
     }
 }
 
+it('create: product_lines omitted -> 422 (user directive 2026-07-17: at least one row required)', function () {
+    $actor = productLinesOpportunityUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/opportunities', array_merge(productLinesMandatoryOpportunityFks(), [
+        'name' => 'No product lines',
+    ]))->assertStatus(422)->assertJsonValidationErrors('product_lines');
+
+    expect(Opportunity::count())->toBe(0);
+});
+
+it('create: product_lines: [] -> 422 (user directive 2026-07-17: at least one row required)', function () {
+    $actor = productLinesOpportunityUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/opportunities', array_merge(productLinesMandatoryOpportunityFks(), [
+        'name' => 'Empty product lines',
+        'product_lines' => [],
+    ]))->assertStatus(422)->assertJsonValidationErrors('product_lines');
+
+    expect(Opportunity::count())->toBe(0);
+});
+
 it('create: multiple product_lines rows persist, same business function with different categories allowed (AC-099)', function () {
     $actor = productLinesOpportunityUserWith(['create']);
     $businessFunction = BusinessFunction::factory()->create();
@@ -156,14 +179,14 @@ it('update: product_lines is a full-replace sync (AC-099)', function () {
     $this->assertDatabaseMissing('opportunity_product_lines', ['product_category_id' => $categoryOne->id]);
 });
 
-it('update: product_lines: [] clears every row (AC-099)', function () {
+it('update: product_lines: [] -> 422, the existing rows are kept (user directive 2026-07-17: an opportunity always keeps >=1 row)', function () {
     $actor = productLinesOpportunityUserWith(['create', 'update']);
     $businessFunction = BusinessFunction::factory()->create();
     $category = ProductCategory::factory()->create(['business_function_id' => $businessFunction->id]);
     Sanctum::actingAs($actor);
 
     $created = $this->postJson('/api/opportunities', array_merge(productLinesMandatoryOpportunityFks(), [
-        'name' => 'Clearable lines',
+        'name' => 'Non-clearable lines',
         'product_lines' => [
             ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
         ],
@@ -171,10 +194,12 @@ it('update: product_lines: [] clears every row (AC-099)', function () {
     $opportunityId = $created->json('data.id');
 
     $this->patchJson("/api/opportunities/{$opportunityId}", ['product_lines' => []])
-        ->assertOk()
-        ->assertJsonPath('data.product_lines', []);
+        ->assertStatus(422)->assertJsonValidationErrors('product_lines');
 
-    $this->assertDatabaseCount('opportunity_product_lines', 0);
+    $this->assertDatabaseCount('opportunity_product_lines', 1);
+    $this->assertDatabaseHas('opportunity_product_lines', [
+        'opportunity_id' => $opportunityId, 'product_category_id' => $category->id,
+    ]);
 });
 
 it('update: omitting product_lines leaves the existing rows untouched (partial PATCH)', function () {

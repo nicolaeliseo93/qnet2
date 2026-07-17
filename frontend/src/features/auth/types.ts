@@ -1,5 +1,6 @@
 import type { PersonalDataPayload } from '@/features/personal-data/drafts'
 import type { PersonalDataCard } from '@/features/personal-data/types'
+import type { ModuleOpenPreferences } from '@/features/modules/types'
 
 export interface User {
   id: number
@@ -21,6 +22,8 @@ export interface User {
    */
   personal_data?: PersonalDataCard | null
   created_at: string | null
+  /** Per-user modal-vs-page open mode preference (spec 0042). Never null on the wire. */
+  module_open_preferences: ModuleOpenPreferences
 }
 
 export interface LoginPayload {
@@ -32,6 +35,8 @@ export interface UpdateProfilePayload {
   locale: string
   /** Nested registry card + contacts + addresses (ADR 0013). */
   personal_data?: PersonalDataPayload
+  /** Optional: updates the modal-vs-page open mode preference (spec 0042). */
+  module_open_preferences?: ModuleOpenPreferences
 }
 
 export interface ChangePasswordPayload {

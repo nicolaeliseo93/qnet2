@@ -13,7 +13,7 @@ import type { ProjectGeoMeta } from '@/features/campaigns/campaign-geo'
 
 /**
  * Spec 0023 FRONTEND acceptance criteria:
- * - AC-042: picking a Project prefills Client/Source/Partner (editable) and
+ * - AC-042: picking a Project prefills Source/Partner (editable) and
  *   forces the 3 classification fields read-only from the project's values,
  *   which are excluded from the payload regardless of what they display.
  * - AC-043: clearing the Project makes the 3 classification fields editable
@@ -143,7 +143,6 @@ function projectForSelectItem(overrides: {
     id: TEST_PROJECT_ID,
     label: 'PRJ-0042 — Acme rollout',
     meta: {
-      registry: { id: 11, label: 'Acme Srl' },
       source: { id: 21, label: 'Referral' },
       partner: { id: 31, label: 'Jane Partner' },
       pipeline_status: { id: 41, label: 'Active' },
@@ -175,8 +174,6 @@ function campaign(
     project: null,
     name: 'Spring push',
     description: null,
-    registry_id: null,
-    registry: null,
     source_id: null,
     source: null,
     partner_id: null,
@@ -229,7 +226,7 @@ beforeEach(() => {
 })
 
 describe('CampaignForm — selecting a Project (AC-042)', () => {
-  it('prefills Client/Source/Partner, forces the 3 classification fields read-only, and locks the geo levels the project fills (BR-5)', async () => {
+  it('prefills Source/Partner, forces the 3 classification fields read-only, and locks the geo levels the project fills (BR-5)', async () => {
     createCampaignMock.mockResolvedValue(campaign({ project_id: TEST_PROJECT_ID }))
 
     render(<CampaignForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
@@ -240,18 +237,16 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Linked campaign' } })
     fireEvent.click(screen.getByRole('button', { name: 'select Project' }))
 
-    await waitFor(() => expect(screen.getByTestId('value-Client')).toHaveTextContent('11'))
-    expect(screen.getByTestId('value-Source')).toHaveTextContent('21')
+    await waitFor(() => expect(screen.getByTestId('value-Source')).toHaveTextContent('21'))
     expect(screen.getByTestId('value-Partner')).toHaveTextContent('31')
     expect(screen.getByTestId('value-Status')).toHaveTextContent('41')
     expect(screen.getByTestId('value-Business function')).toHaveTextContent('51')
     expect(screen.getByTestId('value-Product category')).toHaveTextContent('71')
 
-    // The 3 derived fields are forced read-only while linked; Client/Source/Partner stay editable.
+    // The 3 derived fields are forced read-only while linked; Source/Partner stay editable.
     expect(screen.getByTestId('disabled-Status')).toHaveTextContent('true')
     expect(screen.getByTestId('disabled-Business function')).toHaveTextContent('true')
     expect(screen.getByTestId('disabled-Product category')).toHaveTextContent('true')
-    expect(screen.getByTestId('disabled-Client')).toHaveTextContent('false')
     expect(screen.getByTestId('disabled-Source')).toHaveTextContent('false')
     expect(screen.getByTestId('disabled-Partner')).toHaveTextContent('false')
 
@@ -274,7 +269,6 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
     expect(payload).not.toHaveProperty('product_category_id')
     expect(payload).not.toHaveProperty('country_id')
     expect(payload.project_id).toBe(TEST_PROJECT_ID)
-    expect(payload.registry_id).toBe(11)
     expect(payload.source_id).toBe(21)
     expect(payload.partner_id).toBe(31)
   })

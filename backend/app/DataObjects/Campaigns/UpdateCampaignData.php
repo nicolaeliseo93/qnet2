@@ -34,8 +34,6 @@ final readonly class UpdateCampaignData
         public ?string $name = null,
         public ?string $description = null,
         public bool $descriptionSubmitted = false,
-        public ?int $registryId = null,
-        public bool $registryIdSubmitted = false,
         public ?int $sourceId = null,
         public bool $sourceIdSubmitted = false,
         public ?int $partnerId = null,
@@ -77,8 +75,6 @@ final readonly class UpdateCampaignData
             name: array_key_exists('name', $data) ? (string) $data['name'] : null,
             description: array_key_exists('description', $data) ? $data['description'] : null,
             descriptionSubmitted: array_key_exists('description', $data),
-            registryId: self::nullableInt($data, 'registry_id'),
-            registryIdSubmitted: array_key_exists('registry_id', $data),
             sourceId: self::nullableInt($data, 'source_id'),
             sourceIdSubmitted: array_key_exists('source_id', $data),
             partnerId: self::nullableInt($data, 'partner_id'),
@@ -130,10 +126,6 @@ final readonly class UpdateCampaignData
 
         if ($this->descriptionSubmitted) {
             $attributes['description'] = $this->description;
-        }
-
-        if ($this->registryIdSubmitted) {
-            $attributes['registry_id'] = $this->registryId;
         }
 
         if ($this->sourceIdSubmitted) {

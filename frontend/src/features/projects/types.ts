@@ -9,7 +9,7 @@ import type { CustomFieldValue } from '@/features/custom-fields/types'
 import type { GeoScope } from '@/features/geo/geo-scope'
 import type { AdvancedFilterValues } from '@/features/table/advanced-filters/types'
 
-/** Hydrated projection of a plain `{id, name}` relation (registry/source/business_function/state/product_category/partner). */
+/** Hydrated projection of a plain `{id, name}` relation (source/business_function/state/product_category/partner). */
 export interface ProjectRelationRef {
   id: number
   name: string
@@ -35,8 +35,6 @@ export interface ProjectDetail {
   code: string
   name: string
   description: string | null
-  registry_id: number | null
-  registry: ProjectRelationRef | null
   pipeline_status_id: number
   pipeline_status: PipelineStatusRef
   source_id: number | null
@@ -94,7 +92,6 @@ export interface CreateProjectPayload {
   name: string
   pipeline_status_id?: number | null
   description?: string | null
-  registry_id?: number | null
   source_id?: number | null
   business_function_id?: number | null
   /** Geo cascade (spec 0027 BR-4): `country_id` is required on create. */

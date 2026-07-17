@@ -140,8 +140,6 @@ function campaign(
     project: null,
     name: 'Spring push',
     description: null,
-    registry_id: null,
-    registry: null,
     source_id: null,
     source: null,
     partner_id: null,

@@ -63,7 +63,6 @@ class CampaignService
         'project.province',
         'project.city',
         'project.productCategory',
-        'registry',
         'source',
         'partner',
         'pipelineStatus',

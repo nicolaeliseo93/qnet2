@@ -107,9 +107,6 @@ export function ProjectDetailView({ project }: ProjectDetailViewProps) {
       <DetailSection title={t('projects.form.sections.classification.title')} icon={<Tags />}>
         <DetailGrid>
           <DetailField label={t('projects.form.status')}>{project.pipeline_status.name}</DetailField>
-          <DetailField label={t('projects.form.registry')}>
-            {project.registry?.name ?? <DetailEmpty />}
-          </DetailField>
           <DetailField label={t('projects.form.source')}>
             {project.source?.name ?? <DetailEmpty />}
           </DetailField>

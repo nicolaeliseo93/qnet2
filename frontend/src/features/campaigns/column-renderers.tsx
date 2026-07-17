@@ -1,4 +1,4 @@
-import { Building2, FolderKanban, Radio } from 'lucide-react'
+import { FolderKanban, Radio } from 'lucide-react'
 import { DateTimeCell } from '@/features/table/cell-renderers'
 import {
   CodeBadgeCell,
@@ -23,7 +23,6 @@ import type { TableRendererMap } from '@/features/table/renderer-registry'
 export const campaignColumnRenderers: TableRendererMap = {
   code: (params) => <CodeBadgeCell {...params} />,
   project: (params) => <RelationCell {...params} icon={FolderKanban} />,
-  registry: (params) => <RelationCell {...params} icon={Building2} />,
   pipeline_status: (params) => <StatusBadgeCell {...params} />,
   source: (params) => <RelationCell {...params} icon={Radio} />,
   country: (params) => <RelationCell {...params} />,

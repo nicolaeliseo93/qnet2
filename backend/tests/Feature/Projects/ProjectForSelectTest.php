@@ -5,7 +5,6 @@ use App\Models\Campaign;
 use App\Models\PipelineStatus;
 use App\Models\Project;
 use App\Models\Referent;
-use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -56,13 +55,11 @@ it('forbids actors without projects.viewAny (403)', function () {
 it('maps a project to label "{code} — {name}" with the full campaign-form meta block (AC-017)', function () {
     $actor = projectUserWith(['viewAny']);
     $status = PipelineStatus::factory()->create(['name' => 'Attivo']);
-    $registry = Registry::factory()->create(['name' => 'Acme Srl']);
     $source = Source::factory()->create(['name' => 'Fiera']);
     $partner = Referent::factory()->create(['name' => 'Ada Partner']);
     $businessFunction = BusinessFunction::factory()->create(['name' => 'Marketing']);
     $project = Project::factory()->create([
         'pipeline_status_id' => $status->id,
-        'registry_id' => $registry->id,
         'source_id' => $source->id,
         'partner_id' => $partner->id,
         'business_function_id' => $businessFunction->id,
@@ -76,7 +73,6 @@ it('maps a project to label "{code} — {name}" with the full campaign-form meta
 
     expect($item['label'])->toBe(sprintf('%s — %s', $project->code, $project->name))
         ->and($item['meta']['pipeline_status'])->toMatchArray(['id' => $status->id, 'label' => 'Attivo'])
-        ->and($item['meta']['registry'])->toMatchArray(['id' => $registry->id, 'label' => 'Acme Srl'])
         ->and($item['meta']['source'])->toMatchArray(['id' => $source->id, 'label' => 'Fiera'])
         ->and($item['meta']['partner'])->toMatchArray(['id' => $partner->id, 'label' => 'Ada Partner'])
         ->and($item['meta']['business_function'])->toMatchArray(['id' => $businessFunction->id, 'label' => 'Marketing'])
@@ -88,7 +84,6 @@ it('maps a project to label "{code} — {name}" with the full campaign-form meta
 it('meta fields are null when the corresponding relation is unset', function () {
     $actor = projectUserWith(['viewAny']);
     $project = Project::factory()->create([
-        'registry_id' => null,
         'source_id' => null,
         'partner_id' => null,
         'business_function_id' => null,
@@ -101,8 +96,7 @@ it('meta fields are null when the corresponding relation is unset', function () 
     $response = $this->getJson('/api/projects/for-select')->assertOk();
     $item = collect($response->json('items'))->firstWhere('id', $project->id);
 
-    expect($item['meta']['registry'])->toBeNull()
-        ->and($item['meta']['source'])->toBeNull()
+    expect($item['meta']['source'])->toBeNull()
         ->and($item['meta']['partner'])->toBeNull()
         ->and($item['meta']['business_function'])->toBeNull()
         ->and($item['meta']['state'])->toBeNull()

@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from '@/routes/protected-route'
 import { AppLayout } from '@/layouts/app-layout'
 import { MigrationRouteGuard } from '@/features/migrations/migration-route-guard'
+import { buildModuleRoutes } from '@/features/modules/module-routes'
 
 const LoginPage = lazy(() => import('@/pages/login-page'))
 const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password-page'))
@@ -34,18 +35,10 @@ const VatRatesPage = lazy(() => import('@/pages/vat-rates-page'))
 const TagsPage = lazy(() => import('@/pages/tags-page'))
 const PipelineStatusesPage = lazy(() => import('@/pages/pipeline-statuses-page'))
 const ProjectsPage = lazy(() => import('@/pages/projects-page'))
-const ProjectDetailPage = lazy(() => import('@/pages/project-detail-page'))
-const ProjectFormPage = lazy(() => import('@/pages/project-form-page'))
 const CampaignsPage = lazy(() => import('@/pages/campaigns-page'))
-const CampaignDetailPage = lazy(() => import('@/pages/campaign-detail-page'))
-const CampaignFormPage = lazy(() => import('@/pages/campaign-form-page'))
 const LeadStatusesPage = lazy(() => import('@/pages/lead-statuses-page'))
 const LeadsPage = lazy(() => import('@/pages/leads-page'))
-const LeadDetailPage = lazy(() => import('@/pages/lead-detail-page'))
-const LeadFormPage = lazy(() => import('@/pages/lead-form-page'))
 const OpportunitiesPage = lazy(() => import('@/pages/opportunities-page'))
-const OpportunityDetailPage = lazy(() => import('@/pages/opportunity-detail-page'))
-const OpportunityFormPage = lazy(() => import('@/pages/opportunity-form-page'))
 const LeadImportPage = lazy(() => import('@/pages/lead-import-page'))
 const LeadImportHistoryPage = lazy(() => import('@/pages/lead-import-history-page'))
 const LeadImportDetailPage = lazy(() => import('@/pages/lead-import-detail-page'))
@@ -190,32 +183,8 @@ export const router = createBrowserRouter([
             element: <ProjectsPage />,
           },
           {
-            path: 'projects/new',
-            element: <ProjectFormPage />,
-          },
-          {
-            path: 'projects/:id',
-            element: <ProjectDetailPage />,
-          },
-          {
-            path: 'projects/:id/edit',
-            element: <ProjectFormPage />,
-          },
-          {
             path: 'campaigns',
             element: <CampaignsPage />,
-          },
-          {
-            path: 'campaigns/new',
-            element: <CampaignFormPage />,
-          },
-          {
-            path: 'campaigns/:id',
-            element: <CampaignDetailPage />,
-          },
-          {
-            path: 'campaigns/:id/edit',
-            element: <CampaignFormPage />,
           },
           {
             path: 'lead-statuses',
@@ -226,33 +195,14 @@ export const router = createBrowserRouter([
             element: <LeadsPage />,
           },
           {
-            path: 'leads/new',
-            element: <LeadFormPage />,
-          },
-          {
-            path: 'leads/:id',
-            element: <LeadDetailPage />,
-          },
-          {
-            path: 'leads/:id/edit',
-            element: <LeadFormPage />,
-          },
-          {
             path: 'opportunities',
             element: <OpportunitiesPage />,
           },
-          {
-            path: 'opportunities/new',
-            element: <OpportunityFormPage />,
-          },
-          {
-            path: 'opportunities/:id',
-            element: <OpportunityDetailPage />,
-          },
-          {
-            path: 'opportunities/:id/edit',
-            element: <OpportunityFormPage />,
-          },
+          // Deep-link routes (`new`/`:id`/`:id/edit`) of every registered
+          // module — projects/campaigns/leads/opportunities in Wave 0 — are
+          // generated from the single module registry (spec 0042, AC-012/
+          // AC-022), not declared by hand here.
+          ...buildModuleRoutes(),
           {
             path: 'imports',
             element: <LeadImportHistoryPage />,

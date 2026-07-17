@@ -4,7 +4,6 @@ use App\Models\Campaign;
 use App\Models\Concerns\LogsModelActivity;
 use App\Models\PipelineStatus;
 use App\Models\Project;
-use App\Models\Registry;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\QueryException;
@@ -25,11 +24,12 @@ uses(TestCase::class, RefreshDatabase::class);
 it('creates the projects table with the expected columns', function () {
     expect(Schema::hasTable('projects'))->toBeTrue();
     expect(Schema::hasColumns('projects', [
-        'id', 'code', 'name', 'description', 'registry_id', 'pipeline_status_id',
+        'id', 'code', 'name', 'description', 'pipeline_status_id',
         'source_id', 'business_function_id', 'state_id', 'product_category_id',
         'partner_id', 'start_date', 'end_date', 'total_budget', 'target_lead',
         'created_at', 'updated_at',
     ]))->toBeTrue();
+    expect(Schema::hasColumn('projects', 'registry_id'))->toBeFalse();
 });
 
 it('code is unique at the database level', function () {
@@ -91,15 +91,6 @@ it('`code` is deliberately absent from #[Fillable]: mass-assignment cannot set i
     ]);
 
     expect($project->code)->toBeNull();
-});
-
-it('a nullOnDelete FK (registry_id) is cleared, not blocked, when the related row is deleted', function () {
-    $registry = Registry::factory()->create();
-    $project = Project::factory()->create(['registry_id' => $registry->id]);
-
-    $registry->delete();
-
-    expect($project->fresh()->registry_id)->toBeNull();
 });
 
 it('logs model activity on the projects log channel', function () {

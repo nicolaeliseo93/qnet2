@@ -9,7 +9,7 @@ import type { CustomFieldValue } from '@/features/custom-fields/types'
 import type { ProjectRelationRef, PipelineStatusRef } from '@/features/projects/types'
 import type { GeoScope } from '@/features/geo/geo-scope'
 
-/** Hydrated `{id, name}` relation shared by registry/source/partner/business_function/state/product_category (identical shape to a project's, reused rather than redeclared). */
+/** Hydrated `{id, name}` relation shared by source/partner/business_function/state/product_category (identical shape to a project's, reused rather than redeclared). */
 export type CampaignRelationRef = ProjectRelationRef
 
 /** The linked project's minimal identity, as exposed by `CampaignResource.project`. */
@@ -38,8 +38,6 @@ export interface CampaignDetail {
   project: CampaignProjectRef | null
   name: string
   description: string | null
-  registry_id: number | null
-  registry: CampaignRelationRef | null
   source_id: number | null
   source: CampaignRelationRef | null
   partner_id: number | null
@@ -98,7 +96,6 @@ export interface CreateCampaignPayload {
   name: string
   project_id?: number | null
   description?: string | null
-  registry_id?: number | null
   source_id?: number | null
   partner_id?: number | null
   pipeline_status_id?: number | null

@@ -123,16 +123,30 @@ return [
             ],
         ],
 
-        // "Gestione": the day-to-day operational records (master data). Flat
-        // leaves under a section label — no collapsible sub-groups. Ordered
-        // from the central anagraphic entity outward.
+        // Opportunities (spec 0040): a commercial deal against an Anagrafica,
+        // created manually or generated from a Lead (BR-1 read-only derivation).
+        // Promoted to a standalone top-level entry (user decision 2026-07-17):
+        // it is the only commercial record living outside the Marketing e Lead
+        // pipeline, so it reads as its own destination rather than a domain group.
         [
-            'key' => 'management',
-            'label' => 'navigation.management',
-            'icon' => null,
+            'key' => 'opportunities',
+            'label' => 'navigation.opportunities',
+            'icon' => 'handshake',
+            'route' => '/opportunities',
+            'permission' => 'opportunities.view',
+        ],
+
+        // "Anagrafiche" domain: every registry/contact master-data record under
+        // one collapsible parent. Replaces the former flat "Gestione" section,
+        // dissolved into domain groups (user decision 2026-07-17). A route-less
+        // parent renders collapsible; NavigationService drops it when the actor
+        // can see none of its children. Ordered from the central registry outward.
+        [
+            'key' => 'registries-group',
+            'label' => 'navigation.registries',
+            'icon' => 'book-user',
             'route' => null,
             'permission' => null,
-            'type' => 'section',
             'children' => [
                 [
                     'key' => 'registries',
@@ -149,18 +163,21 @@ return [
                     'permission' => 'referents.view',
                 ],
                 [
+                    // Referent types (spec 0016): the Referent classification
+                    // pick-list. Moved here from Configurazione: it belongs to
+                    // the registry domain it classifies (user decision 2026-07-17).
+                    'key' => 'referent-types',
+                    'label' => 'navigation.referentTypes',
+                    'icon' => 'tags',
+                    'route' => '/referent-types',
+                    'permission' => 'referent-types.view',
+                ],
+                [
                     'key' => 'companies',
                     'label' => 'navigation.companies',
                     'icon' => 'building',
                     'route' => '/companies',
                     'permission' => 'companies.view',
-                ],
-                [
-                    'key' => 'operational-sites',
-                    'label' => 'navigation.operationalSites',
-                    'icon' => 'map-pin',
-                    'route' => '/operational-sites',
-                    'permission' => 'operational-sites.view',
                 ],
                 [
                     // Company Sites (spec 0020): flexible site
@@ -172,6 +189,26 @@ return [
                     'permission' => 'company-sites.view',
                 ],
                 [
+                    'key' => 'operational-sites',
+                    'label' => 'navigation.operationalSites',
+                    'icon' => 'map-pin',
+                    'route' => '/operational-sites',
+                    'permission' => 'operational-sites.view',
+                ],
+            ],
+        ],
+
+        // "Prodotti" domain: the product catalogue plus its own lookup tables
+        // (categories, attributes, VAT rates) under one collapsible parent
+        // (user decision 2026-07-17). Same collapsible-group shape as above.
+        [
+            'key' => 'products-group',
+            'label' => 'navigation.products',
+            'icon' => 'package',
+            'route' => null,
+            'permission' => null,
+            'children' => [
+                [
                     'key' => 'products',
                     'label' => 'navigation.products',
                     'icon' => 'package',
@@ -179,24 +216,33 @@ return [
                     'permission' => 'products.view',
                 ],
                 [
-                    // Opportunities (spec 0040): a commercial deal against an
-                    // Anagrafica, created manually or generated from a Lead
-                    // (BR-1 read-only derivation). Placed under Gestione for now
-                    // (user decision 2026-07-16).
-                    'key' => 'opportunities',
-                    'label' => 'navigation.opportunities',
-                    'icon' => 'handshake',
-                    'route' => '/opportunities',
-                    'permission' => 'opportunities.view',
+                    'key' => 'product-categories',
+                    'label' => 'navigation.productCategories',
+                    'icon' => 'list-tree',
+                    'route' => '/product-categories',
+                    'permission' => 'product-categories.view',
+                ],
+                [
+                    'key' => 'attributes',
+                    'label' => 'navigation.attributes',
+                    'icon' => 'sliders-horizontal',
+                    'route' => '/attributes',
+                    'permission' => 'attributes.view',
+                ],
+                [
+                    'key' => 'vat-rates',
+                    'label' => 'navigation.vatRates',
+                    'icon' => 'percent',
+                    'route' => '/vat-rates',
+                    'permission' => 'vat-rates.view',
                 ],
             ],
         ],
 
-        // "Configurazione": every support/lookup table gathered in one place
-        // (grant the operational modules their reference values). This is the
-        // single settings area the product asked for — mirrors the Setup areas
-        // of Salesforce/Zoho where pick-lists and reusable fields live apart
-        // from the daily-work records.
+        // "Configurazione": cross-cutting lookup tables not tied to a single
+        // domain. Product/registry pick-lists moved into their domain groups
+        // above; custom fields moved to Amministrazione (user decision
+        // 2026-07-17). What remains are the taxonomies shared across modules.
         [
             'key' => 'configuration',
             'label' => 'navigation.configuration',
@@ -211,13 +257,6 @@ return [
                     'icon' => 'briefcase',
                     'route' => '/business-functions',
                     'permission' => 'business-functions.view',
-                ],
-                [
-                    'key' => 'referent-types',
-                    'label' => 'navigation.referentTypes',
-                    'icon' => 'tags',
-                    'route' => '/referent-types',
-                    'permission' => 'referent-types.view',
                 ],
                 [
                     'key' => 'sectors',
@@ -240,44 +279,13 @@ return [
                     'route' => '/sources',
                     'permission' => 'sources.view',
                 ],
-                [
-                    'key' => 'vat-rates',
-                    'label' => 'navigation.vatRates',
-                    'icon' => 'percent',
-                    'route' => '/vat-rates',
-                    'permission' => 'vat-rates.view',
-                ],
-                [
-                    'key' => 'product-categories',
-                    'label' => 'navigation.productCategories',
-                    'icon' => 'list-tree',
-                    'route' => '/product-categories',
-                    'permission' => 'product-categories.view',
-                ],
-                [
-                    'key' => 'attributes',
-                    'label' => 'navigation.attributes',
-                    'icon' => 'sliders-horizontal',
-                    'route' => '/attributes',
-                    'permission' => 'attributes.view',
-                ],
-                [
-                    // Universal custom fields (spec 0021): the admin catalogue
-                    // of dynamic fields grafted onto every custom-fieldable
-                    // module.
-                    'key' => 'custom-fields',
-                    'label' => 'navigation.customFields',
-                    'icon' => 'puzzle',
-                    'route' => '/custom-fields',
-                    'permission' => 'custom-fields.view',
-                ],
             ],
         ],
 
-        // "Amministrazione": system-level access control and data migration.
-        // Separate from the reference-data configuration above (who-can-do-what
-        // vs reference values). The section is dropped automatically when the
-        // actor can see none of its children.
+        // "Amministrazione": system-level access control, the dynamic-field
+        // catalogue and data migration (who-can-do-what plus admin-only tooling,
+        // kept apart from the reference-data configuration above). The section
+        // is dropped automatically when the actor can see none of its children.
         [
             'key' => 'administration',
             'label' => 'navigation.administration',
@@ -299,6 +307,17 @@ return [
                     'icon' => 'shield-check',
                     'route' => '/roles',
                     'permission' => 'roles.view',
+                ],
+                [
+                    // Universal custom fields (spec 0021): the admin catalogue
+                    // of dynamic fields grafted onto every custom-fieldable
+                    // module. Moved here from Configurazione (user decision
+                    // 2026-07-17): it is an admin-only tool, not a taxonomy.
+                    'key' => 'custom-fields',
+                    'label' => 'navigation.customFields',
+                    'icon' => 'puzzle',
+                    'route' => '/custom-fields',
+                    'permission' => 'custom-fields.view',
                 ],
                 [
                     'key' => 'migrations',

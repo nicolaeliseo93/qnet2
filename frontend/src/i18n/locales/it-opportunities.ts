@@ -101,6 +101,7 @@ export const opportunities = {
       add: 'Aggiungi riga prodotto',
       remove: 'Rimuovi riga prodotto',
       hint: 'Ogni riga collega una funzione aziendale a una categoria prodotto: scegli prima la funzione, poi la categoria (filtrata di conseguenza). Rimuovi una riga con il cestino.',
+      required: 'Aggiungi almeno una funzione aziendale con la relativa categoria prodotto.',
       rowIncomplete: 'Ogni riga richiede sia la funzione aziendale sia la categoria prodotto.',
     },
     supervisor: 'Supervisore',

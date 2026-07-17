@@ -23,7 +23,6 @@ export const projects = {
   columns: {
     code: 'Code',
     name: 'Name',
-    registry: 'Client',
     pipeline_status: 'Status',
     source: 'Source',
     business_function: 'Business function',
@@ -41,7 +40,6 @@ export const projects = {
     created_at: 'Created at',
   },
   advancedFilters: {
-    registry: 'Client',
     pipelineStatus: 'Status',
     source: 'Source',
     businessFunction: 'Business function',
@@ -74,7 +72,7 @@ export const projects = {
       },
       classification: {
         title: 'Classification',
-        description: 'Client, status and the other classification relations.',
+        description: 'Status and the other classification relations.',
       },
       geography: {
         title: 'Geography',
@@ -89,7 +87,7 @@ export const projects = {
       code: 'Prefilled with the next sequential code; edit it if you need a custom one.',
       totalBudget: 'Overall planned budget for the project.',
       targetLead: 'Expected number of leads to reach.',
-      partner: 'The partner organization involved, as distinct from the client.',
+      partner: 'Fill in if the project is requested by the partner (costs are charged to the partner).',
       geography: 'Select a country, then narrow down to region, province and city.',
     },
     code: 'Code',
@@ -102,8 +100,6 @@ export const projects = {
     description: 'Description',
     status: 'Status',
     statusSearch: 'Search statuses…',
-    registry: 'Client',
-    registrySearch: 'Search clients…',
     source: 'Source',
     sourceSearch: 'Search sources…',
     businessFunction: 'Business function',

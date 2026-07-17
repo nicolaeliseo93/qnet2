@@ -35,8 +35,6 @@ function baseFields(t: TFunction) {
       .min(1, t('projects.form.nameRequired'))
       .max(NAME_MAX_LENGTH, t('projects.form.nameMax')),
     description: z.string().nullable(),
-    // Single-select relations (for-select standard): `null` = unset.
-    registry_id: z.number().nullable(),
     // Nullable/optional (spec 0039 D-3): the server falls back to the system
     // "Nuovo" status when omitted, and the create form preselects it as soon
     // as the for-select resolves.

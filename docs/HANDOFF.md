@@ -2,6 +2,93 @@
 
 > Injected at session start. Update at every green state.
 
+## FE+BE: RIMOZIONE RELAZIONE CLIENTE (registry) DA PROGETTI/CAMPAGNE + PARTNER HINT (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente: eliminare la relazione "Cliente" (= `registry`/`registry_id`) da Progetti e
+Campagne, refactor della sezione, TOGLIENDOLA ANCHE DA DB E TABELLA. Inoltre: riscrivere l'hint del
+campo `partner` (il vecchio testo diceva "distinto dal cliente", ora concetto rimosso).
+NB: il modulo `registries` e la relazione Lead->registry NON sono toccati; solo i link
+project->registry e campaign->registry sono rimossi.
+
+BACKEND (contratto: `registry_id`/`registry` non esistono piu' su Project/Campaign):
+- Model Project/Campaign: rimossi da #[Fillable] e cancellata la relazione `registry()`.
+- NUOVA migrazione `2026_07_17_170000_drop_registry_id_from_projects_and_campaigns_tables.php`
+  (reversibile; su MySQL la FK va droppata PRIMA dell'indice esplicito — err.1553). Le create
+  migration NON toccate (regola §3). `migrate:fresh` + `rollback` verificati verdi.
+- FormRequest (Store/Update Project+Campaign) + DTO (Create/Update Project+Campaign Data): tolto
+  registry_id. Resource (Project/Campaign/ProjectForSelect): tolte chiavi registry_id/registry.
+- Service: tolto 'registry' da DETAIL_RELATIONS e registry_id dal select() di for-select.
+- Tables: tolto da ProjectColumnCatalog/CampaignColumnCatalog, Advanced*FilterCatalog (order
+  rinumerato), Projects/CampaignsTableDefinition (relationMap, mapRow, whereHas set-filter,
+  distinct-values). Authorization: tolto FieldDefinition+FieldPermission registry_id.
+- Seeder Demo Project/Campaign: tolti i load di Registry. Factory non settavano registry_id.
+
+FRONTEND (stesso contratto):
+- projects/campaigns: types, *-schema(.test), use-*-form, *-form-payload(.test), *-form-body(.test),
+  *-detail(.test), column-renderers(.test), for-select-api, campaign-relation-field (tolto
+  registry_id dalla union), campaign-project-field (tolto il prefill setValue registry_id; restano
+  source/partner), campaign-project-link.test (tolta assert prefill registry).
+- i18n en/it projects+campaigns: rimosse chiavi `columns.registry`, `advancedFilters.registry`,
+  `form.registry`, `form.registrySearch`; aggiornate le description che citavano "Cliente".
+- PARTNER hint riscritto (4 file): IT campagne "Compila se la campagna e' richiesta dal partner
+  (i costi sono imputati al partner)."; IT progetti idem con "il progetto"; EN equivalenti.
+
+VERIFICATO (eseguito davvero):
+- BE `pest tests/Feature/Projects tests/Feature/Campaigns + Unit/Models/Project|Campaign` 136/136;
+  `pint --test --dirty` clean; migrate:fresh + rollback verdi.
+- FE `vitest src/features/projects src/features/campaigns` 136/136 sui file del manifest;
+  `tsc --noEmit` pulito; eslint pulito sui 34 file toccati.
+
+NOTE / PRE-ESISTENTI NON MIEI (verificati indipendentemente, NON causati da questo task):
+- FE: `projects-table.test.tsx`, `campaigns-table.test.tsx`, `projects-view.test.tsx` falliscono su
+  `useNavigate()` in `features/modules/use-module-opener.tsx` (lavoro in-flight spec 0042, dir
+  `features/modules/` untracked): i wrapper di test non forniscono Router/AuthProvider. I miei edit
+  a questi test erano solo 2 delete di fixture registry. FIX (fuori scope): aggiungere i provider
+  al render helper di questi test — appartiene al lavoro module-opener.
+- BE: `OpportunitySecurityTest` navigation fallisce per la modifica non committata di
+  `config/navigation.php` (altro lavoro in-flight), non per questo task.
+
+NIENTE COMMIT (in attesa di via libera).
+
+## FE+BE: OPPORTUNITY product_lines OBBLIGATORIE (>=1) (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente: per CREARE un'opportunita' serve per forza almeno una coppia funzione aziendale +
+categoria prodotto, altrimenti non si crea. Decisione utente (AskUserQuestion): invariante SEMPRE
+>=1 (create + update) -> in modifica non si puo' svuotare l'ultima riga. Questo INVERTE due AC gia'
+testati: AC-082 (create coi soli mandatory -> 201 con product_lines vuoto) e AC-099 (update
+`product_lines: []` azzera le righe). Requisito cambiato, dichiarato nei test.
+
+BACKEND:
+- `ValidatesProductLines::productLinesRules(bool $required)`: create `['required','array','min:1']`,
+  update `['sometimes','array','min:1']` (PATCH puo' OMETTERE product_lines -> righe intatte, ma
+  NON puo' passarlo `[]`). Store passa required:true, Update required:false.
+- `OpportunitiesAuthorization`: `product_lines` ora `FieldDefinition(mandatory: true)` +
+  FieldPermission `visibleEditable(required: true)` -> compare col flag required nel meta e diventa
+  NON restringibile via field-permission (coerente cogli altri mandatory: un ruolo non puo'
+  nascondere un campo necessario alla creazione).
+
+FRONTEND:
+- `opportunity-schema.ts` superRefine: `rows.length === 0` -> issue `productLines.required`
+  (rispecchia il backend). Default create resta `product_lines: []` (il form blocca il submit con
+  l'errore + hint + bottone "Aggiungi"); da lead con classificazione resta pre-compilato.
+- i18n it/en: nuova chiave `opportunities.form.productLines.required`.
+
+TEST (aggiornati per requisito cambiato):
+- CRUD `mandatoryOpportunityFks()` e FromLead `nonDerivableOpportunityFks()` ora includono una
+  product line valida (BF + category col match hierarchy). ATTENZIONE ORDINE array_merge: i test
+  che passano un product_lines specifico devono mettere l'helper PRIMA (cosi' il loro valore vince).
+- Nuovi: create senza product_lines -> 422; create `[]` -> 422. Invertiti: update `[]` -> 422 (righe
+  mantenute); from-lead create senza product_lines -> 422; from-lead "editable ma non clearable".
+  Meta: `product_lines.required` true. Schema FE: "rejects an empty collection".
+
+VERIFICATO (eseguito davvero): BE `pest tests/Feature/Opportunities + Unit/OpportunityTest` 121/121;
+`pest tests/Feature/Authorization` 78/78. FE `vitest run src/features/opportunities` 82/82;
+`tsc --noEmit` pulito; eslint pulito sui file toccati; Pint pulito. NIENTE COMMIT (in attesa via libera).
+
+PROSSIMO BUG (richiesto dall'utente, DA FARE DOPO): selezionando un'anagrafica il form
+auto-seleziona commerciale e segnalatore (reporter) — NON deve. Investigare l'autofill lato FE
+(probabile in use-opportunity-* / registry field onChange).
+
 ## FE+BE: BADGE CODICE + STATO COLORATO PROGETTI/CAMPAGNE + COLORI GRUPPO (2026-07-17) — GREEN, NON COMMITTATO
 
 Richiesta utente su tabelle Progetti/Campagne: (1) colonna `code` come badge; (2) stato

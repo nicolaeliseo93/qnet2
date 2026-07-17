@@ -101,6 +101,7 @@ export const opportunities = {
       add: 'Add product line',
       remove: 'Remove product line',
       hint: 'Each row links one business function to one product category: pick the function first, then the category (scoped accordingly). Remove a row with the trash icon.',
+      required: 'Add at least one business function with its product category.',
       rowIncomplete: 'Each row requires both a business function and a product category.',
     },
     supervisor: 'Supervisor',

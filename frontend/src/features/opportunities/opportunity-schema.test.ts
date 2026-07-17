@@ -20,7 +20,9 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     reporter_id: null,
     supervisor_id: null,
     source_id: null,
-    product_lines: [],
+    // product_lines is mandatory (>=1 row, user directive 2026-07-17): the base
+    // happy-path carries one valid row; the empty-collection case overrides it.
+    product_lines: [{ business_function_id: 1, product_category_id: 11 }],
     manager_slots: [],
     start_date: null,
     expected_close_date: null,
@@ -106,10 +108,13 @@ describe('buildCreateOpportunitySchema', () => {
    * non-null per row before submit.
    */
   describe('product_lines (amendment rev.3)', () => {
-    it('accepts an empty collection', () => {
+    it('rejects an empty collection (user directive 2026-07-17: at least one row required)', () => {
       const schema = buildCreateOpportunitySchema(i18n.t)
       const result = schema.safeParse(baseValues({ product_lines: [] }))
-      expect(result.success).toBe(true)
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues.some((issue) => issue.path.join('.') === 'product_lines')).toBe(true)
+      }
     })
 
     it('accepts one or more complete rows', () => {

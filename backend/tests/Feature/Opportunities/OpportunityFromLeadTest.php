@@ -23,15 +23,24 @@ if (! function_exists('nonDerivableOpportunityFks')) {
     /**
      * `company_id`/`company_site_id` are mandatory but NEVER BR-1-derivable
      * (amendment rev.1 A-2: no lead/campaign chain to either) — every
-     * from-lead POST in this file still needs them explicitly.
+     * from-lead POST in this file still needs them explicitly. Since the
+     * user directive 2026-07-17 makes `product_lines` mandatory to create,
+     * a valid one-row collection ships here too (tests that assert a specific
+     * product_lines payload merge the helper FIRST so their own value wins).
      *
-     * @return array{company_id: int, company_site_id: int}
+     * @return array{company_id: int, company_site_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
      */
     function nonDerivableOpportunityFks(): array
     {
+        $businessFunction = BusinessFunction::factory()->create();
+        $category = ProductCategory::factory()->create(['business_function_id' => $businessFunction->id]);
+
         return [
             'company_id' => Company::factory()->create()->id,
             'company_site_id' => CompanySite::factory()->create()->id,
+            'product_lines' => [
+                ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
+            ],
         ];
     }
 }

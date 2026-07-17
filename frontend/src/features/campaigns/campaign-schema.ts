@@ -48,7 +48,6 @@ function baseFields(t: TFunction) {
       .max(NAME_MAX_LENGTH, t('campaigns.form.nameMax')),
     description: z.string().nullable(),
     // Always the campaign's own, editable relation (AC-042 prefills but never locks these).
-    registry_id: z.number().nullable(),
     source_id: z.number().nullable(),
     partner_id: z.number().nullable(),
     // Derived (BR-2): required when standalone, forced null/read-only when linked;

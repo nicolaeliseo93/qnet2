@@ -1,4 +1,4 @@
-import { Boxes, Briefcase, Building2, Handshake, Radio } from 'lucide-react'
+import { Boxes, Briefcase, Handshake, Radio } from 'lucide-react'
 import { DateTimeCell } from '@/features/table/cell-renderers'
 import {
   CodeBadgeCell,
@@ -23,7 +23,6 @@ import type { TableRendererMap } from '@/features/table/renderer-registry'
  */
 export const projectColumnRenderers: TableRendererMap = {
   code: (params) => <CodeBadgeCell {...params} />,
-  registry: (params) => <RelationCell {...params} icon={Building2} />,
   pipeline_status: (params) => <StatusBadgeCell {...params} />,
   source: (params) => <RelationCell {...params} icon={Radio} />,
   business_function: (params) => <RelationCell {...params} icon={Briefcase} />,

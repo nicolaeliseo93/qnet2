@@ -34,7 +34,8 @@ use Illuminate\Validation\Rule;
  *
  * Amendment rev.3: `business_function_id`/`product_category_id` are REPLACED
  * by `product_lines` (ValidatesProductLines) — no longer BR-1-derivable/
- * lockable scalars.
+ * lockable scalars. User directive 2026-07-17: `product_lines` is REQUIRED
+ * (at least one {business_function_id, product_category_id} row) to create.
  */
 class StoreOpportunityRequest extends FormRequest
 {
@@ -75,7 +76,7 @@ class StoreOpportunityRequest extends FormRequest
             'estimated_value' => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
             'expected_close_date' => ['nullable', 'date'],
             'success_probability' => ['nullable', 'integer', 'between:0,100'],
-        ], $this->managerSlotsRules(), $this->productLinesRules());
+        ], $this->managerSlotsRules(), $this->productLinesRules(required: true));
     }
 
     /**

@@ -18,7 +18,9 @@ use Illuminate\Database\Eloquent\Model;
  * `lead_id` is NOT permissionable (structural, immutable server-side
  * derivation — BR-1/BR-2) and carries no FieldDefinition here. Amendment
  * rev.3: the former `business_function_id`/`product_category_id` scalars are
- * REPLACED by a single `product_lines` field (a to-many collection).
+ * REPLACED by a single `product_lines` field (a to-many collection) — which,
+ * per user directive 2026-07-17, is itself mandatory (at least one row to
+ * create; never clearable to empty), so it joins the non-restrictable set.
  */
 class OpportunitiesAuthorization extends AbstractResourceAuthorization
 {
@@ -48,7 +50,7 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('reporter_id', 'select'),
             new FieldDefinition('supervisor_id', 'select'),
             new FieldDefinition('source_id', 'select'),
-            new FieldDefinition('product_lines', 'multiselect'),
+            new FieldDefinition('product_lines', 'multiselect', mandatory: true),
             new FieldDefinition('manager_slots', 'multiselect'),
             new FieldDefinition('start_date', 'date'),
             new FieldDefinition('estimated_value', 'number'),
@@ -83,7 +85,7 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
             'reporter_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'supervisor_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'product_lines' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'product_lines' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'manager_slots' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'start_date' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'estimated_value' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),

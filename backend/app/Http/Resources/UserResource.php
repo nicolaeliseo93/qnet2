@@ -12,6 +12,16 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class UserResource extends JsonResource
 {
     /**
+     * Default preference when the column is null (spec 0042): every module
+     * opens exactly as it does today (custom mode with no override falls back
+     * to each module's native defaultMode, resolved client-side). Never null
+     * in the response.
+     *
+     * @var array{mode: string, overrides: array<string, string>}
+     */
+    private const array DEFAULT_MODULE_OPEN_PREFERENCES = ['mode' => 'custom', 'overrides' => []];
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -48,6 +58,9 @@ class UserResource extends JsonResource
                 fn () => new EmploymentResource($this->employment),
             ),
             'created_at' => $this->created_at,
+            // Spec 0042: mode/overrides for the per-user module open preference,
+            // defaulted here (never null) when the column is unset.
+            'module_open_preferences' => $this->module_open_preferences ?? self::DEFAULT_MODULE_OPEN_PREFERENCES,
         ];
     }
 }

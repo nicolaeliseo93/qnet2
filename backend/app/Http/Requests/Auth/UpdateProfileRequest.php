@@ -42,15 +42,70 @@ class UpdateProfileRequest extends FormRequest
     {
         return array_merge([
             'locale' => ['sometimes', 'required', Rule::in(LocaleEnum::values())],
+
+            // Spec 0042 — per-user module open mode preference. `mode` is
+            // required only when the object itself is submitted; override
+            // keys are checked against the table registry in withValidator().
+            'module_open_preferences' => ['sometimes', 'nullable', 'array'],
+            'module_open_preferences.mode' => [
+                Rule::requiredIf($this->has('module_open_preferences')),
+                Rule::in(['modal', 'page', 'custom']),
+            ],
+            'module_open_preferences.overrides' => ['sometimes', 'nullable', 'array'],
+            'module_open_preferences.overrides.*' => [Rule::in(['modal', 'page'])],
         ], $this->profileRules());
     }
 
     /**
-     * Apply the per-type contact `value` rules for the nested profile (ADR 0012).
+     * Apply the per-type contact `value` rules for the nested profile (ADR
+     * 0012), then the module-open-preferences override key allow-list.
      */
     public function withValidator(Validator $validator): void
     {
         $validator->after(fn (Validator $validator) => $this->validateProfile($validator));
+        $validator->after(fn (Validator $validator) => $this->validateModuleOpenPreferences($validator));
+    }
+
+    /**
+     * Every `module_open_preferences.overrides` key must be a domain the
+     * generic table registry actually knows (config/tables.php), excluding the
+     * non-CRUD ones that are never commutable (spec 0042, scope §out). Read
+     * from the registry itself so a newly registered module is switchable
+     * without touching this request.
+     */
+    protected function validateModuleOpenPreferences(Validator $validator): void
+    {
+        $overrides = (array) $this->input('module_open_preferences.overrides', []);
+
+        if ($overrides === []) {
+            return;
+        }
+
+        $validDomains = $this->switchableModuleDomains();
+
+        foreach (array_keys($overrides) as $domain) {
+            if (! in_array($domain, $validDomains, true)) {
+                $validator->errors()->add(
+                    "module_open_preferences.overrides.{$domain}",
+                    "The selected module [{$domain}] is invalid.",
+                );
+            }
+        }
+    }
+
+    /**
+     * The module domains a user may target with an override: every domain
+     * registered in config/tables.php except the non-CRUD ones (import-runs'
+     * wizard, and any future migrations preview).
+     *
+     * @return array<int, string>
+     */
+    protected function switchableModuleDomains(): array
+    {
+        /** @var array<string, class-string> $definitions */
+        $definitions = config('tables.definitions', []);
+
+        return array_values(array_diff(array_keys($definitions), ['import-runs', 'migrations']));
     }
 
     /**
@@ -71,5 +126,29 @@ class UpdateProfileRequest extends FormRequest
             ],
             static fn ($value): bool => $value !== null,
         );
+    }
+
+    /**
+     * The submitted `module_open_preferences`, or null when the client did not
+     * send the key (leave the stored preference untouched). Kept OUT of
+     * accountAttributes() on purpose: the column is guarded (not in
+     * User::$fillable — spec 0042, AC-008), so the service assigns this value
+     * via forceFill() rather than through mass assignment.
+     *
+     * @return array{mode: string, overrides: array<string, string>}|null
+     */
+    public function moduleOpenPreferences(): ?array
+    {
+        if (! $this->has('module_open_preferences')) {
+            return null;
+        }
+
+        /** @var array{mode: string, overrides?: array<string, string>} $validated */
+        $validated = $this->validated()['module_open_preferences'];
+
+        return [
+            'mode' => $validated['mode'],
+            'overrides' => $validated['overrides'] ?? [],
+        ];
     }
 }

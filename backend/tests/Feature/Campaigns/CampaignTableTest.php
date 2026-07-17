@@ -53,7 +53,7 @@ it('GET /api/tables/campaigns/columns: 200 with the declared columns, 403 withou
 
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
-        'code', 'project', 'name', 'registry', 'pipeline_status', 'source',
+        'code', 'project', 'name', 'pipeline_status', 'source',
         'country', 'state', 'province', 'city', 'geo_scope',
         'start_date', 'end_date', 'total_budget', 'target_lead', 'created_at',
     ]);

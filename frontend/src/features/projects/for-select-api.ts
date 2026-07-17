@@ -42,7 +42,6 @@ export interface ProjectForSelectGeo {
  * the project's own geo cascade, used to lock/prefill the campaign form.
  */
 export interface ProjectForSelectMeta {
-  registry: ProjectForSelectRelation | null
   source: ProjectForSelectRelation | null
   partner: ProjectForSelectRelation | null
   pipeline_status: ProjectForSelectRelation

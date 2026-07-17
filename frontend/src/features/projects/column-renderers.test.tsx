@@ -17,18 +17,6 @@ beforeAll(async () => {
   await i18n.changeLanguage('en')
 })
 
-describe('projectColumnRenderers.registry (relation cell)', () => {
-  it('renders the relation name', () => {
-    renderCell('registry', { id: 1, name: 'Acme Corp' })
-    expect(screen.getByText('Acme Corp')).toBeInTheDocument()
-  })
-
-  it('renders an em dash when unset', () => {
-    renderCell('registry', null)
-    expect(screen.getByText('—')).toBeInTheDocument()
-  })
-})
-
 describe('projectColumnRenderers.code', () => {
   it('renders the code inside a badge', () => {
     renderCell('code', 'PRJ-001')

@@ -11,7 +11,6 @@ export const campaigns = {
     code: 'Code',
     project: 'Project',
     name: 'Name',
-    registry: 'Client',
     pipeline_status: 'Status',
     source: 'Source',
     country: 'Country',
@@ -28,7 +27,6 @@ export const campaigns = {
   advancedFilters: {
     project: 'Project',
     pipelineStatus: 'Status',
-    registry: 'Client',
     source: 'Source',
     partner: 'Partner',
     budgetRange: 'Budget',
@@ -55,7 +53,7 @@ export const campaigns = {
       },
       project: {
         title: 'Project link',
-        description: 'Linking a project prefills Client, Source and Partner below.',
+        description: 'Linking a project prefills Source and Partner below.',
       },
       classification: {
         title: 'Classification',
@@ -77,7 +75,7 @@ export const campaigns = {
       code: 'Prefilled with the next sequential code; edit it if you need a custom one.',
       project: 'Linking a project prefills and locks Classification and Geography below.',
       classification: 'Inherited from the linked project.',
-      partner: 'The partner is the referent promoting the campaign, distinct from the Client being targeted.',
+      partner: 'Fill in if the campaign is requested by the partner (costs are charged to the partner).',
       geography: 'Country, region, province and city cascade top-down; levels filled by a linked project are inherited and locked.',
     },
     code: 'Code',
@@ -92,8 +90,6 @@ export const campaigns = {
     projectSearch: 'Search projects…',
     status: 'Status',
     statusSearch: 'Search statuses…',
-    registry: 'Client',
-    registrySearch: 'Search clients…',
     source: 'Source',
     sourceSearch: 'Search sources…',
     businessFunction: 'Business function',

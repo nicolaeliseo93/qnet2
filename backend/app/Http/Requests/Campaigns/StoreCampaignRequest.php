@@ -73,7 +73,6 @@ class StoreCampaignRequest extends FormRequest
             'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')],
             'name' => ['required', 'string', 'max:191'],
             'description' => ['nullable', 'string'],
-            'registry_id' => ['nullable', 'integer', Rule::exists('registries', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
             'partner_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'pipeline_status_id' => $linked

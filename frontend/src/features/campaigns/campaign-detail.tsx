@@ -84,9 +84,6 @@ export function CampaignDetailView({ campaign }: CampaignDetailViewProps) {
           <DetailField label={t('campaigns.form.project')}>
             {campaign.project ? `${campaign.project.code} — ${campaign.project.name}` : <DetailEmpty />}
           </DetailField>
-          <DetailField label={t('campaigns.form.registry')}>
-            {campaign.registry?.name ?? <DetailEmpty />}
-          </DetailField>
           <DetailField label={t('campaigns.form.source')}>
             {campaign.source?.name ?? <DetailEmpty />}
           </DetailField>

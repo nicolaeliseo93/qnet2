@@ -53,7 +53,7 @@ it('GET /api/tables/projects/columns: 200 with the declared columns, 403 without
 
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
-        'code', 'name', 'registry', 'pipeline_status', 'source', 'business_function',
+        'code', 'name', 'pipeline_status', 'source', 'business_function',
         'country', 'state', 'province', 'city', 'geo_scope', 'product_category', 'partner',
         'start_date', 'end_date', 'total_budget', 'target_lead', 'created_at',
     ]);
@@ -61,7 +61,6 @@ it('GET /api/tables/projects/columns: 200 with the declared columns, 403 without
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['pipeline_status']['sortable'])->toBeTrue()
         ->and($columns['pipeline_status']['filterType'])->toBe('set')
-        ->and($columns['registry']['sortable'])->toBeTrue()
         ->and($columns['source']['sortable'])->toBeFalse()
         ->and($columns['source']['filterType'])->toBe('set');
 });

@@ -12,7 +12,6 @@ import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-status
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
-import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
 import { useProjectForm } from '@/features/projects/use-project-form'
 import { ProjectGeographySection } from '@/features/projects/project-geography-section'
@@ -142,17 +141,6 @@ export function ProjectFormBody({ mode, onSuccess, onCancel, initialCode }: Proj
                 resource={PROJECT_STATUSES_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('projects.form.statusSearch')}
                 selected={original ? { id: original.pipeline_status.id, name: original.pipeline_status.name } : null}
-                {...relationLabels}
-              />
-
-              <RelationSelectField
-                control={form.control}
-                name="registry_id"
-                metaKey="registry_id"
-                label={t('projects.form.registry')}
-                resource={REGISTRIES_FOR_SELECT_RESOURCE}
-                searchPlaceholder={t('projects.form.registrySearch')}
-                selected={original?.registry ?? null}
                 {...relationLabels}
               />
 
