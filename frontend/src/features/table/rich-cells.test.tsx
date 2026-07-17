@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import i18n from '@/i18n'
 import {
   BooleanBadgeCell,
+  CodeBadgeCell,
   ColorSwatchCell,
   CurrencyCell,
   DateCell,
@@ -50,6 +51,18 @@ describe('RelationCell', () => {
 
   it('renders an em dash when the relation is null', () => {
     const { getByText } = render(<RelationCell {...params(null)} />)
+    expect(getByText('—')).toBeInTheDocument()
+  })
+})
+
+describe('CodeBadgeCell', () => {
+  it('renders the code inside a badge', () => {
+    const { getByText } = render(<CodeBadgeCell {...params('PRJ-001')} />)
+    expect(getByText('PRJ-001')).toBeInTheDocument()
+  })
+
+  it('renders an em dash when the code is empty', () => {
+    const { getByText } = render(<CodeBadgeCell {...params('')} />)
     expect(getByText('—')).toBeInTheDocument()
   })
 })
@@ -151,6 +164,17 @@ describe('GroupCell', () => {
       <GroupCell {...params('open')} labelPrefix="pipelineStatuses.form.group" />,
     )
     expect(getByText(i18n.t('pipelineStatuses.form.group.open'))).toBeInTheDocument()
+  })
+
+  it.each([
+    ['open', 'bg-green-500'],
+    ['pending', 'bg-orange-500'],
+    ['closed', 'bg-red-500'],
+  ])('renders the %s group with a %s swatch dot', (group, swatchClass) => {
+    const { container } = render(
+      <GroupCell {...params(group)} labelPrefix="pipelineStatuses.form.group" />,
+    )
+    expect(container.querySelector(`.${swatchClass}`)).not.toBeNull()
   })
 
   it('renders an em dash when the group is null', () => {

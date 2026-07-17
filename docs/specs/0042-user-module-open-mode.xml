@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0042 — Impostazione per-utente della MODALITA' DI APERTURA DEI MODULI.
+
+  Decisioni utente approvate (AskUserQuestion, 2026-07-17):
+  - SCOPE: "tutti i moduli, davvero" -> costruire l'infrastruttura mancante ovunque
+    (le 20 pagine dedicate assenti + i 3 montaggi modale assenti). Scope ampio: eseguito
+    A ONDATE (Wave 0 foundation+4 moduli di riferimento, poi rollout a batch disgiunti).
+  - UI: dentro la pagina profilo/account ESISTENTE (features/auth), non una pagina nuova.
+  - PERSISTENZA: singolo JSON su `users` esposto/salvato via /auth/me (no righe per-dominio).
+
+  Grounding VERIFICATO sul codice reale (nomi non ipotizzati):
+  - /auth/me -> AuthController@me ritorna UserResource; PATCH /auth/me -> updateProfile,
+    body validato da UpdateProfileRequest (oggi: solo `locale` + personal_data;
+    accountAttributes() e' il punto di mass-assign delle chiavi account).
+  - Model User: #[Fillable(['name','email','password','locale','is_active'])],
+    casts() a User.php; NESSUNA colonna JSON settings/preferences esiste oggi.
+  - UserResource espone id,name,email,locale,is_active,roles,avatar_url,personal_data?,
+    employment?,created_at; nessun blocco preferenze.
+  - Envelope: BaseApiController::ok() -> {success,message,data}; okWithPermissions aggiunge `permissions`.
+  - Registro moduli centrale: config/tables.php -> 24 slug kebab-case (domain), risolto da
+    TableRegistry::resolve(). Gli slug sono la stessa chiave usata in user_table_preferences.domain.
+  - FE: utente corrente in queryKey ['auth','me'] (authKeys.me), letto da AuthProvider/useAuth;
+    updateProfile -> PATCH /auth/me (features/auth/api.ts), UI in features/auth/profile-form.tsx.
+  - FE: la scelta modale-vs-pagina e' OGGI hard-coded in ogni features/**/{*-table.tsx}, in DUE
+    punti: i case 'view'/'edit' di handleAction (setSheet vs navigate) e l'onClick del bottone
+    "Nuovo" nel PageHeader. row-actions.tsx e page-header.tsx sono gia' condivisi e agnostici.
+  - Pattern modale canonico: features/users/users-table.tsx (SheetState kind
+    none|create|view|edit, SheetContent storageKey `sheet-width:${DOMAIN}`, ViewXLoader/EditXLoader
+    che rifetchano il detail). Pattern pagina canonico: features/registries/registries-table.tsx
+    (navigate('/registries/:id' | ':id/edit' | 'new')) + pages/registry-*.tsx + rotte in router.tsx.
+  - Stato infrastruttura per modulo (verificato):
+      * ENTRAMBE gia' presenti (commutazione a costo zero): projects, campaigns, leads, opportunities.
+      * Solo-modale (manca pagina+rotte): users, roles, companies, company-sites, operational-sites,
+        business-functions, referent-types, sectors, sources, tags, vat-rates, attributes,
+        custom-fields, product-categories, pipeline-statuses, lead-statuses.
+      * Solo-pagina (manca montaggio modale): registries, referents, products.
+  - Ogni modulo POSSIEDE GIA' i propri componenti presentational X-detail / X-form (montati
+    oggi nello Sheet o nelle pagine): sono la materia prima riusabile da entrambi i lati.
+-->
+<spec id="0042-user-module-open-mode" status="draft" owner="nicola" date="2026-07-17">
+
+  <goal>
+    Ogni utente puo' scegliere come si aprono le schermate di creazione/modifica/visualizzazione
+    dei moduli: "solo modale", "solo pagina singola", oppure "personalizzata" (modalita' decisa
+    modulo per modulo). La preferenza e' salvata per-utente e applicata automaticamente in tutto
+    il gestionale, senza cambiare logica, permessi, validazioni o flussi dei moduli: cambia solo
+    il PUNTO DI MOUNT (Sheet vs pagina dedicata) delle stesse schermate gia' esistenti.
+  </goal>
+
+  <context>
+    La scelta modale-vs-pagina e' oggi duplicata e hard-coded in ogni `*-table.tsx`. La feature la
+    sposta in un'unica astrazione condivisa guidata dalla preferenza utente. Il meccanismo NON e'
+    un nuovo flusso: riusa i componenti presentational X-detail/X-form gia' esistenti in ogni
+    modulo, cambiando soltanto se vengono montati in `<Sheet>` o in una pagina dedicata.
+
+    Persistenza (decisione utente): un unico JSON `module_open_preferences` sul model `User`,
+    esposto in `UserResource` e salvato via `PATCH /auth/me`. Viene caricato UNA SOLA VOLTA
+    all'avvio (e' gia' dentro la query ['auth','me']) -> applicazione app-wide senza fetch extra.
+
+    Registro moduli (frontend): unica fonte di verita' `frontend/src/features/modules/module-registry.ts`.
+    Ogni voce dichiara, per un `domain` (lo stesso slug kebab-case di config/tables.php): i componenti
+    schermata (detail + form come adapter uniformi), il `basePath` di rotta, il `defaultMode` (la
+    modalita' nativa odierna del modulo, per parita' col comportamento attuale) e la label i18n.
+
+    Risoluzione della modalita' effettiva per un modulo (funzione pura, single source of truth):
+      mode='modal'  -> 'modal'
+      mode='page'   -> 'page'
+      mode='custom' -> overrides[domain] ?? registry.defaultMode(domain)
+    Preferenza assente/null == { mode:'custom', overrides:{} } -> ogni modulo apre ESATTAMENTE
+    come oggi (defaultMode = modalita' nativa). Cosi' gli utenti che non toccano l'impostazione
+    non vedono alcun cambiamento.
+  </context>
+
+  <scope>
+    <in>
+      <item>BE: colonna `json module_open_preferences` su `users`, cast array, esposizione in UserResource, validazione e mass-assign in UpdateProfileRequest, salvataggio via l'esistente PATCH /auth/me.</item>
+      <item>FE-core: tipo `ModuleOpenPreferences`, funzione pura `resolveOpenMode(prefs, domain, defaultMode)`, hook `useModuleOpenMode(domain)` che legge ['auth','me'] + registry, hook `useModuleOpener(domain)` che espone openView/openEdit/openCreate + l'elemento Sheet, e instrada a Sheet o navigate secondo la modalita' risolta.</item>
+      <item>FE-core: `module-registry.ts` (registro di TUTTI i moduli CRUD) + generazione centralizzata delle rotte deep-link (`:id`, `:id/edit`, `new`) da un unico host `ModuleDetailPage`/`ModuleFormPage`, mantenendo funzionanti i deep-link.</item>
+      <item>FE-settings: sezione nella pagina profilo esistente con selettore a 3 stati (modale/pagina/personalizzata) e, in personalizzata, elenco di tutti i moduli con toggle modale/pagina per ciascuno; salvataggio via updateProfile.</item>
+      <item>Rollout su TUTTI i moduli CRUD: rewire di ogni `*-table.tsx` su `useModuleOpener(domain)`; per i moduli solo-modale creare l'infrastruttura pagina mancante (via host generico + registry); per i solo-pagina abilitare il montaggio modale.</item>
+      <item>Test: Pest (BE) su validazione/persistenza/esposizione; Vitest (FE) su resolveOpenMode, useModuleOpener (instradamento), UI impostazione, e su ogni tabella rewired (apre nel modo risolto).</item>
+    </in>
+    <out>
+      <item>Nessuna modifica a logica di business, query, permessi (Policy/authz server-side), validazioni di dominio, payload o comportamento delle schermate: cambia SOLO il punto di mount.</item>
+      <item>Moduli NON-CRUD o speciali: `import-runs` (wizard import storico con rotta `:runId`/`new?runId`) e la preview `migrations` restano nel loro flusso nativo e NON sono commutabili (non compaiono nell'elenco personalizzato). Documentato, non un gap silenzioso.</item>
+      <item>Nessuna persistenza server-side della larghezza Sheet (gia' spec 0022B), nessun cambio all'envelope, nessun nuovo endpoint dedicato (si riusa /auth/me).</item>
+      <item>Nessuna nuova dipendenza npm/composer.</item>
+      <item>Nessun controllo di permesso sulla preferenza stessa (e' self-scoped: ognuno modifica solo la propria via /auth/me). La preferenza NON amplia mai cosa un utente puo' vedere/fare: i gate `<Can>` e l'authz server-side restano identici in entrambe le modalita'.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Tipo condiviso (identico BE JSON <-> FE type). Chiavi in inglese. -->
+    <!--
+      ModuleOpenPreferences = {
+        mode: 'modal' | 'page' | 'custom',
+        overrides: { [domain: string]: 'modal' | 'page' }   // domain = slug di config/tables.php
+      }
+      Default quando la colonna e' null: { mode: 'custom', overrides: {} }.
+    -->
+    <endpoint method="GET" path="/api/auth/me">
+      <request><!-- nessun parametro; auth:sanctum --></request>
+      <response status="200">
+        <!-- BaseApiController::ok(): { success:true, message:"OK", data: UserResource } -->
+        <!-- UserResource.data ora include: -->
+        <!--   module_open_preferences: { mode:'modal'|'page'|'custom', overrides:{[domain]:'modal'|'page'} } -->
+        <!-- Mai null nella response: se la colonna e' null, si serializza il default {mode:'custom',overrides:{}}. -->
+      </response>
+      <errors><!-- 401 se non autenticato (invariato) --></errors>
+    </endpoint>
+
+    <endpoint method="PATCH" path="/api/auth/me">
+      <request>
+        <!-- Estende il body attuale (locale, personal_data...) con un campo OPZIONALE: -->
+        <!-- module_open_preferences?: {
+               mode: 'modal'|'page'|'custom',                     // required se l'oggetto e' presente
+               overrides?: { [domain in slug validi]: 'modal'|'page' }
+             } -->
+        <!-- Regole: mode in [modal,page,custom]; ogni chiave di overrides DEVE essere uno slug
+             noto a TableRegistry (altrimenti 422); ogni valore in [modal,page]. Gli slug non-CRUD
+             (import-runs, migrations) NON sono ammessi come chiave (422). -->
+      </request>
+      <response status="200">
+        <!-- { success:true, message:..., data: UserResource } con module_open_preferences aggiornato -->
+      </response>
+      <errors>
+        <!-- 422: mode non valido, valore override non in [modal,page], o chiave override slug ignoto -->
+        <!-- 401: non autenticato -->
+      </errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- ===== BACKEND ===== -->
+    <criterion id="AC-001">Migration: `users` acquisisce `module_open_preferences` json nullable; `down()` la rimuove. Migrate + rollback puliti.</criterion>
+    <criterion id="AC-002">GET /api/auth/me di un utente senza preferenza -> `data.module_open_preferences` == `{mode:'custom',overrides:{}}` (mai null).</criterion>
+    <criterion id="AC-003">PATCH /api/auth/me con `{mode:'modal'}` -> 201/200, persiste; una GET successiva ritorna `{mode:'modal',overrides:{}}`.</criterion>
+    <criterion id="AC-004">PATCH /api/auth/me con `{mode:'custom',overrides:{projects:'page',campaigns:'modal'}}` -> persiste esattamente quegli override; GET li rispecchia.</criterion>
+    <criterion id="AC-005">PATCH con `mode` non in [modal,page,custom] -> 422 sul campo `module_open_preferences.mode`.</criterion>
+    <criterion id="AC-006">PATCH con override valore diverso da modal/page (es. 'sheet') -> 422.</criterion>
+    <criterion id="AC-007">PATCH con chiave override = slug ignoto (es. 'foo') o slug non-CRUD ('import-runs') -> 422.</criterion>
+    <criterion id="AC-008">La preferenza e' self-scoped: PATCH /auth/me modifica SOLO l'utente autenticato; nessun campo consente di toccare altri utenti. `module_open_preferences` non e' mass-assignable fuori da /auth/me.</criterion>
+    <criterion id="AC-009">Nessuna regressione: gli altri campi di /auth/me (locale, personal_data, avatar) continuano a funzionare; test esistenti di updateProfile restano verdi.</criterion>
+
+    <!-- ===== FE-CORE (funzione pura + hook) ===== -->
+    <criterion id="AC-010">`resolveOpenMode(prefs, domain, defaultMode)`: mode 'modal'->'modal'; 'page'->'page'; 'custom' con override presente -> l'override; 'custom' senza override -> defaultMode; prefs null/undefined -> defaultMode. Coperto da unit test su tutti i rami.</criterion>
+    <criterion id="AC-011">`useModuleOpener(domain)` in modalita' risolta 'modal' apre lo Sheet (create/view/edit) montando i componenti del registry e NON naviga; in modalita' 'page' naviga ai path deep-link (`{basePath}/new`, `{basePath}/:id`, `{basePath}/:id/edit`) e NON monta lo Sheet. Verificato con test su entrambe le modalita'.</criterion>
+    <criterion id="AC-012">Le rotte deep-link di TUTTI i moduli del registry (`:id`, `:id/edit`, `new`) restano raggiungibili via URL diretto a prescindere dalla preferenza (parita' con spec 0025 AC-025): la modalita' 'modal' non le disabilita.</criterion>
+
+    <!-- ===== FE-SETTINGS (UI profilo) ===== -->
+    <criterion id="AC-013">Nella pagina profilo compare la sezione "Modalita' apertura moduli" con selettore a 3 stati (modale / pagina singola / personalizzata); riflette il valore corrente da ['auth','me'].</criterion>
+    <criterion id="AC-014">Selezionando "personalizzata" appare l'elenco di TUTTI i moduli CRUD del registry, ciascuno con un toggle modale/pagina inizializzato alla modalita' effettiva (override o defaultMode); import-runs/migrations NON compaiono.</criterion>
+    <criterion id="AC-015">Salvando, viene chiamato updateProfile con il `module_open_preferences` costruito; al successo la query ['auth','me'] e' aggiornata (setQueryData) e l'app applica la nuova modalita' senza reload.</criterion>
+    <criterion id="AC-016">Passare da 'personalizzata' a 'solo modale'/'solo pagina' invia `mode` globale; gli override precedenti restano memorizzati nel JSON ma sono ignorati dalla risoluzione finche' non si torna in 'custom' (nessuna perdita silenziosa dei toggle).</criterion>
+    <criterion id="AC-017">A11y: il selettore a 3 stati e i toggle sono raggiungibili da tastiera, con label/aria corretti; compatti secondo ui-design.md (text-xs, target tap adeguati).</criterion>
+
+    <!-- ===== ROLLOUT PER-MODULO (vale per OGNI modulo CRUD del registry) ===== -->
+    <criterion id="AC-018">Per un modulo con modalita' risolta 'modal': row-action view -> Sheet in lettura col suo detail; edit -> Sheet col suo form in modifica; bottone "Nuovo" -> Sheet in creazione. Nessuna navigazione. (parita' col pattern users odierno)</criterion>
+    <criterion id="AC-019">Per lo stesso modulo con modalita' 'page': view -> `{basePath}/:id`; edit -> `{basePath}/:id/edit`; "Nuovo" -> `{basePath}/new`. Nessuno Sheet. Le pagine montano gli STESSI componenti detail/form.</criterion>
+    <criterion id="AC-020">In entrambe le modalita': la delete resta inline (conferma + toast + refresh griglia) invariata; permessi (`<Can>` + authz server-side), validazioni, payload e comportamento delle schermate sono identici. Nessun cambio di rete oltre al punto di mount.</criterion>
+    <criterion id="AC-021">Cambiando la preferenza (es. da modale a pagina) e tornando alla griglia, il modulo si apre nella nuova modalita' senza reload dell'app.</criterion>
+    <criterion id="AC-022">Zero dead code al termine del rewire: gli SheetState/Loader/navigate hard-coded rimossi dai `*-table.tsx` a favore di `useModuleOpener`; nessun import orfano; router.tsx non contiene piu' le rotte deep-link duplicate a mano (ora generate dal registry).</criterion>
+    <criterion id="AC-023">Copertura del rollout dichiarata e completa: al termine ogni modulo CRUD elencato nel context (20 solo-modale + 3 solo-pagina + 4 gia'-pronti) e' nel registry e commuta in entrambe le modalita'; eventuali moduli esclusi sono SOLO import-runs/migrations, esplicitamente (nessuna troncatura silenziosa).</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie gia' presenti (composer.json / package.json). Nessuna nuova dipendenza.</item>
+    <item>Envelope invariato: BaseApiController::ok() {success,message,data}. Nessun nuovo endpoint: si riusa GET/PATCH /auth/me.</item>
+    <item>La preferenza NON e' un confine di sicurezza: non altera authz. Ogni endpoint resta protetto server-side come oggi; l'UI in entrambe le modalita' e' gated dagli stessi `<Can>`.</item>
+    <item>`module_open_preferences` mass-assignable SOLO attraverso il flusso /auth/me (self), mai da altri endpoint. Validazione via FormRequest (mode enum + override enum + chiave = slug noto e CRUD), mai `$request->only()` grezzo.</item>
+    <item>Il registry FE e' l'unica fonte di verita' dei moduli commutabili: rotte deep-link generate da li', niente duplicazione manuale in router.tsx. Ownership disgiunta: i moduli editano la propria voce/adapter, il router-wiring e' del task foundation.</item>
+    <item>defaultMode di ogni voce = modalita' nativa ODIERNA del modulo -> preferenza vuota == comportamento attuale bit-per-bit.</item>
+    <item>File entro 300/500 righe; naming inglese per gli identificatori; nessun magic value (mode/modalita' come costanti/tipi).</item>
+    <item>Definition of Done: Pest + Vitest verdi ED ESEGUITI, tsc --noEmit pulito, ESLint/Pint puliti, zero dead code, UI verificata a 375/768/1024px.</item>
+  </constraints>
+
+  <rollout>
+    <!-- Esecuzione a ONDATE. Wave 0 e' gated (tutto dipende dal contratto+meccanismo);
+         i batch di rollout sono lane parallele a write-surface DISGIUNTA (un modulo per lane). -->
+    <wave id="0" title="Foundation + 4 moduli di riferimento (end-to-end verde)">
+      BE (migration+User+UserResource+UpdateProfileRequest+Pest) ||
+      FE-core (types, resolveOpenMode, useModuleOpenMode, useModuleOpener, module-registry,
+      ModuleDetailPage/ModuleFormPage + generazione rotte, edit router.tsx) ->
+      FE-settings (sezione profilo) + rewire projects/campaigns/leads/opportunities (gia' hanno entrambe le infra).
+      Copre AC-001..AC-018 sui 4 moduli.
+    </wave>
+    <wave id="1" title="Solo-pagina -> abilita modale">registries, referents, products (adapter modale + registry + rewire table).</wave>
+    <wave id="2" title="Solo-modale batch A">users, roles, companies, company-sites, operational-sites, business-functions (adapter pagina via host generico + registry + rewire table).</wave>
+    <wave id="3" title="Solo-modale batch B">referent-types, sectors, sources, tags, vat-rates.</wave>
+    <wave id="4" title="Solo-modale batch C">attributes, custom-fields, product-categories, pipeline-statuses, lead-statuses.</wave>
+    <!-- Ogni wave chiude verde (Vitest sui moduli toccati) e aggiorna docs/HANDOFF.md; commit solo su via libera utente (CLAUDE.md §3.6). -->
+  </rollout>
+
+</spec>

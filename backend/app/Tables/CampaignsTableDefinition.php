@@ -4,6 +4,7 @@ namespace App\Tables;
 
 use App\Enums\GeoScopeLevel;
 use App\Models\Campaign;
+use App\Models\PipelineStatus;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\Geo\GeoNameLocalizer;
@@ -175,7 +176,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
             'project' => $this->summarizeProject($project),
             'name' => $row->name,
             'registry' => $this->summarize($row->registry),
-            'pipeline_status' => $this->summarize($this->pipelineStatusResolver->effectiveStatus($row)),
+            'pipeline_status' => $this->summarizePipelineStatus($this->pipelineStatusResolver->effectiveStatus($row)),
             'source' => $this->summarize($row->source),
             'country' => $this->summarize($country, geo: true),
             'state' => $this->summarize($state, geo: true),
@@ -219,6 +220,23 @@ class CampaignsTableDefinition extends AbstractTableDefinition
         $name = $geo ? GeoNameLocalizer::toItalian($related->name) : $related->name;
 
         return ['id' => $related->id, 'name' => $name];
+    }
+
+    /**
+     * The effective pipeline status projected WITH its `color` token, so the grid
+     * renders the colored status badge like leads (generic summarize() would drop
+     * the color). Mirrors ProjectsTableDefinition::summarizePipelineStatus.
+     *
+     * @return array{id: int, name: string, color: ?string}|null
+     */
+    private function summarizePipelineStatus(?Model $related): ?array
+    {
+        if ($related === null) {
+            return null;
+        }
+
+        /** @var PipelineStatus $related */
+        return ['id' => $related->id, 'name' => $related->name, 'color' => $related->color];
     }
 
     /**

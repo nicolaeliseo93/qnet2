@@ -1,27 +1,30 @@
 import { Building2, FolderKanban, Radio } from 'lucide-react'
 import { DateTimeCell } from '@/features/table/cell-renderers'
 import {
+  CodeBadgeCell,
   CurrencyCell,
   DateCell,
   GeoScopeCell,
   RelationCell,
+  StatusBadgeCell,
 } from '@/features/table/rich-cells'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 
 /**
  * Custom cell renderers keyed by the backend column `id`, built from the shared
- * cross-module cell library so the campaign grid matches projects/leads. Unlike
- * `projects.pipeline_status`, the campaign `pipeline_status` is resolved
- * name-only server-side (no color token via `CampaignsTableDefinition::mapRow`),
- * so it renders as a plain relation, not a colored status badge. `code`/`name`/
+ * cross-module cell library so the campaign grid matches projects/leads. The
+ * effective `pipeline_status` now carries its color token from
+ * `CampaignsTableDefinition::mapRow`, so it renders as the same colored status
+ * badge as projects/leads. `code` renders as a compact monospace badge; `name`/
  * `target_lead` fall back to the AG Grid default cell; `created_at` reuses the
  * shared datetime renderer (spec 0023). `geo_scope` is the merged, display-only
  * campaign-or-project geo badge with its resolved place name (spec 0027 D-2).
  */
 export const campaignColumnRenderers: TableRendererMap = {
+  code: (params) => <CodeBadgeCell {...params} />,
   project: (params) => <RelationCell {...params} icon={FolderKanban} />,
   registry: (params) => <RelationCell {...params} icon={Building2} />,
-  pipeline_status: (params) => <RelationCell {...params} />,
+  pipeline_status: (params) => <StatusBadgeCell {...params} />,
   source: (params) => <RelationCell {...params} icon={Radio} />,
   country: (params) => <RelationCell {...params} />,
   state: (params) => <RelationCell {...params} />,

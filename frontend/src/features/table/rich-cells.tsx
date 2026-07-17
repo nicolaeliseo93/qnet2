@@ -89,6 +89,24 @@ export function StatusBadgeCell({ value }: ICellRendererParams) {
   )
 }
 
+/**
+ * A short record `code` (e.g. "PRJ-001") as a compact monospace badge, so the
+ * identifier column reads as a tag rather than plain text. Left-aligned to sit
+ * at the start of the column; em dash when the code is missing.
+ */
+export function CodeBadgeCell({ value }: ICellRendererParams) {
+  if (typeof value !== 'string' || value === '') {
+    return <EmptyCell align="left" />
+  }
+  return (
+    <div className="flex h-full items-center overflow-hidden">
+      <Badge variant="secondary" className={cn(BADGE_BASE, 'font-mono', BADGE_COLOR_CLASSES.slate)}>
+        <span className="truncate">{value}</span>
+      </Badge>
+    </div>
+  )
+}
+
 /** A `Y-m-d` date (no time part), localized, digit-aligned. Left-aligned as before. */
 export function DateCell({ value }: ICellRendererParams) {
   if (typeof value !== 'string' || value === '') {
@@ -207,9 +225,9 @@ export function ColorSwatchCell({ value }: ICellRendererParams) {
 
 /** Static swatch token per fixed status group (spec 0039: no per-row color stored). */
 const GROUP_SWATCH_TOKENS: Record<StatusGroupValue, string> = {
-  open: 'blue',
-  pending: 'amber',
-  closed: 'green',
+  open: 'green',
+  pending: 'orange',
+  closed: 'red',
 }
 
 /**

@@ -1,6 +1,7 @@
 import { Boxes, Briefcase, Building2, Handshake, Radio } from 'lucide-react'
 import { DateTimeCell } from '@/features/table/cell-renderers'
 import {
+  CodeBadgeCell,
   CurrencyCell,
   DateCell,
   GeoScopeCell,
@@ -13,13 +14,15 @@ import type { TableRendererMap } from '@/features/table/renderer-registry'
  * Custom cell renderers keyed by the backend column `id`, built entirely from
  * the shared cross-module cell library (`features/table/rich-cells`) so a
  * relation, a status, a date or a money value looks identical here and in the
- * campaigns/leads grids. `code`/`name`/`target_lead` fall back to the AG Grid
- * default cell; `created_at` reuses the shared datetime renderer (spec 0023).
+ * campaigns/leads grids. `code` renders as a compact monospace badge; `name`/
+ * `target_lead` fall back to the AG Grid default cell; `created_at` reuses the
+ * shared datetime renderer (spec 0023).
  * The geo relations (`country`/`state`/`province`/`city`, spec 0027) stay
  * icon-free — the column headers already name them and four map pins in a row
  * would be noise; `geo_scope` is the DISPLAY-ONLY derived badge (D-2).
  */
 export const projectColumnRenderers: TableRendererMap = {
+  code: (params) => <CodeBadgeCell {...params} />,
   registry: (params) => <RelationCell {...params} icon={Building2} />,
   pipeline_status: (params) => <StatusBadgeCell {...params} />,
   source: (params) => <RelationCell {...params} icon={Radio} />,

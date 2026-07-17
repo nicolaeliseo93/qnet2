@@ -29,6 +29,13 @@ describe('projectColumnRenderers.registry (relation cell)', () => {
   })
 })
 
+describe('projectColumnRenderers.code', () => {
+  it('renders the code inside a badge', () => {
+    renderCell('code', 'PRJ-001')
+    expect(screen.getByText('PRJ-001')).toBeInTheDocument()
+  })
+})
+
 describe('projectColumnRenderers.pipeline_status', () => {
   it('renders the status name as a badge', () => {
     renderCell('pipeline_status', { id: 1, name: 'Active', color: 'green' })

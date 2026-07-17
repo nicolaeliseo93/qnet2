@@ -2,6 +2,41 @@
 
 > Injected at session start. Update at every green state.
 
+## FE+BE: BADGE CODICE + STATO COLORATO PROGETTI/CAMPAGNE + COLORI GRUPPO (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente su tabelle Progetti/Campagne: (1) colonna `code` come badge; (2) stato
+progetto/campagna colorato come i lead (badge con colore scelto); (3) colonna `gruppo` (config
+stati) con aperto=verde, pending=arancione, chiuso=rosso.
+
+COSA FATTO:
+- BADGE CODICE: nuovo cell condiviso `CodeBadgeCell` in `frontend/src/features/table/rich-cells.tsx`
+  (badge monospace compatto, em-dash se vuoto). Cablato come renderer di `code` in
+  `projects/column-renderers.tsx` e `campaigns/column-renderers.tsx` (solo questi due moduli).
+- STATO COLORATO: il badge stato leggeva `color` ma il BE non lo forniva per `pipeline_status`
+  (progetti/campagne usavano `summarize()` generico -> {id,name} senza colore -> badge neutro; era
+  il "known_defect_not_ours" citato in `LeadsTableDefinition`). Aggiunto `summarizePipelineStatus()`
+  in `ProjectsTableDefinition` e `CampaignsTableDefinition` che proietta `{id,name,color}` (modello
+  di `LeadsTableDefinition::summarizeLeadStatus`). Campagne: resta lo status EFFETTIVO dal resolver,
+  ora con colore. FE campagne: `pipeline_status` da `RelationCell` -> `StatusBadgeCell` (progetti lo
+  usava gia'). Import `PipelineStatus` aggiunto in entrambe le TableDefinition.
+- COLORI GRUPPO: `GROUP_SWATCH_TOKENS` in `rich-cells.tsx` -> open:green, pending:orange, closed:red
+  (prima blue/amber/green). Cambio app-wide sui configuratori pipeline-statuses e lead-statuses
+  (unico punto, la label i18n resta invariata).
+
+NOTE CONTRATTO: il campo `color` e' ADDITIVO su `pipeline_status` -> i `toMatchArray` esistenti
+(CampaignTableTest) restano validi. Ordinamento/filtri su `pipeline_status` NON toccati (operano
+sulla query, non su `mapRow`).
+
+VERIFICATO (eseguito davvero): FE `vitest` sui 3 file toccati 57/57 verdi (nuovi test: CodeBadgeCell,
+swatch gruppo green/orange/red, badge stato colorato campagne, code badge progetti/campagne).
+`tsc --noEmit` PULITO (fuori da `opportunities`, non mio). ESLint PULITO sui 6 file. BE Pest
+`ProjectTableTest|CampaignTableTest|ProjectForSelectTest` 17/17 verdi. Pint PULITO sulle 2
+TableDefinition. NIENTE COMMIT (in attesa di via libera).
+
+FILE TOCCATI: `frontend/src/features/table/rich-cells.tsx` (+ .test), `frontend/src/features/
+projects/column-renderers.tsx` (+ .test), `frontend/src/features/campaigns/column-renderers.tsx`
+(+ .test), `backend/app/Tables/ProjectsTableDefinition.php`, `backend/app/Tables/CampaignsTableDefinition.php`.
+
 ## FE: RESTYLE GRAFICO/UX TABELLE (Progetti/Campagne/Lead/Import Lead/Config Stati) + Filtri Avanzati (2026-07-17) — GREEN, NON COMMITTATO
 
 Refactoring ESCLUSIVAMENTE grafico/UX della rappresentazione di colonne/celle dei 6 moduli

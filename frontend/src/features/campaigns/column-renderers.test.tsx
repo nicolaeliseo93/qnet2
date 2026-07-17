@@ -23,6 +23,26 @@ beforeAll(async () => {
   await i18n.changeLanguage('en')
 })
 
+describe('campaignColumnRenderers.code', () => {
+  it('renders the code inside a badge', () => {
+    renderCell('code', 'CMP-001')
+    expect(screen.getByText('CMP-001')).toBeInTheDocument()
+  })
+})
+
+describe('campaignColumnRenderers.pipeline_status', () => {
+  it('renders the effective status as a colored badge', () => {
+    const { container } = renderCell('pipeline_status', { id: 1, name: 'On Track', color: 'green' })
+    expect(screen.getByText('On Track')).toBeInTheDocument()
+    expect(container.querySelector('.bg-green-100')).not.toBeNull()
+  })
+
+  it('renders an em dash when unset', () => {
+    renderCell('pipeline_status', null)
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
+})
+
 describe('campaignColumnRenderers geo relation columns (country/state/province/city)', () => {
   it.each(['country', 'state', 'province', 'city'])('renders the %s relation name', (columnId) => {
     renderCell(columnId, { id: 1, name: 'Lombardy' })

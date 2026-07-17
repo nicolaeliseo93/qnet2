@@ -3,6 +3,7 @@
 namespace App\Tables;
 
 use App\Enums\GeoScopeLevel;
+use App\Models\PipelineStatus;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\Geo\GeoNameLocalizer;
@@ -166,6 +167,10 @@ class ProjectsTableDefinition extends AbstractTableDefinition
             $mapped[$columnId] = $this->summarize($row->{$config['relation']}, in_array($columnId, self::GEO_COLUMN_IDS, true));
         }
 
+        // `pipeline_status` carries its color token so the grid renders the same
+        // colored status badge as leads (summarize() alone drops the color).
+        $mapped['pipeline_status'] = $this->summarizePipelineStatus($row->pipelineStatus);
+
         $mapped['geo_scope'] = GeoScopeLevel::for($row->country_id, $row->state_id, $row->province_id, $row->city_id)?->value;
 
         $mapped['start_date'] = $row->start_date;
@@ -193,6 +198,23 @@ class ProjectsTableDefinition extends AbstractTableDefinition
         $name = $geo ? GeoNameLocalizer::toItalian($related->name) : $related->name;
 
         return ['id' => $related->id, 'name' => $name];
+    }
+
+    /**
+     * The pipeline status projected WITH its `color` token, so the grid renders
+     * the colored status badge (mirrors LeadsTableDefinition::summarizeLeadStatus;
+     * generic summarize() would drop the color).
+     *
+     * @return array{id: int, name: string, color: ?string}|null
+     */
+    private function summarizePipelineStatus(?Model $related): ?array
+    {
+        if ($related === null) {
+            return null;
+        }
+
+        /** @var PipelineStatus $related */
+        return ['id' => $related->id, 'name' => $related->name, 'color' => $related->color];
     }
 
     /**
