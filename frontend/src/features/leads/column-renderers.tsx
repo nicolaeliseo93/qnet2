@@ -99,11 +99,11 @@ const BOOLEAN_BADGE_NO =
   'border-transparent bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200'
 
 /**
- * Renders the derived `is_assigned` column as a colored yes/no badge with a
- * leading icon (check when an operator is assigned, cross otherwise). Icon
- * plus text keeps it accessible — color is not the only signal.
+ * Renders a derived boolean column (`is_assigned`, `is_converted`) as a
+ * colored yes/no badge with a leading icon (check when true, cross otherwise).
+ * Icon plus text keeps it accessible — color is not the only signal.
  */
-function AssignedBadgeCell({ value }: ICellRendererParams) {
+function BooleanBadgeCell({ value }: ICellRendererParams) {
   if (typeof value !== 'boolean') {
     return <EmptyCell />
   }
@@ -129,6 +129,7 @@ export const leadColumnRenderers: TableRendererMap = {
   operational_site: (params) => <OperationalSiteCell {...params} />,
   source: (params) => <RelationCell {...params} />,
   operator: (params) => <RelationCell {...params} />,
-  is_assigned: (params) => <AssignedBadgeCell {...params} />,
+  is_assigned: (params) => <BooleanBadgeCell {...params} />,
+  is_converted: (params) => <BooleanBadgeCell {...params} />,
   created_at: (params) => <DateTimeCell {...params} />,
 }

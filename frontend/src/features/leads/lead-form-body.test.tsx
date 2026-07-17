@@ -114,7 +114,7 @@ describe('LeadForm — fields render (AC-061, AC-016)', () => {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByTestId('select-Contact')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
     expect(screen.getByTestId('select-Campaign')).toBeInTheDocument()
     expect(screen.getByTestId('select-Site')).toBeInTheDocument()
     expect(screen.getByTestId('select-Source')).toBeInTheDocument()
@@ -172,7 +172,7 @@ describe('LeadForm — field permissions (AC-062)', () => {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByTestId('select-Contact')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
     expect(screen.queryByTestId('select-Operator')).not.toBeInTheDocument()
   })
 
@@ -205,7 +205,7 @@ describe('LeadForm — field permissions (AC-062)', () => {
 
 describe('LeadForm — server 422 mapping (AC-064)', () => {
   it('maps a 422 error onto the notes field and wires the full a11y triad', async () => {
-    // Edit mode so the required Contact/Campaign already carry valid
+    // Edit mode so the required Registry/Campaign already carry valid
     // defaultValues (client-side Zod validation passes trivially) and the
     // submit reaches the mocked server call under test.
     updateLeadMock.mockRejectedValue(
@@ -252,7 +252,7 @@ describe('LeadForm — extra fields editor (AC-014)', () => {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByTestId('select-Contact')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
     expect(screen.getByText('No extra fields.')).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Key' })).not.toBeInTheDocument()
   })
@@ -262,7 +262,7 @@ describe('LeadForm — extra fields editor (AC-014)', () => {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByTestId('select-Contact')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: 'Add field' }))
     expect(screen.getAllByRole('textbox', { name: 'Key' })).toHaveLength(1)
@@ -286,7 +286,7 @@ describe('LeadForm — extra fields editor (AC-014)', () => {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(screen.getByTestId('select-Contact')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: 'Add field' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add field' }))

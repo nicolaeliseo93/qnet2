@@ -2,6 +2,48 @@
 
 > Injected at session start. Update at every green state.
 
+## LEAD: COLONNA "is_converted" nella tabella lead (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente: colonna nella tabella lead per capire se un lead e' stato convertito in
+opportunita'. Stato DERIVATO (nessun flag in DB — coerente con spec 0040 D-5 "no is_converted
+flag"): EXISTS sulla relazione `Lead::opportunity()` (HasOne, `opportunities.lead_id` UNIQUE).
+Colonna boolean derivata `is_converted`, mirror ESATTO del pattern gia' esistente `is_assigned`.
+
+CONTRATTO (nessuna migration, nessun cambio DB):
+- Tabella `leads`: nuova colonna derivata `is_converted` (boolean, sortable, filterType set),
+  label i18n `leads.columns.isConverted`. Ordine colonne: ...is_assigned, lead_status,
+  is_converted, created_at. Row payload: `is_converted: bool`.
+- Filtro set '1'/'0' -> whereHas/whereDoesntHave('opportunity'). Sort: subquery EXISTS
+  correlata (selectRaw('1') costante, mai input) -> not-converted prima su ASC (false<true,
+  come is_assigned). /values: fallback boolean generico ['1','0'].
+
+FILE TOCCATI:
+- BE: `LeadColumnCatalog.php` (colonna is_converted); `LeadsTableDefinition.php`
+  (const IS_CONVERTED_COLUMN/OPPORTUNITY_RELATION/OPPORTUNITY_EXISTS_ALIAS/OPPORTUNITIES_TABLE;
+  baseQuery `->withExists('opportunity')`; mapRow `opportunity_exists`; applyConvertedFilter;
+  applyDerivedSort subquery EXISTS); test `LeadTableTest.php` (ordine colonne + 4 test mirror
+  di is_assigned, import Opportunity).
+- FE: `column-renderers.tsx` (AssignedBadgeCell -> BooleanBadgeCell generico, mappato a
+  is_assigned + is_converted); `it-leads.ts`/`en-leads.ts` (`columns.isConverted`
+  "Convertito"/"Converted").
+
+VERIFICATO (eseguito davvero): Pest LeadTableTest 21/21 (77 assert); FE Vitest leads 53/53;
+`tsc --noEmit` pulito; Pint + ESLint puliti sul diff. NIENTE COMMIT (in attesa di via libera).
+
+## LEAD: COPY "Contatto" -> "Anagrafica" nel modulo lead (2026-07-17) — GREEN, NON COMMITTATO
+
+Follow-up richiesto dall'utente: nel modulo Lead la relazione registry era ancora etichettata
+"Contatto"/"Contact" (COPY lasciata invariata in 0041). Allineata alla convenzione gia' canonica
+in opportunities e import-wizard: registry -> "Anagrafica"/"Registry". SOLO i18n leads (nessun
+identificatore: chiave `registry` gia' inglese; chiave sezione interna `contact` invariata).
+Toccati: `i18n/locales/it-leads.ts` + `en-leads.ts` (columns.registry, advancedFilters.registry,
+detail.unknownRegistry, form.sections.contact.title+description, form.registry/registrySearch/
+registryRequired -> wording identico a opportunities/import). Test adeguati al nuovo copy (req
+cambiato, non tampering): `lead-form-body.test.tsx` testid `select-Contact`->`select-Registry`
+(5x) + commento; `lead-detail.test.tsx` heading 'Unknown contact'->'Unknown registry'.
+VERIFICATO: Vitest lead-form-body+lead-detail 17/17 verdi; `tsc -b` exit 0. NIENTE COMMIT.
+Questo AMMENDA la nota "COPY 'Contatto'/'Contact' invariato" della sezione 0041 sotto.
+
 ## LEAD: RELAZIONE REFERENTE -> ANAGRAFICA (spec 0041) (2026-07-17) — GREEN, NON COMMITTATO
 
 Correzione richiesta dall'utente: un Lead NON ha piu' un Referente ma un'Anagrafica (Registry).

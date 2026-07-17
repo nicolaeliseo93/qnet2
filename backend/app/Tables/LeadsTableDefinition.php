@@ -46,6 +46,20 @@ class LeadsTableDefinition extends AbstractTableDefinition
     private const string OPERATOR_FK = 'operator_id';
 
     /**
+     * Derived boolean column: whether an opportunity was generated from the
+     * lead (spec 0040 D-2/D-5). No stored flag — the state is an EXISTS on
+     * the `opportunity` relation, surfaced via the `opportunity_exists`
+     * withExists alias for the row value and the sort.
+     */
+    private const string IS_CONVERTED_COLUMN = 'is_converted';
+
+    private const string OPPORTUNITY_RELATION = 'opportunity';
+
+    private const string OPPORTUNITY_EXISTS_ALIAS = 'opportunity_exists';
+
+    private const string OPPORTUNITIES_TABLE = 'opportunities';
+
+    /**
      * Simple (single-hop) relation-name derived columns: relation accessor,
      * related table and owning FK column, keyed by the derived column id.
      *
@@ -85,7 +99,9 @@ class LeadsTableDefinition extends AbstractTableDefinition
     {
         // Eager-load every relation mapRow touches to avoid N+1 across the
         // page (operationalSite's address+city for the composed label, BR-3).
-        return Lead::query()->with(['registry', 'campaign', 'operationalSite.addresses.city', 'source', 'operator', 'leadStatus']);
+        return Lead::query()
+            ->with(['registry', 'campaign', 'operationalSite.addresses.city', 'source', 'operator', 'leadStatus'])
+            ->withExists(self::OPPORTUNITY_RELATION);
     }
 
     /**
@@ -157,6 +173,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
             'source' => $this->summarize($row->source),
             'operator' => $this->summarize($row->operator),
             'is_assigned' => $row->operator_id !== null,
+            'is_converted' => (bool) $row->getAttribute(self::OPPORTUNITY_EXISTS_ALIAS),
             'lead_status' => $this->summarizeLeadStatus($row->leadStatus),
             'notes' => $row->notes,
             'created_at' => $row->created_at,
@@ -271,6 +288,12 @@ class LeadsTableDefinition extends AbstractTableDefinition
             return true;
         }
 
+        if ($columnId === self::IS_CONVERTED_COLUMN) {
+            $this->applyConvertedFilter($query, $values);
+
+            return true;
+        }
+
         $config = self::DERIVED_RELATIONS[$columnId] ?? null;
 
         if ($config === null) {
@@ -305,6 +328,29 @@ class LeadsTableDefinition extends AbstractTableDefinition
         $wantsAssigned
             ? $query->whereNotNull(self::OPERATOR_FK)
             : $query->whereNull(self::OPERATOR_FK);
+    }
+
+    /**
+     * `is_converted` set filter: '1' keeps leads with a generated opportunity,
+     * '0' keeps leads without one; both (or neither) selected leaves the query
+     * untouched. Resolved via the `opportunity` relation (EXISTS), never a
+     * stored flag (spec 0040 D-5).
+     *
+     * @param  Builder<Lead>  $query
+     * @param  array<int, string>  $values
+     */
+    private function applyConvertedFilter(Builder $query, array $values): void
+    {
+        $wantsConverted = in_array('1', $values, true);
+        $wantsNotConverted = in_array('0', $values, true);
+
+        if ($wantsConverted === $wantsNotConverted) {
+            return;
+        }
+
+        $wantsConverted
+            ? $query->whereHas(self::OPPORTUNITY_RELATION)
+            : $query->whereDoesntHave(self::OPPORTUNITY_RELATION);
     }
 
     /**
@@ -344,6 +390,21 @@ class LeadsTableDefinition extends AbstractTableDefinition
             // Boolean semantics via the FK: NULL (unassigned) sorts before any
             // id on ASC in both MySQL and SQLite, i.e. false < true. No raw SQL.
             $query->orderBy(self::OPERATOR_FK, $direction);
+
+            return true;
+        }
+
+        if ($columnId === self::IS_CONVERTED_COLUMN) {
+            // Boolean semantics via a correlated EXISTS subquery (1 when an
+            // opportunity references the lead, NULL otherwise): NULL sorts
+            // before 1 on ASC in MySQL and SQLite, i.e. false < true, matching
+            // is_assigned. `1` is a constant literal, never user input.
+            $existsSubquery = DB::table(self::OPPORTUNITIES_TABLE)
+                ->selectRaw('1')
+                ->whereColumn(self::OPPORTUNITIES_TABLE.'.lead_id', 'leads.id')
+                ->limit(1);
+
+            $query->orderBy($existsSubquery, $direction);
 
             return true;
         }

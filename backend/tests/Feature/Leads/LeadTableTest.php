@@ -7,6 +7,7 @@ use App\Models\ExportRun;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\OperationalSite;
+use App\Models\Opportunity;
 use App\Models\Registry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,14 +58,16 @@ it('GET /api/tables/leads/columns: 200 with the declared columns, 403 without vi
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['registry', 'campaign', 'operational_site', 'source', 'operator', 'is_assigned', 'lead_status', 'created_at']);
+    expect($ids)->toBe(['registry', 'campaign', 'operational_site', 'source', 'operator', 'is_assigned', 'lead_status', 'is_converted', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['operational_site']['sortable'])->toBeTrue()
         ->and($columns['operational_site']['filterType'])->toBe('set')
         ->and($columns['registry']['sortable'])->toBeTrue()
         ->and($columns['is_assigned']['type'])->toBe('boolean')
-        ->and($columns['is_assigned']['filterType'])->toBe('set');
+        ->and($columns['is_assigned']['filterType'])->toBe('set')
+        ->and($columns['is_converted']['type'])->toBe('boolean')
+        ->and($columns['is_converted']['filterType'])->toBe('set');
 });
 
 // ---------------------------------------------------------------------------
@@ -236,6 +239,69 @@ it('values: is_assigned always offers both boolean states', function () {
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/tables/leads/values', ['columnId' => 'is_assigned'])
+        ->assertOk()
+        ->assertJsonPath('data.values', ['1', '0']);
+});
+
+// ---------------------------------------------------------------------------
+// is_converted — derived boolean on the `opportunity` relation (spec 0040
+// D-2/D-5: no stored flag, EXISTS): row value, set filter ('1'/'0'), sort,
+// and the fixed boolean value list from the /values endpoint
+// ---------------------------------------------------------------------------
+
+it('rows: is_converted reflects the presence of a generated opportunity', function () {
+    $actor = leadUserWith(['viewAny']);
+    $converted = Lead::factory()->create();
+    $notConverted = Lead::factory()->create();
+    Opportunity::factory()->create(['lead_id' => $converted->id]);
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/leads/rows', ['startRow' => 0, 'endRow' => 25])->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $converted->id)['is_converted'])->toBeTrue()
+        ->and($items->firstWhere('id', $notConverted->id)['is_converted'])->toBeFalse();
+});
+
+it('rows: the is_converted set filter narrows to converted or not-converted leads', function () {
+    $actor = leadUserWith(['viewAny']);
+    $converted = Lead::factory()->create();
+    $notConverted = Lead::factory()->create();
+    Opportunity::factory()->create(['lead_id' => $converted->id]);
+    Sanctum::actingAs($actor);
+
+    $rowsFor = fn (array $values) => collect($this->postJson('/api/tables/leads/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['is_converted' => ['filterType' => 'set', 'values' => $values]],
+    ])->assertOk()->json('items'))->pluck('id')->all();
+
+    expect($rowsFor(['1']))->toBe([$converted->id])
+        ->and($rowsFor(['0']))->toBe([$notConverted->id])
+        ->and($rowsFor(['1', '0']))->toHaveCount(2);
+});
+
+it('rows: sorting by is_converted puts not-converted leads first on asc', function () {
+    $actor = leadUserWith(['viewAny']);
+    $converted = Lead::factory()->create();
+    $notConverted = Lead::factory()->create();
+    Opportunity::factory()->create(['lead_id' => $converted->id]);
+    Sanctum::actingAs($actor);
+
+    $ids = collect($this->postJson('/api/tables/leads/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'is_converted', 'sort' => 'asc']],
+    ])->assertOk()->json('items'))->pluck('id')->all();
+
+    expect($ids)->toBe([$notConverted->id, $converted->id]);
+});
+
+it('values: is_converted always offers both boolean states', function () {
+    $actor = leadUserWith(['viewAny']);
+    Lead::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/tables/leads/values', ['columnId' => 'is_converted'])
         ->assertOk()
         ->assertJsonPath('data.values', ['1', '0']);
 });

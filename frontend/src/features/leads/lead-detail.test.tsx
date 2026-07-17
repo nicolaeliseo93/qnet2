@@ -80,7 +80,7 @@ describe('LeadDetailView — read-only (AC-065)', () => {
   it('falls back to a placeholder heading when the registry relation is missing', () => {
     render(<LeadDetailView lead={lead({ registry_id: 10, registry: null })} />)
 
-    expect(screen.getByRole('heading', { name: 'Unknown contact' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Unknown registry' })).toBeInTheDocument()
   })
 })
 

@@ -45,6 +45,21 @@ final class LeadColumnCatalog
             ],
             self::derivedColumn('lead_status', 'leads.columns.leadStatus'),
             [
+                // DERIVED boolean: whether an opportunity references this lead
+                // (`opportunities.lead_id` EXISTS — spec 0040 D-2/D-5: no stored
+                // flag, the converted state is derived). No real DB column;
+                // filter/sort resolved by LeadsTableDefinition via the
+                // `opportunity` relation, set-filter values ('1'/'0', localized
+                // yes/no on the FE) from the generic boolean fallback.
+                'id' => 'is_converted',
+                'label' => 'leads.columns.isConverted',
+                'type' => 'boolean',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
+            [
                 'id' => 'created_at',
                 'label' => 'leads.columns.createdAt',
                 'type' => 'datetime',
