@@ -12,6 +12,8 @@ import type { OpportunitySelectedItems } from '@/features/opportunities/use-oppo
 interface OpportunityTeamSectionProps {
   control: Control<OpportunityFormValues>
   selectedItems: OpportunitySelectedItems
+  /** Create-only requirement; existing opportunities may keep a null supervisor. */
+  supervisorRequired: boolean
   className?: string
 }
 
@@ -19,7 +21,12 @@ interface OpportunityTeamSectionProps {
  * The opportunity's team relations: supervisor and the shared, ordered "G.A. n"
  * manager slots (`ManagerSlotsField`, extracted from Registries — spec 0040).
  */
-export function OpportunityTeamSection({ control, selectedItems, className }: OpportunityTeamSectionProps) {
+export function OpportunityTeamSection({
+  control,
+  selectedItems,
+  supervisorRequired,
+  className,
+}: OpportunityTeamSectionProps) {
   const { t } = useTranslation()
 
   return (
@@ -37,6 +44,7 @@ export function OpportunityTeamSection({ control, selectedItems, className }: Op
         resource={USERS_FOR_SELECT_RESOURCE}
         searchPlaceholder={t('opportunities.form.supervisorSearch')}
         selected={selectedItems.supervisor}
+        required={supervisorRequired}
         showAvatar
         placeholder={t('opportunities.form.selectPlaceholder')}
         emptyLabel={t('opportunities.form.selectEmpty')}

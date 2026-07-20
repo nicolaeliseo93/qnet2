@@ -2,8 +2,8 @@
  * Opportunities CRUD types. The generic table types (columns/filters/actions/
  * rows) live in `features/table/types.ts`; this file holds only what is
  * genuinely opportunities-specific. Source of truth: spec 0040 frozen
- * `data_contract`. Only `name`/`registry_id` are required (D-4); every other
- * relation is nullable.
+ * `data_contract`. Supervisor is required by the create form but remains
+ * nullable on stored opportunities and in edit mode.
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
@@ -109,10 +109,10 @@ export interface OpportunityDetailWithPermissions extends OpportunityDetail {
 }
 
 /**
- * Payload for POST /opportunities (create). `name`/`registry_id` are required
- * (D-4); every other field is optional/nullable. `lead_id`, when set, derives
- * several fields server-side (BR-1) — the client must not also send a value
- * for a field whose derivation is non-null (422 `prohibited`).
+ * Payload for POST /opportunities (create). The form requires a numeric
+ * supervisor in addition to the existing identity fields. `lead_id`, when
+ * set, derives several fields server-side (BR-1) — the client must not also
+ * send a value for a field whose derivation is non-null (422 `prohibited`).
  */
 export interface CreateOpportunityPayload {
   name: string
@@ -129,7 +129,7 @@ export interface CreateOpportunityPayload {
   referent_id?: number | null
   commercial_id?: number | null
   reporter_id?: number | null
-  supervisor_id?: number | null
+  supervisor_id: number
   source_id?: number | null
   lead_id?: number | null
   /** Ordered, gap-aware G.A. slots: index+1 = G.A. n, `null` = empty slot. */
@@ -151,7 +151,12 @@ export interface CreateOpportunityPayload {
  * optional (sparse diff). `lead_id` is immutable in update (BR-2, prohibited
  * server-side) and therefore not part of this shape at all.
  */
-export type UpdateOpportunityPayload = Partial<Omit<CreateOpportunityPayload, 'lead_id'>>
+export type UpdateOpportunityPayload = Partial<
+  Omit<CreateOpportunityPayload, 'lead_id' | 'supervisor_id'>
+> & {
+  /** Existing opportunities may keep or explicitly clear a nullable supervisor. */
+  supervisor_id?: number | null
+}
 
 /**
  * BR-1: the fields a Lead's campaign can derive — only `source_id` and

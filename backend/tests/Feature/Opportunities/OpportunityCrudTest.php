@@ -39,15 +39,15 @@ if (! function_exists('opportunityUserWith')) {
 if (! function_exists('mandatoryOpportunityFks')) {
     /**
      * The mandatory create payload beyond `name`: `registry_id` (D-4),
-     * `opportunity_status_id` (spec 0043, D-3) plus a valid one-row
-     * `product_lines` collection (user directive 2026-07-17: at least one
-     * row is required to create). Each a freshly created row. Tests
+     * `opportunity_status_id` (spec 0043, D-3), `supervisor_id`, plus a valid
+     * one-row `product_lines` collection (user directive 2026-07-17: at least
+     * one row is required to create). Each a freshly created row. Tests
      * asserting a specific `product_lines` payload merge this helper FIRST
      * so their own value overrides it. User directive 2026-07-17:
      * `company_id`/`company_site_id`/`operational_site_id` are REMOVED
      * entirely, no longer part of this payload.
      *
-     * @return array{registry_id: int, opportunity_status_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{registry_id: int, opportunity_status_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
      */
     function mandatoryOpportunityFks(): array
     {
@@ -57,6 +57,7 @@ if (! function_exists('mandatoryOpportunityFks')) {
         return [
             'registry_id' => Registry::factory()->create()->id,
             'opportunity_status_id' => OpportunityStatus::factory()->create()->id,
+            'supervisor_id' => User::factory()->create()->id,
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],
@@ -65,10 +66,10 @@ if (! function_exists('mandatoryOpportunityFks')) {
 }
 
 // ---------------------------------------------------------------------------
-// create (AC-012/AC-013/AC-014/AC-016/AC-017/AC-082 — i mandatory sono ora
-// name + registry_id + opportunity_status_id (spec 0043, D-3) +
-// product_lines; company_id/company_site_id/operational_site_id sono stati
-// rimossi per direttiva utente 2026-07-17)
+// create (AC-012/AC-013/AC-014/AC-016/AC-017/AC-082 — mandatory fields are
+// name + registry_id + opportunity_status_id (spec 0043, D-3) + supervisor_id +
+// product_lines; company_id/company_site_id/operational_site_id were removed
+// by user directive 2026-07-17)
 // ---------------------------------------------------------------------------
 
 it('create: with the mandatory fields only -> 201, every optional scalar null (AC-082)', function () {
@@ -87,7 +88,6 @@ it('create: with the mandatory fields only -> 201, every optional scalar null (A
         'referent_id' => null,
         'commercial_id' => null,
         'reporter_id' => null,
-        'supervisor_id' => null,
         'source_id' => null,
         'lead_id' => null,
     ]));
@@ -145,6 +145,30 @@ it('create: missing registry_id -> 422 on that field, no row created', function 
 
     $this->postJson('/api/opportunities', array_merge(['name' => 'No Registry'], $fks))
         ->assertStatus(422)->assertJsonValidationErrors('registry_id');
+
+    expect(Opportunity::count())->toBe(0);
+});
+
+it('create: missing supervisor_id -> 422 on that field, no row created', function () {
+    $actor = opportunityUserWith(['create']);
+    $fks = mandatoryOpportunityFks();
+    unset($fks['supervisor_id']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/opportunities', array_merge(['name' => 'No Supervisor'], $fks))
+        ->assertStatus(422)->assertJsonValidationErrors('supervisor_id');
+
+    expect(Opportunity::count())->toBe(0);
+});
+
+it('create: null supervisor_id -> 422 on that field, no row created', function () {
+    $actor = opportunityUserWith(['create']);
+    $fks = mandatoryOpportunityFks();
+    $fks['supervisor_id'] = null;
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/opportunities', array_merge(['name' => 'Null Supervisor'], $fks))
+        ->assertStatus(422)->assertJsonValidationErrors('supervisor_id');
 
     expect(Opportunity::count())->toBe(0);
 });
@@ -262,6 +286,21 @@ it('update: PATCH with only estimated_value -> 200, only that field changes (AC-
         'name' => 'Original name',
         'registry_id' => $opportunity->registry_id,
         'estimated_value' => 999.99,
+    ]);
+});
+
+it('update: PATCH may clear supervisor_id to null', function () {
+    $actor = opportunityUserWith(['update']);
+    $opportunity = Opportunity::factory()->create(['supervisor_id' => User::factory()]);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/opportunities/{$opportunity->id}", ['supervisor_id' => null])
+        ->assertOk()
+        ->assertJsonPath('data.supervisor_id', null);
+
+    $this->assertDatabaseHas('opportunities', [
+        'id' => $opportunity->id,
+        'supervisor_id' => null,
     ]);
 });
 

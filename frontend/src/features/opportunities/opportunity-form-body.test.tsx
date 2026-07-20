@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
 import { OpportunityForm } from '@/features/opportunities/opportunity-form'
 import type { ResourceMeta } from '@/features/authorization/types'
+import type { OpportunityDetailWithPermissions } from '@/features/opportunities/types'
 
 /**
  * AC-071 (every field of the contract renders), AC-072 (referent disabled
@@ -51,6 +52,51 @@ const TEST_REGISTRY_WITH_DEFAULTS = 10
 const TEST_REGISTRY_WITHOUT_DEFAULTS = 20
 const TEST_BUSINESS_FUNCTION = 40
 const TEST_PRODUCT_CATEGORY = 500
+
+function editOpportunity(): OpportunityDetailWithPermissions {
+  return {
+    id: 1,
+    name: 'Enterprise deal',
+    registry_id: TEST_REGISTRY_WITH_DEFAULTS,
+    registry: { id: TEST_REGISTRY_WITH_DEFAULTS, name: 'Acme S.p.A.' },
+    opportunity_status_id: 5,
+    opportunity_status: { id: 5, name: 'New', color: 'slate' },
+    referent_id: null,
+    referent: null,
+    commercial_id: null,
+    commercial: null,
+    reporter_id: null,
+    reporter: null,
+    supervisor_id: null,
+    supervisor: null,
+    source_id: null,
+    source: null,
+    product_lines: [
+      {
+        id: 1,
+        business_function: { id: TEST_BUSINESS_FUNCTION, name: 'Sales' },
+        product_category: { id: TEST_PRODUCT_CATEGORY, name: 'Consulting' },
+      },
+    ],
+    lead_id: null,
+    lead: null,
+    managers: [],
+    start_date: null,
+    expected_close_date: null,
+    estimated_value: null,
+    success_probability: null,
+    locked_fields: [],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    permissions: FULL_PERMISSIONS,
+  }
+}
+
+function labelFor(text: string): HTMLElement {
+  return screen.getByText(
+    (_, element) => element?.tagName === 'LABEL' && element.textContent?.startsWith(text) === true,
+  )
+}
 
 /** Fixed selection ids exposed per field (by accessible trigger label), so BR-4 side effects are exercisable without a real dropdown. */
 const SELECT_IDS: Record<string, number[]> = {
@@ -193,6 +239,28 @@ describe('OpportunityFormBody — fields render (AC-071)', () => {
     // Amendment rev.3: no product-line row renders until "Add" is clicked (mirrors manager slots).
     expect(screen.getByRole('button', { name: 'Add product line' })).toBeInTheDocument()
     expect(screen.queryByTestId('select-Business function 1')).not.toBeInTheDocument()
+  })
+
+  it('marks supervisor required only when the form mode is create', async () => {
+    const create = render(
+      <OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(labelFor('Supervisor')).toHaveTextContent('Supervisor*'))
+    create.unmount()
+
+    render(
+      <OpportunityForm
+        mode={{ type: 'edit', opportunity: editOpportunity() }}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    )
+
+    expect(labelFor('Supervisor')).toHaveTextContent('Supervisor')
+    expect(labelFor('Supervisor')).not.toHaveTextContent('*')
   })
 })
 

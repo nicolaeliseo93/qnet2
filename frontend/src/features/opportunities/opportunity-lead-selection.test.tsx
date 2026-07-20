@@ -290,6 +290,7 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
         String(TEST_OPPORTUNITY_STATUS_ID),
       ),
     )
+    fireEvent.click(screen.getByRole('button', { name: 'select Supervisor 1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 

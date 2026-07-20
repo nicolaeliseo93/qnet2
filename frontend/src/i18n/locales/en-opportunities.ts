@@ -102,6 +102,7 @@ export const opportunities = {
     },
     supervisor: 'Supervisor',
     supervisorSearch: 'Search supervisors…',
+    supervisorRequired: 'Supervisor is required.',
     managers: 'Account managers',
     managersMax: 'An opportunity has at most 4 managers.',
     startDate: 'Start date',

@@ -27,6 +27,10 @@ function values(overrides: Partial<OpportunityFormValues> = {}): OpportunityForm
   }
 }
 
+function createValues(overrides: Partial<OpportunityFormValues> = {}): OpportunityFormValues {
+  return values({ supervisor_id: 9, ...overrides })
+}
+
 function original(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail {
   return {
     id: 1,
@@ -61,8 +65,8 @@ function original(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail
 }
 
 describe('buildCreatePayload', () => {
-  it('includes the 2 mandatory fields and every truly optional field as null when unset (AC-082)', () => {
-    const payload = buildCreatePayload(values())
+  it('includes the required supervisor and every truly optional field as null when unset (AC-082)', () => {
+    const payload = buildCreatePayload(createValues())
 
     expect(payload).toEqual({
       name: 'Enterprise deal',
@@ -71,7 +75,7 @@ describe('buildCreatePayload', () => {
       referent_id: null,
       commercial_id: null,
       reporter_id: null,
-      supervisor_id: null,
+      supervisor_id: 9,
       source_id: null,
       product_lines: [],
       manager_slots: [],
@@ -85,7 +89,7 @@ describe('buildCreatePayload', () => {
   /** Amendment rev.3 (AC-099/107): `product_lines` is always sent in full, never locked, even from a lead. */
   it('always sends product_lines in full, unlocked even when creating from a lead', () => {
     const payload = buildCreatePayload(
-      values({
+      createValues({
         product_lines: [
           { business_function_id: 40, product_category_id: 50 },
           { business_function_id: 41, product_category_id: 51 },
@@ -102,7 +106,7 @@ describe('buildCreatePayload', () => {
 
   it('trims the name and includes every set relation/estimate', () => {
     const payload = buildCreatePayload(
-      values({
+      createValues({
         name: '  Enterprise deal  ',
         referent_id: 10,
         manager_slots: [20, null, 21],
@@ -124,7 +128,7 @@ describe('buildCreatePayload', () => {
   describe('create-from-lead (BR-1/BR-2, AC-075)', () => {
     it('appends lead_id and omits every locked field from the payload', () => {
       const payload = buildCreatePayload(
-        values({
+        createValues({
           registry_id: 30,
           referent_id: 10,
           source_id: 20,
@@ -143,7 +147,7 @@ describe('buildCreatePayload', () => {
 
     it('sends a field whose derivation is null (BR-2: not locked, stays free) even from a lead', () => {
       const payload = buildCreatePayload(
-        values({ source_id: 70 }),
+        createValues({ source_id: 70 }),
         { leadId: 9, lockedFields: ['registry_id', 'referent_id'] },
       )
 
@@ -153,7 +157,7 @@ describe('buildCreatePayload', () => {
     })
 
     it('never appends lead_id for a plain manual create', () => {
-      const payload = buildCreatePayload(values())
+      const payload = buildCreatePayload(createValues())
       expect(payload).not.toHaveProperty('lead_id')
     })
   })
@@ -178,6 +182,15 @@ describe('buildUpdatePayload', () => {
     expect(buildUpdatePayload(values({ opportunity_status_id: 6 }), original())).toEqual({
       opportunity_status_id: 6,
     })
+  })
+
+  it('allows an existing supervisor to be cleared back to null', () => {
+    const payload = buildUpdatePayload(
+      values({ supervisor_id: null }),
+      original({ supervisor_id: 9, supervisor: { id: 9, name: 'Alex Smith' } }),
+    )
+
+    expect(payload).toEqual({ supervisor_id: null })
   })
 
   it('includes a relation cleared back to null', () => {

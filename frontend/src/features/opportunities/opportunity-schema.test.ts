@@ -1,10 +1,13 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import i18n from '@/i18n'
-import { buildCreateOpportunitySchema } from '@/features/opportunities/opportunity-schema'
+import {
+  buildCreateOpportunitySchema,
+  buildUpdateOpportunitySchema,
+} from '@/features/opportunities/opportunity-schema'
 
 /**
- * AC-070: `name` and `registry_id` are mandatory (D-4); every other field is
- * optional; probability out of 0..100 rejected.
+ * AC-070: create requires the identity fields and supervisor; edit keeps the
+ * supervisor nullable; probability out of 0..100 is rejected.
  */
 
 function baseValues(overrides: Record<string, unknown> = {}) {
@@ -16,7 +19,7 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     referent_id: null,
     commercial_id: null,
     reporter_id: null,
-    supervisor_id: null,
+    supervisor_id: 9,
     source_id: null,
     // product_lines is mandatory (>=1 row, user directive 2026-07-17): the base
     // happy-path carries one valid row; the empty-collection case overrides it.
@@ -36,7 +39,7 @@ beforeAll(async () => {
 })
 
 describe('buildCreateOpportunitySchema', () => {
-  it('accepts a valid payload with only the 2 mandatory fields set', () => {
+  it('accepts a valid payload with all create-required fields set', () => {
     const schema = buildCreateOpportunitySchema(i18n.t)
     const result = schema.safeParse(baseValues())
     expect(result.success).toBe(true)
@@ -74,8 +77,25 @@ describe('buildCreateOpportunitySchema', () => {
 
   it('accepts every truly optional relation left null', () => {
     const schema = buildCreateOpportunitySchema(i18n.t)
-    const result = schema.safeParse(baseValues())
+    const result = schema.safeParse(
+      baseValues({ referent_id: null, commercial_id: null, reporter_id: null, source_id: null }),
+    )
     expect(result.success).toBe(true)
+  })
+
+  it('rejects a missing supervisor_id with the localized required message', () => {
+    const schema = buildCreateOpportunitySchema(i18n.t)
+    const result = schema.safeParse(baseValues({ supervisor_id: null }))
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ['supervisor_id'],
+          message: 'Supervisor is required.',
+        }),
+      )
+    }
   })
 
   /**
@@ -197,5 +217,13 @@ describe('buildCreateOpportunitySchema', () => {
     const schema = buildCreateOpportunitySchema(i18n.t)
     const result = schema.safeParse(baseValues({ manager_slots: [1, 2, 3, 4, 5] }))
     expect(result.success).toBe(false)
+  })
+})
+
+describe('buildUpdateOpportunitySchema', () => {
+  it('keeps supervisor_id nullable for existing opportunities', () => {
+    const schema = buildUpdateOpportunitySchema(i18n.t)
+
+    expect(schema.safeParse(baseValues({ supervisor_id: null })).success).toBe(true)
   })
 })

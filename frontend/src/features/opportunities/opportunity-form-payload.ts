@@ -15,10 +15,10 @@ export interface CreatePayloadFromLead {
 }
 
 /**
- * Builds the create payload. `name`/`registry_id` are validated non-null by
- * the schema's refine before submit (D-4). `registry_id` is sent as-is
- * UNLESS locked (`fromLead`, BR-1) — either way the RHF value is always
- * present at submit time, just not always sent. `product_lines` (amendment
+ * Builds the create payload. `name`/`registry_id`/`supervisor_id` are
+ * validated non-null by the create schema before submit. `registry_id` is
+ * sent as-is UNLESS locked (`fromLead`, BR-1) — either way the RHF value is
+ * always present at submit time, just not always sent. `product_lines` (amendment
  * rev.3) is NEVER locked — even the row derived from a linked Lead is a
  * normal, editable/removable row (AC-102/103) — so it is always sent as-is,
  * in full (the server replaces the entire collection, AC-099). When creating
@@ -37,7 +37,9 @@ export function buildCreatePayload(
     opportunity_status_id: values.opportunity_status_id as number,
     commercial_id: values.commercial_id,
     reporter_id: values.reporter_id,
-    supervisor_id: values.supervisor_id,
+    // The create schema guarantees this value before the payload builder runs;
+    // the shared RHF value remains nullable because edit permits clearing it.
+    supervisor_id: values.supervisor_id as number,
     product_lines: completeProductLines(values.product_lines),
     manager_slots: values.manager_slots,
     start_date: values.start_date,

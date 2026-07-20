@@ -102,6 +102,7 @@ export const opportunities = {
     },
     supervisor: 'Supervisore',
     supervisorSearch: 'Cerca supervisori…',
+    supervisorRequired: 'Il supervisore è obbligatorio.',
     managers: 'Gestori account',
     managersMax: "Un'opportunità ha al massimo 4 gestori.",
     startDate: 'Data inizio',

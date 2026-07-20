@@ -255,6 +255,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
           <OpportunityTeamSection
             control={form.control}
             selectedItems={selectedItems}
+            supervisorRequired={mode.type === 'create'}
             className={sectionRevealClassName(3)}
           />
 

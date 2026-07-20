@@ -40,13 +40,14 @@ if (! function_exists('productLinesOpportunityUserWith')) {
 
 if (! function_exists('productLinesMandatoryOpportunityFks')) {
     /**
-     * @return array{registry_id: int, opportunity_status_id: int}
+     * @return array{registry_id: int, opportunity_status_id: int, supervisor_id: int}
      */
     function productLinesMandatoryOpportunityFks(): array
     {
         return [
             'registry_id' => Registry::factory()->create()->id,
             'opportunity_status_id' => OpportunityStatus::factory()->create()->id,
+            'supervisor_id' => User::factory()->create()->id,
         ];
     }
 }

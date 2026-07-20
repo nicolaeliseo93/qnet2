@@ -176,6 +176,27 @@
       appendHydratedForSelectIds). meta.commercial/meta.reporter invariati.
   </amendment>
 
+  <amendment date="2026-07-20" author="nicola" rev="4">
+    A-8 (SUPERVISORE OBBLIGATORIO SOLO IN CREAZIONE): `supervisor_id` e' obbligatorio nel POST e
+    nel form CREATE. Il vincolo appartiene esclusivamente all'ingresso di creazione: la colonna DB,
+    la resource di dettaglio e il contratto di UPDATE/PATCH restano nullable. In particolare, il
+    PATCH puo' omettere `supervisor_id` oppure inviarlo esplicitamente a null.
+
+    SOSTITUISCE, per il solo flusso CREATE, ogni clausola precedente che includeva
+    `supervisor_id` tra i campi opzionali/nullable. NON modifica la nullability dello schema dati,
+    della response di dettaglio o dell'update e NON aggiunge `supervisor_id` ai campi mandatory di
+    `GET /api/meta/opportunities`.
+
+    Contratto aggiornato:
+    - POST `/api/opportunities`: `supervisor_id` required, integer, exists:users,id; null o assenza
+      producono 422 su `supervisor_id`.
+    - PUT/PATCH `/api/opportunities/{opportunity}`: `supervisor_id` resta
+      `sometimes|nullable|integer|exists:users,id`.
+    - Schema Zod CREATE: `supervisor_id` e' una relation id richiesta, con errore localizzato se
+      vuota. Schema Zod EDIT: `supervisor_id` resta `number|null`; nessun vincolo create-only viene
+      riusato nell'edit.
+  </amendment>
+
   <scope>
     <in>
       <item>Backend: migration `opportunities` + pivot `opportunity_user` (position), model `Opportunity` (BaseModel, #[Fillable], LogsModelActivity), DTO Create/Update, `OpportunityService` (managerSyncMap come RegistryService), `StoreOpportunityRequest`/`UpdateOpportunityRequest` (+ValidatesManagerSlots, EnforcesFieldPermissions), `OpportunityPolicy`, `OpportunityResource`, `OpportunityController`, `routes/api/opportunities.php` + require in api.php.</item>
@@ -256,8 +277,9 @@
         { name: string (required, max 255),
           registry_id: number (required se derivazione null, exists),
           company_id/company_site_id/operational_site_id/business_function_id/referent_id/
-          commercial_id/reporter_id/supervisor_id/source_id/product_category_id:
+          commercial_id/reporter_id/source_id/product_category_id:
             number|null (nullable, exists sulla rispettiva tabella),
+          supervisor_id: number (required, exists:users,id),
           lead_id: number|null (nullable, exists:leads,id, unique:opportunities,lead_id),
           manager_slots: (number|null)[] (ValidatesManagerSlots, come Registry),
           start_date/expected_close_date: string 'Y-m-d' | null,
@@ -456,7 +478,7 @@
     <!-- ===== AMENDMENT rev.3 (2026-07-17): righe multiple funzione aziendale + categoria prodotto ===== -->
     <!-- SOSTITUISCE i campi singoli business_function_id/product_category_id dell'opportunita' con una collezione uno-a-molti di righe (funzione aziendale + categoria prodotto). -->
     <criterion id="AC-097">Nuova tabella `opportunity_product_lines` (opportunity_id FK cascadeOnDelete; business_function_id FK restrictOnDelete; product_category_id FK restrictOnDelete; timestamps; UNIQUE(opportunity_id, business_function_id, product_category_id); indici sulle FK). La stessa migration RIMUOVE le colonne business_function_id e product_category_id da `opportunities` (down reversibile: ripristina colonne + droppa tabella; backfill best-effort di 1 riga dove entrambe erano non-null). [Pest: Unit/Models/OpportunityProductLineTest + OpportunityTest]</criterion>
-    <criterion id="AC-098">Model Opportunity: rimosse relazioni businessFunction()/productCategory() e le 2 colonne dal Fillable; aggiunta productLines(): HasMany<OpportunityProductLine>. Model OpportunityProductLine con Fillable [opportunity_id, business_function_id, product_category_id] e relazioni businessFunction()/productCategory(). [Pest]</criterion>
+    <criterion id="AC-098">Model Opportunity: rimosse relazioni businessFunction()/productCategory() e le 2 colonne dal Fillable; aggiunta productLines(): HasMany&lt;OpportunityProductLine&gt;. Model OpportunityProductLine con Fillable [opportunity_id, business_function_id, product_category_id] e relazioni businessFunction()/productCategory(). [Pest]</criterion>
     <criterion id="AC-099">POST/PUT accettano `product_lines`: [] (array; ogni item {business_function_id required exists, product_category_id required exists}). Il server SOSTITUISCE integralmente l'insieme delle righe (delete-all + insert in transazione). Non piu' business_function_id/product_category_id nel payload. [Pest: OpportunityCrudTest]</criterion>
     <criterion id="AC-100">withValidator server-side: coppia (business_function_id, product_category_id) duplicata nel payload -> 422; categoria la cui funzione aziendale EFFICACE (CategoryHierarchy::effectiveBusinessFunction) != business_function_id della riga -> 422. [Pest: OpportunityCrudTest]</criterion>
     <criterion id="AC-101">OpportunityResource: rimossi business_function_id/business_function/product_category_id/product_category; aggiunto `product_lines`: [{id, business_function:{id,name}, product_category:{id,name}}] (eager-loaded, N+1-free). `locked_fields` non contiene piu' business_function_id/product_category_id. [Pest: OpportunityShowTest]</criterion>
@@ -467,6 +489,10 @@
     <criterion id="AC-106">Form: nuova sezione a righe. Input bozza = select funzione aziendale + select categoria (params business_function_id, disabilitato finche' non scelta la funzione) + bottone "Aggiungi" (abilitato solo con entrambi valorizzati e coppia non gia' presente). Righe confermate come lista compatta con rimozione. useFieldArray name='product_lines'. [Vitest: opportunity-product-lines-field.test.tsx]</criterion>
     <criterion id="AC-107">Nome opportunita': si auto-compila con la concatenazione dei nomi delle categorie prodotto scelte con separatore " + " (in ordine di riga). Auto ma SOVRASCRIVIBILE: appena l'utente modifica il campo nome a mano, l'auto-fill si disattiva e il valore manuale resta. Backend `name` invariato (required, max:255): il FE lo calcola e lo invia. [Vitest: opportunity-product-lines-field.test.tsx + opportunity-form-body.test.tsx]</criterion>
     <criterion id="AC-108">Select sede operativa nel form NON e' piu' filtrato per business_function_id (nessuna BF singola): resta singolo, required, derivabile da lead. SOSTITUISCE lo scoping BF di operational_site della sezione classificazione. [Vitest]</criterion>
+
+    <!-- ===== AMENDMENT rev.4 (2026-07-20): supervisore obbligatorio solo in creazione ===== -->
+    <criterion id="AC-109">POST senza `supervisor_id` o con `supervisor_id: null` -> 422 localizzato sul campo e nessuna opportunita' creata; POST con un supervisore esistente soddisfa il vincolo create-only. SOSTITUISCE per il solo POST la nullability di `supervisor_id` descritta nel contratto storico. [Pest: OpportunityCrudTest]</criterion>
+    <criterion id="AC-110">Schema Zod CREATE: supervisore vuoto -> errore localizzato e submit impedito. Schema Zod EDIT: supervisore null e' valido; PATCH senza `supervisor_id` oppure con `supervisor_id: null` resta valido e la response di dettaglio puo' esporre `supervisor_id: null` e `supervisor: null`. [Vitest: opportunity-schema.test.ts + Pest: OpportunityCrudTest]</criterion>
 
   </acceptance_criteria>
 

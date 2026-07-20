@@ -43,7 +43,7 @@ if (! function_exists('opportunityStatusFkUserWith')) {
 
 if (! function_exists('opportunityStatusFkPayload')) {
     /**
-     * @return array{registry_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{registry_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
      */
     function opportunityStatusFkPayload(): array
     {
@@ -52,6 +52,7 @@ if (! function_exists('opportunityStatusFkPayload')) {
 
         return [
             'registry_id' => Registry::factory()->create()->id,
+            'supervisor_id' => User::factory()->create()->id,
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],

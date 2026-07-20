@@ -27,9 +27,10 @@ if (! function_exists('nonDerivableOpportunityFks')) {
      * (amendment rev.1 A-2) — REMOVED entirely per user directive
      * 2026-07-17. `opportunity_status_id` (spec 0043, D-3) is NOT
      * BR-1-derivable from a lead (only registry_id/source_id are), so it
-     * stays a plain mandatory field even for a from-lead create.
+     * stays a plain mandatory field even for a from-lead create. The
+     * supervisor is likewise mandatory only on create.
      *
-     * @return array{opportunity_status_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{opportunity_status_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
      */
     function nonDerivableOpportunityFks(): array
     {
@@ -38,6 +39,7 @@ if (! function_exists('nonDerivableOpportunityFks')) {
 
         return [
             'opportunity_status_id' => OpportunityStatus::factory()->create()->id,
+            'supervisor_id' => User::factory()->create()->id,
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],

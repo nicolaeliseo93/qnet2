@@ -4,8 +4,9 @@ import type { TFunction } from 'i18next'
 /**
  * Zod schema for the opportunity create/edit form, built as a factory so
  * validation messages are localized via the i18n `t` function. The shape
- * mirrors the frozen backend contract (spec 0040 + amendment rev.1) 1:1:
- * `name`, `registry_id` required (D-4), every other relation nullable.
+ * mirrors the opportunity contract while preserving the create/edit
+ * distinction: supervisor is required only when creating an opportunity and
+ * remains nullable when editing an existing one.
  */
 
 /** Backend `name` column limit (`max:255`). */
@@ -107,12 +108,15 @@ function baseFields(t: TFunction) {
 
 /** Create schema. */
 export function buildCreateOpportunitySchema(t: TFunction) {
-  return z.object(baseFields(t))
+  return z.object({
+    ...baseFields(t),
+    supervisor_id: requiredRelationId(t('opportunities.form.supervisorRequired')),
+  })
 }
 
-/** Edit schema (same shape; partial PATCH is computed by the caller). */
+/** Edit schema; partial PATCH is computed by the caller and supervisor remains nullable. */
 export function buildUpdateOpportunitySchema(t: TFunction) {
-  return buildCreateOpportunitySchema(t)
+  return z.object(baseFields(t))
 }
 
 export type CreateOpportunityFormValues = z.infer<ReturnType<typeof buildCreateOpportunitySchema>>
