@@ -30,7 +30,7 @@ export interface StatusReorderSheetLabels {
 interface StatusReorderSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Resource segment of the endpoint: `pipeline-statuses` or `lead-statuses`. */
+  /** Resource segment of the endpoint: `pipeline-statuses` or `opportunity-statuses`. */
   resource: string
   /** Callers own their own i18n strings (mirrors `RelationSelectField`). */
   labels: StatusReorderSheetLabels
@@ -39,7 +39,7 @@ interface StatusReorderSheetProps {
 }
 
 /**
- * Drag & drop reorder sheet shared by `pipeline-statuses` and `lead-statuses`
+ * Drag & drop reorder sheet shared by `pipeline-statuses` and `opportunity-statuses`
  * (spec 0039 D-4): a thin wrapper over `<SortableList>` (`components/ui`,
  * @dnd-kit) fed by `useStatusReorder`. The system rows ("Nuovo"/"Chiuso")
  * pin to the leading/trailing edges — no handle, not draggable — and every

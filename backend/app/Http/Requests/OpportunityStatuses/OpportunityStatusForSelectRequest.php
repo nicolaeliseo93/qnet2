@@ -8,7 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Validates the query for GET /api/opportunity-statuses/for-select
- * (ADR 0011), mirroring LeadStatusForSelectRequest.
+ * (ADR 0011).
  *
  * Authorization is intentionally NOT handled here (it stays in the controller
  * via authorize('viewAny', OpportunityStatus::class)). Pagination bounds

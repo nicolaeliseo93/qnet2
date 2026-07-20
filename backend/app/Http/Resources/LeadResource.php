@@ -36,8 +36,7 @@ class LeadResource extends JsonResource
             'source' => $this->summarizeByName($this->source),
             'operator_id' => $this->operator_id,
             'operator' => $this->summarizeByName($this->operator),
-            'lead_status_id' => $this->lead_status_id,
-            'lead_status' => $this->summarizeLeadStatus($this->leadStatus),
+            'lead_status' => $this->lifecycleStatus()->value,
             'notes' => $this->notes,
             'extra_fields' => $this->extra_fields,
             // spec 0040: the opportunity generated from this lead, if any
@@ -59,24 +58,6 @@ class LeadResource extends JsonResource
         }
 
         return ['id' => $related->id, 'name' => $related->name];
-    }
-
-    /**
-     * `lead_status_id` is NOT NULL (spec 0029 D-1), so this is always
-     * populated. Mapped EXPLICITLY with `color` — never through
-     * summarizeByName(), which would drop it and reproduce the scolored
-     * badge defect of ProjectsTableDefinition (spec 0029
-     * context/known_defect_not_ours).
-     *
-     * @return array{id: int, name: string, color: ?string}|null
-     */
-    private function summarizeLeadStatus(mixed $leadStatus): ?array
-    {
-        if ($leadStatus === null) {
-            return null;
-        }
-
-        return ['id' => $leadStatus->id, 'name' => $leadStatus->name, 'color' => $leadStatus->color];
     }
 
     /**

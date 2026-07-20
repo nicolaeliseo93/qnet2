@@ -27,7 +27,6 @@ final class LeadRowPersister
         private readonly RegistryService $registryService,
         private readonly LeadService $leadService,
         private readonly LeadProfileBuilder $profileBuilder,
-        private readonly LeadImportFieldCatalog $catalog,
     ) {}
 
     /**
@@ -107,12 +106,6 @@ final class LeadRowPersister
             throw new RuntimeException('LeadsImportDefinition::persistRow requires a campaign_id in the global configuration.');
         }
 
-        $leadStatusId = $this->id($globalConfig, 'lead_status_id') ?? $this->catalog->defaultLeadStatusId();
-
-        if ($leadStatusId === null) {
-            throw new RuntimeException('LeadsImportDefinition::persistRow requires a lead_status_id in the global configuration.');
-        }
-
         $sourceId = $this->id($globalConfig, 'source_id');
         $operationalSiteId = $this->id($globalConfig, 'operational_site_id');
         $operatorId = $this->id($globalConfig, 'operator_id');
@@ -131,8 +124,6 @@ final class LeadRowPersister
                 operationalSiteIdSubmitted: true,
                 operatorId: $operatorId,
                 operatorIdSubmitted: true,
-                leadStatusId: $leadStatusId,
-                leadStatusIdSubmitted: true,
                 notes: $notes,
                 notesSubmitted: true,
                 extraFields: $extraFields,
@@ -148,7 +139,6 @@ final class LeadRowPersister
             operationalSiteId: $operationalSiteId,
             sourceId: $sourceId,
             operatorId: $operatorId,
-            leadStatusId: $leadStatusId,
             notes: $notes,
             extraFields: $extraFields,
         ));

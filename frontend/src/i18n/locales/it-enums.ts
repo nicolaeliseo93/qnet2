@@ -15,6 +15,11 @@ export const enums = {
     individual: 'Persona fisica',
     company: 'Azienda',
   },
+  lead_lifecycle_status: {
+    not_associated: 'Non associato',
+    associated: 'Associato',
+    converted_to_opportunity: 'Convertito in opportunità',
+  },
   gender: {
     male: 'Maschio',
     female: 'Femmina',

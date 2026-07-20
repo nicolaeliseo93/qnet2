@@ -4,12 +4,12 @@ import { STATUS_GROUPS } from '@/features/status-reorder/types'
 
 /**
  * Zod schema for the opportunity status create/edit form, built as a factory
- * so validation messages are localized via the i18n `t` function (mirrors
- * `lead-statuses`, spec 0043). The shape mirrors the frozen backend contract
+ * so validation messages are localized via the i18n `t` function. The shape
+ * mirrors the frozen backend contract
  * (spec 0043) 1:1. `color` stores a palette TOKEN (empty string = unset,
  * mapped to `null` by the payload builder) — see `ColorTokenPicker`.
- * `sort_order` is server-managed (D-5) and has no form field. Unlike
- * lead-statuses, this module has no custom fields (spec 0043 scope: out).
+ * `sort_order` is server-managed (D-5) and has no form field. This module has
+ * no custom fields (spec 0043 scope: out).
  */
 
 /** Backend `name` column limit (`max:191`). */
@@ -26,7 +26,7 @@ function baseFields(t: TFunction) {
       .min(1, t('opportunityStatuses.form.nameRequired'))
       .max(NAME_MAX_LENGTH, t('opportunityStatuses.form.nameMax')),
     color: z.string().max(COLOR_MAX_LENGTH, t('opportunityStatuses.form.colorMax')),
-    // Fixed 3-value enum (mirrors lead-statuses). System rows only ever
+    // Fixed 3-value enum. System rows only ever
     // accept `name`/`color` — the group control is disabled for them in the
     // form body, so this field never diverges from its hydrated value.
     group: z.enum(STATUS_GROUPS),

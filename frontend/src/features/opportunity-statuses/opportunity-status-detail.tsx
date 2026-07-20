@@ -23,8 +23,7 @@ interface OpportunityStatusDetailViewProps {
 /**
  * Read-only detail of a single opportunity status. Purely presentational: the
  * caller (the table's "view" sheet) fetches the fresh detail and passes it
- * down. Composed from the shared detail kit for a consistent CRM look
- * (mirrors `LeadStatusDetailView`).
+ * down. Composed from the shared detail kit for a consistent CRM look.
  */
 export function OpportunityStatusDetailView({ opportunityStatus }: OpportunityStatusDetailViewProps) {
   const { t } = useTranslation()

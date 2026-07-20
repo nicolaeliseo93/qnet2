@@ -2,14 +2,15 @@
 
 namespace App\Tables;
 
+use App\Enums\LeadLifecycleStatus;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\User;
 use App\Tables\Leads\LeadAdvancedFilterCatalog;
 use App\Tables\Leads\LeadColumnCatalog;
 use App\Tables\Leads\LeadOperationalSiteColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -36,22 +37,9 @@ class LeadsTableDefinition extends AbstractTableDefinition
 
     private const string OPERATIONAL_SITE_COLUMN = 'operational_site';
 
-    /**
-     * Derived boolean column: whether an operator is assigned to the lead
-     * (`operator_id IS NOT NULL`). No real DB column, so filter and sort are
-     * resolved here against the FK.
-     */
-    private const string IS_ASSIGNED_COLUMN = 'is_assigned';
-
     private const string OPERATOR_FK = 'operator_id';
 
-    /**
-     * Derived boolean column: whether an opportunity was generated from the
-     * lead (spec 0040 D-2/D-5). No stored flag — the state is an EXISTS on
-     * the `opportunity` relation, surfaced via the `opportunity_exists`
-     * withExists alias for the row value and the sort.
-     */
-    private const string IS_CONVERTED_COLUMN = 'is_converted';
+    private const string LEAD_STATUS_COLUMN = 'lead_status';
 
     private const string OPPORTUNITY_RELATION = 'opportunity';
 
@@ -70,7 +58,6 @@ class LeadsTableDefinition extends AbstractTableDefinition
         'campaign' => ['relation' => 'campaign', 'table' => 'campaigns', 'fk' => 'campaign_id'],
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
         'operator' => ['relation' => 'operator', 'table' => 'users', 'fk' => 'operator_id'],
-        'lead_status' => ['relation' => 'leadStatus', 'table' => 'lead_statuses', 'fk' => 'lead_status_id'],
     ];
 
     public function __construct(private readonly LeadOperationalSiteColumn $operationalSiteColumn) {}
@@ -100,7 +87,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
         // Eager-load every relation mapRow touches to avoid N+1 across the
         // page (operationalSite's address+city for the composed label, BR-3).
         return Lead::query()
-            ->with(['registry', 'campaign', 'operationalSite.addresses.city', 'source', 'operator', 'leadStatus'])
+            ->with(['registry', 'campaign', 'operationalSite.addresses.city', 'source', 'operator'])
             ->withExists(self::OPPORTUNITY_RELATION);
     }
 
@@ -155,6 +142,28 @@ class LeadsTableDefinition extends AbstractTableDefinition
     }
 
     /**
+     * Badge metadata for the derived `lead_status` lifecycle column.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    protected function badgesFor(string $columnId, User $actor): ?array
+    {
+        if ($columnId !== self::LEAD_STATUS_COLUMN) {
+            return null;
+        }
+
+        return array_map(static fn ($meta): array => $meta->toArray(), LeadLifecycleStatus::options());
+    }
+
+    /**
+     * The lifecycle badge label is localized by the frontend enum catalogue.
+     */
+    protected function enumKeyFor(string $columnId, User $actor): ?string
+    {
+        return $columnId === self::LEAD_STATUS_COLUMN ? 'lead_lifecycle_status' : null;
+    }
+
+    /**
      * Map a Lead to the row payload. `notes` is emitted even though it is not
      * a declared (sortable/filterable) column, matching the data contract's
      * row shape. `actions` is attached by the generic TableService via
@@ -172,9 +181,7 @@ class LeadsTableDefinition extends AbstractTableDefinition
             'operational_site' => $this->operationalSiteColumn->summarize($row),
             'source' => $this->summarize($row->source),
             'operator' => $this->summarize($row->operator),
-            'is_assigned' => $row->operator_id !== null,
-            'is_converted' => (bool) $row->getAttribute(self::OPPORTUNITY_EXISTS_ALIAS),
-            'lead_status' => $this->summarizeLeadStatus($row->leadStatus),
+            'lead_status' => $row->lifecycleStatus()->value,
             'notes' => $row->notes,
             'created_at' => $row->created_at,
         ];
@@ -190,25 +197,6 @@ class LeadsTableDefinition extends AbstractTableDefinition
         }
 
         return ['id' => $related->id, 'name' => $related->name];
-    }
-
-    /**
-     * `lead_status_id` is NOT NULL (spec 0029 D-1). Mapped EXPLICITLY with
-     * `color`, never via summarize(): reusing it here would reproduce the
-     * scolored badge defect ProjectsTableDefinition::mapRow() has via
-     * summarize() on `pipeline_status` (spec 0029 context/known_defect_not_ours,
-     * out of scope to fix there).
-     *
-     * @return array{id: int, name: string, color: ?string}|null
-     */
-    private function summarizeLeadStatus(?Model $related): ?array
-    {
-        if ($related === null) {
-            return null;
-        }
-
-        /** @var LeadStatus $related */
-        return ['id' => $related->id, 'name' => $related->name, 'color' => $related->color];
     }
 
     /**
@@ -251,6 +239,13 @@ class LeadsTableDefinition extends AbstractTableDefinition
      */
     public function applyAdvancedFilter(Builder $query, string $name, array $descriptor, mixed $value): bool
     {
+        if ($name === self::LEAD_STATUS_COLUMN) {
+            $values = is_array($value) ? array_values($value) : [$value];
+            $this->applyLeadStatusFilter($query, $values);
+
+            return true;
+        }
+
         if ($name === self::OPERATIONAL_SITE_COLUMN) {
             if (is_string($value) && $value !== '') {
                 $this->operationalSiteColumn->applyAdvancedFilter($query, $value);
@@ -282,14 +277,8 @@ class LeadsTableDefinition extends AbstractTableDefinition
             return true;
         }
 
-        if ($columnId === self::IS_ASSIGNED_COLUMN) {
-            $this->applyAssignedFilter($query, $values);
-
-            return true;
-        }
-
-        if ($columnId === self::IS_CONVERTED_COLUMN) {
-            $this->applyConvertedFilter($query, $values);
+        if ($columnId === self::LEAD_STATUS_COLUMN) {
+            $this->applyLeadStatusFilter($query, $values);
 
             return true;
         }
@@ -310,47 +299,50 @@ class LeadsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * `is_assigned` set filter: '1' keeps leads with an operator, '0' keeps
-     * unassigned ones; both (or neither) selected leaves the query untouched.
+     * `lead_status` set filter: converted leads have a generated opportunity,
+     * associated leads have an operator and no opportunity, not-associated
+     * leads have neither.
      *
      * @param  Builder<Lead>  $query
      * @param  array<int, string>  $values
      */
-    private function applyAssignedFilter(Builder $query, array $values): void
+    private function applyLeadStatusFilter(Builder $query, array $values): void
     {
-        $wantsAssigned = in_array('1', $values, true);
-        $wantsUnassigned = in_array('0', $values, true);
+        $values = array_values(array_unique(array_intersect($values, $this->leadStatusValues())));
 
-        if ($wantsAssigned === $wantsUnassigned) {
+        if ($values === [] || count($values) === count($this->leadStatusValues())) {
             return;
         }
 
-        $wantsAssigned
-            ? $query->whereNotNull(self::OPERATOR_FK)
-            : $query->whereNull(self::OPERATOR_FK);
+        $query->where(function (Builder $statusQuery) use ($values): void {
+            foreach ($values as $value) {
+                match ($value) {
+                    LeadLifecycleStatus::ConvertedToOpportunity->value => $statusQuery->orWhereHas(self::OPPORTUNITY_RELATION),
+                    LeadLifecycleStatus::Associated->value => $statusQuery->orWhere(function (Builder $associatedQuery): void {
+                        $associatedQuery
+                            ->whereNotNull(self::OPERATOR_FK)
+                            ->whereDoesntHave(self::OPPORTUNITY_RELATION);
+                    }),
+                    LeadLifecycleStatus::NotAssociated->value => $statusQuery->orWhere(function (Builder $unassociatedQuery): void {
+                        $unassociatedQuery
+                            ->whereNull(self::OPERATOR_FK)
+                            ->whereDoesntHave(self::OPPORTUNITY_RELATION);
+                    }),
+                    default => null,
+                };
+            }
+        });
     }
 
     /**
-     * `is_converted` set filter: '1' keeps leads with a generated opportunity,
-     * '0' keeps leads without one; both (or neither) selected leaves the query
-     * untouched. Resolved via the `opportunity` relation (EXISTS), never a
-     * stored flag (spec 0040 D-5).
-     *
-     * @param  Builder<Lead>  $query
-     * @param  array<int, string>  $values
+     * @return array<int, string>
      */
-    private function applyConvertedFilter(Builder $query, array $values): void
+    private function leadStatusValues(): array
     {
-        $wantsConverted = in_array('1', $values, true);
-        $wantsNotConverted = in_array('0', $values, true);
-
-        if ($wantsConverted === $wantsNotConverted) {
-            return;
-        }
-
-        $wantsConverted
-            ? $query->whereHas(self::OPPORTUNITY_RELATION)
-            : $query->whereDoesntHave(self::OPPORTUNITY_RELATION);
+        return array_map(
+            static fn (LeadLifecycleStatus $status): string => $status->value,
+            LeadLifecycleStatus::cases(),
+        );
     }
 
     /**
@@ -386,25 +378,8 @@ class LeadsTableDefinition extends AbstractTableDefinition
             return true;
         }
 
-        if ($columnId === self::IS_ASSIGNED_COLUMN) {
-            // Boolean semantics via the FK: NULL (unassigned) sorts before any
-            // id on ASC in both MySQL and SQLite, i.e. false < true. No raw SQL.
-            $query->orderBy(self::OPERATOR_FK, $direction);
-
-            return true;
-        }
-
-        if ($columnId === self::IS_CONVERTED_COLUMN) {
-            // Boolean semantics via a correlated EXISTS subquery (1 when an
-            // opportunity references the lead, NULL otherwise): NULL sorts
-            // before 1 on ASC in MySQL and SQLite, i.e. false < true, matching
-            // is_assigned. `1` is a constant literal, never user input.
-            $existsSubquery = DB::table(self::OPPORTUNITIES_TABLE)
-                ->selectRaw('1')
-                ->whereColumn(self::OPPORTUNITIES_TABLE.'.lead_id', 'leads.id')
-                ->limit(1);
-
-            $query->orderBy($existsSubquery, $direction);
+        if ($columnId === self::LEAD_STATUS_COLUMN) {
+            $query->orderBy($this->leadStatusSortSubquery(), $direction);
 
             return true;
         }
@@ -425,6 +400,13 @@ class LeadsTableDefinition extends AbstractTableDefinition
         return true;
     }
 
+    private function leadStatusSortSubquery(): QueryBuilder
+    {
+        return DB::table(self::OPPORTUNITIES_TABLE)
+            ->selectRaw('CASE WHEN COUNT(*) > 0 THEN 2 WHEN leads.operator_id IS NOT NULL THEN 1 ELSE 0 END')
+            ->whereColumn(self::OPPORTUNITIES_TABLE.'.lead_id', 'leads.id');
+    }
+
     /**
      * Excel-like distinct values (spec 0004/0005). `registry`/`campaign`/
      * `source`/`operator` are plain related-row names; `operational_site`
@@ -438,6 +420,10 @@ class LeadsTableDefinition extends AbstractTableDefinition
     {
         if ($columnId === self::OPERATIONAL_SITE_COLUMN) {
             return $this->operationalSiteColumn->distinctValues($search, $query, $limit);
+        }
+
+        if ($columnId === self::LEAD_STATUS_COLUMN) {
+            return $this->filteredLeadStatusValues($search, $limit);
         }
 
         $config = self::DERIVED_RELATIONS[$columnId] ?? null;
@@ -459,6 +445,24 @@ class LeadsTableDefinition extends AbstractTableDefinition
             ->pluck('name')
             ->map(static fn (mixed $name): string => (string) $name)
             ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function filteredLeadStatusValues(?string $search, int $limit): array
+    {
+        $values = $this->leadStatusValues();
+
+        if ($search !== null && $search !== '') {
+            $needle = mb_strtolower($search);
+            $values = array_values(array_filter(
+                $values,
+                static fn (string $value): bool => str_contains(mb_strtolower($value), $needle),
+            ));
+        }
+
+        return array_slice($values, 0, $limit);
     }
 
     /**

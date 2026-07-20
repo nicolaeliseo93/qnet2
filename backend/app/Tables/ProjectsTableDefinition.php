@@ -201,8 +201,7 @@ class ProjectsTableDefinition extends AbstractTableDefinition
 
     /**
      * The pipeline status projected WITH its `color` token, so the grid renders
-     * the colored status badge (mirrors LeadsTableDefinition::summarizeLeadStatus;
-     * generic summarize() would drop the color).
+     * the colored status badge; generic summarize() would drop the color.
      *
      * @return array{id: int, name: string, color: ?string}|null
      */

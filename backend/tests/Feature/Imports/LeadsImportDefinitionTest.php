@@ -14,7 +14,6 @@ use App\Models\Country;
 use App\Models\ImportRun;
 use App\Models\ImportRunRow;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\PersonalData;
 use App\Models\Province;
 use App\Models\Registry;
@@ -66,7 +65,6 @@ it('AC-011: persistRow creates a Registry (card+contacts+geo address) and a Lead
     $campaign = Campaign::factory()->create();
     $source = Source::factory()->create();
     $operator = User::factory()->create();
-    $status = LeadStatus::factory()->create();
 
     $row = stagedLeadRow(
         mapped: [
@@ -93,7 +91,6 @@ it('AC-011: persistRow creates a Registry (card+contacts+geo address) and a Lead
         'campaign_id' => $campaign->id,
         'source_id' => $source->id,
         'operator_id' => $operator->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::CreateNew->value);
 
     $registry = Registry::query()->where('name', 'Mario Rossi')->firstOrFail();
@@ -117,20 +114,17 @@ it('AC-011: persistRow creates a Registry (card+contacts+geo address) and a Lead
     $lead = Lead::query()->where('registry_id', $registry->id)->where('campaign_id', $campaign->id)->firstOrFail();
     expect($lead->source_id)->toBe($source->id)
         ->and($lead->operator_id)->toBe($operator->id)
-        ->and($lead->lead_status_id)->toBe($status->id)
         ->and($lead->notes)->toBe('Imported lead');
 });
 
 it('AC-011: a company-shaped row (company_name, no first/last) creates a company card', function () {
     $actor = User::factory()->create();
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
 
     $row = stagedLeadRow(mapped: ['company_name' => 'Acme Srl', 'email' => 'info@acme.example.com']);
 
     app(LeadsImportDefinition::class)->persistRow($actor, $row, [
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::CreateNew->value);
 
     $registry = Registry::query()->where('name', 'Acme Srl')->firstOrFail();
@@ -192,12 +186,10 @@ it('AC-012: create_new always inserts a new Registry, even when a duplicate matc
     Contact::factory()->email()->for($card, 'contactable')->create(['value' => 'dup@example.com']);
 
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     $row = stagedLeadRow(['first_name' => 'New', 'last_name' => 'Person', 'email' => 'dup@example.com']);
 
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $row, [
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::CreateNew->value);
 
     expect(Registry::query()->count())->toBe(2)
@@ -211,7 +203,6 @@ it('AC-012: update_existing updates the matched Registry card and preserves its 
     $pec = Contact::factory()->pec()->for($card, 'contactable')->create(['value' => 'old@pec.example.com']);
 
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     $row = stagedLeadRow(
         mapped: ['first_name' => 'New', 'last_name' => 'Name', 'email' => 'dup@example.com'],
         duplicateOfId: $existing->id,
@@ -219,7 +210,6 @@ it('AC-012: update_existing updates the matched Registry card and preserves its 
 
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $row, [
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::UpdateExisting->value);
 
     expect(Registry::query()->count())->toBe(1);
@@ -231,18 +221,15 @@ it('AC-012: update_existing updates the matched Registry card and preserves its 
     $pec->refresh();
     expect($pec->value)->toBe('old@pec.example.com');
 
-    $lead = Lead::query()->where('registry_id', $existing->id)->where('campaign_id', $campaign->id)->firstOrFail();
-    expect($lead->lead_status_id)->toBe($status->id);
+    Lead::query()->where('registry_id', $existing->id)->where('campaign_id', $campaign->id)->firstOrFail();
 });
 
 it('AC-012: update_existing with NO match falls back to create_new', function () {
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     $row = stagedLeadRow(['first_name' => 'Fresh', 'last_name' => 'Contact', 'email' => 'fresh@example.com']);
 
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $row, [
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::UpdateExisting->value);
 
     expect(Registry::query()->count())->toBe(1)
@@ -251,12 +238,10 @@ it('AC-012: update_existing with NO match falls back to create_new', function ()
 
 it('AC-012: ignore never persists anything', function () {
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     $row = stagedLeadRow(['first_name' => 'Skip', 'last_name' => 'Me', 'email' => 'skip@example.com']);
 
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $row, [
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::Ignore->value);
 
     expect(Registry::query()->count())->toBe(0)
@@ -269,12 +254,10 @@ it('AC-012: manual with a resolved duplicate is defensively left untouched (park
     Contact::factory()->email()->for($card, 'contactable')->create(['value' => 'dup@example.com']);
 
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     $row = stagedLeadRow(['first_name' => 'Some', 'last_name' => 'One', 'email' => 'dup@example.com'], duplicateOfId: $existing->id);
 
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $row, [
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::Manual->value);
 
     expect(Registry::query()->count())->toBe(1)
@@ -283,12 +266,10 @@ it('AC-012: manual with a resolved duplicate is defensively left untouched (park
 
 it('AC-012: manual with NO duplicate creates normally', function () {
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     $row = stagedLeadRow(['first_name' => 'No', 'last_name' => 'Collision', 'email' => 'no-collision@example.com']);
 
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $row, [
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::Manual->value);
 
     expect(Registry::query()->count())->toBe(1)
@@ -302,7 +283,6 @@ it('AC-012: manual with NO duplicate creates normally', function () {
 
 it('AC-013: extra_values are persisted verbatim on leads.extra_fields, under their original column names', function () {
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     $row = stagedLeadRow(
         mapped: ['first_name' => 'Extra', 'last_name' => 'Fields', 'email' => 'extra@example.com'],
         extraValues: ['Origine Lead' => 'Fiera Milano', 'Note interne' => 'VIP'],
@@ -310,7 +290,6 @@ it('AC-013: extra_values are persisted verbatim on leads.extra_fields, under the
 
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $row, [
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::CreateNew->value);
 
     $lead = Lead::query()->latest('id')->firstOrFail();
@@ -322,12 +301,10 @@ it('AC-013: extra_values are persisted verbatim on leads.extra_fields, under the
 
 it('AC-013: no extra_values leaves leads.extra_fields null', function () {
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     $row = stagedLeadRow(['first_name' => 'No', 'last_name' => 'Extra', 'email' => 'no-extra@example.com']);
 
     app(LeadsImportDefinition::class)->persistRow(User::factory()->create(), $row, [
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ], ImportDedupMode::CreateNew->value);
 
     expect(Lead::query()->latest('id')->firstOrFail()->extra_fields)->toBeNull();
@@ -353,15 +330,13 @@ it('exposes recognizers()/supportsExtraFields()/dedupModes() per the frozen cont
         ->toBe(['create_new', 'update_existing', 'ignore', 'manual']);
 });
 
-it('globalConfig() requires campaign_id and defaults lead_status_id to the seeded "New" status', function () {
-    $newStatus = LeadStatus::factory()->create(['name' => 'New']);
-
+it('globalConfig() requires campaign_id and no longer exposes lead_status_id', function () {
     $definition = app(LeadsImportDefinition::class);
     $global = collect($definition->globalConfig())->keyBy('id');
 
     expect($global['campaign_id']['required'])->toBeTrue()
         ->and($global['campaign_id']['for_select_resource'])->toBe('campaigns')
-        ->and($global['lead_status_id']['default'])->toBe($newStatus->id)
+        ->and($global->has('lead_status_id'))->toBeFalse()
         ->and($global['project_id']['for_select_resource'])->toBe('projects')
         ->and($global['source_id']['for_select_resource'])->toBe('sources')
         ->and($global['operator_id']['for_select_resource'])->toBe('users');

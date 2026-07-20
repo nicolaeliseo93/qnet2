@@ -5,7 +5,6 @@ use App\Models\Campaign;
 use App\Models\City;
 use App\Models\ExportRun;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\Registry;
@@ -58,16 +57,22 @@ it('GET /api/tables/leads/columns: 200 with the declared columns, 403 without vi
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['registry', 'campaign', 'operational_site', 'source', 'operator', 'is_assigned', 'lead_status', 'is_converted', 'created_at']);
+    expect($ids)->toBe(['registry', 'campaign', 'operational_site', 'source', 'operator', 'lead_status', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['operational_site']['sortable'])->toBeTrue()
         ->and($columns['operational_site']['filterType'])->toBe('set')
         ->and($columns['registry']['sortable'])->toBeTrue()
-        ->and($columns['is_assigned']['type'])->toBe('boolean')
-        ->and($columns['is_assigned']['filterType'])->toBe('set')
-        ->and($columns['is_converted']['type'])->toBe('boolean')
-        ->and($columns['is_converted']['filterType'])->toBe('set');
+        ->and($columns['lead_status']['type'])->toBe('badge')
+        ->and($columns['lead_status']['filterType'])->toBe('set')
+        ->and($columns['lead_status']['options'])->toBe(['not_associated', 'associated', 'converted_to_opportunity'])
+        ->and($columns['lead_status']['enumKey'])->toBe('lead_lifecycle_status');
+
+    $leadStatusBadges = collect($columns['lead_status']['badges'])->keyBy('value');
+    expect($leadStatusBadges)->toHaveCount(3)
+        ->and($leadStatusBadges['not_associated']['color'])->toBe('slate')
+        ->and($leadStatusBadges['associated']['color'])->toBe('blue')
+        ->and($leadStatusBadges['converted_to_opportunity']['color'])->toBe('green');
 });
 
 // ---------------------------------------------------------------------------
@@ -185,179 +190,93 @@ it('rows: registry/source/operator surface as {id, name} summaries', function ()
 });
 
 // ---------------------------------------------------------------------------
-// is_assigned — derived boolean on operator_id: row value, set filter ('1'/'0'),
-// sort, and the fixed boolean value list from the /values endpoint
+// lead_status — derived lifecycle on operator_id/opportunity relation.
 // ---------------------------------------------------------------------------
 
-it('rows: is_assigned reflects the presence of an operator', function () {
+it('rows: lead_status reflects association and conversion state', function () {
     $actor = leadUserWith(['viewAny']);
     $assigned = Lead::factory()->create(['operator_id' => User::factory()->create()->id]);
     $unassigned = Lead::factory()->create(['operator_id' => null]);
+    $converted = Lead::factory()->create(['operator_id' => User::factory()->create()->id]);
+    Opportunity::factory()->create(['lead_id' => $converted->id]);
     Sanctum::actingAs($actor);
 
     $items = collect($this->postJson('/api/tables/leads/rows', ['startRow' => 0, 'endRow' => 25])->assertOk()->json('items'));
 
-    expect($items->firstWhere('id', $assigned->id)['is_assigned'])->toBeTrue()
-        ->and($items->firstWhere('id', $unassigned->id)['is_assigned'])->toBeFalse();
+    expect($items->firstWhere('id', $assigned->id)['lead_status'])->toBe('associated')
+        ->and($items->firstWhere('id', $unassigned->id)['lead_status'])->toBe('not_associated')
+        ->and($items->firstWhere('id', $converted->id)['lead_status'])->toBe('converted_to_opportunity');
 });
 
-it('rows: the is_assigned set filter narrows to assigned or unassigned leads', function () {
+it('rows: the lead_status set filter narrows to lifecycle status', function () {
     $actor = leadUserWith(['viewAny']);
     $assigned = Lead::factory()->create(['operator_id' => User::factory()->create()->id]);
     $unassigned = Lead::factory()->create(['operator_id' => null]);
+    $converted = Lead::factory()->create(['operator_id' => null]);
+    Opportunity::factory()->create(['lead_id' => $converted->id]);
     Sanctum::actingAs($actor);
 
     $rowsFor = fn (array $values) => collect($this->postJson('/api/tables/leads/rows', [
         'startRow' => 0,
         'endRow' => 25,
-        'filterModel' => ['is_assigned' => ['filterType' => 'set', 'values' => $values]],
+        'filterModel' => ['lead_status' => ['filterType' => 'set', 'values' => $values]],
     ])->assertOk()->json('items'))->pluck('id')->all();
 
-    expect($rowsFor(['1']))->toBe([$assigned->id])
-        ->and($rowsFor(['0']))->toBe([$unassigned->id])
-        ->and($rowsFor(['1', '0']))->toHaveCount(2);
+    expect($rowsFor(['associated']))->toBe([$assigned->id])
+        ->and($rowsFor(['not_associated']))->toBe([$unassigned->id])
+        ->and($rowsFor(['converted_to_opportunity']))->toBe([$converted->id])
+        ->and($rowsFor(['not_associated', 'associated', 'converted_to_opportunity']))->toHaveCount(3);
 });
 
-it('rows: sorting by is_assigned puts unassigned leads first on asc', function () {
+it('rows: duplicated lead_status values do not disable the lifecycle filter', function () {
     $actor = leadUserWith(['viewAny']);
     $assigned = Lead::factory()->create(['operator_id' => User::factory()->create()->id]);
     $unassigned = Lead::factory()->create(['operator_id' => null]);
+    $converted = Lead::factory()->create(['operator_id' => null]);
+    Opportunity::factory()->create(['lead_id' => $converted->id]);
     Sanctum::actingAs($actor);
 
     $ids = collect($this->postJson('/api/tables/leads/rows', [
         'startRow' => 0,
         'endRow' => 25,
-        'sortModel' => [['colId' => 'is_assigned', 'sort' => 'asc']],
+        'filterModel' => [
+            'lead_status' => [
+                'filterType' => 'set',
+                'values' => ['associated', 'associated', 'not_associated'],
+            ],
+        ],
     ])->assertOk()->json('items'))->pluck('id')->all();
 
-    expect($ids)->toBe([$unassigned->id, $assigned->id]);
+    expect($ids)->toContain($assigned->id, $unassigned->id)
+        ->not->toContain($converted->id)
+        ->toHaveCount(2);
 });
 
-it('values: is_assigned always offers both boolean states', function () {
+it('rows: sorting by lead_status orders not-associated, associated, converted on asc', function () {
+    $actor = leadUserWith(['viewAny']);
+    $assigned = Lead::factory()->create(['operator_id' => User::factory()->create()->id]);
+    $unassigned = Lead::factory()->create(['operator_id' => null]);
+    $converted = Lead::factory()->create(['operator_id' => null]);
+    Opportunity::factory()->create(['lead_id' => $converted->id]);
+    Sanctum::actingAs($actor);
+
+    $ids = collect($this->postJson('/api/tables/leads/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'lead_status', 'sort' => 'asc']],
+    ])->assertOk()->json('items'))->pluck('id')->all();
+
+    expect($ids)->toBe([$unassigned->id, $assigned->id, $converted->id]);
+});
+
+it('values: lead_status always offers the three dynamic states', function () {
     $actor = leadUserWith(['viewAny']);
     Lead::factory()->create(['operator_id' => null]);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/tables/leads/values', ['columnId' => 'is_assigned'])
+    $this->postJson('/api/tables/leads/values', ['columnId' => 'lead_status'])
         ->assertOk()
-        ->assertJsonPath('data.values', ['1', '0']);
-});
-
-// ---------------------------------------------------------------------------
-// is_converted — derived boolean on the `opportunity` relation (spec 0040
-// D-2/D-5: no stored flag, EXISTS): row value, set filter ('1'/'0'), sort,
-// and the fixed boolean value list from the /values endpoint
-// ---------------------------------------------------------------------------
-
-it('rows: is_converted reflects the presence of a generated opportunity', function () {
-    $actor = leadUserWith(['viewAny']);
-    $converted = Lead::factory()->create();
-    $notConverted = Lead::factory()->create();
-    Opportunity::factory()->create(['lead_id' => $converted->id]);
-    Sanctum::actingAs($actor);
-
-    $items = collect($this->postJson('/api/tables/leads/rows', ['startRow' => 0, 'endRow' => 25])->assertOk()->json('items'));
-
-    expect($items->firstWhere('id', $converted->id)['is_converted'])->toBeTrue()
-        ->and($items->firstWhere('id', $notConverted->id)['is_converted'])->toBeFalse();
-});
-
-it('rows: the is_converted set filter narrows to converted or not-converted leads', function () {
-    $actor = leadUserWith(['viewAny']);
-    $converted = Lead::factory()->create();
-    $notConverted = Lead::factory()->create();
-    Opportunity::factory()->create(['lead_id' => $converted->id]);
-    Sanctum::actingAs($actor);
-
-    $rowsFor = fn (array $values) => collect($this->postJson('/api/tables/leads/rows', [
-        'startRow' => 0,
-        'endRow' => 25,
-        'filterModel' => ['is_converted' => ['filterType' => 'set', 'values' => $values]],
-    ])->assertOk()->json('items'))->pluck('id')->all();
-
-    expect($rowsFor(['1']))->toBe([$converted->id])
-        ->and($rowsFor(['0']))->toBe([$notConverted->id])
-        ->and($rowsFor(['1', '0']))->toHaveCount(2);
-});
-
-it('rows: sorting by is_converted puts not-converted leads first on asc', function () {
-    $actor = leadUserWith(['viewAny']);
-    $converted = Lead::factory()->create();
-    $notConverted = Lead::factory()->create();
-    Opportunity::factory()->create(['lead_id' => $converted->id]);
-    Sanctum::actingAs($actor);
-
-    $ids = collect($this->postJson('/api/tables/leads/rows', [
-        'startRow' => 0,
-        'endRow' => 25,
-        'sortModel' => [['colId' => 'is_converted', 'sort' => 'asc']],
-    ])->assertOk()->json('items'))->pluck('id')->all();
-
-    expect($ids)->toBe([$notConverted->id, $converted->id]);
-});
-
-it('values: is_converted always offers both boolean states', function () {
-    $actor = leadUserWith(['viewAny']);
-    Lead::factory()->create();
-    Sanctum::actingAs($actor);
-
-    $this->postJson('/api/tables/leads/values', ['columnId' => 'is_converted'])
-        ->assertOk()
-        ->assertJsonPath('data.values', ['1', '0']);
-});
-
-// ---------------------------------------------------------------------------
-// spec 0029 AC-013 — lead_status row shape includes color (never through
-// summarize(), unlike ProjectsTableDefinition's scolored-badge defect), and
-// the derived column is filterable (set) and sortable via the allow-list.
-// ---------------------------------------------------------------------------
-
-it('rows: lead_status is {id, name, color}, mapped explicitly (AC-013)', function () {
-    $actor = leadUserWith(['viewAny']);
-    $status = LeadStatus::factory()->create(['name' => 'Qualified', 'color' => 'green']);
-    $lead = Lead::factory()->create(['lead_status_id' => $status->id]);
-    Sanctum::actingAs($actor);
-
-    $response = $this->postJson('/api/tables/leads/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
-    $row = collect($response->json('items'))->firstWhere('id', $lead->id);
-
-    expect($row['lead_status'])->toBe(['id' => $status->id, 'name' => 'Qualified', 'color' => 'green']);
-});
-
-it('rows: a filter on the lead_status column returns only that status\' leads (AC-013)', function () {
-    $actor = leadUserWith(['viewAny']);
-    $status = LeadStatus::factory()->create(['name' => 'Matching Status']);
-    $otherStatus = LeadStatus::factory()->create(['name' => 'Other Status']);
-    $matching = Lead::factory()->create(['lead_status_id' => $status->id]);
-    Lead::factory()->create(['lead_status_id' => $otherStatus->id]);
-    Sanctum::actingAs($actor);
-
-    $response = $this->postJson('/api/tables/leads/rows', [
-        'startRow' => 0,
-        'endRow' => 25,
-        'filterModel' => ['lead_status' => ['filterType' => 'set', 'values' => ['Matching Status']]],
-    ])->assertOk();
-
-    $ids = collect($response->json('items'))->pluck('id');
-    expect($ids->all())->toBe([$matching->id]);
-});
-
-it('rows: sorting by lead_status orders leads by the related status name (AC-013)', function () {
-    $actor = leadUserWith(['viewAny']);
-    $statusAlpha = LeadStatus::factory()->create(['name' => 'Alpha Status']);
-    $statusZulu = LeadStatus::factory()->create(['name' => 'Zulu Status']);
-    $leadZulu = Lead::factory()->create(['lead_status_id' => $statusZulu->id]);
-    $leadAlpha = Lead::factory()->create(['lead_status_id' => $statusAlpha->id]);
-    Sanctum::actingAs($actor);
-
-    $response = $this->postJson('/api/tables/leads/rows', [
-        'startRow' => 0,
-        'endRow' => 25,
-        'sortModel' => [['colId' => 'lead_status', 'sort' => 'asc']],
-    ])->assertOk();
-
-    $ids = collect($response->json('items'))->pluck('id');
-    expect($ids->all())->toBe([$leadAlpha->id, $leadZulu->id]);
+        ->assertJsonPath('data.values', ['not_associated', 'associated', 'converted_to_opportunity']);
 });
 
 // ---------------------------------------------------------------------------

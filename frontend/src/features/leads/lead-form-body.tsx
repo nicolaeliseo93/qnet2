@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils'
 import { MetaField } from '@/features/authorization/MetaField'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-api'
-import { LEAD_STATUSES_FOR_SELECT_RESOURCE } from '@/features/lead-statuses/for-select-api'
 import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
@@ -29,7 +28,7 @@ interface LeadFormBodyProps {
 
 /**
  * The lead create/edit form UI, grouped by prominence: the required
- * Contact/Campaign/Lead-status trio (BR-1, D-1) leads, the 3 optional
+ * Contact/Campaign pair (BR-1, D-1) leads, the optional
  * relations sit in a secondary "Details" section, and notes/extra fields
  * collapse out of the way (auto-reopening on validation errors) — all
  * wrapped in `MetaField` (spec 0004). All non-render logic lives in
@@ -79,32 +78,19 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
               {...selectLabels}
             />
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <RelationSelectField
-                control={form.control}
-                name="campaign_id"
-                metaKey="campaign_id"
-                label={t('leads.form.campaign')}
-                resource={CAMPAIGNS_FOR_SELECT_RESOURCE}
-                searchPlaceholder={t('leads.form.campaignSearch')}
-                selected={
-                  original?.campaign ? { id: original.campaign.id, name: original.campaign.name } : null
-                }
-                required
-                {...selectLabels}
-              />
-
-              <RelationSelectField
-                control={form.control}
-                name="lead_status_id"
-                metaKey="lead_status_id"
-                label={t('leads.form.leadStatus')}
-                resource={LEAD_STATUSES_FOR_SELECT_RESOURCE}
-                searchPlaceholder={t('leads.form.leadStatusSearch')}
-                selected={original?.lead_status ?? null}
-                {...selectLabels}
-              />
-            </div>
+            <RelationSelectField
+              control={form.control}
+              name="campaign_id"
+              metaKey="campaign_id"
+              label={t('leads.form.campaign')}
+              resource={CAMPAIGNS_FOR_SELECT_RESOURCE}
+              searchPlaceholder={t('leads.form.campaignSearch')}
+              selected={
+                original?.campaign ? { id: original.campaign.id, name: original.campaign.name } : null
+              }
+              required
+              {...selectLabels}
+            />
           </FormSection>
 
           <FormSection

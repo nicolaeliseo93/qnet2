@@ -1,8 +1,7 @@
 /**
  * Dominio Stati opportunità (spec 0043). Estratto in un file affiancato per
  * mantenere `it.ts` entro i limiti dimensionali (vedi
- * `.claude/rules/engineering.md` §6); rispecchia `lead-statuses` (spec 0029 +
- * 0039) 1:1, con il messaggio del delete-guard adattato alle Opportunità
+ * `.claude/rules/engineering.md` §6), con il messaggio del delete-guard adattato alle Opportunità
  * (BR-4). Gli stati di sistema sono "Nuova"/"Chiusa con successo"/"Persa" e un
  * enum `group` fisso a 3 valori (open/pending/closed), oltre allo sheet di
  * riordino drag & drop per le righe personalizzate.

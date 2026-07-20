@@ -2,9 +2,8 @@
  * Opportunity statuses CRUD types. The generic table types (columns/filters/
  * actions/rows) live in `features/table/types.ts`; this file holds only what
  * is genuinely opportunity-statuses-specific — the resource and its
- * create/update payloads. Source of truth: spec 0043 frozen `data_contract`
- * (clone of Lead Statuses, spec 0029 + 0039). Unlike lead-statuses, this
- * module has no custom fields (spec 0043 scope: out).
+ * create/update payloads. Source of truth: spec 0043 frozen `data_contract`.
+ * This module has no custom fields (spec 0043 scope: out).
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
@@ -57,7 +56,7 @@ export type UpdateOpportunityStatusPayload = Partial<CreateOpportunityStatusPayl
 
 /**
  * Discriminated form mode shared by the form hook/meta-resolver and the
- * `OpportunityStatusForm` component (mirrors `LeadStatusFormMode`).
+ * `OpportunityStatusForm` component.
  */
 export type OpportunityStatusFormMode =
   | { type: 'create' }

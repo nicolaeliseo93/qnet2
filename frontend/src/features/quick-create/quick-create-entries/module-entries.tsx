@@ -5,7 +5,6 @@ import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-a
 import { REFERENT_TYPES_FOR_SELECT_RESOURCE } from '@/features/referent-types/for-select-api'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-statuses/for-select-api'
-import { LEAD_STATUSES_FOR_SELECT_RESOURCE } from '@/features/lead-statuses/for-select-api'
 import { OPPORTUNITY_STATUSES_FOR_SELECT_RESOURCE } from '@/features/opportunity-statuses/for-select-api'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-api'
@@ -104,24 +103,6 @@ const pipelineStatuses: QuickCreateEntry = {
         <PipelineStatusForm
           mode={{ type: 'create' }}
           onSuccess={(pipelineStatus) => onSuccess({ id: pipelineStatus.id, name: pipelineStatus.name })}
-          onCancel={onCancel}
-        />
-      ),
-    }
-  }),
-}
-
-const leadStatuses: QuickCreateEntry = {
-  titleKey: 'leadStatuses.form.createTitle',
-  descriptionKey: 'leadStatuses.form.createSubtitle',
-  permission: 'lead-statuses.create',
-  form: lazy(async () => {
-    const { LeadStatusForm } = await import('@/features/lead-statuses/lead-status-form')
-    return {
-      default: ({ onSuccess, onCancel }: QuickCreateFormProps) => (
-        <LeadStatusForm
-          mode={{ type: 'create' }}
-          onSuccess={(leadStatus) => onSuccess({ id: leadStatus.id, name: leadStatus.name })}
           onCancel={onCancel}
         />
       ),
@@ -244,7 +225,6 @@ export const moduleEntries: Record<string, QuickCreateEntry> = {
   [REFERENT_TYPES_FOR_SELECT_RESOURCE]: referentTypes,
   [BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE]: businessFunctions,
   [PROJECT_STATUSES_FOR_SELECT_RESOURCE]: pipelineStatuses,
-  [LEAD_STATUSES_FOR_SELECT_RESOURCE]: leadStatuses,
   [OPPORTUNITY_STATUSES_FOR_SELECT_RESOURCE]: opportunityStatuses,
   [REGISTRIES_FOR_SELECT_RESOURCE]: registries,
   [CAMPAIGNS_FOR_SELECT_RESOURCE]: campaigns,

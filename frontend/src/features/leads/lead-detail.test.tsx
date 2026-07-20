@@ -13,8 +13,7 @@ function lead(overrides: Partial<LeadDetailWithPermissions> = {}): LeadDetailWit
     registry: { id: 10, name: 'Mario Rossi' },
     campaign_id: 20,
     campaign: { id: 20, code: 'CMP-0001', name: 'Spring push' },
-    lead_status_id: 60,
-    lead_status: { id: 60, name: 'Qualified', color: 'green' },
+    lead_status: 'associated',
     operational_site_id: 30,
     operational_site: { id: 30, label: 'Via Roma 1 - Milano' },
     source_id: 40,
@@ -46,7 +45,7 @@ describe('LeadDetailView — read-only (AC-065)', () => {
     expect(screen.getByText('CMP-0001 — Spring push')).toBeInTheDocument()
     expect(screen.getByText('Via Roma 1 - Milano')).toBeInTheDocument()
     expect(screen.getByText('Web')).toBeInTheDocument()
-    expect(screen.getByText('Qualified')).toBeInTheDocument()
+    expect(screen.getByText('Associated')).toBeInTheDocument()
     expect(screen.getByText('Anna Bianchi')).toBeInTheDocument()
     expect(screen.getByText('Interested in the enterprise plan.')).toBeInTheDocument()
   })

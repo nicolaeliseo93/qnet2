@@ -7,8 +7,8 @@ use App\Enums\ImportStatus;
 /**
  * Declarative column/filter/action catalogue for the `lead-imports` domain:
  * the read-only history of the actor's own lead import runs, rendered by the
- * generic table engine instead of a bespoke HTML table. Pure data (no logic),
- * mirroring LeadStatusColumnCatalog. Every column is a real `import_runs`
+ * generic table engine instead of a bespoke HTML table. Pure data (no logic).
+ * Every column is a real `import_runs`
  * column; `error_rows` is the contract alias for the `invalid_rows` column
  * (see ImportRunResource) and is mapped in LeadImportsTableDefinition::mapRow.
  */

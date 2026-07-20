@@ -21,17 +21,6 @@ export interface LeadCampaignRef {
 }
 
 /**
- * The linked lead status's identity, as exposed by `LeadResource.lead_status`
- * (spec 0029). Unlike the other relations, this one is NEVER null (D-1: the
- * FK is NOT NULL, every lead always has a status).
- */
-export interface LeadStatusRef {
-  id: number
-  name: string
-  color: string | null
-}
-
-/**
  * The linked operational site's identity, as exposed by `LeadResource.operational_site`.
  * `operational_sites` has no `name` column (BR-3): the identity is a server-composed
  * "{line1} - {city}" label.
@@ -52,9 +41,10 @@ export interface LeadOpportunityRef {
 
 /**
  * Single lead detail returned by GET/POST/PATCH /leads (envelope `data`).
- * Matches `LeadResource`. `registry_id`/`campaign_id`/`lead_status_id` are
- * always set (BR-1, D-1; spec 0041 D-1: the contact is the anagrafica, not
- * the referent); the other 3 fields are nullable.
+ * Matches `LeadResource`. `registry_id`/`campaign_id` are always set (BR-1,
+ * D-1; spec 0041 D-1: the contact is the anagrafica, not the referent); the
+ * other fields are nullable. `lead_status` is derived from assignment and
+ * opportunity state.
  *
  * `extra_fields` (spec 0033, AC-014) is a free-form key/value store: no
  * fixed shape, no per-field permissions. Keys either mirror an imported
@@ -71,8 +61,7 @@ export interface LeadDetail {
   registry: LeadRelationRef | null
   campaign_id: number
   campaign: LeadCampaignRef | null
-  lead_status_id: number
-  lead_status: LeadStatusRef
+  lead_status: LeadLifecycleStatus
   operational_site_id: number | null
   operational_site: LeadOperationalSiteRef | null
   source_id: number | null
@@ -97,14 +86,12 @@ export interface LeadDetailWithPermissions extends LeadDetail {
 
 /**
  * Payload for POST /leads (create). `registry_id`/`campaign_id` are required
- * (BR-1, D-1); `lead_status_id` is nullable/optional (spec 0039 D-3: the
- * server falls back to the system "Nuovo" status when omitted); the other 3
- * fields are optional/nullable.
+ * (BR-1, D-1); the other fields are optional/nullable. Lead status is derived
+ * server-side and is not part of the write contract.
  */
 export interface CreateLeadPayload {
   registry_id: number
   campaign_id: number
-  lead_status_id?: number | null
   operational_site_id?: number | null
   source_id?: number | null
   operator_id?: number | null
@@ -117,3 +104,5 @@ export type UpdateLeadPayload = Partial<CreateLeadPayload>
 
 /** Discriminated form mode shared by the form hook/meta-resolver and `LeadForm`. */
 export type LeadFormMode = { type: 'create' } | { type: 'edit'; lead: LeadDetailWithPermissions }
+
+export type LeadLifecycleStatus = 'not_associated' | 'associated' | 'converted_to_opportunity'

@@ -41,12 +41,6 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
-/** Spec 0039 D-3: the create form preselects this resolved "Nuovo" status id. */
-const fetchSystemStatusIdMock = vi.fn<() => Promise<number | null>>()
-vi.mock('@/features/status-reorder/api', () => ({
-  fetchSystemStatusId: () => fetchSystemStatusIdMock(),
-}))
-
 /** Stubs every single-select field, keyed by its accessible trigger label (mirrors `campaign-form-body.test.tsx`). */
 vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
@@ -78,8 +72,7 @@ function lead(overrides: Partial<LeadDetailWithPermissions> = {}): LeadDetailWit
     registry: { id: 10, name: 'Mario Rossi' },
     campaign_id: 20,
     campaign: { id: 20, code: 'CMP-0001', name: 'Spring push' },
-    lead_status_id: 30,
-    lead_status: { id: 30, name: 'New', color: 'slate' },
+    lead_status: 'not_associated',
     operational_site_id: null,
     operational_site: null,
     source_id: null,
@@ -104,12 +97,10 @@ beforeEach(() => {
   updateLeadMock.mockReset()
   fetchResourceMetaMock.mockReset()
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
-  fetchSystemStatusIdMock.mockReset()
-  fetchSystemStatusIdMock.mockResolvedValue(null)
 })
 
 describe('LeadForm — fields render (AC-061, AC-016)', () => {
-  it('renders the 7 fields: 6 relational selects and a notes textarea', async () => {
+  it('renders the 6 fields: 5 relational selects and a notes textarea', async () => {
     render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
@@ -118,34 +109,8 @@ describe('LeadForm — fields render (AC-061, AC-016)', () => {
     expect(screen.getByTestId('select-Campaign')).toBeInTheDocument()
     expect(screen.getByTestId('select-Site')).toBeInTheDocument()
     expect(screen.getByTestId('select-Source')).toBeInTheDocument()
-    expect(screen.getByTestId('select-Lead status')).toBeInTheDocument()
     expect(screen.getByTestId('select-Operator')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Notes' })).toBeInTheDocument()
-  })
-})
-
-describe('LeadForm — default status preselection (spec 0039 D-3, AC-012)', () => {
-  it('preselects the resolved "Nuovo" status id on create once it resolves', async () => {
-    fetchSystemStatusIdMock.mockResolvedValue(42)
-
-    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Lead status')).toHaveTextContent('42'))
-  })
-
-  it('does not preselect in edit mode', async () => {
-    fetchSystemStatusIdMock.mockResolvedValue(42)
-
-    render(
-      <LeadForm mode={{ type: 'edit', lead: lead({ lead_status_id: 30 }) }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
-      { wrapper: wrapper() },
-    )
-
-    await waitFor(() => expect(screen.getByTestId('select-Lead status')).toBeInTheDocument())
-    expect(screen.getByTestId('select-Lead status')).toHaveTextContent('30')
-    expect(fetchSystemStatusIdMock).not.toHaveBeenCalled()
   })
 })
 

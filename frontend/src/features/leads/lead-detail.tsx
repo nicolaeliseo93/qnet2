@@ -12,9 +12,9 @@ import {
   DetailPanel,
   DetailSection,
 } from '@/components/detail/detail-panel'
-import { formatDateTime } from '@/features/table/cell-renderers'
+import { BADGE_BASE, badgeColorClass, formatDateTime } from '@/features/table/cell-renderers'
+import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
 import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
-import { LEAD_STATUS_BADGE_CLASSES } from '@/features/leads/column-renderers'
 import type { LeadDetailWithPermissions as LeadDetailData } from '@/features/leads/types'
 
 interface LeadDetailViewProps {
@@ -34,6 +34,12 @@ export function LeadDetailView({ lead }: LeadDetailViewProps) {
   const registryName = lead.registry?.name ?? t('leads.detail.unknownRegistry')
   const createdAt = formatDateTime(lead.created_at)
   const extraFieldEntries = lead.extra_fields ? Object.entries(lead.extra_fields) : []
+  const leadStatusColors = {
+    not_associated: 'slate',
+    associated: 'blue',
+    converted_to_opportunity: 'green',
+  } as const
+  const leadStatusColor = leadStatusColors[lead.lead_status]
 
   return (
     <DetailPanel>
@@ -65,12 +71,10 @@ export function LeadDetailView({ lead }: LeadDetailViewProps) {
           <DetailField label={t('leads.form.leadStatus')}>
             <Badge
               variant="secondary"
-              className={cn(
-                'h-5 min-h-5',
-                lead.lead_status.color ? LEAD_STATUS_BADGE_CLASSES[lead.lead_status.color] : undefined,
-              )}
+              className={cn(BADGE_BASE, 'gap-1.5', badgeColorClass(leadStatusColor))}
             >
-              {lead.lead_status.name}
+              <span className={cn('size-1.5 shrink-0 rounded-full', swatchClassFor(leadStatusColor))} aria-hidden="true" />
+              {t(`enums.lead_lifecycle_status.${lead.lead_status}`)}
             </Badge>
           </DetailField>
           <DetailField label={t('leads.form.operator')}>

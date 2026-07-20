@@ -4,15 +4,13 @@ import type { LeadFormValues } from '@/features/leads/use-lead-form'
 
 /**
  * Builds the create payload. `registry_id`/`campaign_id` are validated
- * non-null by the schema's refine before submit (BR-1, D-1); `lead_status_id`
- * is sent as-is (spec 0039 D-3: `null` falls back to the system "Nuovo"
- * status server-side).
+ * non-null by the schema's refine before submit (BR-1, D-1). Lead status is
+ * derived server-side and is not submitted.
  */
 export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
   return {
     registry_id: values.registry_id as number,
     campaign_id: values.campaign_id as number,
-    lead_status_id: values.lead_status_id,
     operational_site_id: values.operational_site_id,
     source_id: values.source_id,
     operator_id: values.operator_id,
@@ -25,8 +23,7 @@ export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
  * Builds a partial PATCH payload carrying only fields that changed from the
  * original lead (spec 0024, sparse diff, mirrors campaigns). `registry_id`/
  * `campaign_id`, when changed, are always non-null (the schema forbids
- * clearing either, BR-1, D-1). `lead_status_id` may be cleared to `null`
- * (spec 0039 D-3), the server then falls back to the system "Nuovo" status.
+ * clearing either, BR-1, D-1). Lead status is derived server-side.
  */
 export function buildUpdatePayload(values: LeadFormValues, original: LeadDetail): UpdateLeadPayload {
   const payload: UpdateLeadPayload = {}
@@ -36,9 +33,6 @@ export function buildUpdatePayload(values: LeadFormValues, original: LeadDetail)
   }
   if (values.campaign_id !== original.campaign_id) {
     payload.campaign_id = values.campaign_id as number
-  }
-  if (values.lead_status_id !== original.lead_status_id) {
-    payload.lead_status_id = values.lead_status_id
   }
   if (values.operational_site_id !== original.operational_site_id) {
     payload.operational_site_id = values.operational_site_id

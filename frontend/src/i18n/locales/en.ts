@@ -28,7 +28,6 @@ import { projects } from './en-projects'
 import { campaigns } from './en-campaigns'
 import { leads } from './en-leads'
 import { opportunities } from './en-opportunities'
-import { leadStatuses } from './en-lead-statuses'
 import { opportunityStatuses } from './en-opportunity-statuses'
 import { leadImports } from './en-lead-imports'
 import { businessFunctions } from './en-business-functions'
@@ -90,7 +89,6 @@ export const en = {
     projects: 'Projects',
     campaigns: 'Campaigns',
     leads: 'Leads',
-    leadStatuses: 'Lead Statuses',
     opportunities: 'Opportunities',
     opportunityStatuses: 'Opportunity Statuses',
     opportunitiesAndCommesse: 'Opportunities & Contracts',
@@ -479,7 +477,6 @@ export const en = {
   projects: { ...projects, stats: moduleStats.projects },
   pipelineStatuses,
   campaigns: { ...campaigns, stats: moduleStats.campaigns },
-  leadStatuses,
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
   opportunities: { ...opportunities, stats: moduleStats.opportunities },

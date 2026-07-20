@@ -1,7 +1,5 @@
 <?php
 
-use App\Http\Controllers\LeadStatuses\LeadStatusController;
-use App\Http\Controllers\LeadStatuses\LeadStatusForSelectController;
 use App\Http\Controllers\OpportunityStatuses\OpportunityStatusController;
 use App\Http\Controllers\OpportunityStatuses\OpportunityStatusForSelectController;
 use App\Http\Controllers\Sectors\SectorController;
@@ -77,27 +75,6 @@ Route::get('sectors/{sector}', [SectorController::class, 'show']);
 Route::post('sectors', [SectorController::class, 'store']);
 Route::match(['put', 'patch'], 'sectors/{sector}', [SectorController::class, 'update']);
 Route::delete('sectors/{sector}', [SectorController::class, 'destroy']);
-
-// Lead statuses CRUD (spec 0029): the Lead working-state pick-list (BR-3
-// delete-guard lives in LeadStatusService). Authorization
-// (lead-statuses.view/create/update/delete) is enforced server-side in
-// LeadStatusController via LeadStatusPolicy.
-// Minimal searchable/paginated list for entity-backed selects (ADR 0011).
-// Declared ABOVE lead-statuses/{leadStatus} so the literal `for-select`
-// segment wins over the bound wildcard. Gated by lead-statuses.viewAny
-// server-side in LeadStatusForSelectController.
-Route::get('lead-statuses/for-select', LeadStatusForSelectController::class);
-
-// Custom-row resequencing (spec 0039, D-5): `sort_order` is server-managed,
-// this is the only way to change it. Declared ABOVE the bound wildcard for
-// the same literal-segment reason as `for-select`. Gated on
-// lead-statuses.update directly in LeadStatusController::reorder.
-Route::post('lead-statuses/reorder', [LeadStatusController::class, 'reorder']);
-
-Route::get('lead-statuses/{leadStatus}', [LeadStatusController::class, 'show']);
-Route::post('lead-statuses', [LeadStatusController::class, 'store']);
-Route::match(['put', 'patch'], 'lead-statuses/{leadStatus}', [LeadStatusController::class, 'update']);
-Route::delete('lead-statuses/{leadStatus}', [LeadStatusController::class, 'destroy']);
 
 // Opportunity statuses CRUD (spec 0043): the Opportunity working-state
 // pick-list (BR-2 delete-guard lives in OpportunityStatusService).

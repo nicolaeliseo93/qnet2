@@ -3,7 +3,6 @@
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\Registry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -46,7 +45,6 @@ it('a created lead resolves FK labels for populated fields and drops null-null n
     $actor = fkLabelActor('leads', ['view', 'viewActivity']);
     $registry = Registry::factory()->create(['name' => 'Jane Registry']);
     $campaign = Campaign::factory()->create(['name' => 'Spring Campaign']);
-    $leadStatus = LeadStatus::factory()->create(['name' => 'New']);
     Sanctum::actingAs($actor);
 
     // operational_site_id/source_id/operator_id stay null (LeadFactory default),
@@ -54,7 +52,6 @@ it('a created lead resolves FK labels for populated fields and drops null-null n
     $lead = Lead::factory()->create([
         'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $leadStatus->id,
         'notes' => 'Inbound call',
     ]);
 
@@ -66,8 +63,7 @@ it('a created lead resolves FK labels for populated fields and drops null-null n
 
     expect($byField['registry_id']['old_display'])->toBeNull()
         ->and($byField['registry_id']['new_display'])->toBe('Jane Registry')
-        ->and($byField['campaign_id']['new_display'])->toBe('Spring Campaign')
-        ->and($byField['lead_status_id']['new_display'])->toBe('New');
+        ->and($byField['campaign_id']['new_display'])->toBe('Spring Campaign');
 
     // A non-FK field never gets a display, FK or not.
     expect($byField['notes']['old_display'])->toBeNull()

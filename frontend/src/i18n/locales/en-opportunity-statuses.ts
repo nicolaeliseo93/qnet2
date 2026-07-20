@@ -1,8 +1,8 @@
 /**
  * Opportunity statuses domain (spec 0043). Sibling file so `en.ts` stays
  * within the engineering size limits (see `.claude/rules/engineering.md`
- * §6); mirrors `lead-statuses` (spec 0029 + 0039) 1:1, with the delete-guard
- * message adjusted to Opportunities (BR-4). System statuses are
+ * §6), with the delete-guard message adjusted to Opportunities (BR-4).
+ * System statuses are
  * "Nuova"/"Chiusa con successo"/"Persa" and a fixed 3-value `group` enum
  * (open/pending/closed), plus a drag & drop reorder sheet for the custom
  * rows.

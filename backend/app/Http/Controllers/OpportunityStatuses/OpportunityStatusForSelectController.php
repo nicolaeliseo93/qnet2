@@ -14,7 +14,7 @@ use Throwable;
 /**
  * GET /api/opportunity-statuses/for-select — minimal, searchable, paginated
  * opportunity status list feeding entity-backed selects (spec 0043, ADR 0011
- * the for-select standard), mirroring LeadStatusForSelectController.
+ * the for-select standard).
  *
  * Thin invokable controller: validation (OpportunityStatusForSelectRequest),
  * server-side authorization (opportunity-statuses.viewAny via

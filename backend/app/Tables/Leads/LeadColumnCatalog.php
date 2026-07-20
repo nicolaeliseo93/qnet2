@@ -2,17 +2,19 @@
 
 namespace App\Tables\Leads;
 
+use App\Enums\LeadLifecycleStatus;
+
 /**
  * Declarative column/filter/action catalogue for the `leads` domain (spec
  * 0024). Extracted out of LeadsTableDefinition (file-size split,
  * engineering.md §6): pure data (no logic).
  *
  * `created_at` is a real DB column handled entirely by the generic engine.
- * `registry`/`campaign`/`source`/`operator`/`lead_status` are STANDARD
+ * `registry`/`campaign`/`source`/`operator` are STANDARD
  * derived (related-row name) columns, resolved by LeadsTableDefinition (spec
  * 0041 D-1: the contact is now an Anagrafica, not a Referent).
- * `lead_status`'s label is `leads.columns.leadStatus` (camelCase: the real
- * convention of this domain, unlike lead-statuses' own snake_case, spec 0029).
+ * `lead_status` is a display-only lifecycle badge derived from operator and
+ * opportunity state.
  * `operational_site` is the ONE specially-derived column (BR-3: no own name,
  * sort/filter pass through the site's primary address `line1`), delegated to
  * LeadOperationalSiteColumn.
@@ -31,33 +33,14 @@ final class LeadColumnCatalog
             self::derivedColumn('source', 'leads.columns.source'),
             self::derivedColumn('operator', 'leads.columns.operator'),
             [
-                // DERIVED boolean: `operator_id IS NOT NULL`. No real DB column —
-                // filter/sort resolved by LeadsTableDefinition on the FK; the
-                // set-filter value list ('1'/'0', localized yes/no on the FE)
-                // comes from the generic boolean fallback in TableService.
-                'id' => 'is_assigned',
-                'label' => 'leads.columns.isAssigned',
-                'type' => 'boolean',
+                'id' => 'lead_status',
+                'label' => 'leads.columns.leadStatus',
+                'type' => 'badge',
                 'visible' => true,
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'set',
-            ],
-            self::derivedColumn('lead_status', 'leads.columns.leadStatus'),
-            [
-                // DERIVED boolean: whether an opportunity references this lead
-                // (`opportunities.lead_id` EXISTS — spec 0040 D-2/D-5: no stored
-                // flag, the converted state is derived). No real DB column;
-                // filter/sort resolved by LeadsTableDefinition via the
-                // `opportunity` relation, set-filter values ('1'/'0', localized
-                // yes/no on the FE) from the generic boolean fallback.
-                'id' => 'is_converted',
-                'label' => 'leads.columns.isConverted',
-                'type' => 'boolean',
-                'visible' => true,
-                'sortable' => true,
-                'filterable' => true,
-                'filterType' => 'set',
+                'options' => self::leadStatusValues(),
             ],
             [
                 'id' => 'created_at',
@@ -89,6 +72,17 @@ final class LeadColumnCatalog
             'filterable' => true,
             'filterType' => 'set',
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function leadStatusValues(): array
+    {
+        return array_map(
+            static fn (LeadLifecycleStatus $status): string => $status->value,
+            LeadLifecycleStatus::cases(),
+        );
     }
 
     /**

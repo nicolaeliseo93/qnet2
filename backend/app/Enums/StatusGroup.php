@@ -4,7 +4,7 @@ namespace App\Enums;
 
 /**
  * The fixed 3-value classification every status configurator row carries
- * (pipeline_statuses.group/lead_statuses.group, spec 0039 pivot — replaces
+ * (pipeline_statuses.group/opportunity_statuses.group — replaces
  * the earlier "status groups" lookup entity): every row, system or custom,
  * is exactly one of Open/Pending/Closed. Never mass-assignable on a system
  * row (App\Services\Statuses\SystemStatusGuard rejects it outright).

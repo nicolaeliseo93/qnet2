@@ -43,7 +43,6 @@ export const imports = {
       campaign_id: 'Campaign',
       project_id: 'Project',
       source_id: 'Source',
-      lead_status_id: 'Initial status',
       operator_id: 'Assigned operator',
     },
   },

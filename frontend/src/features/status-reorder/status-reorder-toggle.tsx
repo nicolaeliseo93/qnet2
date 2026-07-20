@@ -9,7 +9,7 @@ interface StatusReorderToggleLabels extends StatusReorderSheetLabels {
 }
 
 interface StatusReorderToggleProps {
-  /** Resource segment of the endpoint: `pipeline-statuses` or `lead-statuses`. */
+  /** Resource segment of the endpoint: `pipeline-statuses` or `opportunity-statuses`. */
   resource: string
   /** Permission gating the toolbar button and the sheet (spec 0039: `{resource}.update`). */
   permission: string
@@ -22,7 +22,7 @@ interface StatusReorderToggleProps {
  * Toolbar affordance for the two status configurators (spec 0039 D-4): a
  * gated button that opens `<StatusReorderSheet>`, owning only the sheet's
  * open/closed state. Extracted out of the table adapters so both
- * `pipeline-statuses-table.tsx` and `lead-statuses-table.tsx` stay within the
+ * status table screens stay within the
  * engineering size limits (`engineering.md` §6) instead of duplicating this
  * wiring inline.
  */

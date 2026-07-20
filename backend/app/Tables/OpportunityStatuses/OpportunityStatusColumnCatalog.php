@@ -7,8 +7,8 @@ use App\Enums\StatusGroup;
 /**
  * Declarative column/filter/action catalogue for the `opportunity-statuses`
  * domain (spec 0043). Extracted out of OpportunityStatusesTableDefinition
- * (file-size split, engineering.md §6): pure data (no logic), mirroring
- * LeadStatusColumnCatalog. Every column (name/color/sort_order/group/
+ * (file-size split, engineering.md §6): pure data (no logic). Every column
+ * (name/color/sort_order/group/
  * created_at) is a real DB column handled entirely by the generic engine.
  * `color` is deliberately not sortable/filterable (a swatch value, not a
  * meaningful ordering/filter axis). `group` (App\Enums\StatusGroup) is a

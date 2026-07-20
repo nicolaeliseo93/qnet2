@@ -10,8 +10,7 @@ import { OpportunityStatusesTable } from '@/features/opportunity-statuses/opport
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
 
 /**
- * Mirrors `lead-statuses-table.test.tsx` (spec 0043): the generic
- * `<TableView>` (AG Grid + SSRM) and the app chrome (`PageHeader`) are
+ * The generic `<TableView>` (AG Grid + SSRM) and the app chrome (`PageHeader`) are
  * framework pieces outside this microtask's ownership: they are stubbed so
  * the suite stays focused on what THIS adapter is responsible for — wiring
  * `<Can>` around the table, mounting `<TableView domain="opportunity-statuses">`,

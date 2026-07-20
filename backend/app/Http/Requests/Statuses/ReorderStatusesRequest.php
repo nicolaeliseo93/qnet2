@@ -5,7 +5,7 @@ namespace App\Http\Requests\Statuses;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Validates the payload for POST /api/{pipeline-statuses|lead-statuses}/reorder
+ * Validates the payload for POST /api/{pipeline-statuses|opportunity-statuses}/reorder
  * (spec 0039, D-5). Shared by both status configurators — the shape is
  * identical, only the target resource/model differs (resolved by the
  * concrete controller).

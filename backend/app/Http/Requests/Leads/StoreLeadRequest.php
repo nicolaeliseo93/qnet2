@@ -11,10 +11,9 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for POST /api/leads (spec 0024, spec 0041 D-1).
- * `registry_id`/`campaign_id` are required (BR-1); the other 3 relations are optional,
- * `notes` is a plain nullable text. spec 0039, D-3: `lead_status_id` went
- * from `required` to `nullable` — an omitted/null FK falls back to the
- * system_key='new' status in LeadService::create() (server-side default).
+ * `registry_id`/`campaign_id` are required (BR-1); the other relations are
+ * optional, `notes` is a plain nullable text. Lead status is derived and is
+ * not accepted in the write contract.
  *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Lead::class)). EnforcesFieldPermissions
@@ -42,7 +41,6 @@ class StoreLeadRequest extends FormRequest
             'operational_site_id' => ['nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
             'operator_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
-            'lead_status_id' => ['nullable', 'integer', Rule::exists('lead_statuses', 'id')],
             'notes' => ['nullable', 'string', 'max:5000'],
             'extra_fields' => ['nullable', 'array'],
             'extra_fields.*' => ['string'],

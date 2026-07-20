@@ -35,7 +35,7 @@ const GROUP_LABEL_KEYS: Record<StatusGroupValue, string> = {
 }
 
 /**
- * The opportunity status create/edit form UI (mirrors `LeadStatusFormBody`).
+ * The opportunity status create/edit form UI.
  * `name`, `color` and `group` are each wrapped in `MetaField` (spec 0004):
  * hidden means absent, non-editable means disabled, `required` comes from
  * the resolved `ResourcePermissions` — no hardcoded permission logic lives

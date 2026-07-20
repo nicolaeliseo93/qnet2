@@ -76,7 +76,7 @@ export function usePipelineStatusForm({ mode, onSuccess }: UsePipelineStatusForm
   }, [mode, customFields.defaultValues])
 
   const form = useForm<PipelineStatusFormValues>({
-    // See `useLeadStatusForm`: `schema` is a create/edit union and
+    // `schema` is a create/edit union and
     // `sort_order`'s `z.coerce.number()` widens the schema's own inferred
     // input to `unknown`, so `zodResolver` can't infer/unify its generics —
     // asserting the resolver's type at this one boundary (not `any`) is the

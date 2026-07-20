@@ -2,7 +2,6 @@
 
 use App\Models\Campaign;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\Registry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,13 +39,11 @@ it('create: extra_fields is persisted and exposed by LeadResource', function () 
     $actor = leadUserWith(['create']);
     $registry = Registry::factory()->create();
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/leads', [
         'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
         'extra_fields' => ['Origine' => 'Fiera Milano', 'Note' => 'VIP'],
     ])->assertCreated()
         ->assertJsonPath('data.extra_fields', ['Origine' => 'Fiera Milano', 'Note' => 'VIP']);
@@ -60,13 +57,11 @@ it('create: without extra_fields, it stays null', function () {
     $actor = leadUserWith(['create']);
     $registry = Registry::factory()->create();
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/leads', [
         'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
     ])->assertCreated()
         ->assertJsonPath('data.extra_fields', null);
 
@@ -77,13 +72,11 @@ it('create: extra_fields must be an array of strings -> 422', function () {
     $actor = leadUserWith(['create']);
     $registry = Registry::factory()->create();
     $campaign = Campaign::factory()->create();
-    $status = LeadStatus::factory()->create();
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/leads', [
         'registry_id' => $registry->id,
         'campaign_id' => $campaign->id,
-        'lead_status_id' => $status->id,
         'extra_fields' => ['Origine' => ['not', 'a', 'string']],
     ])->assertStatus(422)->assertJsonValidationErrors('extra_fields.Origine');
 

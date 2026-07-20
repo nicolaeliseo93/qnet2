@@ -1,9 +1,9 @@
 <?php
 
 use App\Enums\AdvancedFilterType;
+use App\Enums\LeadLifecycleStatus;
 use App\Models\Campaign;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\PipelineStatus;
 use App\Models\Project;
 use App\Models\User;
@@ -78,25 +78,24 @@ it('exposes a non-empty, schema-valid advancedFilters() catalog for each cluster
 
     assertAdvancedFilterCatalogSchemaValid($definition->advancedFilters());
 })->with([
-    'leads', 'campaigns', 'projects', 'pipeline-statuses', 'lead-statuses',
+    'leads', 'campaigns', 'projects', 'pipeline-statuses',
 ]);
 
-it('filters leads by lead_status via the generic relation-by-id default (AC-003)', function () {
+it('filters leads by the dynamic lead_status advanced filter (AC-003)', function () {
     Sanctum::actingAs(userWithDomainAbilities('leads', ['viewAny']));
 
-    $won = LeadStatus::factory()->create();
-    $lost = LeadStatus::factory()->create();
-    Lead::factory()->count(2)->create(['lead_status_id' => $won->id]);
-    Lead::factory()->create(['lead_status_id' => $lost->id]);
+    $operator = User::factory()->create();
+    $matching = Lead::factory()->create(['operator_id' => $operator->id]);
+    Lead::factory()->create(['operator_id' => null]);
 
     $response = $this->postJson('/api/tables/leads/rows', [
         'startRow' => 0,
         'endRow' => 25,
-        'advancedFilters' => ['lead_status' => [$won->id]],
+        'advancedFilters' => ['lead_status' => [LeadLifecycleStatus::Associated->value]],
     ])->assertOk();
 
-    expect($response->json('pagination.total'))->toBe(2)
-        ->and(collect($response->json('items'))->pluck('lead_status.id')->unique()->all())->toBe([$won->id]);
+    expect($response->json('pagination.total'))->toBe(1)
+        ->and(collect($response->json('items'))->pluck('id')->all())->toBe([$matching->id]);
 });
 
 it('filters campaigns by pipeline_status through the BR-2 own-or-project override (AC-007)', function () {
@@ -149,19 +148,4 @@ it('filters pipeline-statuses by a free-text name match', function () {
     ])->assertOk();
 
     expect(collect($response->json('items'))->pluck('name')->all())->toBe(['Won']);
-});
-
-it('filters lead-statuses by a free-text name match', function () {
-    Sanctum::actingAs(userWithDomainAbilities('lead-statuses', ['viewAny']));
-
-    LeadStatus::factory()->create(['name' => 'Qualified']);
-    LeadStatus::factory()->create(['name' => 'New']);
-
-    $response = $this->postJson('/api/tables/lead-statuses/rows', [
-        'startRow' => 0,
-        'endRow' => 25,
-        'advancedFilters' => ['name' => 'Quali'],
-    ])->assertOk();
-
-    expect(collect($response->json('items'))->pluck('name')->all())->toBe(['Qualified']);
 });

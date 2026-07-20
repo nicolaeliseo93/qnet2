@@ -25,8 +25,7 @@ function detailQueryKey(id: number) {
  * Content-only `opportunity-statuses` screens for the module registry (spec
  * 0042): fetch + the existing presentational view/form, no page chrome.
  * Reused as-is by the modal Sheet (`useModuleOpener`) and by the generic
- * dedicated pages (`ModuleDetailPage`/`ModuleFormPage`). Mirrors
- * `LeadStatusDetailScreen`/`LeadStatusFormScreen` (spec 0043).
+ * dedicated pages (`ModuleDetailPage`/`ModuleFormPage`).
  */
 export function OpportunityStatusDetailScreen({ id }: ModuleDetailScreenProps) {
   const { t } = useTranslation()

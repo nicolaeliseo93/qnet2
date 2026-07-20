@@ -11,8 +11,8 @@ namespace App\DataObjects\OpportunityStatuses;
  * legitimately nullable/optional VALUES (color clears back to none; group is
  * simply not always resubmitted on a partial PATCH), so a plain null
  * property cannot distinguish "not submitted" from "submitted as null" —
- * `colorSubmitted`/`groupSubmitted` carry that distinction explicitly,
- * mirroring UpdateLeadStatusData's same pairs. `sort_order` is GONE from
+ * `colorSubmitted`/`groupSubmitted` carry that distinction explicitly.
+ * `sort_order` is GONE from
  * this DTO — server-managed, never accepted from the client (see
  * App\Services\Statuses\StatusOrderManager). `group` (App\Enums\StatusGroup)
  * — App\Services\Statuses\SystemStatusGuard rejects it outright when the

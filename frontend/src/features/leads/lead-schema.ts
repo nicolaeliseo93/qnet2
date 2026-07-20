@@ -4,7 +4,7 @@ import type { TFunction } from 'i18next'
 /**
  * Zod schema for the lead create/edit form, built as a factory so validation
  * messages are localized via the i18n `t` function. The shape mirrors the
- * frozen backend contract (spec 0024) 1:1: exactly 6 fields, no `code` (D-3).
+ * frozen backend contract (spec 0024) 1:1: no `code` (D-3).
  */
 
 /** Backend `notes` column limit (`max:5000`); exported for the form's character counter. */
@@ -32,9 +32,7 @@ function extraFieldEntrySchema(t: TFunction) {
  * guard, silently narrowing the field's inferred type to non-nullable
  * `number` and breaking every consumer typed against the nullable form
  * value (`RelationSelectField`'s `Control<LeadFormValues>`, `useForm`'s
- * `defaultValues`). `lead_status_id` is nullable, NOT required (spec 0039
- * D-3): the server falls back to the system "Nuovo" status when omitted, and
- * the create form preselects it as soon as the for-select resolves.
+ * `defaultValues`).
  */
 function baseFields(t: TFunction) {
   return {
@@ -46,7 +44,6 @@ function baseFields(t: TFunction) {
       .number()
       .nullable()
       .refine((value): boolean => value !== null, { message: t('leads.form.campaignRequired') }),
-    lead_status_id: z.number().nullable(),
     operational_site_id: z.number().nullable(),
     source_id: z.number().nullable(),
     operator_id: z.number().nullable(),

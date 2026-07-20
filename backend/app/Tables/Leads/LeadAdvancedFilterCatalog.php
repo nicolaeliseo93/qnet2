@@ -3,6 +3,7 @@
 namespace App\Tables\Leads;
 
 use App\Enums\AdvancedFilterType;
+use App\Enums\LeadLifecycleStatus;
 
 /**
  * Advanced-filter catalogue for the `leads` domain (spec 0032). Curated from
@@ -26,14 +27,20 @@ final class LeadAdvancedFilterCatalog
             [
                 'name' => 'lead_status',
                 'label' => 'leads.advancedFilters.leadStatus',
-                'type' => AdvancedFilterType::Relation,
+                'type' => AdvancedFilterType::Multiselect,
                 'order' => 1,
                 'required' => false,
                 'visible' => true,
                 'width' => 'md',
                 'multiple' => true,
-                'source' => ['resource' => 'lead-statuses'],
-                'target' => 'leadStatus',
+                'options' => array_map(
+                    static fn (LeadLifecycleStatus $status): array => [
+                        'value' => $status->value,
+                        'label' => $status->meta()->label,
+                    ],
+                    LeadLifecycleStatus::cases(),
+                ),
+                'target' => 'lead_status',
             ],
             [
                 'name' => 'campaign',

@@ -6,7 +6,7 @@ use App\Enums\AdvancedFilterType;
 
 /**
  * Advanced-filter catalogue for the `opportunity-statuses` domain (spec
- * 0032/0043), mirroring LeadStatusAdvancedFilterCatalog 1:1: a small lookup
+ * 0032/0043): a small lookup
  * table (OpportunityStatusColumnCatalog: name/color/sort_order/group/
  * created_at) — every entry here is a direct-column filter, handled entirely
  * by the generic default (no domain override needed). `color` is

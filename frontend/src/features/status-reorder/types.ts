@@ -1,7 +1,7 @@
 /**
  * Shared types for status reordering (spec 0039 D-4/D-5), consumed by
- * `pipeline-statuses`, `lead-statuses` and `opportunity-statuses` (spec
- * 0043) — the modules that gained a "system status" concept and a
+ * `pipeline-statuses` and `opportunity-statuses` — the modules that keep a
+ * "system status" concept and a
  * custom-only drag & drop reorder sheet.
  */
 
@@ -10,7 +10,7 @@
  * `lost` is opportunity-statuses only (spec 0043 D-2): "Persa", closed, the
  * fixed last row of the tail.
  */
-export type SystemStatusKey = 'new' | 'won' | 'lost' | 'discarded' | 'closed' | null
+export type SystemStatusKey = 'new' | 'won' | 'lost' | 'closed' | null
 
 /** Fixed enum of status groups, replacing the former "status groups" lookup module. */
 export const STATUS_GROUPS = ['open', 'pending', 'closed'] as const

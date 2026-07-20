@@ -18,7 +18,7 @@ interface StatusForSelectItem extends ForSelectItem {
 
 /**
  * Persists a new custom-status order (spec 0039 D-5). `resource` is either
- * `pipeline-statuses` or `lead-statuses`; `orderedIds` must be EXACTLY the
+ * `pipeline-statuses` or `opportunity-statuses`; `orderedIds` must be EXACTLY the
  * custom (non-system) ids, in their new visual order — the backend rejects
  * anything else with 422. Returns the fresh, full ordered list.
  */

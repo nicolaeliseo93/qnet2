@@ -89,7 +89,6 @@ export const activityLog = {
     campaign_id: 'Campagna',
     operational_site_id: 'Sede',
     operator_id: 'Operatore',
-    lead_status_id: 'Stato lead',
     extra_fields: 'Campi extra',
     category_id: 'Categoria',
     cost: 'Costo',

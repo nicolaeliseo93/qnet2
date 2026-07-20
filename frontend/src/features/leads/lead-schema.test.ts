@@ -4,16 +4,13 @@ import { buildCreateLeadSchema } from '@/features/leads/lead-schema'
 
 /**
  * AC-060: contact and campaign missing produce a localized validation error
- * (BR-1, D-1); the other 4 fields empty pass. `lead_status_id` is nullable,
- * not required (spec 0039 D-3 — requirement changed: the server falls back
- * to the system "Nuovo" status when omitted).
+ * (BR-1, D-1); the other fields empty pass.
  */
 
 function baseValues(overrides: Record<string, unknown> = {}) {
   return {
     registry_id: 1,
     campaign_id: 2,
-    lead_status_id: 3,
     operational_site_id: null,
     source_id: null,
     operator_id: null,
@@ -50,12 +47,6 @@ describe('buildCreateLeadSchema', () => {
     if (!result.success) {
       expect(result.error.issues.some((issue) => issue.path.join('.') === 'campaign_id')).toBe(true)
     }
-  })
-
-  it('accepts a missing lead_status_id (spec 0039 D-3: server falls back to "Nuovo")', () => {
-    const schema = buildCreateLeadSchema(i18n.t)
-    const result = schema.safeParse(baseValues({ lead_status_id: null }))
-    expect(result.success).toBe(true)
   })
 
   it('accepts the 4 optional fields left null', () => {

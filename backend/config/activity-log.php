@@ -7,7 +7,6 @@ use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\CustomFieldDefinition;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
@@ -69,9 +68,6 @@ return [
         'custom-fields' => [
             'model' => CustomFieldDefinition::class,
             'relations' => ['options'],
-        ],
-        'lead-statuses' => [
-            'model' => LeadStatus::class,
         ],
         'leads' => [
             'model' => Lead::class,

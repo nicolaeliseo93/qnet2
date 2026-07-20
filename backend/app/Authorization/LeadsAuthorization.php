@@ -16,9 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  * CampaignsAuthorization. `registry_id`/`campaign_id` are the mandatory
  * fields (BR-1, spec 0041 D-1); no `code` field exists for a Lead (D-3).
  *
- * spec 0039, D-3: `lead_status_id` is NO LONGER mandatory — the FK went from
- * `required` to `nullable` in StoreLeadRequest (server-side fallback to the
- * system_key='new' status when omitted, LeadService::create()).
+ * Lead status is display-only and derived from assignment/opportunity state.
  */
 class LeadsAuthorization extends AbstractResourceAuthorization
 {
@@ -43,7 +41,6 @@ class LeadsAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('operational_site_id', 'select'),
             new FieldDefinition('source_id', 'select'),
             new FieldDefinition('operator_id', 'select'),
-            new FieldDefinition('lead_status_id', 'select'),
             new FieldDefinition('notes', 'textarea'),
             new FieldDefinition('extra_fields', 'textarea'),
         ];
@@ -70,7 +67,6 @@ class LeadsAuthorization extends AbstractResourceAuthorization
             'operational_site_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'operator_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'lead_status_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'notes' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'extra_fields' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];

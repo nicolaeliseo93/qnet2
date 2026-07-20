@@ -20,8 +20,7 @@ import { StatusReorderToggle } from '@/features/status-reorder/status-reorder-to
 const OPPORTUNITY_STATUSES_DOMAIN = 'opportunity-statuses'
 
 /**
- * Thin Opportunity Statuses adapter over the generic table (mirrors
- * `LeadStatusesTable`, spec 0043). It mounts `<TableView>` with the
+ * Thin Opportunity Statuses adapter over the generic table. It mounts `<TableView>` with the
  * `opportunity-statuses` domain, its custom cell renderers and a row-action
  * handler, and delegates the open mode (modal Sheet vs dedicated page) of
  * view/edit/create to `useModuleOpener`, resolved from the user's preference

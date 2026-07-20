@@ -11,8 +11,8 @@ use Illuminate\Database\Eloquent\Model;
  * ResourceAuthorization for the `opportunity-statuses` resource (spec 0043).
  *
  * No contextual rules: every field's ceiling is simply visible+editable when
- * the actor may write (create/update), else visible+readonly, mirroring
- * LeadStatusesAuthorization. `sort_order` is server-managed, no longer
+ * the actor may write (create/update), else visible+readonly. `sort_order`
+ * is server-managed, no longer
  * writable via the API (the table column itself is unaffected, see
  * OpportunityStatusColumnCatalog). `group` (App\Enums\StatusGroup) is the
  * fixed 3-value classification.

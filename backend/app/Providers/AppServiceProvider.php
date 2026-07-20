@@ -18,7 +18,6 @@ use App\Models\CustomFieldDefinition;
 use App\Models\CustomFieldOption;
 use App\Models\EmploymentProfile;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
@@ -119,7 +118,6 @@ class AppServiceProvider extends ServiceProvider
             'project' => Project::class,
             'campaign' => Campaign::class,
             'lead' => Lead::class,
-            'lead_status' => LeadStatus::class,
             'opportunity' => Opportunity::class,
             'opportunity_status' => OpportunityStatus::class,
             'vat_rate' => VatRate::class,

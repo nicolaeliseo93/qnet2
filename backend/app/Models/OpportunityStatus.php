@@ -12,8 +12,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Opportunity status lookup entity (spec 0043): a clone 1:1 of LeadStatus's
- * "system statuses" shape (spec 0039) describing an Opportunity's working
+ * Opportunity status lookup entity (spec 0043): a persisted status
+ * configurator describing an Opportunity's working
  * state. `name` is unique (BR-3); `system_key` (nullable, the THREE
  * mandatory "Nuova"/"Chiusa con successo"/"Persa" rows — D-2) is
  * DELIBERATELY absent from #[Fillable] — never mass-assignable, written only

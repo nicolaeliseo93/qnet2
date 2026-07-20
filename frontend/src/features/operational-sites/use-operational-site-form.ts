@@ -98,8 +98,8 @@ export function useOperationalSiteForm({ mode, onSuccess }: UseOperationalSiteFo
   }, [mode, customFields.defaultValues])
 
   const form = useForm<OperationalSiteFormValues>({
-    // See `useLeadStatusForm`: `schema` is a create/edit union (and one of
-    // its coerced/nullable numeric fields widens the schema's own inferred
+    // `schema` is a create/edit union (and one of its coerced/nullable numeric
+    // fields widens the schema's own inferred
     // input), so `zodResolver` can't infer/unify its generics — asserting the
     // resolver's type at this one boundary (not `any`) is the fix: at
     // runtime it still validates through the same schema.

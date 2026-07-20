@@ -13,6 +13,7 @@ import type {
 } from 'ag-grid-community'
 import { fetchTableColumnValues } from '@/features/table/api'
 import type { TableColumn } from '@/features/table/types'
+import { enumLabelOf } from '@/features/config/enum-label'
 
 /**
  * Maps a backend column to the AG Grid filter component, or false.
@@ -124,6 +125,10 @@ export function buildSetFilterParams(
     params.valueFormatter = (formatterParams: ValueFormatterParams): string =>
       formatBooleanFilterValue(formatterParams.value, translate)
   }
+  if (column.type === 'badge') {
+    params.valueFormatter = (formatterParams: ValueFormatterParams): string =>
+      formatBadgeFilterValue(formatterParams.value, column)
+  }
   return params
 }
 
@@ -146,6 +151,21 @@ export function formatBooleanFilterValue(
   }
   const isTruthy = value === true || value === 1 || value === '1' || value === 'true'
   return translate(isTruthy ? BOOLEAN_YES_KEY : BOOLEAN_NO_KEY)
+}
+
+function formatBadgeFilterValue(value: unknown, column: TableColumn): string {
+  if (value === null || value === undefined || value === '') {
+    return ''
+  }
+
+  const raw = String(value)
+  if (column.enumKey) {
+    return enumLabelOf(column.enumKey, raw)
+  }
+
+  const badge = column.badges?.find((candidate) => candidate.value === raw)
+
+  return badge?.label ?? raw
 }
 
 /** i18n key for the sub-menu title of the typed condition filter (0005). */

@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\Campaign;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\Registry;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -27,7 +26,6 @@ class LeadFactory extends Factory
         return [
             'registry_id' => Registry::factory(),
             'campaign_id' => Campaign::factory(),
-            'lead_status_id' => LeadStatus::factory(),
             'operational_site_id' => null,
             'source_id' => null,
             'operator_id' => null,

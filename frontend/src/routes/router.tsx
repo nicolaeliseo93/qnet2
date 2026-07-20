@@ -36,7 +36,6 @@ const TagsPage = lazy(() => import('@/pages/tags-page'))
 const PipelineStatusesPage = lazy(() => import('@/pages/pipeline-statuses-page'))
 const ProjectsPage = lazy(() => import('@/pages/projects-page'))
 const CampaignsPage = lazy(() => import('@/pages/campaigns-page'))
-const LeadStatusesPage = lazy(() => import('@/pages/lead-statuses-page'))
 const LeadsPage = lazy(() => import('@/pages/leads-page'))
 const OpportunitiesPage = lazy(() => import('@/pages/opportunities-page'))
 const OpportunityStatusesPage = lazy(() => import('@/pages/opportunity-statuses-page'))
@@ -186,10 +185,6 @@ export const router = createBrowserRouter([
           {
             path: 'campaigns',
             element: <CampaignsPage />,
-          },
-          {
-            path: 'lead-statuses',
-            element: <LeadStatusesPage />,
           },
           {
             path: 'leads',

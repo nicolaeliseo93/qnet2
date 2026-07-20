@@ -7,8 +7,7 @@ const STALE_TIME_MS = 5 * 60 * 1000
 /**
  * Resolves the id of a resource's system status (spec 0039 D-3), used to
  * preselect "Nuovo" on create when the field is left untouched by the user.
- * Shared by the leads/projects/campaigns create forms — both `pipeline-statuses`
- * and `lead-statuses` expose the same `meta.system_key` for-select marker.
+ * Shared by create forms that still use persisted status configurators.
  */
 export function useDefaultSystemStatusId(resource: string, key: 'new' | 'closed', enabled: boolean) {
   return useQuery({

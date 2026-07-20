@@ -2,8 +2,6 @@
 
 namespace App\Imports\Leads;
 
-use App\Models\LeadStatus;
-
 /**
  * Static catalogue backing `LeadsImportDefinition::columns()/fields()/
  * globalConfig()` (spec 0033): the mappable Registry+Lead field ids and the
@@ -54,15 +52,8 @@ final class LeadImportFieldCatalog
         ['id' => 'campaign_id', 'required' => true, 'for_select_resource' => 'campaigns'],
         ['id' => 'project_id', 'required' => false, 'for_select_resource' => 'projects'],
         ['id' => 'source_id', 'required' => false, 'for_select_resource' => 'sources'],
-        ['id' => 'lead_status_id', 'required' => false, 'for_select_resource' => 'lead-statuses'],
         ['id' => 'operator_id', 'required' => false, 'for_select_resource' => 'users'],
     ];
-
-    /**
-     * The seeded default lead status name (spec 0029), used as
-     * globalConfig()'s `lead_status_id` default when present.
-     */
-    private const string DEFAULT_LEAD_STATUS_NAME = 'New';
 
     /**
      * Fields StagedRowBuilder defaults to `config('imports.placeholder')`
@@ -117,18 +108,10 @@ final class LeadImportFieldCatalog
                 'label' => "imports.leads.global.{$field['id']}",
                 'required' => $field['required'],
                 'for_select_resource' => $field['for_select_resource'],
-                'default' => $field['id'] === 'lead_status_id' ? $this->defaultLeadStatusId() : null,
+                'default' => null,
             ],
             self::GLOBAL_FIELDS,
         );
-    }
-
-    public function defaultLeadStatusId(): ?int
-    {
-        /** @var int|null $id */
-        $id = LeadStatus::query()->where('name', self::DEFAULT_LEAD_STATUS_NAME)->value('id');
-
-        return $id;
     }
 
     /**

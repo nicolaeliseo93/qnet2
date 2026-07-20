@@ -62,9 +62,8 @@ class DemoDataSeeder extends Seeder
         // Depends on DemoProjectSeeder for the linked shape, plus the same
         // classification lookups for the standalone shape.
         $this->call(DemoCampaignSeeder::class);
-        $this->call(DemoLeadStatusSeeder::class);
-        // Depends on DemoReferentSeeder/DemoCampaignSeeder/DemoLeadStatusSeeder
-        // (mandatory, BR-1/D-1) plus DemoOperationalSiteSeeder/DemoSourceSeeder/
+        // Depends on DemoReferentSeeder/DemoCampaignSeeder (mandatory, BR-1)
+        // plus DemoOperationalSiteSeeder/DemoSourceSeeder/
         // DemoUsersSeeder (optional) — must run after all of them.
         $this->call(DemoLeadSeeder::class);
         $this->call(DemoOpportunityStatusSeeder::class);

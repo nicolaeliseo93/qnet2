@@ -35,8 +35,7 @@ class PipelineStatus extends BaseModel
 
     /**
      * The system rows that pin to the tail of the sort_order sequence
-     * (StatusOrderManager, spec 0039 D-5): just "Chiuso" here, unlike
-     * LeadStatus's two-row tail.
+     * (StatusOrderManager, spec 0039 D-5): just "Chiuso" here.
      *
      * @var array<int, StatusSystemKey>
      */

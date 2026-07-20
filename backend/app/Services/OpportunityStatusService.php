@@ -15,7 +15,7 @@ use Illuminate\Support\Collection;
 /**
  * Business logic for the `opportunity-statuses` resource (spec 0043): a
  * full-CRUD lookup entity (name/color) describing an Opportunity's working
- * state. Mirrors LeadStatusService's shape 1:1, including the BR-2 delete
+ * state. Keeps the shared lookup-service shape, including the BR-2 delete
  * guard.
  *
  * `sort_order` is server-managed — placed by StatusOrderManager::placeNew()
@@ -32,7 +32,7 @@ class OpportunityStatusService
 
     /**
      * Shared by show (controller)/create/update — a hook point kept for
-     * symmetry with LeadStatusService even though `group` is a plain
+     * symmetry with other status services even though `group` is a plain
      * column, needing no eager-load.
      */
     public function loadDetail(OpportunityStatus $opportunityStatus): OpportunityStatus
@@ -99,7 +99,7 @@ class OpportunityStatusService
 
     /**
      * Minimal, searchable, paginated opportunity status list for the
-     * for-select standard (ADR 0011), mirroring LeadStatusService::forSelect.
+     * for-select standard (ADR 0011).
      * Ordered by `sort_order` first so the select mirrors the table's
      * display order (BR-7).
      */

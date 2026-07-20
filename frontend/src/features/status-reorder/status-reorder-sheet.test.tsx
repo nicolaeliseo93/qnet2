@@ -36,13 +36,13 @@ const ITEMS: StatusReorderItem[] = [
   { id: 4, name: 'Closed', systemKey: 'closed' },
 ]
 
-/** Lead statuses (spec 0039 pivot): 3 system rows — "Nuovo" leads, "Chiuso con successo"/"Scartato" pinned in the tail, in that order. */
-const LEAD_ITEMS: StatusReorderItem[] = [
+/** Opportunity statuses: 3 system rows — "New" leads, "Won"/"Lost" are pinned in the tail, in that order. */
+const OPPORTUNITY_ITEMS: StatusReorderItem[] = [
   { id: 1, name: 'New', systemKey: 'new' },
   { id: 2, name: 'Alpha', systemKey: null },
   { id: 3, name: 'Bravo', systemKey: null },
   { id: 4, name: 'Won', systemKey: 'won' },
-  { id: 5, name: 'Discarded', systemKey: 'discarded' },
+  { id: 5, name: 'Lost', systemKey: 'lost' },
 ]
 
 const LABELS = {
@@ -91,7 +91,7 @@ function renderSheet(onReordered = vi.fn()) {
       <StatusReorderSheet
         open
         onOpenChange={vi.fn()}
-        resource="lead-statuses"
+        resource="pipeline-statuses"
         labels={LABELS}
         onReordered={onReordered}
       />
@@ -143,7 +143,7 @@ describe('StatusReorderSheet (spec 0039 AC-011)', () => {
 
     await dragFirstCustomDown()
 
-    await waitFor(() => expect(reorderStatusesMock).toHaveBeenCalledWith('lead-statuses', [3, 2]))
+    await waitFor(() => expect(reorderStatusesMock).toHaveBeenCalledWith('pipeline-statuses', [3, 2]))
     await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith(LABELS.saved))
     expect(onReordered).toHaveBeenCalledTimes(1)
   })
@@ -183,15 +183,15 @@ describe('StatusReorderSheet (spec 0039 AC-011)', () => {
   })
 })
 
-describe('StatusReorderSheet — lead statuses, 3 system rows (spec 0039 pivot)', () => {
-  it('pins New first and Won/Discarded last in that order, leaving only the custom rows draggable', async () => {
-    fetchStatusesForReorderMock.mockResolvedValue(LEAD_ITEMS)
+describe('StatusReorderSheet — opportunity statuses, 3 system rows', () => {
+  it('pins New first and Won/Lost last in that order, leaving only the custom rows draggable', async () => {
+    fetchStatusesForReorderMock.mockResolvedValue(OPPORTUNITY_ITEMS)
 
     renderSheet()
 
     await screen.findByText('New')
     expect(screen.getAllByRole('button', { name: LABELS.dragHandleLabel })).toHaveLength(2)
     const rows = screen.getAllByRole('listitem')
-    expect(rows.map((row) => row.textContent)).toEqual(['New', 'Alpha', 'Bravo', 'Won', 'Discarded'])
+    expect(rows.map((row) => row.textContent)).toEqual(['New', 'Alpha', 'Bravo', 'Won', 'Lost'])
   })
 })

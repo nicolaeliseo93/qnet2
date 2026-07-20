@@ -33,7 +33,7 @@ class PipelineStatusService
 
     /**
      * Shared by show (controller)/create/update — a hook point kept for
-     * symmetry with LeadStatusService even though `group` (spec 0039 pivot)
+     * symmetry with other status services even though `group`
      * is a plain column, needing no eager-load.
      */
     public function loadDetail(PipelineStatus $pipelineStatus): PipelineStatus

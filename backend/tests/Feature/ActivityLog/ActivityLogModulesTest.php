@@ -7,7 +7,6 @@ use App\Models\Company;
 use App\Models\CompanySite;
 use App\Models\CustomFieldDefinition;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\OperationalSite;
 use App\Models\PipelineStatus;
 use App\Models\Product;
@@ -49,7 +48,6 @@ if (! function_exists('activityLogModuleFixtures')) {
             'companies' => Company::class,
             'company-sites' => CompanySite::class,
             'custom-fields' => CustomFieldDefinition::class,
-            'lead-statuses' => LeadStatus::class,
             'leads' => Lead::class,
             'operational-sites' => OperationalSite::class,
             'pipeline-statuses' => PipelineStatus::class,

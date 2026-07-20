@@ -31,8 +31,6 @@ final readonly class UpdateLeadData
         public bool $sourceIdSubmitted = false,
         public ?int $operatorId = null,
         public bool $operatorIdSubmitted = false,
-        public ?int $leadStatusId = null,
-        public bool $leadStatusIdSubmitted = false,
         public ?string $notes = null,
         public bool $notesSubmitted = false,
         public ?array $extraFields = null,
@@ -57,8 +55,6 @@ final readonly class UpdateLeadData
             sourceIdSubmitted: array_key_exists('source_id', $data),
             operatorId: self::nullableInt($data, 'operator_id'),
             operatorIdSubmitted: array_key_exists('operator_id', $data),
-            leadStatusId: self::nullableInt($data, 'lead_status_id'),
-            leadStatusIdSubmitted: array_key_exists('lead_status_id', $data),
             notes: array_key_exists('notes', $data) ? $data['notes'] : null,
             notesSubmitted: array_key_exists('notes', $data),
             extraFields: array_key_exists('extra_fields', $data) ? $data['extra_fields'] : null,
@@ -94,10 +90,6 @@ final readonly class UpdateLeadData
 
         if ($this->operatorIdSubmitted) {
             $attributes['operator_id'] = $this->operatorId;
-        }
-
-        if ($this->leadStatusIdSubmitted) {
-            $attributes['lead_status_id'] = $this->leadStatusId;
         }
 
         if ($this->notesSubmitted) {

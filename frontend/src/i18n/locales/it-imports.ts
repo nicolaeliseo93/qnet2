@@ -36,7 +36,6 @@ export const imports = {
       campaign_id: 'Campagna',
       project_id: 'Progetto',
       source_id: 'Fonte',
-      lead_status_id: 'Stato iniziale',
       operator_id: 'Operatore assegnato',
     },
   },

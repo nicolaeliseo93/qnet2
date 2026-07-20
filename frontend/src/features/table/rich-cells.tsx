@@ -183,7 +183,7 @@ const GROUP_SWATCH_TOKENS: Record<StatusGroupValue, string> = {
 
 /**
  * The fixed 3-value status `group` as a colored dot + localized label. The label
- * i18n namespace differs per configurator (`pipelineStatuses` vs `leadStatuses`),
+ * i18n namespace differs per configurator,
  * so the caller passes `labelPrefix`.
  */
 export function GroupCell({

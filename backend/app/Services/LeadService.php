@@ -9,8 +9,6 @@ use App\DataObjects\Leads\UpdateLeadData;
 use App\DataObjects\Shared\ForSelectQuery;
 use App\DataObjects\Shared\ForSelectResult;
 use App\Models\Lead;
-use App\Models\LeadStatus;
-use App\Services\Statuses\SystemStatusGuard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
@@ -29,8 +27,6 @@ use Illuminate\Support\Facades\DB;
  */
 class LeadService
 {
-    public function __construct(private readonly SystemStatusGuard $systemStatusGuard) {}
-
     /**
      * Relations eager-loaded for the detail read tree (LeadResource), so a
      * single query never N+1s.
@@ -43,7 +39,6 @@ class LeadService
         'operationalSite.addresses.city',
         'source',
         'operator',
-        'leadStatus',
         // spec 0040: LeadResource.opportunity {id,name}|null.
         'opportunity',
     ];
@@ -55,14 +50,7 @@ class LeadService
 
     public function create(CreateLeadData $data): Lead
     {
-        $attributes = $data->attributes();
-
-        // spec 0039, D-3: an omitted/null FK falls back to the mandatory
-        // system_key='new' status (resolved by system_key, never by name).
-        $attributes['lead_status_id'] = $data->leadStatusId
-            ?? $this->systemStatusGuard->resolveNewStatusId(LeadStatus::class);
-
-        $lead = Lead::create($attributes);
+        $lead = Lead::create($data->attributes());
 
         return $this->loadDetail($lead);
     }
