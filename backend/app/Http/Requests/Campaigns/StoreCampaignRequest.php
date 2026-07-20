@@ -5,6 +5,7 @@ namespace App\Http\Requests\Campaigns;
 use App\DataObjects\Campaigns\CreateCampaignData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ValidatesGeoHierarchy;
+use App\Http\Requests\Concerns\ValidatesProductCategoryBusinessFunction;
 use App\Models\Project;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
@@ -45,6 +46,7 @@ class StoreCampaignRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
     use ValidatesGeoHierarchy;
+    use ValidatesProductCategoryBusinessFunction;
 
     /**
      * Memoizes linkedProject() (rules() and withValidator() both need it) so
@@ -157,6 +159,19 @@ class StoreCampaignRequest extends FormRequest
             if (! $validator->errors()->hasAny($relevantFields)) {
                 $linked = $this->filled('project_id');
                 $this->validateGeoHierarchy($validator, $this->mergedGeo($linked, $linked ? $this->linkedProject() : null));
+            }
+
+            // Coherence only applies to a STANDALONE campaign: when linked, the
+            // 3 classification fields are `prohibited` (derived from the
+            // project), so there is no submitted pair to check.
+            $classFields = ['business_function_id', 'product_category_id'];
+
+            if (! $this->filled('project_id') && ! $validator->errors()->hasAny($classFields)) {
+                $this->validateProductCategoryBusinessFunction(
+                    $validator,
+                    $this->filled('business_function_id') ? (int) $this->input('business_function_id') : null,
+                    $this->filled('product_category_id') ? (int) $this->input('product_category_id') : null,
+                );
             }
         });
     }

@@ -11,9 +11,8 @@ import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchLead, leadDetailQueryKey } from '@/features/leads/api'
 import { LeadForm } from '@/features/leads/lead-form'
 import { LeadDetailView } from '@/features/leads/lead-detail'
-import { useModuleOpener } from '@/features/modules/use-module-opener'
+import { useLeadConversion } from '@/features/leads/use-lead-conversion'
 import { OPEN_MODE_MODAL } from '@/features/modules/types'
-import { OPPORTUNITIES_DOMAIN } from '@/features/opportunities/api'
 import type {
   ModuleDetailScreenProps,
   ModuleFormScreenProps,
@@ -125,15 +124,16 @@ export function LeadDetailPageActions({ id }: ModuleDetailScreenProps) {
   const queryClient = useQueryClient()
   const { data: lead } = useEntityDetail(leadDetailQueryKey(id), () => fetchLead(id))
 
-  // Opens the OPPORTUNITIES form seeded with this lead (spec 0045), following
-  // the user's opportunities open mode instead of always navigating to a
-  // page. On save, invalidates THIS lead's detail query (AC-025) so the
-  // button flips to "Go to opportunity" once `lead.opportunity` comes back
-  // populated.
-  const { openCreateWith: openOpportunityWith, sheet: opportunitySheet } = useModuleOpener(
-    OPPORTUNITIES_DOMAIN,
-    { onSaved: () => queryClient.invalidateQueries({ queryKey: leadDetailQueryKey(id) }) },
-  )
+  // Lead -> opportunity conversion (spec 0044, revised): a lead missing
+  // Operator/Site is corrected first, then the prefilled Opportunity form
+  // opens. On either save, invalidates THIS lead's detail query so the button
+  // flips to "Go to opportunity" once `lead.opportunity` comes back populated.
+  const invalidateDetail = () =>
+    queryClient.invalidateQueries({ queryKey: leadDetailQueryKey(id) })
+  const { startConversion, sheets } = useLeadConversion({
+    onOpportunitySaved: invalidateDetail,
+    onLeadCorrected: invalidateDetail,
+  })
 
   if (!lead) {
     return null
@@ -152,11 +152,11 @@ export function LeadDetailPageActions({ id }: ModuleDetailScreenProps) {
 
   return (
     <Can permission="opportunities.create">
-      <Button variant="outline" onClick={() => openOpportunityWith({ lead_id: id })}>
+      <Button variant="outline" onClick={() => void startConversion(lead)}>
         <Handshake aria-hidden="true" />
         {t('leads.detail.createOpportunity')}
       </Button>
-      {opportunitySheet}
+      {sheets}
     </Can>
   )
 }

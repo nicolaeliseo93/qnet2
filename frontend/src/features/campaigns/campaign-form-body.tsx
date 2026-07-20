@@ -62,6 +62,11 @@ export function CampaignFormBody({ mode, onSuccess, onCancel, initialCode }: Cam
   const projectId = useWatch({ control: form.control, name: 'project_id' })
   const isLinked = projectId !== null
 
+  // Standalone only: the product category is scoped to the selected business
+  // function and disabled until one is picked; changing the function clears a
+  // now-incoherent category (mirrors the backend coherence rule).
+  const businessFunctionId = useWatch({ control: form.control, name: 'business_function_id' })
+
   const { errors, isSubmitting } = form.formState
   const [planningOpen, setPlanningOpen] = useState(false)
   const planningHasError = Boolean(errors.start_date || errors.end_date || errors.total_budget || errors.target_lead)
@@ -216,6 +221,11 @@ export function CampaignFormBody({ mode, onSuccess, onCancel, initialCode }: Cam
                 selected={original?.business_function ?? null}
                 forceDisabled={isLinked}
                 required={!isLinked}
+                onValueChange={(next) => {
+                  if (next !== businessFunctionId) {
+                    form.setValue('product_category_id', null, { shouldDirty: true })
+                  }
+                }}
               />
 
               <CampaignRelationField
@@ -226,8 +236,9 @@ export function CampaignFormBody({ mode, onSuccess, onCancel, initialCode }: Cam
                 resource={PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('campaigns.form.productCategorySearch')}
                 selected={original?.product_category ?? null}
-                forceDisabled={isLinked}
+                forceDisabled={isLinked || businessFunctionId === null}
                 required={!isLinked}
+                params={businessFunctionId !== null ? { business_function_id: businessFunctionId } : undefined}
               />
             </div>
           </FormSection>

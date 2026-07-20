@@ -50,10 +50,13 @@ if (! function_exists('standaloneClassificationFields')) {
      */
     function standaloneClassificationFields(): array
     {
+        // Coherent pair (spec 0023 REV): the category sits under the business function.
+        $businessFunction = BusinessFunction::factory()->create();
+
         return [
             'pipeline_status_id' => PipelineStatus::factory()->create()->id,
-            'business_function_id' => BusinessFunction::factory()->create()->id,
-            'product_category_id' => ProductCategory::factory()->create()->id,
+            'business_function_id' => $businessFunction->id,
+            'product_category_id' => ProductCategory::factory()->create(['business_function_id' => $businessFunction->id])->id,
         ];
     }
 }

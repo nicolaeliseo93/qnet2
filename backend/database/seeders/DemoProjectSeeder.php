@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\DataObjects\Projects\CreateProjectData;
-use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\PipelineStatus;
 use App\Models\ProductCategory;
@@ -12,6 +11,7 @@ use App\Models\Referent;
 use App\Models\Source;
 use App\Models\State;
 use App\Services\ProjectService;
+use Database\Seeders\Concerns\ResolvesCategoryBusinessFunction;
 use Database\Seeders\Concerns\SeedsItalianGeo;
 use Faker\Factory as FakerFactory;
 use Faker\Generator;
@@ -48,6 +48,7 @@ use Illuminate\Support\Collection;
  */
 class DemoProjectSeeder extends Seeder
 {
+    use ResolvesCategoryBusinessFunction;
     use SeedsItalianGeo;
 
     private const int PROJECTS = 14;
@@ -67,10 +68,13 @@ class DemoProjectSeeder extends Seeder
 
         $statuses = PipelineStatus::query()->orderBy('sort_order')->get();
         $sources = Source::query()->orderBy('name')->get();
-        $businessFunctions = BusinessFunction::query()->orderBy('name')->get();
         $productCategories = ProductCategory::query()->orderBy('name')->get();
         $partners = Referent::query()->orderBy('name')->get();
         $states = $this->italianStates();
+
+        // The business function is DERIVED from each category's effective one
+        // (spec 0023 REV), so every seeded project carries a coherent pair.
+        $classificationPairs = $this->coherentClassificationPairs($productCategories);
 
         if ($statuses->isEmpty()) {
             // No status to satisfy the NOT NULL pipeline_status_id (BR-4/D-5):
@@ -79,16 +83,15 @@ class DemoProjectSeeder extends Seeder
         }
 
         for ($index = 0; $index < self::PROJECTS; $index++) {
-            $this->seedProject($faker, $index, $statuses, $sources, $businessFunctions, $states, $productCategories, $partners);
+            $this->seedProject($faker, $index, $statuses, $sources, $states, $classificationPairs, $partners);
         }
     }
 
     /**
      * @param  Collection<int, PipelineStatus>  $statuses
      * @param  Collection<int, Source>  $sources
-     * @param  Collection<int, BusinessFunction>  $businessFunctions
      * @param  Collection<int, State>  $states
-     * @param  Collection<int, ProductCategory>  $productCategories
+     * @param  Collection<int, array{product_category_id: int, business_function_id: int}>  $classificationPairs
      * @param  Collection<int, Referent>  $partners
      */
     private function seedProject(
@@ -96,9 +99,8 @@ class DemoProjectSeeder extends Seeder
         int $index,
         Collection $statuses,
         Collection $sources,
-        Collection $businessFunctions,
         Collection $states,
-        Collection $productCategories,
+        Collection $classificationPairs,
         Collection $partners,
     ): void {
         // Every 5th project has no budget cap at all (A-1): campaigns linked
@@ -118,15 +120,19 @@ class DemoProjectSeeder extends Seeder
         // never appear in the demo data.
         $geo = $this->geoTuple($states, $index + 1);
 
+        $pair = $classificationPairs->isNotEmpty()
+            ? $classificationPairs[$index % $classificationPairs->count()]
+            : null;
+
         $data = new CreateProjectData(
             code: null,
             name: $faker->unique()->catchPhrase(),
             pipelineStatusId: $statuses[$index % $statuses->count()]->id,
             description: $faker->boolean(60) ? $faker->paragraph() : null,
             sourceId: $this->pick($sources, $index)?->id,
-            businessFunctionId: $this->pick($businessFunctions, $index)?->id,
+            businessFunctionId: $pair['business_function_id'] ?? null,
             stateId: $geo['state_id'],
-            productCategoryId: $this->pick($productCategories, $index)?->id,
+            productCategoryId: $pair['product_category_id'] ?? null,
             partnerId: $this->pick($partners, $index)?->id,
             startDate: $startDate->format('Y-m-d'),
             endDate: $endDate?->format('Y-m-d'),

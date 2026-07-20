@@ -45,10 +45,15 @@ if (! function_exists('campaignUserWith')) {
 if (! function_exists('standaloneClassificationFields')) {
     function standaloneClassificationFields(): array
     {
+        // The category is created UNDER the business function so the pair is
+        // coherent (spec 0023 REV): the write-side coherence rule rejects a
+        // category whose effective business function differs.
+        $businessFunction = BusinessFunction::factory()->create();
+
         return [
             'pipeline_status_id' => PipelineStatus::factory()->create()->id,
-            'business_function_id' => BusinessFunction::factory()->create()->id,
-            'product_category_id' => ProductCategory::factory()->create()->id,
+            'business_function_id' => $businessFunction->id,
+            'product_category_id' => ProductCategory::factory()->create(['business_function_id' => $businessFunction->id])->id,
         ];
     }
 }

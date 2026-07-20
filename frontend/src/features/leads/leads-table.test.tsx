@@ -45,6 +45,16 @@ const mockLead: LeadDetailWithPermissions = {
   },
 }
 
+// A lead already carrying both Operator and Site: conversion skips the
+// correction step and opens the Opportunity form directly (spec 0044 revised).
+const readyLead: LeadDetailWithPermissions = {
+  ...mockLead,
+  operational_site_id: 3,
+  operational_site: { id: 3, label: 'Main plant' },
+  operator_id: 7,
+  operator: { id: 7, name: 'Operator One' },
+}
+
 const canMock = vi.fn<(permission: string) => boolean>()
 // The leads Sheet stays modal throughout this suite; the opportunities Sheet
 // (spec 0045, second opener for 'convert_to_opportunity') varies per test to
@@ -314,27 +324,31 @@ describe('LeadsTable — Sheet-based CRUD (AC-024)', () => {
     )
   })
 
-  it('AC-020: opens the Opportunity modal Sheet prefilled with the lead on convert_to_opportunity, no navigation', () => {
+  it('AC-020: a ready lead opens the Opportunity modal Sheet prefilled, no correction, no navigation', async () => {
+    fetchLeadMock.mockResolvedValue(readyLead)
     renderTable()
 
     fireEvent.click(screen.getByText('trigger-convert'))
 
-    expect(screen.getByText('opportunity-form-create')).toBeInTheDocument()
+    expect(await screen.findByText('opportunity-form-create')).toBeInTheDocument()
     expect(screen.getByText('opportunity-params:{"lead_id":33}')).toBeInTheDocument()
+    expect(screen.queryByText('Complete the lead first')).not.toBeInTheDocument()
     expect(navigateMock).not.toHaveBeenCalled()
   })
 
-  it('AC-021: navigates to the Opportunity form deep-link when the resolved open mode is "page"', () => {
+  it('AC-021: a ready lead navigates to the Opportunity form deep-link in "page" mode', async () => {
+    fetchLeadMock.mockResolvedValue(readyLead)
     opportunitiesOpenMode = 'page'
     renderTable()
 
     fireEvent.click(screen.getByText('trigger-convert'))
 
-    expect(navigateMock).toHaveBeenCalledWith('/opportunities/new?lead_id=33')
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/opportunities/new?lead_id=33'))
     expect(screen.queryByText('opportunity-form-create')).not.toBeInTheDocument()
   })
 
   it('AC-024: saving the Opportunity from the modal Sheet refreshes the leads grid', async () => {
+    fetchLeadMock.mockResolvedValue(readyLead)
     renderTable()
 
     fireEvent.click(screen.getByText('trigger-convert'))
@@ -343,6 +357,31 @@ describe('LeadsTable — Sheet-based CRUD (AC-024)', () => {
     fireEvent.click(screen.getByText('stub-save-opportunity'))
 
     await waitFor(() => expect(screen.queryByText('opportunity-form-create')).not.toBeInTheDocument())
+    expect(refreshMock).toHaveBeenCalled()
+  })
+
+  it('gates a lead missing Operator/Site into the correction form before the Opportunity', async () => {
+    fetchLeadMock.mockResolvedValue(mockLead)
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-convert'))
+
+    expect(await screen.findByText('Complete the lead first')).toBeInTheDocument()
+    expect(screen.queryByText('opportunity-form-create')).not.toBeInTheDocument()
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('opens the prefilled Opportunity form after the lead is corrected, and refreshes the grid', async () => {
+    fetchLeadMock.mockResolvedValue(mockLead)
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-convert'))
+    expect(await screen.findByText('Complete the lead first')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('stub-save'))
+
+    expect(await screen.findByText('opportunity-form-create')).toBeInTheDocument()
+    expect(screen.getByText('opportunity-params:{"lead_id":33}')).toBeInTheDocument()
     expect(refreshMock).toHaveBeenCalled()
   })
 

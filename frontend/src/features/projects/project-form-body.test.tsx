@@ -62,13 +62,20 @@ vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
     value,
     onChange,
+    disabled,
     labels,
   }: {
     value: number | null
     onChange: (value: number) => void
+    disabled?: boolean
     labels: { triggerLabel: string }
   }) => (
-    <button type="button" data-testid={`select-${labels.triggerLabel}`} onClick={() => onChange(3)}>
+    <button
+      type="button"
+      disabled={disabled}
+      data-testid={`select-${labels.triggerLabel}`}
+      onClick={() => onChange(3)}
+    >
       {value ?? ''}
     </button>
   ),
@@ -379,6 +386,31 @@ describe('ProjectForm — geo hierarchy (spec 0027 BR-4/AC-010)', () => {
     await waitFor(() => expect(createProjectMock).toHaveBeenCalledTimes(1))
     const payload = createProjectMock.mock.calls[0][0] as Record<string, unknown>
     expect(payload.country_id).toBe(1)
+  })
+})
+
+describe('ProjectForm — product category depends on business function (spec 0023 REV)', () => {
+  it('disables the product category select until a business function is chosen, then enables it', async () => {
+    render(<ProjectForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Product category')).toBeInTheDocument())
+    expect(screen.getByTestId('select-Product category')).toBeDisabled()
+
+    fireEvent.click(screen.getByTestId('select-Business function'))
+
+    await waitFor(() => expect(screen.getByTestId('select-Product category')).toBeEnabled())
+  })
+
+  it('leaves the product category enabled in edit mode (a business function is already set)', async () => {
+    render(
+      <ProjectForm mode={{ type: 'edit', project: project() }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByTestId('select-Product category')).toBeInTheDocument())
+    expect(screen.getByTestId('select-Product category')).toBeEnabled()
   })
 })
 

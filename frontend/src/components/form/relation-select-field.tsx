@@ -37,6 +37,12 @@ interface RelationSelectFieldProps<
   /** Overrides the required marker when requiredness is form-state-dependent; forwarded to `MetaField.required`. */
   required?: boolean
   /**
+   * Fired after the field value changes (user pick or quick-create), with the
+   * new value — lets a caller react to it, e.g. reset a dependent field when
+   * this one drives a scoped picker (business function -> product category).
+   */
+  onValueChange?: (next: FieldPathValue<TFieldValues, TName>) => void
+  /**
    * Extra, resource-specific query parameters forwarded to the for-select
    * request (spec 0032 `dependency.param`, e.g. `{ registry_id }` to scope a
    * referent picker, spec 0040 BR-4). Omitted for a plain, unscoped picker.
@@ -79,6 +85,7 @@ export function RelationSelectField<
   selected,
   forceDisabled = false,
   required,
+  onValueChange,
   params,
   placeholder,
   emptyLabel,
@@ -110,7 +117,11 @@ export function RelationSelectField<
             <AsyncPaginatedSelect
               resource={resource}
               value={field.value}
-              onChange={(next) => field.onChange(next as FieldPathValue<TFieldValues, TName>)}
+              onChange={(next) => {
+                const value = next as FieldPathValue<TFieldValues, TName>
+                field.onChange(value)
+                onValueChange?.(value)
+              }}
               selectedItem={toForSelectItem(quickCreatedMatch ?? selected)}
               showAvatar={showAvatar}
               disabled={isDisabled}
@@ -124,10 +135,11 @@ export function RelationSelectField<
                 triggerLabel: label,
                 retry: retryLabel,
               }}
-              action={renderAction(
-                (ref) => field.onChange(ref.id as FieldPathValue<TFieldValues, TName>),
-                isDisabled,
-              )}
+              action={renderAction((ref) => {
+                const value = ref.id as FieldPathValue<TFieldValues, TName>
+                field.onChange(value)
+                onValueChange?.(value)
+              }, isDisabled)}
             />
           </FormControl>
         )

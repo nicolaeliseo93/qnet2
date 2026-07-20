@@ -42,15 +42,24 @@ class CampaignFactory extends Factory
     {
         $country = Country::factory()->create();
 
+        // The default standalone campaign carries a COHERENT classification
+        // pair (spec 0023 REV): the product category is created UNDER the same
+        // business function, so its effective business function matches
+        // `business_function_id` — otherwise the write-side coherence rule
+        // (and any endpoint test posting this fixture) would reject it. The
+        // function is resolved to a real model first (same reason as `country`
+        // above) so both keys point at the one row.
+        $businessFunction = BusinessFunction::factory()->create();
+
         return [
             'project_id' => null,
             'name' => fake()->unique()->words(3, true),
             'description' => fake()->optional()->paragraph(),
             'pipeline_status_id' => PipelineStatus::factory(),
-            'business_function_id' => BusinessFunction::factory(),
+            'business_function_id' => $businessFunction->id,
             'country_id' => $country->id,
             'state_id' => State::factory()->state(['country_id' => $country->id]),
-            'product_category_id' => ProductCategory::factory(),
+            'product_category_id' => ProductCategory::factory()->state(['business_function_id' => $businessFunction->id]),
             'start_date' => null,
             'end_date' => null,
             'total_budget' => fake()->optional()->randomFloat(2, 100, 50000),

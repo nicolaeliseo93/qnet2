@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useWatch } from 'react-hook-form'
 import { FolderKanban, Loader2, Tags } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,11 @@ export function ProjectFormBody({ mode, onSuccess, onCancel, initialCode }: Proj
 
   const [customOpen, setCustomOpen] = useState(false)
   const customHasError = Boolean(form.formState.errors.custom_fields)
+
+  // The product category is scoped to the selected business function and stays
+  // disabled until one is picked; changing the function clears a now-incoherent
+  // category (mirrors the backend coherence rule and the opportunity picker).
+  const businessFunctionId = useWatch({ control: form.control, name: 'business_function_id' })
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -163,6 +169,11 @@ export function ProjectFormBody({ mode, onSuccess, onCancel, initialCode }: Proj
                 resource={BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('projects.form.businessFunctionSearch')}
                 selected={original?.business_function ?? null}
+                onValueChange={(next) => {
+                  if (next !== businessFunctionId) {
+                    form.setValue('product_category_id', null, { shouldDirty: true })
+                  }
+                }}
                 {...relationLabels}
               />
 
@@ -174,6 +185,8 @@ export function ProjectFormBody({ mode, onSuccess, onCancel, initialCode }: Proj
                 resource={PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('projects.form.productCategorySearch')}
                 selected={original?.product_category ?? null}
+                forceDisabled={businessFunctionId === null}
+                params={businessFunctionId !== null ? { business_function_id: businessFunctionId } : undefined}
                 {...relationLabels}
               />
 

@@ -27,6 +27,16 @@ vi.mock('@/features/leads/api', () => ({
   leadDetailQueryKey: (id: number | null) => ['leads', 'detail', id] as const,
 }))
 
+// The conversion correction step mounts the real `LeadForm`; its submission is
+// owned by another suite, so it is stubbed to a button that drives `onSuccess`.
+vi.mock('@/features/leads/lead-form', () => ({
+  LeadForm: ({ onSuccess }: { onSuccess: (lead: LeadDetail) => void }) => (
+    <button type="button" onClick={() => onSuccess({ id: 9 } as LeadDetail)}>
+      stub-correct-save
+    </button>
+  ),
+}))
+
 const canMock = vi.fn<(permission: string) => boolean>()
 vi.mock('@/features/auth/use-abilities', () => ({
   useAbilities: () => ({ can: canMock, hasRole: () => false, roles: [], isLoading: false }),
@@ -80,8 +90,16 @@ vi.mock('@/features/opportunities/opportunity-screens', () => ({
   },
 }))
 
+// Ready by default (Operator + Site set) so the conversion skips the correction
+// step; the correction tests pass explicit nulls to trigger the gate.
 function lead(overrides: Partial<LeadDetail> = {}): LeadDetail {
-  return { id: 9, opportunity: null, ...overrides } as LeadDetail
+  return {
+    id: 9,
+    opportunity: null,
+    operator_id: 7,
+    operational_site_id: 3,
+    ...overrides,
+  } as LeadDetail
 }
 
 function renderActions() {
@@ -137,24 +155,41 @@ describe('LeadDetailPageActions', () => {
     expect(screen.queryByRole('button', { name: /create opportunity/i })).not.toBeInTheDocument()
   })
 
-  it('AC-025 (spec 0044): a lead without an operator still offers "Create opportunity", with no blocking dialog', async () => {
+  it('spec 0044 (revised): a lead missing the Operator opens the correction form before the Opportunity', async () => {
     fetchLeadMock.mockResolvedValue(
-      lead({ opportunity: null, operator_id: null, operator: null }),
+      lead({ opportunity: null, operator_id: null, operational_site_id: null }),
     )
 
     renderActions()
 
-    expect(await screen.findByRole('button', { name: /create opportunity/i })).toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: /create opportunity/i }))
+
+    expect(await screen.findByText('Complete the lead first')).toBeInTheDocument()
+    expect(screen.queryByText('opportunity-form-create')).not.toBeInTheDocument()
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 
-  it('AC-022: opens the Opportunity modal Sheet prefilled with the lead, no navigation', async () => {
+  it('chains into the prefilled Opportunity form once the lead is corrected', async () => {
+    fetchLeadMock.mockResolvedValue(
+      lead({ opportunity: null, operator_id: null, operational_site_id: null }),
+    )
+
+    renderActions()
+
+    fireEvent.click(await screen.findByRole('button', { name: /create opportunity/i }))
+    fireEvent.click(await screen.findByText('stub-correct-save'))
+
+    expect(await screen.findByText('opportunity-form-create')).toBeInTheDocument()
+    expect(screen.getByText('opportunity-params:{"lead_id":9}')).toBeInTheDocument()
+  })
+
+  it('AC-022: a ready lead opens the Opportunity modal Sheet prefilled, no navigation', async () => {
     fetchLeadMock.mockResolvedValue(lead({ opportunity: null }))
     renderActions()
 
     fireEvent.click(await screen.findByRole('button', { name: /create opportunity/i }))
 
-    expect(screen.getByText('opportunity-form-create')).toBeInTheDocument()
+    expect(await screen.findByText('opportunity-form-create')).toBeInTheDocument()
     expect(screen.getByText('opportunity-params:{"lead_id":9}')).toBeInTheDocument()
     expect(navigateMock).not.toHaveBeenCalled()
   })
@@ -175,7 +210,7 @@ describe('LeadDetailPageActions', () => {
     renderActions()
 
     fireEvent.click(await screen.findByRole('button', { name: /create opportunity/i }))
-    expect(screen.getByText('opportunity-form-create')).toBeInTheDocument()
+    expect(await screen.findByText('opportunity-form-create')).toBeInTheDocument()
 
     fetchLeadMock.mockResolvedValueOnce(
       lead({ opportunity: { id: 42 } as LeadDetail['opportunity'] }),

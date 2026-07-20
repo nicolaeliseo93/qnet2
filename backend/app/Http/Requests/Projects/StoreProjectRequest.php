@@ -5,6 +5,7 @@ namespace App\Http\Requests\Projects;
 use App\DataObjects\Projects\CreateProjectData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ValidatesGeoHierarchy;
+use App\Http\Requests\Concerns\ValidatesProductCategoryBusinessFunction;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
@@ -33,6 +34,7 @@ class StoreProjectRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
     use ValidatesGeoHierarchy;
+    use ValidatesProductCategoryBusinessFunction;
 
     public function authorize(): bool
     {
@@ -77,6 +79,14 @@ class StoreProjectRequest extends FormRequest
                     'province_id' => $this->filled('province_id') ? (int) $this->input('province_id') : null,
                     'city_id' => $this->filled('city_id') ? (int) $this->input('city_id') : null,
                 ]);
+            }
+
+            if (! $validator->errors()->hasAny(['business_function_id', 'product_category_id'])) {
+                $this->validateProductCategoryBusinessFunction(
+                    $validator,
+                    $this->filled('business_function_id') ? (int) $this->input('business_function_id') : null,
+                    $this->filled('product_category_id') ? (int) $this->input('product_category_id') : null,
+                );
             }
         });
     }

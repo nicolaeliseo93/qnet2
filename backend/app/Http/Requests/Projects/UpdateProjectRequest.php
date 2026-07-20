@@ -5,6 +5,7 @@ namespace App\Http\Requests\Projects;
 use App\DataObjects\Projects\UpdateProjectData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ValidatesGeoHierarchy;
+use App\Http\Requests\Concerns\ValidatesProductCategoryBusinessFunction;
 use App\Models\Project;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
@@ -29,6 +30,7 @@ class UpdateProjectRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
     use ValidatesGeoHierarchy;
+    use ValidatesProductCategoryBusinessFunction;
 
     public function authorize(): bool
     {
@@ -73,6 +75,22 @@ class UpdateProjectRequest extends FormRequest
 
             if ($this->hasAny($geoFields) && ! $validator->errors()->hasAny($geoFields)) {
                 $this->validateGeoHierarchy($validator, $this->effectiveGeo());
+            }
+
+            // Only re-check coherence when THIS request touches either
+            // classification field: an update that changes neither must not
+            // fail on a pre-existing (possibly legacy) row it does not itself
+            // change — mirrors the geo guard above. The resulting pair is the
+            // submitted value for a touched field, else the project's current.
+            $classFields = ['business_function_id', 'product_category_id'];
+
+            if ($this->hasAny($classFields) && ! $validator->errors()->hasAny($classFields)) {
+                $project = $this->currentProject();
+                $this->validateProductCategoryBusinessFunction(
+                    $validator,
+                    $this->has('business_function_id') ? (int) $this->input('business_function_id') : $project->business_function_id,
+                    $this->has('product_category_id') ? (int) $this->input('product_category_id') : $project->product_category_id,
+                );
             }
         });
     }

@@ -26,6 +26,8 @@ interface LeadFormBodyProps {
   mode: LeadFormMode
   onSuccess: (lead: LeadDetail) => void
   onCancel: () => void
+  /** See `LeadForm`: makes Operator/Site required for the conversion correction step. */
+  requireConversionFields?: boolean
 }
 
 /**
@@ -36,9 +38,9 @@ interface LeadFormBodyProps {
  * wrapped in `MetaField` (spec 0004). All non-render logic lives in
  * `useLeadForm`.
  */
-export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
+export function LeadFormBody({ mode, onSuccess, onCancel, requireConversionFields }: LeadFormBodyProps) {
   const { t } = useTranslation()
-  const { form, serverError, onSubmit } = useLeadForm({ mode, onSuccess })
+  const { form, serverError, onSubmit } = useLeadForm({ mode, onSuccess, requireConversionFields })
   const original = mode.type === 'edit' ? mode.lead : null
 
   const { errors, isSubmitting } = form.formState

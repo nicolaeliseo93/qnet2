@@ -44,9 +44,14 @@ if (! function_exists('projectStoreExtras')) {
      */
     function projectStoreExtras(): array
     {
+        // The category is created UNDER the business function so the pair is
+        // coherent (spec 0023 REV): the write-side coherence rule rejects a
+        // category whose effective business function differs.
+        $businessFunction = BusinessFunction::factory()->create();
+
         return [
-            'business_function_id' => BusinessFunction::factory()->create()->id,
-            'product_category_id' => ProductCategory::factory()->create()->id,
+            'business_function_id' => $businessFunction->id,
+            'product_category_id' => ProductCategory::factory()->create(['business_function_id' => $businessFunction->id])->id,
             'start_date' => '2026-01-01',
             'end_date' => '2026-12-31',
         ];

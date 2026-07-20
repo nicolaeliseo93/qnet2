@@ -39,6 +39,11 @@ export const leads = {
     createOpportunity: 'Create opportunity',
     goToOpportunity: 'Go to opportunity',
   },
+  conversion: {
+    correctTitle: 'Complete the lead first',
+    correctSubtitle:
+      'This lead is missing the Operator or the Site. Fill them in before creating the Opportunity, then it opens automatically.',
+  },
   form: {
     newLead: 'New lead',
     importLeads: 'Import leads',

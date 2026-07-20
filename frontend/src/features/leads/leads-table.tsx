@@ -19,7 +19,7 @@ import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
 import { leadColumnRenderers } from '@/features/leads/column-renderers'
 import { deleteLead } from '@/features/leads/api'
-import { OPPORTUNITIES_DOMAIN } from '@/features/opportunities/api'
+import { useLeadConversion } from '@/features/leads/use-lead-conversion'
 
 /** Domain key used to mount the generic table for leads. */
 const LEADS_DOMAIN = 'leads'
@@ -64,16 +64,15 @@ export function LeadsTable() {
 
   const { openCreate, openView, openEdit, sheet } = useModuleOpener(LEADS_DOMAIN, { onSaved })
 
-  // Second, domain-generic opener mounting the OPPORTUNITIES form (spec
-  // 0045): 'convert_to_opportunity' seeds it with the lead id and follows the
-  // user's opportunities open mode, instead of always navigating to a page.
-  // Reuses the same `onSaved` (grid refresh + stats invalidation) as the
-  // leads opener above, since AC-024 requires the leads grid to reflect the
-  // conversion (the converted row no longer exposes the action).
-  const { openCreateWith: openOpportunityWith, sheet: opportunitySheet } = useModuleOpener(
-    OPPORTUNITIES_DOMAIN,
-    { onSaved },
-  )
+  // Lead -> opportunity conversion controller (spec 0044, revised): gates a
+  // lead missing Operator/Site into a correction step before the Opportunity
+  // form, then chains into it. Reuses the same `onSaved` (grid refresh + stats
+  // invalidation) as the leads opener above — both the correction and the
+  // opportunity change the converted row, which AC-024 requires reflected.
+  const { startConversion, sheets: conversionSheets } = useLeadConversion({
+    onOpportunitySaved: onSaved,
+    onLeadCorrected: onSaved,
+  })
 
   const runDelete = useCallback(
     async (row: TableRow) => {
@@ -113,13 +112,13 @@ export function LeadsTable() {
           setActivityRow(row)
           break
         case 'convert_to_opportunity':
-          openOpportunityWith({ lead_id: row.id })
+          void startConversion(row.id)
           break
         default:
           break
       }
     },
-    [openView, openEdit, runDelete, openOpportunityWith],
+    [openView, openEdit, runDelete, startConversion],
   )
 
   const isBusy = useCallback((row: TableRow) => row.id === deletingId, [deletingId])
@@ -162,7 +161,7 @@ export function LeadsTable() {
       />
 
       {sheet}
-      {opportunitySheet}
+      {conversionSheets}
 
       <ResourceActivityDialog
         resource={LEADS_DOMAIN}

@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\DataObjects\Campaigns\CreateCampaignData;
-use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\PipelineStatus;
 use App\Models\ProductCategory;
@@ -12,6 +11,7 @@ use App\Models\Referent;
 use App\Models\Source;
 use App\Models\State;
 use App\Services\CampaignService;
+use Database\Seeders\Concerns\ResolvesCategoryBusinessFunction;
 use Database\Seeders\Concerns\SeedsItalianGeo;
 use Faker\Factory as FakerFactory;
 use Faker\Generator;
@@ -49,6 +49,7 @@ use Illuminate\Support\Collection;
  */
 class DemoCampaignSeeder extends Seeder
 {
+    use ResolvesCategoryBusinessFunction;
     use SeedsItalianGeo;
 
     private const int STANDALONE_CAMPAIGNS = 8;
@@ -66,21 +67,25 @@ class DemoCampaignSeeder extends Seeder
 
         $projects = Project::query()->orderBy('id')->get();
         $statuses = PipelineStatus::query()->orderBy('sort_order')->get();
-        $businessFunctions = BusinessFunction::query()->orderBy('name')->get();
         $productCategories = ProductCategory::query()->orderBy('name')->get();
         $states = $this->italianStates();
         $sources = Source::query()->orderBy('name')->get();
         $partners = Referent::query()->orderBy('name')->get();
 
+        // The business function is DERIVED from each category's effective one
+        // (spec 0023 REV), so every standalone campaign carries a coherent pair.
+        $classificationPairs = $this->coherentClassificationPairs($productCategories);
+
         $this->seedLinkedCampaigns($faker, $projects, $partners);
 
-        if ($statuses->isEmpty() || $businessFunctions->isEmpty() || $states->isEmpty() || $productCategories->isEmpty()) {
-            // Nothing sensible to seed for the standalone shape without all 4
-            // required classification lookups (BR-2).
+        if ($statuses->isEmpty() || $states->isEmpty() || $classificationPairs->isEmpty()) {
+            // Nothing sensible to seed for the standalone shape without all
+            // required classification lookups (BR-2) plus a coherent
+            // category/function pair.
             return;
         }
 
-        $this->seedStandaloneCampaigns($faker, $statuses, $businessFunctions, $states, $productCategories, $sources, $partners);
+        $this->seedStandaloneCampaigns($faker, $statuses, $states, $classificationPairs, $sources, $partners);
     }
 
     /**
@@ -167,23 +172,22 @@ class DemoCampaignSeeder extends Seeder
      * across the same lookups DemoProjectSeeder uses.
      *
      * @param  Collection<int, PipelineStatus>  $statuses
-     * @param  Collection<int, BusinessFunction>  $businessFunctions
      * @param  Collection<int, State>  $states
-     * @param  Collection<int, ProductCategory>  $productCategories
+     * @param  Collection<int, array{product_category_id: int, business_function_id: int}>  $classificationPairs
      * @param  Collection<int, Source>  $sources
      * @param  Collection<int, Referent>  $partners
      */
     private function seedStandaloneCampaigns(
         Generator $faker,
         Collection $statuses,
-        Collection $businessFunctions,
         Collection $states,
-        Collection $productCategories,
+        Collection $classificationPairs,
         Collection $sources,
         Collection $partners,
     ): void {
         for ($index = 0; $index < self::STANDALONE_CAMPAIGNS; $index++) {
             $geo = $this->geoTuple($states, $index);
+            $pair = $classificationPairs[$index % $classificationPairs->count()];
 
             $this->createCampaign($faker, [
                 'project_id' => null,
@@ -191,12 +195,12 @@ class DemoCampaignSeeder extends Seeder
                 'source_id' => $this->pick($sources, $index)?->id,
                 'partner_id' => $this->pick($partners, $index)?->id,
                 'pipeline_status_id' => $statuses[$index % $statuses->count()]->id,
-                'business_function_id' => $businessFunctions[$index % $businessFunctions->count()]->id,
+                'business_function_id' => $pair['business_function_id'],
                 'country_id' => $geo['country_id'],
                 'state_id' => $geo['state_id'],
                 'province_id' => $geo['province_id'],
                 'city_id' => $geo['city_id'],
-                'product_category_id' => $productCategories[$index % $productCategories->count()]->id,
+                'product_category_id' => $pair['product_category_id'],
                 'total_budget' => $faker->boolean(75) ? $faker->randomFloat(2, 500, 60000) : null,
             ]);
         }

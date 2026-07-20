@@ -5,6 +5,7 @@ namespace App\Http\Requests\Campaigns;
 use App\DataObjects\Campaigns\UpdateCampaignData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ValidatesGeoHierarchy;
+use App\Http\Requests\Concerns\ValidatesProductCategoryBusinessFunction;
 use App\Models\Campaign;
 use App\Models\Project;
 use Illuminate\Contracts\Validation\Validator;
@@ -51,6 +52,7 @@ class UpdateCampaignRequest extends FormRequest
 {
     use EnforcesFieldPermissions;
     use ValidatesGeoHierarchy;
+    use ValidatesProductCategoryBusinessFunction;
 
     /**
      * Memoizes effectiveProject() (rules() and withValidator() both need it)
@@ -216,6 +218,22 @@ class UpdateCampaignRequest extends FormRequest
             // campaign could predate BR-4, D-4).
             if ($this->hasAny($relevantFields) && ! $validator->errors()->hasAny($relevantFields)) {
                 $this->validateGeoHierarchy($validator, $this->mergedGeo());
+            }
+
+            // Coherence only applies when the campaign is EFFECTIVELY
+            // standalone after this update: a linked campaign derives its
+            // classification from the project (fields `prohibited`, NULL in
+            // DB). The resulting pair is the submitted value for a touched
+            // field, else the campaign's current one.
+            $classFields = ['business_function_id', 'product_category_id'];
+
+            if (! $this->isLinkedAfterUpdate() && ! $validator->errors()->hasAny($classFields)) {
+                $campaign = $this->currentCampaign();
+                $this->validateProductCategoryBusinessFunction(
+                    $validator,
+                    $this->has('business_function_id') ? (int) $this->input('business_function_id') : $campaign->business_function_id,
+                    $this->has('product_category_id') ? (int) $this->input('product_category_id') : $campaign->product_category_id,
+                );
             }
         });
     }

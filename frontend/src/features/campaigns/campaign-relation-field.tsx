@@ -32,6 +32,10 @@ interface CampaignRelationFieldProps {
   forceDisabled?: boolean
   /** Required-marker override for the 3 classification fields (required only while standalone, BR-2); forwarded to `RelationSelectField`. */
   required?: boolean
+  /** Scopes the picker to a parent value (product category -> business function, spec 0023 REV); forwarded to `RelationSelectField.params`. */
+  params?: Record<string, string | number>
+  /** Fired after the value changes, with the new value; forwarded to `RelationSelectField.onValueChange`. */
+  onValueChange?: (next: number | null) => void
   /** Optional explanatory tooltip rendered next to the label, forwarded to `RelationSelectField`'s `hint`. */
   hint?: string
 }
@@ -52,6 +56,8 @@ export function CampaignRelationField({
   selected,
   forceDisabled = false,
   required,
+  params,
+  onValueChange,
   hint,
 }: CampaignRelationFieldProps) {
   const { t } = useTranslation()
@@ -68,6 +74,8 @@ export function CampaignRelationField({
       selected={selected}
       forceDisabled={forceDisabled}
       required={required}
+      params={params}
+      onValueChange={onValueChange}
       placeholder={t('campaigns.form.selectPlaceholder')}
       emptyLabel={t('campaigns.form.selectEmpty')}
       errorLabel={t('campaigns.form.selectError')}

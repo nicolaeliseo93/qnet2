@@ -51,9 +51,12 @@ if (! function_exists('campaignFallbackUserWith')) {
 if (! function_exists('standaloneFieldsWithoutStatus')) {
     function standaloneFieldsWithoutStatus(): array
     {
+        // Coherent pair (spec 0023 REV): the category sits under the business function.
+        $businessFunction = BusinessFunction::factory()->create();
+
         return [
-            'business_function_id' => BusinessFunction::factory()->create()->id,
-            'product_category_id' => ProductCategory::factory()->create()->id,
+            'business_function_id' => $businessFunction->id,
+            'product_category_id' => ProductCategory::factory()->create(['business_function_id' => $businessFunction->id])->id,
             'country_id' => Country::factory()->create()->id,
             'start_date' => '2026-01-01',
             'end_date' => '2026-12-31',

@@ -2,6 +2,94 @@
 
 > Injected at session start. Update at every green state.
 
+## PROJECT/CAMPAIGN: CATEGORIA PRODOTTO VINCOLATA ALLA FUNZIONE AZIENDALE (2026-07-20) — GREEN, NON COMMITTATO
+
+Richiesta utente (intervento diretto): nel form Progetto/Campagna la **categoria prodotto** e'
+selezionabile solo dopo aver scelto la **funzione aziendale**, con la lista filtrata per quella
+funzione; vietato scegliere una categoria di una funzione diversa. "Anche il seeder si deve
+adeguare." Decisioni utente (AskUserQuestion): (1) coerenza imposta anche lato **backend** con 422
+(non solo filtro UI); (2) al cambio funzione la categoria selezionata si **resetta a null**.
+
+GROUNDING CHIAVE: meta' esisteva gia'. La relazione DB c'e' (`product_categories.business_function_id`
+FK nullable "propria" + business function EFFETTIVA propria/ereditata risolta da
+`CategoryHierarchy::effectiveBusinessFunction`). L'endpoint `product-categories/for-select` SUPPORTA
+GIA' il filtro `business_function_id` (scoping sulla EFFETTIVA, `ProductCategoryService::forSelect`,
+no N+1) — oggi lo consumava solo Opportunita'. Il pattern "select dipendente" esisteva gia' in
+`opportunity-product-lines-field.tsx` (categoria disabled finche' funzione null + `params`).
+
+BACKEND: nuovo concern `App\Http\Requests\Concerns\ValidatesProductCategoryBusinessFunction` (gemello
+di `ValidatesGeoHierarchy`): 422 su `product_category_id` quando la EFFETTIVA della categoria !=
+`business_function_id`; skip se uno dei due e' null. Cablato in `withValidator()` di StoreProject/
+UpdateProject/StoreCampaign/UpdateCampaign risolvendo la coppia EFFETTIVA come per il geo
+(submitted-or-current in update; SOLO standalone per campaign — linked = campi `prohibited`/derivati).
+
+FRONTEND: `RelationSelectField` ha ora una prop opzionale `onValueChange` (additiva, nessun call-site
+esistente cambia). `CampaignRelationField` inoltra `params` + `onValueChange` (prima non li passava).
+`project-form-body.tsx` e `campaign-form-body.tsx`: `useWatch('business_function_id')` -> categoria
+`forceDisabled` finche' null (campaign: `isLinked || null`) + `params={{business_function_id}}` +
+reset categoria a null al cambio funzione. Schema Zod NON toccati (il required c'era gia'; la coerenza
+la garantiscono filtro UI + 422).
+
+SEEDER/FACTORY: nuovo concern `Database\Seeders\Concerns\ResolvesCategoryBusinessFunction` — DERIVA la
+business function dalla EFFETTIVA di ogni categoria, scarta le categorie senza funzione. Usato da
+`DemoProjectSeeder` + `DemoCampaignSeeder` (standalone) per coppie coerenti. `CampaignFactory` crea la
+categoria SOTTO la business function (coppia coerente di default). Aggiornati gli helper di test che
+accoppiavano una funzione con `ProductCategory::factory()` senza funzione (ProjectCrud/CampaignCrud/
+CampaignGeoScope/CampaignStatusFallback) — adeguamento all'invariante, NON test tampering.
+
+TEST NUOVI: `ProjectClassificationCoherenceTest` + `CampaignClassificationCoherenceTest` (create/update:
+mismatch 422, inherited match 201/created) e `ClassificationCoherencePairingTest` (unit del trait — il
+full DemoDataSeeder NON e' eseguibile su SQLite di test: `locations:add` importa SQL incompatibile).
+Test FE: la mock `AsyncPaginatedSelect` ora onora `disabled`; 2+2 test "categoria disabled finche'
+manca la funzione" in project/campaign form-body.
+
+VERIFICATO (output reale): Pest full 2947/2959 (11 fail TUTTI pre-esistenti, confermato: nessuno nei
+file dello scope; +7 test nuovi vs baseline 2952). Vitest projects/campaigns/form 187/187. `tsc -b` 0
+errori, nessun artefatto emesso. ESLint + Pint puliti. NESSUN COMMIT (in attesa di ok, CLAUDE.md §3.6).
+
+## LEAD -> OPPORTUNITY: CORREZIONE LEAD PRIMA DELLA CONVERSIONE (2026-07-20) — GREEN, NON COMMITTATO
+
+Richiesta utente (intervento diretto, nessuna spec nuova): la conversione differita di un lead
+**senza operatore o senza sede operativa** non deve piu' aprire subito la modale Opportunita' col
+Supervisor vuoto. Deve **prima far correggere il lead** (form edit con Operatore+Sede obbligatori),
+poi **aprire in automatico** l'Opportunita' precompilata. Decisioni utente: gate = `operator_id` +
+`operational_site_id` (gli stessi campi del flusso di creazione contestuale); dopo il salvataggio
+del lead -> apertura automatica dell'Opportunita'.
+
+**CONFLITTO CON SPEC 0044 (segnalato, spec NON riscritta):** questo cambia la decisione 2 / AC-025
+di `docs/specs/0044-lead-opportunity-conversion.xml`, che documentava il vecchio comportamento
+("lead senza operatore apre comunque l'Opportunita', Supervisor scelto li', lead non modificato").
+La spec e' un contratto congelato: NON l'ho riscritta di mia iniziativa. Se si vuole formalizzare,
+amendare decisione 2 + AC-025. Il codice ora contraddice la spec su questo punto.
+
+Implementazione (frontend-only, nessuna modifica backend — la correzione e' un normale PATCH /leads):
+- **Nuovo hook condiviso** `frontend/src/features/leads/use-lead-conversion.tsx`: `startConversion(number | LeadDetailWithPermissions)`.
+  Gate `operator_id == null || operational_site_id == null` (loose `==` per gestire anche key assenti
+  nelle fixture parziali). Se manca -> apre una Sheet di correzione con `<LeadForm requireConversionFields>`;
+  su onSuccess chiama `openOpportunityWith({lead_id})`. Se completo -> apre l'Opportunita' diretta.
+  Ritorna `{ startConversion, sheets }` (sheets = Sheet correzione + Sheet dell'opener opportunita').
+  Da id fa `queryClient.fetchQuery(leadDetailQueryKey)`; dall'oggetto (detail page) niente refetch.
+- **`requireConversionFields`** threadato in `LeadForm` -> `LeadFormBody` -> `useLeadForm`: in edit mode
+  seed `convert_to_opportunity = requireConversionFields`. Riusa la superRefine ESISTENTE dello schema
+  (operator+site required) e i marker `required` nel body. `buildUpdatePayload` NON invia mai il flag
+  (gia' cosi'), quindi il PATCH resta un semplice update: nessuna conversione atomica lato edit.
+- **Call site 1** `leads-table.tsx`: rimosso il secondo `useModuleOpener(OPPORTUNITIES_DOMAIN)`; ora usa
+  `useLeadConversion({onOpportunitySaved: onSaved, onLeadCorrected: onSaved})`; row action
+  `convert_to_opportunity` -> `void startConversion(row.id)`; render `{conversionSheets}`.
+- **Call site 2** `lead-screens.tsx` (`LeadDetailPageActions`): idem, ma passa l'oggetto `lead` gia'
+  caricato (no refetch); onSaved/onLeadCorrected invalidano il detail query (button -> "Go to opportunity").
+- **i18n** nuove chiavi `leads.conversion.correctTitle` / `.correctSubtitle` (en + it).
+
+Nota UI: la Sheet di correzione e' sempre modale (storageKey `sheet-width:leads`), anche se l'open mode
+dei lead fosse "page": e' un interstitial guidato del gesto di conversione, non l'edit standard. La
+modale Opportunita' successiva rispetta invece l'open mode utente (via `useModuleOpener`).
+
+Verde: `npx tsc -b --force` EXIT 0 (artefatti .js ripuliti); vitest 76 pass (leads-table + lead-detail-page-actions
++ lead-form-body + lead-schema + lead-form-payload + opportunity-form-from-lead + opportunity-lead-selection);
+eslint EXIT 0. Test aggiornati per il nuovo requisito (dichiarato): AC-020/021/024 ora usano un `readyLead`
+(operator+site set) per l'apertura diretta, + nuovi test per il gate di correzione e il concatenamento.
+NON committato: attendo via libera (CLAUDE.md §3.6).
+
 ## TRAPPOLA RICORRENTE — TYPECHECK FRONTEND (leggere sempre)
 
 Il gate typecheck valido e' **`cd frontend && npx tsc -b`**. **MAI `npx tsc --noEmit`**: il
@@ -106,6 +194,41 @@ potrebbe volere una soppressione per breakpoint) e se `buildDataTableTheme(facto
 del sidebar con la UI scale. Nessun test aggiunto: modifiche puramente di stile/config, la suite
 esistente copre la non-regressione. I contrasti nuovi NON sono stati verificati contro WCAG ne'
 guardando l'app: solo calcolo sui token.
+
+## FE: PARAMETRI DI CREAZIONE NEL MODULE OPENER (2026-07-20, spec 0045) — GREEN, NON COMMITTATO
+
+Richiesta utente: cliccando "Converti in Opportunita'" deve aprirsi la MODALE, non la pagina
+piena, e comunque va rispettato il setting di apertura scelto dall'utente (spec 0042).
+
+CAUSA: il contratto del module registry non prevedeva payload sul ramo create, quindi il lead
+poteva viaggiare SOLO nella query string — e in modale `useSearchParams()` legge i params della
+pagina chiamante (/leads), non un prefill. Frontend-only, nessuna modifica backend.
+
+CONTRATTO (features/modules/types.ts): `ModuleCreateParams = Record<string, string | number>`;
+`ModuleFormScreenMode` create branch ora ha `params?`. `useModuleOpener` espone DUE funzioni:
+  openCreate: () => void                               <- zero parametri
+  openCreateWith: (params: ModuleCreateParams) => void  <- per i caller con prefill
+`ModuleFormPage` converte la query string in `mode.params`, cosi' il form ha UN SOLO canale e
+`OpportunityFormScreen` NON usa piu' `useSearchParams`. Consumer: leads-table.tsx e
+LeadDetailPageActions usano `useModuleOpener(OPPORTUNITIES_DOMAIN)` — primo caso cross-module del
+codebase — e devono renderizzare ANCHE il secondo sheet (senza, in modale non compare nulla).
+
+### TRAPPOLA DA NON RIPETERE — perche' NON `openCreate(params?)`
+Una firma unica con parametro opzionale (o un overload che la nasconde) SEMBRA piu' pulita ma
+introduce un bug di runtime: **24 call site fanno `onClick={openCreate}`** e React passa un
+MouseEvent come primo argomento. Con un parametro dichiarato quell'evento viene letto come `params`:
+in modalita' pagina finisce serializzato nella URL
+(`/new?_reactName=onClick&type=click&target=...`), in modalita' modale finisce in `mode.params`
+trascinandosi nodo DOM e fiber React (`TypeError: Converting circular structure to JSON`).
+Entrambi i sintomi RIPRODOTTI davvero, due volte. `openCreate` deve restare a ZERO parametri.
+Test di regressione a guardia: use-module-opener.test.tsx monta `<button onClick={openCreate}>`
+in forma DIRETTA (non arrow-wrapped) — la forma arrow NON intercetta il bug.
+
+VERIFICATO DAL VERIFIER con MUTATION TESTING (non solo esecuzione): rotto deliberatamente il codice
+e verificato che i test FALLISSERO, in 3 punti — (A) openCreate che inoltra l'argomento, (B) adapter
+che ignora mode.params, (C) sheet non renderizzato. Tutte e tre le controprove valide, file
+ripristinati e verificati con diff. 27 AC PASS. `tsc -b --force` exit 0, vitest 1729/1732 (3 rossi
+pre-esistenti in cell-renderers.test.tsx), backend 2940/2952 (11 pre-esistenti, spec frontend-only).
 
 ## FE+BE: CONVERSIONE LEAD -> OPPORTUNITA' (2026-07-20, spec 0044) — GREEN, NON COMMITTATO
 
