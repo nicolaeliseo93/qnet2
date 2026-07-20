@@ -24,6 +24,7 @@ const SERVER_ERROR_FIELDS = [
   'source_id',
   'operator_id',
   'notes',
+  'convert_to_opportunity',
 ] as const
 
 export type LeadFormValues = CreateLeadFormValues
@@ -62,6 +63,9 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
         operator_id: lead.operator_id,
         notes: lead.notes,
         extra_fields: recordToEntries(lead.extra_fields),
+        // Create-only control (spec 0044): edit mode never renders or sets
+        // it, so it always defaults to false here.
+        convert_to_opportunity: false,
       }
     }
     return {
@@ -72,6 +76,7 @@ export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
       operator_id: null,
       notes: null,
       extra_fields: [],
+      convert_to_opportunity: false,
     }
   }, [mode])
 

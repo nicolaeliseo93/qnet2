@@ -51,7 +51,11 @@ export function AdvancedFilterPanel({ descriptors, filters }: AdvancedFilterPane
   )
 
   return (
-    <div className="border-b border-border bg-muted/30">
+    // Opaque card surface, not a translucent tint: the panel reads as a sheet
+    // laid over the page, and the fields' own `--field` fill (94%) only reads as
+    // "editable" against it — on the previous `bg-muted/30` the two tones nearly
+    // matched and the inputs lost their edge.
+    <div className="border-b border-border bg-card">
       <div className="flex flex-wrap gap-3 p-3">
         {visible.map((descriptor) => {
           const fieldId = `${panelId}-${descriptor.name}`
@@ -95,7 +99,13 @@ export function AdvancedFilterPanel({ descriptors, filters }: AdvancedFilterPane
         })}
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-border bg-background/40 px-3 py-2">
+      {/* Action bar sits just off the white panel: `--border` is the lightest
+          tone in the scale (96% against the card's 100%), so the zone separates
+          without reading as a grey band — the top hairline carries most of the
+          split. Dark uses `--field` (18% over the card's 13%) as the equivalent
+          smallest step, since the direction inverts between themes. Solid, never
+          an alpha: a tint would recomposite against the panel. */}
+      <div className="flex items-center justify-end gap-2 border-t border-border bg-border px-3 py-2 dark:bg-field">
         <Button
           type="button"
           variant="ghost"

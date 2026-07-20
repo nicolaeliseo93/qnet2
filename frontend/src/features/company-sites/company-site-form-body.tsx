@@ -203,7 +203,7 @@ export function CompanySiteFormBody({
             )}
             <Button
               type="button"
-              variant="outline" className="bg-card"
+              variant="outline"
               onClick={onCancel}
               disabled={form.formState.isSubmitting}
             >

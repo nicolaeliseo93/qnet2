@@ -95,7 +95,6 @@ export function UiScaleForm() {
         <Button
           type="button"
           variant="outline"
-          className="bg-card"
           onClick={onReset}
           disabled={isSaving}
         >

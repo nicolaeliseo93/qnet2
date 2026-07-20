@@ -211,7 +211,7 @@ export function ProjectFormBody({ mode, onSuccess, onCancel, initialCode }: Proj
           )}
 
           <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <Button type="button" variant="outline" className="bg-card" onClick={onCancel} disabled={form.formState.isSubmitting}>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}>
               {t('projects.form.cancel')}
             </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>

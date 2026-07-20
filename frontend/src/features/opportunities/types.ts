@@ -170,6 +170,12 @@ export interface OpportunityDefaultValues {
   referent_id: number | null
   source_id: number | null
   registry_id: number | null
+  /**
+   * Spec 0044 AC-030/031: the lead's `operator_id`, precompiled but NEVER
+   * part of `locked_fields` (AC-032) — the Supervisor stays editable, unlike
+   * `source_id`/`registry_id`.
+   */
+  supervisor_id: number | null
 }
 
 /**
@@ -180,6 +186,8 @@ export interface OpportunityDefaultValues {
 export interface OpportunityDefaultReferences {
   source: OpportunityRelationRef | null
   registry: OpportunityRelationRef | null
+  /** Spec 0044 AC-030/031: the lead's `operator`, mirrors `supervisor_id` above. */
+  supervisor: OpportunityRelationRef | null
 }
 
 /** Response of `GET /leads/{lead}/opportunity-defaults` (spec 0040 MT-6, amendment rev.3), already unwrapped from the envelope. */

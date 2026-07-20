@@ -5,7 +5,10 @@
 
 :root {
   --radius: 0.625rem;
-  --background: hsl(218 16% 95%);
+  /* The page is deliberately a few steps darker than the white card: with the
+     hairline border reduced to #F2F5F9 it is this contrast, not the border,
+     that makes a card read as a raised surface. */
+  --background: hsl(218 16% 91%);
   --foreground: hsl(216 28% 31%);
   --card: hsl(0 0% 100%);
   --card-foreground: hsl(216 28% 31%);
@@ -21,13 +24,16 @@
   --accent: hsl(216 18% 84%);
   --accent-foreground: hsl(218 31% 27%);
   --destructive: hsl(0 84.2% 60.2%);
-  --border: hsl(214 18% 82%);
-  --input: hsl(214 18% 82%);
-  /* Fillable-field surface: white on the grey body, distinguished from the
-     white card by a slightly stronger border. Contrast comes from border +
-     shadow, not a different fill, so fields never blend into the page. */
-  --field: hsl(0 0% 100%);
-  --field-border: hsl(214 16% 76%);
+  /* Shared hairline (#F2F5F9): card edges, form-field edges and AG Grid
+     cell/header separators all read it, so the whole app draws its structure
+     with one line colour. */
+  --border: hsl(214 37% 96%);
+  --input: hsl(214 37% 96%);
+  /* Fillable-field surface: a tint of the hairline hue, one step darker than it.
+     Since the hairline is nearly invisible on the white card, the fill is what
+     makes a field readable as editable — the border only edges it. */
+  --field: hsl(214 30% 94%);
+  --field-border: hsl(214 37% 96%);
   --ring: hsl(214 55% 50%);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);

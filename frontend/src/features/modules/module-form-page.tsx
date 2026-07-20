@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Can } from '@/features/auth/can'
 import { PageHeader } from '@/components/page-header'
 import { getModuleRegistryEntry } from '@/features/modules/module-registry'
@@ -27,6 +27,7 @@ export default function ModuleFormPage({ domain }: ModuleFormPageProps) {
   const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const entry = getModuleRegistryEntry(domain)
   // Only used so the hooks below stay unconditional (rules-of-hooks) up to
@@ -60,11 +61,15 @@ export default function ModuleFormPage({ domain }: ModuleFormPageProps) {
   // Narrow on `entityId` itself (not `isEdit`) so TS refines it to `number` in
   // the edit branch without a cast: the `isEdit && entityId === null` case
   // already returned above, so here `entityId !== null` is exactly "edit".
+  // The create branch is the FormScreen's only params channel (spec 0045):
+  // a bare `${basePath}/new` yields `params: undefined`, so consumers no
+  // longer need their own `useSearchParams()` for a deep-linked create.
   let mode: ModuleFormScreenMode
   if (entityId !== null) {
     mode = { type: 'edit', id: entityId }
   } else {
-    mode = { type: 'create' }
+    const query = searchParams.toString()
+    mode = { type: 'create', params: query ? Object.fromEntries(searchParams) : undefined }
   }
 
   return (

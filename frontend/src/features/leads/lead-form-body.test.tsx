@@ -41,20 +41,39 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
-/** Stubs every single-select field, keyed by its accessible trigger label (mirrors `campaign-form-body.test.tsx`). */
+/** Grants `opportunities.create` by default so the convert checkbox (AC-040) renders in every test unless overridden. */
+const canMock = vi.fn<(permission: string) => boolean>()
+vi.mock('@/features/auth/use-abilities', () => ({
+  useAbilities: () => ({ can: canMock, hasRole: () => false, roles: [], isLoading: false }),
+}))
+
+/**
+ * Stubs every single-select field, keyed by its accessible trigger label
+ * (mirrors `campaign-form-body.test.tsx`). Renders as a button calling
+ * `onChange(3)` so the AC-043 submit test can satisfy Operator/Site without
+ * a real dropdown.
+ */
 vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
     value,
+    onChange,
     labels,
     disabled,
   }: {
     value: number | null
+    onChange: (value: number) => void
     labels: { triggerLabel: string }
     disabled?: boolean
   }) => (
-    <div data-testid={`select-${labels.triggerLabel}`} data-disabled={disabled ? 'true' : 'false'}>
+    <button
+      type="button"
+      data-testid={`select-${labels.triggerLabel}`}
+      data-disabled={disabled ? 'true' : 'false'}
+      disabled={disabled}
+      onClick={() => onChange(3)}
+    >
       {value ?? ''}
-    </div>
+    </button>
   ),
 }))
 
@@ -97,6 +116,8 @@ beforeEach(() => {
   updateLeadMock.mockReset()
   fetchResourceMetaMock.mockReset()
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
+  canMock.mockReset()
+  canMock.mockReturnValue(true)
 })
 
 describe('LeadForm — fields render (AC-061, AC-016)', () => {
@@ -274,5 +295,104 @@ describe('LeadForm — extra fields editor (AC-014)', () => {
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Key' })).toBeInTheDocument())
     expect(screen.getByRole('textbox', { name: 'Key' })).toHaveValue('Original column')
     expect(screen.getByRole('textbox', { name: 'Value' })).toHaveValue('foo')
+  })
+})
+
+describe('LeadForm — convert to opportunity (spec 0044, AC-040..AC-043)', () => {
+  it('AC-040: shows the control in create mode when the actor has opportunities.create', async () => {
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    expect(
+      screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }),
+    ).toBeInTheDocument()
+  })
+
+  it('AC-040: hides the control without opportunities.create', async () => {
+    canMock.mockReturnValue(false)
+
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    expect(
+      screen.queryByRole('switch', { name: 'Automatically convert to Opportunity' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('AC-040: hides the control in edit mode regardless of permission', async () => {
+    render(
+      <LeadForm mode={{ type: 'edit', lead: lead() }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    expect(
+      screen.queryByRole('switch', { name: 'Automatically convert to Opportunity' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('AC-041: submitting with the control on but Operator/Site empty shows field errors and does not submit', async () => {
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(
+      await screen.findByText('The Operator is required to convert to an Opportunity.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('The Site is required to convert to an Opportunity.'),
+    ).toBeInTheDocument()
+    expect(createLeadMock).not.toHaveBeenCalled()
+  })
+
+  it('AC-042: Operator and Site stay optional and the form submits with the control off', async () => {
+    createLeadMock.mockResolvedValue(lead())
+
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('select-Registry'))
+    fireEvent.click(screen.getByTestId('select-Campaign'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(createLeadMock).toHaveBeenCalledTimes(1))
+    const payload = createLeadMock.mock.calls[0][0]
+    expect(payload.operator_id).toBeNull()
+    expect(payload.operational_site_id).toBeNull()
+    expect(payload.convert_to_opportunity).toBe(false)
+  })
+
+  it('AC-043: the create payload carries convert_to_opportunity: true once Operator/Site are set', async () => {
+    createLeadMock.mockResolvedValue(lead())
+
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByTestId('select-Registry'))
+    fireEvent.click(screen.getByTestId('select-Campaign'))
+    fireEvent.click(screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }))
+    fireEvent.click(screen.getByTestId('select-Operator'))
+    fireEvent.click(screen.getByTestId('select-Site'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(createLeadMock).toHaveBeenCalledTimes(1))
+    const payload = createLeadMock.mock.calls[0][0]
+    expect(payload.convert_to_opportunity).toBe(true)
+    expect(payload.operator_id).toBe(3)
+    expect(payload.operational_site_id).toBe(3)
   })
 })

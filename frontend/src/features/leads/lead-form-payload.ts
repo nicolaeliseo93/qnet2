@@ -16,6 +16,7 @@ export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
     operator_id: values.operator_id,
     notes: values.notes,
     extra_fields: entriesToRecord(values.extra_fields),
+    convert_to_opportunity: values.convert_to_opportunity,
   }
 }
 
@@ -24,6 +25,9 @@ export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
  * original lead (spec 0024, sparse diff, mirrors campaigns). `registry_id`/
  * `campaign_id`, when changed, are always non-null (the schema forbids
  * clearing either, BR-1, D-1). Lead status is derived server-side.
+ * `convert_to_opportunity` (spec 0044) is deliberately never read here:
+ * conversion in edit mode is out of scope, so the update payload never
+ * carries the flag.
  */
 export function buildUpdatePayload(values: LeadFormValues, original: LeadDetail): UpdateLeadPayload {
   const payload: UpdateLeadPayload = {}

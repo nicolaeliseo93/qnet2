@@ -137,6 +137,19 @@ final class LeadColumnCatalog
                 'confirm' => false,
                 'permission' => 'leads.viewActivity',
             ],
+            [
+                // Deferred conversion (spec 0044): gated on the ABILITY to
+                // create the target resource (opportunities.create), not on
+                // any leads.* permission — the per-row whitelist
+                // (LeadsTableDefinition::actionsFor) additionally hides it
+                // once the lead is already converted.
+                'key' => 'convert_to_opportunity',
+                'label' => 'actions.convertToOpportunity',
+                'icon' => 'arrow-right-left',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'opportunities.create',
+            ],
         ];
     }
 }

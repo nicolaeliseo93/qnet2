@@ -14,6 +14,7 @@ function values(overrides: Partial<LeadFormValues> = {}): LeadFormValues {
     operator_id: null,
     notes: null,
     extra_fields: [],
+    convert_to_opportunity: false,
     ...overrides,
   }
 }
@@ -54,6 +55,7 @@ describe('buildCreatePayload', () => {
       operator_id: 5,
       notes: 'Note',
       extra_fields: null,
+      convert_to_opportunity: false,
     })
   })
 
@@ -68,6 +70,7 @@ describe('buildCreatePayload', () => {
       operator_id: null,
       notes: null,
       extra_fields: null,
+      convert_to_opportunity: false,
     })
   })
 
@@ -77,6 +80,15 @@ describe('buildCreatePayload', () => {
     )
 
     expect(payload.extra_fields).toEqual({ 'Original column': 'foo' })
+  })
+
+  /** AC-043 (spec 0044): the create payload carries the checkbox's boolean verbatim. */
+  it('includes convert_to_opportunity: true once the conversion control is on', () => {
+    const payload = buildCreatePayload(
+      values({ convert_to_opportunity: true, operator_id: 5, operational_site_id: 3 }),
+    )
+
+    expect(payload.convert_to_opportunity).toBe(true)
   })
 })
 
@@ -130,5 +142,14 @@ describe('buildUpdatePayload', () => {
   it('includes extra_fields as null when every row is removed', () => {
     const payload = buildUpdatePayload(values({ extra_fields: [] }), original({ extra_fields: { a: '1' } }))
     expect(payload).toEqual({ extra_fields: null })
+  })
+
+  /** Spec 0044: edit-mode conversion is out of scope, the PATCH payload never carries the flag. */
+  it('never includes convert_to_opportunity, even if the form value were true', () => {
+    const payload = buildUpdatePayload(
+      values({ convert_to_opportunity: true, notes: 'Updated note' }),
+      original(),
+    )
+    expect(payload).not.toHaveProperty('convert_to_opportunity')
   })
 })

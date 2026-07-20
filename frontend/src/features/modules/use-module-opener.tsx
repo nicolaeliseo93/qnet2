@@ -10,8 +10,22 @@ import {
 } from '@/components/ui/sheet'
 import { getModuleRegistryEntry } from '@/features/modules/module-registry'
 import { useModuleOpenMode } from '@/features/modules/use-module-open-mode'
-import { OPEN_MODE_MODAL } from '@/features/modules/types'
+import { OPEN_MODE_MODAL, type ModuleCreateParams } from '@/features/modules/types'
 import type { TableRow } from '@/features/table/types'
+
+/**
+ * Query string for the `page`-mode create deep-link (spec 0045). `undefined`/
+ * empty `params` yields `''` so the caller navigates to a bare `${basePath}/new`
+ * (AC-003), never a trailing `?`. Values are cast to `string` before handing
+ * them to `URLSearchParams` since `ModuleCreateParams` also allows `number`.
+ */
+function buildCreateQueryString(params?: ModuleCreateParams): string {
+  if (!params || Object.keys(params).length === 0) {
+    return ''
+  }
+  const stringValues = Object.entries(params).map(([key, value]) => [key, String(value)])
+  return new URLSearchParams(stringValues).toString()
+}
 
 /**
  * Maps a kebab-case module `domain` (e.g. `company-sites`) to its camelCase
@@ -25,7 +39,7 @@ function moduleI18nNamespace(domain: string): string {
 /** Which sheet (if any) is currently open and for which row — same shape every `*-table.tsx` used inline before the rewire. */
 type SheetState =
   | { kind: 'none' }
-  | { kind: 'create' }
+  | { kind: 'create'; params?: ModuleCreateParams }
   | { kind: 'view'; row: TableRow }
   | { kind: 'edit'; row: TableRow }
 
@@ -40,7 +54,19 @@ export interface UseModuleOpenerOptions {
 }
 
 export interface UseModuleOpenerResult {
+  /**
+   * Opens the create form with no initial data. Declared with ZERO parameters
+   * on purpose: 24 call sites pass it straight to a click handler
+   * (`onClick={openCreate}`), where React supplies a `MouseEvent` as the first
+   * argument. A `(params?: ModuleCreateParams) => void` signature — or an
+   * overload hiding one — would let that event through as `params`, and in
+   * page mode it would be serialized into the query string
+   * (`/new?_reactName=onClick&type=click&...`). Ignoring extra arguments is
+   * the behaviour those call sites have always relied on; keep it.
+   */
   openCreate: () => void
+  /** Opens the create form seeding the target module's form with `params` (spec 0045). */
+  openCreateWith: (params: ModuleCreateParams) => void
   openView: (row: TableRow) => void
   openEdit: (row: TableRow) => void
   /** The modal Sheet when the resolved mode is `'modal'`, `null` in `'page'` mode. Render it once, anywhere in the table adapter's tree. */
@@ -74,13 +100,22 @@ export function useModuleOpener(domain: string, options: UseModuleOpenerOptions 
 
   const closeSheet = useCallback(() => setSheetState({ kind: 'none' }), [])
 
-  const openCreate = useCallback(() => {
-    if (mode === OPEN_MODE_MODAL) {
-      setSheetState({ kind: 'create' })
-    } else {
-      void navigate(`${basePath}/new`)
-    }
-  }, [mode, navigate, basePath])
+  const openCreateWith = useCallback(
+    (params?: ModuleCreateParams) => {
+      if (mode === OPEN_MODE_MODAL) {
+        setSheetState({ kind: 'create', params })
+      } else {
+        const query = buildCreateQueryString(params)
+        void navigate(query ? `${basePath}/new?${query}` : `${basePath}/new`)
+      }
+    },
+    [mode, navigate, basePath],
+  )
+
+  // Wrapper with no declared parameters: it swallows whatever a click handler
+  // passes (see `openCreate` on the result interface) instead of forwarding it
+  // as `params`.
+  const openCreate = useCallback(() => openCreateWith(undefined), [openCreateWith])
 
   const openView = useCallback(
     (row: TableRow) => {
@@ -144,7 +179,11 @@ export function useModuleOpener(domain: string, options: UseModuleOpenerOptions 
                 <SheetTitle>{t(`${ns}.form.createTitle`)}</SheetTitle>
                 <SheetDescription>{t(`${ns}.form.createSubtitle`)}</SheetDescription>
               </SheetHeader>
-              <FormScreen mode={{ type: 'create' }} onSuccess={handleSaved} onCancel={closeSheet} />
+              <FormScreen
+                mode={{ type: 'create', params: sheetState.params }}
+                onSuccess={handleSaved}
+                onCancel={closeSheet}
+              />
             </>
           )}
 
@@ -165,5 +204,5 @@ export function useModuleOpener(domain: string, options: UseModuleOpenerOptions 
       </Sheet>
     ) : null
 
-  return { openCreate, openView, openEdit, sheet }
+  return { openCreate, openCreateWith, openView, openEdit, sheet }
 }

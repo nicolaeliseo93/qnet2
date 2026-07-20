@@ -11,7 +11,9 @@ import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchLead, leadDetailQueryKey } from '@/features/leads/api'
 import { LeadForm } from '@/features/leads/lead-form'
 import { LeadDetailView } from '@/features/leads/lead-detail'
+import { useModuleOpener } from '@/features/modules/use-module-opener'
 import { OPEN_MODE_MODAL } from '@/features/modules/types'
+import { OPPORTUNITIES_DOMAIN } from '@/features/opportunities/api'
 import type {
   ModuleDetailScreenProps,
   ModuleFormScreenProps,
@@ -120,7 +122,18 @@ function LeadEditScreen({ leadId, onSuccess, onCancel }: LeadEditScreenProps) {
  */
 export function LeadDetailPageActions({ id }: ModuleDetailScreenProps) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const { data: lead } = useEntityDetail(leadDetailQueryKey(id), () => fetchLead(id))
+
+  // Opens the OPPORTUNITIES form seeded with this lead (spec 0045), following
+  // the user's opportunities open mode instead of always navigating to a
+  // page. On save, invalidates THIS lead's detail query (AC-025) so the
+  // button flips to "Go to opportunity" once `lead.opportunity` comes back
+  // populated.
+  const { openCreateWith: openOpportunityWith, sheet: opportunitySheet } = useModuleOpener(
+    OPPORTUNITIES_DOMAIN,
+    { onSaved: () => queryClient.invalidateQueries({ queryKey: leadDetailQueryKey(id) }) },
+  )
 
   if (!lead) {
     return null
@@ -139,12 +152,11 @@ export function LeadDetailPageActions({ id }: ModuleDetailScreenProps) {
 
   return (
     <Can permission="opportunities.create">
-      <Button variant="outline" asChild>
-        <Link to={`/opportunities/new?lead_id=${id}`}>
-          <Handshake aria-hidden="true" />
-          {t('leads.detail.createOpportunity')}
-        </Link>
+      <Button variant="outline" onClick={() => openOpportunityWith({ lead_id: id })}>
+        <Handshake aria-hidden="true" />
+        {t('leads.detail.createOpportunity')}
       </Button>
+      {opportunitySheet}
     </Can>
   )
 }

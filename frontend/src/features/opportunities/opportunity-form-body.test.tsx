@@ -13,6 +13,11 @@ import type { OpportunityDetailWithPermissions } from '@/features/opportunities/
  * change; commercial/reporter are free and, per user directive 2026-07-17, are
  * never auto-filled from the anagrafica), AC-074 (field permissions: hidden vs
  * disabled), AC-107 (amendment rev.3: the name auto-fill override).
+ *
+ * The `?lead_id=N` deep-link create-from-lead mode (AC-075) and the in-form
+ * "Lead" select (AC-086/087/088, spec 0044 supervisor prefill AC-025/034) are
+ * split into their own files for size (engineering.md §6): see
+ * `opportunity-form-from-lead.test.tsx` and `opportunity-lead-selection.test.tsx`.
  */
 
 const createOpportunityMock = vi.fn()
@@ -466,74 +471,5 @@ describe('OpportunityFormBody — field permissions (AC-074)', () => {
 
     const source = await screen.findByTestId('disabled-Source')
     expect(source).toHaveTextContent('true')
-  })
-})
-
-/** AC-075: create-from-lead mode (spec 0040 MT-6) — locked fields precompiled + forceDisabled, banner shown, free fields stay editable. */
-describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
-  it('shows the origin banner, locks the derived fields precompiled, and seeds the editable product-line row', async () => {
-    render(
-      <OpportunityForm
-        mode={{
-          type: 'create',
-          fromLead: {
-            leadId: 9,
-            values: {
-              // spec 0041 D-3/AC-050: no longer a derived field.
-              referent_id: null,
-              source_id: 20,
-              registry_id: 30,
-            },
-            references: {
-              source: { id: 20, name: 'Web' },
-              registry: { id: 30, name: 'Acme S.p.A.' },
-            },
-            lockedFields: ['registry_id', 'source_id'],
-            productLines: [
-              {
-                id: 900,
-                business_function: { id: 40, name: 'Sales' },
-                product_category: { id: 50, name: 'Consulting' },
-              },
-            ],
-          },
-        }}
-        onSuccess={vi.fn()}
-        onCancel={vi.fn()}
-      />,
-      { wrapper: wrapper() },
-    )
-
-    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
-    // AC-051: the origin banner sources its name from the registry, not the referent.
-    expect(screen.getByRole('status')).toHaveTextContent('Acme S.p.A.')
-
-    expect(screen.getByTestId('value-Registry')).toHaveTextContent('30')
-    expect(screen.getByTestId('disabled-Registry')).toHaveTextContent('true')
-    // AC-051: referent_id is no longer derived/locked by the lead — free and
-    // editable, gated only by the registry now being chosen.
-    expect(screen.getByTestId('value-Contact')).toHaveTextContent('')
-    expect(screen.getByTestId('disabled-Contact')).toHaveTextContent('false')
-    expect(screen.getByTestId('value-Source')).toHaveTextContent('20')
-    expect(screen.getByTestId('disabled-Source')).toHaveTextContent('true')
-
-    // Amendment rev.3 (AC-102/103): the seeded row is editable/removable —
-    // never disabled — and its category already auto-fills the name.
-    expect(screen.getByTestId('value-Business function 1')).toHaveTextContent('40')
-    expect(screen.getByTestId('disabled-Business function 1')).toHaveTextContent('false')
-    expect(screen.getByTestId('value-Product category 1')).toHaveTextContent('50')
-    expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('false')
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Consulting')
-    expect(screen.getByRole('button', { name: 'Remove product line' })).toBeInTheDocument()
-  })
-
-  it('renders no banner and no locked field for a plain manual create', async () => {
-    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    expect(screen.getByTestId('disabled-Registry')).toHaveTextContent('false')
   })
 })

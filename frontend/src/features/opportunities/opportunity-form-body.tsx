@@ -82,6 +82,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
         }
       : null,
     form.setValue,
+    form.getValues,
     nameAutofill,
   )
 
@@ -278,7 +279,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
           )}
 
           <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <Button type="button" variant="outline" className="bg-card" onClick={onCancel} disabled={isSubmitting}>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
               {t('opportunities.form.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting || leadIsBlocked}>

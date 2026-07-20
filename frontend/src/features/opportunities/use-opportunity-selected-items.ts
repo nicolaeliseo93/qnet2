@@ -40,7 +40,12 @@ const EMPTY_SELECTED_ITEMS: OpportunitySelectedItems = {
  * `leadSelection.registry` (spec 0041 AC-051) takes precedence over
  * `mode.fromLead.references.registry`: it reflects the in-form "Lead" picker,
  * which can supersede the initial deep-link lead after mount, while the
- * latter only ever hydrates the very first render.
+ * latter only ever hydrates the very first render. `supervisor` mirrors the
+ * same precedence (spec 0044 AC-034): `leadSelection.supervisor` is set only
+ * right after a fresh in-form selection actually prefilled the field, so it
+ * naturally falls back to `references.supervisor` (deep-link mount) or `null`
+ * (no prefill happened — an already-chosen Supervisor keeps its own label,
+ * resolved by the picker itself, not by this hydration).
  */
 export function useOpportunitySelectedItems(
   mode: OpportunityFormMode,
@@ -68,6 +73,7 @@ export function useOpportunitySelectedItems(
       ...EMPTY_SELECTED_ITEMS,
       registry: leadSelection.registry ?? references?.registry ?? null,
       source: references?.source ?? null,
+      supervisor: leadSelection.supervisor ?? references?.supervisor ?? null,
     }
-  }, [mode, leadSelection.registry])
+  }, [mode, leadSelection.registry, leadSelection.supervisor])
 }

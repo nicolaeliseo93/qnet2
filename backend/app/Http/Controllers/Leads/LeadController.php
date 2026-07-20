@@ -10,6 +10,7 @@ use App\Http\Requests\Leads\StoreLeadRequest;
 use App\Http\Requests\Leads\UpdateLeadRequest;
 use App\Http\Resources\LeadResource;
 use App\Models\Lead;
+use App\Models\Opportunity;
 use App\Models\User;
 use App\Services\LeadService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -57,14 +58,22 @@ class LeadController extends BaseApiController
     }
 
     /**
-     * POST /api/leads — create a new lead.
+     * POST /api/leads — create a new lead. `convert_to_opportunity` (spec
+     * 0044) additionally requires `opportunities.create`, checked here
+     * BEFORE the service call so a forbidden request never persists a Lead.
      */
     public function store(StoreLeadRequest $request): JsonResponse
     {
         try {
             $this->authorize('create', Lead::class);
 
-            $lead = $this->service->create($request->toData());
+            $data = $request->toData();
+
+            if ($data->convertToOpportunity) {
+                $this->authorize('create', Opportunity::class);
+            }
+
+            $lead = $this->service->create($data);
 
             return $this->okWithPermissions(
                 new LeadResource($lead),

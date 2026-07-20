@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spec 0044 — Conversione Lead -> Opportunita'.
+  Contract-first: la shape sotto e' congelata PRIMA del dispatch.
+  Estende (non riscrive) il flusso "opportunity da lead" gia' esistente della spec 0040.
+-->
+<spec id="0044-lead-opportunity-conversion" status="draft" owner="utente" date="2026-07-20">
+
+  <goal>
+    Permettere la conversione di un Lead in Opportunita' in tre modi complementari:
+    contestuale alla creazione del Lead (checkbox), differita su un Lead esistente
+    (azione gated sui permessi), e con prefill del Supervisore quando si crea
+    un'Opportunita' associando manualmente un Lead.
+  </goal>
+
+  <context>
+    Il flusso "opportunity da lead" ESISTE GIA' (spec 0040) ed e' composto da due pezzi
+    che questa spec estende senza riscrivere:
+      - GET /api/leads/{lead}/opportunity-defaults (LeadOpportunityDefaultsController,
+        routes/api/leads.php:32) -> LeadOpportunityDefaultsResolver
+      - POST /api/opportunities con lead_id: OpportunityService::applyLeadDefaults()
+        sovrascrive server-side i campi derivati; StoreOpportunityRequest::derivableRule()
+        li rende 'prohibited' se inviati; Rule::unique su opportunities.lead_id.
+
+    Nomi reali verificati:
+      - Lead (app/Models/Lead.php): #[Fillable([registry_id, campaign_id,
+        operational_site_id, source_id, operator_id, notes, extra_fields])].
+        operator_id -> User ("Operatore"), operational_site_id -> OperationalSite ("Sede"),
+        entrambi oggi nullable. opportunity(): HasOne. Nessuna colonna is_converted:
+        lo stato e' DERIVATO da LeadLifecycleStatus (app/Enums/LeadLifecycleStatus.php:31-55).
+      - Opportunity (app/Models/Opportunity.php): supervisor_id -> User ("Supervisore").
+        NON esiste alcun campo sede/company/site: droppati dalla migration
+        2026_07_17_180000_drop_company_and_site_columns_from_opportunities_table.php.
+      - Obbligatori per creare un'Opportunita' (StoreOpportunityRequest::rules()):
+        name, registry_id, supervisor_id, opportunity_status_id, product_lines (min:1).
+      - LeadOpportunityDefaultsResolver::DERIVED_FIELDS = ['source_id','registry_id']
+        (gli unici lockati). productLines() deriva UNA riga {business_function,
+        product_category} da campaign.project.* con fallback campaign.*; la riga e'
+        EDITABILE/rimovibile, mai lockata (amendment rev.3).
+      - La coppia business_function_id/product_category_id e' SEMPRE valorizzata:
+        required su StoreProjectRequest.php:54,59; required su StoreCampaignRequest.php:81-89
+        per la campagna non collegata; 'prohibited' + ereditata dal progetto se collegata.
+      - Il name dell'Opportunita' e' auto-calcolato dalle categorie prodotto
+        (frontend: composeProductLinesName, separatore ' + ' in
+        opportunity-product-line-name.ts:8; spec 0040 AC-107).
+      - Azione di riga = incrocio di due liste server-side: catalogo actions() filtrato
+        per 'permission' in AbstractTableDefinition::resolveActions(), e whitelist
+        per-riga actionsFor(). Devono restare allineate.
+      - Gate UI: <Can permission="..."> (features/auth/can.tsx); il backend autorizza.
+      - Envelope: { success, message, data } / { success, message, errors } —
+        BaseApiController::ok() / fail().
+
+    DECISIONI UTENTE (2026-07-20):
+      1. La "Sede" (operational_site_id) diventa obbligatoria sul Lead quando il
+         checkbox e' attivo SOLO per completezza del flusso Lead. L'Opportunita' NON
+         la consuma: nessuna modifica al modulo opportunities per la sede.
+      2. Conversione differita su Lead senza Operatore: apre comunque il form
+         Opportunita' precompilato, il Supervisore si sceglie li'. Il Lead non viene
+         modificato.
+      3. Il bottone di conversione differita sta sia nelle azioni di riga della tabella
+         Lead (nuovo) sia nel dettaglio Lead (gia' presente in lead-screens.tsx:121-150,
+         da allineare).
+  </context>
+
+  <scope>
+    <in>
+      <item>Campo booleano convert_to_opportunity in POST /api/leads (default false).</item>
+      <item>Obbligatorieta' condizionale di operator_id e operational_site_id sul Lead quando convert_to_opportunity=true.</item>
+      <item>Creazione server-side dell'Opportunita' collegata, in transazione, alla creazione del Lead.</item>
+      <item>Calcolo server-side del name dell'Opportunita' dalle categorie prodotto derivate.</item>
+      <item>supervisor_id derivato da lead.operator_id: aggiunto ai values di opportunity-defaults e applicato in conversione.</item>
+      <item>Azione di riga 'convert_to_opportunity' nella tabella Lead, gated su opportunities.create e nascosta sui Lead gia' convertiti.</item>
+      <item>Checkbox nel form di creazione Lead con i campi condizionalmente obbligatori.</item>
+      <item>Prefill del Supervisore nel form Opportunita' alla selezione di un Lead.</item>
+    </in>
+    <out>
+      <item>Qualsiasi campo sede/company/site sull'Opportunita': resta rimosso (direttiva 2026-07-17).</item>
+      <item>Nuova colonna sul DB: nessuna migration. convert_to_opportunity e' un flag di richiesta, non un attributo persistito del Lead.</item>
+      <item>Modifica di LeadLifecycleStatus: lo stato resta derivato dalla presenza dell'opportunity.</item>
+      <item>Conversione in edit del Lead (PUT/PATCH /api/leads/{lead}): fuori scope, solo in create.</item>
+      <item>Conversione massiva / bulk da tabella.</item>
+      <item>Modifica dei DERIVED_FIELDS lockati: restano esattamente ['source_id','registry_id'].</item>
+      <item>Nuovo endpoint POST /api/leads/{lead}/convert: la conversione differita riusa il form Opportunita' esistente.</item>
+      <item>Rilassamento della regola product_lines min:1.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <endpoint method="POST" path="/api/leads">
+      <request>
+        <!-- Campi esistenti invariati: registry_id*, campaign_id*, operational_site_id,
+             source_id, operator_id, notes, extra_fields. NUOVO: -->
+        convert_to_opportunity: boolean (nullable, default false)
+
+        <!-- Regole condizionali quando convert_to_opportunity === true: -->
+        operator_id:          required_if:convert_to_opportunity,true  (integer, exists:users,id)
+        operational_site_id:  required_if:convert_to_opportunity,true  (integer, exists:operational_sites,id)
+      </request>
+      <response status="201">
+        <!-- Envelope invariato: { success, message, data, permissions }.
+             data = LeadResource GIA' ESISTENTE, nessun campo nuovo.
+             Quando convert_to_opportunity=true, data.opportunity e' valorizzato
+             ({id, name}) invece che null, e data.lead_status vale
+             'converted_to_opportunity'. -->
+        data.opportunity: { id: int, name: string } | null
+        data.lead_status: 'not_associated' | 'associated' | 'converted_to_opportunity'
+      </response>
+      <errors>
+        403 — l'attore non ha leads.create (invariato).
+        403 — convert_to_opportunity=true e l'attore NON ha opportunities.create.
+        422 — convert_to_opportunity=true e operator_id o operational_site_id assenti.
+        422 — convert_to_opportunity=true ma le linee prodotto derivate sono vuote
+              (campagna/progetto privi di business function o categoria prodotto):
+              messaggio esplicito, nessun Lead creato (rollback della transazione).
+      </errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/leads/{lead}/opportunity-defaults">
+      <request>
+        <!-- Invariato: lead via route model binding. -->
+      </request>
+      <response status="200">
+        <!-- Shape ESISTENTE estesa in due punti, additiva e retrocompatibile: -->
+        data.lead_id: int
+        data.existing_opportunity_id: int | null
+        data.values: {
+          registry_id: int | null,
+          source_id: int | null,
+          supervisor_id: int | null      <!-- NUOVO: da lead.operator_id -->
+        }
+        data.references: {
+          registry: {id,name} | null,
+          source: {id,name} | null,
+          supervisor: {id,name} | null   <!-- NUOVO: da lead.operator -->
+        }
+        data.locked_fields: ['source_id','registry_id']
+        <!-- INVARIATO E VINCOLANTE: supervisor_id NON entra in DERIVED_FIELDS.
+             Il Supervisore e' PRECOMPILATO ma EDITABILE, mai 'prohibited'.
+             Un test esistente asserisce che locked_fields abbia esattamente 2 voci. -->
+        data.product_lines: [{ business_function: {id,name}, product_category: {id,name} }]
+      </response>
+      <errors>
+        403 — senza opportunities.create; 403 — senza leads.view; 404 — lead inesistente.
+        (Tutti invariati.)
+      </errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/tables/leads">
+      <request><!-- Invariato. --></request>
+      <response status="200">
+        <!-- Catalogo azioni: NUOVA voce, emessa solo se l'attore ha opportunities.create -->
+        actions[]: { key: 'convert_to_opportunity', label: 'actions.convertToOpportunity',
+                     icon: 'arrow-right-left', type: 'action', confirm: false }
+        <!-- Whitelist per-riga: 'convert_to_opportunity' presente in row.actions solo se
+             l'attore puo' creare Opportunita' E il lead non e' gia' convertito. -->
+        rows[].actions: string[]
+      </response>
+      <errors><!-- Invariati. --></errors>
+    </endpoint>
+
+    <internal_contract>
+      <!-- Non HTTP, ma congelato perche' backend e frontend devono coincidere. -->
+      Nome auto-calcolato dell'Opportunita': i nomi delle categorie prodotto delle righe
+      derivate, nell'ordine, uniti dal separatore ' + '. Con la singola riga derivata dal
+      Lead il nome coincide con il nome della categoria prodotto.
+      Frontend: composeProductLinesName (opportunity-product-line-name.ts).
+      Backend: costante equivalente, NON hard-coded inline.
+
+      In conversione automatica l'Opportunita' nasce con:
+        registry_id           = derivato dal lead (locked)
+        source_id             = derivato dal lead (locked)
+        supervisor_id         = lead.operator_id
+        opportunity_status_id = stato di sistema 'new' (SystemStatusGuard::resolveNewStatusId)
+        product_lines         = righe derivate dal resolver
+        name                  = auto-calcolato come sopra
+        lead_id               = id del lead appena creato
+    </internal_contract>
+
+  </data_contract>
+
+  <acceptance_criteria>
+
+    <!-- A) Conversione contestuale alla creazione del Lead -->
+    <criterion id="AC-001">Dato un utente con leads.create e opportunities.create, quando POST /api/leads con convert_to_opportunity=true e operator_id/operational_site_id valorizzati, allora risponde 201 ed esiste esattamente un'Opportunity con lead_id = id del lead creato.</criterion>
+    <criterion id="AC-002">Dato lo scenario AC-001, allora l'Opportunity creata ha supervisor_id === lead.operator_id.</criterion>
+    <criterion id="AC-003">Dato lo scenario AC-001, allora l'Opportunity creata ha registry_id e source_id uguali ai valori derivati dal lead dal LeadOpportunityDefaultsResolver.</criterion>
+    <criterion id="AC-004">Dato lo scenario AC-001, allora l'Opportunity creata ha esattamente una product_line con la business function e la categoria prodotto derivate da campaign/project.</criterion>
+    <criterion id="AC-005">Dato lo scenario AC-001, allora l'Opportunity creata ha name uguale al nome della categoria prodotto derivata.</criterion>
+    <criterion id="AC-006">Dato lo scenario AC-001, allora l'Opportunity creata ha opportunity_status_id pari allo stato di sistema con system_key 'new'.</criterion>
+    <criterion id="AC-007">Dato lo scenario AC-001, allora la risposta espone data.opportunity = {id,name} non null e data.lead_status = 'converted_to_opportunity'.</criterion>
+    <criterion id="AC-008">Dato convert_to_opportunity=true e operator_id assente, quando POST /api/leads, allora risponde 422 con errore sul campo operator_id e nessun Lead viene creato.</criterion>
+    <criterion id="AC-009">Dato convert_to_opportunity=true e operational_site_id assente, quando POST /api/leads, allora risponde 422 con errore sul campo operational_site_id e nessun Lead viene creato.</criterion>
+    <criterion id="AC-010">Dato convert_to_opportunity=false (o assente) e operator_id/operational_site_id assenti, quando POST /api/leads, allora risponde 201, il Lead esiste e nessuna Opportunity viene creata (retrocompatibilita' del flusso attuale).</criterion>
+    <criterion id="AC-011">Dato un utente CON leads.create ma SENZA opportunities.create, quando POST /api/leads con convert_to_opportunity=true, allora risponde 403 e nessun Lead viene creato.</criterion>
+    <criterion id="AC-012">Data una campagna priva di business function o categoria prodotto (dato legacy), quando POST /api/leads con convert_to_opportunity=true, allora risponde 422 con messaggio esplicito e NESSUN Lead resta persistito (rollback verificato con un conteggio prima/dopo).</criterion>
+
+    <!-- B) Conversione differita -->
+    <criterion id="AC-020">Dato un utente con opportunities.create, quando richiede la tabella leads, allora il catalogo actions contiene la voce con key 'convert_to_opportunity'.</criterion>
+    <criterion id="AC-021">Dato un utente SENZA opportunities.create, quando richiede la tabella leads, allora il catalogo actions NON contiene 'convert_to_opportunity'.</criterion>
+    <criterion id="AC-022">Dato un Lead non ancora convertito e un attore con opportunities.create, allora row.actions di quel Lead contiene 'convert_to_opportunity'.</criterion>
+    <criterion id="AC-023">Dato un Lead gia' convertito (con opportunity collegata), allora row.actions di quel Lead NON contiene 'convert_to_opportunity'.</criterion>
+    <criterion id="AC-024">Dato l'utente sulla tabella Lead, quando attiva l'azione 'convert_to_opportunity' su una riga, allora naviga al form Opportunita' con lead_id valorizzato (rotta /opportunities/new?lead_id=N).</criterion>
+    <criterion id="AC-025">Dato un Lead senza Operatore, quando si apre il form Opportunita' da quel Lead, allora il campo Supervisore e' vuoto, obbligatorio e editabile, e il form e' compilabile e salvabile.</criterion>
+
+    <!-- C) Prefill del Supervisore -->
+    <criterion id="AC-030">Dato un Lead con operator_id valorizzato, quando GET /api/leads/{lead}/opportunity-defaults, allora data.values.supervisor_id === lead.operator_id e data.references.supervisor === {id,name} dell'operatore.</criterion>
+    <criterion id="AC-031">Dato un Lead senza operator_id, quando GET /api/leads/{lead}/opportunity-defaults, allora data.values.supervisor_id === null e data.references.supervisor === null.</criterion>
+    <criterion id="AC-032">Dato qualsiasi Lead, quando GET /api/leads/{lead}/opportunity-defaults, allora data.locked_fields NON contiene 'supervisor_id' e continua a contenere esattamente ['source_id','registry_id'] quando entrambi sono derivabili.</criterion>
+    <criterion id="AC-033">Dato POST /api/opportunities con lead_id e un supervisor_id DIVERSO da lead.operator_id, allora risponde 201 e l'Opportunity ha il supervisor_id inviato dall'utente (il prefill non e' vincolante).</criterion>
+    <criterion id="AC-034">Dato il form Opportunita' in creazione, quando l'utente seleziona un Lead con Operatore e il campo Supervisore e' vuoto, allora il campo Supervisore viene precompilato con quell'Operatore e resta editabile.</criterion>
+
+    <!-- Frontend, form Lead -->
+    <criterion id="AC-040">Dato il form di creazione Lead, allora e' presente un controllo booleano "Converti in Opportunita'", visibile solo con permesso opportunities.create e assente in modalita' edit.</criterion>
+    <criterion id="AC-041">Dato il checkbox attivo, allora i campi Operatore e Sede risultano obbligatori lato client: il submit senza uno dei due mostra l'errore di validazione sul campo e non invia la richiesta.</criterion>
+    <criterion id="AC-042">Dato il checkbox non attivo, allora Operatore e Sede restano opzionali e il form si salva senza compilarli.</criterion>
+    <criterion id="AC-043">Dato il checkbox attivo, allora il payload POST /api/leads contiene convert_to_opportunity: true.</criterion>
+
+  </acceptance_criteria>
+
+  <constraints>
+    Nessuna nuova dipendenza (composer.json / package.json invariati).
+    Nessuna migration: convert_to_opportunity non e' un attributo persistito e NON deve
+      comparire nel #[Fillable] di Lead.
+    La creazione Lead + Opportunita' e' ATOMICA: unica DB::transaction, rollback totale
+      su qualsiasi errore (AC-012).
+    Authz server-side obbligatoria: la conversione richiede opportunities.create verificato
+      via Policy, non solo nascosto in UI.
+    Catalogo azioni e whitelist per-riga vanno mantenuti allineati (resolveActions +
+      actionsFor), come documentato in RolesAuthorization::actionPermissions.
+    Separatore del nome auto-calcolato in una costante, mai stringa inline (engineering.md §6).
+    Zero whereRaw/orderByRaw su input utente.
+    Stringhe UI solo via i18next, in it-leads.ts / en-leads.ts.
+    Il flusso esistente deve restare verde: i test di OpportunityFromLeadTest, in particolare
+      l'asserzione che locked_fields abbia esattamente ['source_id','registry_id'], non vanno
+      modificati per far passare il nuovo codice.
+    File entro 300 righe soft / 500 hard; logica di conversione in una Action dedicata con
+      metodo handle() e // Step N, non srotolata dentro LeadService::create().
+  </constraints>
+
+</spec>

@@ -56,28 +56,59 @@ function baseFields(t: TFunction) {
  * Create schema. A top-level `superRefine` flags duplicate `extra_fields`
  * keys (case-insensitive): two rows resolving to the same `Record` key
  * would silently overwrite one another at the API boundary, so it is
- * caught here instead.
+ * caught here instead. It also enforces spec 0044's conditional rule:
+ * once `convert_to_opportunity` is on, Operator and Site (otherwise
+ * optional) become required, mirroring the backend's `required_if`.
+ * The flag is deliberately NOT `.default(false)`: a Zod default makes the
+ * schema's input and output types diverge, which collapses the resolver's
+ * inference and untypes every `control` in the form. `use-lead-form`
+ * supplies the `false` default instead.
  */
 export function buildCreateLeadSchema(t: TFunction) {
-  return z.object(baseFields(t)).superRefine((values, ctx) => {
-    const seenKeys = new Set<string>()
-    values.extra_fields.forEach((entry, index) => {
-      const normalizedKey = entry.key.trim().toLowerCase()
-      if (!normalizedKey) return
-      if (seenKeys.has(normalizedKey)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: t('leads.form.extraFields.duplicateKey'),
-          path: ['extra_fields', index, 'key'],
-        })
-        return
+  return z
+    .object({ ...baseFields(t), convert_to_opportunity: z.boolean() })
+    .superRefine((values, ctx) => {
+      const seenKeys = new Set<string>()
+      values.extra_fields.forEach((entry, index) => {
+        const normalizedKey = entry.key.trim().toLowerCase()
+        if (!normalizedKey) return
+        if (seenKeys.has(normalizedKey)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: t('leads.form.extraFields.duplicateKey'),
+            path: ['extra_fields', index, 'key'],
+          })
+          return
+        }
+        seenKeys.add(normalizedKey)
+      })
+
+      if (values.convert_to_opportunity) {
+        if (values.operator_id === null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: t('leads.form.operatorRequired'),
+            path: ['operator_id'],
+          })
+        }
+        if (values.operational_site_id === null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: t('leads.form.operationalSiteRequired'),
+            path: ['operational_site_id'],
+          })
+        }
       }
-      seenKeys.add(normalizedKey)
     })
-  })
 }
 
-/** Edit schema (same shape; partial PATCH is computed by the caller). */
+/**
+ * Edit schema (same shape; partial PATCH is computed by the caller).
+ * `convert_to_opportunity` is create-only in the UI (never rendered or
+ * set in edit mode, `use-lead-form` always defaults it to `false`), so
+ * the conditional Operator/Site requirement above never triggers here —
+ * update never inherits the new obligation.
+ */
 export function buildUpdateLeadSchema(t: TFunction) {
   return buildCreateLeadSchema(t)
 }

@@ -83,6 +83,11 @@ export const leads = {
       source: "Il canale o l'origine da cui proviene il lead.",
       operator: "L'utente interno incaricato di seguire il lead.",
     },
+    convertToOpportunity: 'Converti automaticamente in Opportunità',
+    convertToOpportunityHint:
+      "Alla creazione del Lead verrà generata automaticamente l'Opportunità collegata. Operatore e Sede diventano obbligatori.",
+    operatorRequired: "L'Operatore è obbligatorio per la conversione in Opportunità.",
+    operationalSiteRequired: 'La Sede è obbligatoria per la conversione in Opportunità.',
     notes: 'Note',
     notesPlaceholder: 'Scrivi una nota su questo lead…',
     notesMax: 'Le note devono avere al massimo 5000 caratteri.',

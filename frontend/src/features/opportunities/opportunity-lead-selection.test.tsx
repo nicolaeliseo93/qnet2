@@ -17,6 +17,12 @@ import type { ResourceMeta } from '@/features/authorization/types'
  * every other field's own behavior (BR-4 scoping, field permissions,
  * deep-link create-from-lead) is covered there; here only the Lead field
  * itself is under test.
+ *
+ * Spec 0044 (AC-025/AC-030..034): a lead selection now also prefills the
+ * Supervisor from the lead's Operator, into an empty field only, never
+ * locked. The fixtures below carry `values.supervisor_id`/`references.supervisor`
+ * (contract requirement added by spec 0044, not present when this file was
+ * first written).
  */
 
 const createOpportunityMock = vi.fn()
@@ -53,11 +59,15 @@ vi.mock('@/features/status-reorder/api', () => ({
 const TEST_REGISTRY_ID = 10
 const TEST_LEAD_ID = 900
 const TEST_LEAD_ALREADY_LINKED_ID = 901
+/** Spec 0044 AC-025: a lead with no Operator — `values.supervisor_id`/`references.supervisor` both null. */
+const TEST_LEAD_NO_OPERATOR_ID = 902
 const TEST_OPPORTUNITY_STATUS_ID = 5
+/** Spec 0044 AC-030: the Operator derived onto `TEST_LEAD_ID`. */
+const TEST_SUPERVISOR_ID = 300
 
 /** Fixed selection ids exposed per field (by accessible trigger label), mirrors `opportunity-form-body.test.tsx`. */
 const SELECT_IDS: Record<string, number[]> = {
-  Lead: [TEST_LEAD_ID, TEST_LEAD_ALREADY_LINKED_ID],
+  Lead: [TEST_LEAD_ID, TEST_LEAD_ALREADY_LINKED_ID, TEST_LEAD_NO_OPERATOR_ID],
 }
 
 vi.mock('@/components/ui/async-paginated-select', () => ({
@@ -190,8 +200,8 @@ beforeEach(() => {
       return {
         lead_id: leadId,
         existing_opportunity_id: 777,
-        values: { referent_id: null, source_id: null, registry_id: null },
-        references: { source: null, registry: null },
+        values: { referent_id: null, source_id: null, registry_id: null, supervisor_id: null },
+        references: { source: null, registry: null, supervisor: null },
         locked_fields: [],
         product_lines: [],
       }
@@ -204,11 +214,16 @@ beforeEach(() => {
         referent_id: null,
         source_id: 20,
         registry_id: TEST_REGISTRY_ID,
+        // Spec 0044 AC-030/031: derived from the lead's Operator, absent for TEST_LEAD_NO_OPERATOR_ID.
+        supervisor_id: leadId === TEST_LEAD_NO_OPERATOR_ID ? null : TEST_SUPERVISOR_ID,
       },
       references: {
         source: { id: 20, name: 'Web' },
         registry: { id: TEST_REGISTRY_ID, name: 'Acme S.p.A.' },
+        supervisor:
+          leadId === TEST_LEAD_NO_OPERATOR_ID ? null : { id: TEST_SUPERVISOR_ID, name: 'Giulia Bianchi' },
       },
+      // AC-032: supervisor_id is never among locked_fields, whether derived or not.
       locked_fields: ['source_id', 'registry_id'],
       // Amendment rev.3 (AC-102/103): editable/removable seed row, never locked.
       product_lines: [
@@ -328,6 +343,54 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(createOpportunityMock).not.toHaveBeenCalled()
+  })
+
+  it('prefills the empty Supervisor from the lead Operator on selection, still editable (AC-034)', async () => {
+    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
+    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('')
+
+    screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
+
+    await waitFor(() =>
+      expect(screen.getByTestId('value-Supervisor')).toHaveTextContent(String(TEST_SUPERVISOR_ID)),
+    )
+    // Precompiled, never locked: the user can still change it (unlike Registry/Source above).
+    expect(screen.getByTestId('disabled-Supervisor')).toHaveTextContent('false')
+    // The trigger label is hydrated too — `setValue` alone writes the id, not the name.
+    expect(screen.getByTestId('label-Supervisor')).toHaveTextContent('Giulia Bianchi')
+  })
+
+  it('leaves the required Supervisor empty and editable when the picked lead has no Operator (AC-025)', async () => {
+    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
+    screen.getByRole('button', { name: `select Lead ${TEST_LEAD_NO_OPERATOR_ID}` }).click()
+
+    await waitFor(() => expect(screen.getByTestId('value-Registry')).toHaveTextContent(String(TEST_REGISTRY_ID)))
+    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('')
+    expect(screen.getByTestId('disabled-Supervisor')).toHaveTextContent('false')
+  })
+
+  it('never overwrites a Supervisor the user already picked (AC-034)', async () => {
+    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'select Supervisor 1' }))
+    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('1')
+
+    screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
+
+    await waitFor(() => expect(screen.getByTestId('value-Registry')).toHaveTextContent(String(TEST_REGISTRY_ID)))
+    // The user's own pick wins over the lead's derived Operator.
+    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('1')
   })
 })
 

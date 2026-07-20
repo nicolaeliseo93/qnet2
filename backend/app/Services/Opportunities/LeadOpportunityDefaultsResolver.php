@@ -30,6 +30,12 @@ use Illuminate\Database\Eloquent\Model;
  * second implementation) as a single EDITABLE/removable row, only when BOTH
  * are present. User directive 2026-07-17: `operational_site_id` is REMOVED
  * from the derivable set entirely.
+ *
+ * Spec 0044 (AC-030/031/032): `supervisor_id`/`supervisor` carry
+ * `lead->operator_id`/`lead->operator` as a PRECOMPILED SUGGESTION, not a
+ * BR-2 lock — deliberately kept OUT of `DERIVED_FIELDS` so `lockedFields()`
+ * never includes it and `StoreOpportunityRequest::derivableRule()` never
+ * turns it 'prohibited'. The user may freely override it (AC-033/AC-034).
  */
 final class LeadOpportunityDefaultsResolver
 {
@@ -53,6 +59,7 @@ final class LeadOpportunityDefaultsResolver
     private const array REQUIRED_RELATIONS = [
         'registry',
         'source',
+        'operator',
         'opportunity',
         'campaign.source',
         'campaign.businessFunction',
@@ -75,11 +82,13 @@ final class LeadOpportunityDefaultsResolver
         $values = [
             'source_id' => $effectiveSource?->id,
             'registry_id' => $lead->registry_id,
+            'supervisor_id' => $lead->operator_id,
         ];
 
         $references = [
             'source' => $this->summarizeByName($effectiveSource),
             'registry' => $this->summarizeByName($lead->registry),
+            'supervisor' => $this->summarizeByName($lead->operator),
         ];
 
         return new LeadOpportunityDefaults(

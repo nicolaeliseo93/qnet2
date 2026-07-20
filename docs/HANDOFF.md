@@ -2,6 +2,169 @@
 
 > Injected at session start. Update at every green state.
 
+## TRAPPOLA RICORRENTE — TYPECHECK FRONTEND (leggere sempre)
+
+Il gate typecheck valido e' **`cd frontend && npx tsc -b`**. **MAI `npx tsc --noEmit`**: il
+`frontend/tsconfig.json` ha `"files": []` e solo `references`, quindi `--noEmit` non type-checka
+NESSUN file ed esce sempre 0, anche col codice rotto. Scoperto il 2026-07-20 dopo che 3 teammate
+avevano dichiarato "typecheck pulito" con `--noEmit` mentre `tsc -b` sugli stessi file trovava 5
+errori reali. L'hook `.claude/hooks/typecheck.sh` e lo script `build` usano gia' `tsc -b`.
+Passare `tsc -b` esplicitamente a ogni subagent/teammate nelle istruzioni.
+Nota 1: `tsc -b` EMETTE artefatti (App.js, vite.config.js) — vanno rimossi dopo l'esecuzione.
+Nota 2: `tsc -b` e' INCREMENTALE e puo' mentire in entrambe le direzioni se il
+`node_modules/.tmp/*.tsbuildinfo` e' stale — rischio concreto con piu' teammate che
+compilano in parallelo sullo stesso file di cache (osservato il 2026-07-20: un run mostrava
+errori gia' corretti). Per una verifica PROBANTE usare **`npx tsc -b --force`**, che ignora
+la cache. Il gate del verifier deve usare `--force`.
+
+## FE: AG GRID COLUMNS TOOL PANEL + FILL BOTTONI OUTLINE (2026-07-20) — GREEN, NON COMMITTATO
+
+Due richieste UI indipendenti, nessuna spec (interventi diretti).
+
+(1) **Sidebar colonne AG Grid.** Era gia' tutto disponibile: `AllEnterpriseModule` e' registrato in
+`ag-grid-setup.ts`, mancava solo `sideBar`. Aggiunta costante `SIDE_BAR` a livello modulo in
+`data-table.tsx` col solo `agColumnsToolPanel` (row-group/pivot/values soppressi: sotto SSRM sono
+sezioni vuote; pannello filtri NON incluso, duplicherebbe i menu filtro degli header).
+`defaultToolPanel: undefined` => chiuso al mount. `suppressColumnsToolPanel: true` sulla colonna
+sintetica `__actions` (il suo id non e' nell'allow-list server, `toColumnPreferences` la scarta gia').
+**La persistenza non ha richiesto codice**: `onColumnVisible` filtra solo `source === 'api'` e il
+tool panel emette `toolPanelUi`. Il selection column e' escluso nativamente da AG Grid
+(`SelectionColumnDef` non espone nemmeno `suppressColumnsToolPanel` — verificato nei .d.ts).
+
+(2) **SCALA DI LUMINOSITA' DEI CONTROLLI SUL BODY (leggere prima di toccare colori).**
+Causa radice unica: i default shadcn presuppongono una pagina BIANCA, ma qui `--background` e' un
+grigio 91%, quindi ogni token tarato "grigio su bianco" collassa sul body. Ladder reale:
+
+  light: accent 84  <  body/muted 91  <  field 94  <  border/input 96  <  card 100
+  dark:  body 11  <  card 13  <  field 18  <  border/input 28  <  field-border 33  <  accent 44
+
+Regola derivata: **un controllo appoggiato al body deve stare sopra il body in ENTRAMBI i temi, e
+non deve attraversare quel piano in hover.** Attenzione: la direzione "piu' chiaro" e' invertita fra
+i temi, quindi NON esiste un token unico — servono coppie `X dark:Y`.
+
+Fix in `components/ui/button.tsx`, variante `outline`:
+`bg-transparent` -> **`bg-border`** a riposo (scelta utente: fill = colore del bordo; light 96 e
+dark 28, entrambi sopra il body). Hover `bg-accent` -> **`hover:bg-card dark:hover:bg-field-border`**:
+`accent` in light e' 84%, cioe' SOTTO il body 91%, quindi in hover il bottone attraversava il piano
+del body (era il sintomo riportato: "in hover diventa come il colore del body"). Rimosso anche
+`dark:hover:bg-input/50` (alpha su body -> ~19%, fangoso e vicino al body).
+
+Fix in `components/ui/tabs.tsx` (difetto piu' netto, dimostrabile): `TabsList` era `bg-muted` =
+`hsl(215 20% 91%)` contro body `hsl(218 16% 91%)` — **stessa luminosita', striscia invisibile**; e il
+trigger attivo era `data-[state=active]:bg-background`, cioe' dipinto LETTERALMENTE col colore del
+body. Ora `TabsList` -> `bg-field`, trigger attivo -> `bg-card dark:bg-border`. Ladder crescente in
+entrambi i temi (light 91<94<100, dark 11<18<28).
+
+**Rimossi 27 override `className="bg-card"` su bottoni `variant="outline"`** (tutti "Annulla" nei
+footer dei form, che sono `bg-background/95` = colore del body): erano lo STESSO workaround applicato
+a mano 27 volte, reso superfluo dal fix alla variante. Andavano tolti anche perche' con
+`hover:bg-card` il rest sarebbe coinciso con l'hover, annullando il feedback. Rimosso per lo stesso
+motivo `bg-field` da `stats-toggle-button.tsx` (era l'unico BOTTONE a pescare il token dei campi form).
+
+(3) **Pannello filtri avanzati su fondo bianco.** `advanced-filter-panel.tsx` e' UNICO per tabella e
+griglia progetti (call site `table-view.tsx:469` e `project-card-grid.tsx:180`), quindi un solo edit
+copre entrambi. Root `bg-muted/30` -> **`bg-card`** (opaco): oltre alla richiesta, cosi' il fill
+`--field` (94%) degli input torna a leggersi come "editabile", cosa che sul muted/30 non accadeva.
+Barra azioni Azzera/Applica: `bg-background/40` -> **`bg-border dark:bg-field`** (96% su card 100%).
+Preferenza utente finale: "piu' chiaro, quasi bianco" — la barra si separa col filo `border-t`, non
+con una fascia grigia. Mai un alpha: `/40` ricomponeva sul parent e sul fondo bianco sarebbe salita
+a ~96% comunque, ma in modo dipendente dal contesto.
+
+LEZIONE DI PROCESSO (costata 5 giri di taratura al buio 91->94->96->94->96): NON iterare sui colori
+senza far vedere il risultato. L'utente ha dovuto chiedere "ma stiamo parlando dello stesso posto?"
+prima che smettessi di indovinare. Cosa ha funzionato, da rifare subito la prossima volta:
+ (a) provare l'identita' del componente invece di assumerla — le chiavi i18n
+     `table.advancedFilters.reset/.apply` sono usate SOLO in `advanced-filter-panel.tsx`;
+ (b) leggere il CSS REALE servito dal dev server, non ragionare sui sorgenti:
+     `curl -s "http://localhost:5173/src/index.css?direct"` -> conferma `.bg-card`/`.bg-field` e i
+     valori dei token effettivamente spediti al browser;
+ (c) pubblicare un artifact con swatch affiancati (repliche fedeli del componente, token copiati da
+     index.css, colonna light + dark) e far scegliere. Ha risolto in un turno.
+NB: niente driver browser installato (no playwright/chromium-cli) e non se ne aggiungono senza
+autorizzazione — quindi lo screenshot dell'app non e' disponibile, l'artifact e' il sostituto.
+
+VERIFICATO ESEGUENDO: `npx tsc -b --force` (rebuild completo, cache esclusa) **0 errori, exit 0 reale**.
+ESLint su 54 file cambiati: 0 errori (`components/ui/` e' escluso da ESLint, non lintabile).
+Vitest FULL SUITE **1718/1721**: i 3 fail sono i pre-esistenti in `cell-renderers.test.tsx >
+ContactsCell`, file mai toccato. Nessuna regressione dai ~104 bottoni outline + tutti i Tabs.
+
+TRAPPOLA #2 SCOPERTA (aggiunta alla trappola typecheck in cima): **`echo "EXIT=$?"` dopo una PIPELINE
+(`tsc -b | grep | head`) legge l'exit di `head`, non di `tsc`** — da' sempre 0. Redirigere su file e
+leggere `$?` subito. Inoltre `tsc -b` incrementale puo' NON riesaminare file non toccati: usare
+`--force` quando serve un verdetto affidabile.
+
+ATTENZIONE — LAVORO CONCORRENTE SUL REPO (2026-07-20 ~11:45-11:49): durante questa sessione sono
+comparsi `docs/specs/0045-module-create-params.xml` e `frontend/src/features/modules/module-form-page.test.tsx`,
+creati da un'ALTRA sessione. Questo ha prodotto errori TS TRANSITORI su `attributes-table.tsx`,
+`campaigns-table.tsx`, `business-functions-table.tsx` (`ModuleCreateParams` non assegnabile a
+`MouseEventHandler`) catturati a meta' della loro modifica; ora risolti da loro
+(`use-module-opener.tsx:60`). Il verde qui sopra e' su un albero in movimento: rieseguire i gate
+prima di committare.
+
+NON VERIFICATO (segnalato all'utente, fuori scope): resa del tool panel a 375px (larghezza fissa,
+potrebbe volere una soppressione per breakpoint) e se `buildDataTableTheme(factor)` scali i parametri
+del sidebar con la UI scale. Nessun test aggiunto: modifiche puramente di stile/config, la suite
+esistente copre la non-regressione. I contrasti nuovi NON sono stati verificati contro WCAG ne'
+guardando l'app: solo calcolo sui token.
+
+## FE+BE: CONVERSIONE LEAD -> OPPORTUNITA' (2026-07-20, spec 0044) — GREEN, NON COMMITTATO
+
+Richiesta utente in 3 requisiti incrementali: (A) checkbox in creazione Lead che genera
+automaticamente l'Opportunita' collegata, con Operatore e Sede resi obbligatori; (B) conversione
+differita su Lead esistente via azione, gated sul permesso di creare Opportunita', che chiede il
+completamento dei dati mancanti; (C) creando manualmente un'Opportunita' e associando un Lead,
+l'Operatore del Lead diventa Supervisore dell'Opportunita'.
+
+DECISIONI UTENTE (2026-07-20): la **Sede resta obbligatoria SOLO sul Lead** per completezza del
+flusso — l'Opportunita' NON la consuma (`operational_site_id`/`company_id`/`company_site_id` furono
+droppati dalle opportunities il 2026-07-17, decisione NON riaperta). Conversione differita su Lead
+senza Operatore: apre comunque il form Opportunita' precompilato, il Supervisore si sceglie li',
+nessun blocco. Bottone sia nelle azioni di riga (nuovo) sia nel dettaglio (gia' esistente).
+
+GROUNDING CHIAVE: meta' del flusso ESISTEVA GIA' (spec 0040) e NON e' stato riscritto —
+`GET /api/leads/{lead}/opportunity-defaults` + `POST /api/opportunities` con `lead_id`.
+`LeadOpportunityDefaultsResolver` derivava gia' le linee prodotto da
+`campaign.project.{businessFunction,productCategory}` con fallback `campaign.*`; la coppia e'
+SEMPRE valorizzata (required su StoreProjectRequest; required o ereditata su StoreCampaignRequest).
+Il `name` dell'Opportunita' e' auto-calcolato dalle categorie prodotto unite da `' + '`
+(`composeProductLinesName`, AC-107 spec 0040) — replicato server-side come costante nella Action.
+
+BACKEND: **nessuna migration**. `ConvertLeadToOpportunity` (Action, `handle()` + `// Step N`) risolve
+i defaults, guarda contro product lines vuote (422) e delega a `OpportunityService::create()`.
+`LeadService::create()` avvolge `Lead::create()` + conversione in UNA `DB::transaction` (atomico).
+`LeadController::store()` fa `authorize('create', Opportunity::class)` PRIMA del service (403 senza
+toccare il DB). `convert_to_opportunity` e' un flag di richiesta: **MAI** nel `#[Fillable]` di Lead,
+mai in `CreateLeadData::attributes()`. `LeadOpportunityDefaultsResolver` espone ora
+`values.supervisor_id` + `references.supervisor` (+ `operator` in REQUIRED_RELATIONS, no N+1) ma
+**`DERIVED_FIELDS` resta `['source_id','registry_id']`**: il Supervisore e' PRECOMPILATO ma
+EDITABILE, mai lockato (invariante verificato eseguendo). Azione riga in `LeadColumnCatalog::actions()`
+(permission `opportunities.create`) + `LeadsTableDefinition::actionsFor()` (riusa `opportunity_exists`
+da `withExists` gia' in baseQuery, zero query aggiuntive) — catalogo e whitelist vanno tenuti allineati.
+
+FRONTEND: checkbox nel form Lead via MetaField+Switch dentro la sezione "details" esistente (nessuna
+rinumerazione dei reveal index), gated `mode.type === 'create' && <Can permission="opportunities.create">`.
+Obbligatorieta' condizionale nel `superRefine` gia' presente, con `path` sul campo giusto.
+**`convert_to_opportunity` e' `z.boolean()`, NON `.default(false)`**: un default Zod fa divergere i tipi
+input/output, collassa l'inferenza di `zodResolver` e "detipizza" ogni `control` del form (5 errori TS
+che puntavano a `lead-form-body.tsx`, file non responsabile — la causa era nello schema).
+Azione riga: `leads-table.tsx` naviga a `/opportunities/new?lead_id=N`; icona iniettata via prop
+`iconMap` di `<TableView>` (`{'arrow-right-left': ArrowRightLeft}`, hoistata a livello modulo) —
+`action-icon-map.ts` condiviso NON va modificato, gli override di dominio vincono sui default.
+`lead-screens.tsx` NON toccato: gia' conforme. Prefill Supervisore in `use-opportunity-lead-selection.ts`
+(legge `getValues('supervisor_id')`, scrive solo se null: mai sovrascrivere una scelta utente) +
+idratazione della reference in `use-opportunity-selected-items.ts` (senza, il select mostra un id nudo).
+
+VERIFICATO DAL VERIFIER (output reale, non dichiarato): 27/27 AC PASS. Pest completo 2940/2952
+(11 fail TUTTI pre-esistenti, provati con `git stash -u` + rerun su baseline pulita), nessun segfault
+in isolamento (il crash visto da BE-1 era contesa SQLite tra teammate concorrenti). `tsc -b` 0 errori.
+Vitest 1711/1714 (3 fail pre-esistenti in `cell-renderers.test.tsx`, mai toccato). Pint/ESLint puliti
+sui file dello scope. `locked_fields` verificato `toEqualCanonicalizing(['source_id','registry_id'])`.
+
+NOTA: `opportunity-form-body.test.tsx` era gia' a 539 righe (oltre l'hard limit 500) PRIMA di questo
+lavoro; splittato in `opportunity-form-from-lead.test.tsx` (475 + 161), 14 `it()` prima e dopo.
+
+NESSUN COMMIT (in attesa di ok esplicito, CLAUDE.md §3.6).
+
 ## FE+BE: MODULO OPPORTUNITY-STATUSES + FK + GRUPPO NAV (2026-07-17, spec 0043) — GREEN, NON COMMITTATO
 
 Richiesta utente: stati per le opportunita' "come gli stati lead" (parita' completa col modello

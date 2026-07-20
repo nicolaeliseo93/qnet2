@@ -71,7 +71,6 @@ export function ModuleOpenModeForm() {
         <Button
           type="button"
           variant="outline"
-          className="bg-card"
           onClick={onReset}
           disabled={isSaving}
         >

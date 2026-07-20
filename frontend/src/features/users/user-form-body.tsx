@@ -260,7 +260,7 @@ export function UserFormBody({ mode, onSuccess, onCancel, onAvatarChange }: User
           <div className="mt-auto flex justify-end gap-2 pt-2">
             <Button
               type="button"
-              variant="outline" className="bg-card"
+              variant="outline"
               onClick={onCancel}
               disabled={form.formState.isSubmitting}
             >

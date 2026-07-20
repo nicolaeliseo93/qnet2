@@ -6,9 +6,11 @@ import { FormSection } from '@/components/form-section'
 import { sectionRevealClassName } from '@/components/form-section-reveal'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Form, FormControl } from '@/components/ui/form'
+import { Switch } from '@/components/ui/switch'
+import { Form, FormControl, FormDescription } from '@/components/ui/form'
 import { RelationSelectField } from '@/components/form/relation-select-field'
 import { cn } from '@/lib/utils'
+import { Can } from '@/features/auth/can'
 import { MetaField } from '@/features/authorization/MetaField'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
 import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-api'
@@ -47,6 +49,9 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
 
   const notesValue = useWatch({ control: form.control, name: 'notes' })
   const notesLength = notesValue?.length ?? 0
+  // AC-041: drives the Operator/Site required marker while the schema's
+  // superRefine enforces the same rule (spec 0044).
+  const convertToOpportunity = useWatch({ control: form.control, name: 'convert_to_opportunity' })
 
   const selectLabels = {
     placeholder: t('leads.form.selectPlaceholder'),
@@ -113,6 +118,7 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
                     ? { id: original.operational_site.id, name: original.operational_site.label }
                     : null
                 }
+                required={convertToOpportunity || undefined}
                 {...selectLabels}
               />
 
@@ -137,10 +143,31 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
                 resource={USERS_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('leads.form.operatorSearch')}
                 selected={original?.operator ?? null}
+                required={convertToOpportunity || undefined}
                 showAvatar
                 {...selectLabels}
               />
             </div>
+
+            {mode.type === 'create' && (
+              <Can permission="opportunities.create">
+                <MetaField
+                  control={form.control}
+                  name="convert_to_opportunity"
+                  metaKey="convert_to_opportunity"
+                  label={t('leads.form.convertToOpportunity')}
+                  description={
+                    <FormDescription>{t('leads.form.convertToOpportunityHint')}</FormDescription>
+                  }
+                >
+                  {({ field, disabled }) => (
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={disabled} />
+                    </FormControl>
+                  )}
+                </MetaField>
+              </Can>
+            )}
           </FormSection>
 
           <FormSection
@@ -201,7 +228,7 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
           )}
 
           <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <Button type="button" variant="outline" className="bg-card" onClick={onCancel} disabled={isSubmitting}>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
               {t('leads.form.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting}>

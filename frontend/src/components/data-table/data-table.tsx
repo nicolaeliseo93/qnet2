@@ -15,6 +15,7 @@ import {
   type ModelUpdatedEvent,
   type RowSelectionOptions,
   type SelectionChangedEvent,
+  type SideBarDef,
 } from 'ag-grid-community'
 import {
   AG_GRID_LOCALE_EN,
@@ -71,6 +72,34 @@ const ROW_SELECTION: RowSelectionOptions<TableRow> = {
  */
 const ACTIONS_COLUMN_WIDTH = 100
 const ACTIONS_COLUMN_WIDTH_WITH_OVERFLOW = 120
+
+/**
+ * Right-hand tool panel listing every column with a checkbox to show/hide it and
+ * drag handles to reorder. Closed on mount (opened from the vertical tab strip)
+ * so the grid keeps its full width by default.
+ *
+ * Only the columns panel is exposed: the filters panel would duplicate the
+ * per-header filter menus, and row-group/pivot/aggregation are meaningless under
+ * the SSRM setup here, so their sections are suppressed rather than shown empty.
+ */
+const SIDE_BAR: SideBarDef = {
+  toolPanels: [
+    {
+      id: 'columns',
+      labelDefault: 'Columns',
+      labelKey: 'columns',
+      iconKey: 'columns',
+      toolPanel: 'agColumnsToolPanel',
+      toolPanelParams: {
+        suppressRowGroups: true,
+        suppressValues: true,
+        suppressPivots: true,
+        suppressPivotMode: true,
+      },
+    },
+  ],
+  defaultToolPanel: undefined,
+}
 
 /**
  * Per-cell loading placeholder shown while an SSRM block streams in. Because AG
@@ -277,6 +306,10 @@ export function DataTable({
         width: actionsWidth,
         minWidth: actionsWidth,
         flex: 0,
+        // Synthetic column, not part of the domain schema: hiding it from the
+        // tool panel keeps the list to real, persistable columns (its id is not
+        // in the server's allow-list, so it is dropped on save anyway).
+        suppressColumnsToolPanel: true,
         cellRenderer: (params: ICellRendererParams) => renderRowActions(params),
       })
     }
@@ -371,6 +404,7 @@ export function DataTable({
     () => ({
       rowModelType: 'serverSide',
       serverSideDatasource: datasource,
+      sideBar: SIDE_BAR,
       // Universal custom field columns (spec 0021) use a dotted id
       // (`custom.<key>`) as a FLAT row key, not a nested path. AG Grid's default
       // dot-notation would otherwise read `field: 'custom.<key>'` as

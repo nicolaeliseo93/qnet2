@@ -34,8 +34,19 @@ export const DEFAULT_MODULE_OPEN_PREFERENCES: ModuleOpenPreferences = {
   overrides: {},
 }
 
+/**
+ * Initial values for a create form (spec 0045), e.g. `{ lead_id: 7 }` when
+ * converting a Lead into an Opportunity. Scalar-only so it round-trips
+ * through a query string without loss: the modal path can hand over a
+ * `number`, the page path always produces a `string` once parsed back from
+ * the URL — adapters must normalize before use (see `opportunity-screens.tsx`).
+ */
+export type ModuleCreateParams = Record<string, string | number>
+
 /** Which entity (create vs edit) a `FormScreen` renders. */
-export type ModuleFormScreenMode = { type: 'create' } | { type: 'edit'; id: number }
+export type ModuleFormScreenMode =
+  | { type: 'create'; params?: ModuleCreateParams }
+  | { type: 'edit'; id: number }
 
 export interface ModuleDetailScreenProps {
   id: number

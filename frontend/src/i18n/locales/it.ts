@@ -105,6 +105,7 @@ export const it: TranslationResources = {
     edit: 'Modifica',
     delete: 'Elimina',
     activity: 'Attività',
+    convertToOpportunity: 'Converti in Opportunità',
   },
   table,
   statsPanel,

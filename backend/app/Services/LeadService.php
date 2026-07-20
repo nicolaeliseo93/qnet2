@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Leads\ConvertLeadToOpportunity;
 use App\DataObjects\Leads\CreateLeadData;
 use App\DataObjects\Leads\UpdateLeadData;
 use App\DataObjects\Shared\ForSelectQuery;
@@ -43,14 +44,35 @@ class LeadService
         'opportunity',
     ];
 
+    public function __construct(
+        private readonly ConvertLeadToOpportunity $converter,
+    ) {}
+
     public function loadDetail(Lead $lead): Lead
     {
         return $lead->load(self::DETAIL_RELATIONS);
     }
 
+    /**
+     * Plain create, or — when `convertToOpportunity` is set (spec 0044) — the
+     * Lead and its derived Opportunity created atomically in a single
+     * transaction: the conversion logic itself lives entirely in
+     * ConvertLeadToOpportunity, not unrolled here.
+     */
     public function create(CreateLeadData $data): Lead
     {
-        $lead = Lead::create($data->attributes());
+        if (! $data->convertToOpportunity) {
+            $lead = Lead::create($data->attributes());
+
+            return $this->loadDetail($lead);
+        }
+
+        $lead = DB::transaction(function () use ($data): Lead {
+            $lead = Lead::create($data->attributes());
+            $this->converter->handle($lead);
+
+            return $lead;
+        });
 
         return $this->loadDetail($lead);
     }

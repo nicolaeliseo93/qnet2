@@ -43,7 +43,7 @@ export default function LeadImportDetailPage() {
         <PageHeader
           actions={
             <>
-              <Button variant="outline" className="bg-card" asChild>
+              <Button variant="outline" asChild>
                 <Link to="/imports">
                   <ArrowLeft aria-hidden="true" />
                   {t('common.back')}

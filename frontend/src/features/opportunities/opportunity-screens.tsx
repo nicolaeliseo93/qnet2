@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- registry adapter: components + moduleScreen descriptor colocated by design (spec 0042) */
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -56,14 +56,16 @@ export function OpportunityDetailScreen({ id }: ModuleDetailScreenProps) {
 }
 
 /**
- * Create branch reads `?lead_id=N` from the CURRENT route (spec 0040 MT-6):
- * harmless when mounted from the table's "New" action (that route never
- * carries the param) and required when mounted at the `/opportunities/new`
- * deep-link coming from a lead's "Create opportunity" action.
+ * Create branch reads `lead_id` from `mode.params` (spec 0045), the single
+ * channel a `FormScreen` gets its create-time context through regardless of
+ * where it is mounted: the modal Sheet hands the params straight through,
+ * while `ModuleFormPage` converts the deep-link's `?lead_id=N` query string
+ * into the same `params` shape before mounting this screen. `lead_id` can
+ * therefore arrive as either a `number` (modal caller) or a `string` (parsed
+ * query string) — normalize to string before `parseEntityId`.
  */
 export function OpportunityFormScreen({ mode, onSuccess, onCancel }: ModuleFormScreenProps) {
   const queryClient = useQueryClient()
-  const [searchParams] = useSearchParams()
 
   const handleSuccess = (saved: OpportunityDetail) => {
     queryClient.invalidateQueries({ queryKey: opportunityDetailQueryKey(saved.id) })
@@ -76,7 +78,7 @@ export function OpportunityFormScreen({ mode, onSuccess, onCancel }: ModuleFormS
     )
   }
 
-  const leadId = parseEntityId(searchParams.get('lead_id') ?? undefined)
+  const leadId = parseEntityId(String(mode.params?.lead_id ?? ''))
   return <OpportunityCreateScreen leadId={leadId} onSuccess={handleSuccess} onCancel={onCancel} />
 }
 

@@ -9,6 +9,7 @@ import i18n from '@/i18n'
 import { LeadsTable } from '@/features/leads/leads-table'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
+import type { ModuleFormScreenMode, OpenMode } from '@/features/modules/types'
 import type { LeadDetailWithPermissions } from '@/features/leads/types'
 
 /**
@@ -45,10 +46,60 @@ const mockLead: LeadDetailWithPermissions = {
 }
 
 const canMock = vi.fn<(permission: string) => boolean>()
-// Default modal behaviour; force the resolved open mode (spec 0042).
+// The leads Sheet stays modal throughout this suite; the opportunities Sheet
+// (spec 0045, second opener for 'convert_to_opportunity') varies per test to
+// cover AC-020 (modal) and AC-021 (page).
+let opportunitiesOpenMode: OpenMode = 'modal'
 vi.mock('@/features/modules/use-module-open-mode', () => ({
-  useModuleOpenMode: () => 'modal',
+  useModuleOpenMode: (domain: string) => (domain === 'opportunities' ? opportunitiesOpenMode : 'modal'),
 }))
+
+// Isolates the real `useModuleOpener('opportunities')` call from the actual
+// opportunities FormScreen (owned by another teammate, in flux): the module
+// registry auto-collects every `*-screens.tsx` via `import.meta.glob`, so
+// this mock intercepts that exact file by its resolved path before the
+// registry eagerly imports it, keeping this suite about the leads adapter's
+// own responsibility (AC-020/021/024), not the opportunities form internals.
+vi.mock('@/features/opportunities/opportunity-screens', () => ({
+  moduleScreen: {
+    domain: 'opportunities',
+    basePath: '/opportunities',
+    defaultMode: 'modal',
+    labelKey: 'navigation.opportunities',
+    DetailScreen: () => null,
+    FormScreen: ({
+      mode,
+      onSuccess,
+      onCancel,
+    }: {
+      mode: ModuleFormScreenMode
+      onSuccess: (id: number) => void
+      onCancel: () => void
+    }) => (
+      <div>
+        <div>{`opportunity-form-${mode.type}`}</div>
+        {mode.type === 'create' && (
+          <div>{`opportunity-params:${JSON.stringify(mode.params ?? null)}`}</div>
+        )}
+        <button type="button" onClick={() => onSuccess(99)}>
+          stub-save-opportunity
+        </button>
+        <button type="button" onClick={onCancel}>
+          stub-cancel-opportunity
+        </button>
+      </div>
+    ),
+  },
+}))
+
+// The row action navigates away in 'page' mode (AC-021), so `useNavigate` is
+// mocked and asserted the same way `leads-table-import.test.tsx` does for the
+// "Import" button.
+const navigateMock = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return { ...actual, useNavigate: () => navigateMock }
+})
 
 vi.mock('@/features/auth/use-abilities', () => ({
   useAbilities: () => ({
@@ -78,11 +129,17 @@ function action(key: string): TableActionDefinition {
   }
 }
 
+let capturedIconMap: Record<string, unknown> | undefined
+
 vi.mock('@/features/table/table-view', () => ({
-  TableView: forwardRef<{ refresh: () => void }, { domain: string; onAction: RowActionHandler }>(
-    function TableViewStub({ domain, onAction }, ref) {
+  TableView: forwardRef<
+    { refresh: () => void },
+    { domain: string; onAction: RowActionHandler; iconMap?: Record<string, unknown> }
+  >(
+    function TableViewStub({ domain, onAction, iconMap }, ref) {
       useImperativeHandle(ref, () => ({ refresh: refreshMock }))
       capturedOnAction = onAction
+      capturedIconMap = iconMap
       return (
         <div role="region" aria-label={`table-${domain}`}>
           <button type="button" onClick={() => onAction(action('view'), ROW)}>
@@ -93,6 +150,12 @@ vi.mock('@/features/table/table-view', () => ({
           </button>
           <button type="button" onClick={() => onAction(action('delete'), ROW)}>
             trigger-delete
+          </button>
+          <button
+            type="button"
+            onClick={() => onAction(action('convert_to_opportunity'), ROW)}
+          >
+            trigger-convert
           </button>
         </div>
       )
@@ -166,7 +229,10 @@ beforeEach(() => {
   canMock.mockReset()
   canMock.mockReturnValue(true)
   refreshMock.mockReset()
+  navigateMock.mockReset()
+  opportunitiesOpenMode = 'modal'
   capturedOnAction = null
+  capturedIconMap = undefined
   fetchLeadMock.mockReset()
   fetchLeadMock.mockResolvedValue(mockLead)
   deleteLeadMock.mockReset()
@@ -246,6 +312,44 @@ describe('LeadsTable — Sheet-based CRUD (AC-024)', () => {
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith('Unable to delete the lead. Please try again.'),
     )
+  })
+
+  it('AC-020: opens the Opportunity modal Sheet prefilled with the lead on convert_to_opportunity, no navigation', () => {
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-convert'))
+
+    expect(screen.getByText('opportunity-form-create')).toBeInTheDocument()
+    expect(screen.getByText('opportunity-params:{"lead_id":33}')).toBeInTheDocument()
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('AC-021: navigates to the Opportunity form deep-link when the resolved open mode is "page"', () => {
+    opportunitiesOpenMode = 'page'
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-convert'))
+
+    expect(navigateMock).toHaveBeenCalledWith('/opportunities/new?lead_id=33')
+    expect(screen.queryByText('opportunity-form-create')).not.toBeInTheDocument()
+  })
+
+  it('AC-024: saving the Opportunity from the modal Sheet refreshes the leads grid', async () => {
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-convert'))
+    expect(await screen.findByText('opportunity-form-create')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('stub-save-opportunity'))
+
+    await waitFor(() => expect(screen.queryByText('opportunity-form-create')).not.toBeInTheDocument())
+    expect(refreshMock).toHaveBeenCalled()
+  })
+
+  it("threads an icon override for the 'arrow-right-left' action key (spec 0044 action catalog)", () => {
+    renderTable()
+
+    expect(capturedIconMap).toHaveProperty('arrow-right-left')
   })
 })
 

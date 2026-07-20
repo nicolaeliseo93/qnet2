@@ -97,6 +97,12 @@ export interface CreateLeadPayload {
   operator_id?: number | null
   notes?: string | null
   extra_fields?: Record<string, string> | null
+  /**
+   * Spec 0044: requests atomic conversion into a linked Opportunity when
+   * true (default false). Create-only — `UpdateLeadPayload` never carries
+   * it, edit-mode conversion is out of scope.
+   */
+  convert_to_opportunity?: boolean
 }
 
 /** Payload for PATCH /leads/{id} (partial update). Every field is optional (sparse diff). */

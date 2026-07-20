@@ -4,6 +4,7 @@ namespace App\Tables;
 
 use App\Enums\LeadLifecycleStatus;
 use App\Models\Lead;
+use App\Models\Opportunity;
 use App\Models\User;
 use App\Tables\Leads\LeadAdvancedFilterCatalog;
 use App\Tables\Leads\LeadColumnCatalog;
@@ -200,12 +201,17 @@ class LeadsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Allowed action keys for a single row, via LeadPolicy.
+     * Allowed action keys for a single row, via LeadPolicy — plus the
+     * cross-resource `convert_to_opportunity` (spec 0044), gated on the
+     * OpportunityPolicy::create ability rather than any LeadPolicy ability,
+     * and hidden once the lead is already converted (`opportunity_exists`,
+     * resolved by baseQuery's withExists — no per-row N+1).
      *
      * @return array<int, string>
      */
     public function actionsFor(User $actor, Model $row): array
     {
+        /** @var Lead $row */
         $allowed = [];
 
         if (Gate::forUser($actor)->allows('view', $row)) {
@@ -222,6 +228,10 @@ class LeadsTableDefinition extends AbstractTableDefinition
 
         if (Gate::forUser($actor)->allows('viewActivity', $row)) {
             $allowed[] = 'activity';
+        }
+
+        if (! $row->{self::OPPORTUNITY_EXISTS_ALIAS} && Gate::forUser($actor)->allows('create', Opportunity::class)) {
+            $allowed[] = 'convert_to_opportunity';
         }
 
         return $allowed;

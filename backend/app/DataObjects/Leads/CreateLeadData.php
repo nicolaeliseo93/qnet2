@@ -16,6 +16,11 @@ namespace App\DataObjects\Leads;
  *
  * Lead status is derived from assignment/opportunity state and is not accepted
  * in the write contract.
+ *
+ * `convertToOpportunity` (spec 0044) is a request-level flag, NOT a Lead
+ * attribute: it drives LeadService::create()'s conversion branch and is
+ * deliberately absent from attributes() — it must never reach
+ * `Lead::create()`'s mass assignment.
  */
 final readonly class CreateLeadData
 {
@@ -30,6 +35,7 @@ final readonly class CreateLeadData
         public ?int $operatorId,
         public ?string $notes,
         public ?array $extraFields = null,
+        public bool $convertToOpportunity = false,
     ) {}
 
     /**
@@ -47,6 +53,7 @@ final readonly class CreateLeadData
             operatorId: isset($data['operator_id']) ? (int) $data['operator_id'] : null,
             notes: $data['notes'] ?? null,
             extraFields: $data['extra_fields'] ?? null,
+            convertToOpportunity: (bool) ($data['convert_to_opportunity'] ?? false),
         );
     }
 

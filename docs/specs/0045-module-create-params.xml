@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spec 0045 — Parametri di creazione nel module opener.
+  Infrastruttura CONDIVISA da tutti i moduli. Estende la spec 0042 (open mode)
+  e sblocca il requisito utente della spec 0044 (conversione Lead -> Opportunita'
+  che rispetta il setting modale/pagina).
+  Frontend-only: nessuna modifica backend, nessuna migration, nessun endpoint.
+-->
+<spec id="0045-module-create-params" status="draft" owner="utente" date="2026-07-20">
+
+  <goal>
+    Permettere di aprire il form di CREAZIONE di un modulo passando dei parametri
+    iniziali, rispettando il setting di apertura dell'utente (modale o pagina, spec
+    0042). Sblocca l'azione "Converti in Opportunita'" del Lead, che oggi funziona
+    solo navigando a pagina piena.
+  </goal>
+
+  <context>
+    PROBLEMA OSSERVATO: l'azione di riga `convert_to_opportunity` (spec 0044) fa
+    `navigate('/opportunities/new?lead_id=N')`, cioe' apre SEMPRE una pagina piena,
+    ignorando `module_open_preferences`. Richiesta utente 2026-07-20: deve aprirsi la
+    modale, e comunque rispettare il setting scelto.
+
+    CAUSA VERIFICATA — il contratto del registry non prevede payload sul ramo create:
+      - `ModuleFormScreenMode` = `{type:'create'} | {type:'edit'; id}`
+        (frontend/src/features/modules/types.ts:44-50): il ramo create non ha campi.
+      - `openCreate()` e' a ZERO argomenti; `SheetState` ha `{kind:'create'}` senza payload
+        (use-module-opener.tsx:26-30, 76-82).
+      - Il Sheet monta `mode={{type:'create'}}` HARD-CODED (use-module-opener.tsx:150);
+        `ModuleFormPage` fa lo stesso (module-form-page.tsx:127).
+      - `OpportunityFormScreen` legge `?lead_id=` con `useSearchParams()`
+        (opportunity-screens.tsx:65-82): aperto in MODALE da /leads legge i params di
+        /leads, quindi ottiene sempre `null`. Il commento nel file lo documenta gia'.
+
+    GIA' PRONTO E PROP-DRIVEN (non va toccato): tutta la catena sotto l'adapter accetta
+    gia' il lead per props — `OpportunityCreateScreen({leadId})` ->
+    `useOpportunityCreateMode(leadId)` -> `mode.fromLead` ->
+    `useOpportunityLeadSelection(initial)`. Manca solo il canale che porti il valore
+    dal chiamante fino all'adapter senza passare dalla URL.
+
+    ALTRI FATTI: il module registry si popola via glob su `features/*/*-screens.tsx`
+    (module-registry.ts); `opportunities` ha gia' `defaultMode: OPEN_MODE_MODAL`
+    (opportunity-screens.tsx:169-176); la risoluzione modale/pagina e' in
+    `resolve-open-mode.ts` (spec 0042 AC-010); nessun modulo apre oggi il form di un
+    ALTRO modulo via `useModuleOpener` (25 call site, tutti same-module) — tecnicamente
+    l'hook e' gia' generico sul `domain`, l'unico ostacolo era il payload.
+
+    SCARTATO: riusare il registro `quick-create`. Monta il form reale di un altro modulo
+    in una Dialog (precedente valido), ma NON consulta `module_open_preferences`: aprirebbe
+    sempre una modale, violando il requisito "in base ai settings scelti".
+  </context>
+
+  <scope>
+    <in>
+      <item>Payload opzionale sul ramo create di ModuleFormScreenMode.</item>
+      <item>openCreate(params?) con propagazione al Sheet in modalita' modale.</item>
+      <item>Serializzazione dei params in query string in modalita' pagina.</item>
+      <item>ModuleFormPage converte la query string in params, cosi' il form legge un canale unico.</item>
+      <item>OpportunityFormScreen legge lead_id da mode.params invece che da useSearchParams.</item>
+      <item>Azione di riga 'convert_to_opportunity' nella tabella Lead che rispetta l'open mode.</item>
+      <item>Bottone "Crea opportunita'" nel dettaglio Lead che rispetta l'open mode.</item>
+    </in>
+    <out>
+      <item>Qualsiasi modifica backend: nessun endpoint, nessuna migration, nessun permesso nuovo.</item>
+      <item>Modifica del registro quick-create: resta com'e', fuori scope.</item>
+      <item>Payload sul ramo EDIT di ModuleFormScreenMode: solo create.</item>
+      <item>Modifica della logica di risoluzione dell'open mode (resolve-open-mode.ts, spec 0042).</item>
+      <item>Estensione dei params ad altri moduli oltre opportunities: l'infrastruttura e' generica ma l'unico consumer di questa spec e' la conversione Lead.</item>
+      <item>Cambio del gating permessi: resta opportunities.create, server-side, invariato.</item>
+      <item>Modifica del comportamento del deep-link /opportunities/new?lead_id=N: deve continuare a funzionare identico.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Contratto TypeScript condiviso. Nessun endpoint HTTP coinvolto. -->
+
+    <types file="frontend/src/features/modules/types.ts">
+      /** Parametri iniziali per il form di creazione. Valori scalari: devono poter
+          essere serializzati in query string senza perdita. */
+      export type ModuleCreateParams = Record&lt;string, string | number&gt;
+
+      export type ModuleFormScreenMode =
+        | { type: 'create'; params?: ModuleCreateParams }   <!-- params NUOVO, OPZIONALE -->
+        | { type: 'edit'; id: number }
+
+      <!-- ModuleFormScreenProps INVARIATO: { mode, onSuccess, onCancel } -->
+    </types>
+
+    <hook file="frontend/src/features/modules/use-module-opener.tsx">
+      <!-- REVISIONE 2026-07-20, in corso d'opera. La firma unica
+           `openCreate(params?)` e' stata SCARTATA dopo aver provato che introduce
+           un bug di runtime: 24 call site fanno `onClick={openCreate}`, dove React
+           passa un MouseEvent come primo argomento. Con un parametro dichiarato
+           (o con un overload che lo nasconde) quell'evento viene letto come
+           `params`: in modalita' pagina finisce serializzato nella query string
+           (`/new?_reactName=onClick&amp;type=click&amp;...`), in modalita' modale
+           finisce dentro `mode.params` trascinandosi il nodo DOM e il fiber React
+           (errore reale osservato: "Converting circular structure to JSON").
+           Due funzioni DISTINTE, nessun overload: -->
+      openCreate: () =&gt; void                              <!-- INVARIATA: zero parametri, ignora gli argomenti -->
+      openCreateWith: (params: ModuleCreateParams) =&gt; void <!-- NUOVA: per i caller che passano params -->
+
+      <!-- Modalita' MODALE: lo stato porta il payload e il Sheet lo inoltra. -->
+      SheetState create branch: { kind: 'create'; params?: ModuleCreateParams }
+      Il Sheet monta: mode={{ type: 'create', params }}
+
+      <!-- Modalita' PAGINA: i params diventano query string. -->
+      navigate(`${basePath}/new`) se params assente o vuoto
+      navigate(`${basePath}/new?${new URLSearchParams(params)}`) altrimenti
+    </hook>
+
+    <page file="frontend/src/features/modules/module-form-page.tsx">
+      <!-- Converte la query string in params, cosi' il form ha UN SOLO canale. -->
+      In rotta `${basePath}/new`: legge i search params correnti e monta
+      mode={{ type: 'create', params }} (params assente se la query string e' vuota).
+    </page>
+
+    <adapter file="frontend/src/features/opportunities/opportunity-screens.tsx">
+      <!-- OpportunityFormScreen NON usa piu' useSearchParams. -->
+      leadId = parseEntityId(mode.type === 'create' ? String(mode.params?.lead_id ?? '') : undefined)
+      <!-- NB: i valori provenienti dalla query string sono sempre string, quelli
+           passati in modale possono essere number: normalizzare prima del parse. -->
+    </adapter>
+
+    <consumers>
+      <!-- leads-table.tsx: secondo opener sul domain 'opportunities'. -->
+      const { openCreateWith: openOpportunityWith, sheet: opportunitySheet } =
+        useModuleOpener(OPPORTUNITIES_DOMAIN, { onSaved: &lt;refresh della griglia leads&gt; })
+      case 'convert_to_opportunity': openOpportunityWith({ lead_id: row.id })
+      <!-- Entrambi gli sheet (leads + opportunities) vanno renderizzati. -->
+
+      <!-- lead-screens.tsx LeadDetailPageActions: Button al posto di Link. -->
+      onClick={() =&gt; openOpportunityWith({ lead_id: id })}
+      <!-- onSaved deve invalidare la query di dettaglio del lead, cosi' il bottone
+           passa da "Crea opportunita'" a "Vai all'opportunita'". -->
+    </consumers>
+  </data_contract>
+
+  <acceptance_criteria>
+
+    <!-- Infrastruttura condivisa -->
+    <criterion id="AC-001">Dato un modulo con open mode risolto a 'modal', quando si chiama openCreate({k: 'v'}), allora il Sheet viene montato e il FormScreen riceve mode = {type:'create', params:{k:'v'}}, senza alcuna navigazione.</criterion>
+    <criterion id="AC-002">Dato un modulo con open mode risolto a 'page', quando si chiama openCreate({lead_id: 7}), allora si naviga a `{basePath}/new?lead_id=7` e nessuno Sheet viene montato.</criterion>
+    <criterion id="AC-003">Dato openCreate() chiamato SENZA argomenti in modalita' 'page', allora si naviga a `{basePath}/new` senza punto interrogativo ne' query string vuota.</criterion>
+    <criterion id="AC-004">Dato openCreate() chiamato senza argomenti in modalita' 'modal', allora il FormScreen riceve mode = {type:'create'} con params undefined (retrocompatibilita': i 25 call site esistenti non cambiano comportamento).</criterion>
+    <criterion id="AC-005">Data la rotta `{basePath}/new?lead_id=7`, quando ModuleFormPage la monta, allora il FormScreen riceve mode = {type:'create', params:{lead_id:'7'}}.</criterion>
+    <criterion id="AC-006">Data la rotta `{basePath}/new` senza query string, quando ModuleFormPage la monta, allora il FormScreen riceve mode = {type:'create'} con params undefined o oggetto vuoto, e nessun consumer va in errore.</criterion>
+
+    <!-- Adapter opportunities -->
+    <criterion id="AC-010">Dato OpportunityFormScreen montato con mode = {type:'create', params:{lead_id: 7}} (number, da modale), allora il form si inizializza con il lead 7 (defaults richiesti, campi derivati bloccati).</criterion>
+    <criterion id="AC-011">Dato OpportunityFormScreen montato con mode = {type:'create', params:{lead_id: '7'}} (string, da query string), allora il comportamento e' identico ad AC-010.</criterion>
+    <criterion id="AC-012">Dato OpportunityFormScreen montato con mode = {type:'create'} senza params, allora il form si apre in creazione libera senza lead, senza errori e senza chiamare l'endpoint dei defaults.</criterion>
+    <criterion id="AC-013">Dato il deep-link diretto /opportunities/new?lead_id=7 aperto da URL, allora il form si precompila dal lead 7 esattamente come prima di questa spec (nessuna regressione sul percorso esistente).</criterion>
+
+    <!-- Consumers leads -->
+    <criterion id="AC-020">Dato un utente con open mode 'modal' per opportunities, quando attiva l'azione 'convert_to_opportunity' su una riga della tabella Lead, allora si apre la modale del form Opportunita' precompilata con quel lead e NON avviene alcuna navigazione.</criterion>
+    <criterion id="AC-021">Dato un utente con open mode 'page' per opportunities, quando attiva la stessa azione, allora si naviga a /opportunities/new?lead_id=N.</criterion>
+    <criterion id="AC-022">Dato il bottone "Crea opportunita'" nel dettaglio Lead con open mode 'modal', quando lo si clicca, allora si apre la modale precompilata e non avviene navigazione.</criterion>
+    <criterion id="AC-023">Dato lo stesso bottone con open mode 'page', quando lo si clicca, allora si naviga a /opportunities/new?lead_id=N.</criterion>
+    <criterion id="AC-024">Dopo aver salvato l'Opportunita' dalla modale aperta dalla tabella Lead, allora la griglia dei Lead viene aggiornata (la riga convertita non espone piu' l'azione di conversione).</criterion>
+    <criterion id="AC-025">Dopo aver salvato l'Opportunita' dalla modale aperta dal dettaglio Lead, allora il dettaglio si aggiorna e il bottone diventa "Vai all'opportunita'".</criterion>
+    <criterion id="AC-026">Il gating resta invariato: l'azione di riga e il bottone di dettaglio restano visibili solo con permesso opportunities.create, e il backend resta l'unica autorita' (nessun controllo spostato lato client).</criterion>
+
+  </acceptance_criteria>
+
+  <constraints>
+    Frontend-only: ZERO modifiche a backend/, nessuna migration, nessun endpoint nuovo.
+    Nessuna nuova dipendenza (package.json invariato).
+    RETROCOMPATIBILITA' VINCOLANTE: `params` e' OPZIONALE. I 25 call site esistenti di
+      openCreate() non vanno toccati e non devono cambiare comportamento (AC-004).
+    Il deep-link /opportunities/new?lead_id=N deve continuare a funzionare (AC-013):
+      e' il percorso gia' in produzione dalla spec 0044.
+    NON modificare resolve-open-mode.ts ne' la logica di risoluzione della spec 0042:
+      questa spec CONSUMA l'open mode, non lo ridefinisce.
+    NON usare il registro quick-create per questo flusso (ignora l'open mode).
+    Serializzazione: usare URLSearchParams, mai concatenazione manuale di stringhe.
+    I valori dei params sono scalari: normalizzare a string prima del parse nell'adapter,
+      perche' la query string produce sempre string e la modale puo' produrre number.
+    Gate typecheck: `cd frontend && npx tsc -b` — MAI `tsc --noEmit`, che in questo repo
+      non controlla alcun file ed esce sempre 0 (tsconfig root con "files": []).
+    Test: query per ruolo accessibile, non data-testid. QueryClient stabile per-test.
+    File entro 300 righe soft / 500 hard.
+  </constraints>
+
+</spec>
