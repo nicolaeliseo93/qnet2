@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\LeadStatuses\LeadStatusController;
 use App\Http\Controllers\LeadStatuses\LeadStatusForSelectController;
+use App\Http\Controllers\OpportunityStatuses\OpportunityStatusController;
+use App\Http\Controllers\OpportunityStatuses\OpportunityStatusForSelectController;
 use App\Http\Controllers\Sectors\SectorController;
 use App\Http\Controllers\Sectors\SectorForSelectController;
 use App\Http\Controllers\Sources\SourceController;
@@ -96,6 +98,29 @@ Route::get('lead-statuses/{leadStatus}', [LeadStatusController::class, 'show']);
 Route::post('lead-statuses', [LeadStatusController::class, 'store']);
 Route::match(['put', 'patch'], 'lead-statuses/{leadStatus}', [LeadStatusController::class, 'update']);
 Route::delete('lead-statuses/{leadStatus}', [LeadStatusController::class, 'destroy']);
+
+// Opportunity statuses CRUD (spec 0043): the Opportunity working-state
+// pick-list (BR-2 delete-guard lives in OpportunityStatusService).
+// Authorization (opportunity-statuses.view/create/update/delete) is
+// enforced server-side in OpportunityStatusController via
+// OpportunityStatusPolicy.
+// Minimal searchable/paginated list for entity-backed selects (ADR 0011).
+// Declared ABOVE opportunity-statuses/{opportunityStatus} so the literal
+// `for-select` segment wins over the bound wildcard. Gated by
+// opportunity-statuses.viewAny server-side in
+// OpportunityStatusForSelectController.
+Route::get('opportunity-statuses/for-select', OpportunityStatusForSelectController::class);
+
+// Custom-row resequencing (spec 0039, D-5): `sort_order` is server-managed,
+// this is the only way to change it. Declared ABOVE the bound wildcard for
+// the same literal-segment reason as `for-select`. Gated on
+// opportunity-statuses.update directly in OpportunityStatusController::reorder.
+Route::post('opportunity-statuses/reorder', [OpportunityStatusController::class, 'reorder']);
+
+Route::get('opportunity-statuses/{opportunityStatus}', [OpportunityStatusController::class, 'show']);
+Route::post('opportunity-statuses', [OpportunityStatusController::class, 'store']);
+Route::match(['put', 'patch'], 'opportunity-statuses/{opportunityStatus}', [OpportunityStatusController::class, 'update']);
+Route::delete('opportunity-statuses/{opportunityStatus}', [OpportunityStatusController::class, 'destroy']);
 
 // VAT rates CRUD: a standalone lookup used to assign a VAT percentage to a
 // Product. Authorization (vat-rates.view/create/update/delete) is enforced

@@ -45,6 +45,8 @@ function baseFields(t: TFunction) {
       .max(NAME_MAX_LENGTH, t('opportunities.form.nameMax')),
     // D-4: registry_id is the other required field (name is above).
     registry_id: requiredRelationId(t('opportunities.form.registryRequired')),
+    // Spec 0043 D-3: the opportunity status is a mandatory FK, mirrors registry_id.
+    opportunity_status_id: requiredRelationId(t('opportunities.form.opportunityStatusRequired')),
     referent_id: z.number().nullable(),
     commercial_id: z.number().nullable(),
     reporter_id: z.number().nullable(),

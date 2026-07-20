@@ -23,6 +23,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * (one row per funzione-aziendale + categoria-prodotto pair). User directive
  * 2026-07-17: `company_id`/`company`/`company_site_id`/`company_site`/
  * `operational_site_id`/`operational_site` are REMOVED entirely.
+ * `opportunity_status_id`/`opportunity_status` (spec 0043, D-3) is the
+ * mandatory working-state FK — NEVER null.
  */
 class OpportunityResource extends JsonResource
 {
@@ -46,6 +48,8 @@ class OpportunityResource extends JsonResource
             'supervisor' => $this->summarizeByName($this->supervisor),
             'source_id' => $this->source_id,
             'source' => $this->summarizeByName($this->source),
+            'opportunity_status_id' => $this->opportunity_status_id,
+            'opportunity_status' => $this->summarizeStatus($this->opportunityStatus),
             'product_lines' => $this->summarizeProductLines($this->productLines),
             'lead_id' => $this->lead_id,
             'lead' => $this->summarizeLead($this->lead),
@@ -66,6 +70,17 @@ class OpportunityResource extends JsonResource
     private function summarizeByName(?Model $related): ?array
     {
         return $related === null ? null : ['id' => $related->id, 'name' => $related->name];
+    }
+
+    /**
+     * The opportunity_status summary (spec 0043, D-3, mandatory: NEVER null
+     * on a persisted opportunity), including `color` for the FE badge.
+     *
+     * @return array{id: int, name: string, color: string|null}|null
+     */
+    private function summarizeStatus(?Model $status): ?array
+    {
+        return $status === null ? null : ['id' => $status->id, 'name' => $status->name, 'color' => $status->color];
     }
 
     /**

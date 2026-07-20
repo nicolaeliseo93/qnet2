@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Cog, Lock, Scaling, UserRound, type LucideIcon } from 'lucide-react'
+import { Cog, Lock, UserRound, type LucideIcon } from 'lucide-react'
 import {
   Card,
   CardContent,
@@ -18,15 +18,23 @@ import { AvatarForm } from '@/features/auth/avatar-form'
 import { ModuleOpenModeForm } from '@/features/modules/module-open-mode-form'
 import { UiScaleForm } from '@/features/appearance/ui-scale-form'
 
+interface SubSectionMeta {
+  id: string
+  titleKey: string
+}
+
 interface SectionMeta {
   id: string
   icon: LucideIcon
   titleKey: string
   descKey: string
+  // Sub-sections rendered as separate cards inside this section's panel; the
+  // rail lists them as children that scroll to their card.
+  children?: readonly SubSectionMeta[]
 }
 
-// Section identity shared by the sticky index and the content anchors; the array
-// order is the render + scroll order.
+// Section identity shared by the rail and the panel; the array order is the rail
+// order and the first entry is the initial selection.
 const SECTIONS: readonly SectionMeta[] = [
   {
     id: 'profile',
@@ -41,31 +49,32 @@ const SECTIONS: readonly SectionMeta[] = [
     descKey: 'settings.passwordSubtitle',
   },
   {
-    id: 'appearance',
-    icon: Scaling,
-    titleKey: 'settings.appearance.title',
-    descKey: 'settings.appearance.subtitle',
-  },
-  {
     id: 'system',
     icon: Cog,
     titleKey: 'settings.systemSettings.title',
     descKey: 'settings.systemSettings.subtitle',
+    children: [
+      { id: 'module-open', titleKey: 'settings.moduleOpenMode.title' },
+      { id: 'ui-scale', titleKey: 'settings.uiScale.title' },
+    ],
   },
 ]
 
-const SECTION_IDS = SECTIONS.map((section) => section.id)
-
 /**
- * Connected-user settings. Two-column on desktop (a sticky identity + section
- * index rail beside the section cards), collapsing to a single column below lg.
- * Each section is a white card whose fields sit on a muted panel so the inputs
- * read as elevated, distinct surfaces (see FieldPanel).
+ * Connected-user settings. Two-column on desktop: a sticky identity + section
+ * rail beside a single panel that shows only the selected section (the others
+ * are hidden), collapsing to a single column below lg. A section with children
+ * renders one card per child and the rail lists those children as scroll links.
  */
 export default function SettingsPage() {
   const { t } = useTranslation()
   const { user } = useAuth()
-  const activeSection = useActiveSection(SECTION_IDS)
+  const [activeSection, setActiveSection] = useState<string>(
+    SECTIONS[0]?.id ?? '',
+  )
+
+  const active =
+    SECTIONS.find((section) => section.id === activeSection) ?? SECTIONS[0]
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
@@ -102,82 +111,95 @@ export default function SettingsPage() {
           >
             {SECTIONS.map((section) => {
               const Icon = section.icon
-              const isActive = activeSection === section.id
+              const isActive = active?.id === section.id
               return (
-                <button
-                  key={section.id}
-                  type="button"
-                  onClick={() => scrollToSection(section.id)}
-                  aria-current={isActive ? 'true' : undefined}
-                  className={cn(
-                    'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                <div key={section.id} className="flex flex-col gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection(section.id)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={cn(
+                      'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    {t(section.titleKey)}
+                  </button>
+
+                  {isActive && section.children && (
+                    <div className="ml-7 flex flex-col gap-0.5 border-l pl-2">
+                      {section.children.map((child) => (
+                        <button
+                          key={child.id}
+                          type="button"
+                          onClick={() => scrollToSection(child.id)}
+                          className="rounded-md px-2.5 py-1 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+                        >
+                          {t(child.titleKey)}
+                        </button>
+                      ))}
+                    </div>
                   )}
-                >
-                  <Icon className="size-4 shrink-0" aria-hidden="true" />
-                  {t(section.titleKey)}
-                </button>
+                </div>
               )
             })}
           </nav>
         </aside>
 
         <div className="flex min-w-0 flex-col gap-6">
-          <SettingsSection
-            id="profile"
-            icon={UserRound}
-            title={t('settings.profileTitle')}
-            description={t('settings.profileSubtitle')}
-          >
-            <AvatarForm />
-            <Separator />
-            <FieldPanel>
-              <ProfileForm />
-            </FieldPanel>
-          </SettingsSection>
+          {active?.children
+            ? active.children.map((child) => (
+                <Card key={child.id} id={child.id} className="scroll-mt-6">
+                  <CardContent>
+                    <FieldPanel>{renderSubSection(child.id)}</FieldPanel>
+                  </CardContent>
+                </Card>
+              ))
+            : active && (
+                <SettingsSection
+                  icon={active.icon}
+                  title={t(active.titleKey)}
+                  description={t(active.descKey)}
+                >
+                  {active.id === 'profile' && (
+                    <>
+                      <AvatarForm />
+                      <Separator />
+                      <FieldPanel>
+                        <ProfileForm />
+                      </FieldPanel>
+                    </>
+                  )}
 
-          <SettingsSection
-            id="security"
-            icon={Lock}
-            title={t('settings.passwordTitle')}
-            description={t('settings.passwordSubtitle')}
-          >
-            <FieldPanel>
-              <PasswordForm />
-            </FieldPanel>
-          </SettingsSection>
-
-          <SettingsSection
-            id="appearance"
-            icon={Scaling}
-            title={t('settings.appearance.title')}
-            description={t('settings.appearance.subtitle')}
-          >
-            <FieldPanel>
-              <UiScaleForm />
-            </FieldPanel>
-          </SettingsSection>
-
-          <SettingsSection
-            id="system"
-            icon={Cog}
-            title={t('settings.systemSettings.title')}
-            description={t('settings.systemSettings.subtitle')}
-          >
-            <FieldPanel>
-              <ModuleOpenModeForm />
-            </FieldPanel>
-          </SettingsSection>
+                  {active.id === 'security' && (
+                    <FieldPanel>
+                      <PasswordForm />
+                    </FieldPanel>
+                  )}
+                </SettingsSection>
+              )}
         </div>
       </div>
     </div>
   )
 }
 
+/** Maps a system sub-section id to its form. */
+function renderSubSection(id: string): ReactNode {
+  switch (id) {
+    case 'module-open':
+      return <ModuleOpenModeForm />
+    case 'ui-scale':
+      return <UiScaleForm />
+    default:
+      return null
+  }
+}
+
 interface SettingsSectionProps {
-  id: string
   icon: LucideIcon
   title: string
   description: string
@@ -186,14 +208,13 @@ interface SettingsSectionProps {
 
 /** White section card with an icon-led header and a stacked body. */
 function SettingsSection({
-  id,
   icon: Icon,
   title,
   description,
   children,
 }: SettingsSectionProps) {
   return (
-    <Card id={id} className="scroll-mt-6">
+    <Card>
       <CardHeader>
         <div className="flex items-center gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -225,37 +246,7 @@ function FieldPanel({ children }: { children: ReactNode }) {
   )
 }
 
-/** Highlights the section currently in view for the sticky index. */
-function useActiveSection(ids: readonly string[]): string {
-  const [active, setActive] = useState(ids[0] ?? '')
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
-        if (visible) {
-          setActive(visible.target.id)
-        }
-      },
-      { rootMargin: '-20% 0px -70% 0px' },
-    )
-
-    ids.forEach((id) => {
-      const element = document.getElementById(id)
-      if (element) {
-        observer.observe(element)
-      }
-    })
-
-    return () => observer.disconnect()
-  }, [ids])
-
-  return active
-}
-
-/** Smooth-scrolls to a section, honoring reduced-motion. */
+/** Smooth-scrolls to a sub-section card, honoring reduced-motion. */
 function scrollToSection(id: string): void {
   const element = document.getElementById(id)
   if (!element) {

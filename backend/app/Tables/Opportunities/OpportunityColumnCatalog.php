@@ -39,7 +39,20 @@ final class OpportunityColumnCatalog
             self::derivedColumn('referent', 'opportunities.columns.referent'),
             self::derivedColumn('commercial', 'opportunities.columns.commercial'),
             self::derivedColumn('supervisor', 'opportunities.columns.supervisor'),
+            // Account managers (opportunity_user pivot, to-many), rendered as an
+            // avatar stack. Not sortable (a to-many value has no single sort
+            // key); filterable via whereHas on the manager's name.
+            [
+                'id' => 'managers',
+                'label' => 'opportunities.columns.managers',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => false,
+                'filterable' => true,
+                'filterType' => 'set',
+            ],
             self::derivedColumn('source', 'opportunities.columns.source'),
+            self::derivedColumn('opportunity_status', 'opportunities.columns.opportunityStatus'),
             self::aggregatedColumn('product_category', 'opportunities.columns.productCategory'),
             self::aggregatedColumn('business_function', 'opportunities.columns.businessFunction'),
             [

@@ -34,6 +34,7 @@ export function buildCreatePayload(
 
   const payload: CreateOpportunityPayload = {
     name: values.name.trim(),
+    opportunity_status_id: values.opportunity_status_id as number,
     commercial_id: values.commercial_id,
     reporter_id: values.reporter_id,
     supervisor_id: values.supervisor_id,
@@ -83,6 +84,9 @@ export function buildUpdatePayload(
   }
   if (values.registry_id !== original.registry_id) {
     payload.registry_id = values.registry_id as number
+  }
+  if (values.opportunity_status_id !== original.opportunity_status_id) {
+    payload.opportunity_status_id = values.opportunity_status_id as number
   }
   if (values.referent_id !== original.referent_id) {
     payload.referent_id = values.referent_id

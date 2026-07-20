@@ -7,6 +7,8 @@ import type { OpportunityLeadSelectionState } from '@/features/opportunities/use
 /** Every relation picker's edit-mode hydration, resolved once by the form hook (mirrors `RegistrySelectedItems`). */
 export interface OpportunitySelectedItems {
   registry: RelationFieldRef | null
+  /** Spec 0043 D-3: the mandatory opportunity status, always set in edit mode. */
+  opportunityStatus: RelationFieldRef | null
   referent: RelationFieldRef | null
   commercial: RelationFieldRef | null
   reporter: RelationFieldRef | null
@@ -17,6 +19,7 @@ export interface OpportunitySelectedItems {
 
 const EMPTY_SELECTED_ITEMS: OpportunitySelectedItems = {
   registry: null,
+  opportunityStatus: null,
   referent: null,
   commercial: null,
   reporter: null,
@@ -48,6 +51,7 @@ export function useOpportunitySelectedItems(
       const { opportunity } = mode
       return {
         registry: opportunity.registry,
+        opportunityStatus: opportunity.opportunity_status,
         referent: opportunity.referent,
         commercial: opportunity.commercial,
         reporter: opportunity.reporter,

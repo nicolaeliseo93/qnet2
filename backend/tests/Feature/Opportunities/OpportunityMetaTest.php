@@ -31,15 +31,16 @@ if (! function_exists('opportunityMetaUserWith')) {
 const OPPORTUNITY_FIELD_KEYS = [
     'name', 'registry_id',
     'referent_id', 'commercial_id', 'reporter_id', 'supervisor_id',
-    'source_id', 'product_lines', 'manager_slots', 'start_date', 'estimated_value',
+    'source_id', 'opportunity_status_id', 'product_lines', 'manager_slots', 'start_date', 'estimated_value',
     'expected_close_date', 'success_probability',
 ];
 
 // ---------------------------------------------------------------------------
-// AC-031 — GET /api/meta/opportunities: the 13 fields (amendment rev.3:
+// AC-031 — GET /api/meta/opportunities: the 14 fields (amendment rev.3:
 // business_function_id/product_category_id merged into product_lines; user
 // directive 2026-07-17: company_id/company_site_id/operational_site_id
-// REMOVED entirely), lead_id absent
+// REMOVED entirely; spec 0043, D-3: opportunity_status_id ADDED, mandatory),
+// lead_id absent
 // ---------------------------------------------------------------------------
 
 it('403 without opportunities.viewAny', function () {
@@ -49,7 +50,7 @@ it('403 without opportunities.viewAny', function () {
     $this->getJson('/api/meta/opportunities')->assertForbidden();
 });
 
-it('200: field catalogue has the 13 contract fields, in order, lead_id absent (AC-031)', function () {
+it('200: field catalogue has the 14 contract fields, in order, lead_id absent (AC-031)', function () {
     $actor = opportunityMetaUserWith(['viewAny', 'create']);
     Sanctum::actingAs($actor);
 
@@ -58,7 +59,8 @@ it('200: field catalogue has the 13 contract fields, in order, lead_id absent (A
         ->assertJsonPath('success', true);
 
     $keys = collect($response->json('data.fields'))->pluck('key')->all();
-    expect($keys)->toBe(OPPORTUNITY_FIELD_KEYS);
+    expect($keys)->toBe(OPPORTUNITY_FIELD_KEYS)
+        ->and($keys)->toHaveCount(14);
     expect($keys)->not->toContain('lead_id');
 
     foreach ($response->json('permissions.fields') as $field) {
@@ -119,7 +121,7 @@ it('permissions.fields are readonly when the actor may not create', function () 
 // AC-033 — the resource surfaces in the Role matrix's field catalogue too
 // ---------------------------------------------------------------------------
 
-it('GET /api/authorization/fields includes opportunities with its 13 fields (AC-033)', function () {
+it('GET /api/authorization/fields includes opportunities with its 14 fields (AC-033)', function () {
     foreach (['viewAny', 'create'] as $ability) {
         Permission::findOrCreate("roles.{$ability}");
     }

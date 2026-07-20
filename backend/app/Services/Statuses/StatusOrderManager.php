@@ -4,19 +4,21 @@ namespace App\Services\Statuses;
 
 use App\Enums\StatusSystemKey;
 use App\Models\LeadStatus;
+use App\Models\OpportunityStatus;
 use App\Models\PipelineStatus;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * `sort_order` placement/resequencing for both status configurators (spec
- * 0039, D-5): server-managed since the field left store/update. Generic on
- * the two sibling status models via a class-string (no speculative
- * interface — engineering.md §1.3): both share the exact same
- * name/system_key/sort_order shape, differing only in which system rows
- * pin to the tail (`$modelClass::SYSTEM_TAIL_KEYS` — PipelineStatus:
- * `[Closed]`; LeadStatus: `[Won, Discarded]`).
+ * `sort_order` placement/resequencing for every status configurator (spec
+ * 0039, D-5; extended to opportunity_statuses by spec 0043): server-managed
+ * since the field left store/update. Generic on the sibling status models
+ * via a class-string (no speculative interface — engineering.md §1.3): all
+ * three share the exact same name/system_key/sort_order shape, differing
+ * only in which system rows pin to the tail (`$modelClass::SYSTEM_TAIL_KEYS`
+ * — PipelineStatus: `[Closed]`; LeadStatus: `[Won, Discarded]`;
+ * OpportunityStatus: `[Won, Lost]`).
  *
  * Sequence invariant, maintained by every method here: Nuovo=0,
  * custom=10,20,..., then each SYSTEM_TAIL_KEYS row in declared order,
@@ -34,7 +36,7 @@ class StatusOrderManager
      * in the same transaction so they always stay last, in their declared
      * order.
      *
-     * @param  class-string<PipelineStatus>|class-string<LeadStatus>  $modelClass
+     * @param  class-string<PipelineStatus>|class-string<LeadStatus>|class-string<OpportunityStatus>  $modelClass
      */
     public function placeNew(string $modelClass): int
     {
@@ -56,9 +58,9 @@ class StatusOrderManager
      * missing) — validated here so the guard holds regardless of caller
      * (defense in depth beyond the FormRequest's own `distinct` rule).
      *
-     * @param  class-string<PipelineStatus>|class-string<LeadStatus>  $modelClass
+     * @param  class-string<PipelineStatus>|class-string<LeadStatus>|class-string<OpportunityStatus>  $modelClass
      * @param  array<int, int>  $orderedIds
-     * @return Collection<int, PipelineStatus|LeadStatus>
+     * @return Collection<int, PipelineStatus|LeadStatus|OpportunityStatus>
      *
      * @throws HttpException 422
      */
@@ -86,7 +88,7 @@ class StatusOrderManager
      * STEP apart, starting right after $lastCustomOrder (the last custom
      * row's sort_order, or 0 when there is none).
      *
-     * @param  class-string<PipelineStatus>|class-string<LeadStatus>  $modelClass
+     * @param  class-string<PipelineStatus>|class-string<LeadStatus>|class-string<OpportunityStatus>  $modelClass
      */
     private function bumpTail(string $modelClass, int $lastCustomOrder): void
     {
@@ -103,7 +105,7 @@ class StatusOrderManager
      * $orderedIds must be exactly the custom (non-system) id set: no
      * duplicates, no system-row id, none missing.
      *
-     * @param  class-string<PipelineStatus>|class-string<LeadStatus>  $modelClass
+     * @param  class-string<PipelineStatus>|class-string<LeadStatus>|class-string<OpportunityStatus>  $modelClass
      * @param  array<int, int>  $orderedIds
      *
      * @throws HttpException 422

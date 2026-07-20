@@ -21,7 +21,9 @@ use Illuminate\Database\Eloquent\Model;
  * per user directive 2026-07-17, is itself mandatory (at least one row to
  * create; never clearable to empty), so it joins the non-restrictable set.
  * User directive 2026-07-17: `company_id`/`company_site_id`/
- * `operational_site_id` are REMOVED entirely.
+ * `operational_site_id` are REMOVED entirely. `opportunity_status_id` (spec
+ * 0043, D-3) joins `name`/`registry_id` as a mandatory field — the
+ * working-state FK is NOT NULL at schema level, never hidable.
  */
 class OpportunitiesAuthorization extends AbstractResourceAuthorization
 {
@@ -48,6 +50,7 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('reporter_id', 'select'),
             new FieldDefinition('supervisor_id', 'select'),
             new FieldDefinition('source_id', 'select'),
+            new FieldDefinition('opportunity_status_id', 'select', mandatory: true),
             new FieldDefinition('product_lines', 'multiselect', mandatory: true),
             new FieldDefinition('manager_slots', 'multiselect'),
             new FieldDefinition('start_date', 'date'),
@@ -80,6 +83,7 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
             'reporter_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'supervisor_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'opportunity_status_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'product_lines' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'manager_slots' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'start_date' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),

@@ -123,17 +123,38 @@ return [
             ],
         ],
 
-        // Opportunities (spec 0040): a commercial deal against an Anagrafica,
-        // created manually or generated from a Lead (BR-1 read-only derivation).
-        // Promoted to a standalone top-level entry (user decision 2026-07-17):
-        // it is the only commercial record living outside the Marketing e Lead
-        // pipeline, so it reads as its own destination rather than a domain group.
+        // "Opportunita' e Commesse" (spec 0043, D-4): Opportunities (spec 0040,
+        // a commercial deal against an Anagrafica, created manually or
+        // generated from a Lead) gathered under one collapsible parent with
+        // their own working-state pick-list (opportunity statuses). No
+        // "Commesse" module exists yet in this iteration — only the group's
+        // name anticipates it. A route-less parent with children renders as a
+        // collapsible group; it is dropped automatically when the actor can
+        // see none of its children.
         [
-            'key' => 'opportunities',
-            'label' => 'navigation.opportunities',
-            'icon' => 'handshake',
-            'route' => '/opportunities',
-            'permission' => 'opportunities.view',
+            'key' => 'opportunities-group',
+            'label' => 'navigation.opportunitiesAndCommesse',
+            'icon' => 'briefcase',
+            'route' => null,
+            'permission' => null,
+            'children' => [
+                [
+                    'key' => 'opportunities',
+                    'label' => 'navigation.opportunities',
+                    'icon' => 'handshake',
+                    'route' => '/opportunities',
+                    'permission' => 'opportunities.view',
+                ],
+                [
+                    // Opportunity statuses (spec 0043): the Opportunity
+                    // working-state pick-list, delete-guarded (BR-2).
+                    'key' => 'opportunity-statuses',
+                    'label' => 'navigation.opportunityStatuses',
+                    'icon' => 'tag',
+                    'route' => '/opportunity-statuses',
+                    'permission' => 'opportunity-statuses.view',
+                ],
+            ],
         ],
 
         // "Anagrafiche" domain: every registry/contact master-data record under

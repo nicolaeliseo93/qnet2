@@ -18,12 +18,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * `registry_id` are mandatory (D-4); every other relation is optional.
  * `commercial`/`reporter` mirror Registry's own referent fields; `referent`
  * is NOT derivable (spec 0041 D-3), a plain always-editable field; `source`
- * is BR-1-derivable from the linked lead. No `code` (D-3: no opportunity
- * status/sequence in this iteration). Amendment rev.3: the former single
+ * is BR-1-derivable from the linked lead. Amendment rev.3: the former single
  * `business_function_id`/`product_category_id` columns are REPLACED by
  * `productLines()`, a one-to-many collection (see OpportunityProductLine).
  * User directive 2026-07-17: `company_id`/`company_site_id`/
  * `operational_site_id` and their relations are REMOVED entirely.
+ * `opportunity_status_id` (spec 0043, D-3): the mandatory working-state FK,
+ * NOT NULL at schema level, defaulted server-side to the system 'new' status
+ * when omitted (see OpportunityService).
  */
 #[Fillable([
     'name',
@@ -34,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'supervisor_id',
     'source_id',
     'lead_id',
+    'opportunity_status_id',
     'start_date',
     'estimated_value',
     'expected_close_date',
@@ -93,6 +96,15 @@ class Opportunity extends BaseModel
     public function source(): BelongsTo
     {
         return $this->belongsTo(Source::class);
+    }
+
+    /**
+     * The Opportunity's working-state classification (spec 0043, D-3):
+     * mandatory (NOT NULL at schema level), restrictOnDelete.
+     */
+    public function opportunityStatus(): BelongsTo
+    {
+        return $this->belongsTo(OpportunityStatus::class);
     }
 
     /**

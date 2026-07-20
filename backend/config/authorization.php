@@ -10,6 +10,7 @@ use App\Authorization\LeadsAuthorization;
 use App\Authorization\LeadStatusesAuthorization;
 use App\Authorization\OperationalSitesAuthorization;
 use App\Authorization\OpportunitiesAuthorization;
+use App\Authorization\OpportunityStatusesAuthorization;
 use App\Authorization\PipelineStatusesAuthorization;
 use App\Authorization\ProductCategoriesAuthorization;
 use App\Authorization\ProductsAuthorization;
@@ -68,6 +69,7 @@ return [
         'leads' => LeadsAuthorization::class,
         'lead-statuses' => LeadStatusesAuthorization::class,
         'opportunities' => OpportunitiesAuthorization::class,
+        'opportunity-statuses' => OpportunityStatusesAuthorization::class,
         'vat-rates' => VatRatesAuthorization::class,
     ],
 

@@ -8,7 +8,9 @@ use App\DataObjects\Opportunities\CreateOpportunityData;
 use App\DataObjects\Opportunities\UpdateOpportunityData;
 use App\Models\Lead;
 use App\Models\Opportunity;
+use App\Models\OpportunityStatus;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
+use App\Services\Statuses\SystemStatusGuard;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -16,6 +18,11 @@ use Illuminate\Support\Facades\DB;
  * update/delete plus the BR-1 lead-derivation on create. `managerSlots`
  * sync mirrors RegistryService::syncPivots/managerSyncMap verbatim (the
  * pivot shape is identical, `opportunity_user` mirroring `registry_user`).
+ *
+ * `opportunity_status_id` (spec 0043, D-3) is mandatory at the FormRequest
+ * layer, so the SystemStatusGuard fallback below only ever fires for a
+ * caller that bypasses validation (e.g. a seeder passing null) — defense in
+ * depth, mirroring the Lead/Project 'new'-status fallback precedent.
  */
 class OpportunityService
 {
@@ -34,6 +41,7 @@ class OpportunityService
         'reporter',
         'supervisor',
         'source',
+        'opportunityStatus',
         'productLines.businessFunction',
         'productLines.productCategory',
         'managers',
@@ -47,7 +55,10 @@ class OpportunityService
         'lead.campaign.project.productCategory',
     ];
 
-    public function __construct(private readonly LeadOpportunityDefaultsResolver $defaultsResolver) {}
+    public function __construct(
+        private readonly LeadOpportunityDefaultsResolver $defaultsResolver,
+        private readonly SystemStatusGuard $systemStatusGuard,
+    ) {}
 
     public function loadDetail(Opportunity $opportunity): Opportunity
     {
@@ -68,6 +79,10 @@ class OpportunityService
 
             if ($data->leadId !== null) {
                 $attributes = $this->applyLeadDefaults($attributes, $data->leadId);
+            }
+
+            if ($attributes['opportunity_status_id'] === null) {
+                $attributes['opportunity_status_id'] = $this->systemStatusGuard->resolveNewStatusId(OpportunityStatus::class);
             }
 
             $opportunity = Opportunity::create($attributes);

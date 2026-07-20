@@ -41,6 +41,12 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
+/** Spec 0043 D-3: the create form preselects this resolved "Nuova" status id. */
+const fetchSystemStatusIdMock = vi.fn<() => Promise<number | null>>()
+vi.mock('@/features/status-reorder/api', () => ({
+  fetchSystemStatusId: () => fetchSystemStatusIdMock(),
+}))
+
 const TEST_REGISTRY_WITH_DEFAULTS = 10
 const TEST_REGISTRY_WITHOUT_DEFAULTS = 20
 const TEST_BUSINESS_FUNCTION = 40
@@ -122,6 +128,9 @@ beforeEach(() => {
   fetchResourceMetaMock.mockReset()
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
 
+  fetchSystemStatusIdMock.mockReset()
+  fetchSystemStatusIdMock.mockResolvedValue(null)
+
   fetchForSelectMock.mockReset()
   fetchForSelectMock.mockImplementation(async (resource: string, params: { ids?: number[] }) => {
     if (resource === 'registries' && params?.ids?.includes(TEST_REGISTRY_WITH_DEFAULTS)) {
@@ -174,6 +183,7 @@ describe('OpportunityFormBody — fields render (AC-071)', () => {
 
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
     expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument()
+    expect(screen.getByTestId('select-Opportunity Status')).toBeInTheDocument()
     expect(screen.getByTestId('select-Contact')).toBeInTheDocument()
     expect(screen.getByTestId('select-Sales rep')).toBeInTheDocument()
     expect(screen.getByTestId('select-Reporter')).toBeInTheDocument()
@@ -183,6 +193,18 @@ describe('OpportunityFormBody — fields render (AC-071)', () => {
     // Amendment rev.3: no product-line row renders until "Add" is clicked (mirrors manager slots).
     expect(screen.getByRole('button', { name: 'Add product line' })).toBeInTheDocument()
     expect(screen.queryByTestId('select-Business function 1')).not.toBeInTheDocument()
+  })
+})
+
+describe('OpportunityFormBody — default status preselection (spec 0043 D-3)', () => {
+  it('preselects the resolved "Nuova" status id on create once it resolves', async () => {
+    fetchSystemStatusIdMock.mockResolvedValue(42)
+
+    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('value-Opportunity Status')).toHaveTextContent('42'))
   })
 })
 

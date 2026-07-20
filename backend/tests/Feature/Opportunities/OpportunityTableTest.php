@@ -56,9 +56,12 @@ it('GET /api/tables/opportunities/columns: 200 with the declared columns, 403 wi
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
+    // requirement changed (spec 0043, D-3): `opportunity_status` is a new
+    // relation-derived column, right after `source`. `managers` (opportunity_user
+    // pivot, avatar stack) sits next to `supervisor`.
     expect($ids)->toBe([
-        'name', 'registry', 'referent', 'commercial', 'supervisor', 'source', 'product_category',
-        'business_function', 'estimated_value', 'success_probability', 'start_date',
+        'name', 'registry', 'referent', 'commercial', 'supervisor', 'managers', 'source', 'opportunity_status',
+        'product_category', 'business_function', 'estimated_value', 'success_probability', 'start_date',
         'expected_close_date', 'created_at',
     ]);
 
@@ -68,11 +71,14 @@ it('GET /api/tables/opportunities/columns: 200 with the declared columns, 403 wi
         ->and($columns['estimated_value']['filterType'])->toBe('number');
 
     // Amendment rev.3: the 2 AGGREGATED (to-many) columns are filterable but
-    // NOT sortable — no single related row to order by (AC-105).
+    // NOT sortable — no single related row to order by (AC-105). The `managers`
+    // to-many column shares that shape: filterable (set), never sortable.
     expect($columns['product_category']['filterType'])->toBe('set')
         ->and($columns['product_category']['sortable'])->toBeFalse()
         ->and($columns['business_function']['filterType'])->toBe('set')
-        ->and($columns['business_function']['sortable'])->toBeFalse();
+        ->and($columns['business_function']['sortable'])->toBeFalse()
+        ->and($columns['managers']['filterType'])->toBe('set')
+        ->and($columns['managers']['sortable'])->toBeFalse();
 });
 
 // ---------------------------------------------------------------------------
@@ -178,6 +184,40 @@ it('rows: registry/referent/commercial/supervisor/source surface as {id, name} s
 
     expect($row['registry'])->toMatchArray(['id' => $registry->id, 'name' => 'Acme Spa']);
     expect($row['referent'])->toBeNull();
+});
+
+it('rows: supervisor carries avatar_url and managers surface as an ordered avatar-stack array filterable by name', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    $supervisor = User::factory()->create(['name' => 'Dana Ricci']);
+    $managerOne = User::factory()->create(['name' => 'Bruno Sala']);
+    $managerTwo = User::factory()->create(['name' => 'Aldo Neri']);
+    $opportunity = Opportunity::factory()->create(['supervisor_id' => $supervisor->id]);
+    $opportunity->managers()->attach([
+        $managerOne->id => ['position' => 1],
+        $managerTwo->id => ['position' => 2],
+    ]);
+    Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/opportunities/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $opportunity->id);
+
+    // supervisor: {id, name, avatar_url} (avatar_url null when none uploaded).
+    expect($row['supervisor'])->toMatchArray(['id' => $supervisor->id, 'name' => 'Dana Ricci'])
+        ->and($row['supervisor'])->toHaveKey('avatar_url');
+
+    // managers: ordered by pivot position, each an {id, name, avatar_url} summary.
+    expect(collect($row['managers'])->pluck('name')->all())->toBe(['Bruno Sala', 'Aldo Neri'])
+        ->and($row['managers'][0])->toHaveKeys(['id', 'name', 'avatar_url']);
+
+    // A set filter on managers scopes to opportunities having that manager.
+    $filtered = $this->postJson('/api/tables/opportunities/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['managers' => ['filterType' => 'set', 'values' => ['Bruno Sala']]],
+    ])->assertOk();
+
+    expect(collect($filtered->json('items'))->pluck('id')->all())->toBe([$opportunity->id]);
 });
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 use App\Models\BusinessFunction;
 use App\Models\Lead;
 use App\Models\Opportunity;
+use App\Models\OpportunityStatus;
 use App\Models\ProductCategory;
 use App\Models\Referent;
 use App\Models\Registry;
@@ -37,15 +38,16 @@ if (! function_exists('opportunityUserWith')) {
 
 if (! function_exists('mandatoryOpportunityFks')) {
     /**
-     * The mandatory create payload beyond `name`: `registry_id` (D-4) plus a
-     * valid one-row `product_lines` collection (user directive 2026-07-17:
-     * at least one row is required to create). Each a freshly created row.
-     * Tests asserting a specific `product_lines` payload merge this helper
-     * FIRST so their own value overrides it. User directive 2026-07-17:
+     * The mandatory create payload beyond `name`: `registry_id` (D-4),
+     * `opportunity_status_id` (spec 0043, D-3) plus a valid one-row
+     * `product_lines` collection (user directive 2026-07-17: at least one
+     * row is required to create). Each a freshly created row. Tests
+     * asserting a specific `product_lines` payload merge this helper FIRST
+     * so their own value overrides it. User directive 2026-07-17:
      * `company_id`/`company_site_id`/`operational_site_id` are REMOVED
      * entirely, no longer part of this payload.
      *
-     * @return array{registry_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{registry_id: int, opportunity_status_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
      */
     function mandatoryOpportunityFks(): array
     {
@@ -54,6 +56,7 @@ if (! function_exists('mandatoryOpportunityFks')) {
 
         return [
             'registry_id' => Registry::factory()->create()->id,
+            'opportunity_status_id' => OpportunityStatus::factory()->create()->id,
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],
@@ -63,8 +66,9 @@ if (! function_exists('mandatoryOpportunityFks')) {
 
 // ---------------------------------------------------------------------------
 // create (AC-012/AC-013/AC-014/AC-016/AC-017/AC-082 — i mandatory sono ora
-// SOLO name + registry_id; company_id/company_site_id/operational_site_id
-// sono stati rimossi per direttiva utente 2026-07-17)
+// name + registry_id + opportunity_status_id (spec 0043, D-3) +
+// product_lines; company_id/company_site_id/operational_site_id sono stati
+// rimossi per direttiva utente 2026-07-17)
 // ---------------------------------------------------------------------------
 
 it('create: with the mandatory fields only -> 201, every optional scalar null (AC-082)', function () {

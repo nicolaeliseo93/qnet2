@@ -11,6 +11,7 @@ use App\Tables\LeadsTableDefinition;
 use App\Tables\LeadStatusesTableDefinition;
 use App\Tables\OperationalSitesTableDefinition;
 use App\Tables\OpportunitiesTableDefinition;
+use App\Tables\OpportunityStatusesTableDefinition;
 use App\Tables\PipelineStatusesTableDefinition;
 use App\Tables\ProductCategoriesTableDefinition;
 use App\Tables\ProductsTableDefinition;
@@ -71,6 +72,7 @@ return [
         'lead-statuses' => LeadStatusesTableDefinition::class,
         'import-runs' => LeadImportsTableDefinition::class,
         'opportunities' => OpportunitiesTableDefinition::class,
+        'opportunity-statuses' => OpportunityStatusesTableDefinition::class,
         'vat-rates' => VatRatesTableDefinition::class,
     ],
 

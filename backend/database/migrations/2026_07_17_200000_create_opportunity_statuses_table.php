@@ -1,0 +1,52 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Opportunity status lookup entity (spec 0043): a clone 1:1 of the
+ * lead_statuses "system statuses" shape (spec 0039) — unlike lead_statuses'
+ * own history (create-migration first, system columns/rows added by a LATER
+ * migration), this brand-new table carries `system_key`/`group` and the
+ * THREE mandatory system rows from the very start (BR-1): "Nuova" (`new`,
+ * open, sort_order 0), "Chiusa con successo" (`won`, closed, sort_order 10),
+ * "Persa" (`lost`, closed, sort_order 20 — ALWAYS last, D-2). `name` is
+ * UNIQUE (BR-3). Referenced by `opportunities.opportunity_status_id` with
+ * `restrictOnDelete` (BR-2), added by a later migration (D-2/context: the
+ * opportunities create-migration is already committed).
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('opportunity_statuses', function (Blueprint $table) {
+            $table->id();
+            $table->string('name', 191)->unique();
+            $table->string('color', 32)->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->string('system_key', 16)->nullable()->unique();
+            $table->string('group', 16)->default('open');
+            $table->timestamps();
+        });
+
+        $this->seedSystemRows();
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('opportunity_statuses');
+    }
+
+    private function seedSystemRows(): void
+    {
+        $now = now();
+
+        DB::table('opportunity_statuses')->insert([
+            ['name' => 'Nuova', 'color' => 'slate', 'sort_order' => 0, 'system_key' => 'new', 'group' => 'open', 'created_at' => $now, 'updated_at' => $now],
+            ['name' => 'Chiusa con successo', 'color' => 'green', 'sort_order' => 10, 'system_key' => 'won', 'group' => 'closed', 'created_at' => $now, 'updated_at' => $now],
+            ['name' => 'Persa', 'color' => 'red', 'sort_order' => 20, 'system_key' => 'lost', 'group' => 'closed', 'created_at' => $now, 'updated_at' => $now],
+        ]);
+    }
+};

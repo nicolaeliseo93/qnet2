@@ -17,9 +17,10 @@ use Illuminate\Support\Facades\Gate;
  *
  * `name`/`estimated_value`/`success_probability`/`start_date`/
  * `expected_close_date`/`created_at` are real columns handled entirely by the
- * generic engine. `registry`/`referent`/`commercial`/`supervisor`/`source`
- * are simple relation-name derived columns (own FK on the opportunity),
- * resolved generically via DERIVED_RELATIONS — a `whereHas` set filter
+ * generic engine. `registry`/`referent`/`commercial`/`supervisor`/`source`/
+ * `opportunity_status` (spec 0043, D-3) are simple relation-name derived
+ * columns (own FK on the opportunity), resolved generically via
+ * DERIVED_RELATIONS — a `whereHas` set filter
  * (allow-listed columns only, never orderByRaw/whereRaw on raw input —
  * backend.md §8) and a correlated subquery sort, mirroring
  * LeadsTableDefinition. Amendment rev.3: `product_category`/
@@ -48,6 +49,8 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
         'commercial' => ['relation' => 'commercial', 'table' => 'referents', 'fk' => 'commercial_id'],
         'supervisor' => ['relation' => 'supervisor', 'table' => 'users', 'fk' => 'supervisor_id'],
         'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
+        // spec 0043: the mandatory working-state classification.
+        'opportunity_status' => ['relation' => 'opportunityStatus', 'table' => 'opportunity_statuses', 'fk' => 'opportunity_status_id'],
     ];
 
     /**
@@ -87,9 +90,11 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
     public function baseQuery(): Builder
     {
         // Eager-load every relation mapRow touches to avoid N+1 across the page.
+        // supervisor/managers pull their avatar relation too, so each row can
+        // project the inline avatar (data URI) without a per-row query.
         return Opportunity::query()->with([
-            'registry', 'referent', 'commercial', 'supervisor', 'source',
-            'productLines.businessFunction', 'productLines.productCategory',
+            'registry', 'referent', 'commercial', 'supervisor.avatar', 'source', 'opportunityStatus',
+            'managers.avatar', 'productLines.businessFunction', 'productLines.productCategory',
         ]);
     }
 
@@ -158,8 +163,10 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
             'registry' => $this->summarize($row->registry),
             'referent' => $this->summarize($row->referent),
             'commercial' => $this->summarize($row->commercial),
-            'supervisor' => $this->summarize($row->supervisor),
+            'supervisor' => $this->userSummary($row->supervisor),
+            'managers' => $row->managers->map(fn (User $user): array => $this->userSummary($user))->all(),
             'source' => $this->summarize($row->source),
+            'opportunity_status' => $this->summarize($row->opportunityStatus),
             'product_category' => $this->summarizeNames($row->productLines->pluck('productCategory')),
             'business_function' => $this->summarizeNames($row->productLines->pluck('businessFunction')),
             'estimated_value' => $row->estimated_value,
@@ -180,6 +187,26 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
         }
 
         return ['id' => $related->id, 'name' => $related->name];
+    }
+
+    /**
+     * A person summary carrying the inline avatar (data URI) so the supervisor
+     * and managers columns render a real avatar, not just initials — mirrors
+     * BusinessFunctionsTableDefinition::userSummary(). Null when unset.
+     *
+     * @return array{id: int, name: string, avatar_url: string|null}|null
+     */
+    private function userSummary(?User $user): ?array
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'avatar_url' => $user->avatarDataUri(),
+        ];
     }
 
     /**
@@ -237,6 +264,20 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
      */
     public function applyDerivedFilter(Builder $query, string $columnId, array $columnConfig, array $filter): bool
     {
+        // The `managers` (opportunity_user pivot, to-many) set filter: whereHas
+        // on the manager's name, mirroring the simple-relation filters below.
+        if ($columnId === 'managers') {
+            $values = $this->filterValues($filter);
+
+            if ($values !== []) {
+                $query->whereHas('managers', static function (Builder $relatedQuery) use ($values): void {
+                    $relatedQuery->whereIn('name', $values);
+                });
+            }
+
+            return true;
+        }
+
         $config = self::DERIVED_RELATIONS[$columnId] ?? self::AGGREGATED_RELATIONS[$columnId] ?? null;
 
         if ($config === null) {
@@ -310,6 +351,10 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
      */
     public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
     {
+        if ($columnId === 'managers') {
+            return $this->distinctManagerNames($search, $query, $limit);
+        }
+
         if (array_key_exists($columnId, self::AGGREGATED_RELATIONS)) {
             return $this->distinctAggregatedValues(self::AGGREGATED_RELATIONS[$columnId], $search, $query, $limit);
         }
@@ -331,6 +376,32 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
             ->orderBy('name')
             ->limit($limit)
             ->pluck('name')
+            ->map(static fn (mixed $name): string => (string) $name)
+            ->all();
+    }
+
+    /**
+     * Distinct account-manager names among the opportunities matching $query,
+     * via a join through the `opportunity_user` pivot — scoped by every OTHER
+     * active filter (Excel-like distinct values, spec 0004/0005).
+     *
+     * @param  Builder<Opportunity>  $query
+     * @return array<int, string>
+     */
+    private function distinctManagerNames(?string $search, Builder $query, int $limit): array
+    {
+        $opportunityIds = (clone $query)->select('opportunities.id');
+
+        return DB::table('users')
+            ->join('opportunity_user', 'opportunity_user.user_id', '=', 'users.id')
+            ->whereIn('opportunity_user.opportunity_id', $opportunityIds)
+            ->when($search !== null && $search !== '', function ($builder) use ($search): void {
+                $builder->where('users.name', 'like', '%'.$this->escapeLike($search).'%');
+            })
+            ->distinct()
+            ->orderBy('users.name')
+            ->limit($limit)
+            ->pluck('users.name')
             ->map(static fn (mixed $name): string => (string) $name)
             ->all();
     }

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec id="0043-opportunity-statuses-module" status="approved" owner="nicola" date="2026-07-17">
+
+  <goal>
+    Introdurre il modulo `opportunity-statuses`: clone 1:1 dello standard attuale di `lead-statuses`
+    (modello "system statuses", spec 0039). Descrive lo stato di lavorazione di un'Opportunita'
+    (name univoco, color token, sort_order server-managed, `system_key`, `group` open/pending/closed).
+    Ogni Opportunita' ha esattamente uno stato (FK OBBLIGATORIA). Gli stati di sistema sono
+    pre-seedati e non cancellabili; gli stati custom sono aggiungibili e riordinabili (drag&amp;drop).
+    Nuovo gruppo di navigazione "Opportunita' e Commesse" che raccoglie Opportunita' + Stati Opportunita'.
+  </goal>
+
+  <context>
+    <!-- Nomi VERIFICATI sul codice reale (esplorazione 2026-07-17), non ipotizzati. -->
+
+    <precedent>
+      Template 1:1 = `lead-statuses` (spec 0029 + 0039). Replica su tutti i layer. File di riferimento:
+      backend: app/Models/LeadStatus.php, app/Services/LeadStatusService.php,
+      app/Services/Statuses/{SystemStatusGuard,StatusOrderManager}.php (CONDIVISI, si estendono),
+      app/Policies/LeadStatusPolicy.php, app/Authorization/LeadStatusesAuthorization.php,
+      app/Http/Controllers/LeadStatuses/{LeadStatusController,LeadStatusForSelectController}.php,
+      app/Http/Requests/LeadStatuses/{Store,Update,ForSelect}LeadStatusRequest.php,
+      app/Http/Requests/Statuses/ReorderStatusesRequest.php (CONDIVISO, si riusa),
+      app/Http/Resources/{LeadStatusResource,LeadStatusForSelectResource}.php,
+      app/DataObjects/LeadStatuses/{Create,Update}LeadStatusData.php,
+      app/Tables/LeadStatusesTableDefinition.php + app/Tables/LeadStatuses/{LeadStatusColumnCatalog,LeadStatusAdvancedFilterCatalog}.php,
+      app/Enums/{StatusGroup,StatusSystemKey}.php (CONDIVISI), routes/api/lookups.php,
+      database/migrations/2026_07_16_130200_add_system_status_columns_to_lead_statuses_table.php,
+      database/migrations/2026_07_14_160100_add_lead_status_id_to_leads_table.php,
+      database/seeders/DemoLeadStatusSeeder.php + DemoDataSeeder.php.
+      frontend: features/lead-statuses/* (18 file), features/status-reorder/* (CONDIVISO, si riusa),
+      pages/lead-statuses-page.tsx, routes/router.tsx, quick-create/quick-create-entries/module-entries.tsx,
+      i18n/locales/{it,en}-lead-statuses.ts + {it,en}.ts (import+spread+navigation), features/leads/* (FK wiring).
+    </precedent>
+
+    <shared_not_cloned>
+      NON si clonano, si RIUSANO/estendono:
+      - Enum `App\Enums\StatusGroup` (Open/Pending/Closed) e `StatusSystemKey`. Al secondo si AGGIUNGE
+        UN SOLO caso: `Lost = 'lost'` (New, Won gia' presenti; Closed/Discarded restano per gli altri moduli).
+      - `App\Services\Statuses\SystemStatusGuard` e `StatusOrderManager`: si ESTENDONO le union-type dei
+        parametri e i docblock per includere `OpportunityStatus` (metodi assertDeletable/assertUpdatable/
+        resolveNewStatusId; placeNew/reorder generici su class-string). Nessuna logica nuova.
+      - `App\Http\Requests\Statuses\ReorderStatusesRequest` (ordered_ids): riusato dal controller.
+      - FE `features/status-reorder/*`: parametrizzato per resource, nessun file nuovo.
+    </shared_not_cloned>
+
+    <color_is_a_token>
+      color = token di `frontend/src/features/custom-fields/badge-color-tokens.ts` (BADGE_COLOR_TOKENS),
+      picker `ColorTokenPicker`. Backend `string('color',32)->nullable()`. Mai hex.
+    </color_is_a_token>
+
+    <permissions_are_derived>
+      `SyncPermissions` fa glob su app/Policies/*.php e deriva le abilities da BasePolicy. Creare
+      `OpportunityStatusPolicy extends BasePolicy` con `resource(): 'opportunity-statuses'` genera i
+      permessi `opportunity-statuses.{viewAny,view,create,update,delete,export,import,viewActivity}`.
+      I FIELD permissions si dichiarano in `OpportunityStatusesAuthorization` e si registrano in
+      config/authorization.php. Export gratuito via registrazione in config/tables.php. Import FUORI SCOPE.
+    </permissions_are_derived>
+
+    <opportunities_current_state>
+      NESSUN opportunity_status_id oggi (grep pulito). La create-migration di opportunities e' GIA'
+      COMMITTATA: la FK si aggiunge con una NUOVA migration, non modificando la create.
+    </opportunities_current_state>
+  </context>
+
+  <decisions>
+    <decision id="D-1">Parita' completa col modello system-statuses di lead-statuses (0039): system_key + group + reorder drag&amp;drop + guardie server-side + policy/permessi/AG Grid/export/activity. Niente stats (lead-statuses non ne ha).</decision>
+    <decision id="D-2">Stati di sistema: Nuova (new, open, PRIMO), Chiusa con successo (won, closed), Persa (lost, closed, SEMPRE ULTIMO). SYSTEM_TAIL_KEYS = [Won, Lost]. Creati nella migration di CREATE della tabella (configurazione obbligatoria, non dato demo).</decision>
+    <decision id="D-3">FK `opportunities.opportunity_status_id` OBBLIGATORIA: NOT NULL a schema, `required` in store, `sometimes|required` in update, campo `mandatory` in OpportunitiesAuthorization (non nascondibile). Backfill delle opportunita' esistenti sullo stato `new`. FE preseleziona `new` (useDefaultSystemStatusId), come i lead.</decision>
+    <decision id="D-4">Nuovo gruppo nav collassabile "Opportunita' e Commesse" (key `opportunities-group`): Opportunita' (spostato dal top-level) + Stati Opportunita'. Nessun modulo "Commesse" in questa iterazione (solo nome del gruppo). Label it "Opportunita' e Commesse", en "Opportunities &amp; Contracts".</decision>
+    <decision id="D-5">`name` UNIVOCO (unique DB + Rule::unique con ignore in update), come lead-statuses. sort_order SERVER-MANAGED (assente da store/update). group `required` in store, `sometimes` in update (Rule::enum), rifiutato con 422 sulle righe di sistema.</decision>
+    <decision id="D-6">Routes in `routes/api/lookups.php` accanto a lead-statuses (literal `for-select`/`reorder` PRIMA della wildcard `{opportunityStatus}`). Quick-create entry `opportunity-statuses.create` come lead-statuses.</decision>
+  </decisions>
+
+  <business_rules>
+    <rule id="BR-1" name="system-rows-in-migration">La create-migration `create_opportunity_statuses_table` include system_key(16, nullable, unique) e group(16, default 'open') e crea le 3 righe di sistema (Nuova/Chiusa con successo/Persa) con sort_order normalizzato (Nuova=0, won=10, lost=20). down() droppa la tabella. Su DB vuoto restano esattamente 3 righe (seed pulito le CONTIENE).</rule>
+    <rule id="BR-2" name="fk-required-backfill">La migration `add_opportunity_status_id_to_opportunities_table`: (1) aggiunge la colonna NULLABLE `constrained('opportunity_statuses')->restrictOnDelete()`; (2) SE esistono opportunita', backfill sullo stato con system_key='new'; (3) `->nullable(false)->change()`. down() droppa FK + colonna. Verificare su SQLite (rebuild tabella su ->change()).</rule>
+    <rule id="BR-3" name="unique-name">`name` univoco DB + Rule::unique('opportunity_statuses','name'), ignore($opportunityStatus->id) in update. Violazione => 422.</rule>
+    <rule id="BR-4" name="delete-guard">OpportunityStatusService::delete(): PRIMA systemStatusGuard->assertDeletable (422 se system), poi abort(409, 'This opportunity status is used by an opportunity and cannot be deleted.') se opportunities()->exists(). FK restrictOnDelete come difesa in profondita'. deleteModel() nella TableDefinition delega al service (bulk-delete rispetta le guardie).</rule>
+    <rule id="BR-5" name="system-guard">update di `group` su riga di sistema => 422 (SystemStatusGuard::assertUpdatable). delete di riga di sistema => 422. actionsFor() OMETTE 'delete' sulle righe di sistema (edit resta: name/color).</rule>
+    <rule id="BR-6" name="reorder">POST reorder: ordered_ids = permutazione ESATTA dei soli custom. StatusOrderManager resequenzia Nuova=0, custom 10,20,..., coda SYSTEM_TAIL_KEYS (won poi lost). 422 se include id di sistema/inesistente/duplicato o non copre tutti i custom. Gated `opportunity-statuses.update`.</rule>
+    <rule id="BR-7" name="select-order">forSelect() ordina sort_order asc, name asc, id asc; item {id, label:name, meta:{system_key}}; idratazione ids via appendHydratedIds.</rule>
+  </business_rules>
+
+  <scope>
+    <in>
+      <item>Backend modulo `opportunity-statuses` completo: 2 migration (create+seed system rows; add FK a opportunities), Model, Factory, DataObjects, FormRequest (store/update/for-select), Policy, Resource (+ForSelect), Service, Controller (+ForSelect + reorder), rotte, TableDefinition + ColumnCatalog + AdvancedFilterCatalog, Authorization, registrazioni config/{tables,authorization,navigation,activity-log}.php.</item>
+      <item>Estensione enum `StatusSystemKey::Lost` + union-type di SystemStatusGuard/StatusOrderManager per OpportunityStatus.</item>
+      <item>Wiring FK su Opportunity: model (Fillable + opportunityStatus() BelongsTo), OpportunityFactory, OpportunityResource (opportunity_status_id + opportunity_status {id,name,color}), Store/UpdateOpportunityRequest, CreateOpportunityData/UpdateOpportunityData, OpportunitiesTableDefinition (colonna derivata `opportunity_status` + eager-load + mapRow), OpportunityColumnCatalog + OpportunityAdvancedFilterCatalog, OpportunitiesAuthorization (mandatory), OpportunityService (default 'new' via SystemStatusGuard se assente).</item>
+      <item>Seeder: `DemoOpportunityStatusSeeder` in DemoDataSeeder PRIMA di DemoOpportunitySeeder; DemoOpportunitySeeder assegna uno stato.</item>
+      <item>Frontend feature `features/opportunity-statuses/` (clone di lead-statuses, con `opportunity-status-screens.tsx` auto-registrato); page, router (lazy+route), quick-create entry, i18n it/en (dominio + navigation + spread), StatusReorderToggle nella tabella.</item>
+      <item>Frontend wiring `opportunity_status_id`: types, schema, payload, form-body/classification-section (RelationSelectField required + prefill 'new'), detail, column-renderers (badge colorato), use-opportunity-form.</item>
+      <item>Navigazione: nuovo gruppo "Opportunita' e Commesse" con Opportunita' spostato dentro + Stati Opportunita'.</item>
+      <item>Test: Pest (Crud, Table, ForSelect, Meta, Security, Reorder, SystemGuard, DeleteGuard, Migration, Opportunity-FK) + Vitest (schema, payload, form, table).</item>
+    </in>
+    <out>
+      <item>Modulo "Commesse" (solo nome del gruppo nav in questa iterazione).</item>
+      <item>IMPORT del modulo (permesso esiste per uniformita' BasePolicy; nessuna ImportDefinition).</item>
+      <item>Stats per stato opportunita' (lead-statuses non ne ha).</item>
+      <item>Custom fields universali (0021), workflow/transizioni vincolate tra stati.</item>
+      <item>Nuove dipendenze npm/composer. Toccare i moduli esistenti lead-statuses/pipeline-statuses.</item>
+      <item>File del lavoro non committato sul branch estranei a questo scope.</item>
+    </out>
+  </scope>
+
+  <acceptance_criteria>
+    <criterion id="AC-001">migrate:fresh su SQLite verde: `opportunity_statuses` esiste con name(unique)/color/sort_order/system_key(unique,nullable)/group; su DB vuoto contiene ESATTAMENTE 3 righe di sistema (Nuova new/open/0, Chiusa con successo won/closed, Persa lost/closed/ultimo). down() reversibile.</criterion>
+    <criterion id="AC-002">Dopo permissions:sync esistono le permission `opportunity-statuses.{viewAny,view,create,update,delete,export,import,viewActivity}` senza righe di seeder.</criterion>
+    <criterion id="AC-003">POST { name:'Trattativa', color:'blue', group:'open' } con create -> 201 (sort_order automatico = ultimo custom prima della coda); name duplicato -> 422; group mancante/fuori enum -> 422. sort_order inviato -> ignorato.</criterion>
+    <criterion id="AC-004">PATCH: name/color su riga custom -> 200; update con proprio name invariato -> 200 (unique ignora se stesso); PATCH group su riga di SISTEMA -> 422 e nessuna modifica; name/color su riga di sistema -> 200.</criterion>
+    <criterion id="AC-005">DELETE stato custom non referenziato -> 204; referenziato da un'opportunita' -> 409; riga di sistema (single o bulk tabellare) -> 422. Tutti persistono quando 409/422.</criterion>
+    <criterion id="AC-006">Senza il permesso: show/store/patch/delete/for-select/reorder/tabella -> 403 (uno per ability).</criterion>
+    <criterion id="AC-007">POST reorder con permutazione esatta dei custom -> 200, custom 10,20,..., Nuova=0, coda won poi lost ultima; con id di sistema/mancante/duplicato -> 422; senza update -> 403.</criterion>
+    <criterion id="AC-008">GET /api/opportunity-statuses/for-select -> ordinati sort_order asc, rispetta search, idrata ids fuori pagina, item con meta.system_key.</criterion>
+    <criterion id="AC-009">Tabella opportunity-statuses: colonne name/color/sort_order/group(set, options StatusGroup::values())/created_at, defaultSort sort_order asc, export del dominio produce file; row action delete assente sulle righe di sistema.</criterion>
+    <criterion id="AC-010">GET /api/meta/opportunity-statuses espone i field permission per name(mandatory)/color/group; ruolo ristretto su color non puo' scriverlo.</criterion>
+    <criterion id="AC-011">Schema opportunities ha opportunity_status_id NOT NULL con restrictOnDelete; down+up reversibile; le opportunita' preesistenti sono backfillate su system_key='new'.</criterion>
+    <criterion id="AC-012">POST /api/opportunities SENZA opportunity_status_id -> 422; con valido -> 201 e OpportunityResource espone opportunity_status {id,name,color}. Cancellare uno stato usato da un'opportunita' -> 409.</criterion>
+    <criterion id="AC-013">Riga tabella opportunities: cella `opportunity_status` = {id,name,color}, colonna filtrabile `set`/relation e ordinabile (allow-list, zero raw su input).</criterion>
+    <criterion id="AC-014">(FE) Form stato: name(required) + ColorTokenPicker + group(Select 3 opzioni, disabilitato su riga di sistema); niente input sort_order; save con name vuoto -> errore, nessuna chiamata API.</criterion>
+    <criterion id="AC-015">(FE) Tabella opportunity-statuses: cella color = swatch+label, badge group (dot); StatusReorderSheet con righe di sistema pinnate non trascinabili e reorder dei custom persistito via POST reorder.</criterion>
+    <criterion id="AC-016">(FE) Form opportunita' mostra select "Stato Opportunita'" OBBLIGATORIA, preselezionata su 'new', con quick-create "+" che crea uno stato e lo seleziona senza reload; badge colorato nella tabella opportunita'.</criterion>
+    <criterion id="AC-017">Voce "Stati Opportunita'" e "Opportunita'" compaiono nel gruppo "Opportunita' e Commesse" solo coi rispettivi permessi; rotta /opportunity-statuses gated da &lt;Can permission="opportunity-statuses.viewAny"&gt;.</criterion>
+    <criterion id="AC-018">Suite completa VERDE: Pest full, Vitest full, Pint --test, ESLint, tsc --noEmit. Nessuna regressione su opportunities/leads/lead-statuses/pipeline-statuses.</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>ZERO nuove dipendenze (composer/npm) — @dnd-kit gia' presente (0039).</item>
+    <item>Authorization SEMPRE server-side: Policy su ogni endpoint, viewAny fail-safe sulla TableDefinition; regole di sistema nel Service/Guard, mai solo FE.</item>
+    <item>Nessun whereRaw/orderByRaw su input: sort/filtri da allow-list; `group` e' parola riservata MySQL -> solo query/schema builder.</item>
+    <item>Layering Controller(thin) -> FormRequest -> Service -> DTO -> Resource -> Policy. Delete-guard nel Service. `#[Fillable]` attributo (mai $fillable). Mai model raw: sempre Resource. Mai $request->only() nudo.</item>
+    <item>Riuso senza duplicazione: enum, SystemStatusGuard, StatusOrderManager, ReorderStatusesRequest, features/status-reorder condivisi. system_key MAI in Fillable.</item>
+    <item>Seed pulito intoccabile: righe di sistema in MIGRAZIONE; dati demo solo in Demo*Seeder via DemoDataSeeder (idempotenti).</item>
+    <item>File &lt;= 300 righe (soft) / 500 (hard). Zero dead code, zero emoji, identificatori in inglese; label i18n it/en.</item>
+    <item>Definition of Done: Pint + Pest + ESLint + tsc --noEmit + Vitest ESEGUITI. Nessun commit senza ordine esplicito (CLAUDE.md §3.6).</item>
+  </constraints>
+
+</spec>

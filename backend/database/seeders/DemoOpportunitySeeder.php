@@ -127,6 +127,9 @@ class DemoOpportunitySeeder extends Seeder
             supervisorId: $this->maybePick($supervisors, $index + 7, $faker, 60)?->id,
             sourceId: $this->maybePick($sources, $index + 8, $faker, 50)?->id,
             leadId: null,
+            // spec 0043, D-3: null lets OpportunityService fall back to the
+            // system 'new' status (SystemStatusGuard::resolveNewStatusId).
+            opportunityStatusId: null,
             managerSlots: $this->maybeManagerSlots($supervisors, $faker),
             productLines: $this->maybeProductLines($productLineCandidates, $index + 9, $faker, 50),
             startDate: $faker->optional()->date(),
@@ -160,6 +163,9 @@ class DemoOpportunitySeeder extends Seeder
                 supervisorId: $this->maybePick($supervisors, $index, $faker, 50)?->id,
                 sourceId: null,
                 leadId: $lead->id,
+                // spec 0043, D-3: null lets OpportunityService fall back to
+                // the system 'new' status (SystemStatusGuard::resolveNewStatusId).
+                opportunityStatusId: null,
                 managerSlots: $this->maybeManagerSlots($supervisors, $faker),
                 productLines: null,
                 startDate: $faker->optional()->date(),

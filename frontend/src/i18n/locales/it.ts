@@ -22,6 +22,7 @@ import { campaigns } from './it-campaigns'
 import { leads } from './it-leads'
 import { opportunities } from './it-opportunities'
 import { leadStatuses } from './it-lead-statuses'
+import { opportunityStatuses } from './it-opportunity-statuses'
 import { leadImports } from './it-lead-imports'
 import { businessFunctions } from './it-business-functions'
 import { moduleStats, statsPanel } from './it-stats'
@@ -84,6 +85,8 @@ export const it: TranslationResources = {
     leads: 'Lead',
     leadStatuses: 'Stati lead',
     opportunities: 'Opportunità',
+    opportunityStatuses: 'Stati Opportunità',
+    opportunitiesAndCommesse: 'Opportunità e Commesse',
     imports: 'Importa lead',
     pipelineStatuses: 'Stati progetto/campagna',
     marketingLeads: 'Marketing e Lead',
@@ -321,10 +324,6 @@ export const it: TranslationResources = {
       title: 'Impostazioni sistema',
       subtitle: 'Preferenze di sistema del gestionale.',
     },
-    appearance: {
-      title: 'Aspetto',
-      subtitle: "Regola la dimensione dell'interfaccia a tuo piacimento.",
-    },
     uiScale: {
       title: 'Risoluzione interfaccia',
       subtitle:
@@ -468,5 +467,6 @@ export const it: TranslationResources = {
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
   opportunities: { ...opportunities, stats: moduleStats.opportunities },
+  opportunityStatuses,
   importRuns: { stats: moduleStats.importRuns },
 }

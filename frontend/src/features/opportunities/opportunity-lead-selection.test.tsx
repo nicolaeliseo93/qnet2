@@ -44,9 +44,16 @@ vi.mock('@/features/authorization/api', () => ({
   fetchResourceMeta: () => fetchResourceMetaMock(),
 }))
 
+/** Spec 0043 D-3: the create form preselects this resolved "Nuova" status id. */
+const fetchSystemStatusIdMock = vi.fn<() => Promise<number | null>>()
+vi.mock('@/features/status-reorder/api', () => ({
+  fetchSystemStatusId: () => fetchSystemStatusIdMock(),
+}))
+
 const TEST_REGISTRY_ID = 10
 const TEST_LEAD_ID = 900
 const TEST_LEAD_ALREADY_LINKED_ID = 901
+const TEST_OPPORTUNITY_STATUS_ID = 5
 
 /** Fixed selection ids exposed per field (by accessible trigger label), mirrors `opportunity-form-body.test.tsx`. */
 const SELECT_IDS: Record<string, number[]> = {
@@ -138,6 +145,8 @@ function editOpportunity(
     supervisor: null,
     source_id: 20,
     source: { id: 20, name: 'Web' },
+    opportunity_status_id: TEST_OPPORTUNITY_STATUS_ID,
+    opportunity_status: { id: TEST_OPPORTUNITY_STATUS_ID, name: 'Nuova', color: 'slate' },
     product_lines: [
       {
         id: 500,
@@ -168,6 +177,9 @@ beforeEach(() => {
   createOpportunityMock.mockReset()
   fetchResourceMetaMock.mockReset()
   fetchResourceMetaMock.mockResolvedValue({ fields: [], permissions: FULL_PERMISSIONS })
+
+  fetchSystemStatusIdMock.mockReset()
+  fetchSystemStatusIdMock.mockResolvedValue(TEST_OPPORTUNITY_STATUS_ID)
 
   fetchForSelectMock.mockReset()
   fetchForSelectMock.mockResolvedValue(EMPTY_PAGE)
@@ -271,12 +283,20 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
     screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
     await waitFor(() => expect(screen.getByTestId('disabled-Registry')).toHaveTextContent('true'))
+    // Spec 0043 D-3: wait for the preselected system "Nuova" status so the
+    // mandatory field is non-null before Save.
+    await waitFor(() =>
+      expect(screen.getByTestId('value-Opportunity Status')).toHaveTextContent(
+        String(TEST_OPPORTUNITY_STATUS_ID),
+      ),
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createOpportunityMock).toHaveBeenCalledTimes(1))
     const payload = createOpportunityMock.mock.calls[0][0]
     expect(payload.lead_id).toBe(TEST_LEAD_ID)
+    expect(payload.opportunity_status_id).toBe(TEST_OPPORTUNITY_STATUS_ID)
     expect(payload).not.toHaveProperty('registry_id')
     // AC-051: referent_id is no longer among the locked fields — it is sent
     // like any other free field (here still unset by the user).

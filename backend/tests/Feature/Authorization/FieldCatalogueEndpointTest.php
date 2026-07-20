@@ -70,7 +70,8 @@ it('200 with the catalogue for users and roles, keys matching each resolver\'s f
     // `sources`, `sectors` AND `company-sites`, spec 0019 `tags`, spec 0020
     // `registries`, spec 0021 `custom-fields`, spec 0023 `pipeline-statuses`,
     // `projects` AND `campaigns`, spec 0024 `leads`, spec 0029
-    // `lead-statuses`, spec 0040 `opportunities`,
+    // `lead-statuses`, spec 0040 `opportunities`, spec 0043
+    // `opportunity-statuses`,
     // `vat-rates` (VAT-rate lookup for products), all in the same generic
     // registry (config/authorization.php), so this registry-driven catalogue
     // legitimately grows to include them. `import-runs` is NOT here: its meta
@@ -80,7 +81,7 @@ it('200 with the catalogue for users and roles, keys matching each resolver\'s f
         'users', 'roles', 'business-functions', 'companies', 'company-sites', 'operational-sites', 'referent-types',
         'referents', 'attributes', 'custom-fields', 'product-categories', 'products', 'sources', 'sectors', 'tags',
         'registries', 'pipeline-statuses', 'projects', 'campaigns', 'leads', 'lead-statuses',
-        'opportunities', 'vat-rates',
+        'opportunities', 'opportunity-statuses', 'vat-rates',
     ]);
 
     $userFieldKeys = collect($resources['users']['fields'])->pluck('key')->all();

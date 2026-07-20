@@ -67,10 +67,13 @@ class DemoDataSeeder extends Seeder
         // (mandatory, BR-1/D-1) plus DemoOperationalSiteSeeder/DemoSourceSeeder/
         // DemoUsersSeeder (optional) — must run after all of them.
         $this->call(DemoLeadSeeder::class);
+        $this->call(DemoOpportunityStatusSeeder::class);
         // Depends on DemoRegistrySeeder (mandatory) plus every optional lookup
         // above (company/company-sites/operational-sites/business-functions/
-        // referents/users/sources/product-categories) and DemoLeadSeeder (for
-        // the BR-1 from-lead batch) — must run after all of them.
+        // referents/users/sources/product-categories), DemoLeadSeeder (for
+        // the BR-1 from-lead batch) and DemoOpportunityStatusSeeder (spec
+        // 0043, opportunity_status_id is mandatory) — must run after all of
+        // them.
         $this->call(DemoOpportunitySeeder::class);
         // Needs users (avatars) and company sites (logos) already seeded above;
         // attaches demo files through the real HasAttachments write path.

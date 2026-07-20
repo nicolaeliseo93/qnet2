@@ -9,6 +9,8 @@ function values(overrides: Partial<OpportunityFormValues> = {}): OpportunityForm
   return {
     name: 'Enterprise deal',
     registry_id: 1,
+    // Spec 0043 D-3: mandatory FK, mirrors registry_id.
+    opportunity_status_id: 5,
     referent_id: null,
     commercial_id: null,
     reporter_id: null,
@@ -31,6 +33,8 @@ function original(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail
     name: 'Enterprise deal',
     registry_id: 1,
     registry: { id: 1, name: 'Acme S.p.A.' },
+    opportunity_status_id: 5,
+    opportunity_status: { id: 5, name: 'New', color: 'slate' },
     referent_id: null,
     referent: null,
     commercial_id: null,
@@ -63,6 +67,7 @@ describe('buildCreatePayload', () => {
     expect(payload).toEqual({
       name: 'Enterprise deal',
       registry_id: 1,
+      opportunity_status_id: 5,
       referent_id: null,
       commercial_id: null,
       reporter_id: null,
@@ -167,6 +172,12 @@ describe('buildUpdatePayload', () => {
 
   it('includes only the changed registry_id', () => {
     expect(buildUpdatePayload(values({ registry_id: 2 }), original())).toEqual({ registry_id: 2 })
+  })
+
+  it('includes only the changed opportunity_status_id', () => {
+    expect(buildUpdatePayload(values({ opportunity_status_id: 6 }), original())).toEqual({
+      opportunity_status_id: 6,
+    })
   })
 
   it('includes a relation cleared back to null', () => {

@@ -18,7 +18,9 @@ use Illuminate\Validation\Rule;
 /**
  * Validates the payload for PUT/PATCH /api/opportunities/{opportunity}
  * (spec 0040). Every field is `sometimes` (partial PATCH), never null once
- * touched for `name` (mandatory). `lead_id` is ALWAYS `prohibited` (BR-2,
+ * touched for `name` (mandatory) — `opportunity_status_id` (spec 0043, D-3)
+ * joins that never-null set: `sometimes|required`, the FK cannot be cleared.
+ * `lead_id` is ALWAYS `prohibited` (BR-2,
  * immutable once set). When $opportunity carries a `lead_id`, its 2
  * BR-1-derivable fields are re-resolved against the CURRENT lead/campaign
  * state (LeadOpportunityDefaultsResolver — same source as create): a
@@ -71,6 +73,7 @@ class UpdateOpportunityRequest extends FormRequest
             'reporter_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
             'supervisor_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')],
             'source_id' => $this->lockableRule($locked, 'source_id', 'sources'),
+            'opportunity_status_id' => ['sometimes', 'required', 'integer', Rule::exists('opportunity_statuses', 'id')],
             'lead_id' => ['prohibited'],
             'start_date' => ['sometimes', 'nullable', 'date'],
             'estimated_value' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999999999.99'],

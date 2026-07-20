@@ -14,6 +14,18 @@ export interface OpportunityRelationRef {
   name: string
 }
 
+/**
+ * The linked opportunity status's identity, as exposed by
+ * `OpportunityResource.opportunity_status` (spec 0043). Unlike the other
+ * relations, this one is NEVER null: the FK is NOT NULL, every opportunity
+ * always has a status.
+ */
+export interface OpportunityStatusRef {
+  id: number
+  name: string
+  color: string | null
+}
+
 /** The linked lead's identity, as exposed by `OpportunityResource.lead` (the lead's referent name, BR-1). */
 export interface OpportunityLeadRef {
   id: number
@@ -53,6 +65,9 @@ export interface OpportunityDetail {
   name: string
   registry_id: number
   registry: OpportunityRelationRef | null
+  /** Spec 0043 D-3: the opportunity's status. FK is NOT NULL, always present. */
+  opportunity_status_id: number
+  opportunity_status: OpportunityStatusRef
   referent_id: number | null
   referent: OpportunityRelationRef | null
   commercial_id: number | null
@@ -109,6 +124,8 @@ export interface CreateOpportunityPayload {
    * the single place that decides whether to include it.
    */
   registry_id?: number
+  /** Spec 0043 D-3: required by the Zod schema before submit, always sent on create. */
+  opportunity_status_id?: number | null
   referent_id?: number | null
   commercial_id?: number | null
   reporter_id?: number | null

@@ -4,6 +4,7 @@ import type { Control } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { RelationSelectField } from '@/components/form/relation-select-field'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
+import { OPPORTUNITY_STATUSES_FOR_SELECT_RESOURCE } from '@/features/opportunity-statuses/for-select-api'
 import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
 import type { OpportunitySelectedItems } from '@/features/opportunities/use-opportunity-selected-items'
 
@@ -44,6 +45,18 @@ export function OpportunityClassificationSection({
       className={className}
     >
       <div className="grid gap-3 sm:grid-cols-2">
+        <RelationSelectField
+          control={control}
+          name="opportunity_status_id"
+          metaKey="opportunity_status_id"
+          label={t('opportunities.form.opportunityStatus')}
+          resource={OPPORTUNITY_STATUSES_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('opportunities.form.opportunityStatusSearch')}
+          selected={selectedItems.opportunityStatus}
+          required
+          {...selectLabels}
+        />
+
         <RelationSelectField
           control={control}
           name="source_id"

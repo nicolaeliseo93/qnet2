@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Opportunity;
+use App\Models\OpportunityStatus;
 use App\Models\Registry;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -14,8 +15,8 @@ class OpportunityFactory extends Factory
     protected $model = Opportunity::class;
 
     /**
-     * Default: the 2 mandatory columns (D-4); every other (optional)
-     * relation stays null.
+     * Default: the 3 mandatory columns (D-4/spec 0043 D-3); every other
+     * (optional) relation stays null.
      *
      * @return array<string, mixed>
      */
@@ -24,6 +25,7 @@ class OpportunityFactory extends Factory
         return [
             'name' => fake()->company().' deal',
             'registry_id' => Registry::factory(),
+            'opportunity_status_id' => OpportunityStatus::factory(),
             'referent_id' => null,
             'commercial_id' => null,
             'reporter_id' => null,

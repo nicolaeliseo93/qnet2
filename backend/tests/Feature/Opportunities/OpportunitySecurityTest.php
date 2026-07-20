@@ -24,15 +24,18 @@ it('permissions:sync creates all 8 opportunities.* permissions', function () {
 it('navigation: the opportunities node only shows with opportunities.view (AC-080)', function () {
     Permission::findOrCreate('opportunities.view');
 
+    // requirement changed (spec 0043, D-4): `opportunities` moved from a
+    // standalone top-level entry into the "opportunities-group" collapsible
+    // parent (alongside the new `opportunity-statuses`) — was `management`.
     $withoutView = User::factory()->create();
     Sanctum::actingAs($withoutView);
-    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'opportunities-group'))
         ->not->toContain('opportunities');
 
     $withView = User::factory()->create();
     $withView->givePermissionTo('opportunities.view');
     Sanctum::actingAs($withView);
-    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'management'))
+    expect(navigationSectionKeys($this->getJson('/api/navigation')->json('data'), 'opportunities-group'))
         ->toContain('opportunities');
 });
 

@@ -10,6 +10,7 @@ use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\OperationalSite;
 use App\Models\Opportunity;
+use App\Models\OpportunityStatus;
 use App\Models\PipelineStatus;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -80,6 +81,9 @@ return [
         ],
         'opportunities' => [
             'model' => Opportunity::class,
+        ],
+        'opportunity-statuses' => [
+            'model' => OpportunityStatus::class,
         ],
         'pipeline-statuses' => [
             'model' => PipelineStatus::class,

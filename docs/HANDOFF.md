@@ -2,6 +2,182 @@
 
 > Injected at session start. Update at every green state.
 
+## FE+BE: MODULO OPPORTUNITY-STATUSES + FK + GRUPPO NAV (2026-07-17, spec 0043) — GREEN, NON COMMITTATO
+
+Richiesta utente: stati per le opportunita' "come gli stati lead" (parita' completa col modello
+system-statuses 0039), in una nuova sezione nav "Opportunita' e Commesse" con dentro Opportunita' +
+il nuovo modulo. Decisioni (AskUserQuestion): (1) parita' completa; (2) solo gruppo nav + Stati
+Opportunita', NESSUN modulo Commesse ora; (3) stati di sistema Nuova/Chiusa con successo/Persa;
+(4) FK `opportunity_status_id` OBBLIGATORIA. Contratto congelato in docs/specs/0043-opportunity-statuses-module.xml.
+
+CLONE 1:1 di lead-statuses. Team: teammate backend + frontend (ownership disgiunta) + verifier.
+
+BACKEND (owner backend/): modulo completo clone di lead-statuses — Model OpportunityStatus
+(`#[Fillable(['name','color','sort_order','group'])]`, system_key MAI fillable, SYSTEM_TAIL_KEYS=[Won,Lost]),
+Service/Policy/Authorization/2 Controller(+reorder)/3 Request/2 Resource/2 DTO/TableDefinition+2 catalog/
+Factory/DemoOpportunityStatusSeeder (in DemoDataSeeder PRIMA di DemoOpportunitySeeder). 2 MIGRATION:
+create_opportunity_statuses_table (crea tabella + seed 3 righe di sistema nella up(): Nuova/new/open/0,
+Chiusa con successo/won/closed/10, Persa/lost/closed/20 — singola migration perche' tabella nuova) e
+add_opportunity_status_id_to_opportunities_table (nullable->backfill 'new'->NOT NULL, mirror lead_status_id).
+CONDIVISI ESTESI (retrocompat, no logica nuova): StatusSystemKey += case Lost='lost'; SystemStatusGuard e
+StatusOrderManager union-type += OpportunityStatus; AppServiceProvider Relation::enforceMorphMap +=
+'opportunity_status'=>OpportunityStatus::class (RICHIESTO da LogsModelActivity, scoperto via 500 reale nei test).
+REGISTRAZIONI: routes/api/lookups.php (for-select/reorder literal PRIMA di {opportunityStatus}),
+config/{tables,authorization,activity-log}.php, config/navigation.php (NUOVO gruppo 'opportunities-group'
+label 'navigation.opportunitiesAndCommesse' icon 'briefcase': 'opportunities' spostato dal top-level +
+'opportunity-statuses'). WIRING FK su Opportunity: Model (Fillable+opportunityStatus() BelongsTo), Factory,
+Resource (opportunity_status_id + opportunity_status {id,name,color} mai null), Store/UpdateOpportunityRequest
+(required/sometimes-required + exists), DTO (opportunityStatusId), OpportunitiesTableDefinition+ColumnCatalog+
+AdvancedFilterCatalog (colonna derivata 'opportunity_status', whereHas/subquery allow-list, zero raw),
+OpportunitiesAuthorization (campo mandatory), OpportunityService (ctor += SystemStatusGuard; create() default
+system 'new' se omesso). NOTA: OpportunitiesTableDefinition era GIA' 364 righe (>300 soft) prima del lavoro
+(anche per l'arricchimento celle concorrente); +8 righe nette da noi, NON splittato (scope) — candidato split.
+
+FRONTEND (owner frontend/src/): feature features/opportunity-statuses/ clone completo (api, for-select-api
+OPPORTUNITY_STATUSES_FOR_SELECT_RESOURCE, types, schema+payload+form+form-body+detail+table+column-renderers+
+screens auto-registrato via glob module-registry). CONDIVISA status-reorder/ riusata; SOLO types.ts esteso
+con 'lost' nella union SystemStatusKey. Registrazioni: pages/opportunity-statuses-page.tsx (<Can viewAny>),
+router.tsx (lazy+route), quick-create module-entries.tsx (entry opportunity-statuses.create), i18n
+{it,en}-opportunity-statuses.ts + spread + navigation.{opportunityStatuses,opportunitiesAndCommesse}
+(grouping nav resta al backend). WIRING opportunity_status_id in features/opportunities/: types
+(OpportunityStatusRef), schema (required via requiredRelationId come registry_id), payload, use-opportunity-
+selected-items (idratazione), use-opportunity-form (default + useDefaultSystemStatusId('opportunity-statuses',
+'new',!isEdit)), opportunity-classification-section (RelationSelectField required + quick-create),
+opportunity-detail (badge), column-renderers (StatusBadgeCell). Test opportunities esistenti adeguati al
+campo ora obbligatorio (requisito cambiato, dichiarato, non tampering).
+
+VERIFICATO dal verifier (output reale eseguito):
+- BE: pint --test (2 file rossi PRE-ESISTENTI fuori scope: PipelineStatusTest, CompanySiteUpdateTest);
+  pest --filter OpportunityStatus 67/67, Opportunit 187/187, Lead 317/317; FULL 3003 test, 2991 pass,
+  11 fail + 1 skip. Gli 11 fail PROVATI pre-esistenti (git blame): 10 asserzioni nav
+  `navigationSectionKeys('management'/'configuration')` in security test di moduli fuori-scope (la sezione
+  'management' fu rinominata in registries-group/products-group dal commit 6fc7942, PRIMA di questo lavoro;
+  il nostro diff di navigation NON tocca management/configuration) + 1 migration roles.description estranea.
+- migrate:fresh verde (61 migration); 3 righe di sistema esatte (tinker); rollback --step=2 pulito e
+  re-migrate ok; factory valorizza opportunity_status_id.
+- FE: tsc -b exit 0 (fix applicato: fixture opportunity-lead-selection.test.tsx priva di opportunity_status_id/
+  opportunity_status -> con ...overrides Partial diventava number|undefined; aggiunti al literal base);
+  eslint pulito; vitest FULL 270 file 1724 test, 1721 pass, 3 fail SOLO in table/cell-renderers.test.tsx
+  (aria-label it/en) PRE-ESISTENTE, file non toccato.
+- Contratto: OpportunityResource emette opportunity_status {id,name,color}; permissions:sync 8/8 abilities
+  opportunity-statuses.*; nessun whereRaw/orderByRaw su input; gruppo nav senza duplicati.
+
+DA VALUTARE (non bloccante): il verifier ha osservato 1 flaky su 5 run in OpportunityTableTest (ordine
+colonne con 'managers') SOLO in suite --filter=Opportunit; in isolamento passa 9/9 e codice/test coerenti.
+La colonna 'managers' viene dall'arricchimento celle concorrente (sezione sotto), non da questo lavoro.
+Sospetta flakiness del runner. Da approfondire se si vuole determinismo pieno.
+
+NESSUN COMMIT (in attesa di ok esplicito, CLAUDE.md §3.6).
+
+## FE+BE: OPPORTUNITIES TABLE — ARRICCHIMENTO CELLE COLONNE (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente: rendere la tabella Opportunità piu' leggibile "a colpo d'occhio" replicando l'approccio
+di Lead — colonne ricche (badge/avatar/icone/progress) invece di testo, LAYOUT INVARIATO (solo
+rappresentazione/organizzazione colonne). Decisioni utente (AskUserQuestion): scope = FE + piccoli ritocchi
+BE (avatar reale supervisor + colonna gestori); i 5 errori tsc preesistenti del feature 0043 (fixture senza
+`opportunity_status_id`) NON toccati da me (poi risultati risolti: `tsc -b --force` exit 0).
+
+MECCANISMO (grounding): ogni modulo ha una renderer map `columnId -> cella` in
+`features/<modulo>/column-renderers.tsx`; libreria condivisa celle ricche in `features/table/rich-cells.tsx`
+(`RelationCell` icona+tooltip, `StatusBadgeCell`, `CurrencyCell`, `DateCell`) + `features/table/user-cell.tsx`
+(`UserCell`/`UserStackCell` avatar+hover -> user detail sheet). Il BE `mapRow` deve emettere il valore
+strutturato che la cella si aspetta ({id,name,color}, {id,name,avatar_url}). Precedente avatar-stack:
+`BusinessFunctionsTableDefinition` colonna `users` (avatar_url via `$user->avatarDataUri()`).
+
+BACKEND (owner backend/):
+- `OpportunitiesTableDefinition`: baseQuery eager-load `supervisor.avatar` + `managers.avatar`; mapRow:
+  `supervisor` ora via nuovo `userSummary()` ({id,name,avatar_url}), aggiunta chiave `managers` (array
+  ordinato per pivot position, ogni item {id,name,avatar_url}); `applyDerivedFilter` branch `managers`
+  (whereHas('managers', whereIn name)); `distinctValues` branch `managers` (`distinctManagerNames` join
+  `opportunity_user`, allow-list, no raw SQL). managers NON sortable (ritorna false).
+- `OpportunityColumnCatalog`: nuova colonna `managers` dopo `supervisor` (type text, sortable:false,
+  filterable:true, filterType:set) — stessa forma di BusinessFunctions.users. Ordine colonne ora:
+  name, registry, referent, commercial, supervisor, MANAGERS, source, opportunity_status, product_category,
+  business_function, estimated_value, success_probability, start_date, expected_close_date, created_at.
+- `OpportunityTableTest`: aggiornata asserzione elenco colonne (+managers) + assert filterType/sortable
+  managers + nuovo test riga (supervisor.avatar_url, managers array ordinato, filtro set managers).
+
+FRONTEND (owner frontend/src/):
+- `opportunities/column-renderers.tsx` RISCRITTO: rimossi renderer locali "poveri", ora usa condivisi:
+  registry->RelationCell icon Building2, referent->UserRound, commercial->Briefcase, source->Radio;
+  estimated_value->CurrencyCell; start/expected_close->DateCell (shared); managers->UserStackCell;
+  supervisor->UserCell (ora avatar reale grazie a avatar_url dal BE); opportunity_status->StatusBadgeCell
+  (gia' 0043); created_at->DateTimeCell. NUOVO `ProbabilityCell` locale: barra `components/ui/progress`
+  (size xs) colorata per fascia (probabilityToneClass: <34 red, 34-66 amber, >=67 green) + testo %; la barra
+  e' `aria-hidden`, il testo % e' il valore accessibile. `NamesCell` locale resta per product_category/
+  business_function (BE invia stringa comma-joined, NON array -> lasciati come testo troncato+tooltip; per
+  multi-badge servirebbe il BE che invia array, fuori scope). Export `OPPORTUNITY_STATUS_BADGE_CLASSES`
+  mantenuto (usato da opportunity-detail.tsx).
+- NUOVO `opportunities/column-renderers.test.tsx` (23 casi): relazioni+icona, status badge, names, currency,
+  probability (%, clamp, tone per fascia, em dash), wiring supervisor/managers/created_at.
+- i18n it/en: chiave `opportunities.columns.managers` ('Gestori account' / 'Account managers').
+
+VERIFICATO (eseguito davvero):
+- BE: pest tests/Feature/Opportunities 102/102 (449 assert); pint --dirty --test pulito.
+- FE: vitest opportunities/column-renderers 23/23; user-cell + rich-cells verdi; tsc -b --force exit 0
+  (frontend intero); eslint file toccati exit 0.
+
+PREESISTENTE, NON MIO (segnalato): `features/table/cell-renderers.test.tsx > ContactsCell` 3 casi rossi
+(tooltip/copy button) — file condiviso NON toccato, clean/committato, failure indipendente dalla mia task.
+NIENTE COMMIT (in attesa).
+
+## FE+BE: UI SCALE — "RISOLUZIONE" 0-100 EXCEL-LIKE PER-UTENTE (2026-07-17) — GREEN, NON COMMITTATO
+
+Richiesta utente: un setting dove l'utente sceglie liberamente la "risoluzione" del sito (caratteri
+tabella + layout, grande/piccola) con uno slider 0-100 come lo zoom di Excel. Decisioni (AskUserQuestion):
+(1) UNICO slider che scala tutta l'app + tabelle; (2) persistenza BACKEND per-utente (cross-device);
+(3) controllo SOLO in Impostazioni; (4) range 0-100 mappato su banda sicura 80%-130%, default 40 = 100%.
+
+CONTRATTO congelato (BE emette, FE consuma): campo utente `ui_scale` (int 0-100). Mapping lineare unico
+`percent = 80 + scale/2` (0->80%, 40->100% DEFAULT, 100->130%); `factor = percent/100`. Esposto/salvato
+via GET/PATCH /api/auth/me (NESSUN endpoint nuovo). UserResource ora espone `ui_scale ?? 40` (mai null).
+
+BACKEND (owner backend/):
+- Migrazione `2026_07_17_190000_add_ui_scale_to_users_table.php`: `unsignedTinyInteger('ui_scale')->nullable()`
+  (reversibile, up+down verificati). `ui_scale` in User #[Fillable] + cast 'integer' (campo display come
+  `locale`, non guarded: nessun rischio escalation, validato 0-100). UpdateProfileRequest: regola
+  `['sometimes','integer','between:0,100']` + in accountAttributes() (docblock -> array<string,mixed>).
+  UserResource: const UI_SCALE_DEFAULT=40, chiave `ui_scale`. Nuovo test UiScaleTest.php (default/persist/
+  bounds 0&100/reject >100,<0,non-int/no-regressione con locale/self-scope).
+
+FRONTEND (owner frontend/src/):
+- NUOVO modulo `features/appearance/`: `ui-scale.ts` (costanti UI_SCALE_MIN/MAX/STEP/DEFAULT,
+  SCALE_PERCENT_MIN/MAX + fn pure clampScale/scaleToPercent/scaleToFactor); `ui-scale-context.ts`
+  (UiScaleContext + hook useUiScale, SPLIT dal provider come user-detail-sheet, cosi' la data-table dipende
+  solo dall'hook leggero); `ui-scale-provider.tsx` (UiScaleProvider: applica font-size % su <html> via
+  effect, sync dal server con pattern "adjust-state-during-render" -- NON effect, lint set-state-in-effect;
+  espone scale/factor/setScale); `ui-scale-form.tsx` (Slider shadcn 0-100 + preview % + reset, save partial
+  PATCH /auth/me { ui_scale } + prime cache authKeys.me, pattern identico a module-open-mode-form).
+- App.tsx: <UiScaleProvider> montato DENTRO AuthProvider (legge useAuth), attorno a TooltipProvider.
+- data-table: tema estratto in NUOVO `components/data-table/data-table-theme.ts` (buildDataTableTheme(factor),
+  BASE_* px costanti, FILTER_FUNNEL_SVG) -- lo split e' stato NECESSARIO: data-table.tsx sfiorava il hard
+  limit 500 righe (ora 435). data-table.tsx consuma useUiScale().factor -> useMemo(buildDataTableTheme).
+  AG Grid usa px assoluti: NON segue il root font-size, va ricablato sul factor (fontSize/rowHeight/header*/
+  cellHorizontalPadding * factor, arrotondati).
+- auth/types.ts: `ui_scale: number` su User (obbligatorio) + `ui_scale?: number` su UpdateProfilePayload.
+  Aggiornate le 2 fixture User nei test (profile-form.test, module-open-mode-form.test: ui_scale:40).
+- settings-page: RISTRUTTURATA in 3 iterazioni volute dall'utente. Stato finale:
+  (a) PANNELLI COMMUTABILI: il rail seleziona la sezione attiva (activeSection state) e si renderizza SOLO
+      quel pannello (Profilo/Sicurezza/Impostazioni sistema). aria-current='page' sul tab attivo.
+  (b) 'Impostazioni sistema' ha FIGLI (SectionMeta.children: 'module-open' -> ModuleOpenModeForm,
+      'ui-scale' -> UiScaleForm). Nel rail, quando 'system' e' attivo, i figli compaiono come sotto-voci
+      indentate (border-l) che al click SCROLLANO (scrollToSection, reduced-motion-aware) alla card.
+  (c) Ogni figlio e' una CARD SEPARATA nel pannello (Card headerless con id + scroll-mt-6, form dentro
+      FieldPanel; il form porta la propria intestazione). Profilo/Sicurezza restano SettingsSection con
+      header icona. Helper renderSubSection(id) mappa id->form.
+  UiScaleForm sta quindi dentro la voce 'Impostazioni sistema', NON come item a se' nel rail.
+- i18n it/en: settings.uiScale.{title,subtitle,saved,reset} (le chiavi settings.appearance sono state
+  rimosse: non piu' usate).
+- Test FE: ui-scale.test.ts (mapping/clamp) + ui-scale-form.test.tsx (preview %, save solo ui_scale, reset->40).
+
+VERIFICATO (eseguito davvero):
+- BE: pest Auth+Users+Unit/Models 420/420; pint --dirty --test pulito; migrate:fresh + rollback --step=1 +
+  re-migrate verdi (down() droppa ui_scale). UiScaleTest 9 casi verdi.
+- FE: vitest appearance+auth+modules+data-table 90/90; tsc --noEmit exit 0; eslint changed files pulito.
+
+NOTA UX: lo slider fa preview LIVE (setScale scala l'intera app mentre trascini, WYSIWYG); il valore
+non salvato torna al server value su refetch/login (server = source of truth). NIENTE COMMIT (in attesa).
+
 ## FE: FIX "#id" NEI SELECT UTENTE (gestori account) — 2026-07-17 — GREEN, NON COMMITTATO
 
 Bug utente: nei select "gestori account" di anagrafica (registries) e opportunita' a volte compariva

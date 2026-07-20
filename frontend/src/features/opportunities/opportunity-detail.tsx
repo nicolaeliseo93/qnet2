@@ -11,9 +11,12 @@ import {
   DetailPerson,
   DetailSection,
 } from '@/components/detail/detail-panel'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/features/table/cell-renderers'
 import { formatDecimal } from '@/features/products/column-renderers'
 import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
+import { OPPORTUNITY_STATUS_BADGE_CLASSES } from '@/features/opportunities/column-renderers'
 import type {
   OpportunityDetailWithPermissions as OpportunityDetailData,
   OpportunityProductLine,
@@ -74,6 +77,19 @@ export function OpportunityDetailView({ opportunity }: OpportunityDetailViewProp
         <DetailGrid>
           <DetailField label={t('opportunities.form.registry')}>
             {opportunity.registry?.name ?? <DetailEmpty />}
+          </DetailField>
+          <DetailField label={t('opportunities.form.opportunityStatus')}>
+            <Badge
+              variant="secondary"
+              className={cn(
+                'h-5 min-h-5',
+                opportunity.opportunity_status.color
+                  ? OPPORTUNITY_STATUS_BADGE_CLASSES[opportunity.opportunity_status.color]
+                  : undefined,
+              )}
+            >
+              {opportunity.opportunity_status.name}
+            </Badge>
           </DetailField>
           <DetailField label={t('opportunities.form.referent')}>
             {opportunity.referent?.name ?? <DetailEmpty />}

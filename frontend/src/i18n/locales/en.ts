@@ -29,6 +29,7 @@ import { campaigns } from './en-campaigns'
 import { leads } from './en-leads'
 import { opportunities } from './en-opportunities'
 import { leadStatuses } from './en-lead-statuses'
+import { opportunityStatuses } from './en-opportunity-statuses'
 import { leadImports } from './en-lead-imports'
 import { businessFunctions } from './en-business-functions'
 import { moduleStats, statsPanel } from './en-stats'
@@ -91,6 +92,8 @@ export const en = {
     leads: 'Leads',
     leadStatuses: 'Lead Statuses',
     opportunities: 'Opportunities',
+    opportunityStatuses: 'Opportunity Statuses',
+    opportunitiesAndCommesse: 'Opportunities & Contracts',
     imports: 'Import Lead',
     pipelineStatuses: 'Project/Campaign Statuses',
     marketingLeads: 'Marketing & Leads',
@@ -332,10 +335,6 @@ export const en = {
       title: 'System settings',
       subtitle: 'System-wide preferences for the application.',
     },
-    appearance: {
-      title: 'Appearance',
-      subtitle: 'Adjust the size of the interface to your liking.',
-    },
     uiScale: {
       title: 'Interface scale',
       subtitle:
@@ -484,6 +483,7 @@ export const en = {
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
   opportunities: { ...opportunities, stats: moduleStats.opportunities },
+  opportunityStatuses,
   importRuns: { stats: moduleStats.importRuns },
 }
 

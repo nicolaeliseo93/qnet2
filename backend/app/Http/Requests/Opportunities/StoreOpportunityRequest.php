@@ -35,6 +35,8 @@ use Illuminate\Validation\Rule;
  * lockable scalars. User directive 2026-07-17: `product_lines` is REQUIRED
  * (at least one {business_function_id, product_category_id} row) to create;
  * `company_id`/`company_site_id`/`operational_site_id` are REMOVED entirely.
+ * `opportunity_status_id` (spec 0043, D-3) is REQUIRED — every opportunity
+ * carries a working-state classification from creation.
  */
 class StoreOpportunityRequest extends FormRequest
 {
@@ -67,6 +69,7 @@ class StoreOpportunityRequest extends FormRequest
             'reporter_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'supervisor_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'source_id' => $this->derivableRule($locked, 'source_id', required: false, table: 'sources'),
+            'opportunity_status_id' => ['required', 'integer', Rule::exists('opportunity_statuses', 'id')],
             'lead_id' => ['nullable', 'integer', Rule::exists('leads', 'id'), Rule::unique('opportunities', 'lead_id')],
             'start_date' => ['nullable', 'date'],
             'estimated_value' => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],

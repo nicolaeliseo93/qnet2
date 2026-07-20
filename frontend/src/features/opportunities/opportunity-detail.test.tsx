@@ -14,6 +14,8 @@ function opportunity(
     name: 'Enterprise deal',
     registry_id: 10,
     registry: { id: 10, name: 'Acme S.p.A.' },
+    opportunity_status_id: 5,
+    opportunity_status: { id: 5, name: 'New', color: 'slate' },
     referent_id: 60,
     referent: { id: 60, name: 'Mario Rossi' },
     commercial_id: 70,
@@ -64,6 +66,7 @@ describe('OpportunityDetailView — read-only (AC-077)', () => {
     expect(screen.getByRole('heading', { name: 'Enterprise deal' })).toBeInTheDocument()
     // "Acme S.p.A." appears twice: the hero subtitle and the registry field.
     expect(screen.getAllByText('Acme S.p.A.').length).toBe(2)
+    expect(screen.getByText('New')).toBeInTheDocument()
     expect(screen.getByText('Sales')).toBeInTheDocument()
     expect(screen.getByText('Mario Rossi')).toBeInTheDocument()
     expect(screen.getByText('Luca Verdi')).toBeInTheDocument()
