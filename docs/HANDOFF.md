@@ -80,9 +80,11 @@ Implementazione (frontend-only, nessuna modifica backend — la correzione e' un
   caricato (no refetch); onSaved/onLeadCorrected invalidano il detail query (button -> "Go to opportunity").
 - **i18n** nuove chiavi `leads.conversion.correctTitle` / `.correctSubtitle` (en + it).
 
-Nota UI: la Sheet di correzione e' sempre modale (storageKey `sheet-width:leads`), anche se l'open mode
-dei lead fosse "page": e' un interstitial guidato del gesto di conversione, non l'edit standard. La
-modale Opportunita' successiva rispetta invece l'open mode utente (via `useModuleOpener`).
+Nota UI (richiesta esplicita utente): lo step di correzione e' un **popup centrato `Dialog`**, NON la
+`Sheet` laterale, ed e' sempre modale a prescindere dall'open mode dei lead ("modale"/"pagina"). Non
+passa da `useModuleOpener` (che rispetterebbe la preferenza); monta un `<Dialog>` dedicato nell'hook
+(`DialogContent` flex-col `max-h-[85vh] max-w-2xl p-0`, il `LeadForm` scrolla internamente). La modale
+Opportunita' successiva rispetta invece l'open mode utente (via `useModuleOpener`).
 
 Verde: `npx tsc -b --force` EXIT 0 (artefatti .js ripuliti); vitest 76 pass (leads-table + lead-detail-page-actions
 + lead-form-body + lead-schema + lead-form-payload + opportunity-form-from-lead + opportunity-lead-selection);

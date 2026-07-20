@@ -2,12 +2,12 @@ import { useCallback, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useModuleOpener } from '@/features/modules/use-module-opener'
 import { OPPORTUNITIES_DOMAIN } from '@/features/opportunities/api'
 import { fetchLead, leadDetailQueryKey } from '@/features/leads/api'
@@ -32,7 +32,11 @@ interface UseLeadConversionResult {
    * Opportunity form directly.
    */
   startConversion: (lead: number | LeadDetailWithPermissions) => Promise<void>
-  /** Mount once in the caller's tree: the correction Sheet plus the Opportunity opener's own Sheet. */
+  /**
+   * Mount once in the caller's tree: the correction popup (a centered Dialog,
+   * always modal regardless of the leads open-mode preference) plus the
+   * Opportunity opener's own Sheet/page.
+   */
   sheets: ReactNode
 }
 
@@ -90,12 +94,12 @@ export function useLeadConversion(options: UseLeadConversionOptions = {}): UseLe
 
   const sheets = (
     <>
-      <Sheet open={correctionLead !== null} onOpenChange={(open) => !open && closeCorrection()}>
-        <SheetContent className="gap-0" storageKey="sheet-width:leads">
-          <SheetHeader>
-            <SheetTitle>{t('leads.conversion.correctTitle')}</SheetTitle>
-            <SheetDescription>{t('leads.conversion.correctSubtitle')}</SheetDescription>
-          </SheetHeader>
+      <Dialog open={correctionLead !== null} onOpenChange={(open) => !open && closeCorrection()}>
+        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="px-4 pt-4">
+            <DialogTitle>{t('leads.conversion.correctTitle')}</DialogTitle>
+            <DialogDescription>{t('leads.conversion.correctSubtitle')}</DialogDescription>
+          </DialogHeader>
           {correctionLead && (
             <LeadForm
               mode={{ type: 'edit', lead: correctionLead }}
@@ -104,8 +108,8 @@ export function useLeadConversion(options: UseLeadConversionOptions = {}): UseLe
               onCancel={closeCorrection}
             />
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
       {opportunitySheet}
     </>
   )
