@@ -34,6 +34,18 @@ i18n.addResourceBundle(
         duplicate: 'Duplicates',
         modified: 'Modified',
       },
+      autoConvert: {
+        title: 'Automatically convert to Opportunity',
+        description: 'Creatable rows are converted into opportunities right after the import completes.',
+        creatableRows: '{{count}} row(s) can be converted.',
+        notReady: 'This run cannot be auto-converted yet:',
+        backToReview: 'Back to review',
+        blockers: {
+          operationalSite: 'The operational site is not set for this run.',
+          productLine: 'The campaign does not derive a product line.',
+          rowsWithoutOperator: '{{count}} row(s) have no operator assigned.',
+        },
+      },
     },
     progress: {
       processing: 'Import in progress…',
@@ -67,6 +79,18 @@ i18n.addResourceBundle(
         error: 'Errori',
         duplicate: 'Duplicate',
         modified: 'Modificate',
+      },
+      autoConvert: {
+        title: 'Converti automaticamente in Opportunità',
+        description: 'Le righe convertibili vengono trasformate in opportunità subito dopo il completamento dell’import.',
+        creatableRows: '{{count}} riga/e convertibili.',
+        notReady: 'Questo import non può ancora essere convertito automaticamente:',
+        backToReview: 'Torna alla revisione',
+        blockers: {
+          operationalSite: 'La sede operativa non è impostata per questo import.',
+          productLine: 'La campagna non deriva una linea di prodotto.',
+          rowsWithoutOperator: '{{count}} riga/e senza operatore assegnato.',
+        },
       },
     },
     progress: {

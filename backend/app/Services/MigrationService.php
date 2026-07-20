@@ -3,19 +3,34 @@
 namespace App\Services;
 
 use App\Enums\MigrationStatus;
+use App\Jobs\RunMassMigrationJob;
 use App\Jobs\RunMigrationJob;
+use App\Migrations\MigrationImportContext;
+use App\Migrations\MigrationRegistry;
+use App\Models\MassMigrationRun;
 use App\Models\MigrationRun;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
- * Business logic for kicking off an external-data migration (spec 0013,
- * phase 2): create the MigrationRun (status=pending) and dispatch
- * RunMigrationJob to page through the source in the background. Mirrors
- * ImportService::start.
+ * Kicks off external-data migrations (spec 0013) and the mass import (spec 0046).
+ *
+ * - start(): single-source — create the MigrationRun (pending) and dispatch
+ *   RunMigrationJob. Mirrors ImportService::start.
+ * - runSource(): the shared "process one run" core (status transitions + import),
+ *   reused by BOTH RunMigrationJob and the mass orchestrator so the import logic
+ *   lives in exactly one place.
+ * - startMass(): read the saved plan's enabled sources, snapshot them onto a
+ *   MassMigrationRun and dispatch RunMassMigrationJob to run them in order.
  */
 class MigrationService
 {
+    public function __construct(
+        private readonly MigrationRegistry $registry,
+        private readonly MigrationPlanService $planService,
+    ) {}
+
     public function start(User $actor, string $source): MigrationRun
     {
         /** @var MigrationRun $run */
@@ -31,6 +46,51 @@ class MigrationService
         ]));
 
         RunMigrationJob::dispatch($run->id);
+
+        return $run;
+    }
+
+    /**
+     * Process one MigrationRun end to end: pending/queued -> processing ->
+     * completed. On any unhandled failure the run moves to `failed` and the
+     * exception re-throws so the caller (single job re-queues/records it, mass
+     * orchestrator stops the chain) decides what to do next.
+     */
+    public function runSource(MigrationRun $run): void
+    {
+        try {
+            $run->update(['status' => MigrationStatus::Processing]);
+
+            $source = $this->registry->resolve($run->source);
+            /** @var User $actor */
+            $actor = User::query()->findOrFail($run->user_id);
+
+            $source->import(new MigrationImportContext(run: $run, actor: $actor));
+
+            $run->update(['status' => MigrationStatus::Completed]);
+        } catch (Throwable $exception) {
+            $run->update(['status' => MigrationStatus::Failed]);
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Start a mass import from the saved plan: snapshot the enabled sources (in
+     * order) onto a MassMigrationRun (pending) and dispatch the orchestrator.
+     */
+    public function startMass(User $actor): MassMigrationRun
+    {
+        $sources = $this->planService->enabledSources();
+
+        /** @var MassMigrationRun $run */
+        $run = DB::transaction(fn (): MassMigrationRun => MassMigrationRun::create([
+            'user_id' => $actor->id,
+            'sources' => $sources,
+            'status' => MigrationStatus::Pending,
+        ]));
+
+        RunMassMigrationJob::dispatch($run->id);
 
         return $run;
     }

@@ -194,7 +194,7 @@ class LeadsImportDefinition extends AbstractImportDefinition
     /**
      * @param  array<string, mixed>  $globalConfig
      */
-    public function persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy): void
+    public function persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy, bool $convertToOpportunity = false): void
     {
         $mode = ImportDedupMode::from($dedupStrategy);
 
@@ -233,6 +233,8 @@ class LeadsImportDefinition extends AbstractImportDefinition
             $row->extra_values ?? [],
             $shouldUpdateRegistry,
             $duplicateRegistryId,
+            $row->operator_id,
+            $convertToOpportunity,
         );
     }
 }

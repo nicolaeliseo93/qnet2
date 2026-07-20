@@ -9,6 +9,7 @@ use App\DataObjects\Registries\UpdateRegistryData;
 use App\Models\Lead;
 use App\Models\Registry;
 use App\Models\User;
+use App\Services\Import\ImportOpportunityConvertibility;
 use App\Services\LeadService;
 use App\Services\RegistryService;
 use RuntimeException;
@@ -20,6 +21,15 @@ use RuntimeException;
  * duplicated anagraphic logic — then creates/updates the Lead in the
  * configured campaign via LeadService. Extracted to stay under the 300-line
  * soft limit (engineering.md §6).
+ *
+ * Auto-convert-to-Opportunity (spec 0045): the CREATE branch only — a
+ * row that lands on the UPDATE branch never converts, mirroring
+ * ConvertLeadToOpportunity's own CREATE-only contract (LeadService::create).
+ * This is defense-in-depth: the confirm-step gate (ImportService::
+ * confirmStaged() -> ImportOpportunityConvertibility) already blocks a
+ * non-ready run, so this per-row re-check exists only so a single bad row
+ * (e.g. an operator override cleared mid-flight) can never reach
+ * ConvertLeadToOpportunity's throwing path.
  */
 final class LeadRowPersister
 {
@@ -27,6 +37,7 @@ final class LeadRowPersister
         private readonly RegistryService $registryService,
         private readonly LeadService $leadService,
         private readonly LeadProfileBuilder $profileBuilder,
+        private readonly ImportOpportunityConvertibility $convertibility,
     ) {}
 
     /**
@@ -41,12 +52,22 @@ final class LeadRowPersister
         array $extraValues,
         bool $shouldUpdateRegistry,
         ?int $duplicateRegistryId,
+        ?int $operatorOverride = null,
+        bool $convertToOpportunity = false,
     ): void {
         $registry = $shouldUpdateRegistry && $duplicateRegistryId !== null
             ? $this->updateRegistry($actor, $duplicateRegistryId, $mapped)
             : $this->createRegistry($actor, $mapped);
 
-        $this->attachLead($registry, $globalConfig, $mapped, $extraValues, $shouldUpdateRegistry && $duplicateRegistryId !== null);
+        $this->attachLead(
+            $registry,
+            $globalConfig,
+            $mapped,
+            $extraValues,
+            $shouldUpdateRegistry && $duplicateRegistryId !== null,
+            $operatorOverride,
+            $convertToOpportunity,
+        );
     }
 
     /**
@@ -98,8 +119,15 @@ final class LeadRowPersister
      * @param  array<string, mixed>  $mapped
      * @param  array<string, mixed>  $extraValues
      */
-    private function attachLead(Registry $registry, array $globalConfig, array $mapped, array $extraValues, bool $shouldUpdate): void
-    {
+    private function attachLead(
+        Registry $registry,
+        array $globalConfig,
+        array $mapped,
+        array $extraValues,
+        bool $shouldUpdate,
+        ?int $operatorOverride,
+        bool $convertToOpportunity,
+    ): void {
         $campaignId = $this->id($globalConfig, 'campaign_id');
 
         if ($campaignId === null) {
@@ -108,7 +136,8 @@ final class LeadRowPersister
 
         $sourceId = $this->id($globalConfig, 'source_id');
         $operationalSiteId = $this->id($globalConfig, 'operational_site_id');
-        $operatorId = $this->id($globalConfig, 'operator_id');
+        // The row's own override (spec 0045) wins over the run's global operator.
+        $effectiveOperatorId = $operatorOverride ?? $this->id($globalConfig, 'operator_id');
         $notes = $this->value($mapped, 'notes');
         $extraFields = $extraValues === [] ? null : $extraValues;
 
@@ -122,7 +151,7 @@ final class LeadRowPersister
                 sourceIdSubmitted: true,
                 operationalSiteId: $operationalSiteId,
                 operationalSiteIdSubmitted: true,
-                operatorId: $operatorId,
+                operatorId: $effectiveOperatorId,
                 operatorIdSubmitted: true,
                 notes: $notes,
                 notesSubmitted: true,
@@ -138,10 +167,27 @@ final class LeadRowPersister
             campaignId: $campaignId,
             operationalSiteId: $operationalSiteId,
             sourceId: $sourceId,
-            operatorId: $operatorId,
+            operatorId: $effectiveOperatorId,
             notes: $notes,
             extraFields: $extraFields,
+            convertToOpportunity: $this->shouldConvert($convertToOpportunity, $effectiveOperatorId, $operationalSiteId, $campaignId),
         ));
+    }
+
+    /**
+     * CREATE-branch-only defense-in-depth re-check (see class docblock):
+     * the confirm-step gate already enforces this at the run level, this
+     * just makes sure no single row can ever reach ConvertLeadToOpportunity
+     * without an operator, an operational site AND a product-line-deriving
+     * campaign.
+     */
+    private function shouldConvert(bool $convertToOpportunity, ?int $effectiveOperatorId, ?int $operationalSiteId, int $campaignId): bool
+    {
+        if (! $convertToOpportunity || $effectiveOperatorId === null || $operationalSiteId === null) {
+            return false;
+        }
+
+        return $this->convertibility->campaignDerivesProductLine($campaignId);
     }
 
     /**

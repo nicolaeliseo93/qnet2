@@ -13,6 +13,7 @@ import { importWizardKeys } from '@/features/imports/wizard/query-keys'
 import { resolveImportWizardErrorMessage } from '@/features/imports/wizard/resolve-error-message'
 import type {
   ConfigureImportPayload,
+  ConfirmImportPayload,
   ImportRunDetail,
   ImportRunStatus,
 } from '@/features/imports/wizard/types'
@@ -131,7 +132,7 @@ export function useImportWizard({ domain, initialRunId, onRunCreated }: UseImpor
   })
 
   const confirmMutation = useMutation({
-    mutationFn: () => confirmImportRun(domain, runId as number),
+    mutationFn: (payload: ConfirmImportPayload) => confirmImportRun(domain, runId as number, payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: importWizardKeys.run(domain, runId as number) })
     },

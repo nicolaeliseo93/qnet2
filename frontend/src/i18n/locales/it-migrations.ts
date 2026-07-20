@@ -22,6 +22,8 @@ export const migrations = {
     sources: 'Fonti',
     tags: 'Tag',
     sectors: 'Settori',
+    attributes: 'Attributi',
+    'product-categories': 'Categorie prodotto',
   },
   page: {
     sourceLabel: 'Sorgente',
@@ -74,6 +76,34 @@ export const migrations = {
       warning: 'Avviso',
       error: 'Errore',
     },
+  },
+  plan: {
+    configureButton: 'Configura ordine',
+    title: 'Ordine import massivo',
+    subtitle:
+      'Scegli quali source include “Importa tutto” e trascina per ordinarle. Le source successive dipendono dalle precedenti.',
+    dragHandle: 'Riordina source',
+    enabledLabel: 'Includi {{source}} nell’import massivo',
+    save: 'Salva ordine',
+    saving: 'Salvataggio…',
+    saved: 'Ordine salvato.',
+    loadError: 'Impossibile caricare l’ordine di import. Riprova.',
+  },
+  massImport: {
+    button: 'Importa tutto',
+    title: 'Importa tutte le source',
+    subtitle: 'Esegue le source abilitate nell’ordine salvato, fermandosi al primo errore.',
+    confirmDescription:
+      'Esegue ogni source abilitata in ordine, in background. Si ferma alla prima source che fallisce, perché le successive dipendono dalle precedenti. I record già importati vengono saltati, quindi è sicuro rilanciare.',
+    start: 'Avvia import',
+    starting: 'Avvio…',
+    empty: 'Nessuna source abilitata. Abilitane almeno una in “Configura ordine”.',
+    stopped:
+      'L’import si è fermato alla source in errore; le source successive non sono state eseguite.',
+    sourceStatus: {
+      notRun: 'Non eseguita',
+    },
+    perSourceCounts: '{{created}} creati · {{skipped}} saltati · {{failed}} falliti',
   },
   status: {
     pending: 'In attesa',

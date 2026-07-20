@@ -42,6 +42,7 @@ class ImportRun extends BaseModel
         'modified_rows',
         'notified_at',
         'error_count',
+        'convert_to_opportunity',
     ];
 
     protected $casts = [
@@ -64,6 +65,7 @@ class ImportRun extends BaseModel
         'modified_rows' => 'int',
         'notified_at' => 'datetime',
         'error_count' => 'int',
+        'convert_to_opportunity' => 'boolean',
     ];
 
     public function user(): BelongsTo

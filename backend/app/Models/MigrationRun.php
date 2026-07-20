@@ -24,6 +24,7 @@ class MigrationRun extends BaseModel
     protected $fillable = [
         'source',
         'user_id',
+        'mass_migration_run_id',
         'status',
         'total_rows',
         'created_rows',
@@ -45,5 +46,15 @@ class MigrationRun extends BaseModel
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The parent "Import all" run (spec 0046), or null for a single-source run.
+     *
+     * @return BelongsTo<MassMigrationRun, $this>
+     */
+    public function massMigrationRun(): BelongsTo
+    {
+        return $this->belongsTo(MassMigrationRun::class);
     }
 }

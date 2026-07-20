@@ -85,6 +85,7 @@ class ProcessStagedImportJob implements ShouldQueue
     {
         $globalConfig = $run->global_config ?? [];
         $dedupStrategy = $run->dedup_strategy ?? ImportDedupMode::CreateOnly->value;
+        $convertToOpportunity = $run->convert_to_opportunity;
 
         /** @var Collection<int, ImportRunRow> $rows */
         $rows = $run->rows()
@@ -96,7 +97,7 @@ class ProcessStagedImportJob implements ShouldQueue
         $failures = [];
 
         foreach ($rows as $row) {
-            $message = $this->persistOneRow($definition, $actor, $row, $globalConfig, $dedupStrategy);
+            $message = $this->persistOneRow($definition, $actor, $row, $globalConfig, $dedupStrategy, $convertToOpportunity);
 
             if ($message !== null) {
                 $failures[] = ['row' => $row, 'message' => $message];
@@ -135,11 +136,11 @@ class ProcessStagedImportJob implements ShouldQueue
      *
      * @param  array<string, mixed>  $globalConfig
      */
-    private function persistOneRow(ImportDefinition $definition, User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy): ?string
+    private function persistOneRow(ImportDefinition $definition, User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy, bool $convertToOpportunity): ?string
     {
         try {
-            DB::transaction(function () use ($definition, $actor, $row, $globalConfig, $dedupStrategy): void {
-                $definition->persistRow($actor, $row, $globalConfig, $dedupStrategy);
+            DB::transaction(function () use ($definition, $actor, $row, $globalConfig, $dedupStrategy, $convertToOpportunity): void {
+                $definition->persistRow($actor, $row, $globalConfig, $dedupStrategy, $convertToOpportunity);
             });
 
             return null;

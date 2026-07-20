@@ -26,6 +26,10 @@ const fetchMigrationColumnsMock = vi.fn()
 const fetchMigrationPreviewMock = vi.fn()
 const startMigrationImportMock = vi.fn()
 const fetchMigrationRunMock = vi.fn()
+const fetchMigrationPlanMock = vi.fn()
+const saveMigrationPlanMock = vi.fn()
+const startMassMigrationMock = vi.fn()
+const fetchMassMigrationRunMock = vi.fn()
 
 vi.mock('@/features/migrations/api', () => ({
   fetchMigrationSources: (...args: unknown[]) => fetchMigrationSourcesMock(...args),
@@ -33,6 +37,10 @@ vi.mock('@/features/migrations/api', () => ({
   fetchMigrationPreview: (...args: unknown[]) => fetchMigrationPreviewMock(...args),
   startMigrationImport: (...args: unknown[]) => startMigrationImportMock(...args),
   fetchMigrationRun: (...args: unknown[]) => fetchMigrationRunMock(...args),
+  fetchMigrationPlan: (...args: unknown[]) => fetchMigrationPlanMock(...args),
+  saveMigrationPlan: (...args: unknown[]) => saveMigrationPlanMock(...args),
+  startMassMigration: (...args: unknown[]) => startMassMigrationMock(...args),
+  fetchMassMigrationRun: (...args: unknown[]) => fetchMassMigrationRunMock(...args),
 }))
 
 vi.mock('@/routes/breadcrumbs', () => ({
@@ -79,6 +87,15 @@ beforeEach(() => {
   fetchMigrationPreviewMock.mockReset().mockResolvedValue(previewPage())
   startMigrationImportMock.mockReset()
   fetchMigrationRunMock.mockReset()
+  fetchMigrationPlanMock.mockReset().mockResolvedValue({
+    sources: [
+      { source: 'roles', label: 'Roles', enabled: true },
+      { source: 'users', label: 'Users', enabled: true },
+    ],
+  })
+  saveMigrationPlanMock.mockReset()
+  startMassMigrationMock.mockReset()
+  fetchMassMigrationRunMock.mockReset()
   Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
 })
 

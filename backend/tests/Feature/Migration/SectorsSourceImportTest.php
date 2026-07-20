@@ -2,11 +2,11 @@
 
 use App\Enums\MigrationStatus;
 use App\Jobs\RunMigrationJob;
-use App\Migrations\MigrationRegistry;
 use App\Models\MigrationRun;
 use App\Models\Role;
 use App\Models\Sector;
 use App\Models\User;
+use App\Services\MigrationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 
@@ -51,7 +51,7 @@ if (! function_exists('migrationsSuperAdminActor')) {
 if (! function_exists('runMigrationJobFor')) {
     function runMigrationJobFor(MigrationRun $run): void
     {
-        (new RunMigrationJob($run->id))->handle(app(MigrationRegistry::class));
+        (new RunMigrationJob($run->id))->handle(app(MigrationService::class));
     }
 }
 

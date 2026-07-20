@@ -20,6 +20,8 @@ function rowItem(overrides: Partial<ImportRunRowItem> = {}): ImportRunRowItem {
     status: 'duplicate',
     is_edited: false,
     duplicate_of_id: 5,
+    operator_id: null,
+    operator: null,
     duplicate_meta: {
       registry_id: 5,
       registry_name: 'Mario Rossi',

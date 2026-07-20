@@ -24,6 +24,13 @@ vi.mock('@/features/imports/wizard/api', () => ({
   getImportRunSummary: (...args: unknown[]) => getImportRunSummaryMock(...args),
 }))
 
+// Grants `opportunities.create` unconditionally: the auto-convert toggle's
+// own gating (`<Can>`) is exercised by `lead-form-body.test.tsx`, not here —
+// this lane only cares about the toggle's own behavior once visible.
+vi.mock('@/features/auth/use-abilities', () => ({
+  useAbilities: () => ({ can: () => true, hasRole: () => false, roles: [], isLoading: false }),
+}))
+
 function baseRun(overrides: Partial<ImportRunDetail> = {}): ImportRunDetail {
   return {
     id: 1,
@@ -68,6 +75,12 @@ function baseSummary(overrides: Partial<ImportRunSummaryReport> = {}): ImportRun
     dedup_strategy: 'create_new',
     warnings: ['Row 4: ambiguous city match'],
     duplicate_resolutions: undefined,
+    conversion_readiness: {
+      operational_site_set: true,
+      campaign_derives_product_line: true,
+      creatable_rows: 7,
+      rows_without_operator: 0,
+    },
     ...overrides,
   }
 }
@@ -75,6 +88,7 @@ function baseSummary(overrides: Partial<ImportRunSummaryReport> = {}): ImportRun
 function renderStep({
   run = baseRun(),
   onConfirm = vi.fn(),
+  onBackToReview = vi.fn(),
   isConfirming = false,
   confirmError = null as string | null,
 } = {}) {
@@ -85,12 +99,13 @@ function renderStep({
         domain="leads"
         run={run}
         onConfirm={onConfirm}
+        onBackToReview={onBackToReview}
         isConfirming={isConfirming}
         confirmError={confirmError}
       />
     </QueryClientProvider>,
   )
-  return { onConfirm }
+  return { onConfirm, onBackToReview }
 }
 
 beforeAll(async () => {
@@ -160,13 +175,56 @@ describe('ImportStepSummary', () => {
     expect(await screen.findByText('No global values configured.')).toBeInTheDocument()
   })
 
-  it('calls onConfirm when the confirm action is clicked', async () => {
+  it('calls onConfirm with convert_to_opportunity: false when the toggle stays off', async () => {
     getImportRunSummaryMock.mockResolvedValue(baseSummary())
     const { onConfirm } = renderStep()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm and import' }))
 
     expect(onConfirm).toHaveBeenCalledTimes(1)
+    expect(onConfirm).toHaveBeenCalledWith({ convert_to_opportunity: false })
+  })
+
+  it('auto-convert toggle ON with a ready run sends convert_to_opportunity: true on confirm', async () => {
+    getImportRunSummaryMock.mockResolvedValue(baseSummary())
+    const { onConfirm } = renderStep()
+
+    fireEvent.click(await screen.findByRole('switch', { name: 'Automatically convert to Opportunity' }))
+    expect(await screen.findByText('7 row(s) can be converted.')).toBeInTheDocument()
+
+    const confirmButton = screen.getByRole('button', { name: 'Confirm and import' })
+    expect(confirmButton).not.toBeDisabled()
+
+    fireEvent.click(confirmButton)
+    expect(onConfirm).toHaveBeenCalledWith({ convert_to_opportunity: true })
+  })
+
+  it('auto-convert toggle ON with a not-ready run disables Confirm and shows the blockers + back-to-review action', async () => {
+    getImportRunSummaryMock.mockResolvedValue(
+      baseSummary({
+        conversion_readiness: {
+          operational_site_set: false,
+          campaign_derives_product_line: true,
+          creatable_rows: 7,
+          rows_without_operator: 3,
+        },
+      }),
+    )
+    const { onConfirm, onBackToReview } = renderStep()
+
+    fireEvent.click(await screen.findByRole('switch', { name: 'Automatically convert to Opportunity' }))
+
+    expect(await screen.findByText('This run cannot be auto-converted yet:')).toBeInTheDocument()
+    expect(screen.getByText('The operational site is not set for this run.')).toBeInTheDocument()
+    expect(screen.getByText('3 row(s) have no operator assigned.')).toBeInTheDocument()
+    expect(screen.queryByText('The campaign does not derive a product line.')).not.toBeInTheDocument()
+
+    const confirmButton = screen.getByRole('button', { name: 'Confirm and import' })
+    expect(confirmButton).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to review' }))
+    expect(onBackToReview).toHaveBeenCalledTimes(1)
+    expect(onConfirm).not.toHaveBeenCalled()
   })
 
   it('disables the confirm action while confirming', async () => {

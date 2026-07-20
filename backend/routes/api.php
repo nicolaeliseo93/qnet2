@@ -18,7 +18,9 @@ use App\Http\Controllers\Export\ExportController;
 use App\Http\Controllers\Import\ImportController;
 use App\Http\Controllers\Import\ImportMappingTemplateController;
 use App\Http\Controllers\Meta\MetaController;
+use App\Http\Controllers\Migration\MassMigrationController;
 use App\Http\Controllers\Migration\MigrationController;
+use App\Http\Controllers\Migration\MigrationPlanController;
 use App\Http\Controllers\Navigation\NavigationController;
 use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\OperationalSites\OperationalSiteController;
@@ -189,6 +191,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // actor OR whose source != {source} 404s (never 403).
     Route::middleware('super-admin')->group(function () {
         Route::get('migrations', [MigrationController::class, 'index']);
+
+        // Mass-import plan (spec 0046): the app-wide singleton ordering which
+        // sources the "Import all" run executes. Declared before the {source}
+        // routes — `plan` is a fixed segment, never a source key.
+        Route::get('migrations/plan', [MigrationPlanController::class, 'show']);
+        Route::put('migrations/plan', [MigrationPlanController::class, 'update']);
+
+        // "Import all" (spec 0046): run the plan's enabled sources in order,
+        // stopping at the first failure. `mass-runs` is a fixed segment, so it
+        // never collides with the {source} routes below.
+        Route::post('migrations/mass-runs', [MassMigrationController::class, 'store']);
+        Route::get('migrations/mass-runs/{massMigrationRun}', [MassMigrationController::class, 'show']);
+
         Route::get('migrations/{source}/columns', [MigrationController::class, 'columns']);
         Route::get('migrations/{source}/runs/{migrationRun}', [MigrationController::class, 'run']);
 

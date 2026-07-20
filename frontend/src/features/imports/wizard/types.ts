@@ -163,6 +163,15 @@ export interface ImportRunRowItem {
   /** Chosen resolution for a `duplicate` row (spec 0036); optional/nullable, same compat rationale. */
   resolution?: ImportRowResolution | null
   /**
+   * Per-row operator override (id only), applied via `PATCH .../rows/{row}`
+   * with `{ operator_id }`. `null` means the row uses the run's global
+   * `operator_id` default (`global_config`); it never resolves that default
+   * onto this field.
+   */
+  operator_id: number | null
+  /** Hydrated projection of `operator_id`, or `null` when unset. */
+  operator: ImportRunRowOperator | null
+  /**
    * Keyed by field id (mapped) or original column name (extra). Mostly
    * strings, but the geo fields (spec 0038) also carry the resolved
    * `country_id`/`state_id`/`province_id`/`city_id` as numbers (or `null`
@@ -170,6 +179,12 @@ export interface ImportRunRowItem {
    */
   values: Record<string, string | number | null>
   messages: string[]
+}
+
+/** Minimal projection of the row's overridden operator, hydrated alongside `operator_id`. */
+export interface ImportRunRowOperator {
+  id: number
+  name: string
 }
 
 /** Response shape of `POST /imports/{domain}/{importRun}/rows` (envelope `data`). */
@@ -227,5 +242,26 @@ export interface ImportRunSummaryReport {
     update: number
     unresolved: number
   }
+  /**
+   * Pre-confirm readiness of the run for the auto-convert-to-Opportunity
+   * option: whether the run's operational site and campaign-derived product
+   * line are set (both required by the conversion action), how many rows are
+   * creatable at all, and how many creatable rows still lack an operator
+   * (own `operator_id` override or the run's global default).
+   */
+  conversion_readiness: ConversionReadiness
+}
+
+/** See `ImportRunSummaryReport.conversion_readiness`. */
+export interface ConversionReadiness {
+  operational_site_set: boolean
+  campaign_derives_product_line: boolean
+  creatable_rows: number
+  rows_without_operator: number
+}
+
+/** Body of `POST /imports/{domain}/{importRun}/confirm`. */
+export interface ConfirmImportPayload {
+  convert_to_opportunity: boolean
 }
 

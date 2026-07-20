@@ -108,7 +108,7 @@ final class FakeWizardImportDefinition extends AbstractImportDefinition
         BusinessFunction::create(['name' => $row['full_name']]);
     }
 
-    public function persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy): void
+    public function persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy, bool $convertToOpportunity = false): void
     {
         $name = (string) ($row->mapped_values['full_name'] ?? '');
 

@@ -112,7 +112,17 @@ describe('ImportStepReview', () => {
     expect(capturedOnRowUpdated).not.toBeNull()
     act(() => {
       capturedOnRowUpdated!(
-        { id: 1, row_number: 1, status: 'valid', is_edited: true, duplicate_of_id: null, values: {}, messages: [] },
+        {
+          id: 1,
+          row_number: 1,
+          status: 'valid',
+          is_edited: true,
+          duplicate_of_id: null,
+          operator_id: null,
+          operator: null,
+          values: {},
+          messages: [],
+        },
         { total: 5, valid_rows: 4, warning_rows: 0, error_rows: 1, duplicate_rows: 0, modified_rows: 1 },
       )
     })

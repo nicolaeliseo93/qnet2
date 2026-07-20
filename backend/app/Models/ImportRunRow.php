@@ -35,6 +35,7 @@ class ImportRunRow extends BaseModel
         'duplicate_meta',
         'resolution',
         'is_edited',
+        'operator_id',
     ];
 
     protected $casts = [
@@ -50,10 +51,20 @@ class ImportRunRow extends BaseModel
         'duplicate_meta' => 'array',
         'resolution' => ImportRowResolution::class,
         'is_edited' => 'bool',
+        'operator_id' => 'int',
     ];
 
     public function importRun(): BelongsTo
     {
         return $this->belongsTo(ImportRun::class);
+    }
+
+    /**
+     * Per-row Operator override (spec 0045): when set, overrides the run's
+     * global `operator_id` for this staged row only.
+     */
+    public function operator(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

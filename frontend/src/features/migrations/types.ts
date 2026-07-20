@@ -88,6 +88,41 @@ export interface MigrationReportEntry {
   message: string
 }
 
+/**
+ * One entry of the saved mass-import plan (spec 0046): a source, its human
+ * label, and whether the "Import all" run includes it. Order is the array order.
+ */
+export interface MigrationPlanItem {
+  source: string
+  label: string
+  enabled: boolean
+}
+
+/** The saved mass-import plan as returned by `GET/PUT /migrations/plan`. */
+export interface MigrationPlan {
+  sources: MigrationPlanItem[]
+}
+
+/** The `PUT /migrations/plan` body item — no label (server derives it). */
+export interface MigrationPlanInput {
+  source: string
+  enabled: boolean
+}
+
+/**
+ * The "Import all" aggregate run (spec 0046): its status, the ordered snapshot
+ * of the enabled sources it runs, and one child `MigrationRun` per source
+ * actually started (in execution order). Returned by
+ * `POST /migrations/mass-runs` (with `runs: []`) and its polling endpoint.
+ */
+export interface MassMigrationRun {
+  id: number
+  status: MigrationRunStatus
+  sources: string[]
+  created_at: string
+  runs: MigrationRun[]
+}
+
 /** The run resource as returned by the polling endpoint `GET .../runs/{migrationRun}`. */
 export interface MigrationRun {
   id: number

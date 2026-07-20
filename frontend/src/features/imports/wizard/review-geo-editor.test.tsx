@@ -66,6 +66,8 @@ function rowItem(overrides: Partial<ImportRunRowItem> = {}): ImportRunRowItem {
     status: 'warning',
     is_edited: false,
     duplicate_of_id: null,
+    operator_id: null,
+    operator: null,
     values: {
       country: 'Italy',
       region: 'Campania',

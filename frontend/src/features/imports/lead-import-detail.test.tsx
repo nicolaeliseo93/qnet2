@@ -67,6 +67,12 @@ function summary(overrides: Partial<ImportRunSummaryReport> = {}): ImportRunSumm
     global_config: {},
     dedup_strategy: 'create_new',
     warnings: [],
+    conversion_readiness: {
+      operational_site_set: true,
+      campaign_derives_product_line: true,
+      creatable_rows: 7,
+      rows_without_operator: 0,
+    },
     ...overrides,
   }
 }

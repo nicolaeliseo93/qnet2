@@ -11,4 +11,10 @@ export const migrationKeys = {
   run: (source: string, runId: number) => ['migrations', source, 'runs', runId] as const,
   /** Stable placeholder key used while no run has started yet (query disabled). */
   idleRun: (source: string) => ['migrations', source, 'runs', 'idle'] as const,
+  /** The saved mass-import plan (spec 0046). */
+  plan: ['migrations', 'plan'] as const,
+  /** A running mass import, keyed by its aggregate run id. */
+  massRun: (runId: number) => ['migrations', 'mass-runs', runId] as const,
+  /** Stable placeholder key used while no mass run has started yet (query disabled). */
+  idleMassRun: ['migrations', 'mass-runs', 'idle'] as const,
 }

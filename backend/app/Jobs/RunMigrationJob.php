@@ -2,25 +2,21 @@
 
 namespace App\Jobs;
 
-use App\Enums\MigrationStatus;
-use App\Migrations\MigrationImportContext;
-use App\Migrations\MigrationRegistry;
 use App\Models\MigrationRun;
-use App\Models\User;
+use App\Services\MigrationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Throwable;
 
 /**
- * Phase 2 (background import, spec 0013): resolve the run's MigrationSource
- * and page through the ENTIRE external source, creating every valid row
- * (idempotent per `old_id`, isolated per-row transactions — see
- * AbstractMigrationSource::import). Moves the run pending -> processing ->
- * completed; on any unhandled failure the run moves to `failed` instead of
- * staying stuck mid-flight (mirrors ProcessImportJob).
+ * Phase 2 (background import, spec 0013): process one MigrationRun's source,
+ * paging through the ENTIRE external source (idempotent per `old_id`, isolated
+ * per-row transactions — see AbstractMigrationSource::import). The status
+ * transitions and import call live in MigrationService::runSource, shared with
+ * the mass orchestrator (spec 0046); on an unhandled failure runSource moves the
+ * run to `failed` and re-throws so this job is recorded as failed.
  */
 class RunMigrationJob implements ShouldQueue
 {
@@ -28,31 +24,17 @@ class RunMigrationJob implements ShouldQueue
 
     public function __construct(private readonly int $migrationRunId) {}
 
-    public function handle(MigrationRegistry $registry): void
+    public function handle(MigrationService $service): void
     {
         // A large migration can exceed PHP's max_execution_time; under the sync
-        // queue driver this job runs inside the HTTP request and would be
-        // killed at 30s. Lift the per-script limit (harmless under async
-        // workers, which govern their own timeout).
+        // queue driver this job runs inside the HTTP request and would be killed
+        // at 30s. Lift the per-script limit (harmless under async workers, which
+        // govern their own timeout).
         set_time_limit(0);
 
         /** @var MigrationRun $run */
         $run = MigrationRun::query()->findOrFail($this->migrationRunId);
 
-        try {
-            $run->update(['status' => MigrationStatus::Processing]);
-
-            $source = $registry->resolve($run->source);
-            /** @var User $actor */
-            $actor = User::query()->findOrFail($run->user_id);
-
-            $source->import(new MigrationImportContext(run: $run, actor: $actor));
-
-            $run->update(['status' => MigrationStatus::Completed]);
-        } catch (Throwable $exception) {
-            $run->update(['status' => MigrationStatus::Failed]);
-
-            throw $exception;
-        }
+        $service->runSource($run);
     }
 }

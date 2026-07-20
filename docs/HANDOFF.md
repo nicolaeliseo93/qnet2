@@ -2,6 +2,90 @@
 
 > Injected at session start. Update at every green state.
 
+## MIGRAZIONI: IMPORT MASSIVO CON PIANO ORDINATO SALVATO (spec 0046, 2026-07-20) — GREEN, NON COMMITTATO
+
+Richiesta utente: un unico bottone "Importa tutto" per le migrazioni dati esterni (spec 0013),
+mantenendo il select single-source per l'import manuale. L'ordine (quali source e in che sequenza)
+lo sceglie l'utente UNA VOLTA e si salva a DB come impostazione. Decisioni utente (AskUserQuestion):
+ordine riordinabile dall'utente ma persistito (non per-run); sottoinsieme via checkbox enable;
+su fallimento di una source la catena SI FERMA (le fasi dopo dipendono via old_id).
+
+SPEC: nuova `docs/specs/0046-mass-migration-import.xml` (0013 NON riscritta; override dichiarato del
+suo out-of-scope "nessun orchestratore dell'ordine"). Default ordine = `MigrationOrder::PHASES`.
+
+BACKEND (tutto additivo, riuso infra 0013):
+- Persistenza piano: tabella singleton `migration_plans` (json `sources`=[{source,enabled}] ordinato),
+  Model `MigrationPlan`, `MigrationPlanService` (current() RICONCILIA vs registry: droppa key non
+  registrate, appende in coda le nuove come enabled; default da MigrationOrder; save() upsert singleton;
+  enabledSources()). Request `UpdateMigrationPlanRequest` (source in registry, distinct, enabled bool).
+  Controller `MigrationPlanController` (show/update). Rotte `GET/PUT migrations/plan`.
+- Orchestratore: tabella `mass_migration_runs` (user_id, json `sources` snapshot abilitate, status=
+  riusa MigrationStatus) + FK nullable `mass_migration_run_id` su `migration_runs`. Model
+  `MassMigrationRun` (runs() hasMany) + factory; `MigrationRun` +fillable +relazione massMigrationRun().
+  Refactor DRY: `MigrationService::runSource(MigrationRun)` estratto (processing->import->completed;
+  fail+rethrow); `RunMigrationJob::handle` ora inietta `MigrationService` (NON piu' MigrationRegistry)
+  e delega. `MigrationService::startMass(User)` crea MassMigrationRun+dispatch. Job
+  `RunMassMigrationJob`: per source in ordine crea figlio MigrationRun+runSource; PRIMO fail -> parent
+  failed + STOP (source dopo non partono), no rethrow. Controller `MassMigrationController`
+  (store 422 se nessuna abilitata; show ownership 404). Resource `MassMigrationRunResource` (status+
+  sources+runs con report). Rotte `POST migrations/mass-runs`, `GET migrations/mass-runs/{massMigrationRun}`.
+
+FRONTEND (`features/migrations/`, select single-source INVARIATO):
+- api.ts +fetch/save plan +start/fetch mass. types.ts +MigrationPlan(Item/Input)+MassMigrationRun.
+  query-keys +plan/massRun/idleMassRun. Hook `use-migration-plan` (query+save mutation),
+  `use-mass-migration` (start+poll 1500ms, mirror use-migration-import).
+- `migration-plan-panel.tsx`: Sheet con `<SortableList>` (components/ui, @dnd-kit gia' presente) +
+  Checkbox enable per source + Salva. Copia locale ri-seedata su cambio ref del piano (adjust-on-prop).
+- `mass-import-dialog.tsx` (conferma lista abilitate + start) + `mass-import-progress.tsx` (badge
+  aggregato + riga per source: stato figlio o "Not run" se non raggiunta dopo il fail). Bottoni
+  "Configura ordine" (secondary) + "Importa tutto" (default) nella Card top di migrations-page.
+- i18n: en/it-migrations +sezioni `plan`/`massImport` +sources attributes/product-categories.
+
+RORDINE DEFAULT — FLAG DA VALUTARE (segnalato, NON risolto, fuori scope §1.6): `MigrationOrder::PHASES`
+NON include `roles` (registrato in config), quindi nel piano di DEFAULT `roles` finisce APPESO IN CODA
+(dopo business-function-members) — subottimale perche' `users` referenzia i ruoli via old_id (spec 0013
+AC-009). L'utente riordina e salva comunque (e' lo scopo della feature), ma il default sarebbe piu'
+corretto aggiungendo `roles` alla fase 1 di MigrationOrder.php. Decidere se farlo.
+
+VERIFICATO (output reale): Pest nuovi — MigrationPlanEndpointsTest 12/12, MassMigrationTest+
+RunMigrationJobTest 10/10; refactor senza regressioni: endpoints/nav/model/schema 90/90, source imports
+72/72. Vitest migrations 18/18 (18 include 5 nuovi: plan-panel 2, mass-dialog 3). tsc OK. Pint OK.
+ESLint OK. UN fallimento PRE-ESISTENTE fuori scope: `AbstractMigrationSourcePreviewTest` (si aspetta
+righe roles senza `description`, ma RolesSource committato HA la colonna `description` — test stantio,
+non toccato da me). NESSUN COMMIT (attesa ok, CLAUDE.md §3.6).
+
+## LEAD IMPORT: OPERATORE PER-RIGA + AUTO-CONVERSIONE IN OPPORTUNITA' (2026-07-20) — GREEN, NON COMMITTATO
+
+Richiesta utente: nel wizard di import lead poter (1) mantenere l'operatore di default globale (gia'
+esistente), (2) sovrascrivere l'operatore MANUALMENTE riga-per-riga nel penultimo step (review),
+(3) nello step finale (summary) un toggle "Converti automaticamente in Opportunita'" che a fine
+import converte i lead con tutti i campi obbligatori. Decisioni utente (AskUserQuestion): (1) righe
+NON convertibili con auto-convert ON = **bloccate come errore** (import non procede finche' non
+corrette o toggle off); (2) "convertibile" = **operatore + sede operativa + product line derivabile**
+(campagna/progetto con business function + categoria prodotto) — coerente con la conversione manuale.
+
+GROUNDING CHIAVE: `operator_id` era GIA' un global config field (`LeadImportFieldCatalog::GLOBAL_FIELDS`).
+La conversione end-to-end esisteva gia': `LeadService::create()` esegue `ConvertLeadToOpportunity` in
+una `DB::transaction` quando `CreateLeadData->convertToOpportunity` e' true. Step wizard:
+upload(0)→config(1)→mapping(2)→**review(3, penultimo)**→**summary(4, finale)**. Sede operativa e
+campagna sono config GLOBALE (scelte una volta), quindi la convertibilita' e' quasi uniforme: l'unica
+variabile per-riga e' l'operatore → una riga senza operatore effettivo e' l'unico blocker per-riga.
+
+CONTRATTO CONGELATO (BE e FE combaciano field-for-field):
+- Migrazioni: `import_run_rows.operator_id` (FK nullable users) + `import_runs.convert_to_opportunity` (bool default false).
+- `PATCH .../rows/{row}` accetta `operator_id?` (nullable, exists:users). `ImportRunRowResource` espone `operator_id` + `operator:{id,name}`. Submit di solo `operator_id` NON rifa la pipeline di staging (no churn status), setta `is_edited=true` (`operatorIdSubmitted` distingue "non inviato" da "inviato null").
+- `GET .../summary` aggiunge `conversion_readiness:{operational_site_set, campaign_derives_product_line, creatable_rows, rows_without_operator}` (ultimo = int count nel summary).
+- `POST .../confirm` accetta `{convert_to_opportunity?: boolean}`. Non-ready → 422 top-level `{success:false, message, convert_blockers:{operational_site_missing, campaign_missing_product_line, rows_without_operator:number[]}}` (row_number, non id). AUTORIZZAZIONE: `authorize('create', Opportunity::class)` quando flag true (mirror di `LeadController::store`) — fix aggiunto dopo che il verifier ha trovato/riprodotto il buco (era solo gate FE). Ready/false → persiste flag e procede.
+- Persist: operatore effettivo = row override ?? global; SOLO ramo create converte quando `run.convert_to_opportunity && effOperator!=null && operational_site_id!=null && campagna deriva product line`. Ramo update MAI.
+
+FILE CHIAVE: BE — nuovo `App\Services\Import\ImportOpportunityConvertibility` (predicato `campaignDerivesProductLine` estratto da `LeadOpportunityDefaultsResolver`, UNA implementazione condivisa da summary + confirm gate), `ImportConversionReadiness` DTO, `ImportConversionNotReadyException`, `ConfirmImportRequest`, concern `GuardsImportRequests` (estratto da ImportController per stare sotto 500 righe). Modificati: `ImportController::confirm`, modelli `ImportRunRow`/`ImportRun`, `UpdateImportRowRequest`, `StagedRowReviser`, `ImportRunRowResource`, `ImportRunSummaryBuilder`, `ReviewRowsQuery` (eager-load operator), `LeadsImportDefinition`/`AbstractImportDefinition`/`ImportDefinition`, `ProcessStagedImportJob`, `LeadRowPersister`. FE — nuovi `review-operator-editor.tsx` (cella popup users, pattern ReviewGeoCell), `summary-conversion-readiness.tsx` (toggle + blockers + "Torna alla revisione"); modificati `types.ts`, `api.ts`, `review-columns.tsx`, `review-grid.tsx`, `use-review-rows.ts` (handleApplyOperator, invalida summary query), `use-import-wizard.ts` (confirm forwarda payload), `import-wizard.tsx` (onBackToReview→goToStep(3)), `import-step-summary.tsx` (stato autoConvert, gated da `<Can opportunities.create>`), i18n it/en.
+
+NOTA (semplificazione deliberata, non bug): "creatable rows" nel readiness = `status IN (valid,warning)` OR (`duplicate AND resolution=create`) — euristica congelata, non simulazione runtime completa del branching create/update del persister (che dipende anche dallo stato DB live al commit). Il guard per-riga in `LeadRowPersister` e' difesa-in-profondita': il confirm gate blocca gia' le run non-ready.
+
+VERIFICATO (verifier indipendente, output reale): Pest full 2978/2990 (11 fail TUTTI pre-esistenti, confermati via `git stash` su `main`, nessuno nello scope). Scoped `tests/Feature/Imports Leads Opportunities` 329/329. `ImportOpportunityConversionTest` 11/11 (include regressione authz 403). Vitest `src/features/imports` 135/135; full 1749/1752 (3 fail pre-esistenti in `cell-renderers.test.tsx`, fuori scope). `tsc` 0 errori, ESLint + Pint puliti. Config-tamper: nessuna. NESSUN COMMIT (in attesa ok, CLAUDE.md §3.6).
+
+ATTENZIONE COMMIT: la working tree condivisa contiene anche modifiche NON tracciate concorrenti di un altro teammate (spec 0046 mass-migration-import: `RunMigrationJob.php`, `MigrationService.php`, `routes/api.php`, `MigrationPlan.php`, migration `migration_plans`, `docs/specs/0046-*.xml`) FUORI dallo scope di questa feature: al commit scopare SOLO i file di questa feature.
+
 ## PROJECT/CAMPAIGN: CATEGORIA PRODOTTO VINCOLATA ALLA FUNZIONE AZIENDALE (2026-07-20) — GREEN, NON COMMITTATO
 
 Richiesta utente (intervento diretto): nel form Progetto/Campagna la **categoria prodotto** e'

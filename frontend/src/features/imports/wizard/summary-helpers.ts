@@ -1,4 +1,4 @@
-import type { ImportRunDetail } from '@/features/imports/wizard/types'
+import type { ConversionReadiness, ImportRunDetail } from '@/features/imports/wizard/types'
 
 /**
  * Resolves each selected global-config value (campaign/project/source/status)
@@ -38,4 +38,13 @@ export function resolveFieldLabel(
 ): string {
   const field = run?.fields.find((candidate) => candidate.id === fieldId)
   return field ? translate(field.label) : fieldId
+}
+
+/** Whether the run can be auto-converted to Opportunity as-is (no blocker in `readiness`). */
+export function isConversionReady(readiness: ConversionReadiness): boolean {
+  return (
+    readiness.operational_site_set &&
+    readiness.campaign_derives_product_line &&
+    readiness.rows_without_operator === 0
+  )
 }

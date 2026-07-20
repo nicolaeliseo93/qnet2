@@ -6,6 +6,7 @@ import { AG_GRID_LOCALE_EN, AG_GRID_LOCALE_IT } from '@ag-grid-community/locale'
 import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
 import { buildReviewColumnDefs } from '@/features/imports/wizard/review-columns'
 import type { ReviewGeoGridContext } from '@/features/imports/wizard/review-geo-editor'
+import type { ReviewOperatorGridContext } from '@/features/imports/wizard/review-operator-editor'
 import { useReviewRows } from '@/features/imports/wizard/use-review-rows'
 import type { ImportRunDetail, ImportRunRowCounts, ImportRunRowItem } from '@/features/imports/wizard/types'
 
@@ -74,11 +75,12 @@ export function ReviewGrid({ domain, run, onRowUpdated = noopRowUpdated, readOnl
     [i18n.language],
   )
 
-  const { datasource, handleCellValueChanged, handleResolutionChange, handleApplyGeo } = useReviewRows({
-    domain,
-    importRunId: run.id,
-    onRowUpdated,
-  })
+  const { datasource, handleCellValueChanged, handleResolutionChange, handleApplyGeo, handleApplyOperator } =
+    useReviewRows({
+      domain,
+      importRunId: run.id,
+      onRowUpdated,
+    })
 
   const columnDefs = useMemo(
     () => buildReviewColumnDefs(run, t, readOnly, handleResolutionChange),
@@ -87,11 +89,15 @@ export function ReviewGrid({ domain, run, onRowUpdated = noopRowUpdated, readOnl
 
   const getRowId = useCallback((params: GetRowIdParams<ImportRunRowItem>) => String(params.data.id), [])
 
-  // The geo popup's apply callback (spec 0038) is shared by all 4 geo
-  // columns and never column-specific, so it travels via `gridOptions.context`
-  // instead of `cellRendererParams` — every `ReviewGeoCell` reads it off
-  // `params.context`, with no per-colDef prop drilling.
-  const gridContext = useMemo<ReviewGeoGridContext>(() => ({ onApplyGeo: handleApplyGeo }), [handleApplyGeo])
+  // The geo/operator popups' apply callbacks are shared by all 4 geo columns
+  // and the operator column respectively, never column-specific, so they
+  // travel via `gridOptions.context` instead of `cellRendererParams` — every
+  // `ReviewGeoCell`/`ReviewOperatorCell` reads them off `params.context`,
+  // with no per-colDef prop drilling.
+  const gridContext = useMemo<ReviewGeoGridContext & ReviewOperatorGridContext>(
+    () => ({ onApplyGeo: handleApplyGeo, onApplyOperator: handleApplyOperator }),
+    [handleApplyGeo, handleApplyOperator],
+  )
 
   const gridOptions = useMemo<GridOptions<ImportRunRowItem>>(
     () => ({

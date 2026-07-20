@@ -16,7 +16,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * frontend never has to know which store a given key came from. Never the
  * raw `import_run_id`/timestamps — those are server-only bookkeeping.
  * `duplicate_meta`/`resolution` (spec 0036, additive) are null on any row
- * that never matched an existing record.
+ * that never matched an existing record. `operator_id`/`operator` (spec
+ * 0045, additive) carry the per-row Operator override — null on a row that
+ * still defers to the run's global operator.
  */
 class ImportRunRowResource extends JsonResource
 {
@@ -36,6 +38,8 @@ class ImportRunRowResource extends JsonResource
             'duplicate_of_id' => $row->duplicate_of_id,
             'duplicate_meta' => $row->duplicate_meta,
             'resolution' => $row->resolution?->value,
+            'operator_id' => $row->operator_id,
+            'operator' => $row->operator === null ? null : ['id' => $row->operator->id, 'name' => $row->operator->name],
             'values' => [...($row->mapped_values ?? []), ...($row->extra_values ?? [])],
             'messages' => $row->messages ?? [],
         ];

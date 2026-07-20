@@ -22,13 +22,19 @@ use Illuminate\Validation\Validator;
  * original column name, never a synthetic "extra field id"). Any other key
  * is rejected — the same allow-list discipline as ConfigureImportRequest.
  *
- * `geo` (spec 0038): at least one of `values`/`geo` is required. `geo` pins
- * the 4 geo levels to authoritative ids (country_id/state_id/province_id/
- * city_id, all nullable) instead of letting the reviser re-run the fuzzy
- * GeoRecognizer — validated here for existence (`exists:`) and hierarchical
- * coherence (a child id must actually belong to its declared parent, the
- * same rule GeoSelect enforces client-side), so an incoherent pin never
- * reaches StagedRowReviser.
+ * `geo` (spec 0038): at least one of `values`/`geo`/`operator_id` is
+ * required. `geo` pins the 4 geo levels to authoritative ids (country_id/
+ * state_id/province_id/city_id, all nullable) instead of letting the
+ * reviser re-run the fuzzy GeoRecognizer — validated here for existence
+ * (`exists:`) and hierarchical coherence (a child id must actually belong to
+ * its declared parent, the same rule GeoSelect enforces client-side), so an
+ * incoherent pin never reaches StagedRowReviser.
+ *
+ * `operator_id` (spec 0045): the per-row Operator override — nullable (a
+ * present, explicitly-null value CLEARS the override back to the run's
+ * global operator). Presence is checked manually in withValidator() (not via
+ * `required_without_all`), because the built-in rule cannot tell "submitted
+ * as null to clear" apart from "not submitted at all".
  *
  * The {domain}/{importRun} route segments resolve BEFORE any rule below runs
  * (unknown domain -> 404 via bootstrap/app.php; unknown/unbound importRun ->
@@ -54,23 +60,40 @@ class UpdateImportRowRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'values' => ['required_without:geo', 'array'],
+            'values' => ['sometimes', 'array'],
             'values.*' => ['nullable', 'string'],
-            'geo' => ['required_without:values', 'array'],
+            'geo' => ['sometimes', 'array'],
             'geo.country_id' => ['nullable', 'integer', 'exists:countries,id'],
             'geo.state_id' => ['nullable', 'integer', 'exists:states,id'],
             'geo.province_id' => ['nullable', 'integer', 'exists:provinces,id'],
             'geo.city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'operator_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
         ];
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $this->validateAtLeastOneSubmitted($validator);
             $this->validateValuesAllowList($validator);
             $this->validateGeoKeys($validator);
             $this->validateGeoHierarchy($validator);
         });
+    }
+
+    /**
+     * `values`/`geo`/`operator_id` replace the old `required_without` pair:
+     * an explicit `operator_id: null` (clearing the override) must count as
+     * "submitted", which the built-in required-family rules cannot express
+     * for a nullable field — so presence is checked directly here instead.
+     */
+    private function validateAtLeastOneSubmitted(Validator $validator): void
+    {
+        if ($this->has('values') || $this->has('geo') || $this->has('operator_id')) {
+            return;
+        }
+
+        $validator->errors()->add('values', 'At least one of values, geo or operator_id is required.');
     }
 
     private function validateValuesAllowList(Validator $validator): void

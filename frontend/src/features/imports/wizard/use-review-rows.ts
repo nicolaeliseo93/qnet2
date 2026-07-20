@@ -50,6 +50,11 @@ export function useReviewRows({ domain, importRunId, onRowUpdated }: UseReviewRo
       updateImportRunRow(domain, importRunId, rowId, { geo }),
   })
 
+  const updateRowOperatorMutation = useMutation({
+    mutationFn: ({ rowId, operatorId }: { rowId: number; operatorId: number | null }) =>
+      updateImportRunRow(domain, importRunId, rowId, { operator_id: operatorId }),
+  })
+
   const resolveRowMutation = useMutation({
     mutationFn: ({ rowId, resolution }: { rowId: number; resolution: ImportRowResolution }) =>
       resolveImportRunRow(domain, importRunId, rowId, resolution),
@@ -156,11 +161,29 @@ export function useReviewRows({ domain, importRunId, onRowUpdated }: UseReviewRo
     [onRowUpdated, updateRowGeoMutation],
   )
 
+  // Step 1: PATCH the popup's chosen operator id (or `null` to revert to the
+  // run's global default) as `operator_id`, mirroring `handleApplyGeo`.
+  // Step 2: on success replace the row with the server's copy, bubble the
+  // recalculated counts, and invalidate the summary query — its
+  // `conversion_readiness.rows_without_operator` depends on rows overridden
+  // here. On failure reject unchanged (no `setData`) so the popup — the only
+  // caller — can surface the error itself.
+  const handleApplyOperator = useCallback(
+    (row: ImportRunRowItem, operatorId: number | null, node: IRowNode<ImportRunRowItem>) =>
+      updateRowOperatorMutation.mutateAsync({ rowId: row.id, operatorId }).then((result) => {
+        node.setData(result.row)
+        onRowUpdated(result.row, result.counts)
+        void queryClient.invalidateQueries({ queryKey: importWizardKeys.summary(domain, importRunId) })
+      }),
+    [domain, importRunId, onRowUpdated, queryClient, updateRowOperatorMutation],
+  )
+
   return {
     datasource,
     handleCellValueChanged,
     handleResolutionChange,
     handleApplyGeo,
+    handleApplyOperator,
     isSaving: updateRowMutation.isPending,
     hasSaveError: updateRowMutation.isError,
   }

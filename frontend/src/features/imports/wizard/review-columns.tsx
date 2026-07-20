@@ -11,6 +11,7 @@ import { AlertTriangle } from 'lucide-react'
 import i18n from '@/i18n'
 import { Badge } from '@/components/ui/badge'
 import { ReviewGeoCell } from '@/features/imports/wizard/review-geo-editor'
+import { ReviewOperatorCell } from '@/features/imports/wizard/review-operator-editor'
 import { ReviewResolutionCell } from '@/features/imports/wizard/review-resolution-cell'
 import { EXTRA_TARGET, IGNORE_TARGET } from '@/features/imports/wizard/types'
 import type { ImportRowResolution, ImportRowStatus, ImportRunDetail, ImportRunRowItem } from '@/features/imports/wizard/types'
@@ -183,6 +184,11 @@ function resolveEditableFields(run: ImportRunDetail): Array<{ id: string; label:
  * matched anagrafica + skip/create/update select for `duplicate` rows via
  * `ReviewResolutionCell`, an em dash for every other row, and stays disabled
  * (no `onResolve`) in `readOnly` mode.
+ *
+ * An `operator` column follows `resolution`: a non-editable button cell
+ * (`ReviewOperatorCell`) showing the row's own operator override, or a
+ * muted "uses the default" hint, opening a popup to set/clear it — the
+ * apply callback travels via `gridOptions.context`, same as the geo columns.
  */
 export function buildReviewColumnDefs(
   run: ImportRunDetail,
@@ -229,6 +235,17 @@ export function buildReviewColumnDefs(
       flex: 0,
       cellRenderer: ReviewResolutionCell,
       cellRendererParams: { onResolve: readOnly ? undefined : onResolve, readOnly },
+    },
+    {
+      colId: 'operator',
+      headerName: t('review.columns.operator'),
+      editable: false,
+      sortable: false,
+      filter: false,
+      minWidth: 180,
+      flex: 0,
+      cellRenderer: ReviewOperatorCell,
+      cellRendererParams: { readOnly },
     },
     // `field.label` is a backend default-namespace i18n key
     // (`imports.leads.fields.*`); resolve it via the default namespace, not the

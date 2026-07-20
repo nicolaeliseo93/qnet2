@@ -176,9 +176,13 @@ interface ImportDefinition
      * legacy createRow(), ignoring $dedupStrategy — retro-compat for the 5
      * legacy domains, which are always create-only.
      *
+     * `$convertToOpportunity` (spec 0045): the run's confirm-step choice —
+     * defaults false, ignored by every definition that has not adopted
+     * auto-convert-to-Opportunity (only `leads` has, so far).
+     *
      * @param  array<string, mixed>  $globalConfig
      */
-    public function persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy): void;
+    public function persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy, bool $convertToOpportunity = false): void;
 
     /**
      * Resolve the primary-key id of the EXISTING dominant record this staged

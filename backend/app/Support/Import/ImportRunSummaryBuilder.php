@@ -7,6 +7,7 @@ use App\Enums\ImportRowStatus;
 use App\Imports\Staging\StagedRowBuilder;
 use App\Models\ImportRun;
 use App\Models\ImportRunRow;
+use App\Services\Import\ImportOpportunityConvertibility;
 
 /**
  * Builds the GET .../summary (spec 0033) and the PATCH .../rows/{row}
@@ -16,6 +17,8 @@ use App\Models\ImportRunRow;
  */
 final class ImportRunSummaryBuilder
 {
+    public function __construct(private readonly ImportOpportunityConvertibility $convertibility) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -36,6 +39,26 @@ final class ImportRunSummaryBuilder
             'dedup_strategy' => $importRun->dedup_strategy,
             'warnings' => $this->collectWarningMessages($importRun),
             'duplicate_resolutions' => $this->duplicateResolutions($importRun),
+            'conversion_readiness' => $this->conversionReadiness($importRun),
+        ];
+    }
+
+    /**
+     * Auto-convert-to-Opportunity readiness (spec 0045), computed by the
+     * SAME ImportOpportunityConvertibility the confirm-step gate uses — a
+     * pre-confirm preview, never a second implementation.
+     *
+     * @return array{operational_site_set: bool, campaign_derives_product_line: bool, creatable_rows: int, rows_without_operator: int}
+     */
+    private function conversionReadiness(ImportRun $importRun): array
+    {
+        $readiness = $this->convertibility->assess($importRun);
+
+        return [
+            'operational_site_set' => $readiness->operationalSiteSet,
+            'campaign_derives_product_line' => $readiness->campaignDerivesProductLine,
+            'creatable_rows' => $readiness->creatableRowsCount,
+            'rows_without_operator' => $readiness->rowsWithoutOperatorCount,
         ];
     }
 

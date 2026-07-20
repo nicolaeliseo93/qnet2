@@ -147,6 +147,7 @@ export function ImportWizard({ domain }: ImportWizardProps) {
           domain={domain}
           run={wizard.run}
           onConfirm={wizard.confirm}
+          onBackToReview={() => wizard.goToStep(3)}
           isConfirming={wizard.isConfirming}
           confirmError={wizard.confirmError}
         />

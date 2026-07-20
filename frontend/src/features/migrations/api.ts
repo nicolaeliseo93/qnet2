@@ -1,7 +1,10 @@
 import { apiClient } from '@/api/client'
 import type { ApiResponse } from '@/api/types'
 import type {
+  MassMigrationRun,
   MigrationColumnsTemplate,
+  MigrationPlan,
+  MigrationPlanInput,
   MigrationPreviewPage,
   MigrationRun,
   MigrationRunCreated,
@@ -64,4 +67,34 @@ export async function fetchMigrationRun(source: string, runId: number): Promise<
     `/migrations/${source}/runs/${runId}`,
   )
   return data.data.migration_run
+}
+
+/** Fetches the saved mass-import plan (`GET /migrations/plan`). */
+export async function fetchMigrationPlan(): Promise<MigrationPlan> {
+  const { data } = await apiClient.get<ApiResponse<{ plan: MigrationPlan }>>('/migrations/plan')
+  return data.data.plan
+}
+
+/** Upserts the mass-import plan (`PUT /migrations/plan`), returning it reconciled. */
+export async function saveMigrationPlan(sources: MigrationPlanInput[]): Promise<MigrationPlan> {
+  const { data } = await apiClient.put<ApiResponse<{ plan: MigrationPlan }>>('/migrations/plan', {
+    sources,
+  })
+  return data.data.plan
+}
+
+/** Starts the mass import from the saved plan (`POST /migrations/mass-runs`). */
+export async function startMassMigration(): Promise<MassMigrationRun> {
+  const { data } = await apiClient.post<ApiResponse<{ mass_migration_run: MassMigrationRun }>>(
+    '/migrations/mass-runs',
+  )
+  return data.data.mass_migration_run
+}
+
+/** Polls a mass-import run (`GET /migrations/mass-runs/{massMigrationRun}`). */
+export async function fetchMassMigrationRun(runId: number): Promise<MassMigrationRun> {
+  const { data } = await apiClient.get<ApiResponse<{ mass_migration_run: MassMigrationRun }>>(
+    `/migrations/mass-runs/${runId}`,
+  )
+  return data.data.mass_migration_run
 }

@@ -10,6 +10,7 @@ import {
   reviewValueKeyOf,
 } from '@/features/imports/wizard/review-columns'
 import { ReviewGeoCell } from '@/features/imports/wizard/review-geo-editor'
+import { ReviewOperatorCell } from '@/features/imports/wizard/review-operator-editor'
 import { ReviewResolutionCell } from '@/features/imports/wizard/review-resolution-cell'
 import type { ImportRunDetail, ImportRunRowItem } from '@/features/imports/wizard/types'
 
@@ -62,6 +63,8 @@ function rowItem(overrides: Partial<ImportRunRowItem> = {}): ImportRunRowItem {
     status: 'warning',
     is_edited: false,
     duplicate_of_id: null,
+    operator_id: null,
+    operator: null,
     values: { email: 'mario@example.com' },
     messages: [],
     ...overrides,
@@ -81,6 +84,7 @@ describe('buildReviewColumnDefs', () => {
       'row_number',
       'status',
       'resolution',
+      'operator',
       'field:email',
       'extra:Notes column',
       'messages',
@@ -132,6 +136,7 @@ describe('buildReviewColumnDefs', () => {
       'row_number',
       'status',
       'resolution',
+      'operator',
       'field:first_name',
       'field:last_name',
       'messages',
@@ -149,6 +154,7 @@ describe('buildReviewColumnDefs', () => {
         'row_number',
         'status',
         'resolution',
+        'operator',
         'field:email',
         'extra:Notes column',
         'messages',
@@ -202,6 +208,20 @@ describe('buildReviewColumnDefs', () => {
 
     expect(col?.editable).toBe(false)
     expect(col?.cellRendererParams).toEqual({ readOnly: true })
+  })
+
+  it('wires the operator column to ReviewOperatorCell, non-editable and disabled in readOnly mode', () => {
+    const operatorCol = buildReviewColumnDefs(baseRun(), i18n.t.bind(i18n)).find(
+      (col) => col.colId === 'operator',
+    )
+    expect(operatorCol?.editable).toBe(false)
+    expect(operatorCol?.cellRenderer).toBe(ReviewOperatorCell)
+    expect(operatorCol?.cellRendererParams).toEqual({ readOnly: false })
+
+    const readOnlyOperatorCol = buildReviewColumnDefs(baseRun(), i18n.t.bind(i18n), true).find(
+      (col) => col.colId === 'operator',
+    )
+    expect(readOnlyOperatorCol?.cellRendererParams).toEqual({ readOnly: true })
   })
 
   it("the mapped field column's valueGetter/valueSetter read and write `values` by field id", () => {

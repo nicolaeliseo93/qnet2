@@ -3,6 +3,7 @@ import type { ApiResponse } from '@/api/types'
 import type { GeoValue } from '@/features/geo/geo-select'
 import type {
   ConfigureImportPayload,
+  ConfirmImportPayload,
   ImportMappingTemplate,
   ImportRowResolution,
   ImportRunDetail,
@@ -14,13 +15,15 @@ import type {
 } from '@/features/imports/wizard/types'
 
 /**
- * Body of `PATCH .../rows/{row}` (spec 0038): at least one of the two blocks
- * is present. `geo`, when sent, is authoritative for the 4 geo levels — the
- * backend skips its own fuzzy re-matching for them.
+ * Body of `PATCH .../rows/{row}`: at least one block is present. `geo`, when
+ * sent, is authoritative for the 4 geo levels (spec 0038) — the backend skips
+ * its own fuzzy re-matching for them. `operator_id` sets/clears the row's
+ * per-row operator override (`null` reverts to the run's global default).
  */
 export interface UpdateImportRunRowPayload {
   values?: Record<string, string>
   geo?: GeoValue
+  operator_id?: number | null
 }
 
 /**
@@ -69,11 +72,18 @@ export async function configureImportRun(
 
 /**
  * Confirms a reviewed run, moving it to background processing
- * (`POST .../confirm`). Valid only while `status === 'reviewing'`.
+ * (`POST .../confirm`). Valid only while `status === 'reviewing'`. `payload`
+ * opts the run into auto-converting its creatable rows into Opportunities;
+ * omitted (or `convert_to_opportunity: false`) leaves the legacy behavior.
  */
-export async function confirmImportRun(domain: string, importRunId: number): Promise<ImportRunSummary> {
+export async function confirmImportRun(
+  domain: string,
+  importRunId: number,
+  payload?: ConfirmImportPayload,
+): Promise<ImportRunSummary> {
   const { data } = await apiClient.post<ApiResponse<{ import_run: ImportRunSummary }>>(
     `/imports/${domain}/${importRunId}/confirm`,
+    payload,
   )
   return data.data.import_run
 }

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\ImportRowStatus;
 use App\Enums\ImportStatus;
+use App\Exceptions\Import\ImportConversionNotReadyException;
 use App\Imports\ImportDefinition;
 use App\Imports\RowOutcome;
 use App\Jobs\AnalyzeImportJob;
@@ -14,6 +15,7 @@ use App\Jobs\ValidateImportJob;
 use App\Models\ImportRun;
 use App\Models\ImportRunRow;
 use App\Models\User;
+use App\Services\Import\ImportOpportunityConvertibility;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -37,6 +39,8 @@ class ImportService
     private const string DISK = 'local';
 
     private const string DIRECTORY = 'imports';
+
+    public function __construct(private readonly ImportOpportunityConvertibility $convertibility) {}
 
     /**
      * Store the uploaded file, create the ImportRun (status=validating) and
@@ -144,14 +148,34 @@ class ImportService
      * Move a reviewing run to processing and dispatch the commit job that
      * reads FROM the staged `import_run_rows` (AC-009) — never the source
      * file again. Valid only from `reviewing`; any other status is a 422.
+     *
+     * `$convertToOpportunity` (spec 0045): when true, the run must be READY
+     * (ImportOpportunityConvertibility) — operational site set, campaign
+     * derives a product line, every creatable row has an effective operator
+     * — or this throws ImportConversionNotReadyException (caught by
+     * ImportController::confirm() for the frozen `convert_blockers` 422
+     * body) instead of ever dispatching the commit job. The flag (true or
+     * false) is always persisted on the run so ProcessStagedImportJob ->
+     * LeadsImportDefinition::persistRow() reads the operator's actual choice.
      */
-    public function confirmStaged(ImportRun $run): ImportRun
+    public function confirmStaged(ImportRun $run, bool $convertToOpportunity = false): ImportRun
     {
         if ($run->status !== ImportStatus::Reviewing) {
             abort(422, 'The import cannot be confirmed in its current status.');
         }
 
-        $run->update(['status' => ImportStatus::Processing]);
+        if ($convertToOpportunity) {
+            $readiness = $this->convertibility->assess($run);
+
+            if (! $readiness->isReady()) {
+                throw new ImportConversionNotReadyException($readiness);
+            }
+        }
+
+        $run->update([
+            'convert_to_opportunity' => $convertToOpportunity,
+            'status' => ImportStatus::Processing,
+        ]);
 
         ProcessStagedImportJob::dispatch($run->id);
 

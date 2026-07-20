@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0046 — Mass migration import with a saved, ordered plan (estende 0013).
+  Contract-first. Il super-admin oggi importa UNA source alla volta (0013). Questa
+  spec aggiunge: (1) una CONFIGURAZIONE persistita a DB (quali source includere e in
+  quale ORDINE), impostata una volta via drag & drop; (2) un bottone "Importa tutto"
+  che esegue le source abilitate IN QUELL'ORDINE, in background, FERMANDOSI alla prima
+  che fallisce (le fasi successive dipendono via `old_id` dalle precedenti). Il select
+  single-source di 0013 resta invariato per l'import manuale.
+
+  OVERRIDE DI 0013 (dichiarato, 0013 NON riscritta): l'out-of-scope di 0013
+  ("NESSUN orchestratore automatico dell'ORDINE tra migrazioni") viene SUPERATO da
+  questa spec. L'ordine di default resta la guida gia' codificata in
+  App\Migrations\MigrationOrder::PHASES; qui diventa un piano PERSISTITO e riordinabile
+  dall'utente, e un orchestratore lo esegue.
+
+  Decisioni prodotto (approvate dall'utente, 2026-07-20):
+  - Ordine scelto dall'utente UNA VOLTA e salvato a DB come impostazione app-wide
+    (non per-run, non per-utente): singleton `migration_plans`.
+  - Nel massivo l'utente sceglie un SOTTOINSIEME (flag enabled per source); le
+    disabilitate sono saltate, l'ordine relativo resta quello salvato.
+  - Su fallimento di una source: FERMA la catena (le source non raggiunte non partono).
+-->
+<spec id="0046-mass-migration-import" status="draft" owner="tu" date="2026-07-20">
+
+  <goal>
+    Dare al super-admin un bottone "Importa tutto" che esegue le migration source (spec
+    0013) in sequenza secondo un PIANO salvato a DB — quali source includere e in quale
+    ordine — configurabile una volta via drag & drop. L'orchestratore esegue solo le
+    source abilitate, nell'ordine salvato, e si ferma alla prima che fallisce. L'import
+    single-source manuale di 0013 resta invariato.
+  </goal>
+
+  <context>
+    Verificato sul repo (nomi reali, non ipotizzati). Riuso massimo dell'infra 0013.
+
+    Ordine di dipendenza GIA' codificato: `App\Migrations\MigrationOrder::PHASES`
+    (`phases()`), 3 fasi di `MigrationSource::key()` (fase 1 ancore indipendenti; fase 2
+    users/referents; fase 3 business-function-members). Oggi e' dato inerte: nessun
+    job/comando/endpoint lo consuma. Diventa il DEFAULT del piano persistito.
+
+    Registry source: `App\Migrations\MigrationRegistry` (`resolve`, `all`) su
+    `config('migrations.definitions')` (13 source). `MigrationSource::key()`/`label()`.
+
+    Import single-source (0013, riuso): `MigrationController@import` ->
+    `App\Services\MigrationService::start(User,string)` crea `MigrationRun`(pending) e
+    dispatcha `App\Jobs\RunMigrationJob`, che chiama `MigrationSource::import(
+    MigrationImportContext)` (idempotente per `old_id`, transazione per-riga). Enum
+    `App\Enums\MigrationStatus` (pending|processing|completed|failed). Model
+    `App\Models\MigrationRun` (source string NON FK, user_id, status, counters, report).
+    Resource `App\Http\Resources\Migration\MigrationRunResource` (+ `withReport()`).
+
+    Gate: gruppo rotte `migrations` sotto `auth:sanctum` + alias middleware `super-admin`
+    (`EnsureSuperAdmin`, fail-closed via `UserService::PRIVILEGED_ROLE`). Nessun throttle
+    (decisione utente 2026-07-15). Ownership run come `MigrationController::assertOwnedRun`
+    (run non dell'actor -> 404, mai 403).
+
+    Envelope `BaseApiController`: `ok`/`created`/`fail`/`handleControllerException`
+    (AuthorizationException->403, ModelNotFound->404). Envelope `{success,message,data}`.
+
+    Persistenza settings: NON esiste una tabella settings globale (solo
+    `UserTablePreference`, per-utente). Il piano e' app-wide -> nuova tabella singleton.
+
+    Frontend: `frontend/src/features/migrations/` (api.ts, types.ts, query-keys.ts,
+    use-migrations.ts, use-migration-import.ts, migrations-page.tsx, import-dialog.tsx,
+    migration-import-progress.tsx, migration-template-panel.tsx, i18n.ts). Il select
+    single-source vive in `migrations-page.tsx`. `@dnd-kit/sortable` GIA' installato
+    (`package.json`) -> riordino drag & drop senza nuove dipendenze. `components/ui/*`
+    (button, card, checkbox, dialog, badge, progress), TanStack Query, axios, i18next.
+  </context>
+
+  <scope>
+    <in>
+      <item>Tabella singleton `migration_plans` + Model `App\Models\MigrationPlan` (`sources` json: array ORDINATO di `{source:string, enabled:bool}`, timestamps). `down()` reversibile.</item>
+      <item>`App\Services\MigrationPlanService`: `current()` (piano salvato RICONCILIATO col registry — droppa key non piu' registrate, mantiene l'ordine salvato, APPENDE in coda le source registrate mancanti come enabled=true nell'ordine `MigrationOrder`; se nessuna riga -> default = `MigrationOrder::PHASES` appiattito, tutte enabled); `save(array $sources)` (upsert singleton).</item>
+      <item>Tabella `mass_migration_runs` + Model `App\Models\MassMigrationRun` (+ factory): id, user_id (FK), sources(json: snapshot ordinato delle key ABILITATE al lancio), status(string, riusa `MigrationStatus`), timestamps. `runs()` hasMany `MigrationRun`. `down()` reversibile.</item>
+      <item>Migration ADDITIVA: colonna `mass_migration_run_id` (FK nullable, nullOnDelete) su `migration_runs`; Model `MigrationRun` espone la relazione `massMigrationRun()` belongsTo e il campo in `$fillable`. `down()` rimuove la FK. Nessuna modifica alle colonne esistenti.</item>
+      <item>Refactor DRY: estrarre in `MigrationService::runSource(MigrationRun): void` il core di `RunMigrationJob::handle` (processing -> resolve source -> import -> completed; su Throwable -> failed + rethrow). `RunMigrationJob` delega a `runSource`. `MigrationService` inietta `MigrationRegistry`. Firma pubblica dei Source/DTO invariata.</item>
+      <item>`MigrationService::startMass(User): MassMigrationRun`: legge il piano (source abilitate in ordine), crea `MassMigrationRun`(pending, sources=snapshot) e dispatcha `App\Jobs\RunMassMigrationJob`. Piano senza source abilitate -> non avvia (il controller risponde 422).</item>
+      <item>`App\Jobs\RunMassMigrationJob`: parent pending->processing; per ogni source in ordine crea un `MigrationRun` figlio (linkato via `mass_migration_run_id`) ed esegue `MigrationService::runSource`; al primo figlio in errore -> parent `failed` e STOP (le source non raggiunte NON creano figlio); tutte ok -> parent `completed`. Nessun re-throw (esito di dominio osservato via polling).</item>
+      <item>Controller thin `App\Http\Controllers\Migration\MigrationPlanController` (`show`, `update`) e `App\Http\Controllers\Migration\MassMigrationController` (`store`, `show`), stile `MigrationController` (try/catch -> handleControllerException). FormRequest `App\Http\Requests\Migration\UpdateMigrationPlanRequest`. Resource `App\Http\Resources\Migration\MassMigrationRunResource`.</item>
+      <item>Rotte nel gruppo `super-admin` esistente (`routes/api.php`): `GET/PUT migrations/plan`, `POST migrations/mass-runs`, `GET migrations/mass-runs/{massMigrationRun}`. Ownership: `{massMigrationRun}` non dell'actor -> 404 (mai 403).</item>
+      <item>Frontend: pannello "Configura ordine import" (lista drag & drop `@dnd-kit/sortable` con checkbox enable per source + Salva) e bottone primario "Importa tutto" (dialog conferma -> POST -> polling GET mass-runs/{id} con progress PER-SOURCE, stop-on-failure evidenziato). Hook `use-migration-plan.ts`, `use-mass-migration.ts`; aggiunte a api.ts/types.ts/query-keys.ts/i18n.ts. Il select single-source di 0013 resta invariato.</item>
+      <item>Test: Pest (plan default+reconcile+save+validazione+authz; startMass; RunMassMigrationJob happy/stop-on-failure; endpoint authz/ownership) + Vitest (pannello render ordine, riordino, save; Importa tutto POST+polling+stop-on-failure).</item>
+    </in>
+    <out>
+      <item>NESSUNA modifica al flusso single-source di 0013 (select + `migrations/{source}/import` + `RunMigrationJob` intatti, solo refactor DRY interno).</item>
+      <item>NESSUN piano per-utente ne' storico dei piani: `migration_plans` e' singleton app-wide, l'ultimo salvataggio vince.</item>
+      <item>NESSUNA validazione automatica delle dipendenze nel riordino: l'utente puo' salvare qualunque ordine; l'ordine SBAGLIATO produce gli stessi warning non-fatali di 0013 (parent non migrato). Il default resta corretto.</item>
+      <item>NESSUN retry/resume del massivo dopo lo stop: su fallimento si corregge e si rilancia (idempotente per `old_id`: le source gia' completate ri-eseguono in SKIP).</item>
+      <item>NESSUN throttle sui nuovi endpoint (coerente con la decisione utente 2026-07-15).</item>
+      <item>NESSUN nuovo permesso granulare: solo hard gate super-admin.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+    <!-- Authz OGNI endpoint: auth:sanctum + EnsureSuperAdmin (401 anonimo, 403 non
+         super-admin). Envelope {success,message,data}. `source` = key del registry. -->
+
+    <endpoint method="GET" path="/api/migrations/plan">
+      <request>Nessun body. Ritorna il piano riconciliato (salvato o default).</request>
+      <response status="200">
+        { success, message, data: { plan: { sources: Array&lt;{ source:string, label:string, enabled:boolean }&gt; } } }
+      </response>
+      <errors>401; 403.</errors>
+    </endpoint>
+
+    <endpoint method="PUT" path="/api/migrations/plan">
+      <request>
+        Body: { sources: Array&lt;{ source:string, enabled:boolean }&gt; }.
+        Validazione: `sources` array, min 1; ogni `sources.*.source` in registry
+        (config migrations.definitions) e DISTINCT; `sources.*.enabled` boolean.
+      </request>
+      <response status="200">
+        { success, message, data: { plan: { sources: Array&lt;{ source:string, label:string, enabled:boolean }&gt; } } }  <!-- riconciliato -->
+      </response>
+      <errors>401; 403; 422 source ignota / duplicata / enabled non boolean / lista vuota.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/migrations/mass-runs">
+      <request>Nessun body. Avvia il massivo dal piano salvato; dispatcha RunMassMigrationJob.</request>
+      <response status="201">
+        { success, message, data: { mass_migration_run: {
+          id:number, status:'pending', sources:string[], created_at:string, runs:[]
+        } } }
+      </response>
+      <errors>401; 403; 422 se il piano non ha alcuna source abilitata.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/migrations/mass-runs/{massMigrationRun}">
+      <request>Nessun body. Polling dell'aggregato + figli.</request>
+      <response status="200">
+        { success, message, data: { mass_migration_run: {
+          id:number,
+          status:'pending'|'processing'|'completed'|'failed',
+          sources:string[],  <!-- ordine pianificato delle abilitate -->
+          created_at:string,
+          runs: Array&lt;{ id:number, source:string,
+            status:'pending'|'processing'|'completed'|'failed',
+            total_rows:number, created_rows:number, skipped_rows:number, failed_rows:number,
+            report: Array&lt;{ old_id:number|string|null, level:'warning'|'error', message:string }&gt; | null,
+            created_at:string }&gt;  <!-- un figlio per source AVVIATA, in ordine di creazione -->
+        } } }
+      </response>
+      <errors>401; 403; 404 run inesistente o non dell'actor.</errors>
+    </endpoint>
+  </data_contract>
+
+  <acceptance_criteria>
+    <criterion id="AC-001">Data la migration `migration_plans`, quando la eseguo, allora esiste con `sources` json + timestamps e `down()` la rimuove; `MigrationPlan` casta `sources` ad array. (test: schema up/down + cast)</criterion>
+    <criterion id="AC-002">Dato nessun piano salvato, quando `MigrationPlanService::current()`, allora ritorna il default = `MigrationOrder::PHASES` appiattito, tutte enabled, nell'ordine delle fasi. (test: default da MigrationOrder)</criterion>
+    <criterion id="AC-003">Dato un piano salvato che contiene una key NON piu' registrata e a cui MANCA una source registrata, quando `current()`, allora la key ignota e' droppata, l'ordine salvato e' preservato, e la source mancante e' APPESA in coda enabled=true. (test: reconcile drop + append)</criterion>
+    <criterion id="AC-004">Dato `MigrationPlanService::save(sources)`, quando salvo due volte, allora resta UNA sola riga (singleton, ultimo vince) e `current()` riflette l'ordine/flag salvati. (test: upsert singleton)</criterion>
+    <criterion id="AC-005">Dato il refactor, quando eseguo `RunMigrationJob` per una source valida, allora il MigrationRun passa processing->completed identico a prima; per una source non registrata passa a failed e rilancia. (test: non-regressione single-source via runSource)</criterion>
+    <criterion id="AC-006">Dato un piano con source abilitate [A,B,C] e Http::fake che le fa tutte riuscire, quando gira `RunMassMigrationJob`, allora crea un `MigrationRun` figlio per A,B,C IN ORDINE (ognuno linkato via mass_migration_run_id, completed) e il parent passa a completed. (test: happy path ordine + linking)</criterion>
+    <criterion id="AC-007">Dato un piano [A,B,C] in cui B fallisce, quando gira il job, allora A e' completed, B e' failed, il parent e' failed, e C NON ha alcun figlio (catena fermata); nessuna eccezione propagata dal job. (test: stop-on-failure)</criterion>
+    <criterion id="AC-008">Dato un piano con alcune source disabilitate, quando avvio il massivo, allora il `MassMigrationRun.sources` snapshot contiene SOLO le abilitate in ordine e il job crea figli solo per quelle. (test: subset enabled)</criterion>
+    <criterion id="AC-009">Dato un super-admin, quando GET /api/migrations/plan, allora `data.plan.sources` = lista {source,label,enabled}; non super-admin -> 403; anonimo -> 401. (test: show + authz)</criterion>
+    <criterion id="AC-010">Dato un super-admin, quando PUT /api/migrations/plan con un ordine/subset validi, allora 200 col piano riconciliato e la riga persiste; source ignota/duplicata/lista vuota -> 422; non super-admin -> 403. (test: update happy + validazione + authz)</criterion>
+    <criterion id="AC-011">Dato un super-admin e un piano con abilitate, quando POST /api/migrations/mass-runs, allora 201 con mass_migration_run(status=pending, sources=snapshot) e `RunMassMigrationJob` dispatchato (Queue::fake); piano senza abilitate -> 422; non super-admin -> 403. (test: store + Queue::fake + 422 + authz)</criterion>
+    <criterion id="AC-012">Dato un mass run dell'actor con figli, quando GET /api/migrations/mass-runs/{id}, allora ricevo status + sources + `runs[]` (con report) dei figli in ordine; run di altro utente -> 404; non super-admin -> 403. (test: show + ownership 404 + authz)</criterion>
+    <criterion id="AC-013">Data la pagina Migrazioni, quando apro "Configura ordine import", allora vedo le source nell'ordine del piano con checkbox enable; riordino drag & drop e Salva -> PUT plan; il select single-source resta invariato. (test FE: render ordine + riordino + save, MSW)</criterion>
+    <criterion id="AC-014">Dato il bottone "Importa tutto", quando confermo, allora POST mass-runs avvia il run e il dialog fa polling di GET mass-runs/{id} finche' status in {completed,failed}, mostrando il progress PER-SOURCE; su stop-on-failure evidenzia la source fallita e le non avviate; errore server mostra messaggio i18n coerente. (test FE: import+polling+stop-on-failure/i18n)</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm): drag & drop con `@dnd-kit/sortable` gia' presente; coda `database` gia' configurata.</item>
+    <item>Authz server-side su OGNI nuovo endpoint: `auth:sanctum` + `EnsureSuperAdmin` + ownership sul mass run (404, mai 403). Nessun throttle. L'UI nasconde, il backend autorizza.</item>
+    <item>Nessuna modifica alle firme dei Service/DTO/Source di 0013: solo estrazione DRY di `runSource` e aggiunta di `startMass`. `RunMigrationJob` continua a delegare la stessa logica.</item>
+    <item>Ordine come dato: default da `MigrationOrder::PHASES` (unica fonte di verita' del default); il piano salvato lo OVERRIDA. `current()` sempre riconciliato col registry (nessuna key orfana, nessuna source silenziosamente esclusa).</item>
+    <item>Stop-on-failure: le fasi successive dipendono via `old_id`; la catena si ferma alla prima failed. Idempotenza 0013 preservata: rilancio -> source gia' completate in SKIP.</item>
+    <item>`mass_migration_run_id` e le FK sono set dall'orchestratore (non da input utente); query via Eloquent, mai SQL interpolato. Nessun leak di classi negli errori (envelope).</item>
+    <item>Identificatori in INGLESE (tabelle `migration_plans`/`mass_migration_runs`, colonna `mass_migration_run_id`, rotte `migrations/plan`/`migrations/mass-runs`). Stringhe UI via i18n.</item>
+    <item>Envelope {success,message,data}; mai model/collezione Eloquent grezza: Resource per il mass run; piano come array {source,label,enabled}.</item>
+    <item>File entro 300/500 righe; dead code zero; nessuna emoticon. Pint + ESLint + `tsc --noEmit` puliti. Test ESEGUITI (Http::fake/Queue::fake/MSW, nessuna rete reale).</item>
+  </constraints>
+
+</spec>

@@ -23,6 +23,8 @@ export const migrations = {
     sources: 'Sources',
     tags: 'Tags',
     sectors: 'Sectors',
+    attributes: 'Attributes',
+    'product-categories': 'Product categories',
   },
   page: {
     sourceLabel: 'Source',
@@ -74,6 +76,33 @@ export const migrations = {
       warning: 'Warning',
       error: 'Error',
     },
+  },
+  plan: {
+    configureButton: 'Configure order',
+    title: 'Mass import order',
+    subtitle:
+      'Choose which sources “Import all” includes and drag to set the order. Later sources depend on the earlier ones.',
+    dragHandle: 'Reorder source',
+    enabledLabel: 'Include {{source}} in the mass import',
+    save: 'Save order',
+    saving: 'Saving…',
+    saved: 'Order saved.',
+    loadError: 'Unable to load the import order. Please try again.',
+  },
+  massImport: {
+    button: 'Import all',
+    title: 'Import all sources',
+    subtitle: 'Runs the enabled sources in the saved order, stopping at the first failure.',
+    confirmDescription:
+      'This runs every enabled source in order, in the background. It stops at the first source that fails, because later sources depend on the earlier ones. Already-imported records are skipped, so it is safe to run again.',
+    start: 'Start import',
+    starting: 'Starting…',
+    empty: 'No sources are enabled. Enable at least one in “Configure order”.',
+    stopped: 'The import stopped at the failing source; the sources after it were not run.',
+    sourceStatus: {
+      notRun: 'Not run',
+    },
+    perSourceCounts: '{{created}} created · {{skipped}} skipped · {{failed}} failed',
   },
   status: {
     pending: 'Pending',

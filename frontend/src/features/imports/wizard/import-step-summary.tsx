@@ -1,26 +1,38 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Columns3, FileCheck2, Loader2, MoveRight, PackagePlus, Settings2, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { Can } from '@/features/auth/can'
 import { BusyState, StatTile, StepAlert, StepSectionHeader } from '@/features/imports/wizard/wizard-ui'
 import { getImportRunSummary } from '@/features/imports/wizard/api'
 import { importWizardKeys } from '@/features/imports/wizard/query-keys'
 import { ImportRunProgress } from '@/features/imports/wizard/import-run-progress'
-import { resolveFieldLabel, resolveGlobalConfigEntries } from '@/features/imports/wizard/summary-helpers'
+import {
+  isConversionReady,
+  resolveFieldLabel,
+  resolveGlobalConfigEntries,
+} from '@/features/imports/wizard/summary-helpers'
+import { ConversionReadinessSection } from '@/features/imports/wizard/summary-conversion-readiness'
 // Side effect: registers this lane's `summary.*`/`progress.*` i18n keys (see
 // the module doc comment there).
 import '@/features/imports/wizard/import-wizard-i18n-summary'
-import type { ImportRunDetail, ImportRunSummaryReport } from '@/features/imports/wizard/types'
+import type { ConfirmImportPayload, ImportRunDetail, ImportRunSummaryReport } from '@/features/imports/wizard/types'
 
 export interface ImportStepSummaryProps {
   domain: string
   run: ImportRunDetail | null
-  onConfirm: () => void
+  onConfirm: (payload: ConfirmImportPayload) => void
+  /** Sends the operator back to the review step (spec: not-ready auto-convert blocker). */
+  onBackToReview: () => void
   isConfirming: boolean
   confirmError: string | null
 }
+
+/** Permission gating the auto-convert-to-Opportunity toggle, mirroring `lead-form-body.tsx`'s own gate. */
+const CONVERT_TO_OPPORTUNITY_PERMISSION = 'opportunities.create'
 
 /** Small icon+title heading for the summary's sub-sections. */
 function SummarySectionTitle({ icon: Icon, children }: { icon: typeof Settings2; children: string }) {
@@ -41,13 +53,21 @@ function SummarySectionTitle({ icon: Icon, children }: { icon: typeof Settings2;
  * processing/completed/failed outcome (polling already covered by
  * `useImportWizard`).
  */
-export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confirmError }: ImportStepSummaryProps) {
+export function ImportStepSummary({
+  domain,
+  run,
+  onConfirm,
+  onBackToReview,
+  isConfirming,
+  confirmError,
+}: ImportStepSummaryProps) {
   const { t } = useTranslation('importWizard')
   // Field/global labels are backend default-namespace i18n keys
   // (`imports.leads.fields.*` / `imports.leads.global.*`).
   const { t: tLabel } = useTranslation()
   const runId = run?.id ?? null
   const isReviewing = run?.status === 'reviewing'
+  const [autoConvert, setAutoConvert] = useState(false)
 
   const summaryQuery = useQuery<ImportRunSummaryReport>({
     queryKey: runId != null ? importWizardKeys.summary(domain, runId) : importWizardKeys.domain(domain),
@@ -203,12 +223,26 @@ export function ImportStepSummary({ domain, run, onConfirm, isConfirming, confir
           </div>
         ) : null}
 
+        <Can permission={CONVERT_TO_OPPORTUNITY_PERMISSION}>
+          <ConversionReadinessSection
+            checked={autoConvert}
+            onCheckedChange={setAutoConvert}
+            readiness={summary.conversion_readiness}
+            onBackToReview={onBackToReview}
+            t={t}
+          />
+        </Can>
+
         {confirmError ? <StepAlert>{confirmError}</StepAlert> : null}
 
         <Separator />
 
         <div className="flex justify-end">
-          <Button type="button" onClick={onConfirm} disabled={isConfirming}>
+          <Button
+            type="button"
+            onClick={() => onConfirm({ convert_to_opportunity: autoConvert })}
+            disabled={isConfirming || (autoConvert && !isConversionReady(summary.conversion_readiness))}
+          >
             {isConfirming ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
             {isConfirming ? t('summary.confirming') : t('summary.confirm')}
           </Button>

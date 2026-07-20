@@ -32,6 +32,11 @@ use App\Models\User;
  * authoritative ids into canonical name + id mapped_values BEFORE the
  * pipeline runs, and the pipeline is told to skip GeoRecognizer — the pin IS
  * the resolution, not a hint to re-fuzzy-match.
+ *
+ * `operator_id` (spec 0045): the per-row Operator override never re-runs the
+ * staging pipeline on its own — it does not affect recognizers/validation/
+ * dedup, only who owns the row at commit time — so a request carrying ONLY
+ * `operator_id` short-circuits before StagedRowBuilder even runs.
  */
 final class StagedRowReviser
 {
@@ -41,8 +46,26 @@ final class StagedRowReviser
      * @param  array<string, string>|null  $editedValues  field id (or extra column key) => new value
      * @param  array{country_id: ?int, state_id: ?int, province_id: ?int, city_id: ?int}|null  $geo
      */
-    public function revise(ImportDefinition $definition, User $actor, ImportRun $run, ImportRunRow $row, ?array $editedValues, ?array $geo = null): ImportRunRow
-    {
+    public function revise(
+        ImportDefinition $definition,
+        User $actor,
+        ImportRun $run,
+        ImportRunRow $row,
+        ?array $editedValues,
+        ?array $geo = null,
+        bool $operatorIdSubmitted = false,
+        ?int $operatorId = null,
+    ): ImportRunRow {
+        // Step 1: an operator-only override never touches staging/validation
+        // status — plain column write, no StagedRowBuilder replay.
+        if ($editedValues === null && $geo === null) {
+            if ($operatorIdSubmitted) {
+                $row->update(['operator_id' => $operatorId, 'is_edited' => true]);
+            }
+
+            return $row->fresh();
+        }
+
         $columnMapping = $run->column_mapping ?? [];
         $dedupMode = ImportDedupMode::from($run->dedup_strategy ?? ImportDedupMode::CreateOnly->value);
 
@@ -70,6 +93,7 @@ final class StagedRowReviser
             // — it no longer refers to a real match.
             'resolution' => $outcome->status === ImportRowStatus::Duplicate ? $row->resolution : null,
             'is_edited' => true,
+            ...($operatorIdSubmitted ? ['operator_id' => $operatorId] : []),
         ]);
 
         return $row->fresh();

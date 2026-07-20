@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Opportunities;
 
 use App\DataObjects\Opportunities\LeadOpportunityDefaults;
+use App\Models\Campaign;
 use App\Models\Lead;
 use Illuminate\Database\Eloquent\Model;
 
@@ -73,11 +74,8 @@ final class LeadOpportunityDefaultsResolver
         $lead->loadMissing(self::REQUIRED_RELATIONS);
 
         $campaign = $lead->campaign;
-        $project = $campaign->project;
 
         $effectiveSource = $lead->source_id !== null ? $lead->source : $campaign->source;
-        $effectiveBusinessFunction = $project !== null ? $project->businessFunction : $campaign->businessFunction;
-        $effectiveProductCategory = $project !== null ? $project->productCategory : $campaign->productCategory;
 
         $values = [
             'source_id' => $effectiveSource?->id,
@@ -95,9 +93,36 @@ final class LeadOpportunityDefaultsResolver
             values: $values,
             references: $references,
             lockedFields: $this->lockedFields($values),
-            productLines: $this->productLines($effectiveBusinessFunction, $effectiveProductCategory),
+            productLines: $this->productLines($this->effectiveBusinessFunction($campaign), $this->effectiveProductCategory($campaign)),
             existingOpportunityId: $lead->opportunity?->id,
         );
+    }
+
+    /**
+     * Whether a campaign (via its linked Project when one exists, else the
+     * campaign's own business function/product category) derives a
+     * non-empty Opportunity product line — the SAME predicate resolve()
+     * uses, exposed for App\Services\Import\ImportOpportunityConvertibility
+     * (the import wizard's pre-conversion gate, spec 0045) so the two never
+     * drift apart. Caller must eager-load businessFunction/productCategory/
+     * project.businessFunction/project.productCategory on $campaign.
+     */
+    public function campaignDerivesProductLine(Campaign $campaign): bool
+    {
+        return $this->productLines(
+            $this->effectiveBusinessFunction($campaign),
+            $this->effectiveProductCategory($campaign),
+        ) !== [];
+    }
+
+    private function effectiveBusinessFunction(Campaign $campaign): ?Model
+    {
+        return $campaign->project !== null ? $campaign->project->businessFunction : $campaign->businessFunction;
+    }
+
+    private function effectiveProductCategory(Campaign $campaign): ?Model
+    {
+        return $campaign->project !== null ? $campaign->project->productCategory : $campaign->productCategory;
     }
 
     /**

@@ -154,7 +154,7 @@ abstract class AbstractImportDefinition implements ImportDefinition
      *
      * @param  array<string, mixed>  $globalConfig
      */
-    public function persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy): void
+    public function persistRow(User $actor, ImportRunRow $row, array $globalConfig, string $dedupStrategy, bool $convertToOpportunity = false): void
     {
         $this->createRow($actor, $row->mapped_values ?? []);
     }

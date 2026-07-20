@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, ChevronRight, Eye } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, ListOrdered, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -17,6 +17,8 @@ import { PageHeader } from '@/components/page-header'
 // doc comment) before this page's own `t()` calls run.
 import '@/features/migrations/i18n'
 import { ImportDialog } from '@/features/migrations/import-dialog'
+import { MassImportDialog } from '@/features/migrations/mass-import-dialog'
+import { MigrationPlanPanel } from '@/features/migrations/migration-plan-panel'
 import { MigrationPreviewTable } from '@/features/migrations/migration-preview-table'
 import { MigrationTemplatePanel } from '@/features/migrations/migration-template-panel'
 import type { MigrationColumn, MigrationPreviewRow } from '@/features/migrations/types'
@@ -45,6 +47,8 @@ export default function MigrationsPage() {
   const [page, setPage] = useState(FIRST_PAGE)
   const [previewRequested, setPreviewRequested] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [planOpen, setPlanOpen] = useState(false)
+  const [massImportOpen, setMassImportOpen] = useState(false)
 
   const sourcesQuery = useMigrationSources()
   const columnsQuery = useMigrationColumns(selectedSource)
@@ -76,6 +80,20 @@ export default function MigrationsPage() {
 
       <Card>
         <CardContent className="flex flex-col gap-4">
+          {/* Mass import (spec 0046): configure the ordered plan once, then run
+              every enabled source in one click. The single-source select below
+              stays for manual, one-at-a-time imports (spec 0013). */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setPlanOpen(true)}>
+              <ListOrdered aria-hidden="true" />
+              {t('plan.configureButton')}
+            </Button>
+            <Button type="button" size="sm" onClick={() => setMassImportOpen(true)}>
+              <Play aria-hidden="true" />
+              {t('massImport.button')}
+            </Button>
+          </div>
+
           <div className="flex flex-col gap-1.5 sm:w-64">
             <Label htmlFor="migration-source">{t('page.sourceLabel')}</Label>
             {sourcesQuery.isLoading ? (
@@ -176,6 +194,9 @@ export default function MigrationsPage() {
           onOpenChange={setImportOpen}
         />
       ) : null}
+
+      <MigrationPlanPanel open={planOpen} onOpenChange={setPlanOpen} />
+      <MassImportDialog open={massImportOpen} onOpenChange={setMassImportOpen} />
     </div>
   )
 }
