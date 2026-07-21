@@ -30,7 +30,7 @@ import type { TableActionDefinition, TableRow } from '@/features/table/types'
  * and every remaining action moves into the overflow (three-dots) menu, keeping
  * the actions column narrow while the most frequent actions stay one click away.
  */
-export const INLINE_ACTION_LIMIT = 4
+export const INLINE_ACTION_LIMIT = 3
 
 /** Fired when the user triggers an action on a row. */
 export type RowActionHandler = (
@@ -82,7 +82,7 @@ function ActionCountBadge({ count }: { count: number }) {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none text-primary-foreground"
+      className="pointer-events-none absolute -top-px -right-px flex h-2.5 min-w-2.5 items-center justify-center rounded-full bg-primary px-0.5 text-[7px] leading-none text-primary-foreground"
     >
       {count}
     </span>

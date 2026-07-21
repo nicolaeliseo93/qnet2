@@ -2,6 +2,88 @@
 
 > Injected at session start. Update at every green state.
 
+## RESTYLING UI POPUP + SEZIONE FILE MODULO OPPORTUNITA (2026-07-21) — GREEN FE, NON COMMITTATO
+
+Direttiva utente: restyling COMPLETO del popup gestione file e della sezione File dell'Opportunita —
+SOLO UI/UX/qualita visiva, ZERO cambi a logica/backend/contratto. Obiettivo: gestione documentale da
+CRM enterprise moderno/premium. Ancorato al design-system del progetto (shadcn/ui + token Tailwind,
+lucide, sizing compatto) — NON ai default del skill landing-page (nessuna nuova dipendenza).
+
+FILE TOCCATI (solo FE):
+- `features/attachments/attachment-tile.tsx`: da tile quadrata a RIGA-file ricca. Avatar tipizzato
+  (thumbnail immagine via view_url, altrimenti icona lucide colorata per `fileKind`), nome, strip meta
+  (badge formato = estensione uppercase, dimensione, data `created_at`), azioni ghost con hover accento
+  (anteprima/scarica = primary tint, elimina = destructive tint). `KIND_META` mappa 8 tipi
+  (image/pdf/spreadsheet/word/presentation/archive/text/generic) con tint translucidi theme-safe
+  (`bg-*-500/12 text-*-600 dark:text-*-300`). `fileKind()` estende la vecchia `mimeCategory`.
+- `features/attachments/documents-section.tsx`: dropzone moderna (chip icona in cerchio, hint+subhint,
+  stato drag/upload), lista a righe (`flex flex-col gap-2`, era grid), skeleton a righe, empty-state ed
+  error-state curati (icona in cerchio, testo). Aggiunto banner errore azione con icona.
+- `features/opportunities/opportunity-documents-dialog.tsx`: header strutturato (chip FolderOpen +
+  titolo + DialogDescription), `DialogContent p-0 overflow-hidden`, corpo `px-5 py-4`.
+- i18n `en/it-attachments.ts`: +`dialogSubtitle`, +`dropzoneSubhint`, +`emptyHint`.
+
+VINCOLI TEST RISPETTATI (nessun test modificato): 1 solo `<img>` per immagini + icona per il resto;
+`original_name` come testo; link Preview/Download e bottone Delete con aria-label invariati; stringa
+esatta `attachments.empty` = "No documents yet." resta come titolo empty-state; dropzone reperibile via
+`getByLabelText('Drop a file here or click to browse')` — FIX: aggiunto `aria-label` esplicito sull'input
+(il sub-hint alterava il textContent della label e `getByLabelText` fa match esatto, non rispetta
+aria-hidden). Nome accessibile ora stabile via aria-label, testo visibile decorativo.
+
+LIMITI FEDELI AL VINCOLO (segnalati, NON implementati come fake):
+- AUTORE (nome): il contratto `Attachment` espone solo `uploaded_by: number|null` (id), nessun nome.
+  Non introdotta lookup (=modifica backend). Mostrata solo la data reale. Follow-up opzionale: campo
+  `uploaded_by_name` nella Resource lato BE per mostrare l'autore.
+- AZIONE "MODIFICA/RENAME": nessun endpoint di rename negli attachments → non aggiunta azione fittizia.
+  Curate solo le azioni reali (anteprima/scarica/elimina).
+
+VERIFICA (green reale): `tsc -b` EXIT 0; ESLint pulito sui 5 file; vitest `attachments` +
+`opportunities-table-documents` 11/11 PASS; intera suite `features/opportunities` PASS.
+
+FOLLOW-UP (2026-07-21) — regola azioni inline ripristinata a 3: l'utente ha notato che l'icona
+documenti restava inline come 4ª, violando la regola "prime 3 icone inline, resto nei tre puntini".
+Storia git: `INLINE_ACTION_LIMIT` era 3 (cb19abf/272d083), portato a 4 in `acd64f3` (feature badge
+documenti) per tenere documenti inline. RIPRISTINATO a 3 in `features/table/row-actions.tsx` (costante
+generica, vale per tutte le tabelle). Ora su Opportunita: inline = view/edit/delete, overflow (tre
+puntini) = documents (con count "(n)" muted nel menu), activity. Aggiornate le asserzioni di
+`row-actions.test.tsx` che codificavano il 4 (requisito ripristinato, dichiarato — non test-tampering):
+"up to 3 actions", "first 3 inline", overflow di catalogOf(6) ora 3 item (a3/a4/a5). VERIFICA:
+`tsc -b` EXIT 0; `row-actions.test.tsx` + `opportunities-table-documents` 9/9 PASS; suite `features/table`
+133 PASS (unici 3 rossi = `cell-renderers ContactsCell`, PREESISTENTI e non correlati).
+
+## RESTYLING UI POPUP "ASSEGNA OPERATORI" (2026-07-21) — GREEN FE, NON COMMITTATO
+
+Direttiva utente: restyling COMPLETO del popup "Assegna operatori" (usato sia nell'ultimo step
+dell'Import Lead via `review-bulk-assign-bar` sia nella tabella Lead) — SOLO UI/UX, logica e backend
+INVARIATI. Aspetto CRM enterprise premium: meno piatto, card/input/select/CTA valorizzati, palette
+funzionale, sezioni differenziate, gerarchia/spaziature/tipografia/icone migliorate, micro-interazioni.
+
+FILE TOCCATO (unico): `frontend/src/features/leads/assign-operators-dialog.tsx`. Nessun altro file,
+nessuna nuova dipendenza, nessuna nuova chiave i18n, nessun cambio al contratto `onAssign`/props.
+
+DECISIONI DESIGN (presentational only, entro token esistenti + palette Tailwind):
+- Colori FUNZIONALI per differenziare i due modi (richiesta esplicita): emerald = "Smistamento equo"
+  (balanced), sky = "Assegna a operatore" (single), navy brand (--primary) = header + CTA. Tokens per-modo
+  inlinati in `ASSIGNMENT_MODES` (class strings complete → JIT-safe), non costruiti dinamicamente.
+- `DialogContent` ora `p-0 gap-0 overflow-hidden sm:max-w-md` → 3 bande: header (chip icona Users +
+  gradient brand tenue), body su `bg-background` (grigio attuale, "parti dal background attuale"), footer
+  gradient con CTA full-width. Card modo bianche (`bg-card`) che si staccano dal grigio; pannello Step 2
+  (Sede/Operatore) bordato con gradient `from-card to-muted/20` per differenziare la sezione.
+- Selezione modo: ring+tint+shadow per-accent + `CheckCircle2` in alto a dx (fade/zoom in). Label campi
+  con icona (`MapPin` sede/primary, `User` operatore/sky). Select: `SELECT_CLASS` = `h-8 bg-card text-xs
+  shadow-sm hover:border-ring/50` (focus-ring forte già interno al componente). CTA: shadow brand + lift.
+- Micro-interazioni gated `motion-safe:` (hover -translate, active translate, animate-in dei blocchi) →
+  rispettano `prefers-reduced-motion`. Compatto (preferenza cliente, ui-design.md) mantenuto. Dark+light ok.
+
+INVARIATO PER I TEST (verificato): struttura sequenziale mode→site→operator, props di
+`AsyncPaginatedSelect` (resource/value/onChange/disabled/params/labels.triggerLabel), aria-label radio
+("Balanced split"/"Assign to operator"), nome CTA ("Assign"), stringa description ("N lead(s) selected."),
+gating submit, pending, close-on-success, retry-on-reject.
+
+VERIFICA (green reale): `npx tsc -b` EXIT 0; ESLint EXIT 0 sul file; `vitest run` su
+assign-operators-dialog + leads-table-assign + review-bulk-assign-bar = 3 file / 27 test PASS.
+Prossimo passo: verifica visiva a schermo (light+dark) e, se ok, chiedere conferma per commit.
+
 ## AZIONE RIGA "documents" CON BADGE COUNT NELLA TABELLA OPPORTUNITA (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
 
 Direttiva utente: oltre alla sezione documenti nel dettaglio, un'icona documenti con badge del conteggio

@@ -4,9 +4,12 @@
  */
 export const attachments = {
   title: 'Documenti',
+  dialogSubtitle: 'File collegati a questa opportunità',
   dropzoneHint: 'Trascina un file qui o clicca per sfogliare',
+  dropzoneSubhint: 'PDF, immagini, fogli di calcolo e documenti',
   uploading: 'Caricamento in corso…',
   empty: 'Nessun documento presente.',
+  emptyHint: 'Trascina un file nell\'area qui sopra per aggiungere il primo.',
   preview: 'Anteprima',
   download: 'Scarica',
   deleteAction: 'Elimina documento',

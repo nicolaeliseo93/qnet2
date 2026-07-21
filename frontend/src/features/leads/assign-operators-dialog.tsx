@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Scale, UserCheck } from 'lucide-react'
+import { CheckCircle2, MapPin, Scale, User, UserCheck, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { Button } from '@/components/ui/button'
@@ -32,11 +32,40 @@ export interface AssignOperatorsDialogInput {
   operator_id?: number
 }
 
-/** The two assignment modes, in selection order, each with its lead icon. */
-const ASSIGNMENT_MODES: ReadonlyArray<{ mode: AssignmentMode; icon: LucideIcon }> = [
-  { mode: 'balanced', icon: Scale },
-  { mode: 'single', icon: UserCheck },
+/**
+ * Presentation tokens per assignment mode. Each mode owns a distinct semantic
+ * accent (emerald = workload split, sky = single operator) so the two cards
+ * read as different actions at a glance. Full class strings are inlined (not
+ * built dynamically) so Tailwind's JIT keeps them.
+ */
+const ASSIGNMENT_MODES: ReadonlyArray<{
+  mode: AssignmentMode
+  icon: LucideIcon
+  /** Icon chip styling while selected. */
+  chip: string
+  /** Card border/tint/ring while selected. */
+  card: string
+  /** Accent color for the selected check mark. */
+  accent: string
+}> = [
+  {
+    mode: 'balanced',
+    icon: Scale,
+    chip: 'bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/25 dark:text-emerald-400',
+    card: 'border-emerald-500/60 bg-emerald-500/[0.07] ring-2 ring-emerald-500/25',
+    accent: 'text-emerald-600 dark:text-emerald-400',
+  },
+  {
+    mode: 'single',
+    icon: UserCheck,
+    chip: 'bg-sky-500/15 text-sky-600 ring-1 ring-sky-500/25 dark:text-sky-400',
+    card: 'border-sky-500/60 bg-sky-500/[0.07] ring-2 ring-sky-500/25',
+    accent: 'text-sky-600 dark:text-sky-400',
+  },
 ]
+
+/** Crisp, compact styling shared by the Sede/Operatore selects. */
+const SELECT_CLASS = 'h-8 bg-card text-xs shadow-sm transition-colors hover:border-ring/50'
 
 export interface AssignOperatorsDialogProps {
   open: boolean
@@ -74,7 +103,7 @@ export function AssignOperatorsDialog({
 }: AssignOperatorsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
         <AssignOperatorsDialogBody
           selectionCount={selectionCount}
           defaultSiteId={defaultSiteId}
@@ -147,17 +176,31 @@ function AssignOperatorsDialogBody({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>{t('leads.assign.title')}</DialogTitle>
-        <DialogDescription>{t('leads.assign.description', { count: selectionCount })}</DialogDescription>
-      </DialogHeader>
+      {/* Header band: brand-tinted strip with an icon chip for identity. */}
+      <div className="flex items-start gap-3 border-b bg-gradient-to-br from-card to-primary/[0.06] px-4 pt-4 pb-3.5">
+        <span
+          aria-hidden="true"
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15"
+        >
+          <Users className="size-4.5" />
+        </span>
+        <DialogHeader className="flex-1 gap-1">
+          <DialogTitle className="text-sm">{t('leads.assign.title')}</DialogTitle>
+          <DialogDescription className="text-xs">
+            {t('leads.assign.description', { count: selectionCount })}
+          </DialogDescription>
+        </DialogHeader>
+      </div>
 
-      <div className="space-y-4">
+      <div className="space-y-4 px-4 py-4">
         {/* Step 1: pick the assignment mode. */}
-        <div className="space-y-1.5">
-          <Label>{t('leads.assign.mode.label')}</Label>
+        <div className="space-y-2">
+          <Label className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            {t('leads.assign.mode.label')}
+          </Label>
           <div role="radiogroup" aria-label={t('leads.assign.mode.label')} className="flex flex-col gap-2">
-            {ASSIGNMENT_MODES.map(({ mode: value, icon: Icon }) => {
+            {ASSIGNMENT_MODES.map((entry) => {
+              const { mode: value, icon: Icon } = entry
               const selected = mode === value
               return (
                 <button
@@ -169,28 +212,41 @@ function AssignOperatorsDialogBody({
                   disabled={isSubmitting}
                   onClick={() => setMode(value)}
                   className={cn(
-                    // bg-card (white) lifts each option off the gray dialog
-                    // surface (bg-background); a bare border blended tone-on-tone.
-                    'flex items-start gap-2.5 rounded-lg border bg-card px-3 py-2 text-left transition-colors',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    'group relative flex items-start gap-3 rounded-xl border bg-card p-3 text-left transition-all',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
                     'disabled:pointer-events-none disabled:opacity-50',
                     selected
-                      ? 'border-primary ring-1 ring-primary/40 text-foreground'
-                      : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted/60',
+                      ? cn(entry.card, 'shadow-sm')
+                      : 'border-border hover:border-foreground/20 hover:bg-muted/40 hover:shadow-sm motion-safe:hover:-translate-y-0.5',
                   )}
                 >
-                  <Icon
+                  <span
                     aria-hidden="true"
-                    className={cn('mt-0.5 size-3.5 shrink-0', selected ? 'text-primary' : 'text-muted-foreground')}
-                  />
-                  <span className="space-y-0.5">
-                    <span className="block text-xs font-medium text-foreground">
+                    className={cn(
+                      'flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors',
+                      selected ? entry.chip : 'bg-muted text-muted-foreground group-hover:bg-muted/70',
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1 space-y-0.5 pr-4">
+                    <span className="block text-xs font-semibold text-foreground">
                       {t(`leads.assign.actions.${value}`)}
                     </span>
-                    <span className="block text-xs text-muted-foreground">
+                    <span className="block text-[11px] leading-snug text-muted-foreground">
                       {t(`leads.assign.actions.${value}Hint`)}
                     </span>
                   </span>
+                  {selected && (
+                    <CheckCircle2
+                      aria-hidden="true"
+                      className={cn(
+                        'absolute top-2.5 right-2.5 size-4 shrink-0',
+                        entry.accent,
+                        'motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-75',
+                      )}
+                    />
+                  )}
                 </button>
               )
             })}
@@ -199,9 +255,15 @@ function AssignOperatorsDialogBody({
 
         {/* Step 2: pick the Sede (always) and the Operatore (single only). */}
         {mode !== null && (
-          <div className="space-y-3">
+          <div className="space-y-3 rounded-xl border bg-gradient-to-b from-card to-muted/20 p-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1">
             <div className="space-y-1.5">
-              <Label htmlFor="assign-operators-site">{t('leads.assign.site.label')}</Label>
+              <Label
+                htmlFor="assign-operators-site"
+                className="flex items-center gap-1.5 text-xs font-medium"
+              >
+                <MapPin className="size-3.5 text-primary" aria-hidden="true" />
+                {t('leads.assign.site.label')}
+              </Label>
               <AsyncPaginatedSelect
                 id="assign-operators-site"
                 resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
@@ -209,7 +271,7 @@ function AssignOperatorsDialogBody({
                 onChange={handleSiteChange}
                 selectedItem={defaultSite ? { id: defaultSite.id, label: defaultSite.label } : null}
                 disabled={isSubmitting}
-                className="h-8 text-xs"
+                className={SELECT_CLASS}
                 labels={{
                   placeholder: t('leads.assign.site.placeholder'),
                   searchPlaceholder: t('leads.assign.site.searchPlaceholder'),
@@ -224,7 +286,13 @@ function AssignOperatorsDialogBody({
 
             {mode === 'single' && (
               <div className="space-y-1.5">
-                <Label htmlFor="assign-operators-operator">{t('leads.assign.operator.label')}</Label>
+                <Label
+                  htmlFor="assign-operators-operator"
+                  className="flex items-center gap-1.5 text-xs font-medium"
+                >
+                  <User className="size-3.5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
+                  {t('leads.assign.operator.label')}
+                </Label>
                 <AsyncPaginatedSelect
                   id="assign-operators-operator"
                   resource={USERS_FOR_SELECT_RESOURCE}
@@ -233,7 +301,7 @@ function AssignOperatorsDialogBody({
                   showAvatar
                   disabled={isSubmitting || siteId === null}
                   params={siteId !== null ? { operational_site_id: siteId } : undefined}
-                  className="h-8 text-xs"
+                  className={SELECT_CLASS}
                   labels={{
                     placeholder: t('leads.assign.operator.placeholder'),
                     searchPlaceholder: t('leads.assign.operator.searchPlaceholder'),
@@ -244,7 +312,7 @@ function AssignOperatorsDialogBody({
                     retry: t('leads.assign.operator.retry'),
                   }}
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   {siteId === null ? t('leads.assign.operator.disabledHint') : t('leads.assign.operator.hint')}
                 </p>
               </div>
@@ -253,11 +321,11 @@ function AssignOperatorsDialogBody({
         )}
       </div>
 
-      <DialogFooter>
+      <DialogFooter className="border-t bg-gradient-to-t from-primary/[0.05] to-transparent px-4 py-3.5">
         <Button
           type="button"
           size="sm"
-          className="w-full gap-1.5"
+          className="w-full gap-1.5 shadow-sm shadow-primary/20 transition-all hover:shadow-md hover:shadow-primary/25 motion-safe:active:translate-y-px"
           onClick={handleAssign}
           disabled={!canSubmit || isSubmitting}
         >

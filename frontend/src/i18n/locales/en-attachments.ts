@@ -6,9 +6,12 @@
  */
 export const attachments = {
   title: 'Documents',
+  dialogSubtitle: 'Files linked to this opportunity',
   dropzoneHint: 'Drop a file here or click to browse',
+  dropzoneSubhint: 'PDF, images, spreadsheets and documents',
   uploading: 'Uploading…',
   empty: 'No documents yet.',
+  emptyHint: 'Drop a file into the area above to add the first one.',
   preview: 'Preview',
   download: 'Download',
   deleteAction: 'Delete document',

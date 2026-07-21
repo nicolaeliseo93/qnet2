@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Upload } from 'lucide-react'
+import { AlertCircle, FolderOpen, Loader2, Upload, UploadCloud } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -92,9 +92,9 @@ export function DocumentsSection({
       {canUpload ? (
         <label
           className={cn(
-            'flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-3 text-xs text-muted-foreground transition-colors',
-            'hover:border-primary/50 hover:bg-primary/5 focus-within:ring-[3px] focus-within:ring-ring/50',
-            isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25',
+            'group relative flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors duration-200',
+            'hover:border-primary/50 hover:bg-primary/5 focus-within:border-primary focus-within:ring-[3px] focus-within:ring-ring/50',
+            isDragging ? 'border-primary bg-primary/10' : 'border-muted-foreground/25 bg-muted/30',
           )}
           onDragOver={(event) => {
             event.preventDefault()
@@ -107,39 +107,81 @@ export function DocumentsSection({
           }}
           onDrop={handleDrop}
         >
-          <input type="file" className="sr-only" onChange={handleInputChange} disabled={isUploading} />
-          {isUploading ? (
-            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          ) : (
-            <Upload className="size-3.5" aria-hidden="true" />
-          )}
-          <span>{isUploading ? t('attachments.uploading') : t('attachments.dropzoneHint')}</span>
+          <input
+            type="file"
+            className="sr-only"
+            aria-label={t('attachments.dropzoneHint')}
+            onChange={handleInputChange}
+            disabled={isUploading}
+          />
+          <span
+            aria-hidden="true"
+            className={cn(
+              'flex size-10 items-center justify-center rounded-full text-primary transition-transform duration-200 group-hover:scale-105',
+              isDragging ? 'bg-primary/20' : 'bg-primary/10',
+            )}
+          >
+            {isUploading ? (
+              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+            ) : isDragging ? (
+              <UploadCloud className="size-5" aria-hidden="true" />
+            ) : (
+              <Upload className="size-5" aria-hidden="true" />
+            )}
+          </span>
+          <span className="text-xs font-medium text-foreground">
+            {isUploading ? t('attachments.uploading') : t('attachments.dropzoneHint')}
+          </span>
+          {!isUploading ? (
+            <span aria-hidden="true" className="text-[11px] text-muted-foreground">
+              {t('attachments.dropzoneSubhint')}
+            </span>
+          ) : null}
         </label>
       ) : null}
 
       {actionError ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p
+          role="alert"
+          className="flex items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive"
+        >
+          <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
           {actionError}
         </p>
       ) : null}
 
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+        <ul className="flex flex-col gap-2">
           {Array.from({ length: SKELETON_TILES }).map((_, index) => (
-            <Skeleton key={index} className="aspect-square w-full rounded-lg" />
+            <li key={index} className="flex items-center gap-3 rounded-lg border bg-card p-2.5">
+              <Skeleton className="size-11 shrink-0 rounded-md" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3 w-2/3" />
+                <Skeleton className="h-2.5 w-1/3" />
+              </div>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : isError ? (
-        <div className="flex flex-col items-start gap-2">
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-destructive/40 bg-destructive/5 px-4 py-8 text-center">
+          <span className="flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <AlertCircle className="size-5" aria-hidden="true" />
+          </span>
           <p className="text-xs text-destructive">{t('attachments.errors.load')}</p>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             {t('common.retry')}
           </Button>
         </div>
       ) : documents.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{t('attachments.empty')}</p>
+        <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/25 bg-muted/20 px-4 py-8 text-center">
+          <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <FolderOpen className="size-5" aria-hidden="true" />
+          </span>
+          <p className="text-sm font-medium text-foreground">{t('attachments.empty')}</p>
+          <p className="max-w-[32ch] text-xs text-muted-foreground">{t('attachments.emptyHint')}</p>
+        </div>
       ) : (
-        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+        <ul className="flex flex-col gap-2">
           {documents.map((document) => (
             <AttachmentTile key={document.id} attachment={document} canDelete={canDelete} onDelete={handleDelete} />
           ))}
