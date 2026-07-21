@@ -2,6 +2,8 @@ import { apiClient } from '@/api/client'
 import type { ApiResponse } from '@/api/types'
 import type { GeoValue } from '@/features/geo/geo-select'
 import type {
+  BulkAssignImportRowPayload,
+  BulkAssignImportRowResult,
   ConfigureImportPayload,
   ConfirmImportPayload,
   ImportMappingTemplate,
@@ -19,11 +21,14 @@ import type {
  * sent, is authoritative for the 4 geo levels (spec 0038) — the backend skips
  * its own fuzzy re-matching for them. `operator_id` sets/clears the row's
  * per-row operator override (`null` reverts to the run's global default).
+ * `operational_site_id` sets/clears the row's per-row operational-site
+ * override (`null` clears it — there is no global default to revert to).
  */
 export interface UpdateImportRunRowPayload {
   values?: Record<string, string>
   geo?: GeoValue
   operator_id?: number | null
+  operational_site_id?: number | null
 }
 
 /**
@@ -120,6 +125,24 @@ export async function updateImportRunRow(
 ): Promise<ImportRunRowUpdateResult> {
   const { data } = await apiClient.patch<ApiResponse<ImportRunRowUpdateResult>>(
     `/imports/${domain}/${importRunId}/rows/${rowId}`,
+    payload,
+  )
+  return data.data
+}
+
+/**
+ * Bulk-assigns an operator and/or an operational site to a selection of
+ * staged rows (`PATCH .../rows/assign`, distinct from the single-row
+ * `.../rows/{row}`). `payload` mirrors AG Grid's own server-side selection
+ * state 1:1 — see `BulkAssignImportRowPayload`.
+ */
+export async function bulkAssignImportRow(
+  domain: string,
+  importRunId: number,
+  payload: BulkAssignImportRowPayload,
+): Promise<BulkAssignImportRowResult> {
+  const { data } = await apiClient.patch<ApiResponse<BulkAssignImportRowResult>>(
+    `/imports/${domain}/${importRunId}/rows/assign`,
     payload,
   )
   return data.data

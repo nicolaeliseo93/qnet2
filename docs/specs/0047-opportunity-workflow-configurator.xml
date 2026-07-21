@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0047 — Configuratore Stati di Lavorazione Opportunità.
+  Contract-first. Naming identificatori in inglese (§engineering 1.2); label UI in italiano (i18n).
+  Grounding verificato nel repo il 2026-07-20 (vedi <context>). Decisioni utente congelate:
+    D1 = Regione: nuova colonna state_id su leads (derivata dalla sede) ereditata da opportunities.
+    D2 = "stati di lavorazione" = NUOVA tabella dedicata, dimensione interna DISTINTA da opportunity_statuses (pipeline vendita).
+    D3 = al re-match, mappatura per system_key (open->open, closed->closed), altrimenti stato iniziale.
+    D4 = tie-break a parità di specificità: workflow più vecchio (id asc). Nessun campo priority.
+-->
+<spec id="0047-opportunity-workflow-configurator" status="draft" owner="tu" date="2026-07-20">
+
+  <goal>
+    Un nuovo modulo "Configuratore Stati di Lavorazione Opportunità" che permette di definire dinamicamente
+    workflow di stati di lavorazione (dimensione interna, distinta dallo stato pipeline di vendita) applicati
+    a un'Opportunità in base a criteri liberi (Regione, Fonte, Funzione Aziendale, Categoria Prodotto). La
+    risoluzione del workflow applicabile è centralizzata lato backend: la configurazione più specifica vince,
+    con fallback a un workflow globale di default.
+  </goal>
+
+  <context>
+    STATUS-WORKFLOW ESISTENTE DA CLONARE (spec 0043/0039): OpportunityStatus/PipelineStatus, protezione righe di
+    sistema via colonna nullable system_key + App\Services\Statuses\SystemStatusGuard, ordinamento via
+    App\Services\Statuses\StatusOrderManager (STEP=10, reorder resequence), enum App\Enums\StatusGroup
+    (open|pending|closed) e App\Enums\StatusSystemKey. Frontend: feature status-reorder + componente
+    components/ui/sortable-list.tsx (@dnd-kit, pinned rows fuori dal DndContext).
+
+    ENGINE TABELLARE (riuso, NON toccare): App\Tables\TableDefinition + AbstractTableDefinition + TableRegistry;
+    registrazione via config/tables.php; rotte generiche POST /api/tables/{domain}/{rows,columns,values,bulk-delete,preferences}.
+    Allow-list sort/filter/search derivata dai flag di colonna (anti-SQLi, TableQueryBuilder). Frontend:
+    features/table/table-view.tsx (<TableView domain=...>), renderer map per colonna.
+
+    OPEN-MODE (spec 0042, riuso): features/modules/* — un file features/<dominio>/<dominio>-screens.tsx che esporta
+    { DetailScreen, FormScreen, moduleScreen: ModuleRegistryEntry } si auto-registra (import.meta.glob) e diventa
+    apribile in Sheet o pagina secondo la preferenza utente; buildModuleRoutes() genera new/:id/:id/edit.
+
+    PARENT+CHILDREN IN UN'UNICA REQUEST (riuso, spec 0040): App\Services\OpportunityService::syncProductLines
+    (full-replace in DB::transaction), trait App\Http\Requests\Concerns\ValidatesProductLines (regole product_lines.*),
+    DTO con "null = non inviato / array = autoritativo". Frontend nested editor: features/leads/extra-fields-editor.tsx
+    (react-hook-form useFieldArray, coppie {key,value}) è il modello più vicino per l'editor dei criteri.
+
+    SCHEMA OPPORTUNITÀ (verificato): backend/app/Models/Opportunity.php, tabella opportunities. NON possiede colonne geo:
+    niente state_id. I "campi criterio" del brief vivono così: source_id = colonna diretta; business_function_id +
+    product_category_id = tabella figlia opportunity_product_lines (N righe, relazione productLines()); operational_site_id
+    e geo furono RIMOSSI (migrazione 2026_07_17_180000). Regione (=modello App\Models\State, gerarchia Country>State>Province>City)
+    non esiste sull'opportunità.
+
+    CATENA REGIONE (D1, verificato): Lead (backend/app/Models/Lead.php, $fillable include operational_site_id) NON ha
+    colonne geo. La sede del lead = operational_site_id -> App\Models\OperationalSite, che espone la regione via accessor
+    ->stateId (= primaryAddress->state_id, morph HasAddresses su App\Models\Address che porta state_id). Conversione
+    lead->opportunity: App\Actions\Leads\ConvertLeadToOpportunity + App\Services\Opportunities\LeadOpportunityDefaultsResolver
+    (unico punto di derivazione; DERIVED_FIELDS = ['source_id','registry_id']).
+
+    PERMESSI/AUTHZ/AUDIT: Policy estende App\Policies\Abstracts\BasePolicy (abilities standard
+    viewAny|view|create|update|delete|export|import|viewActivity), permissions:sync le genera; metadata in
+    App\Authorization\* + config/authorization.php; audit via App\Models\Concerns\LogsModelActivity + config/activity-log.php;
+    menu in config/navigation.php gruppo key 'opportunities-group' (label navigation.opportunitiesAndCommesse).
+    Envelope: BaseApiController -> { success, message, data } (+ permissions con okWithPermissions).
+  </context>
+
+  <scope>
+    <in>
+      <item>Nuovo modello OpportunityWorkflow (il "configuratore"): id, name (univoco), is_active, criteria_signature, timestamps.</item>
+      <item>Nuovo modello OpportunityWorkflowCriterion (criterio): opportunity_workflow_id, field (chiave da allow-list), value_id.</item>
+      <item>Nuovo modello OpportunityWorkflowStatus (stato di lavorazione): opportunity_workflow_id NULLABLE (null = set globale di default), name, color, sort_order, system_key (open|closed), group.</item>
+      <item>Righe di sistema per-set: ogni workflow (e il set globale) ha automaticamente uno stato iniziale system_key='open' e uno finale system_key='closed', non eliminabili, pinnati in testa/coda.</item>
+      <item>Allow-list dei campi-criterio centralizzata backend (registry): state_id (Regione), source_id (Fonte), business_function_id (Funzione Aziendale, match su productLines), product_category_id (Categoria Prodotto, match su productLines). Ognuno con label i18n + for-select resource per scegliere il valore.</item>
+      <item>Servizio di risoluzione centralizzato OpportunityWorkflowResolver: match AND di tutti i criteri; vince il più specifico (max criteri); tie-break id asc; fallback al set globale.</item>
+      <item>Colonna leads.state_id (Regione) derivata server-side dalla sede (operational_site->stateId) a create/update del lead.</item>
+      <item>Colonna opportunities.state_id ereditata dal lead alla conversione (LeadOpportunityDefaultsResolver) e valorizzabile sull'opportunità standalone.</item>
+      <item>Colonna opportunities.opportunity_workflow_status_id valorizzata dal resolver: alla creazione = stato 'open' del set risolto; in update se lo stato corrente non appartiene al set risolto, mappa per system_key (open->open, closed->closed) altrimenti 'open'.</item>
+      <item>Modulo CRUD completo del configuratore: pagina + tabella AG Grid (engine generico), ricerca/filtri/ordinamento/paginazione, create/view/edit (open-mode modale o pagina), delete con re-risoluzione delle opportunità impattate.</item>
+      <item>Form in 3 sezioni: generale (name, is_active) + criteri (editor ripetibile field+value) + workflow stati (editor drag&drop con open/closed pinnati).</item>
+      <item>Gestione del set globale di default (endpoint dedicato) con lo stesso editor drag&drop.</item>
+      <item>Univocità della combinazione di criteri (criteria_signature) enforced a DB + 422 in validazione.</item>
+      <item>Integrazione permessi (nuovo resource opportunity-workflows), authz server-side su ogni endpoint, Activity Log su workflow/criteri/stati, voce di menu sotto "Opportunità e Commesse".</item>
+      <item>Esposizione dello stato di lavorazione corrente + del workflow risolto nella OpportunityResource; select (limitato al set risolto) per cambiare manualmente lo stato di lavorazione nel form opportunità.</item>
+    </in>
+    <out>
+      <item>NON si tocca né sostituisce il modulo opportunity-statuses (pipeline di vendita Nuova/Vinta/Persa): dimensione separata.</item>
+      <item>NIENTE cascata geo completa (country/state/province/city) sul form Lead: la Regione è derivata dalla sede, mostrata in sola lettura; nessun picker regione manuale sul lead.</item>
+      <item>NIENTE Sede Operativa come criterio dell'opportunità (colonna rimossa): la dimensione geografica è coperta da Regione.</item>
+      <item>NIENTE campo priority sul configuratore (D4: tie-break deterministico per id asc).</item>
+      <item>NIENTE regole di transizione avanzate tra stati di lavorazione (grafo/guardie): il cambio manuale è una semplice select entro il set risolto.</item>
+      <item>NIENTE criteri multi-valore (un criterio = un solo value_id) e NIENTE criteri su campi non presenti nell'allow-list.</item>
+      <item>NIENTE reintroduzione di throttle su questi endpoint (regola backend §2).</item>
+      <item>NIENTE nuove dipendenze npm/composer.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <!-- ============ TABELLA (engine generico, nessun nuovo controller: solo config/tables.php) ============ -->
+    <endpoint method="POST" path="/api/tables/opportunity-workflows/rows">
+      <request><!-- shape standard TableRowsRequest (start,limit,sort,filter,search) --></request>
+      <response status="200"><!-- { success, message, data: { rows: [ { id, name, is_active, criteria_fields: string[], criteria_values: string[], statuses_count: number, updated_at, actions } ], total } } --></response>
+      <errors><!-- 403 senza opportunity-workflows.viewAny --></errors>
+    </endpoint>
+
+    <!-- ============ ALLOW-LIST CAMPI CRITERIO (registry, per popolare il form) ============ -->
+    <endpoint method="GET" path="/api/opportunity-workflows/criterion-fields">
+      <request><!-- nessun parametro --></request>
+      <response status="200"><!-- { success, message, data: [ { field: 'state_id'|'source_id'|'business_function_id'|'product_category_id', label: string(i18n key), for_select_resource: 'states'|'sources'|'business-functions'|'product-categories', multi_valued: bool } ] } --></response>
+      <errors><!-- 403 senza opportunity-workflows.view --></errors>
+    </endpoint>
+
+    <!-- ============ CRUD CONFIGURATORE ============ -->
+    <endpoint method="GET" path="/api/opportunity-workflows/{opportunityWorkflow}">
+      <request><!-- route model binding --></request>
+      <response status="200"><!-- { success, message, data: { id, name, is_active, criteria: [ { id, field, value_id, value_label } ], statuses: [ { id, name, color, sort_order, system_key, group } ], created_at, updated_at }, permissions: { update, delete, ... } } --></response>
+      <errors><!-- 403 senza opportunity-workflows.view; 404 inesistente --></errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/opportunity-workflows">
+      <request><!--
+        {
+          name: string (required, unique opportunity_workflows.name),
+          is_active: bool (default true),
+          criteria: [ { field: string(allow-list), value_id: int } ]  // required, min:1, field distinct
+          statuses: [ { name: string, color?: string|null, group: 'open'|'pending'|'closed' } ]  // opzionale, SOLO intermedi custom; open/closed di sistema creati in automatico
+        }
+        Regole: combinazione (field,value_id) univoca tra i workflow (criteria_signature); ogni field distinto nel payload.
+      --></request>
+      <response status="201"><!-- come GET show + permissions --></response>
+      <errors><!-- 403 senza opportunity-workflows.create; 422 name duplicato / criteri vuoti / field non in allow-list / value_id inesistente / field duplicato / combinazione criteri già esistente --></errors>
+    </endpoint>
+
+    <endpoint method="PUT|PATCH" path="/api/opportunity-workflows/{opportunityWorkflow}">
+      <request><!--
+        Tutti i campi 'sometimes' (PATCH sparso). Se 'criteria' presente = sync autoritativo (min:1). Se 'statuses' presente
+        = sync autoritativo degli stati CUSTOM + loro ordine (sort_order = indice); le righe di sistema open/closed NON si
+        eliminano e restano pinnate; per una riga di sistema si accettano solo name/color (422 se si tenta di cambiarne group/system_key).
+        statuses[].id opzionale: presente = update riga esistente, assente = nuova riga custom; le custom esistenti non incluse vengono eliminate.
+      --></request>
+      <response status="200"><!-- come GET show + permissions --></response>
+      <errors><!-- 403 senza opportunity-workflows.update; 422 come store; 422 tentata modifica group di riga di sistema --></errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/opportunity-workflows/{opportunityWorkflow}">
+      <request><!-- route model binding --></request>
+      <response status="200"><!-- { success, message } — in transazione: elimina workflow+criteri+stati (cascade) e RI-RISOLVE ogni opportunità che referenziava uno stato del workflow (nuovo stato per system_key sul set risolto/globale) --></response>
+      <errors><!-- 403 senza opportunity-workflows.delete --></errors>
+    </endpoint>
+
+    <!-- ============ SET GLOBALE DI DEFAULT ============ -->
+    <endpoint method="GET" path="/api/opportunity-workflows/default-statuses">
+      <request><!-- nessun parametro --></request>
+      <response status="200"><!-- { success, message, data: [ { id, name, color, sort_order, system_key, group } ] } — stati con opportunity_workflow_id null, ordinati per sort_order --></response>
+      <errors><!-- 403 senza opportunity-workflows.view --></errors>
+    </endpoint>
+
+    <endpoint method="PUT" path="/api/opportunity-workflows/default-statuses">
+      <request><!-- { statuses: [ { id?, name, color?, group } ] } — sync autoritativo degli stati custom globali + ordine; open/closed di sistema pinnati e non eliminabili (solo name/color) --></request>
+      <response status="200"><!-- come GET default-statuses --></response>
+      <errors><!-- 403 senza opportunity-workflows.update; 422 tentata modifica group di riga di sistema --></errors>
+    </endpoint>
+
+    <!-- ============ INTEGRAZIONE OPPORTUNITÀ ============ -->
+    <endpoint method="GET" path="/api/opportunities/{opportunity}">
+      <request><!-- estensione OpportunityResource esistente --></request>
+      <response status="200"><!-- data include: state_id, state: {id,name}|null, opportunity_workflow_status_id, workflow_status: {id,name,color,system_key,group}|null, workflow_statuses: [ {id,name,color,system_key,group} ] (il set risolto, per popolare la select) --></response>
+      <errors><!-- invariati --></errors>
+    </endpoint>
+    <!-- store/update opportunità: accettano opportunity_workflow_status_id opzionale (deve appartenere al set risolto, altrimenti 422);
+         state_id valorizzato per ereditarietà dal lead alla conversione, editabile sullo standalone. Il resolver gira sempre a create/update. -->
+
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- REGIONE / EREDITARIETÀ -->
+    <criterion id="AC-001">Dato un lead con operational_site_id la cui sede ha primaryAddress.state_id=R, quando il lead è creato/aggiornato, allora leads.state_id === R (derivato server-side; se la sede non ha regione, null). [Pest]</criterion>
+    <criterion id="AC-002">Dato un lead con state_id=R convertito in opportunità, quando l'opportunità viene creata dalla conversione, allora opportunities.state_id === R (ereditato via LeadOpportunityDefaultsResolver). [Pest]</criterion>
+    <criterion id="AC-003">La OpportunityResource e la LeadResource espongono state / state_id (id+nome regione) senza N+1. [Pest]</criterion>
+
+    <!-- STATI DI SISTEMA / SET -->
+    <criterion id="AC-004">Alla creazione di un workflow, vengono create automaticamente esattamente 2 righe di sistema: system_key='open' (iniziale, sort_order minimo) e system_key='closed' (finale, sort_order massimo). [Pest]</criterion>
+    <criterion id="AC-005">Il set globale di default (opportunity_workflow_id null) esiste dopo la migrazione/seed con le sue 2 righe di sistema open/closed e non è mai vuoto. [Pest]</criterion>
+    <criterion id="AC-006">DELETE di uno stato di sistema (open/closed), o PATCH che ne cambia group/system_key, restituisce 422 e non modifica la riga. [Pest]</criterion>
+    <criterion id="AC-007">Il reorder/sync stati resequenzia solo gli stati custom; 'open' resta primo e 'closed' resta ultimo del proprio set. [Pest]</criterion>
+
+    <!-- CRITERI / UNIVOCITÀ -->
+    <criterion id="AC-008">POST workflow con criteria=[] o assenti -> 422. Con field non presente nell'allow-list -> 422. Con value_id inesistente per quel field -> 422. Con due criteri sullo stesso field -> 422. [Pest]</criterion>
+    <criterion id="AC-009">Due workflow con identica combinazione (field,value_id) -> il secondo restituisce 422 (criteria_signature univoca); l'ordine dei criteri nel payload non influisce sulla signature. [Pest]</criterion>
+
+    <!-- RISOLUZIONE -->
+    <criterion id="AC-010">Data un'opportunità che non matcha alcun workflow attivo, il resolver restituisce il set globale di default e opportunity_workflow_status_id = riga 'open' globale. [Pest]</criterion>
+    <criterion id="AC-011">Dati due workflow attivi entrambi compatibili, uno con 1 criterio e uno con 2 criteri corrispondenti, vince quello con 2 criteri (più specifico). [Pest]</criterion>
+    <criterion id="AC-012">Dati due workflow compatibili con lo stesso numero di criteri, vince quello con id più basso (D4). [Pest]</criterion>
+    <criterion id="AC-013">Un criterio su business_function_id/product_category_id matcha se il valore è presente in ALMENO una riga di opportunity_product_lines; un workflow matcha solo se TUTTI i suoi criteri matchano (AND). [Pest]</criterion>
+    <criterion id="AC-014">Un workflow con is_active=false è ignorato dal resolver. [Pest]</criterion>
+    <criterion id="AC-015">Alla creazione dell'opportunità, opportunity_workflow_status_id = 'open' del set risolto. [Pest]</criterion>
+    <criterion id="AC-016">In update, se il workflow risolto cambia e lo stato corrente (es. 'closed') non appartiene al nuovo set, il nuovo stato è mappato per system_key (closed->closed del nuovo set); se non mappabile, 'open' (D3). [Pest]</criterion>
+    <criterion id="AC-017">store/update opportunità con opportunity_workflow_status_id non appartenente al set risolto -> 422. [Pest]</criterion>
+    <criterion id="AC-018">DELETE di un workflow ri-risolve in transazione ogni opportunità che ne referenziava uno stato: nessuna opportunità resta con opportunity_workflow_status_id orfano. [Pest]</criterion>
+
+    <!-- TABELLA / AUTHZ / AUDIT / UI -->
+    <criterion id="AC-019">GET /api/tables/opportunity-workflows/rows senza opportunity-workflows.viewAny -> 403; con permesso -> righe con name, criteria_fields, criteria_values, statuses_count, is_active, updated_at, actions. [Pest]</criterion>
+    <criterion id="AC-020">Ogni endpoint del modulo applica authz server-side (403 senza permesso corrispondente). Le azioni di riga (edit/delete) rispettano i permessi dell'attore. [Pest]</criterion>
+    <criterion id="AC-021">Create/update/delete del workflow e modifiche a criteri/stati sono registrate nell'Activity Log (log name della tabella). [Pest]</criterion>
+    <criterion id="AC-022">GET /api/opportunity-workflows/criterion-fields restituisce l'allow-list attesa (4 field con for_select_resource corretto). [Pest]</criterion>
+
+    <!-- FRONTEND -->
+    <criterion id="AC-023">La pagina modulo monta <TableView domain="opportunity-workflows"> ed è gated da <Can permission="opportunity-workflows.viewAny">; il modulo si apre in Sheet o pagina secondo la preferenza open-mode. [Vitest]</criterion>
+    <criterion id="AC-024">Il form ha 3 sezioni (generale, criteri, workflow stati); l'editor criteri (useFieldArray) aggiunge/rimuove righe field+value con for-select dipendente dal field scelto; salva in un'unica request. [Vitest]</criterion>
+    <criterion id="AC-025">L'editor stati usa SortableList: open/closed sono pinnati (senza handle, non trascinabili) e senza azione elimina; gli stati custom sono riordinabili via drag&drop e l'ordine è inviato nel payload. [Vitest]</criterion>
+    <criterion id="AC-026">Il form opportunità mostra la Regione (sola lettura, derivata) e una select "stato di lavorazione" limitata al set risolto (workflow_statuses); invio di uno stato fuori set produce errore. [Vitest]</criterion>
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Solo librerie già in composer.json/package.json (@dnd-kit, TanStack Query, RHF+Zod, AG Grid già presenti). Nessuna nuova dipendenza.</item>
+    <item>Layering backend: Controller thin -> FormRequest -> Service/Action -> DTO -> Resource -> Policy. Nessun model Eloquent raw in risposta. Envelope { success, message, data }.</item>
+    <item>Riuso obbligatorio: SystemStatusGuard e StatusOrderManager (o servizi gemelli scoped-by-workflow modellati su di essi), status-reorder + SortableList lato FE, engine tabellare, open-mode modules, pattern parent+children (syncProductLines) per criteri/stati.</item>
+    <item>Anti-SQLi: match/resolver via Eloquent, allow-list dei field-criterio server-side; nessun input grezzo in where/order.</item>
+    <item>La logica di risoluzione è centralizzata in OpportunityWorkflowResolver: unico punto usato da OpportunityService (create/update) e dalla conversione. Nessuna duplicazione lato frontend.</item>
+    <item>Migrazioni reversibili (down). Il set globale di default e le righe di sistema sono seminate dalla migrazione (idempotenza per re-run in test).</item>
+    <item>criteria_signature: stringa deterministica ordinata "field:value_id|..." con indice unico; ricalcolata a ogni sync dei criteri.</item>
+    <item>Naming identificatori in inglese; label esposte all'utente via i18next (namespace opportunityWorkflows) it/en.</item>
+    <item>Definition of Done: Pest + Vitest scritti ed ESEGUITI, Pint + ESLint puliti, tsc --noEmit pulito. Nessun commit senza ok esplicito (CLAUDE.md §3.6).</item>
+  </constraints>
+
+</spec>

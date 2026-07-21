@@ -13,6 +13,8 @@ export interface OpportunitySelectedItems {
   commercial: RelationFieldRef | null
   reporter: RelationFieldRef | null
   source: RelationFieldRef | null
+  /** Spec 0047 (D1): the Regione's hydrated ref, edit mode only (never known before a create-from-lead is saved). */
+  state: RelationFieldRef | null
   supervisor: RelationFieldRef | null
   managers: ForSelectItem[]
 }
@@ -24,6 +26,7 @@ const EMPTY_SELECTED_ITEMS: OpportunitySelectedItems = {
   commercial: null,
   reporter: null,
   source: null,
+  state: null,
   supervisor: null,
   managers: [],
 }
@@ -61,6 +64,7 @@ export function useOpportunitySelectedItems(
         commercial: opportunity.commercial,
         reporter: opportunity.reporter,
         source: opportunity.source,
+        state: opportunity.state ?? null,
         supervisor: opportunity.supervisor,
         managers: opportunity.managers.map((manager) => ({ id: manager.id, label: manager.name })),
       }

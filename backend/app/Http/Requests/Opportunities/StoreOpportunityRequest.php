@@ -7,6 +7,7 @@ use App\DataObjects\Opportunities\LeadOpportunityDefaults;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ValidatesManagerSlots;
 use App\Http\Requests\Concerns\ValidatesProductLines;
+use App\Http\Requests\Concerns\ValidatesWorkflowStatus;
 use App\Models\Lead;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
 use Illuminate\Contracts\Validation\Validator;
@@ -45,6 +46,7 @@ class StoreOpportunityRequest extends FormRequest
     use EnforcesFieldPermissions;
     use ValidatesManagerSlots;
     use ValidatesProductLines;
+    use ValidatesWorkflowStatus;
 
     private ?LeadOpportunityDefaults $leadDefaultsCache = null;
 
@@ -77,6 +79,12 @@ class StoreOpportunityRequest extends FormRequest
             'estimated_value' => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
             'expected_close_date' => ['nullable', 'date'],
             'success_probability' => ['nullable', 'integer', 'between:0,100'],
+            // spec 0047: state_id (Regione, D1) is editable on a standalone
+            // create, overwritten by BR-1 derivation when lead_id derives
+            // one. opportunity_workflow_status_id is an OPTIONAL override
+            // (AC-015/017); its set-membership is checked in withValidator.
+            'state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
+            'opportunity_workflow_status_id' => ['nullable', 'integer', Rule::exists('opportunity_workflow_statuses', 'id')],
         ], $this->managerSlotsRules(), $this->productLinesRules(required: true));
     }
 
@@ -127,6 +135,7 @@ class StoreOpportunityRequest extends FormRequest
             $this->validateManagerSlots($validator);
             $this->validateProductLines($validator);
             $this->enforceFieldPermissions($validator);
+            $this->validateWorkflowStatus($validator);
         });
     }
 

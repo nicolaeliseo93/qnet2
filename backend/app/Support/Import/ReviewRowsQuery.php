@@ -42,7 +42,10 @@ final class ReviewRowsQuery
         $endRow = max($startRow + 1, (int) ($params['endRow'] ?? $startRow + BaseApiController::MAX_LIMIT));
         $limit = min(BaseApiController::MAX_LIMIT, $endRow - $startRow);
 
-        $query = ImportRunRow::query()->where('import_run_id', $run->id)->with('operator');
+        $query = ImportRunRow::query()->where('import_run_id', $run->id)->with([
+            'operator',
+            'operationalSite.addresses' => fn ($addressQuery) => $addressQuery->with('city:id,name'),
+        ]);
 
         $this->applyFilters($query, $params['filterModel'] ?? null, [...self::BASE_FILTERABLE, ...$fieldIds], $fieldIds);
         $this->applySearch($query, $params['search'] ?? null);

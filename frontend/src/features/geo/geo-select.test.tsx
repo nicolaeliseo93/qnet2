@@ -111,15 +111,36 @@ describe('GeoSelect', () => {
     expect(screen.getAllByText('*')).toHaveLength(1)
   })
 
-  it('disables the state/province/city selects until a country is chosen', () => {
+  it('disables state/province until a country is chosen, but keeps city enabled (city-first)', () => {
     render(<GeoSelect value={empty} onChange={() => {}} />)
 
-    // Order: country, state, province, city.
+    // Order: country, state, province, city. The city level is searchable on
+    // its own so it stays enabled with no parent chosen.
     const selects = screen.getAllByRole('combobox')
     expect(selects[0]).not.toBeDisabled()
     expect(selects[1]).toBeDisabled()
     expect(selects[2]).toBeDisabled()
-    expect(selects[3]).toBeDisabled()
+    expect(selects[3]).not.toBeDisabled()
+  })
+
+  it('city-first: picking a city backfills its whole ancestor chain', () => {
+    const onChange = vi.fn()
+    useCitiesMock.mockReturnValue(
+      cityQuery([
+        { id: 100, name: 'Grumo Nevano', country_id: 1, state_id: 10, province_id: 50 },
+      ]),
+    )
+    render(<GeoSelect value={empty} onChange={onChange} />)
+
+    fireEvent.click(screen.getAllByRole('combobox')[3])
+    fireEvent.click(screen.getByRole('option', { name: 'Grumo Nevano' }))
+
+    expect(onChange).toHaveBeenCalledWith({
+      country_id: 1,
+      state_id: 10,
+      province_id: 50,
+      city_id: 100,
+    })
   })
 
   it('enables province and city once a state is chosen', () => {

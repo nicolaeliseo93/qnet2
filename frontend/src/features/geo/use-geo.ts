@@ -53,24 +53,28 @@ export function useProvinces(stateId: number | null) {
 /**
  * Loads the cities of a province when one is chosen, otherwise of the state
  * (countries without a province level), one page at a time for infinite scroll.
- * Disabled until `stateId` is set. Previous results are kept while a new search
- * term is fetched, so the open dropdown never unmounts (and closes) mid-typing.
+ * Enabled once a `stateId` is set OR — for city-first selection — as soon as a
+ * non-empty `search` term is typed, which does an unscoped lookup across every
+ * state. Previous results are kept while a new search term is fetched, so the
+ * open dropdown never unmounts (and closes) mid-typing.
  */
 export function useCities(
   stateId: number | null,
   provinceId?: number | null,
   search?: string,
 ) {
+  const hasSearch = (search ?? '').trim() !== ''
+
   return useInfiniteQuery({
     queryKey: geoKeys.cities(stateId ?? 0, provinceId ?? 0, search ?? ''),
     queryFn: ({ pageParam }) =>
       fetchCities({
-        stateId: stateId as number,
+        stateId,
         provinceId,
         search,
         offset: pageParam,
       }),
-    enabled: stateId != null,
+    enabled: stateId != null || hasSearch,
     staleTime: Infinity,
     initialPageParam: 0,
     // A full page means there may be more; a short page is the last one.

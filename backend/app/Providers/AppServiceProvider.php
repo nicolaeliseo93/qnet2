@@ -21,6 +21,8 @@ use App\Models\Lead;
 use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
+use App\Models\OpportunityWorkflow;
+use App\Models\OpportunityWorkflowStatus;
 use App\Models\PersonalData;
 use App\Models\PipelineStatus;
 use App\Models\Product;
@@ -120,6 +122,8 @@ class AppServiceProvider extends ServiceProvider
             'lead' => Lead::class,
             'opportunity' => Opportunity::class,
             'opportunity_status' => OpportunityStatus::class,
+            'opportunity_workflow' => OpportunityWorkflow::class,
+            'opportunity_workflow_status' => OpportunityWorkflowStatus::class,
             'vat_rate' => VatRate::class,
         ]);
 

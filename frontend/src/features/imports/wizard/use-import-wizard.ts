@@ -24,37 +24,36 @@ const POLL_INTERVAL_MS = 1500
 /** Statuses that still require polling; any other status is a pause/terminal point. */
 const POLLING_STATUSES: ReadonlySet<ImportRunStatus> = new Set(['analyzing', 'staging', 'processing'])
 
-/** Index into the 5-step stepper (upload/config/mapping/review/summary). */
-export type WizardStepIndex = 0 | 1 | 2 | 3 | 4
+/** Index into the 4-step stepper (upload/mapping+config/review/summary). */
+export type WizardStepIndex = 0 | 1 | 2 | 3
 
 function isWizardStepIndex(value: number): value is WizardStepIndex {
-  return value === 0 || value === 1 || value === 2 || value === 3 || value === 4
+  return value === 0 || value === 1 || value === 2 || value === 3
 }
 
 /**
  * Derives the step to render from the run's server-authoritative `status`
  * (spec 0033 AC-025: the wizard resumes from `GET run`, never from client
- * state alone), falling back to `localStep` only for the two pairs of steps
- * that share one backend status: config/mapping both live under
- * `configuring` (nothing is persisted until the mapping step's submit), and
- * review/summary both live under `reviewing` (summary is a read-only report
- * over the same staged rows, confirmed only from there).
+ * state alone). The `configuring` status covers the upload-summary gate and
+ * the mapping+config step (nothing is persisted until that step's submit);
+ * `reviewing` covers both review and summary (summary is a read-only report
+ * over the same staged rows, confirmed only from there), disambiguated by
+ * `localStep`.
  */
 function deriveStepIndex(status: ImportRunStatus | undefined, localStep: WizardStepIndex): WizardStepIndex {
   switch (status) {
     case 'analyzing':
       return 0
     case 'configuring':
-      if (localStep === 0) return 0
-      return localStep === 2 ? 2 : 1
+      return localStep === 0 ? 0 : 1
     case 'staging':
-      return 3
+      return 2
     case 'reviewing':
-      return localStep === 4 ? 4 : 3
+      return localStep === 3 ? 3 : 2
     case 'processing':
     case 'completed':
     case 'failed':
-      return 4
+      return 3
     default:
       return 0
   }
@@ -97,7 +96,6 @@ export function useImportWizard({ domain, initialRunId, onRunCreated }: UseImpor
   // continue" gate of a fresh upload — see `deriveStepIndex`'s `analyzing`
   // sibling handling in `ImportStepUpload`.
   const [localStep, setLocalStep] = useState<WizardStepIndex>(initialRunId != null ? 1 : 0)
-  const [configDraft, setConfigDraft] = useState<Record<string, number | null> | null>(null)
 
   const runQuery = useQuery({
     queryKey: runId != null ? importWizardKeys.run(domain, runId) : importWizardKeys.domain(domain),
@@ -118,7 +116,6 @@ export function useImportWizard({ domain, initialRunId, onRunCreated }: UseImpor
     onSuccess: (createdRun) => {
       setRunId(createdRun.id)
       setLocalStep(0)
-      setConfigDraft(null)
       onRunCreated?.(createdRun.id)
     },
   })
@@ -126,7 +123,7 @@ export function useImportWizard({ domain, initialRunId, onRunCreated }: UseImpor
   const configureMutation = useMutation({
     mutationFn: (payload: ConfigureImportPayload) => configureImportRun(domain, runId as number, payload),
     onSuccess: () => {
-      setLocalStep(3)
+      setLocalStep(2)
       void queryClient.invalidateQueries({ queryKey: importWizardKeys.run(domain, runId as number) })
     },
   })
@@ -147,7 +144,7 @@ export function useImportWizard({ domain, initialRunId, onRunCreated }: UseImpor
     return values
   }, [run])
 
-  const configValues = configDraft ?? initialConfigValues
+  const configValues = initialConfigValues
 
   const initialMapping = useMemo<Record<string, string>>(
     () => ({ ...(run?.suggested_mapping ?? {}), ...(run?.column_mapping ?? {}) }),
@@ -160,15 +157,15 @@ export function useImportWizard({ domain, initialRunId, onRunCreated }: UseImpor
 
   const advanceFromUpload = useCallback(() => setLocalStep(1), [])
 
-  const submitConfig = useCallback((values: Record<string, number | null>) => {
-    setConfigDraft(values)
-    setLocalStep(2)
-  }, [])
-
   const submitMapping = useCallback(
-    (mapping: Record<string, string>, strategy: string, saveAsTemplate?: { name: string }) => {
+    (
+      mapping: Record<string, string>,
+      strategy: string,
+      globalConfig: Record<string, number | null>,
+      saveAsTemplate?: { name: string },
+    ) => {
       configureMutation.mutate(
-        { column_mapping: mapping, global_config: configValues, dedup_strategy: strategy },
+        { column_mapping: mapping, global_config: globalConfig, dedup_strategy: strategy },
         {
           // Side-effect POST run AFTER configure already succeeded (spec 0035
           // constraint: never blocks/rolls back the wizard's advance, which
@@ -185,17 +182,19 @@ export function useImportWizard({ domain, initialRunId, onRunCreated }: UseImpor
         },
       )
     },
-    [configValues, configureMutation, domain, runId, queryClient, t],
+    [configureMutation, domain, runId, queryClient, t],
   )
 
-  const advanceFromReview = useCallback(() => setLocalStep(4), [])
+  const advanceFromReview = useCallback(() => setLocalStep(3), [])
 
   const goToStep = useCallback(
     (index: number) => {
       if (!isWizardStepIndex(index)) return
-      if (run?.status === 'configuring' && (index === 1 || index === 2)) {
+      // Mapping+config is a single pre-staging step; review/summary share the
+      // `reviewing` status, so only those transitions are navigable.
+      if (run?.status === 'configuring' && index === 1) {
         setLocalStep(index)
-      } else if (run?.status === 'reviewing' && (index === 3 || index === 4)) {
+      } else if (run?.status === 'reviewing' && (index === 2 || index === 3)) {
         setLocalStep(index)
       }
     },
@@ -216,8 +215,6 @@ export function useImportWizard({ domain, initialRunId, onRunCreated }: UseImpor
     advanceFromUpload,
 
     configValues,
-    submitConfig,
-
     mappingValues: initialMapping,
     dedupStrategy,
     submitMapping,

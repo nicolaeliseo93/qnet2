@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\OpportunityStatuses\OpportunityStatusController;
 use App\Http\Controllers\OpportunityStatuses\OpportunityStatusForSelectController;
+use App\Http\Controllers\OpportunityWorkflows\OpportunityWorkflowController;
 use App\Http\Controllers\Sectors\SectorController;
 use App\Http\Controllers\Sectors\SectorForSelectController;
 use App\Http\Controllers\Sources\SourceController;
@@ -98,6 +99,22 @@ Route::get('opportunity-statuses/{opportunityStatus}', [OpportunityStatusControl
 Route::post('opportunity-statuses', [OpportunityStatusController::class, 'store']);
 Route::match(['put', 'patch'], 'opportunity-statuses/{opportunityStatus}', [OpportunityStatusController::class, 'update']);
 Route::delete('opportunity-statuses/{opportunityStatus}', [OpportunityStatusController::class, 'destroy']);
+
+// Opportunity workflow configurator CRUD (spec 0047, Lane A): the working-
+// state "stati di lavorazione" dimension, distinct from opportunity-statuses
+// (sales pipeline). Authorization (opportunity-workflows.view/create/update/
+// delete) is enforced server-side in OpportunityWorkflowController via
+// OpportunityWorkflowPolicy. `criterion-fields`/`default-statuses` are
+// declared ABOVE opportunity-workflows/{opportunityWorkflow} so their literal
+// segments win over the bound wildcard.
+Route::get('opportunity-workflows/criterion-fields', [OpportunityWorkflowController::class, 'criterionFields']);
+Route::get('opportunity-workflows/default-statuses', [OpportunityWorkflowController::class, 'defaultStatuses']);
+Route::put('opportunity-workflows/default-statuses', [OpportunityWorkflowController::class, 'updateDefaultStatuses']);
+
+Route::get('opportunity-workflows/{opportunityWorkflow}', [OpportunityWorkflowController::class, 'show']);
+Route::post('opportunity-workflows', [OpportunityWorkflowController::class, 'store']);
+Route::match(['put', 'patch'], 'opportunity-workflows/{opportunityWorkflow}', [OpportunityWorkflowController::class, 'update']);
+Route::delete('opportunity-workflows/{opportunityWorkflow}', [OpportunityWorkflowController::class, 'destroy']);
 
 // VAT rates CRUD: a standalone lookup used to assign a VAT percentage to a
 // Product. Authorization (vat-rates.view/create/update/delete) is enforced

@@ -33,22 +33,26 @@ export async function fetchProvinces(stateId: number): Promise<Province[]> {
 /**
  * Lists one page of cities of a province (preferred, the finest level) or, for
  * countries without a province level, of a state, ordered by name (page size
- * 50). An optional `search` prefix narrows the results server-side; `offset`
- * skips already-loaded rows so the caller can scroll through provinces with
- * hundreds of comuni.
+ * 50). With neither parent (`stateId` null), a non-empty `search` does an
+ * unscoped city-first lookup across every state. `offset` skips already-loaded
+ * rows so the caller can scroll through provinces with hundreds of comuni.
  */
 export async function fetchCities(parent: {
-  stateId: number
+  stateId?: number | null
   provinceId?: number | null
   search?: string
   offset?: number
 }): Promise<City[]> {
   const { stateId, provinceId, search, offset } = parent
+  const scope =
+    provinceId != null
+      ? { province_id: provinceId }
+      : stateId != null
+        ? { state_id: stateId }
+        : {}
   const { data } = await apiClient.get<ApiResponse<City[]>>('/cities', {
     params: {
-      ...(provinceId != null
-        ? { province_id: provinceId }
-        : { state_id: stateId }),
+      ...scope,
       search: search || undefined,
       offset: offset || undefined,
     },

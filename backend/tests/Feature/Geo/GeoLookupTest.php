@@ -167,7 +167,25 @@ it('cities: 200 returns only the state cities, ordered by name, with the resourc
         ->assertJsonPath('data.0.name', 'Ancona')
         ->assertJsonPath('data.1.name', 'Verona')
         ->assertJsonPath('data.0.state_id', $state->id)
-        ->assertJsonStructure(['data' => [['id', 'name', 'state_id']]]);
+        ->assertJsonPath('data.0.country_id', $state->country_id)
+        ->assertJsonStructure(['data' => [['id', 'name', 'country_id', 'state_id', 'province_id']]]);
+});
+
+it('cities: search alone (no parent) does an unscoped city-first lookup across states', function () {
+    Sanctum::actingAs(User::factory()->create());
+
+    $one = State::factory()->create();
+    $two = State::factory()->create();
+    City::factory()->forState($one)->create(['name' => 'Rome']);
+    City::factory()->forState($two)->create(['name' => 'Rome']);
+    City::factory()->forState($one)->create(['name' => 'Milan']);
+
+    // Stored "Rome" is served through the Italian localizer as "Roma".
+    $this->getJson('/api/cities?search=Rom')
+        ->assertOk()
+        ->assertJsonCount(2, 'data')
+        ->assertJsonPath('data.0.name', 'Roma')
+        ->assertJsonPath('data.1.name', 'Roma');
 });
 
 it('cities: search filters by a name LIKE prefix', function () {

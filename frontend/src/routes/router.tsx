@@ -39,6 +39,7 @@ const CampaignsPage = lazy(() => import('@/pages/campaigns-page'))
 const LeadsPage = lazy(() => import('@/pages/leads-page'))
 const OpportunitiesPage = lazy(() => import('@/pages/opportunities-page'))
 const OpportunityStatusesPage = lazy(() => import('@/pages/opportunity-statuses-page'))
+const OpportunityWorkflowsPage = lazy(() => import('@/pages/opportunity-workflows-page'))
 const LeadImportPage = lazy(() => import('@/pages/lead-import-page'))
 const LeadImportHistoryPage = lazy(() => import('@/pages/lead-import-history-page'))
 const LeadImportDetailPage = lazy(() => import('@/pages/lead-import-detail-page'))
@@ -197,6 +198,10 @@ export const router = createBrowserRouter([
           {
             path: 'opportunity-statuses',
             element: <OpportunityStatusesPage />,
+          },
+          {
+            path: 'opportunity-workflows',
+            element: <OpportunityWorkflowsPage />,
           },
           // Deep-link routes (`new`/`:id`/`:id/edit`) of every registered
           // module — projects/campaigns/leads/opportunities in Wave 0 — are

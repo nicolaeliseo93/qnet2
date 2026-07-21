@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { ReviewGeoCell } from '@/features/imports/wizard/review-geo-editor'
 import { ReviewOperatorCell } from '@/features/imports/wizard/review-operator-editor'
 import { ReviewResolutionCell } from '@/features/imports/wizard/review-resolution-cell'
+import { ReviewSiteCell } from '@/features/imports/wizard/review-site-editor'
 import { EXTRA_TARGET, IGNORE_TARGET } from '@/features/imports/wizard/types'
 import type { ImportRowResolution, ImportRowStatus, ImportRunDetail, ImportRunRowItem } from '@/features/imports/wizard/types'
 
@@ -189,6 +190,11 @@ function resolveEditableFields(run: ImportRunDetail): Array<{ id: string; label:
  * (`ReviewOperatorCell`) showing the row's own operator override, or a
  * muted "uses the default" hint, opening a popup to set/clear it — the
  * apply callback travels via `gridOptions.context`, same as the geo columns.
+ *
+ * A `site` column follows `operator`, mirroring it exactly (`ReviewSiteCell`)
+ * except there is no run-level default to fall back to: the operational site
+ * is a per-row-only field, set via this column's popup or the grid's bulk
+ * assign bar.
  */
 export function buildReviewColumnDefs(
   run: ImportRunDetail,
@@ -245,6 +251,17 @@ export function buildReviewColumnDefs(
       minWidth: 180,
       flex: 0,
       cellRenderer: ReviewOperatorCell,
+      cellRendererParams: { readOnly },
+    },
+    {
+      colId: 'site',
+      headerName: t('review.columns.site'),
+      editable: false,
+      sortable: false,
+      filter: false,
+      minWidth: 180,
+      flex: 0,
+      cellRenderer: ReviewSiteCell,
       cellRendererParams: { readOnly },
     },
     // `field.label` is a backend default-namespace i18n key

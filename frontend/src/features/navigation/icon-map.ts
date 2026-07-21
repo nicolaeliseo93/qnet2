@@ -22,6 +22,7 @@ import {
   UserPlus,
   Users,
   Waypoints,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -53,6 +54,7 @@ const iconMap: Record<string, LucideIcon> = {
   percent: Percent,
   puzzle: Puzzle,
   'user-plus': UserPlus,
+  workflow: Workflow,
 }
 
 export function resolveIcon(name: string | null): LucideIcon {

@@ -2,6 +2,213 @@
 
 > Injected at session start. Update at every green state.
 
+## CONFIGURATORE STATI DI LAVORAZIONE OPPORTUNITÀ — spec 0047 (2026-07-20) — GREEN FULL-STACK, NON COMMITTATO
+
+Modulo nuovo full-stack (spec `docs/specs/0047-opportunity-workflow-configurator.xml`, APPROVATA "vai col tuo piano").
+Workflow di STATI DI LAVORAZIONE interni all'opportunità (dimensione DISTINTA dal pipeline vendita
+`opportunity_statuses` Nuova/Vinta/Persa — NON toccato), applicati dinamicamente per criteri; risoluzione
+centralizzata backend "più specifico vince" + fallback globale. Eseguito con subagent Task a ownership
+disgiunta (Fase0 gate → Lane B → Lane A → verifier backend → Lane C → Lane D → verifier finale).
+
+DECISIONI UTENTE CONGELATE: D1 Regione = nuova colonna `leads.state_id` DERIVATA server-side dalla sede
+(`operational_site->stateId` = primaryAddress.state_id), EREDITATA da `opportunities.state_id` alla conversione.
+D2 stati di lavorazione = NUOVA tabella dedicata (non riuso opportunity_statuses). D3 al re-match mappa per
+system_key (open->open, closed->closed), altrimenti 'open'. D4 tie-break specificità pari = id ASC (nessun campo priority).
+
+SCHEMA (migrazioni 2026_07_20_1100xx): `opportunity_workflows` (name unique, is_active, criteria_signature unique),
+`opportunity_workflow_criteria` (workflow_id, field, value_id; unique[workflow_id,field]), `opportunity_workflow_statuses`
+(opportunity_workflow_id NULLABLE = set globale di default, name, color, sort_order, system_key open|closed, group).
+Aggiunte `leads.state_id`, `opportunities.state_id` + `opportunities.opportunity_workflow_status_id` (tutte FK nullOnDelete).
+Set globale seminato in migrazione (Aperta/Chiusa). CAVEAT: MySQL/SQLite trattano NULL distinti → unicità del set
+globale (workflow_id null) è invariante APPLICATIVO (WorkflowStatusWriter), non DB.
+
+BACKEND: modelli OpportunityWorkflow/…Criterion/…Status; enum WorkflowStatusSystemKey(Open,Closed); registry
+`App\Support\OpportunityWorkflows\CriterionFieldRegistry` (allow-list 4 field: state_id/'states', source_id/'sources',
+business_function_id/'business-functions' [match su product_lines], product_category_id/'product-categories' [product_lines]).
+RESOLVER UNICO = `App\Services\Opportunities\OpportunityWorkflowResolver` (resolve/statusesFor/targetStatus/resolveAndAssign) —
+usato da OpportunityService(create/update), OpportunityResource, ValidatesWorkflowStatus, OpportunityWorkflowService::delete.
+`OpportunityWorkflowService` + `WorkflowStatusWriter` (system rows scoped-by-workflow, resequence, guard system rows solo name/color).
+Controller `opportunity-workflows` (show/store/update/destroy/criterionFields/defaultStatuses[GET,PUT]); TableDefinition +
+config/tables.php; Policy/Authorization/activity-log/navigation registrati. Envelope { success,message,data[,permissions] }.
+LeadService deriva state_id dalla sede; LeadOpportunityDefaultsResolver aggiunge state_id ai defaults (NON locked → resta editabile).
+
+FRONTEND: feature `frontend/src/features/opportunity-workflows/*` (table, form 3 sezioni = generale/criteri(useFieldArray,
+value-select dipendente dal field)/stati(SortableList @dnd-kit, open/closed PINNED), screens+moduleScreen open-mode, default-statuses
+sheet, i18n namespace opportunityWorkflows, route + icon 'workflow'). Integrazione form: Regione (RelationSelectField 'states')
+in opportunità (read-only se lead-linked, editabile standalone) + select "stato di lavorazione" dal set risolto (workflow_statuses,
+NASCOSTA in create con hint); Regione READ-ONLY derivata nel form/detail LEAD (mai inviata nel payload). Payload nested = sync
+autoritativo unico request (come syncProductLines); statuses sort_order = indice.
+
+VERIFICATO (output reale, verifier finale indipendente): BACKEND pest 312/312 (dedicati+non-regressione), suite completa
+3078 passed / 11 failed TUTTI PREESISTENTI (nav stale-keys + AbstractMigrationSourcePreviewTest, git diff vuoto). Pint pulito.
+FRONTEND vitest 234/234 dedicati; suite intera 1831 passed / 3 failed preesistenti (cell-renderers.test.tsx i18n leak).
+tsc -b PULITO (0 errori), ESLint pulito. AC-001..026 tutti PASS con evidenza test::caso.
+
+DELTA DA DECIDERE (segnalati, non chiusi): (a) UI mette forceDisabled sulla Regione dell'opportunità lead-linked, ma il
+backend la lascia editabile — se si vuole editabile anche da lead, togliere il forceDisabled. (b) AC-018: essendo il FK
+nullOnDelete, alla delete del workflow le opportunità impattate atterrano su 'open' globale (il vecchio system_key è già
+perso), invariante "nessun orfano" comunque garantita.
+
+PROSSIMO PASSO: in attesa di OK esplicito per il commit (CLAUDE.md §3.6 — nessun commit finora). Poi valutare: colonna
+Regione nella tabella lead/opportunità (SSRM) se richiesta; formalizzare eventuale amend spec per delta (a).
+
+## IMPORT REVIEW: SEDE PER-RIGA + BULK, OPERATORE REVIEW-ONLY (2026-07-20) — GREEN, NON COMMITTATO
+
+Richiesta utente: nello step Review del wizard import lead la SEDE (operational_site) editabile
+per-riga + bulk (checkbox), come l'operatore; l'operatore RIMOSSO dalla mappatura/config. Decisioni
+utente (AskUserQuestion): (1) operatore e sede SOLO in Review, nessun default globale in config;
+(2) barra bulk UNICA con due select (Operatore + Sede) e un solo "Assegna" che applica i campi
+valorizzati; (3) sede come blocker di conversione PER-RIGA (`rows_without_site`), speculare a
+`rows_without_operator`. Poi: "vai col piano, non fermarti" → eseguito in autonomia con 2 teammate
+disgiunti (backend/ + frontend/src/) su contratto congelato.
+
+CONTRATTO CONGELATO (implementato su entrambi i lati):
+- Colonna `operational_site_id` su `import_run_rows` (nullable FK → operational_sites, nullOnDelete).
+- PATCH `.../rows/{row}`: accetta `operational_site_id` (nullable; null CLEARa l'override), come operator.
+- Bulk RINOMINATO+COMBINATO: `PATCH .../rows/assign` body `{operator_id?, operational_site_id?,
+  select_all, row_ids}` (almeno uno) → `{updated}`. (Era `.../rows/operator`.)
+- Row resource: +`operational_site_id`, +`operational_site {id,name}`. NB: OperationalSite NON ha
+  colonna `name` (identità = indirizzo): `name` è la label composta (riuso OperationalSiteForSelectResource),
+  shape `{id,name}` invariata.
+- `operator_id` RIMOSSO da `LeadImportFieldCatalog::GLOBAL_FIELDS` (restano campaign_id, source_id;
+  sede NON aggiunta alla config). Config step non offre più operatore.
+- Persister: `$effectiveSiteId = $row->operational_site_id ?? global` usato in Create/UpdateLeadData
+  + shouldConvert. Convertibilità: `operational_site_set` (bool globale) → `rows_without_site`
+  (per-riga, count+numbers); DTO/summary/ImportConversionNotReadyconvert_blockers aggiornati.
+- FE: nuovo `review-site-editor.tsx` (ReviewSiteCell, AsyncPaginatedSelect OPERATIONAL_SITES_FOR_SELECT_RESOURCE,
+  globalDefaultSiteId=null → em-dash); colonna `site` dopo `operator`; barra bulk 2 select + 1 Assegna
+  (`onAssign({operatorId,siteId})`); use-review-rows: `handleApplySite` + `handleBulkAssign` combinato;
+  types/api (`bulkAssignImportRow`, `BulkAssignImportRowPayload`); summary readiness `rows_without_site`;
+  rimossa label morta `global.operator_id` in en/it-imports.ts.
+
+VERIFICATO (output reale): backend Pest imports 163/163 (+ suite completa 3078/3090, gli 11 rossi
+pre-esistenti estranei: nav/migration-preview/table); leads 87/87; Pint OK. Frontend Vitest imports
+168/168 (+ operational-sites, tot 219/219); tsc pulito sui file toccati. NESSUN COMMIT (§3.6).
+PRE-ESISTENTI NON MIE: errori tsc in `features/opportunities/*` (da sorgenti modificati dalla lane
+opportunity-workflows: opportunity-schema.ts/types.ts/use-opportunity-selected-items.ts) e 1 fail
+Vitest in `features/table/cell-renderers.test.tsx` — nessun file mio in quelle aree.
+
+## MIGRATION SOURCE: PRODUCTS (2026-07-20) — GREEN, NON COMMITTATO
+
+Aggiunta la migrazione esterna (pagina /migrations, spec 0013) per l'entità Product,
+sul modello degli altri source. Engine registry-driven: 1 classe + 1 riga di config.
+File (backend):
+- NEW `app/Migrations/Sources/ProductsSource.php`: key/label/endpoint='products'.
+  Remap OBBLIGATORIO `category_id`→ProductCategory via `old_id` (product-categories va
+  migrata prima; categoria assente/non migrata = riga FALLITA per-row, non "detached",
+  perché Product richiede la categoria). `product_type`→enum ProductType (default case
+  se assente; warning+default se valore sconosciuto). `cost`/`price` → float (default 0).
+  `vat_rate_id`/`supplier_id` NON remappabili (le tabelle vat_rates/registries non hanno
+  `old_id` né un source): lasciati null con warning non-fatale se il record esterno li porta.
+- NEW migration `2026_07_20_100000_add_old_id_to_products_table.php` (additiva, reversibile,
+  `old_id` nullable unique after id) — REQUISITO per idempotenza (existsByOldId) e remap.
+- MODIFY `config/migrations.php` (+use +'products'=>ProductsSource::class).
+- MODIFY `app/Migrations/MigrationOrder.php` (products in Fase 2, dopo product-categories).
+- MODIFY `tests/Unit/Migrations/MigrationRegistryTest.php` (14 source, +products — requisito
+  cambiato: nuovo source registrato).
+- NEW `tests/Feature/Migration/ProductsSourceImportTest.php` (5 test: create+remap, warn vat/
+  supplier, default/unknown product_type, idempotenza, categoria mancante isolata).
+FE (opzionale, label tradotta): +`products` in `i18n/locales/{en,it}-migrations.ts`. Nessun'altra
+modifica FE (la pagina /migrations consuma GET /migrations dinamicamente).
+VERIFICATO (output reale, XDEBUG_MODE=off): Pest 29/29 (Products import+registry+plan+mass);
+suite Migration feature 168/168; Pint OK. NESSUN COMMIT (§3.6).
+PRE-ESISTENTI (NON MIE, confermate rimuovendo le mie modifiche): 3 test rossi nel working tree
+non committato, estranei ai prodotti-migrazione — AbstractMigrationSourcePreviewTest (RolesSource
+ha colonna `description` che l'expectation del test non prevede, entrambi a HEAD) e 2 nav test
+ProductSecurityTest/ProductCategorySecurityTest (falliscono identici senza le mie modifiche).
+
+## IMPORT LEAD — FIX GEO + WIZARD (2026-07-20) — IN CORSO
+
+Batch di fix richiesto dall'utente (5 workstream). Decisioni utente (AskUserQuestion):
+- Wizard: eliminato lo step Config separato; i suoi controlli sono nello step MAPPING (non Revisione,
+  per il vincolo dedup campaign-scoped). Wizard ora 4 step. (workstream D — GREEN)
+- GeoSelect "città-first" applicato al COMPONENTE CONDIVISO. (workstream C — GREEN)
+
+STATO COMPLESSIVO: tutti e 5 i workstream (A geo-backfill, B Rome/Roma tiebreak, C città-first,
+D wizard 4-step, E via campo progetti) GREEN, NON COMMITTATI. In attesa di ordine per committare (§3.6).
+
+WORKSTREAM D — GREEN, NON COMMITTATO:
+Vincolo scoperto: `LeadDuplicateMatcher::existingLeadId` filtra i duplicati per `campaign_id`
+(LeadDuplicateMatcher.php:69) IN STAGING (`StagedRowBuilder:103`), quindi campaign_id serve PRIMA
+dello staging. L'utente (AskUserQuestion) ha scelto la soluzione RACCOMANDATA: fondere Config nello
+step MAPPING (non in Revisione). Wizard ora 4 step: Upload > Mapping+Config > Revisione > Riepilogo.
+- FE `import-config-schema.ts`: tolto buildImportConfigSchema; tenuto tipo `ImportConfigFormValues` +
+  nuovo `withConfigDefaults`. `import-mapping-schema.ts`: `ImportMappingFormValues` +`global_config`;
+  `buildImportMappingSchema(fields, globalFields, t)` valida anche i global field required.
+- Nuovo `import-config-fields.tsx`: controlli global config (usa shadcn `FormField`, NON RHF Controller
+  — FormLabel/Control/Message richiedono il context di FormField) sotto path `global_config.<id>`.
+- `import-step-mapping.tsx`: form combinato (mapping+dedup+global_config); sezione config in fondo;
+  onSubmit(mapping, strategy, globalConfig, saveAsTemplate?); RIMOSSO bottone Back (niente vicolo cieco).
+- ELIMINATI `import-step-config.tsx` + test. `use-import-wizard.ts`: WizardStepIndex 0..3; deriveStepIndex
+  aggiornato (configuring->1, staging->2, reviewing->2/3, processing/completed/failed->3); tolto
+  submitConfig/configDraft; submitMapping riceve globalConfig; goToStep aggiornato. `import-wizard.tsx`:
+  4 step (via stepper.config). i18n: rimossi stepper.config/config.continue/config.back en+it.
+- VERIFICATO: Vitest imports+geo 178/178; tsc clean; ESLint OK (2 warning PRE-ESISTENTI in
+  import-step-upload.tsx, RHF watch). NB: 3 fail PRE-ESISTENTI in table/cell-renderers.test.tsx
+  (ContactsCell) NON causati da questo lavoro (falliscono anche senza le mie modifiche).
+
+WORKSTREAM C — GREEN, NON COMMITTATO:
+GeoSelect condiviso ora "città-first": il livello città è cercabile da solo (nessun genitore richiesto)
+e sceglierlo compila a ritroso country/state/province dal City payload (mai sovrascrive un livello
+`lockedLevels`; city-first è OFF se un livello è locked -> caso campagna BR-5 invariato). Backend:
+`CityResource` +`country_id`; `/cities` accetta `search` senza genitore (lookup city-first globale,
+capped 50) via `required_without_all:province_id,search`; `GeoController::cities` branch senza scope.
+FE: `City` type +country_id; `fetchCities` stateId opzionale; `useCities` enabled con stateId OPPURE
+search non vuoto; `geo-select.tsx` cityFirst + handleCity backfill. VERIFICATO: Pest GeoLookup 20/20;
+Vitest geo 28/28 + consumers 364/364 + imports 154/154; tsc+eslint OK.
+
+WORKSTREAM A+B+E — GREEN, NON COMMITTATO (backend, isolati):
+- A (backfill nomi antenati): `GeoRecognizer` ora sovrascrive le colonne display country/region/
+  province/city col NOME canonico dei livelli risolti (un livello NON risolto tiene il testo grezzo,
+  che resta in mapped_values). Nuovo `App\Support\Geo\GeoNameResolver` (id->nome, null se id null),
+  usato anche da `GeoPinResolver` (refactor DRY). Trovare la città cascata i nomi degli antenati.
+- B ("Rome"/"Roma" non trovata = omonimia cross-country, NON "not found"): 6 città "Rome" (1 IT id
+  107, 5 US id 233). Fix: tiebreak home-country. `GeoFuzzyMatcher::match($q,$name,$preferCountryId?)`
+  collassa un set ambiguo al singolo candidato nel paese di casa. `GeoResolver::resolveFuzzy` passa
+  l'home country (nuovo `config('imports.default_country')` = env `IMPORT_DEFAULT_COUNTRY`, default
+  'Italy') SOLO ai livelli state/province/city lasciati senza scope. Zero effetto se non configurato
+  o se il tie non si risolve univocamente. `resolve()` (esatto) invariato.
+- E (via campo progetti): rimosso `project_id` da `LeadImportFieldCatalog::GLOBAL_FIELDS` (era solo
+  narrowing client-side, il Lead eredita il progetto via campaign_id). Frontend rende i global_fields
+  in modo generico → nessuna modifica FE necessaria.
+- VERIFICATO (output reale): Pest 180/180 (geo unit + tutta la feature Imports) + LeadsImportDefinition
+  19/19; Pint OK. NESSUN COMMIT (§3.6).
+
+## LEAD FORM: AUTO-CONVERT DEFAULT ON + PLACEMENT IN GRID DETTAGLI (2026-07-20) — GREEN, NON COMMITTATO
+
+Richiesta utente: il controllo "Converti automaticamente in Opportunità" del form CREAZIONE lead
+(NON il wizard di import) deve stare nella sezione Dettagli a destra (accanto a sede/fonte/operatore),
+essere ON di default, e il default deve dipendere dal permesso `opportunities.create`. Decisioni
+utente (AskUserQuestion): mantenere lo Switch esistente (NON convertire in Checkbox); collocarlo
+"alla destra dove c'è sede, fonte, operatore" → 4a cella della grid Dettagli (colonna destra,
+accanto a Operatore).
+
+STATO PRE-ESISTENTE (spec 0044, già committato): il campo `convert_to_opportunity` esisteva già come
+Switch dentro la sezione Dettagli, gated `<Can permission="opportunities.create">`, solo create,
+default `false`. Backend già completo (StoreLeadRequest `nullable|boolean`, `required_if` su
+operator/site, LeadController autorizza `opportunities.create` server-side solo se flag true,
+LeadService::create → ConvertLeadToOpportunity in transaction). NESSUNA modifica backend necessaria.
+
+MODIFICHE (solo frontend, 3 file prod/test):
+- `use-lead-form.ts`: aggiunto `useAbilities().can`; `canConvertToOpportunity = mode.type==='create'
+  && can('opportunities.create')`; default create ora = `canConvertToOpportunity` (ON con permesso,
+  OFF senza — evita un `true` nascosto che tenterebbe una conversione non autorizzata). `useEffect`
+  re-seed del flag quando le abilities risolvono async (il controllo resta nascosto via `Can` finché
+  non caricano, quindi `defaultValues` può catturare un `false` stantìo al mount); dep primitiva
+  stabile dopo il resolve → un toggle manuale non viene mai sovrascritto.
+- `lead-form-body.tsx`: blocco Switch spostato DENTRO la `grid gap-3 sm:grid-cols-2` come 4a cella
+  (a destra di Operatore). Nessun cambio di ruolo/label (resta `role="switch"`).
+- `lead-form-body.test.tsx`: default ora ON invertiva la semantica dei click toggle → AC-040 asserisce
+  `.toBeChecked()`; AC-041 rimosso il click (già ON); AC-042 aggiunto click per spegnere; AC-043
+  rimosso il click (già ON). Requisito cambiato dichiarato (default true), non test-tampering.
+
+DIVERGENZA SPEC — DA DECIDERE: spec 0044 documenta AC-040 con default `false`. Il nuovo default `true`
+(permission-gated) OVERRIDE quel comportamento ma la spec XML NON è stata riscritta (fuori scope, non
+richiesto). Valutare se aggiornare `docs/specs/0044-lead-opportunity-conversion.xml`.
+
+VERIFICATO (output reale): Vitest leads form/schema/payload 41/41; `tsc --noEmit` OK; ESLint OK sui 3
+file. NESSUN COMMIT (CLAUDE.md §3.6).
+
 ## MIGRAZIONI: IMPORT MASSIVO CON PIANO ORDINATO SALVATO (spec 0046, 2026-07-20) — GREEN, NON COMMITTATO
 
 Richiesta utente: un unico bottone "Importa tutto" per le migrazioni dati esterni (spec 0013),
@@ -82,9 +289,43 @@ FILE CHIAVE: BE — nuovo `App\Services\Import\ImportOpportunityConvertibility` 
 
 NOTA (semplificazione deliberata, non bug): "creatable rows" nel readiness = `status IN (valid,warning)` OR (`duplicate AND resolution=create`) — euristica congelata, non simulazione runtime completa del branching create/update del persister (che dipende anche dallo stato DB live al commit). Il guard per-riga in `LeadRowPersister` e' difesa-in-profondita': il confirm gate blocca gia' le run non-ready.
 
-VERIFICATO (verifier indipendente, output reale): Pest full 2978/2990 (11 fail TUTTI pre-esistenti, confermati via `git stash` su `main`, nessuno nello scope). Scoped `tests/Feature/Imports Leads Opportunities` 329/329. `ImportOpportunityConversionTest` 11/11 (include regressione authz 403). Vitest `src/features/imports` 135/135; full 1749/1752 (3 fail pre-esistenti in `cell-renderers.test.tsx`, fuori scope). `tsc` 0 errori, ESLint + Pint puliti. Config-tamper: nessuna. NESSUN COMMIT (in attesa ok, CLAUDE.md §3.6).
+INCREMENTO 2 (2026-07-20, richiesta utente successiva) — ASSEGNAZIONE MASSIVA OPERATORE + FIX DISPLAY CELLA:
+Decisioni utente (AskUserQuestion): (1) bulk agisce su righe selezionate + opzione "Seleziona tutte"
+(server-side, anche righe non caricate); (2) la barra bulk SOLO assegna (il clear resta sulla cella
+singola). Fix display (bug utente): l'hint "operatore predefinito" nella cella compare SOLO se esiste
+un default globale (`run.global_config['operator_id'] != null`), altrimenti riga senza override = vuoto (em-dash).
+- BACKEND nuovo endpoint `PATCH /imports/{domain}/{importRun}/rows/operator` (distinto dal PATCH single).
+  Body `{ operator_id: int required exists:users, select_all?: bool, row_ids: int[] }` — semantica AG Grid
+  `getServerSideSelectionState()`: select_all=false -> row_ids = INCLUSE (non vuoto); select_all=true ->
+  row_ids = ESCLUSE. Guard `authorize('update',$importRun)` (`leads.import`) + reviewing + row_ids scoped
+  alla run (anti-IDOR: doppia difesa in `BulkAssignOperatorRequest::validateRowIdsBelongToRun` E
+  `where('import_run_id')` nel mass-update di `ImportService::bulkAssignOperator`). NON richiede
+  `opportunities.create`. Response `{success,message,data:{updated:int}}`. File nuovi: `BulkAssignOperatorRequest`,
+  `ImportController::bulkAssignOperator`, `ImportService::bulkAssignOperator`, `ImportBulkAssignOperatorTest` (8 test).
+  NOTA STRUTTURALE: per rientrare nel limite hard 500 righe, le route `imports/{domain}` sono state estratte
+  in un nuovo `backend/routes/api/imports.php` (require dentro il gruppo `auth:sanctum` di `routes/api.php`,
+  stesso pattern di leads.php/opportunities.php). Verificato 1:1 via `route:list`, 15 route import, `rows/operator`
+  PRECEDE `rows/{row}` (precedenza statica su wildcard).
+- FRONTEND nuovi: `review-bulk-assign-bar.tsx` (toolbar compatta, picker users, "Assegna", solo-assign),
+  `review-grid.test.tsx`. Modificati: `review-operator-editor.tsx` (context `globalDefaultOperatorId`, hint
+  condizionale + em-dash), `review-grid.tsx` (ROW_SELECTION multiRow+headerCheckbox+selectAll:'all' se !readOnly,
+  selection state -> barra, dopo assign `setServerSideSelectionState` reset + `refreshServerSide({purge:true})`),
+  `use-review-rows.ts` (`buildBulkAssignPayload` puro + `handleBulkAssignOperator` PATCH + invalida summary + toast),
+  `api.ts`/`types.ts` (`bulkAssignImportRowOperator`, payload/result types), i18n `review.bulkAssign.*` it/en.
 
-ATTENZIONE COMMIT: la working tree condivisa contiene anche modifiche NON tracciate concorrenti di un altro teammate (spec 0046 mass-migration-import: `RunMigrationJob.php`, `MigrationService.php`, `routes/api.php`, `MigrationPlan.php`, migration `migration_plans`, `docs/specs/0046-*.xml`) FUORI dallo scope di questa feature: al commit scopare SOLO i file di questa feature.
+VERIFICATO (verifier indipendente, output reale) — dopo entrambi gli incrementi: Pest full 2995/3007 (11 fail
+TUTTI pre-esistenti, confermati via `git stash` su `main`, nessuno nello scope). `tests/Feature/Imports` 154/154.
+`ImportOpportunityConversionTest` 11/11 (include regressione authz 403), `ImportBulkAssignOperatorTest` 8/8.
+Vitest `src/features/imports` 154/154; full deterministico (`--no-file-parallelism`) 1773/1776 (3 fail
+pre-esistenti in `cell-renderers.test.tsx`, fuori scope; il full-run parallelo dava flakiness da contesa worker,
+non regressione). `tsc` 0 errori, ESLint + Pint puliti. Config-tamper: nessuna. NESSUN COMMIT (in attesa ok, CLAUDE.md §3.6).
+
+ATTENZIONE COMMIT (shared working tree affollata da lavoro concorrente di altri teammate — scopare il commit
+ai SOLI file di questa feature): (a) spec 0046 mass-migration-import (`RunMigrationJob.php`, `MigrationService.php`,
+`MigrationPlan.php`, migration `migration_plans`, `docs/specs/0046-*.xml`); (b) spec 0047 opportunity-workflow-configurator
+(`Lead.php`, `Opportunity.php`, nuove migration, `config/authorization.php`). ATTENZIONE PARTICOLARE a
+`backend/routes/api.php`: toccato SIA da questa feature (estrazione route import) SIA dalla 0046 — va separato a mano
+al commit. Questa feature NON tocca i Model `Lead.php`/`Opportunity.php` (li tocca la 0047).
 
 ## PROJECT/CAMPAIGN: CATEGORIA PRODOTTO VINCOLATA ALLA FUNZIONE AZIENDALE (2026-07-20) — GREEN, NON COMMITTATO
 

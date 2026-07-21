@@ -10,7 +10,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * @mixin City
  *
  * Minimal projection of a city for the geo cascade selects (ADR 0010): id,
- * display name and the parent ids (state_id and the optional province_id).
+ * display name and the parent ids. `country_id` lets the cascade backfill the
+ * full ancestor chain when a city is picked first (city-first selection).
  * Cities are read-only reference data.
  */
 class CityResource extends JsonResource
@@ -23,6 +24,7 @@ class CityResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->localizedName(),
+            'country_id' => $this->country_id,
             'state_id' => $this->state_id,
             'province_id' => $this->province_id,
         ];

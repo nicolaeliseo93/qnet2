@@ -33,10 +33,12 @@ use App\Models\User;
  * pipeline runs, and the pipeline is told to skip GeoRecognizer — the pin IS
  * the resolution, not a hint to re-fuzzy-match.
  *
- * `operator_id` (spec 0045): the per-row Operator override never re-runs the
- * staging pipeline on its own — it does not affect recognizers/validation/
- * dedup, only who owns the row at commit time — so a request carrying ONLY
- * `operator_id` short-circuits before StagedRowBuilder even runs.
+ * `operator_id`/`operational_site_id` (spec 0045, the latter mirrored): the
+ * per-row Operator/Operational Site overrides never re-run the staging
+ * pipeline on their own — they do not affect recognizers/validation/dedup,
+ * only which operator/site owns the row at commit time — so a request
+ * carrying ONLY these overrides short-circuits before StagedRowBuilder even
+ * runs.
  */
 final class StagedRowReviser
 {
@@ -55,12 +57,18 @@ final class StagedRowReviser
         ?array $geo = null,
         bool $operatorIdSubmitted = false,
         ?int $operatorId = null,
+        bool $siteIdSubmitted = false,
+        ?int $siteId = null,
     ): ImportRunRow {
-        // Step 1: an operator-only override never touches staging/validation
-        // status — plain column write, no StagedRowBuilder replay.
+        // Step 1: an operator/site-only override never touches staging/
+        // validation status — plain column write, no StagedRowBuilder replay.
         if ($editedValues === null && $geo === null) {
-            if ($operatorIdSubmitted) {
-                $row->update(['operator_id' => $operatorId, 'is_edited' => true]);
+            if ($operatorIdSubmitted || $siteIdSubmitted) {
+                $row->update([
+                    ...($operatorIdSubmitted ? ['operator_id' => $operatorId] : []),
+                    ...($siteIdSubmitted ? ['operational_site_id' => $siteId] : []),
+                    'is_edited' => true,
+                ]);
             }
 
             return $row->fresh();
@@ -94,6 +102,7 @@ final class StagedRowReviser
             'resolution' => $outcome->status === ImportRowStatus::Duplicate ? $row->resolution : null,
             'is_edited' => true,
             ...($operatorIdSubmitted ? ['operator_id' => $operatorId] : []),
+            ...($siteIdSubmitted ? ['operational_site_id' => $siteId] : []),
         ]);
 
         return $row->fresh();

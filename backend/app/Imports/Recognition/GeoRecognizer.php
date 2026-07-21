@@ -5,6 +5,7 @@ namespace App\Imports\Recognition;
 use App\Imports\ImportRowContext;
 use App\Imports\Support\GeoResolutionResult;
 use App\Imports\Support\GeoResolver;
+use App\Support\Geo\GeoNameResolver;
 
 /**
  * Resolves a row's mapped geo fields (country/region/province/city) to
@@ -23,7 +24,10 @@ final class GeoRecognizer implements RowRecognizer
 
     public const string CITY_FIELD = 'city';
 
-    public function __construct(private readonly GeoResolver $geoResolver) {}
+    public function __construct(
+        private readonly GeoResolver $geoResolver,
+        private readonly GeoNameResolver $geoNames,
+    ) {}
 
     public function recognize(ImportRowContext $context, array $mapped): RecognitionResult
     {
@@ -47,6 +51,17 @@ final class GeoRecognizer implements RowRecognizer
             'province_id' => $result->provinceId,
             'city_id' => $result->cityId,
         ];
+
+        // Step 3: overwrite each resolved level's display column with its
+        // canonical name, so finding a city cascades the ancestor names
+        // (country/region/province) into the grid too. A level that stayed
+        // unresolved (null id) keeps the operator's raw text for review.
+        $names = $this->geoNames->names($result->countryId, $result->stateId, $result->provinceId, $result->cityId);
+        foreach ($names as $field => $name) {
+            if ($name !== null) {
+                $resolved[$field] = $name;
+            }
+        }
 
         if ($result->isResolved()) {
             return RecognitionResult::resolved($resolved);

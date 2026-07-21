@@ -87,6 +87,63 @@ it('is a non-blocking result (never ::failed()) on ambiguity, distinct from a ha
 });
 
 // ---------------------------------------------------------------------------
+// Home-country tiebreak — a bare homonym (no country/region in the row) that
+// matches several countries resolves to the configured home country.
+// ---------------------------------------------------------------------------
+
+/**
+ * @return array{italy: Country, us: Country}
+ */
+function homonymRomeChain(): array
+{
+    $italy = Country::factory()->create(['name' => 'Italy']);
+    $lazio = State::factory()->create(['name' => 'Lazio', 'country_id' => $italy->id]);
+    City::factory()->create(['name' => 'Rome', 'state_id' => $lazio->id, 'country_id' => $italy->id]);
+
+    $us = Country::factory()->create(['name' => 'United States']);
+    $georgia = State::factory()->create(['name' => 'Georgia', 'country_id' => $us->id]);
+    City::factory()->create(['name' => 'Rome', 'state_id' => $georgia->id, 'country_id' => $us->id]);
+
+    return compact('italy', 'us');
+}
+
+it('breaks a cross-country city homonym in favour of the configured home country', function () {
+    config()->set('imports.default_country', 'Italy');
+    $geo = homonymRomeChain();
+
+    $result = app(GeoResolver::class)->resolveFuzzy(null, null, null, 'Roma');
+
+    expect($result->isResolved())->toBeTrue()
+        ->and($result->ambiguous)->toBeFalse()
+        ->and($result->countryId)->toBe($geo['italy']->id);
+});
+
+it('leaves the homonym ambiguous when no home country is configured', function () {
+    config()->set('imports.default_country', '');
+    homonymRomeChain();
+
+    $result = app(GeoResolver::class)->resolveFuzzy(null, null, null, 'Rome');
+
+    expect($result->isResolved())->toBeFalse()
+        ->and($result->ambiguous)->toBeTrue()
+        ->and($result->cityId)->toBeNull();
+});
+
+it('stays ambiguous when the home country itself holds more than one homonym', function () {
+    config()->set('imports.default_country', 'Italy');
+    $italy = Country::factory()->create(['name' => 'Italy']);
+    $lazio = State::factory()->create(['name' => 'Lazio', 'country_id' => $italy->id]);
+    $piedmont = State::factory()->create(['name' => 'Piedmont', 'country_id' => $italy->id]);
+    City::factory()->create(['name' => 'Rome', 'state_id' => $lazio->id, 'country_id' => $italy->id]);
+    City::factory()->create(['name' => 'Rome', 'state_id' => $piedmont->id, 'country_id' => $italy->id]);
+
+    $result = app(GeoResolver::class)->resolveFuzzy(null, null, null, 'Rome');
+
+    expect($result->isResolved())->toBeFalse()
+        ->and($result->ambiguous)->toBeTrue();
+});
+
+// ---------------------------------------------------------------------------
 // AC-005 — retro-compat: resolve() (exact) behavior is unchanged by the
 // fuzzy addition — same inputs, same outputs as before.
 // ---------------------------------------------------------------------------

@@ -17,11 +17,13 @@ import { resolveImportWizardErrorMessage } from '@/features/imports/wizard/resol
 import type { ImportRunRowItem } from '@/features/imports/wizard/types'
 
 /**
- * Shared, stable callback threaded through `gridOptions.context`
+ * Shared, stable state/callback threaded through `gridOptions.context`
  * (review-grid.tsx), mirroring `ReviewGeoGridContext`: the operator column
  * opens a popup and applies through the same mutation regardless of which
  * row triggered it, so there is nothing column-specific to drill into the
- * colDef.
+ * colDef. `globalDefaultOperatorId` is the run's own `global_config`
+ * `operator_id` (or `null` when the run has no global default), read once at
+ * the grid level instead of prop-drilled per column.
  */
 export interface ReviewOperatorGridContext {
   onApplyOperator: (
@@ -29,6 +31,7 @@ export interface ReviewOperatorGridContext {
     operatorId: number | null,
     node: IRowNode<ImportRunRowItem>,
   ) => Promise<void>
+  globalDefaultOperatorId: number | null
 }
 
 export interface ReviewOperatorCellParams
@@ -38,10 +41,13 @@ export interface ReviewOperatorCellParams
 }
 
 /**
- * Per-row operator override cell: shows the row's own `operator` when set,
- * otherwise a muted hint that the run's global default applies. Not
- * `readOnly`, the cell is a button opening a popup with an operator picker
- * (`AsyncPaginatedSelect`) precompiled from the row's current override.
+ * Per-row operator override cell: shows the row's own `operator` when set;
+ * otherwise, a muted "uses the default" hint ONLY when the run actually has
+ * a global default operator configured (`context.globalDefaultOperatorId`)
+ * — an empty placeholder when it does not, since there is then no default to
+ * fall back to. Not `readOnly`, the cell is a button opening a popup with an
+ * operator picker (`AsyncPaginatedSelect`) precompiled from the row's
+ * current override.
  */
 export function ReviewOperatorCell({ data, node, context, readOnly }: ReviewOperatorCellParams) {
   const { t } = useTranslation('importWizard')
@@ -49,7 +55,8 @@ export function ReviewOperatorCell({ data, node, context, readOnly }: ReviewOper
 
   if (!data) return null
 
-  const displayValue = data.operator?.name ?? t('review.operator.usingDefault')
+  const displayValue =
+    data.operator?.name ?? (context.globalDefaultOperatorId != null ? t('review.operator.usingDefault') : '—')
 
   if (readOnly) {
     return <span className="truncate text-xs text-muted-foreground">{displayValue}</span>

@@ -65,6 +65,9 @@ export function LeadDetailView({ lead }: LeadDetailViewProps) {
           <DetailField label={t('leads.form.operationalSite')}>
             {lead.operational_site?.label ?? <DetailEmpty />}
           </DetailField>
+          <DetailField label={t('leads.form.state')}>
+            {lead.state?.name ?? <DetailEmpty />}
+          </DetailField>
           <DetailField label={t('leads.form.source')}>
             {lead.source?.name ?? <DetailEmpty />}
           </DetailField>

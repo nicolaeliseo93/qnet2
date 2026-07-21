@@ -36,7 +36,6 @@ export const imports = {
       campaign_id: 'Campagna',
       project_id: 'Progetto',
       source_id: 'Fonte',
-      operator_id: 'Operatore assegnato',
     },
   },
   buttons: {

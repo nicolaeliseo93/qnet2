@@ -75,6 +75,9 @@ final class ConvertLeadToOpportunity
             estimatedValue: null,
             expectedCloseDate: null,
             successProbability: null,
+            // spec 0047 (AC-002, D1): the Regione inherited from the lead.
+            stateId: $defaults->values['state_id'],
+            workflowStatusId: null,
         ));
     }
 

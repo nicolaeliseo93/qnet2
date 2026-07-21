@@ -10,6 +10,7 @@ use App\Models\Lead;
 use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
+use App\Services\Opportunities\OpportunityWorkflowResolver;
 use App\Services\Statuses\SystemStatusGuard;
 use Illuminate\Support\Facades\DB;
 
@@ -53,11 +54,15 @@ class OpportunityService
         'lead.campaign.productCategory',
         'lead.campaign.project.businessFunction',
         'lead.campaign.project.productCategory',
+        // spec 0047 (AC-003): Regione + resolved working-state row.
+        'state',
+        'workflowStatus',
     ];
 
     public function __construct(
         private readonly LeadOpportunityDefaultsResolver $defaultsResolver,
         private readonly SystemStatusGuard $systemStatusGuard,
+        private readonly OpportunityWorkflowResolver $workflowResolver,
     ) {}
 
     public function loadDetail(Opportunity $opportunity): Opportunity
@@ -95,6 +100,13 @@ class OpportunityService
                 $this->syncProductLines($opportunity, $data->productLines);
             }
 
+            // spec 0047 (AC-015/017): an explicit, already-validated override
+            // wins; otherwise the resolver derives the 'open' row of the
+            // resolved set — product lines are already synced above, so
+            // business_function_id/product_category_id criteria see their
+            // final values.
+            $this->resolveWorkflowStatus($opportunity, $data->workflowStatusId);
+
             return $opportunity;
         });
 
@@ -122,6 +134,14 @@ class OpportunityService
             if ($data->hasProductLines()) {
                 $this->syncProductLines($opportunity, $data->productLines);
             }
+
+            // spec 0047 (AC-016/017): re-resolve after any change to the
+            // resolving criteria (source_id/state_id/product lines) unless
+            // the client explicitly (and already-validated) chose a status.
+            $this->resolveWorkflowStatus(
+                $opportunity,
+                $data->workflowStatusIdSubmitted ? $data->workflowStatusId : null,
+            );
         });
 
         return $this->loadDetail($opportunity);
@@ -135,6 +155,26 @@ class OpportunityService
     public function delete(Opportunity $opportunity): void
     {
         $opportunity->delete();
+    }
+
+    /**
+     * The single write-side entry point for `opportunity_workflow_status_id`
+     * (spec 0047): an explicit, non-null $submittedStatusId (already
+     * validated by ValidatesWorkflowStatus to belong to the resolved set) is
+     * written verbatim; otherwise OpportunityWorkflowResolver derives and
+     * persists it — the SAME resolver Lane A's delete-reassign flow calls,
+     * never duplicated here.
+     */
+    private function resolveWorkflowStatus(Opportunity $opportunity, ?int $submittedStatusId): void
+    {
+        if ($submittedStatusId !== null) {
+            $opportunity->opportunity_workflow_status_id = $submittedStatusId;
+            $opportunity->save();
+
+            return;
+        }
+
+        $this->workflowResolver->resolveAndAssign($opportunity);
     }
 
     /**

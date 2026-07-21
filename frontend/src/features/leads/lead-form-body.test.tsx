@@ -305,9 +305,10 @@ describe('LeadForm — convert to opportunity (spec 0044, AC-040..AC-043)', () =
     })
 
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    // Defaults ON for an actor who can create Opportunities.
     expect(
       screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }),
-    ).toBeInTheDocument()
+    ).toBeChecked()
   })
 
   it('AC-040: hides the control without opportunities.create', async () => {
@@ -342,7 +343,7 @@ describe('LeadForm — convert to opportunity (spec 0044, AC-040..AC-043)', () =
 
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }))
+    // The control is ON by default; submit straight away with Operator/Site empty.
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(
@@ -364,6 +365,8 @@ describe('LeadForm — convert to opportunity (spec 0044, AC-040..AC-043)', () =
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
     fireEvent.click(screen.getByTestId('select-Registry'))
     fireEvent.click(screen.getByTestId('select-Campaign'))
+    // Turn the default-ON control OFF so Operator/Site stay optional.
+    fireEvent.click(screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createLeadMock).toHaveBeenCalledTimes(1))
@@ -384,7 +387,7 @@ describe('LeadForm — convert to opportunity (spec 0044, AC-040..AC-043)', () =
 
     fireEvent.click(screen.getByTestId('select-Registry'))
     fireEvent.click(screen.getByTestId('select-Campaign'))
-    fireEvent.click(screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }))
+    // The control is ON by default; just fill the Operator/Site it requires.
     fireEvent.click(screen.getByTestId('select-Operator'))
     fireEvent.click(screen.getByTestId('select-Site'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -394,5 +397,64 @@ describe('LeadForm — convert to opportunity (spec 0044, AC-040..AC-043)', () =
     expect(payload.convert_to_opportunity).toBe(true)
     expect(payload.operator_id).toBe(3)
     expect(payload.operational_site_id).toBe(3)
+  })
+})
+
+/**
+ * Spec 0047 (D1): the Regione is DERIVED server-side from the operational
+ * site — a read-only display, never a picker, never sent in the payload.
+ */
+describe('LeadFormBody — Regione (read-only, spec 0047)', () => {
+  it('create mode: shows the "derived from the site" hint, disabled', async () => {
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    const state = screen.getByPlaceholderText('Derived from the selected site.')
+    expect(state).toBeDisabled()
+    expect(state).toHaveValue('')
+  })
+
+  it('edit mode: shows the derived region name, disabled', async () => {
+    render(
+      <LeadForm
+        mode={{ type: 'edit', lead: lead({ state_id: 3, state: { id: 3, name: 'Lombardy' } }) }}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    const state = screen.getByDisplayValue('Lombardy')
+    expect(state).toBeDisabled()
+  })
+
+  it('edit mode, no derived region yet: shows the empty placeholder', async () => {
+    render(
+      <LeadForm mode={{ type: 'edit', lead: lead({ state_id: null, state: null }) }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    expect(screen.getByPlaceholderText('— (derived from the site)')).toBeInTheDocument()
+  })
+
+  it('never sends state_id in the create payload', async () => {
+    createLeadMock.mockResolvedValue(lead())
+
+    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('select-Registry'))
+    fireEvent.click(screen.getByTestId('select-Campaign'))
+    fireEvent.click(screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(createLeadMock).toHaveBeenCalledTimes(1))
+    expect(createLeadMock.mock.calls[0][0]).not.toHaveProperty('state_id')
   })
 })

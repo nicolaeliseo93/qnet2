@@ -42,7 +42,7 @@ final class ImportOpportunityConvertibility
     public function assess(ImportRun $run): ImportConversionReadiness
     {
         $globalConfig = $run->global_config ?? [];
-        $operationalSiteId = $this->id($globalConfig, 'operational_site_id');
+        $globalSiteId = $this->id($globalConfig, 'operational_site_id');
         $globalOperatorId = $this->id($globalConfig, 'operator_id');
         $campaignId = $this->id($globalConfig, 'campaign_id');
 
@@ -50,13 +50,17 @@ final class ImportOpportunityConvertibility
         $rowsWithoutOperator = $creatableRows->filter(
             static fn (ImportRunRow $row): bool => ($row->operator_id ?? $globalOperatorId) === null,
         );
+        $rowsWithoutSite = $creatableRows->filter(
+            static fn (ImportRunRow $row): bool => ($row->operational_site_id ?? $globalSiteId) === null,
+        );
 
         return new ImportConversionReadiness(
-            operationalSiteSet: $operationalSiteId !== null,
             campaignDerivesProductLine: $campaignId !== null && $this->campaignDerivesProductLine($campaignId),
             creatableRowsCount: $creatableRows->count(),
             rowsWithoutOperatorCount: $rowsWithoutOperator->count(),
             rowsWithoutOperatorNumbers: $rowsWithoutOperator->pluck('row_number')->values()->all(),
+            rowsWithoutSiteCount: $rowsWithoutSite->count(),
+            rowsWithoutSiteNumbers: $rowsWithoutSite->pluck('row_number')->values()->all(),
         );
     }
 

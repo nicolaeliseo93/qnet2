@@ -209,6 +209,38 @@ class ImportService
     }
 
     /**
+     * Bulk-assign an operator and/or an operational site to a batch of a
+     * run's staged rows in a SINGLE mass UPDATE (spec 0045 bulk increment,
+     * extended to a COMBINED operator+site assignment) — AG Grid
+     * `getServerSideSelectionState()` semantics: `$rowIds` are the rows to
+     * target when `$selectAll` is false, the rows to EXCLUDE (empty = every
+     * row) when true. Every id in `$rowIds` is trusted to already belong to
+     * `$run` — validated by the caller's FormRequest (BulkAssignRequest)
+     * BEFORE this runs, never re-checked here. Marks every targeted row
+     * `is_edited` too, same as a single-row PATCH.
+     *
+     * @param  array<int, int>  $rowIds
+     * @return int the number of rows updated
+     */
+    public function bulkAssign(ImportRun $run, bool $selectAll, array $rowIds, ?int $operatorId, ?int $operationalSiteId): int
+    {
+        $attributes = [
+            ...($operatorId !== null ? ['operator_id' => $operatorId] : []),
+            ...($operationalSiteId !== null ? ['operational_site_id' => $operationalSiteId] : []),
+        ];
+
+        if ($attributes === []) {
+            return 0;
+        }
+
+        return ImportRunRow::query()
+            ->where('import_run_id', $run->id)
+            ->when(! $selectAll, fn ($query) => $query->whereIn('id', $rowIds))
+            ->when($selectAll && $rowIds !== [], fn ($query) => $query->whereNotIn('id', $rowIds))
+            ->update([...$attributes, 'is_edited' => true]);
+    }
+
+    /**
      * Write the errors CSV report for the given rejected rows (the FULL set,
      * not just the preview sample) and persist its path on the run. Header =
      * the definition's template columns + row_number + errors (spec 0012

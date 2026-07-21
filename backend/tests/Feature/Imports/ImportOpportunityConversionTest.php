@@ -23,9 +23,11 @@ use Spatie\Permission\Models\Permission;
 uses(RefreshDatabase::class);
 
 /**
- * Spec 0045 — per-row Operator override (PATCH .../rows/{row}) and
- * auto-convert-to-Opportunity during lead import (POST .../confirm with
- * `convert_to_opportunity: true`, gated by ImportOpportunityConvertibility).
+ * Spec 0045 — auto-convert-to-Opportunity during lead import (POST
+ * .../confirm with `convert_to_opportunity: true`, gated by
+ * ImportOpportunityConvertibility) and its `GET .../summary` preview. The
+ * per-row Operator/Operational Site override coverage (PATCH .../rows/{row})
+ * lives in ImportRowOverrideTest (split out, engineering.md §6).
  */
 
 /**
@@ -82,73 +84,14 @@ function conversionReadyFixture(): array
 }
 
 // ---------------------------------------------------------------------------
-// Per-row Operator override — PATCH /api/imports/leads/{importRun}/rows/{row}
-// ---------------------------------------------------------------------------
-
-it('sets the per-row operator override without touching status/mapped_values', function () {
-    $actor = conversionActor(['import']);
-    $operator = User::factory()->create();
-    $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Reviewing]);
-    $row = ImportRunRow::factory()->create([
-        'import_run_id' => $run->id,
-        'mapped_values' => ['first_name' => 'Mario', 'last_name' => 'Rossi'],
-        'status' => ImportRowStatus::Valid,
-    ]);
-    Sanctum::actingAs($actor);
-
-    $this->patchJson("/api/imports/leads/{$run->id}/rows/{$row->id}", ['operator_id' => $operator->id])
-        ->assertOk()
-        ->assertJsonPath('data.row.operator_id', $operator->id)
-        ->assertJsonPath('data.row.operator.id', $operator->id)
-        ->assertJsonPath('data.row.operator.name', $operator->name)
-        ->assertJsonPath('data.row.is_edited', true)
-        ->assertJsonPath('data.row.status', 'valid');
-
-    $row->refresh();
-    expect($row->operator_id)->toBe($operator->id)
-        ->and($row->mapped_values)->toBe(['first_name' => 'Mario', 'last_name' => 'Rossi']);
-});
-
-it('clears the per-row operator override with an explicit null', function () {
-    $actor = conversionActor(['import']);
-    $operator = User::factory()->create();
-    $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Reviewing]);
-    $row = ImportRunRow::factory()->create(['import_run_id' => $run->id, 'operator_id' => $operator->id]);
-    Sanctum::actingAs($actor);
-
-    $this->patchJson("/api/imports/leads/{$run->id}/rows/{$row->id}", ['operator_id' => null])
-        ->assertOk()
-        ->assertJsonPath('data.row.operator_id', null)
-        ->assertJsonPath('data.row.operator', null);
-
-    expect($row->fresh()->operator_id)->toBeNull();
-});
-
-it('403 without leads.import on the per-row operator override', function () {
-    $actor = conversionActor([]);
-    $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Reviewing]);
-    $row = ImportRunRow::factory()->create(['import_run_id' => $run->id]);
-    Sanctum::actingAs($actor);
-
-    $this->patchJson("/api/imports/leads/{$run->id}/rows/{$row->id}", ['operator_id' => User::factory()->create()->id])
-        ->assertForbidden();
-});
-
-it('422 when none of values/geo/operator_id is submitted', function () {
-    $actor = conversionActor(['import']);
-    $run = ImportRun::factory()->create(['user_id' => $actor->id, 'resource' => 'leads', 'status' => ImportStatus::Reviewing]);
-    $row = ImportRunRow::factory()->create(['import_run_id' => $run->id]);
-    Sanctum::actingAs($actor);
-
-    $this->patchJson("/api/imports/leads/{$run->id}/rows/{$row->id}", [])
-        ->assertStatus(422);
-});
-
-// ---------------------------------------------------------------------------
 // Confirm gate — POST /api/imports/leads/{importRun}/confirm, convert_blockers
 // ---------------------------------------------------------------------------
 
-it('422 with operational_site_missing when the run has no operational_site_id', function () {
+it('422 with rows_without_site listing every creatable row with no effective operational site', function () {
+    // Requirement changed: the operational site is no longer a run-level
+    // "set/missing" boolean — it is a PER-ROW override mirroring the
+    // operator (spec 0045 extended), so an absent global AND per-row site
+    // surfaces as `rows_without_site`, not `operational_site_missing`.
     $actor = conversionActor(['import'], ['create']);
     $fixture = conversionReadyFixture();
     $run = ImportRun::factory()->create([
@@ -158,15 +101,15 @@ it('422 with operational_site_missing when the run has no operational_site_id', 
         'dedup_strategy' => ImportDedupMode::CreateNew->value,
         'global_config' => ['campaign_id' => $fixture['campaign']->id, 'operator_id' => $fixture['operator']->id],
     ]);
-    ImportRunRow::factory()->create(['import_run_id' => $run->id, 'status' => ImportRowStatus::Valid]);
+    ImportRunRow::factory()->create(['import_run_id' => $run->id, 'row_number' => 1, 'status' => ImportRowStatus::Valid]);
     Sanctum::actingAs($actor);
 
     $this->postJson("/api/imports/leads/{$run->id}/confirm", ['convert_to_opportunity' => true])
         ->assertStatus(422)
         ->assertJsonPath('success', false)
-        ->assertJsonPath('convert_blockers.operational_site_missing', true)
         ->assertJsonPath('convert_blockers.campaign_missing_product_line', false)
-        ->assertJsonPath('convert_blockers.rows_without_operator', []);
+        ->assertJsonPath('convert_blockers.rows_without_operator', [])
+        ->assertJsonPath('convert_blockers.rows_without_site', [1]);
 
     expect($run->fresh()->status)->toBe(ImportStatus::Reviewing)
         ->and(Lead::query()->count())->toBe(0);
@@ -193,9 +136,9 @@ it('422 with campaign_missing_product_line when the campaign derives no product 
 
     $this->postJson("/api/imports/leads/{$run->id}/confirm", ['convert_to_opportunity' => true])
         ->assertStatus(422)
-        ->assertJsonPath('convert_blockers.operational_site_missing', false)
         ->assertJsonPath('convert_blockers.campaign_missing_product_line', true)
-        ->assertJsonPath('convert_blockers.rows_without_operator', []);
+        ->assertJsonPath('convert_blockers.rows_without_operator', [])
+        ->assertJsonPath('convert_blockers.rows_without_site', []);
 });
 
 it('422 with rows_without_operator listing every creatable row with no effective operator', function () {
@@ -221,9 +164,38 @@ it('422 with rows_without_operator listing every creatable row with no effective
 
     $this->postJson("/api/imports/leads/{$run->id}/confirm", ['convert_to_opportunity' => true])
         ->assertStatus(422)
-        ->assertJsonPath('convert_blockers.operational_site_missing', false)
         ->assertJsonPath('convert_blockers.campaign_missing_product_line', false)
-        ->assertJsonPath('convert_blockers.rows_without_operator', [1, 3]);
+        ->assertJsonPath('convert_blockers.rows_without_operator', [1, 3])
+        ->assertJsonPath('convert_blockers.rows_without_site', []);
+});
+
+it('422 with rows_without_site listing every creatable row with no effective operational site (per-row override present on some)', function () {
+    $actor = conversionActor(['import'], ['create']);
+    $fixture = conversionReadyFixture();
+    $rowSite = OperationalSite::factory()->create();
+    $run = ImportRun::factory()->create([
+        'user_id' => $actor->id,
+        'resource' => 'leads',
+        'status' => ImportStatus::Reviewing,
+        'dedup_strategy' => ImportDedupMode::CreateNew->value,
+        // No global operational_site_id — every row must supply its own.
+        'global_config' => ['campaign_id' => $fixture['campaign']->id, 'operator_id' => $fixture['operator']->id],
+    ]);
+    ImportRunRow::factory()->create(['import_run_id' => $run->id, 'row_number' => 1, 'status' => ImportRowStatus::Valid]);
+    ImportRunRow::factory()->create([
+        'import_run_id' => $run->id,
+        'row_number' => 2,
+        'status' => ImportRowStatus::Valid,
+        'operational_site_id' => $rowSite->id,
+    ]);
+    ImportRunRow::factory()->create(['import_run_id' => $run->id, 'row_number' => 3, 'status' => ImportRowStatus::Valid]);
+    Sanctum::actingAs($actor);
+
+    $this->postJson("/api/imports/leads/{$run->id}/confirm", ['convert_to_opportunity' => true])
+        ->assertStatus(422)
+        ->assertJsonPath('convert_blockers.campaign_missing_product_line', false)
+        ->assertJsonPath('convert_blockers.rows_without_operator', [])
+        ->assertJsonPath('convert_blockers.rows_without_site', [1, 3]);
 });
 
 it('403 with convert_to_opportunity:true when the actor lacks opportunities.create, even with leads.import', function () {
@@ -408,8 +380,38 @@ it('summary reports conversion_readiness computed from the run/rows', function (
 
     $this->getJson("/api/imports/leads/{$run->id}/summary")
         ->assertOk()
-        ->assertJsonPath('data.summary.conversion_readiness.operational_site_set', true)
         ->assertJsonPath('data.summary.conversion_readiness.campaign_derives_product_line', true)
         ->assertJsonPath('data.summary.conversion_readiness.creatable_rows', 3)
-        ->assertJsonPath('data.summary.conversion_readiness.rows_without_operator', 2);
+        ->assertJsonPath('data.summary.conversion_readiness.rows_without_operator', 2)
+        // The global operational_site_id covers every row that has no own
+        // per-row override (spec 0045, extended to mirror the operator).
+        ->assertJsonPath('data.summary.conversion_readiness.rows_without_site', 0);
+});
+
+it('summary reports rows_without_site mirroring rows_without_operator when neither global nor per-row site is set', function () {
+    $actor = conversionActor(['import']);
+    $fixture = conversionReadyFixture();
+    $run = ImportRun::factory()->create([
+        'user_id' => $actor->id,
+        'resource' => 'leads',
+        'status' => ImportStatus::Reviewing,
+        'dedup_strategy' => ImportDedupMode::CreateNew->value,
+        // No global operational_site_id: only rows with their OWN override count.
+        'global_config' => ['campaign_id' => $fixture['campaign']->id, 'operator_id' => $fixture['operator']->id],
+    ]);
+
+    ImportRunRow::factory()->create(['import_run_id' => $run->id, 'row_number' => 1, 'status' => ImportRowStatus::Valid]);
+    ImportRunRow::factory()->create([
+        'import_run_id' => $run->id,
+        'row_number' => 2,
+        'status' => ImportRowStatus::Valid,
+        'operational_site_id' => OperationalSite::factory()->create()->id,
+    ]);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/imports/leads/{$run->id}/summary")
+        ->assertOk()
+        ->assertJsonPath('data.summary.conversion_readiness.creatable_rows', 2)
+        ->assertJsonPath('data.summary.conversion_readiness.rows_without_operator', 0)
+        ->assertJsonPath('data.summary.conversion_readiness.rows_without_site', 1);
 });

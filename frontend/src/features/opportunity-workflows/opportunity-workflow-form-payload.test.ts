@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest'
+import {
+  buildCreatePayload,
+  buildDefaultStatusesPayload,
+  buildUpdatePayload,
+} from '@/features/opportunity-workflows/opportunity-workflow-form-payload'
+import type { CreateOpportunityWorkflowFormValues } from '@/features/opportunity-workflows/opportunity-workflow-schema'
+import type { WorkflowStatusFormRow } from '@/features/opportunity-workflows/types'
+
+const values: CreateOpportunityWorkflowFormValues = {
+  name: 'EMEA workflow',
+  is_active: true,
+  criteria: [
+    { field: 'state_id', value_id: 1 },
+    { field: 'source_id', value_id: 2 },
+  ],
+}
+
+const PLACEHOLDER_STATUS_ROWS: WorkflowStatusFormRow[] = [
+  { id: 'open', name: '', color: null, group: 'open', system_key: 'open' },
+  { id: 'c1', name: 'In progress', color: 'blue', group: 'pending', system_key: null },
+  { id: 'closed', name: '', color: null, group: 'closed', system_key: 'closed' },
+]
+
+const PERSISTED_STATUS_ROWS: WorkflowStatusFormRow[] = [
+  { id: '1', statusId: 1, name: 'Open', color: null, group: 'open', system_key: 'open' },
+  { id: '2', statusId: 2, name: 'In progress', color: 'blue', group: 'pending', system_key: null },
+  { id: '3', name: 'New custom', color: 'green', group: 'pending', system_key: null },
+  { id: '4', statusId: 4, name: 'Closed', color: null, group: 'closed', system_key: 'closed' },
+]
+
+describe('buildCreatePayload', () => {
+  it('builds the full create payload, dropping incomplete/placeholder rows', () => {
+    expect(buildCreatePayload(values, PLACEHOLDER_STATUS_ROWS)).toEqual({
+      name: 'EMEA workflow',
+      is_active: true,
+      criteria: [
+        { field: 'state_id', value_id: 1 },
+        { field: 'source_id', value_id: 2 },
+      ],
+      statuses: [{ name: 'In progress', color: 'blue', group: 'pending' }],
+    })
+  })
+
+  it('drops an incomplete criteria row (field or value still unset)', () => {
+    const incomplete: CreateOpportunityWorkflowFormValues = {
+      ...values,
+      criteria: [{ field: 'state_id', value_id: 1 }, { field: null, value_id: null }],
+    }
+    expect(buildCreatePayload(incomplete, []).criteria).toEqual([{ field: 'state_id', value_id: 1 }])
+  })
+
+  it('never includes the pinned system rows in the create statuses payload', () => {
+    const payload = buildCreatePayload(values, PLACEHOLDER_STATUS_ROWS)
+    expect(payload.statuses?.every((status) => 'id' in status)).toBe(false)
+  })
+})
+
+describe('buildUpdatePayload', () => {
+  it('sends the full authoritative criteria + statuses sync, including ids for persisted rows', () => {
+    expect(buildUpdatePayload(values, PERSISTED_STATUS_ROWS)).toEqual({
+      name: 'EMEA workflow',
+      is_active: true,
+      criteria: [
+        { field: 'state_id', value_id: 1 },
+        { field: 'source_id', value_id: 2 },
+      ],
+      statuses: [
+        { id: 1, name: 'Open', color: null, group: 'open' },
+        { id: 2, name: 'In progress', color: 'blue', group: 'pending' },
+        { id: undefined, name: 'New custom', color: 'green', group: 'pending' },
+        { id: 4, name: 'Closed', color: null, group: 'closed' },
+      ],
+    })
+  })
+})
+
+describe('buildDefaultStatusesPayload', () => {
+  it('wraps the same statuses sync shape under `statuses`', () => {
+    expect(buildDefaultStatusesPayload(PERSISTED_STATUS_ROWS).statuses).toHaveLength(4)
+  })
+})

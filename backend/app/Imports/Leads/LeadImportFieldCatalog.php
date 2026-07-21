@@ -42,17 +42,17 @@ final class LeadImportFieldCatalog
     ];
 
     /**
-     * Configuration-step global fields, applied to every imported row.
-     * `project_id` narrows the campaign choice client-side only — a Lead has
-     * no `project_id` column of its own (it inherits one via `campaign_id`).
+     * Configuration-step global fields, applied to every imported row. A Lead
+     * inherits its project via `campaign_id`, so the campaign alone is the
+     * global scope — there is no standalone project field. Neither Operator
+     * nor Operational Site is a global field: both are Review-only, per-row
+     * overrides (spec 0045, extended to Operational Site).
      *
      * @var array<int, array{id: string, required: bool, for_select_resource: string}>
      */
     private const array GLOBAL_FIELDS = [
         ['id' => 'campaign_id', 'required' => true, 'for_select_resource' => 'campaigns'],
-        ['id' => 'project_id', 'required' => false, 'for_select_resource' => 'projects'],
         ['id' => 'source_id', 'required' => false, 'for_select_resource' => 'sources'],
-        ['id' => 'operator_id', 'required' => false, 'for_select_resource' => 'users'],
     ];
 
     /**

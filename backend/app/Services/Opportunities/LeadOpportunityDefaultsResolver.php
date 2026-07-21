@@ -81,6 +81,11 @@ final class LeadOpportunityDefaultsResolver
             'source_id' => $effectiveSource?->id,
             'registry_id' => $lead->registry_id,
             'supervisor_id' => $lead->operator_id,
+            // spec 0047 (AC-002, D1): the Regione inherited from the lead's
+            // own state_id. NOT in DERIVED_FIELDS — a plain default value,
+            // never BR-2-locked (an opportunity's Regione stays editable even
+            // when it originates from a lead).
+            'state_id' => $lead->state_id,
         ];
 
         $references = [

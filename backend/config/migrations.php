@@ -6,6 +6,7 @@ use App\Migrations\Sources\BusinessFunctionsSource;
 use App\Migrations\Sources\CompaniesSource;
 use App\Migrations\Sources\OperationalSitesSource;
 use App\Migrations\Sources\ProductCategoriesSource;
+use App\Migrations\Sources\ProductsSource;
 use App\Migrations\Sources\ReferentsSource;
 use App\Migrations\Sources\ReferentTypesSource;
 use App\Migrations\Sources\RolesSource;
@@ -72,6 +73,7 @@ return [
         'sectors' => SectorsSource::class,
         'attributes' => AttributesSource::class,
         'product-categories' => ProductCategoriesSource::class,
+        'products' => ProductsSource::class,
     ],
 
 ];

@@ -133,7 +133,7 @@ describe('ImportWizard', () => {
     expect(screen.getByRole('button', { name: 'Analyze file' })).toBeInTheDocument()
   })
 
-  it('runs upload -> analysis summary -> config -> mapping submit end to end', async () => {
+  it('runs upload -> analysis summary -> mapping+config submit end to end', async () => {
     analyzeImportMock.mockResolvedValue(createdRun())
     getImportWizardRunMock.mockResolvedValue(detailRun())
     configureImportRunMock.mockResolvedValue(createdRun({ status: 'staging' }))
@@ -147,9 +147,9 @@ describe('ImportWizard', () => {
     expect(await screen.findByText('File analysis')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Continue to configuration' }))
 
+    // The mapping step now hosts the global config too: set the campaign there.
     fireEvent.click(await screen.findByRole('combobox', { name: 'Campaign' }))
     fireEvent.click(await screen.findByRole('option', { name: 'Spring campaign' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to mapping' }))
 
     fireEvent.click(await screen.findByRole('button', { name: 'Save mapping and continue' }))
 

@@ -97,24 +97,23 @@ class GeoController extends BaseApiController
 
     /**
      * GET /api/cities?province_id={id}|state_id={id}&search={q}&offset={n} —
-     * cities of a province (preferred) or, failing that, of a state, ordered by
-     * name, optionally filtered by a name LIKE. Returned one page at a time
-     * (CITY_RESULT_LIMIT rows) so the client can scroll through provinces with
-     * hundreds of comuni; `offset` skips the already-loaded rows.
+     * cities of a province (preferred) or of a state, or — for city-first
+     * selection — an unscoped name lookup when neither parent is given (a
+     * non-empty `search` is then mandatory, enforced by ListCitiesRequest).
+     * Ordered by name, optionally filtered by a name LIKE, returned one page at
+     * a time (CITY_RESULT_LIMIT rows); `offset` skips the already-loaded rows.
      */
     public function cities(ListCitiesRequest $request): JsonResponse
     {
         try {
             $search = $request->search();
             $provinceId = $request->provinceId();
+            $stateId = $request->stateId();
 
             $cities = City::query()
-                ->select(['id', 'name', 'state_id', 'province_id'])
-                ->when(
-                    $provinceId !== null,
-                    fn ($query) => $query->where('province_id', $provinceId),
-                    fn ($query) => $query->where('state_id', $request->stateId()),
-                )
+                ->select(['id', 'name', 'country_id', 'state_id', 'province_id'])
+                ->when($provinceId !== null, fn ($query) => $query->where('province_id', $provinceId))
+                ->when($provinceId === null && $stateId !== null, fn ($query) => $query->where('state_id', $stateId))
                 ->when(
                     $search !== null,
                     // Escape the LIKE metacharacters (\ % _) so a search term

@@ -28,9 +28,12 @@ final class GeoFuzzyMatcher
      * @template TModel of Model
      *
      * @param  Builder<TModel>  $query
+     * @param  ?int  $preferCountryId  Home country used to break a cross-country
+     *                                 homonym tie (see homeCountryWinner()); null
+     *                                 disables the tiebreak.
      * @return array{model: ?TModel, candidates: array<int, array{id: int, name: string}>}
      */
-    public function match(Builder $query, string $name): array
+    public function match(Builder $query, string $name, ?int $preferCountryId = null): array
     {
         $rows = $query->get();
         $target = mb_strtolower(trim($name));
@@ -44,7 +47,11 @@ final class GeoFuzzyMatcher
         }
 
         if ($exact->count() > 1) {
-            return ['model' => null, 'candidates' => $this->toCandidates($exact)];
+            $winner = $this->homeCountryWinner($exact, $preferCountryId);
+
+            return $winner !== null
+                ? ['model' => $winner, 'candidates' => []]
+                : ['model' => null, 'candidates' => $this->toCandidates($exact)];
         }
 
         // Zero exact matches: score every row in scope by similarity and keep
@@ -61,12 +68,41 @@ final class GeoFuzzyMatcher
         }
 
         if ($accepted->count() > 1) {
+            $winner = $this->homeCountryWinner($accepted->pluck('row'), $preferCountryId);
+
+            if ($winner !== null) {
+                return ['model' => $winner, 'candidates' => []];
+            }
+
             return ['model' => null, 'candidates' => $this->toCandidates($accepted->take(self::CANDIDATE_LIMIT)->pluck('row'))];
         }
 
         // Nothing crossed the threshold: surface the closest few as
         // suggestions rather than an empty candidate list.
         return ['model' => null, 'candidates' => $this->toCandidates($scored->take(self::CANDIDATE_LIMIT)->pluck('row'))];
+    }
+
+    /**
+     * Home-country tiebreak: an ambiguous set spanning several countries (a
+     * bare homonym like "Rome", matching Italy AND the US) collapses to the
+     * single candidate that belongs to the configured home country, when
+     * exactly one does. Rows without a `country_id` (the Country level itself)
+     * never match, so this is a no-op there; more than one home-country
+     * candidate stays ambiguous, since the tie is real.
+     *
+     * @param  Collection<int, Model>  $tied
+     */
+    private function homeCountryWinner(Collection $tied, ?int $preferCountryId): ?Model
+    {
+        if ($preferCountryId === null) {
+            return null;
+        }
+
+        $inHome = $tied->filter(
+            static fn (Model $row): bool => (int) $row->getAttribute('country_id') === $preferCountryId
+        );
+
+        return $inHome->count() === 1 ? $inHome->first() : null;
     }
 
     private function similarity(string $normalizedTarget, string $candidateName): float

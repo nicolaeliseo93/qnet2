@@ -47,6 +47,8 @@ function rowItem(overrides: Partial<ImportRunRowItem> = {}): ImportRunRowItem {
     duplicate_of_id: null,
     operator_id: null,
     operator: null,
+    operational_site_id: null,
+    operational_site: null,
     values: {},
     messages: [],
     ...overrides,
@@ -57,10 +59,16 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+/** Most tests aren't about the default-hint bug: default a global default id so the hint text is stable. */
+const DEFAULT_GLOBAL_OPERATOR_ID = 7
+
 function renderCell(overrides: Partial<ReviewOperatorCellParams> = {}) {
   const node = { setData: vi.fn() } as unknown as IRowNode<ImportRunRowItem>
   const onApplyOperator = vi.fn().mockResolvedValue(undefined)
-  const context: ReviewOperatorGridContext = { onApplyOperator }
+  const context: ReviewOperatorGridContext = {
+    onApplyOperator,
+    globalDefaultOperatorId: DEFAULT_GLOBAL_OPERATOR_ID,
+  }
   render(
     <ReviewOperatorCell
       {...({
@@ -75,7 +83,7 @@ function renderCell(overrides: Partial<ReviewOperatorCellParams> = {}) {
 }
 
 describe('ReviewOperatorCell', () => {
-  it('shows the default hint and opens a popup precompiled from the row override', () => {
+  it('shows the default hint and opens a popup precompiled from the row override when the run has a global default operator', () => {
     renderCell()
     expect(screen.getByRole('button', { name: 'Edit operator' })).toHaveTextContent('Default operator')
 
@@ -83,6 +91,23 @@ describe('ReviewOperatorCell', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Operator' })).toHaveTextContent('none')
+  })
+
+  it('shows an empty placeholder, not the default hint, when the run has no global default operator', () => {
+    renderCell({
+      context: { onApplyOperator: vi.fn().mockResolvedValue(undefined), globalDefaultOperatorId: null },
+    })
+    expect(screen.getByRole('button', { name: 'Edit operator' })).toHaveTextContent('—')
+    expect(screen.queryByText('Default operator')).not.toBeInTheDocument()
+  })
+
+  it('shows an empty placeholder in readOnly mode too when the run has no global default operator', () => {
+    renderCell({
+      readOnly: true,
+      context: { onApplyOperator: vi.fn().mockResolvedValue(undefined), globalDefaultOperatorId: null },
+    })
+    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.queryByText('Default operator')).not.toBeInTheDocument()
   })
 
   it("shows the row's own operator name when overridden", () => {
@@ -138,7 +163,7 @@ describe('ReviewOperatorCell', () => {
         {...({
           data: rowItem(),
           node,
-          context: { onApplyOperator },
+          context: { onApplyOperator, globalDefaultOperatorId: DEFAULT_GLOBAL_OPERATOR_ID },
         } as ReviewOperatorCellParams & ICellRendererParams)}
       />,
     )

@@ -10,11 +10,13 @@ use Illuminate\Validation\Rule;
  *
  * Cities are fetched scoped to a parent: `province_id` (preferred, the finest
  * level) OR `state_id` (region — kept for countries without a province level and
- * for backward compatibility). At least one is mandatory, so a request with no
- * parent is a 422, never an unbounded list. When both are given, province_id
- * wins (see GeoController::cities). `search` is an optional case-insensitive
- * name filter; the result set is hard-capped (50) in the controller. No
- * authorization beyond auth:sanctum — read-only reference data.
+ * for backward compatibility) OR, for city-first selection, a `search` term
+ * alone (an unscoped name lookup, still hard-capped). At least one of the three
+ * is mandatory, so a request with no parent AND no search is a 422, never an
+ * unbounded list. When both parents are given, province_id wins (see
+ * GeoController::cities). `search` is a case-insensitive name filter; the result
+ * set is hard-capped (50) in the controller. No authorization beyond
+ * auth:sanctum — read-only reference data.
  */
 class ListCitiesRequest extends FormRequest
 {
@@ -31,7 +33,9 @@ class ListCitiesRequest extends FormRequest
     {
         return [
             'province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
-            'state_id' => ['required_without:province_id', 'nullable', 'integer', Rule::exists('states', 'id')],
+            // A parentless request is allowed only with a non-empty `search`
+            // (city-first lookup); still hard-capped in the controller.
+            'state_id' => ['required_without_all:province_id,search', 'nullable', 'integer', Rule::exists('states', 'id')],
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             'offset' => ['sometimes', 'integer', 'min:0'],
         ];

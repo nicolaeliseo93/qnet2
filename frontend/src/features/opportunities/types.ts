@@ -7,6 +7,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
+import type { StatusGroupValue } from '@/features/status-reorder/types'
 
 /** A hydrated `{id, name}` relation projection, shared by every plain single-relation field. */
 export interface OpportunityRelationRef {
@@ -30,6 +31,20 @@ export interface OpportunityStatusRef {
 export interface OpportunityLeadRef {
   id: number
   label: string
+}
+
+/**
+ * A resolved working-state row (spec 0047): the NEW "stato di lavorazione"
+ * dimension, distinct from `opportunity_status` (sales pipeline). `system_key`
+ * is `'open'|'closed'|null` (a pinned system row vs a custom one); `group` is
+ * one of the 3 fixed `StatusGroupValue`s.
+ */
+export interface OpportunityWorkflowStatusRef {
+  id: number
+  name: string
+  color: string | null
+  system_key: string | null
+  group: StatusGroupValue
 }
 
 /** A manager ref carrying its static "G.A. n" `position` (1-based) on top of the person ref. */
@@ -78,6 +93,24 @@ export interface OpportunityDetail {
   supervisor: OpportunityRelationRef | null
   source_id: number | null
   source: OpportunityRelationRef | null
+  /**
+   * Spec 0047 (D1, AC-003): the Regione, ereditata dal lead alla conversione
+   * ma sempre editabile (mai BR-2-locked). Optional so every pre-existing
+   * `OpportunityDetail` fixture across this feature's test suites keeps
+   * type-checking unchanged (mirrors `LeadDetail.opportunity`); treat a
+   * missing key the same as `null`.
+   */
+  state_id?: number | null
+  state?: OpportunityRelationRef | null
+  /**
+   * Spec 0047: the currently resolved working-state row's id/summary, and
+   * `workflow_statuses` = the full set `OpportunityWorkflowResolver` resolves
+   * for THIS opportunity right now (feeds the FE's status select, limited to
+   * that set). Optional for the same fixture-compatibility reason as `state`.
+   */
+  opportunity_workflow_status_id?: number | null
+  workflow_status?: OpportunityWorkflowStatusRef | null
+  workflow_statuses?: OpportunityWorkflowStatusRef[]
   /** Amendment rev.3: replaces the former single `product_category`/`business_function` pair (AC-101). */
   product_lines: OpportunityProductLine[]
   lead_id: number | null
@@ -131,6 +164,8 @@ export interface CreateOpportunityPayload {
   reporter_id?: number | null
   supervisor_id: number
   source_id?: number | null
+  /** Spec 0047 (D1): the Regione, freely settable on a standalone create; never locked, even from a lead. */
+  state_id?: number | null
   lead_id?: number | null
   /** Ordered, gap-aware G.A. slots: index+1 = G.A. n, `null` = empty slot. */
   manager_slots?: (number | null)[]
@@ -156,6 +191,13 @@ export type UpdateOpportunityPayload = Partial<
 > & {
   /** Existing opportunities may keep or explicitly clear a nullable supervisor. */
   supervisor_id?: number | null
+  /**
+   * Spec 0047 (AC-016/017): an OPTIONAL manual override of the resolved
+   * working-state, limited server-side to the currently resolved set — 422
+   * when out of set. Never sent from create (the select is hidden there, the
+   * server always resolves the initial 'open' row on its own).
+   */
+  opportunity_workflow_status_id?: number | null
 }
 
 /**

@@ -41,9 +41,9 @@ i18n.addResourceBundle(
         notReady: 'This run cannot be auto-converted yet:',
         backToReview: 'Back to review',
         blockers: {
-          operationalSite: 'The operational site is not set for this run.',
           productLine: 'The campaign does not derive a product line.',
           rowsWithoutOperator: '{{count}} row(s) have no operator assigned.',
+          rowsWithoutSite: '{{count}} row(s) have no operational site assigned.',
         },
       },
     },
@@ -87,9 +87,9 @@ i18n.addResourceBundle(
         notReady: 'Questo import non può ancora essere convertito automaticamente:',
         backToReview: 'Torna alla revisione',
         blockers: {
-          operationalSite: 'La sede operativa non è impostata per questo import.',
           productLine: 'La campagna non deriva una linea di prodotto.',
           rowsWithoutOperator: '{{count}} riga/e senza operatore assegnato.',
+          rowsWithoutSite: '{{count}} riga/e senza sede operativa assegnata.',
         },
       },
     },

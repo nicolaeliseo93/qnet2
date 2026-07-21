@@ -83,6 +83,21 @@ describe('LeadDetailView — read-only (AC-065)', () => {
   })
 })
 
+/** Spec 0047 (D1, AC-003): the Regione is DERIVED server-side, read-only in the detail like every other field. */
+describe('LeadDetailView — Regione (spec 0047)', () => {
+  it('shows the derived region name when set', () => {
+    render(<LeadDetailView lead={lead({ state_id: 3, state: { id: 3, name: 'Lombardy' } })} />)
+
+    expect(screen.getByText('Lombardy')).toBeInTheDocument()
+  })
+
+  it('shows the em dash placeholder when no region was derived', () => {
+    render(<LeadDetailView lead={lead({ state_id: null, state: null })} />)
+
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1)
+  })
+})
+
 /** AC-014: the "Imported data" section shows extra_fields read-only, only when non-empty. */
 describe('LeadDetailView — imported data (AC-014)', () => {
   it('shows the section with every key/value pair when extra_fields is set', () => {

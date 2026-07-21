@@ -69,10 +69,10 @@ function summary(): ImportRunSummaryReport {
     dedup_strategy: null,
     warnings: [],
     conversion_readiness: {
-      operational_site_set: true,
       campaign_derives_product_line: true,
       creatable_rows: 2,
       rows_without_operator: 0,
+      rows_without_site: 0,
     },
   }
 }

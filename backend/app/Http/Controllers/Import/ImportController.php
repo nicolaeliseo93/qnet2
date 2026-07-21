@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Import;
 use App\Exceptions\Import\ImportConversionNotReadyException;
 use App\Http\Controllers\Abstract\BaseApiController;
 use App\Http\Controllers\Import\Concerns\GuardsImportRequests;
+use App\Http\Requests\Import\BulkAssignRequest;
 use App\Http\Requests\Import\ConfigureImportRequest;
 use App\Http\Requests\Import\ConfirmImportRequest;
 use App\Http\Requests\Import\ResolveImportRowRequest;
@@ -260,8 +261,9 @@ class ImportController extends BaseApiController
             $this->authorizeImport($definition, $actor);
             $this->assertReviewing($importRun);
 
-            $data = $request->safe()->only(['values', 'geo', 'operator_id']);
+            $data = $request->safe()->only(['values', 'geo', 'operator_id', 'operational_site_id']);
             $operatorIdSubmitted = array_key_exists('operator_id', $data);
+            $siteIdSubmitted = array_key_exists('operational_site_id', $data);
 
             $updated = $this->rowReviser->revise(
                 $definition,
@@ -272,6 +274,8 @@ class ImportController extends BaseApiController
                 $data['geo'] ?? null,
                 $operatorIdSubmitted,
                 $operatorIdSubmitted ? $data['operator_id'] : null,
+                $siteIdSubmitted,
+                $siteIdSubmitted ? $data['operational_site_id'] : null,
             );
             $this->service->recomputeCounts($importRun->fresh());
 
@@ -281,6 +285,44 @@ class ImportController extends BaseApiController
             ]);
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['importRun' => $importRun->id, 'row' => $row->id]);
+        }
+    }
+
+    /**
+     * PATCH /api/imports/{domain}/{importRun}/rows/assign — bulk-assign an
+     * operator and/or an operational site to many staged rows in a single
+     * mass UPDATE (spec 0045 bulk increment, extended to a COMBINED
+     * operator+site assignment), distinct from the single-row PATCH
+     * .../rows/{row} above, valid only from `reviewing`. AG Grid
+     * `getServerSideSelectionState()` semantics: `row_ids` are the rows to
+     * target, or to EXCLUDE when `select_all` is true — BulkAssignRequest
+     * already validated every id belongs to this run (anti-IDOR). Pure
+     * operator/site assignment, never gated by `opportunities.create` (that
+     * gate is confirm()'s own, spec 0045).
+     */
+    public function bulkAssign(BulkAssignRequest $request, string $domain, ImportRun $importRun): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->assertOwnedRun($importRun, $actor, $domain);
+            $this->authorize('update', $importRun);
+            $this->authorizeImport($definition, $actor);
+            $this->assertReviewing($importRun);
+
+            $updated = $this->service->bulkAssign(
+                $importRun,
+                $request->selectAll(),
+                $request->rowIds(),
+                $request->operatorId(),
+                $request->operationalSiteId(),
+            );
+            $this->service->recomputeCounts($importRun->fresh());
+
+            return $this->ok(['updated' => $updated]);
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__, ['importRun' => $importRun->id]);
         }
     }
 

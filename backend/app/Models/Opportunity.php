@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'source_id',
     'lead_id',
     'opportunity_status_id',
+    'state_id',
     'start_date',
     'estimated_value',
     'expected_close_date',
@@ -105,6 +106,27 @@ class Opportunity extends BaseModel
     public function opportunityStatus(): BelongsTo
     {
         return $this->belongsTo(OpportunityStatus::class);
+    }
+
+    /**
+     * The Regione (spec 0047, D1): inherited from the originating Lead at
+     * conversion (LeadOpportunityDefaultsResolver) or editable on a
+     * standalone Opportunity.
+     */
+    public function state(): BelongsTo
+    {
+        return $this->belongsTo(State::class, 'state_id');
+    }
+
+    /**
+     * The currently resolved working-state row (spec 0047 — the NEW workflow
+     * dimension, distinct from `opportunityStatus()`/pipeline). Always
+     * written by OpportunityWorkflowResolver, never directly
+     * mass-assignable.
+     */
+    public function workflowStatus(): BelongsTo
+    {
+        return $this->belongsTo(OpportunityWorkflowStatus::class, 'opportunity_workflow_status_id');
     }
 
     /**

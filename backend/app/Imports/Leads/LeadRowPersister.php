@@ -53,6 +53,7 @@ final class LeadRowPersister
         bool $shouldUpdateRegistry,
         ?int $duplicateRegistryId,
         ?int $operatorOverride = null,
+        ?int $siteOverride = null,
         bool $convertToOpportunity = false,
     ): void {
         $registry = $shouldUpdateRegistry && $duplicateRegistryId !== null
@@ -66,6 +67,7 @@ final class LeadRowPersister
             $extraValues,
             $shouldUpdateRegistry && $duplicateRegistryId !== null,
             $operatorOverride,
+            $siteOverride,
             $convertToOpportunity,
         );
     }
@@ -126,6 +128,7 @@ final class LeadRowPersister
         array $extraValues,
         bool $shouldUpdate,
         ?int $operatorOverride,
+        ?int $siteOverride,
         bool $convertToOpportunity,
     ): void {
         $campaignId = $this->id($globalConfig, 'campaign_id');
@@ -135,9 +138,10 @@ final class LeadRowPersister
         }
 
         $sourceId = $this->id($globalConfig, 'source_id');
-        $operationalSiteId = $this->id($globalConfig, 'operational_site_id');
-        // The row's own override (spec 0045) wins over the run's global operator.
+        // The row's own overrides (spec 0045, mirrored for site) win over the
+        // run's global operator/operational site.
         $effectiveOperatorId = $operatorOverride ?? $this->id($globalConfig, 'operator_id');
+        $effectiveSiteId = $siteOverride ?? $this->id($globalConfig, 'operational_site_id');
         $notes = $this->value($mapped, 'notes');
         $extraFields = $extraValues === [] ? null : $extraValues;
 
@@ -149,7 +153,7 @@ final class LeadRowPersister
             $this->leadService->update($existingLead, new UpdateLeadData(
                 sourceId: $sourceId,
                 sourceIdSubmitted: true,
-                operationalSiteId: $operationalSiteId,
+                operationalSiteId: $effectiveSiteId,
                 operationalSiteIdSubmitted: true,
                 operatorId: $effectiveOperatorId,
                 operatorIdSubmitted: true,
@@ -165,12 +169,12 @@ final class LeadRowPersister
         $this->leadService->create(new CreateLeadData(
             registryId: $registry->id,
             campaignId: $campaignId,
-            operationalSiteId: $operationalSiteId,
+            operationalSiteId: $effectiveSiteId,
             sourceId: $sourceId,
             operatorId: $effectiveOperatorId,
             notes: $notes,
             extraFields: $extraFields,
-            convertToOpportunity: $this->shouldConvert($convertToOpportunity, $effectiveOperatorId, $operationalSiteId, $campaignId),
+            convertToOpportunity: $this->shouldConvert($convertToOpportunity, $effectiveOperatorId, $effectiveSiteId, $campaignId),
         ));
     }
 

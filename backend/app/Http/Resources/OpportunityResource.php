@@ -3,7 +3,9 @@
 namespace App\Http\Resources;
 
 use App\Models\Opportunity;
+use App\Models\OpportunityWorkflowStatus;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
+use App\Services\Opportunities\OpportunityWorkflowResolver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -25,6 +27,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * `operational_site_id`/`operational_site` are REMOVED entirely.
  * `opportunity_status_id`/`opportunity_status` (spec 0043, D-3) is the
  * mandatory working-state FK — NEVER null.
+ *
+ * Spec 0047: `state`/`state_id` is the Regione (D1); `workflow_status`/
+ * `opportunity_workflow_status_id` is the currently resolved working-state
+ * row (the NEW dimension, distinct from `opportunity_status`);
+ * `workflow_statuses` is the full ordered set OpportunityWorkflowResolver
+ * resolves for THIS opportunity right now (for the FE's status select,
+ * limited to that set). Resolving the set re-runs the resolver (a bounded,
+ * controlled query), relying on `productLines` already being eager-loaded by
+ * OpportunityService::loadDetail() so it never N+1s beyond that one query.
  */
 class OpportunityResource extends JsonResource
 {
@@ -50,6 +61,11 @@ class OpportunityResource extends JsonResource
             'source' => $this->summarizeByName($this->source),
             'opportunity_status_id' => $this->opportunity_status_id,
             'opportunity_status' => $this->summarizeStatus($this->opportunityStatus),
+            'state_id' => $this->state_id,
+            'state' => $this->summarizeByName($this->state),
+            'opportunity_workflow_status_id' => $this->opportunity_workflow_status_id,
+            'workflow_status' => $this->summarizeWorkflowStatus($this->workflowStatus),
+            'workflow_statuses' => $this->resolveWorkflowStatuses(),
             'product_lines' => $this->summarizeProductLines($this->productLines),
             'lead_id' => $this->lead_id,
             'lead' => $this->summarizeLead($this->lead),
@@ -116,6 +132,40 @@ class OpportunityResource extends JsonResource
                 'name' => $manager->name,
                 'position' => (int) $manager->pivot->position,
             ])
+            ->all();
+    }
+
+    /**
+     * The currently resolved working-state row (spec 0047), including
+     * `system_key`/`group` so the FE can tell a pinned system row apart from
+     * a custom one.
+     *
+     * @return array{id: int, name: string, color: string|null, system_key: string|null, group: string}|null
+     */
+    private function summarizeWorkflowStatus(?OpportunityWorkflowStatus $status): ?array
+    {
+        return $status === null ? null : [
+            'id' => $status->id,
+            'name' => $status->name,
+            'color' => $status->color,
+            'system_key' => $status->system_key,
+            'group' => $status->group->value,
+        ];
+    }
+
+    /**
+     * The full ordered set OpportunityWorkflowResolver resolves for this
+     * opportunity RIGHT NOW (spec 0047) — feeds the FE's "stato di
+     * lavorazione" select, limited to that set (AC-017).
+     *
+     * @return array<int, array{id: int, name: string, color: string|null, system_key: string|null, group: string}>
+     */
+    private function resolveWorkflowStatuses(): array
+    {
+        $resolver = app(OpportunityWorkflowResolver::class);
+
+        return $resolver->statusesFor($resolver->resolve($this->resource))
+            ->map(fn (OpportunityWorkflowStatus $status): array => $this->summarizeWorkflowStatus($status))
             ->all();
     }
 

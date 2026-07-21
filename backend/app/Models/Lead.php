@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'operator_id',
     'notes',
     'extra_fields',
+    'state_id',
 ])]
 class Lead extends BaseModel
 {
@@ -64,6 +65,16 @@ class Lead extends BaseModel
     public function source(): BelongsTo
     {
         return $this->belongsTo(Source::class);
+    }
+
+    /**
+     * The Regione (spec 0047, D1): derived server-side from the sede
+     * (`operationalSite->stateId`) at create/update time — never
+     * user-editable directly.
+     */
+    public function state(): BelongsTo
+    {
+        return $this->belongsTo(State::class, 'state_id');
     }
 
     /**

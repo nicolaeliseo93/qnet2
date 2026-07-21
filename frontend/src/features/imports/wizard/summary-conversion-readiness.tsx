@@ -12,12 +12,14 @@ import type { ConversionReadiness } from '@/features/imports/wizard/types'
  */
 function readinessBlockers(readiness: ConversionReadiness, t: TFunction): string[] {
   const reasons: string[] = []
-  if (!readiness.operational_site_set) reasons.push(t('summary.autoConvert.blockers.operationalSite'))
   if (!readiness.campaign_derives_product_line) reasons.push(t('summary.autoConvert.blockers.productLine'))
   if (readiness.rows_without_operator > 0) {
     reasons.push(
       t('summary.autoConvert.blockers.rowsWithoutOperator', { count: readiness.rows_without_operator }),
     )
+  }
+  if (readiness.rows_without_site > 0) {
+    reasons.push(t('summary.autoConvert.blockers.rowsWithoutSite', { count: readiness.rows_without_site }))
   }
   return reasons
 }

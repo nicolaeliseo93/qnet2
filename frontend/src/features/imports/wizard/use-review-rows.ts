@@ -9,14 +9,46 @@ import type {
   IServerSideGetRowsParams,
 } from 'ag-grid-community'
 import type { GeoValue } from '@/features/geo/geo-select'
-import { getImportRunRows, resolveImportRunRow, updateImportRunRow } from '@/features/imports/wizard/api'
+import {
+  bulkAssignImportRow,
+  getImportRunRows,
+  resolveImportRunRow,
+  updateImportRunRow,
+} from '@/features/imports/wizard/api'
 import { importWizardKeys } from '@/features/imports/wizard/query-keys'
 import { reviewValueKeyOf } from '@/features/imports/wizard/review-columns'
+import type { ReviewBulkAssignInput, ReviewBulkSelectionState } from '@/features/imports/wizard/review-bulk-assign-bar'
 import { resolveImportWizardErrorMessage } from '@/features/imports/wizard/resolve-error-message'
-import type { ImportRowResolution, ImportRunRowCounts, ImportRunRowItem } from '@/features/imports/wizard/types'
+import type {
+  BulkAssignImportRowPayload,
+  BulkAssignImportRowResult,
+  ImportRowResolution,
+  ImportRunRowCounts,
+  ImportRunRowItem,
+} from '@/features/imports/wizard/types'
 
 /** Page size fallback when the grid does not provide an explicit block range. */
 const DEFAULT_BLOCK_SIZE = 25
+
+/**
+ * Maps AG Grid's own server-side selection state onto the combined
+ * bulk-assign payload, 1:1 (spec: `select_all = state.selectAll`, `row_ids =
+ * state.toggledNodes.map(Number)`). A pure function so the two selection
+ * shapes (partial vs. select-all) are unit-testable without mounting the
+ * grid. Each of `operator_id`/`operational_site_id` is included only when its
+ * id is set (`!= null`) — the backend requires at least one of the two.
+ */
+export function buildBulkAssignPayload(
+  selection: ReviewBulkSelectionState,
+  { operatorId, siteId }: ReviewBulkAssignInput,
+): BulkAssignImportRowPayload {
+  return {
+    ...(operatorId != null ? { operator_id: operatorId } : {}),
+    ...(siteId != null ? { operational_site_id: siteId } : {}),
+    select_all: selection.selectAll,
+    row_ids: selection.toggledNodes.map(Number),
+  }
+}
 
 interface UseReviewRowsArgs {
   domain: string
@@ -55,9 +87,18 @@ export function useReviewRows({ domain, importRunId, onRowUpdated }: UseReviewRo
       updateImportRunRow(domain, importRunId, rowId, { operator_id: operatorId }),
   })
 
+  const updateRowSiteMutation = useMutation({
+    mutationFn: ({ rowId, siteId }: { rowId: number; siteId: number | null }) =>
+      updateImportRunRow(domain, importRunId, rowId, { operational_site_id: siteId }),
+  })
+
   const resolveRowMutation = useMutation({
     mutationFn: ({ rowId, resolution }: { rowId: number; resolution: ImportRowResolution }) =>
       resolveImportRunRow(domain, importRunId, rowId, resolution),
+  })
+
+  const bulkAssignMutation = useMutation({
+    mutationFn: (payload: BulkAssignImportRowPayload) => bulkAssignImportRow(domain, importRunId, payload),
   })
 
   const datasource = useMemo<IServerSideDatasource<ImportRunRowItem>>(
@@ -178,12 +219,57 @@ export function useReviewRows({ domain, importRunId, onRowUpdated }: UseReviewRo
     [domain, importRunId, onRowUpdated, queryClient, updateRowOperatorMutation],
   )
 
+  // Step 1: PATCH the popup's chosen operational-site id (or `null` to clear
+  // the override — there is no run default to revert to) as
+  // `operational_site_id`, mirroring `handleApplyOperator`. Step 2: on
+  // success replace the row with the server's copy, bubble the recalculated
+  // counts, and invalidate the summary query — its
+  // `conversion_readiness.rows_without_site` depends on rows overridden here.
+  // On failure reject unchanged (no `setData`) so the popup — the only
+  // caller — can surface the error itself.
+  const handleApplySite = useCallback(
+    (row: ImportRunRowItem, siteId: number | null, node: IRowNode<ImportRunRowItem>) =>
+      updateRowSiteMutation.mutateAsync({ rowId: row.id, siteId }).then((result) => {
+        node.setData(result.row)
+        onRowUpdated(result.row, result.counts)
+        void queryClient.invalidateQueries({ queryKey: importWizardKeys.summary(domain, importRunId) })
+      }),
+    [domain, importRunId, onRowUpdated, queryClient, updateRowSiteMutation],
+  )
+
+  // Step 1: PATCH the combined bulk assignment (operator and/or site) for the
+  // current selection (`select_all`/`row_ids` mirror AG Grid's own
+  // server-side selection state 1:1 — built by the caller from
+  // `gridApi.getServerSideSelectionState()`). Step 2: on success, invalidate
+  // the summary query (its `conversion_readiness.rows_without_operator`/
+  // `rows_without_site` depend on this) and notify with a toast; the caller
+  // (which owns the grid api) still has to refresh the SSRM cache and clear
+  // the selection itself. On failure, toast the error and rethrow so the
+  // caller's own pending state can react.
+  const handleBulkAssign = useCallback(
+    (payload: BulkAssignImportRowPayload): Promise<BulkAssignImportRowResult> =>
+      bulkAssignMutation.mutateAsync(payload).then(
+        (result) => {
+          void queryClient.invalidateQueries({ queryKey: importWizardKeys.summary(domain, importRunId) })
+          toast.success(t('review.bulkAssign.success', { count: result.updated }))
+          return result
+        },
+        (error: unknown) => {
+          toast.error(resolveImportWizardErrorMessage(error, t))
+          throw error
+        },
+      ),
+    [bulkAssignMutation, domain, importRunId, queryClient, t],
+  )
+
   return {
     datasource,
     handleCellValueChanged,
     handleResolutionChange,
     handleApplyGeo,
     handleApplyOperator,
+    handleApplySite,
+    handleBulkAssign,
     isSaving: updateRowMutation.isPending,
     hasSaveError: updateRowMutation.isError,
   }

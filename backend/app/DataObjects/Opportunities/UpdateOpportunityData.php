@@ -25,6 +25,15 @@ namespace App\DataObjects\Opportunities;
  * `operationalSiteId` are REMOVED entirely. `opportunityStatusId` (spec
  * 0043, D-3) follows the same `*Submitted` convention — legitimately never
  * null once submitted (UpdateOpportunityRequest rejects a null value).
+ *
+ * Spec 0047: `stateId` (Regione, D1) follows the same `*Submitted`
+ * convention as every other plain scalar. `workflowStatusId` is the
+ * OPTIONAL explicit `opportunity_workflow_status_id` override (AC-016/017):
+ * submitted-and-non-null is validated (ValidatesWorkflowStatus) to belong to
+ * the resolved set and written verbatim; NOT submitted, or submitted null,
+ * both mean "let OpportunityWorkflowResolver decide" — it is NEVER part of
+ * submittedAttributes() (never mass-assigned, always written by the
+ * resolver).
  */
 final readonly class UpdateOpportunityData
 {
@@ -59,6 +68,10 @@ final readonly class UpdateOpportunityData
         public bool $expectedCloseDateSubmitted = false,
         public ?int $successProbability = null,
         public bool $successProbabilitySubmitted = false,
+        public ?int $stateId = null,
+        public bool $stateIdSubmitted = false,
+        public ?int $workflowStatusId = null,
+        public bool $workflowStatusIdSubmitted = false,
     ) {}
 
     /**
@@ -97,6 +110,10 @@ final readonly class UpdateOpportunityData
             expectedCloseDateSubmitted: array_key_exists('expected_close_date', $data),
             successProbability: self::nullableInt($data, 'success_probability'),
             successProbabilitySubmitted: array_key_exists('success_probability', $data),
+            stateId: self::nullableInt($data, 'state_id'),
+            stateIdSubmitted: array_key_exists('state_id', $data),
+            workflowStatusId: self::nullableInt($data, 'opportunity_workflow_status_id'),
+            workflowStatusIdSubmitted: array_key_exists('opportunity_workflow_status_id', $data),
         );
     }
 
@@ -181,6 +198,10 @@ final readonly class UpdateOpportunityData
 
         if ($this->successProbabilitySubmitted) {
             $attributes['success_probability'] = $this->successProbability;
+        }
+
+        if ($this->stateIdSubmitted) {
+            $attributes['state_id'] = $this->stateId;
         }
 
         return $attributes;

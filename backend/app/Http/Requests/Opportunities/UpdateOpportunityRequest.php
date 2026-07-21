@@ -6,6 +6,7 @@ use App\DataObjects\Opportunities\UpdateOpportunityData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ValidatesManagerSlots;
 use App\Http\Requests\Concerns\ValidatesProductLines;
+use App\Http\Requests\Concerns\ValidatesWorkflowStatus;
 use App\Models\Lead;
 use App\Models\Opportunity;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
@@ -49,6 +50,7 @@ class UpdateOpportunityRequest extends FormRequest
     use EnforcesFieldPermissions;
     use ValidatesManagerSlots;
     use ValidatesProductLines;
+    use ValidatesWorkflowStatus;
 
     public function authorize(): bool
     {
@@ -79,6 +81,12 @@ class UpdateOpportunityRequest extends FormRequest
             'estimated_value' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
             'expected_close_date' => ['sometimes', 'nullable', 'date'],
             'success_probability' => ['sometimes', 'nullable', 'integer', 'between:0,100'],
+            // spec 0047: state_id (Regione, D1) is freely editable on the
+            // standalone opportunity. opportunity_workflow_status_id is an
+            // OPTIONAL override (AC-016/017); its set-membership is checked
+            // in withValidator, against the RESOLVED (possibly changed) set.
+            'state_id' => ['sometimes', 'nullable', 'integer', Rule::exists('states', 'id')],
+            'opportunity_workflow_status_id' => ['sometimes', 'nullable', 'integer', Rule::exists('opportunity_workflow_statuses', 'id')],
         ], $this->managerSlotsRules(), $this->productLinesRules(required: false));
     }
 
@@ -130,9 +138,13 @@ class UpdateOpportunityRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            /** @var Opportunity $opportunity */
+            $opportunity = $this->route('opportunity');
+
             $this->validateManagerSlots($validator);
             $this->validateProductLines($validator);
             $this->enforceFieldPermissions($validator);
+            $this->validateWorkflowStatus($validator, $opportunity);
         });
     }
 

@@ -24,6 +24,15 @@ namespace App\DataObjects\Opportunities;
  * `companySiteId`/`operationalSiteId` are REMOVED entirely.
  * `opportunityStatusId` (spec 0043, D-3) is REQUIRED at the FormRequest
  * layer — never null once validated.
+ *
+ * Spec 0047: `stateId` (Regione, D1) is a plain editable scalar — inherited
+ * from the lead (LeadOpportunityDefaultsResolver/ConvertLeadToOpportunity)
+ * or submitted directly on a standalone create — part of attributes().
+ * `workflowStatusId` is the OPTIONAL, explicit `opportunity_workflow_status_id`
+ * override (AC-017, validated by ValidatesWorkflowStatus to belong to the
+ * resolved set); when null, OpportunityService resolves it via
+ * OpportunityWorkflowResolver instead — it is NEVER part of attributes()
+ * (never mass-assigned, always written by the resolver).
  */
 final readonly class CreateOpportunityData
 {
@@ -47,6 +56,8 @@ final readonly class CreateOpportunityData
         public ?float $estimatedValue,
         public ?string $expectedCloseDate,
         public ?int $successProbability,
+        public ?int $stateId = null,
+        public ?int $workflowStatusId = null,
     ) {}
 
     /**
@@ -74,6 +85,8 @@ final readonly class CreateOpportunityData
             estimatedValue: isset($data['estimated_value']) ? (float) $data['estimated_value'] : null,
             expectedCloseDate: $data['expected_close_date'] ?? null,
             successProbability: isset($data['success_probability']) ? (int) $data['success_probability'] : null,
+            stateId: isset($data['state_id']) ? (int) $data['state_id'] : null,
+            workflowStatusId: isset($data['opportunity_workflow_status_id']) ? (int) $data['opportunity_workflow_status_id'] : null,
         );
     }
 
@@ -125,6 +138,7 @@ final readonly class CreateOpportunityData
             'estimated_value' => $this->estimatedValue,
             'expected_close_date' => $this->expectedCloseDate,
             'success_probability' => $this->successProbability,
+            'state_id' => $this->stateId,
         ];
     }
 }

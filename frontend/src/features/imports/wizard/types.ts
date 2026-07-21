@@ -172,6 +172,15 @@ export interface ImportRunRowItem {
   /** Hydrated projection of `operator_id`, or `null` when unset. */
   operator: ImportRunRowOperator | null
   /**
+   * Per-row operational-site override (id only), applied via
+   * `PATCH .../rows/{row}` with `{ operational_site_id }`. Unlike operator,
+   * the site is NEVER a global-config default — `null` simply means unset,
+   * mirroring `operator_id`'s override mechanics without a fallback to resolve.
+   */
+  operational_site_id: number | null
+  /** Hydrated projection of `operational_site_id`, or `null` when unset. */
+  operational_site: ImportRunRowOperationalSite | null
+  /**
    * Keyed by field id (mapped) or original column name (extra). Mostly
    * strings, but the geo fields (spec 0038) also carry the resolved
    * `country_id`/`state_id`/`province_id`/`city_id` as numbers (or `null`
@@ -183,6 +192,12 @@ export interface ImportRunRowItem {
 
 /** Minimal projection of the row's overridden operator, hydrated alongside `operator_id`. */
 export interface ImportRunRowOperator {
+  id: number
+  name: string
+}
+
+/** Minimal projection of the row's overridden operational site, hydrated alongside `operational_site_id`. */
+export interface ImportRunRowOperationalSite {
   id: number
   name: string
 }
@@ -218,6 +233,28 @@ export interface ImportRunRowUpdateResult {
   counts: ImportRunRowCounts
 }
 
+/**
+ * Body of `PATCH /imports/{domain}/{importRun}/rows/assign` (combined bulk
+ * assign, distinct from the single-row `PATCH .../rows/{row}`). Mirrors AG
+ * Grid's own server-side selection state 1:1
+ * (`gridApi.getServerSideSelectionState()`): `select_all: false` — `row_ids`
+ * are the selected (included) row ids, never empty; `select_all: true` —
+ * `row_ids` are the deselected (excluded) row ids. At least one of
+ * `operator_id`/`operational_site_id` is present. Assign-only: there is no
+ * bulk clear, the single-row cell already covers that.
+ */
+export interface BulkAssignImportRowPayload {
+  operator_id?: number
+  operational_site_id?: number
+  select_all: boolean
+  row_ids: number[]
+}
+
+/** Response shape of `PATCH .../rows/assign` (envelope `data`). */
+export interface BulkAssignImportRowResult {
+  updated: number
+}
+
 /** Response shape of `GET /imports/{domain}/{importRun}/summary` (envelope `data.summary`). */
 export interface ImportRunSummaryReport {
   total_rows: number
@@ -244,20 +281,21 @@ export interface ImportRunSummaryReport {
   }
   /**
    * Pre-confirm readiness of the run for the auto-convert-to-Opportunity
-   * option: whether the run's operational site and campaign-derived product
-   * line are set (both required by the conversion action), how many rows are
-   * creatable at all, and how many creatable rows still lack an operator
-   * (own `operator_id` override or the run's global default).
+   * option: whether the campaign derives a product line (required by the
+   * conversion action), how many rows are creatable at all, and how many
+   * creatable rows still lack an operator or an operational site (both are
+   * per-row-only fields, set via the review grid's per-row/bulk overrides —
+   * neither has a global-config default to fall back to).
    */
   conversion_readiness: ConversionReadiness
 }
 
 /** See `ImportRunSummaryReport.conversion_readiness`. */
 export interface ConversionReadiness {
-  operational_site_set: boolean
   campaign_derives_product_line: boolean
   creatable_rows: number
   rows_without_operator: number
+  rows_without_site: number
 }
 
 /** Body of `POST /imports/{domain}/{importRun}/confirm`. */

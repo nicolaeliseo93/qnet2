@@ -124,6 +124,14 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
   const registryId = useWatch({ control: form.control, name: 'registry_id' })
   const registryChosen = registryId !== null
 
+  // Spec 0047 (AC-026): the Regione stays read-only in the UI once the
+  // opportunity is linked to a Lead (edit mode only — a create-from-lead has
+  // no `lead_id` yet, so it stays editable until saved). The working-state
+  // select is limited to the resolved set exposed on the loaded instance;
+  // `null` in create mode (the set is not yet known server-side).
+  const stateForceDisabled = mode.type === 'edit' && mode.opportunity.lead_id !== null
+  const workflowStatuses = mode.type === 'edit' ? (mode.opportunity.workflow_statuses ?? []) : null
+
   // A-4: recap of the chosen person's primary contacts, under each of the 3
   // selects. commercial/reporter (A-3) are the whole platform list, independent
   // of the anagrafica; only the referent stays anagrafica-scoped (BR-4).
@@ -242,6 +250,8 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
             control={form.control}
             selectedItems={selectedItems}
             lockedFields={lockedFields}
+            stateForceDisabled={stateForceDisabled}
+            workflowStatuses={workflowStatuses}
             className={sectionRevealClassName(1)}
           />
 

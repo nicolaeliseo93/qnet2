@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useAbilities } from '@/features/auth/use-abilities'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
 import { createLead, leadDetailQueryKey, updateLead } from '@/features/leads/api'
 import { buildCreatePayload, buildUpdatePayload } from '@/features/leads/lead-form-payload'
@@ -52,9 +53,16 @@ interface UseLeadFormArgs {
 export function useLeadForm({ mode, onSuccess, requireConversionFields = false }: UseLeadFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { can } = useAbilities()
   const [serverError, setServerError] = useState<string | null>(null)
 
   const isEdit = mode.type === 'edit'
+
+  // The auto-convert control defaults ON for actors who can create
+  // Opportunities and OFF otherwise: it is hidden without the permission
+  // (`Can`), so a `true` default there would silently submit an unauthorized
+  // conversion. Create-only, hence gated on the mode as well.
+  const canConvertToOpportunity = mode.type === 'create' && can('opportunities.create')
 
   const schema = useMemo(
     () => (isEdit ? buildUpdateLeadSchema(t) : buildCreateLeadSchema(t)),
@@ -87,14 +95,24 @@ export function useLeadForm({ mode, onSuccess, requireConversionFields = false }
       operator_id: null,
       notes: null,
       extra_fields: [],
-      convert_to_opportunity: false,
+      convert_to_opportunity: canConvertToOpportunity,
     }
-  }, [mode, requireConversionFields])
+  }, [mode, requireConversionFields, canConvertToOpportunity])
 
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(schema),
     defaultValues,
   })
+
+  // Abilities resolve asynchronously and the control stays hidden until they
+  // do (`Can`), so `defaultValues` may capture a stale `false` at mount.
+  // Re-seed the create-only flag once the permission is known; the dependency
+  // is a stable primitive afterwards, so a manual toggle is never clobbered.
+  useEffect(() => {
+    if (mode.type === 'create') {
+      form.setValue('convert_to_opportunity', canConvertToOpportunity)
+    }
+  }, [canConvertToOpportunity, mode.type, form])
 
   const onSubmit = async (values: LeadFormValues) => {
     setServerError(null)

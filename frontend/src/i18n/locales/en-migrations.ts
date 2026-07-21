@@ -25,6 +25,7 @@ export const migrations = {
     sectors: 'Sectors',
     attributes: 'Attributes',
     'product-categories': 'Product categories',
+    products: 'Products',
   },
   page: {
     sourceLabel: 'Source',

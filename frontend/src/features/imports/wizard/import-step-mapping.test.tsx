@@ -7,15 +7,15 @@ import { EXTRA_TARGET, IGNORE_TARGET } from '@/features/imports/wizard/types'
 import type { ImportRunDetail } from '@/features/imports/wizard/types'
 
 /**
- * Spec 0033 AC-022: the mapping step pre-populates each column's select from
- * the auto-mapping suggestion, flags a required field left unmapped, and
- * persists (via `onSubmit`, wired to `PUT .../configure` upstream) the
- * mapping + dedup strategy once valid.
+ * Spec 0033 AC-021/AC-022: the mapping+config step pre-populates each column's
+ * select from the auto-mapping suggestion, flags a required field left
+ * unmapped, hosts the global-configuration controls (campaign scope must be
+ * set before staging), and persists (via `onSubmit`, wired to `PUT
+ * .../configure` upstream) the mapping + dedup strategy + global config once
+ * valid.
  *
  * `SavedTemplatesMenu` (spec 0035) needs its own `QueryClientProvider`/auth
- * context — irrelevant to this file's AC-009/010/011 coverage (which is
- * about the banner/toggle, not the management popover, covered separately
- * in `mapping-template-controls.test.tsx`) — so it is stubbed out here.
+ * context — irrelevant to this file's coverage — so it is stubbed out here.
  */
 vi.mock('@/features/imports/wizard/mapping-template-controls', async () => {
   const actual = await vi.importActual<typeof import('@/features/imports/wizard/mapping-template-controls')>(
@@ -69,7 +69,7 @@ describe('ImportStepMapping', () => {
         run={baseRun()}
         initialMapping={{ 'Full name': 'full_name' }}
         initialDedupStrategy={null}
-        onBack={vi.fn()}
+        initialConfig={{}}
         onSubmit={vi.fn()}
         isSubmitting={false}
         submitError={null}
@@ -86,7 +86,7 @@ describe('ImportStepMapping', () => {
         run={baseRun()}
         initialMapping={{}}
         initialDedupStrategy="create_new"
-        onBack={vi.fn()}
+        initialConfig={{}}
         onSubmit={onSubmit}
         isSubmitting={false}
         submitError={null}
@@ -99,14 +99,14 @@ describe('ImportStepMapping', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('submits the mapping and dedup strategy once every required field is covered', async () => {
+  it('submits the mapping, dedup strategy and (empty) global config once every required field is covered', async () => {
     const onSubmit = vi.fn()
     render(
       <ImportStepMapping
         run={baseRun()}
         initialMapping={{ 'Full name': 'full_name', Email: 'email' }}
         initialDedupStrategy="update_existing"
-        onBack={vi.fn()}
+        initialConfig={{}}
         onSubmit={onSubmit}
         isSubmitting={false}
         submitError={null}
@@ -119,6 +119,42 @@ describe('ImportStepMapping', () => {
       expect(onSubmit).toHaveBeenCalledWith(
         { 'Full name': 'full_name', Email: 'email' },
         'update_existing',
+        {},
+      ),
+    )
+  })
+
+  it('blocks submit until a required global config field is set, then bundles it (config-in-mapping)', async () => {
+    const onSubmit = vi.fn()
+    render(
+      <ImportStepMapping
+        run={baseRun({
+          global_fields: [
+            { id: 'priority', label: 'Priority', required: true, for_select_resource: null, default: null },
+          ],
+        })}
+        initialMapping={{ 'Full name': 'full_name', Email: 'email' }}
+        initialDedupStrategy="create_new"
+        initialConfig={{}}
+        onSubmit={onSubmit}
+        isSubmitting={false}
+        submitError={null}
+      />,
+    )
+
+    // Required global field still empty -> submit blocked.
+    fireEvent.click(screen.getByRole('button', { name: 'Save mapping and continue' }))
+    await waitFor(() => expect(screen.getByText('This field is required.')).toBeInTheDocument())
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Priority' }), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save mapping and continue' }))
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { 'Full name': 'full_name', Email: 'email' },
+        'create_new',
+        { priority: 5 },
       ),
     )
   })
@@ -136,7 +172,7 @@ describe('ImportStepMapping', () => {
         })}
         initialMapping={{ 'Full name': 'full_name', Email: 'email' }}
         initialDedupStrategy="create_new"
-        onBack={vi.fn()}
+        initialConfig={{}}
         onSubmit={onSubmit}
         isSubmitting={false}
         submitError={null}
@@ -152,6 +188,7 @@ describe('ImportStepMapping', () => {
       expect(onSubmit).toHaveBeenCalledWith(
         { 'Full name': 'full_name', Email: 'email', 'Internal id': IGNORE_TARGET },
         'create_new',
+        {},
       ),
     )
   })
@@ -162,7 +199,7 @@ describe('ImportStepMapping', () => {
         run={baseRun()}
         initialMapping={{}}
         initialDedupStrategy="create_new"
-        onBack={vi.fn()}
+        initialConfig={{}}
         onSubmit={vi.fn()}
         isSubmitting={false}
         submitError={null}
@@ -196,7 +233,7 @@ describe('ImportStepMapping', () => {
         })}
         initialMapping={{ Email: 'email' }}
         initialDedupStrategy="create_new"
-        onBack={vi.fn()}
+        initialConfig={{}}
         onSubmit={onSubmit}
         isSubmitting={false}
         submitError={null}
@@ -209,26 +246,9 @@ describe('ImportStepMapping', () => {
       expect(onSubmit).toHaveBeenCalledWith(
         { Email: 'email', [trickyKey]: IGNORE_TARGET },
         'create_new',
+        {},
       ),
     )
-  })
-
-  it('calls onBack from the back action', () => {
-    const onBack = vi.fn()
-    render(
-      <ImportStepMapping
-        run={baseRun()}
-        initialMapping={{}}
-        initialDedupStrategy="create_new"
-        onBack={onBack}
-        onSubmit={vi.fn()}
-        isSubmitting={false}
-        submitError={null}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    expect(onBack).toHaveBeenCalledTimes(1)
   })
 
   it('applies a matching template on click, leaving the mapping/strategy editable (AC-009)', async () => {
@@ -253,7 +273,7 @@ describe('ImportStepMapping', () => {
         })}
         initialMapping={{}}
         initialDedupStrategy={null}
-        onBack={vi.fn()}
+        initialConfig={{}}
         onSubmit={onSubmit}
         isSubmitting={false}
         submitError={null}
@@ -277,6 +297,7 @@ describe('ImportStepMapping', () => {
       expect(onSubmit).toHaveBeenCalledWith(
         { 'Full name': 'full_name', Email: 'email', Notes: EXTRA_TARGET },
         'update_existing',
+        {},
       ),
     )
   })
@@ -287,7 +308,7 @@ describe('ImportStepMapping', () => {
         run={baseRun()}
         initialMapping={{}}
         initialDedupStrategy="create_new"
-        onBack={vi.fn()}
+        initialConfig={{}}
         onSubmit={vi.fn()}
         isSubmitting={false}
         submitError={null}
@@ -304,7 +325,7 @@ describe('ImportStepMapping', () => {
         run={baseRun()}
         initialMapping={{ 'Full name': 'full_name', Email: 'email' }}
         initialDedupStrategy="update_existing"
-        onBack={vi.fn()}
+        initialConfig={{}}
         onSubmit={onSubmit}
         isSubmitting={false}
         submitError={null}
@@ -321,6 +342,7 @@ describe('ImportStepMapping', () => {
       expect(onSubmit).toHaveBeenCalledWith(
         { 'Full name': 'full_name', Email: 'email' },
         'update_existing',
+        {},
         { name: 'Monthly leads' },
       ),
     )

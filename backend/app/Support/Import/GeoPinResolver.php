@@ -3,10 +3,7 @@
 namespace App\Support\Import;
 
 use App\Imports\Recognition\GeoRecognizer;
-use App\Models\City;
-use App\Models\Country;
-use App\Models\Province;
-use App\Models\State;
+use App\Support\Geo\GeoNameResolver;
 
 /**
  * Turns a validated `geo` PATCH block (spec 0038 — 4 authoritative level ids
@@ -19,6 +16,8 @@ use App\Models\State;
  */
 final class GeoPinResolver
 {
+    public function __construct(private readonly GeoNameResolver $geoNames) {}
+
     /**
      * @param  array{country_id: ?int, state_id: ?int, province_id: ?int, city_id: ?int}  $geo
      * @return array<string, string|int|null>
@@ -30,11 +29,16 @@ final class GeoPinResolver
         $provinceId = $geo['province_id'] ?? null;
         $cityId = $geo['city_id'] ?? null;
 
+        // An unset level (null id) pins to "" — an authoritative "no value",
+        // distinct from GeoRecognizer, which leaves an unresolved level's raw
+        // text in place for review.
+        $names = $this->geoNames->names($countryId, $stateId, $provinceId, $cityId);
+
         return [
-            GeoRecognizer::COUNTRY_FIELD => $countryId !== null ? (Country::find($countryId)?->name ?? '') : '',
-            GeoRecognizer::REGION_FIELD => $stateId !== null ? (State::find($stateId)?->name ?? '') : '',
-            GeoRecognizer::PROVINCE_FIELD => $provinceId !== null ? (Province::find($provinceId)?->name ?? '') : '',
-            GeoRecognizer::CITY_FIELD => $cityId !== null ? (City::find($cityId)?->name ?? '') : '',
+            GeoRecognizer::COUNTRY_FIELD => $names['country'] ?? '',
+            GeoRecognizer::REGION_FIELD => $names['region'] ?? '',
+            GeoRecognizer::PROVINCE_FIELD => $names['province'] ?? '',
+            GeoRecognizer::CITY_FIELD => $names['city'] ?? '',
             'country_id' => $countryId,
             'state_id' => $stateId,
             'province_id' => $provinceId,

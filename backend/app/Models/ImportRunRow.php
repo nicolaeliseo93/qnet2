@@ -36,6 +36,7 @@ class ImportRunRow extends BaseModel
         'resolution',
         'is_edited',
         'operator_id',
+        'operational_site_id',
     ];
 
     protected $casts = [
@@ -52,6 +53,7 @@ class ImportRunRow extends BaseModel
         'resolution' => ImportRowResolution::class,
         'is_edited' => 'bool',
         'operator_id' => 'int',
+        'operational_site_id' => 'int',
     ];
 
     public function importRun(): BelongsTo
@@ -66,5 +68,15 @@ class ImportRunRow extends BaseModel
     public function operator(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Per-row Operational Site override, mirroring operator(): when set,
+     * overrides the run's global `operational_site_id` for this staged row
+     * only.
+     */
+    public function operationalSite(): BelongsTo
+    {
+        return $this->belongsTo(OperationalSite::class);
     }
 }

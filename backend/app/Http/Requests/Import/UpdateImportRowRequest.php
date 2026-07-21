@@ -30,9 +30,10 @@ use Illuminate\Validation\Validator;
  * its declared parent, the same rule GeoSelect enforces client-side), so an
  * incoherent pin never reaches StagedRowReviser.
  *
- * `operator_id` (spec 0045): the per-row Operator override — nullable (a
- * present, explicitly-null value CLEARS the override back to the run's
- * global operator). Presence is checked manually in withValidator() (not via
+ * `operator_id`/`operational_site_id` (spec 0045, the latter mirrored): the
+ * per-row Operator/Operational Site overrides — both nullable (a present,
+ * explicitly-null value CLEARS the override back to the run's global value).
+ * Presence is checked manually in withValidator() (not via
  * `required_without_all`), because the built-in rule cannot tell "submitted
  * as null to clear" apart from "not submitted at all".
  *
@@ -68,6 +69,7 @@ class UpdateImportRowRequest extends FormRequest
             'geo.province_id' => ['nullable', 'integer', 'exists:provinces,id'],
             'geo.city_id' => ['nullable', 'integer', 'exists:cities,id'],
             'operator_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'operational_site_id' => ['sometimes', 'nullable', 'integer', 'exists:operational_sites,id'],
         ];
     }
 
@@ -82,18 +84,19 @@ class UpdateImportRowRequest extends FormRequest
     }
 
     /**
-     * `values`/`geo`/`operator_id` replace the old `required_without` pair:
-     * an explicit `operator_id: null` (clearing the override) must count as
-     * "submitted", which the built-in required-family rules cannot express
-     * for a nullable field — so presence is checked directly here instead.
+     * `values`/`geo`/`operator_id`/`operational_site_id` replace the old
+     * `required_without` pair: an explicit `operator_id: null` (clearing the
+     * override) must count as "submitted", which the built-in required-family
+     * rules cannot express for a nullable field — so presence is checked
+     * directly here instead.
      */
     private function validateAtLeastOneSubmitted(Validator $validator): void
     {
-        if ($this->has('values') || $this->has('geo') || $this->has('operator_id')) {
+        if ($this->has('values') || $this->has('geo') || $this->has('operator_id') || $this->has('operational_site_id')) {
             return;
         }
 
-        $validator->errors()->add('values', 'At least one of values, geo or operator_id is required.');
+        $validator->errors()->add('values', 'At least one of values, geo, operator_id or operational_site_id is required.');
     }
 
     private function validateValuesAllowList(Validator $validator): void

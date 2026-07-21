@@ -89,6 +89,12 @@ export const opportunities = {
     productCategorySearch: 'Cerca categorie prodotto…',
     source: 'Fonte',
     sourceSearch: 'Cerca fonti…',
+    state: 'Regione',
+    stateSearch: 'Cerca regioni…',
+    workflowStatus: 'Stato di lavorazione',
+    workflowStatusHint:
+      'Lo stato di lavorazione interno, distinto dallo Stato Opportunità: limitato al set di stati risolto per questa opportunità.',
+    workflowStatusPendingHint: 'Assegnato automaticamente al salvataggio.',
     productLines: {
       fieldLabel: 'Righe funzione/categoria',
       rowLabel: 'Riga {{n}}',

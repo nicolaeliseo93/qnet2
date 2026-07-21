@@ -24,6 +24,7 @@ export const migrations = {
     sectors: 'Settori',
     attributes: 'Attributi',
     'product-categories': 'Categorie prodotto',
+    products: 'Prodotti',
   },
   page: {
     sourceLabel: 'Sorgente',

@@ -12,6 +12,7 @@ import {
 import { ReviewGeoCell } from '@/features/imports/wizard/review-geo-editor'
 import { ReviewOperatorCell } from '@/features/imports/wizard/review-operator-editor'
 import { ReviewResolutionCell } from '@/features/imports/wizard/review-resolution-cell'
+import { ReviewSiteCell } from '@/features/imports/wizard/review-site-editor'
 import type { ImportRunDetail, ImportRunRowItem } from '@/features/imports/wizard/types'
 
 /**
@@ -65,6 +66,8 @@ function rowItem(overrides: Partial<ImportRunRowItem> = {}): ImportRunRowItem {
     duplicate_of_id: null,
     operator_id: null,
     operator: null,
+    operational_site_id: null,
+    operational_site: null,
     values: { email: 'mario@example.com' },
     messages: [],
     ...overrides,
@@ -85,6 +88,7 @@ describe('buildReviewColumnDefs', () => {
       'status',
       'resolution',
       'operator',
+      'site',
       'field:email',
       'extra:Notes column',
       'messages',
@@ -137,6 +141,7 @@ describe('buildReviewColumnDefs', () => {
       'status',
       'resolution',
       'operator',
+      'site',
       'field:first_name',
       'field:last_name',
       'messages',
@@ -155,6 +160,7 @@ describe('buildReviewColumnDefs', () => {
         'status',
         'resolution',
         'operator',
+        'site',
         'field:email',
         'extra:Notes column',
         'messages',
@@ -222,6 +228,18 @@ describe('buildReviewColumnDefs', () => {
       (col) => col.colId === 'operator',
     )
     expect(readOnlyOperatorCol?.cellRendererParams).toEqual({ readOnly: true })
+  })
+
+  it('wires the site column to ReviewSiteCell, non-editable and disabled in readOnly mode', () => {
+    const siteCol = buildReviewColumnDefs(baseRun(), i18n.t.bind(i18n)).find((col) => col.colId === 'site')
+    expect(siteCol?.editable).toBe(false)
+    expect(siteCol?.cellRenderer).toBe(ReviewSiteCell)
+    expect(siteCol?.cellRendererParams).toEqual({ readOnly: false })
+
+    const readOnlySiteCol = buildReviewColumnDefs(baseRun(), i18n.t.bind(i18n), true).find(
+      (col) => col.colId === 'site',
+    )
+    expect(readOnlySiteCol?.cellRendererParams).toEqual({ readOnly: true })
   })
 
   it("the mapped field column's valueGetter/valueSetter read and write `values` by field id", () => {

@@ -40,6 +40,10 @@ export function buildCreatePayload(
     // The create schema guarantees this value before the payload builder runs;
     // the shared RHF value remains nullable because edit permits clearing it.
     supervisor_id: values.supervisor_id as number,
+    // Spec 0047 (D1): never BR-2-locked (an opportunity's Regione stays
+    // editable even when it originates from a lead) — always sent as-is,
+    // unlike the `locked.has(...)`-gated fields below.
+    state_id: values.state_id,
     product_lines: completeProductLines(values.product_lines),
     manager_slots: values.manager_slots,
     start_date: values.start_date,
@@ -104,6 +108,12 @@ export function buildUpdatePayload(
   }
   if (values.source_id !== original.source_id) {
     payload.source_id = values.source_id
+  }
+  if (values.state_id !== (original.state_id ?? null)) {
+    payload.state_id = values.state_id
+  }
+  if (values.opportunity_workflow_status_id !== (original.opportunity_workflow_status_id ?? null)) {
+    payload.opportunity_workflow_status_id = values.opportunity_workflow_status_id
   }
   // Amendment rev.3: the server replaces the entire row SET (AC-099) — diff
   // as an unordered collection of pairs, never positionally (row order in

@@ -145,6 +145,17 @@ return [
                     'route' => '/opportunity-statuses',
                     'permission' => 'opportunity-statuses.view',
                 ],
+                [
+                    // Opportunity workflow configurator (spec 0047): a NEW,
+                    // separate "stato di lavorazione" dimension (distinct
+                    // from the pipeline opportunity-statuses above),
+                    // criteria-matched per Opportunity.
+                    'key' => 'opportunity-workflows',
+                    'label' => 'navigation.opportunityWorkflows',
+                    'icon' => 'workflow',
+                    'route' => '/opportunity-workflows',
+                    'permission' => 'opportunity-workflows.viewAny',
+                ],
             ],
         ],
 

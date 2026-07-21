@@ -16,6 +16,10 @@ function values(overrides: Partial<OpportunityFormValues> = {}): OpportunityForm
     reporter_id: null,
     supervisor_id: null,
     source_id: null,
+    // Spec 0047: never submit-blocking; the payload-diff tests below cover
+    // each independently.
+    state_id: null,
+    opportunity_workflow_status_id: null,
     product_lines: [],
     manager_slots: [],
     start_date: null,
@@ -49,6 +53,8 @@ function original(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail
     supervisor: null,
     source_id: null,
     source: null,
+    state_id: null,
+    opportunity_workflow_status_id: null,
     product_lines: [],
     lead_id: null,
     lead: null,
@@ -77,6 +83,7 @@ describe('buildCreatePayload', () => {
       reporter_id: null,
       supervisor_id: 9,
       source_id: null,
+      state_id: null,
       product_lines: [],
       manager_slots: [],
       start_date: null,
@@ -84,6 +91,16 @@ describe('buildCreatePayload', () => {
       estimated_value: null,
       success_probability: 0,
     })
+  })
+
+  /** Spec 0047 (D1): never BR-2-locked — always sent as-is, even from a lead. */
+  it('sends state_id unconditionally, even when creating from a lead', () => {
+    const payload = buildCreatePayload(
+      createValues({ state_id: 7 }),
+      { leadId: 9, lockedFields: ['registry_id', 'source_id'] },
+    )
+
+    expect(payload.state_id).toBe(7)
   })
 
   /** Amendment rev.3 (AC-099/107): `product_lines` is always sent in full, never locked, even from a lead. */
@@ -231,6 +248,27 @@ describe('buildUpdatePayload', () => {
       original({ success_probability: 40 }),
     )
     expect(payload).toEqual({ success_probability: 80 })
+  })
+
+  /** Spec 0047 (D1, AC-016/017): both diff independently, like every other field. */
+  describe('state_id / opportunity_workflow_status_id (spec 0047)', () => {
+    it('includes state_id when changed', () => {
+      const payload = buildUpdatePayload(values({ state_id: 3 }), original({ state_id: null }))
+      expect(payload).toEqual({ state_id: 3 })
+    })
+
+    it('omits state_id when unchanged', () => {
+      const payload = buildUpdatePayload(values({ state_id: 3 }), original({ state_id: 3 }))
+      expect(payload).toEqual({})
+    })
+
+    it('includes opportunity_workflow_status_id when changed', () => {
+      const payload = buildUpdatePayload(
+        values({ opportunity_workflow_status_id: 12 }),
+        original({ opportunity_workflow_status_id: 11 }),
+      )
+      expect(payload).toEqual({ opportunity_workflow_status_id: 12 })
+    })
   })
 
   describe('product_lines (unordered set diff, amendment rev.3)', () => {

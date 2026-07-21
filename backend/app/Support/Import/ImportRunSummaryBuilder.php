@@ -44,21 +44,22 @@ final class ImportRunSummaryBuilder
     }
 
     /**
-     * Auto-convert-to-Opportunity readiness (spec 0045), computed by the
-     * SAME ImportOpportunityConvertibility the confirm-step gate uses — a
+     * Auto-convert-to-Opportunity readiness (spec 0045, extended to mirror
+     * the per-row Operational Site override), computed by the SAME
+     * ImportOpportunityConvertibility the confirm-step gate uses — a
      * pre-confirm preview, never a second implementation.
      *
-     * @return array{operational_site_set: bool, campaign_derives_product_line: bool, creatable_rows: int, rows_without_operator: int}
+     * @return array{campaign_derives_product_line: bool, creatable_rows: int, rows_without_operator: int, rows_without_site: int}
      */
     private function conversionReadiness(ImportRun $importRun): array
     {
         $readiness = $this->convertibility->assess($importRun);
 
         return [
-            'operational_site_set' => $readiness->operationalSiteSet,
             'campaign_derives_product_line' => $readiness->campaignDerivesProductLine,
             'creatable_rows' => $readiness->creatableRowsCount,
             'rows_without_operator' => $readiness->rowsWithoutOperatorCount,
+            'rows_without_site' => $readiness->rowsWithoutSiteCount,
         ];
     }
 

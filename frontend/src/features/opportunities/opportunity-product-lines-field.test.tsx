@@ -79,6 +79,8 @@ function baseFormValues(overrides: Partial<OpportunityFormValues> = {}): Opportu
     reporter_id: null,
     supervisor_id: null,
     source_id: null,
+    state_id: null,
+    opportunity_workflow_status_id: null,
     product_lines: [],
     manager_slots: [],
     start_date: null,

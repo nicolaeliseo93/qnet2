@@ -234,6 +234,7 @@ class LeadsImportDefinition extends AbstractImportDefinition
             $shouldUpdateRegistry,
             $duplicateRegistryId,
             $row->operator_id,
+            $row->operational_site_id,
             $convertToOpportunity,
         );
     }

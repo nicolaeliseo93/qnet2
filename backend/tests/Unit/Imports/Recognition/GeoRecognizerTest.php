@@ -51,8 +51,48 @@ it('assigns the *_id fields on a single unambiguous fuzzy match', function () {
             'state_id' => $geo['state']->id,
             'province_id' => $geo['province']->id,
             'city_id' => $geo['city']->id,
+            // Display columns rewritten to the canonical resolved names.
+            'country' => 'Italy',
+            'region' => 'Lombardy',
+            'province' => 'Milan',
+            'city' => 'Milan',
         ])
         ->and($result->messages)->toBe([]);
+});
+
+it('cascades the canonical ancestor names into the display columns when a city resolves', function () {
+    geoRecognizerChain();
+
+    // Only the city is mapped: matching backfills the ancestor ids AND now
+    // overwrites the country/region/province display columns with their
+    // canonical names, so the grid shows the full resolved hierarchy.
+    $result = app(GeoRecognizer::class)->recognize(geoRecognizerContext(), ['city' => 'Milan']);
+
+    expect($result->needsReview)->toBeFalse()
+        ->and($result->resolved['country'])->toBe('Italy')
+        ->and($result->resolved['region'])->toBe('Lombardy')
+        ->and($result->resolved['province'])->toBe('Milan')
+        ->and($result->resolved['city'])->toBe('Milan');
+});
+
+it('backfills resolved ancestor names but keeps the raw text of an unresolved level', function () {
+    $geo = geoRecognizerChain();
+    City::factory()->create(['name' => 'Milano', 'province_id' => $geo['province']->id, 'state_id' => $geo['state']->id, 'country_id' => $geo['country']->id]);
+
+    // Country/region resolve; the ambiguous city stays as the operator typed it.
+    $result = app(GeoRecognizer::class)->recognize(geoRecognizerContext(), [
+        'country' => 'Italy',
+        'region' => 'Lombardy',
+        'city' => 'Milann',
+    ]);
+
+    // The unresolved city is NOT re-written: its raw mapped text ("Milann")
+    // stays in mapped_values untouched, so `resolved` carries no `city` key.
+    expect($result->needsReview)->toBeTrue()
+        ->and($result->resolved['country'])->toBe('Italy')
+        ->and($result->resolved['region'])->toBe('Lombardy')
+        ->and($result->resolved)->not->toHaveKey('city')
+        ->and($result->resolved['city_id'])->toBeNull();
 });
 
 it('flags the row for review with a candidate-carrying message when the city is ambiguous', function () {

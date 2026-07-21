@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Columns3, FileCheck2, FileUp, ListChecks, Settings2 } from 'lucide-react'
+import { Columns3, FileCheck2, FileUp, ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -9,7 +9,6 @@ import { Stepper, type StepperStep } from '@/components/ui/stepper'
 // Side effect: registers the `importWizard` i18next namespace (see the
 // module doc comment) before this component's own `t()` calls run.
 import '@/features/imports/wizard/i18n'
-import { ImportStepConfig } from '@/features/imports/wizard/import-step-config'
 import { ImportStepMapping } from '@/features/imports/wizard/import-step-mapping'
 import { ImportStepReview } from '@/features/imports/wizard/import-step-review'
 import { ImportStepSummary } from '@/features/imports/wizard/import-step-summary'
@@ -36,11 +35,12 @@ function parseRunId(value: string | null): number | null {
 }
 
 /**
- * Full-page wizard orchestrator (spec 0033): mounts the 5-step stepper and
+ * Full-page wizard orchestrator (spec 0033): mounts the 4-step stepper and
  * routes to the step matching the run's server-authoritative status (see
- * `useImportWizard`). The review/summary steps (`ImportStepReview`/
- * `ImportStepSummary`) are the integration points for lanes F2/F3 — this
- * component only wires their props, it owns none of their content.
+ * `useImportWizard`). Column mapping and global configuration share one step
+ * (campaign scope must be set before staging). The review/summary steps
+ * (`ImportStepReview`/`ImportStepSummary`) own their own content — this
+ * component only wires their props.
  */
 export function ImportWizard({ domain }: ImportWizardProps) {
   const { t } = useTranslation('importWizard')
@@ -61,7 +61,6 @@ export function ImportWizard({ domain }: ImportWizardProps) {
   const steps: StepperStep[] = useMemo(
     () => [
       { key: 'upload', label: t('stepper.upload'), icon: FileUp },
-      { key: 'config', label: t('stepper.config'), icon: Settings2 },
       { key: 'mapping', label: t('stepper.mapping'), icon: Columns3 },
       { key: 'review', label: t('stepper.review'), icon: ListChecks },
       { key: 'summary', label: t('stepper.summary'), icon: FileCheck2 },
@@ -119,35 +118,27 @@ export function ImportWizard({ domain }: ImportWizardProps) {
       ) : null}
 
       {wizard.currentStep === 1 ? (
-        <ImportStepConfig
-          globalFields={wizard.run?.global_fields ?? []}
-          initialValues={wizard.configValues}
-          onNext={wizard.submitConfig}
-        />
-      ) : null}
-
-      {wizard.currentStep === 2 ? (
         <ImportStepMapping
           run={wizard.run}
           initialMapping={wizard.mappingValues}
           initialDedupStrategy={wizard.dedupStrategy}
-          onBack={() => wizard.goToStep(1)}
+          initialConfig={wizard.configValues}
           onSubmit={wizard.submitMapping}
           isSubmitting={wizard.isConfiguring}
           submitError={wizard.configureError}
         />
       ) : null}
 
-      {wizard.currentStep === 3 ? (
+      {wizard.currentStep === 2 ? (
         <ImportStepReview domain={domain} run={wizard.run} onContinue={wizard.advanceFromReview} />
       ) : null}
 
-      {wizard.currentStep === 4 ? (
+      {wizard.currentStep === 3 ? (
         <ImportStepSummary
           domain={domain}
           run={wizard.run}
           onConfirm={wizard.confirm}
-          onBackToReview={() => wizard.goToStep(3)}
+          onBackToReview={() => wizard.goToStep(2)}
           isConfirming={wizard.isConfirming}
           confirmError={wizard.confirmError}
         />

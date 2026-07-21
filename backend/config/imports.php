@@ -61,6 +61,14 @@ return [
     // flagged warning and the placeholder stays editable in the review grid.
     'placeholder' => env('IMPORT_PLACEHOLDER', 'SCONOSCIUTO'),
 
+    // Home country name used to disambiguate a geo level that would otherwise
+    // be ambiguous only because a bare homonym spans several countries (a city
+    // "Rome"/"Roma" with no country/region in the row matches Italy AND the
+    // US). GeoResolver::resolveFuzzy() collapses such a tie to the single
+    // candidate in this country. Matched case-insensitively against the
+    // reference dataset (via ItalianGeoLocalizer). Empty disables the tiebreak.
+    'default_country' => env('IMPORT_DEFAULT_COUNTRY', 'Italy'),
+
     /*
     |--------------------------------------------------------------------------
     | Column mapping aliases (spec 0033 — App\Imports\Support\ColumnMapper)

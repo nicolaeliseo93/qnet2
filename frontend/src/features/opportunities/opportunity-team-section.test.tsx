@@ -22,6 +22,7 @@ const EMPTY_SELECTED_ITEMS = {
   commercial: null,
   reporter: null,
   source: null,
+  state: null,
   supervisor: null,
   managers: [],
 }

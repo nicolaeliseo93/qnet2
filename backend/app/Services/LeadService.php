@@ -10,6 +10,7 @@ use App\DataObjects\Leads\UpdateLeadData;
 use App\DataObjects\Shared\ForSelectQuery;
 use App\DataObjects\Shared\ForSelectResult;
 use App\Models\Lead;
+use App\Models\OperationalSite;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
@@ -42,6 +43,8 @@ class LeadService
         'operator',
         // spec 0040: LeadResource.opportunity {id,name}|null.
         'opportunity',
+        // spec 0047 (AC-003): Regione, derived from the sede.
+        'state',
     ];
 
     public function __construct(
@@ -61,14 +64,16 @@ class LeadService
      */
     public function create(CreateLeadData $data): Lead
     {
+        $attributes = $this->withDerivedStateId($data->attributes(), $data->operationalSiteId);
+
         if (! $data->convertToOpportunity) {
-            $lead = Lead::create($data->attributes());
+            $lead = Lead::create($attributes);
 
             return $this->loadDetail($lead);
         }
 
-        $lead = DB::transaction(function () use ($data): Lead {
-            $lead = Lead::create($data->attributes());
+        $lead = DB::transaction(function () use ($attributes): Lead {
+            $lead = Lead::create($attributes);
             $this->converter->handle($lead);
 
             return $lead;
@@ -79,12 +84,54 @@ class LeadService
 
     public function update(Lead $lead, UpdateLeadData $data): Lead
     {
+        $attributes = $data->submittedAttributes();
+
+        // Only re-derive when operational_site_id was actually submitted
+        // (partial PATCH, AC-001): an untouched sede must leave the
+        // previously derived state_id alone, and this keeps the derivation
+        // to a single query, fired only when it can actually change.
+        if ($data->operationalSiteIdSubmitted) {
+            $attributes['state_id'] = $this->deriveStateId($data->operationalSiteId);
+        }
+
         // Unconditional save: fire the model's saved event even when no
         // native attribute changed, so the HasCustomFields write pipeline
         // (spec 0021) persists a custom-fields-only edit.
-        $lead->fill($data->submittedAttributes())->save();
+        $lead->fill($attributes)->save();
 
         return $this->loadDetail($lead);
+    }
+
+    /**
+     * Overlay the server-derived `state_id` (spec 0047, D1) onto $attributes
+     * — mirrors OpportunityService::applyLeadDefaults' overlay pattern
+     * rather than threading it through CreateLeadData: `state_id` is not a
+     * client input (BR: "never user-editable directly"), so it has no place
+     * on the request-validated DTO, only on the mass-assignment array the
+     * Service itself builds.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function withDerivedStateId(array $attributes, ?int $operationalSiteId): array
+    {
+        $attributes['state_id'] = $this->deriveStateId($operationalSiteId);
+
+        return $attributes;
+    }
+
+    /**
+     * The sede's Regione (spec 0047, D1: `operational_site->stateId`, itself
+     * the primary address' `state_id`), a single query — none at all when
+     * $operationalSiteId is null.
+     */
+    private function deriveStateId(?int $operationalSiteId): ?int
+    {
+        if ($operationalSiteId === null) {
+            return null;
+        }
+
+        return OperationalSite::with('addresses')->find($operationalSiteId)?->state_id;
     }
 
     /**

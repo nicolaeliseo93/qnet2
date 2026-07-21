@@ -66,6 +66,14 @@ export interface LeadDetail {
   operational_site: LeadOperationalSiteRef | null
   source_id: number | null
   source: LeadRelationRef | null
+  /**
+   * Spec 0047 (D1, AC-001): the Regione, DERIVED server-side from the
+   * operational site's primary address — never a client input, no picker.
+   * Optional (like `opportunity` below) so every pre-existing `LeadDetail`
+   * fixture keeps type-checking unchanged; a missing key means `null`.
+   */
+  state_id?: number | null
+  state?: LeadRelationRef | null
   operator_id: number | null
   operator: LeadRelationRef | null
   notes: string | null

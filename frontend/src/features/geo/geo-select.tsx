@@ -160,6 +160,12 @@ export function GeoSelect({
   const provinceLocked = lockedLevels.includes('province')
   const cityLocked = lockedLevels.includes('city')
 
+  // City-first selection: the city level is searchable on its own (no parent
+  // required) and picking a city backfills its ancestors. Suppressed when a
+  // linked parent has locked an ancestor (spec 0027 BR-5) — the cascade then
+  // stays strictly top-down so a pick can never contradict the locked scope.
+  const cityFirst = !countryLocked && !stateLocked && !provinceLocked && !cityLocked
+
   // Cities are capped server-side, so their list is narrowed by a server search
   // term rather than filtered client-side like the other levels.
   const [citySearch, setCitySearch] = useState('')
@@ -196,7 +202,20 @@ export function GeoSelect({
   }
 
   const handleCity = (cityId: number) => {
-    onChange({ ...value, city_id: cityId })
+    const picked = cityOptions.find((city) => city.id === cityId)
+    if (!picked) {
+      onChange({ ...value, city_id: cityId })
+      return
+    }
+    // City-first: backfill the ancestor chain from the picked city. A locked
+    // level is never overwritten, but city-first is off whenever any level is
+    // locked, so in practice this always backfills the full chain.
+    onChange({
+      country_id: countryLocked ? value.country_id : picked.country_id,
+      state_id: stateLocked ? value.state_id : picked.state_id,
+      province_id: provinceLocked ? value.province_id : picked.province_id,
+      city_id: picked.id,
+    })
   }
 
   return (
@@ -263,7 +282,7 @@ export function GeoSelect({
         options={cityOptions}
         isPending={cities.isPending}
         isError={cities.isError}
-        disabled={disabled || cityLocked || value.state_id == null}
+        disabled={disabled || cityLocked || (!cityFirst && value.state_id == null)}
         emptyLabel={t('geo.empty')}
         errorLabel={t('geo.error')}
         retryLabel={t('geo.retry')}

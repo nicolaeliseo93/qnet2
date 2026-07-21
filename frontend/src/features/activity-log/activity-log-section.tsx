@@ -101,7 +101,7 @@ function ActivityLogItem({ entry, language }: ActivityLogItemProps) {
   const causerName = entry.causer.name ?? t('activityLog.systemCauser')
 
   return (
-    <li className="flex flex-col gap-1 rounded-lg border p-2.5 text-xs">
+    <li className="flex flex-col gap-1 rounded-lg border bg-card p-2.5 text-xs text-card-foreground shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
         <div className="flex items-center gap-1.5">
           <Badge variant={EVENT_BADGE_VARIANT[entry.event]}>{t(`activityLog.events.${entry.event}`)}</Badge>

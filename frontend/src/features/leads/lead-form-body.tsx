@@ -5,6 +5,8 @@ import { CircleAlert, ClipboardList, Contact, Loader2, StickyNote } from 'lucide
 import { FormSection } from '@/components/form-section'
 import { sectionRevealClassName } from '@/components/form-section-reveal'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Form, FormControl, FormDescription } from '@/components/ui/form'
@@ -124,6 +126,18 @@ export function LeadFormBody({ mode, onSuccess, onCancel, requireConversionField
                 {...selectLabels}
               />
 
+              <div className="grid gap-2">
+                <Label>{t('leads.form.state')}</Label>
+                <Input
+                  value={original?.state?.name ?? ''}
+                  placeholder={
+                    mode.type === 'create' ? t('leads.form.stateCreateHint') : t('leads.form.stateEmpty')
+                  }
+                  disabled
+                  readOnly
+                />
+              </div>
+
               <RelationSelectField
                 control={form.control}
                 name="source_id"
@@ -149,27 +163,31 @@ export function LeadFormBody({ mode, onSuccess, onCancel, requireConversionField
                 showAvatar
                 {...selectLabels}
               />
-            </div>
 
-            {mode.type === 'create' && (
-              <Can permission="opportunities.create">
-                <MetaField
-                  control={form.control}
-                  name="convert_to_opportunity"
-                  metaKey="convert_to_opportunity"
-                  label={t('leads.form.convertToOpportunity')}
-                  description={
-                    <FormDescription>{t('leads.form.convertToOpportunityHint')}</FormDescription>
-                  }
-                >
-                  {({ field, disabled }) => (
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={disabled} />
-                    </FormControl>
-                  )}
-                </MetaField>
-              </Can>
-            )}
+              {mode.type === 'create' && (
+                <Can permission="opportunities.create">
+                  <MetaField
+                    control={form.control}
+                    name="convert_to_opportunity"
+                    metaKey="convert_to_opportunity"
+                    label={t('leads.form.convertToOpportunity')}
+                    description={
+                      <FormDescription>{t('leads.form.convertToOpportunityHint')}</FormDescription>
+                    }
+                  >
+                    {({ field, disabled }) => (
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={disabled}
+                        />
+                      </FormControl>
+                    )}
+                  </MetaField>
+                </Can>
+              )}
+            </div>
           </FormSection>
 
           <FormSection

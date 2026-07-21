@@ -76,10 +76,10 @@ function baseSummary(overrides: Partial<ImportRunSummaryReport> = {}): ImportRun
     warnings: ['Row 4: ambiguous city match'],
     duplicate_resolutions: undefined,
     conversion_readiness: {
-      operational_site_set: true,
       campaign_derives_product_line: true,
       creatable_rows: 7,
       rows_without_operator: 0,
+      rows_without_site: 0,
     },
     ...overrides,
   }
@@ -203,10 +203,10 @@ describe('ImportStepSummary', () => {
     getImportRunSummaryMock.mockResolvedValue(
       baseSummary({
         conversion_readiness: {
-          operational_site_set: false,
           campaign_derives_product_line: true,
           creatable_rows: 7,
           rows_without_operator: 3,
+          rows_without_site: 2,
         },
       }),
     )
@@ -215,8 +215,8 @@ describe('ImportStepSummary', () => {
     fireEvent.click(await screen.findByRole('switch', { name: 'Automatically convert to Opportunity' }))
 
     expect(await screen.findByText('This run cannot be auto-converted yet:')).toBeInTheDocument()
-    expect(screen.getByText('The operational site is not set for this run.')).toBeInTheDocument()
     expect(screen.getByText('3 row(s) have no operator assigned.')).toBeInTheDocument()
+    expect(screen.getByText('2 row(s) have no operational site assigned.')).toBeInTheDocument()
     expect(screen.queryByText('The campaign does not derive a product line.')).not.toBeInTheDocument()
 
     const confirmButton = screen.getByRole('button', { name: 'Confirm and import' })

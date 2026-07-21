@@ -53,6 +53,14 @@ function baseFields(t: TFunction) {
     reporter_id: z.number().nullable(),
     supervisor_id: z.number().nullable(),
     source_id: z.number().nullable(),
+    // Spec 0047 (D1, AC-026): the Regione, freely settable on a standalone
+    // opportunity (forced read-only in the UI when lead-linked, see
+    // `OpportunityFormBody`). Never a submit-blocking requirement.
+    state_id: z.number().nullable(),
+    // Spec 0047 (AC-017): an optional manual override of the resolved
+    // working-state; only ever rendered/submitted in edit mode (the create
+    // select is hidden, the server resolves the initial row on its own).
+    opportunity_workflow_status_id: z.number().nullable(),
     // Amendment rev.3 (AC-097/099): replaces the former single
     // `business_function_id`/`product_category_id` with an inline-editable
     // row collection (mirrors `manager_slots`: "Add" appends an EMPTY row).

@@ -115,7 +115,7 @@ describe('useImportWizard', () => {
     expect(result.current.currentStep).toBe(1)
   })
 
-  it('resumes directly at the config/mapping step for an in-progress run, skipping the upload gate', async () => {
+  it('resumes directly at the mapping+config step for an in-progress run, skipping the upload gate', async () => {
     getImportWizardRunMock.mockResolvedValue(detailRun())
 
     const { result } = renderHook(() => useImportWizard({ domain: 'leads', initialRunId: 1 }), {
@@ -126,7 +126,7 @@ describe('useImportWizard', () => {
     expect(result.current.currentStep).toBe(1)
   })
 
-  it('carries the config draft into the mapping submit, calling configure once', async () => {
+  it('submits the mapping with its bundled global config, calling configure once', async () => {
     getImportWizardRunMock
       .mockResolvedValueOnce(detailRun())
       .mockResolvedValue(detailRun({ status: 'staging' }))
@@ -138,10 +138,7 @@ describe('useImportWizard', () => {
 
     await waitFor(() => expect(result.current.run).not.toBeNull())
 
-    act(() => result.current.submitConfig({ campaign_id: 9 }))
-    expect(result.current.currentStep).toBe(2)
-
-    act(() => result.current.submitMapping({ Email: 'email' }, 'create_new'))
+    act(() => result.current.submitMapping({ Email: 'email' }, 'create_new', { campaign_id: 9 }))
 
     await waitFor(() =>
       expect(configureImportRunMock).toHaveBeenCalledWith('leads', 1, {
@@ -150,23 +147,7 @@ describe('useImportWizard', () => {
         dedup_strategy: 'create_new',
       }),
     )
-    await waitFor(() => expect(result.current.currentStep).toBe(3))
-  })
-
-  it('allows navigating back from mapping to config while still configuring', async () => {
-    getImportWizardRunMock.mockResolvedValue(detailRun())
-
-    const { result } = renderHook(() => useImportWizard({ domain: 'leads', initialRunId: 1 }), {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(result.current.run).not.toBeNull())
-
-    act(() => result.current.goToStep(2))
-    expect(result.current.currentStep).toBe(2)
-
-    act(() => result.current.goToStep(1))
-    expect(result.current.currentStep).toBe(1)
+    await waitFor(() => expect(result.current.currentStep).toBe(2))
   })
 
   it('routes processing/completed/failed statuses to the summary step', async () => {
@@ -176,7 +157,7 @@ describe('useImportWizard', () => {
       wrapper: wrapper(),
     })
 
-    await waitFor(() => expect(result.current.currentStep).toBe(4))
+    await waitFor(() => expect(result.current.currentStep).toBe(3))
   })
 
   it('saves the mapping as a template after a successful configure, without blocking the advance (AC-011)', async () => {
@@ -192,13 +173,12 @@ describe('useImportWizard', () => {
 
     await waitFor(() => expect(result.current.run).not.toBeNull())
 
-    act(() => result.current.submitConfig({ campaign_id: 9 }))
     act(() =>
-      result.current.submitMapping({ Email: 'email' }, 'create_new', { name: 'Monthly leads' }),
+      result.current.submitMapping({ Email: 'email' }, 'create_new', { campaign_id: 9 }, { name: 'Monthly leads' }),
     )
 
     // The wizard advances on the configure response alone.
-    await waitFor(() => expect(result.current.currentStep).toBe(3))
+    await waitFor(() => expect(result.current.currentStep).toBe(2))
 
     await waitFor(() =>
       expect(createMappingTemplateMock).toHaveBeenCalledWith('leads', {
@@ -222,12 +202,11 @@ describe('useImportWizard', () => {
 
     await waitFor(() => expect(result.current.run).not.toBeNull())
 
-    act(() => result.current.submitConfig({ campaign_id: 9 }))
     act(() =>
-      result.current.submitMapping({ Email: 'email' }, 'create_new', { name: 'Monthly leads' }),
+      result.current.submitMapping({ Email: 'email' }, 'create_new', { campaign_id: 9 }, { name: 'Monthly leads' }),
     )
 
-    await waitFor(() => expect(result.current.currentStep).toBe(3))
+    await waitFor(() => expect(result.current.currentStep).toBe(2))
     await waitFor(() => expect(toast.error).toHaveBeenCalled())
   })
 })

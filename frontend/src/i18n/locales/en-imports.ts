@@ -43,7 +43,6 @@ export const imports = {
       campaign_id: 'Campaign',
       project_id: 'Project',
       source_id: 'Source',
-      operator_id: 'Assigned operator',
     },
   },
   buttons: {

@@ -89,6 +89,12 @@ export const opportunities = {
     productCategorySearch: 'Search product categories…',
     source: 'Source',
     sourceSearch: 'Search sources…',
+    state: 'Region',
+    stateSearch: 'Search regions…',
+    workflowStatus: 'Working status',
+    workflowStatusHint:
+      'The internal working status, distinct from the Opportunity Status: limited to the set resolved for this opportunity.',
+    workflowStatusPendingHint: 'Assigned automatically on save.',
     productLines: {
       fieldLabel: 'Function/category rows',
       rowLabel: 'Row {{n}}',

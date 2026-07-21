@@ -29,11 +29,13 @@ export interface Province {
 /**
  * A city scoped to a state and, when the country has a province level, to a
  * province (GET /api/cities). `province_id` is null for countries without
- * provinces.
+ * provinces. `country_id` lets the cascade backfill the whole ancestor chain
+ * when a city is picked first (city-first selection).
  */
 export interface City {
   id: number
   name: string
+  country_id: number
   state_id: number
   province_id: number | null
 }

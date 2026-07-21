@@ -330,16 +330,19 @@ it('exposes recognizers()/supportsExtraFields()/dedupModes() per the frozen cont
         ->toBe(['create_new', 'update_existing', 'ignore', 'manual']);
 });
 
-it('globalConfig() requires campaign_id and no longer exposes lead_status_id', function () {
+it('globalConfig() requires campaign_id and exposes neither lead_status_id, project_id, operator_id nor operational_site_id', function () {
+    // Operator (and, mirroring it, Operational Site) is a Review-only,
+    // per-row override (spec 0045) — never a global-config field.
     $definition = app(LeadsImportDefinition::class);
     $global = collect($definition->globalConfig())->keyBy('id');
 
     expect($global['campaign_id']['required'])->toBeTrue()
         ->and($global['campaign_id']['for_select_resource'])->toBe('campaigns')
         ->and($global->has('lead_status_id'))->toBeFalse()
-        ->and($global['project_id']['for_select_resource'])->toBe('projects')
-        ->and($global['source_id']['for_select_resource'])->toBe('sources')
-        ->and($global['operator_id']['for_select_resource'])->toBe('users');
+        ->and($global->has('project_id'))->toBeFalse()
+        ->and($global->has('operator_id'))->toBeFalse()
+        ->and($global->has('operational_site_id'))->toBeFalse()
+        ->and($global['source_id']['for_select_resource'])->toBe('sources');
 });
 
 it('createRow() (legacy create-only) is unreachable for the wizard-only leads domain', function () {

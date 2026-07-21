@@ -36,6 +36,10 @@ use Illuminate\Database\Eloquent\Model;
  */
 class GeoResolver
 {
+    private ?int $homeCountryId = null;
+
+    private bool $homeCountryResolved = false;
+
     public function __construct(
         private readonly ItalianGeoLocalizer $localizer,
         private readonly GeoFuzzyMatcher $fuzzyMatcher,
@@ -131,6 +135,10 @@ class GeoResolver
         $provinceId = null;
         $cityId = null;
 
+        // Home country used only to break a cross-country homonym tie on a
+        // level the row left unscoped (no country/region of its own).
+        $homeCountryId = $this->homeCountryId();
+
         if ($this->present($countryName)) {
             $match = $this->fuzzyMatcher->match(Country::query(), $this->localizer->country($countryName));
 
@@ -148,7 +156,7 @@ class GeoResolver
                 $query->where('country_id', $countryId);
             }
 
-            $match = $this->fuzzyMatcher->match($query, $this->localizer->region($stateName));
+            $match = $this->fuzzyMatcher->match($query, $this->localizer->region($stateName), $countryId === null ? $homeCountryId : null);
 
             if ($match['model'] === null) {
                 return GeoResolutionResult::ambiguous($countryId, null, null, null, "Region \"{$stateName}\" not found or ambiguous.", $match['candidates']);
@@ -166,7 +174,8 @@ class GeoResolver
                 $query->where('country_id', $countryId);
             }
 
-            $match = $this->fuzzyMatcher->match($query, $this->localizer->province($provinceName) ?? $provinceName);
+            $prefer = ($stateId === null && $countryId === null) ? $homeCountryId : null;
+            $match = $this->fuzzyMatcher->match($query, $this->localizer->province($provinceName) ?? $provinceName, $prefer);
 
             if ($match['model'] === null) {
                 return GeoResolutionResult::ambiguous($countryId, $stateId, null, null, "Province \"{$provinceName}\" not found or ambiguous.", $match['candidates']);
@@ -190,7 +199,8 @@ class GeoResolver
                 $query->where('country_id', $countryId);
             }
 
-            $match = $this->fuzzyMatcher->match($query, $this->localizer->city($cityName) ?? $cityName);
+            $prefer = ($provinceId === null && $stateId === null && $countryId === null) ? $homeCountryId : null;
+            $match = $this->fuzzyMatcher->match($query, $this->localizer->city($cityName) ?? $cityName, $prefer);
 
             if ($match['model'] === null) {
                 return GeoResolutionResult::ambiguous($countryId, $stateId, $provinceId, null, "City \"{$cityName}\" not found or ambiguous.", $match['candidates']);
@@ -205,6 +215,30 @@ class GeoResolver
         }
 
         return GeoResolutionResult::ok($countryId, $stateId, $provinceId, $cityId);
+    }
+
+    /**
+     * The configured home country's id (config `imports.default_country`,
+     * matched case-insensitively through the shared localizer), memoized for
+     * the lifetime of this resolver. Null when unconfigured or unknown — the
+     * tiebreak then simply never fires.
+     */
+    private function homeCountryId(): ?int
+    {
+        if ($this->homeCountryResolved) {
+            return $this->homeCountryId;
+        }
+
+        $this->homeCountryResolved = true;
+        $configured = config('imports.default_country');
+
+        if (! is_string($configured) || trim($configured) === '') {
+            return $this->homeCountryId = null;
+        }
+
+        $country = $this->findByName(Country::query(), $this->localizer->country($configured));
+
+        return $this->homeCountryId = $country?->getAttribute('id');
     }
 
     private function resolveProvince(string $name, ?int $countryId, ?int $stateId): ?Province

@@ -17,22 +17,33 @@ import type { ImportRunRowItem, ImportRunRowUpdateResult } from '@/features/impo
  * an inline edit PATCHes just the edited field, swapping the row for the
  * server's re-validated copy (or reverting it on failure). Spec 0036 AC-009:
  * choosing a duplicate row's resolution PATCHes it the same way, and errors
- * are notified via toast.
+ * are notified via toast. Spec 0038 AC-011/014: the geo popup applies the 4
+ * geo ids as a single block.
+ *
+ * The operator/site popup apply and combined bulk-assign coverage lives in
+ * `use-review-rows-assign.test.tsx` — split out to stay within the
+ * engineering size limits (`.claude/rules/engineering.md` §6).
  */
 
 const getImportRunRowsMock = vi.fn()
 const updateImportRunRowMock = vi.fn()
 const resolveImportRunRowMock = vi.fn()
+const bulkAssignImportRowMock = vi.fn()
 const toastErrorMock = vi.fn()
+const toastSuccessMock = vi.fn()
 
 vi.mock('@/features/imports/wizard/api', () => ({
   getImportRunRows: (...args: unknown[]) => getImportRunRowsMock(...args),
   updateImportRunRow: (...args: unknown[]) => updateImportRunRowMock(...args),
   resolveImportRunRow: (...args: unknown[]) => resolveImportRunRowMock(...args),
+  bulkAssignImportRow: (...args: unknown[]) => bulkAssignImportRowMock(...args),
 }))
 
 vi.mock('sonner', () => ({
-  toast: { error: (...args: unknown[]) => toastErrorMock(...args) },
+  toast: {
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
+  },
 }))
 
 beforeAll(async () => {
@@ -54,6 +65,8 @@ function rowItem(overrides: Partial<ImportRunRowItem> = {}): ImportRunRowItem {
     duplicate_of_id: null,
     operator_id: null,
     operator: null,
+    operational_site_id: null,
+    operational_site: null,
     values: { email: 'bad-email' },
     messages: ['Invalid email format'],
     ...overrides,
@@ -104,7 +117,9 @@ beforeEach(() => {
   getImportRunRowsMock.mockReset()
   updateImportRunRowMock.mockReset()
   resolveImportRunRowMock.mockReset()
+  bulkAssignImportRowMock.mockReset()
   toastErrorMock.mockReset()
+  toastSuccessMock.mockReset()
 })
 
 describe('useReviewRows — datasource', () => {
@@ -310,81 +325,6 @@ describe('useReviewRows — geo popup apply (spec 0038)', () => {
     await expect(
       act(async () => {
         await hookResult.current.handleApplyGeo(row, geo, node)
-      }),
-    ).rejects.toBeTruthy()
-
-    expect(node.setData).not.toHaveBeenCalled()
-    expect(onRowUpdated).not.toHaveBeenCalled()
-  })
-})
-
-describe('useReviewRows — operator popup apply', () => {
-  it('PATCHes `operator_id` with the chosen id, swaps the row, bubbles counts and invalidates the summary query', async () => {
-    const updatedRow = rowItem({ operator_id: 42, operator: { id: 42, name: 'Mario Rossi' } })
-    const counts = { total: 3, valid_rows: 2, warning_rows: 0, error_rows: 0, duplicate_rows: 0, modified_rows: 1 }
-    updateImportRunRowMock.mockResolvedValue({ row: updatedRow, counts })
-    const onRowUpdated = vi.fn()
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-
-    const { result: hookResult } = renderHook(
-      () => useReviewRows({ domain: 'leads', importRunId: 7, onRowUpdated }),
-      { wrapper: wrapper(client) },
-    )
-
-    const row = rowItem()
-    const node = { setData: vi.fn() } as unknown as IRowNode<ImportRunRowItem>
-
-    await act(async () => {
-      await hookResult.current.handleApplyOperator(row, 42, node)
-    })
-
-    expect(updateImportRunRowMock).toHaveBeenCalledWith('leads', 7, 10, { operator_id: 42 })
-    expect(node.setData).toHaveBeenCalledWith(updatedRow)
-    expect(onRowUpdated).toHaveBeenCalledWith(updatedRow, counts)
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['imports', 'wizard', 'leads', 7, 'summary'],
-    })
-  })
-
-  it('PATCHes `operator_id: null` to clear a row override back to the run default', async () => {
-    const clearedRow = rowItem({ operator_id: null, operator: null })
-    const counts = { total: 3, valid_rows: 2, warning_rows: 0, error_rows: 0, duplicate_rows: 0, modified_rows: 1 }
-    updateImportRunRowMock.mockResolvedValue({ row: clearedRow, counts })
-    const onRowUpdated = vi.fn()
-
-    const { result: hookResult } = renderHook(
-      () => useReviewRows({ domain: 'leads', importRunId: 7, onRowUpdated }),
-      { wrapper: wrapper() },
-    )
-
-    const row = rowItem({ operator_id: 42, operator: { id: 42, name: 'Mario Rossi' } })
-    const node = { setData: vi.fn() } as unknown as IRowNode<ImportRunRowItem>
-
-    await act(async () => {
-      await hookResult.current.handleApplyOperator(row, null, node)
-    })
-
-    expect(updateImportRunRowMock).toHaveBeenCalledWith('leads', 7, 10, { operator_id: null })
-    expect(node.setData).toHaveBeenCalledWith(clearedRow)
-    expect(onRowUpdated).toHaveBeenCalledWith(clearedRow, counts)
-  })
-
-  it('rejects without touching the row when the operator PATCH fails', async () => {
-    updateImportRunRowMock.mockRejectedValue({ isAxiosError: true, response: { status: 422 } })
-    const onRowUpdated = vi.fn()
-
-    const { result: hookResult } = renderHook(
-      () => useReviewRows({ domain: 'leads', importRunId: 7, onRowUpdated }),
-      { wrapper: wrapper() },
-    )
-
-    const row = rowItem()
-    const node = { setData: vi.fn() } as unknown as IRowNode<ImportRunRowItem>
-
-    await expect(
-      act(async () => {
-        await hookResult.current.handleApplyOperator(row, 42, node)
       }),
     ).rejects.toBeTruthy()
 

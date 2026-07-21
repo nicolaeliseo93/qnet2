@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Controller, useForm, type FieldPath } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
-import { Columns3, CopyCheck, Loader2, MoveRight } from 'lucide-react'
+import { Columns3, CopyCheck, Loader2, MoveRight, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { FieldHint } from '@/components/field-hint'
 import { StepAlert, StepSectionHeader } from '@/features/imports/wizard/wizard-ui'
+import { ImportConfigFields } from '@/features/imports/wizard/import-config-fields'
+import {
+  type ImportConfigFormValues,
+  withConfigDefaults,
+} from '@/features/imports/wizard/import-config-schema'
 import {
   buildImportMappingSchema,
   type ImportMappingFormValues,
@@ -31,10 +36,12 @@ export interface ImportStepMappingProps {
   run: ImportRunDetail | null
   initialMapping: Record<string, string>
   initialDedupStrategy: string | null
-  onBack: () => void
+  /** Seed values for the global-configuration controls now hosted in this step. */
+  initialConfig: ImportConfigFormValues
   onSubmit: (
     mapping: Record<string, string>,
     dedupStrategy: string,
+    globalConfig: ImportConfigFormValues,
     /** Present only when the operator checked "save as template" (spec 0035 AC-011). */
     saveAsTemplate?: { name: string },
   ) => void
@@ -43,17 +50,19 @@ export interface ImportStepMappingProps {
 }
 
 /**
- * Column mapping step (AC-022): one target select per detected file column
- * (a mappable field, "ignore", or "extra field"), pre-populated from the
- * run's auto-mapping suggestion / already-persisted mapping. Submitting this
- * step is what actually calls `PUT .../configure` (mapping + the config
- * step's values, bundled — see `use-import-wizard.ts`).
+ * Column mapping + configuration step (AC-021/AC-022): one target select per
+ * detected file column (a mappable field, "ignore", or "extra field"),
+ * pre-populated from the run's auto-mapping suggestion / already-persisted
+ * mapping, plus the global-configuration controls (campaign/source/operator/
+ * status). A single submit here calls `PUT .../configure` with mapping +
+ * global config + dedup strategy bundled — campaign scope must be known before
+ * staging (it scopes duplicate detection), so config lives here, not in review.
  */
 export function ImportStepMapping({
   run,
   initialMapping,
   initialDedupStrategy,
-  onBack,
+  initialConfig,
   onSubmit,
   isSubmitting,
   submitError,
@@ -66,6 +75,7 @@ export function ImportStepMapping({
   const fields = run?.fields ?? []
   const columns = run?.detected_columns ?? EMPTY_COLUMNS
   const dedupModes = run?.dedup_modes ?? []
+  const globalFields = run?.global_fields ?? []
 
   // The form's `mapping` is keyed by column INDEX (a path-safe string), NOT by
   // the column key: a column name can contain a `.` (e.g. a survey-question
@@ -88,8 +98,12 @@ export function ImportStepMapping({
   // wizard leaves it, so a fresh mount already picks up the latest mapping —
   // see the same note in `import-step-config.tsx`.
   const form = useForm<ImportMappingFormValues>({
-    resolver: zodResolver(buildImportMappingSchema(fields, t)),
-    defaultValues: { mapping: completeMapping, dedup_strategy: initialDedupStrategy ?? dedupModes[0] ?? '' },
+    resolver: zodResolver(buildImportMappingSchema(fields, globalFields, t)),
+    defaultValues: {
+      mapping: completeMapping,
+      dedup_strategy: initialDedupStrategy ?? dedupModes[0] ?? '',
+      global_config: withConfigDefaults(globalFields, initialConfig),
+    },
   })
 
   const [saveAsTemplate, setSaveAsTemplate] = useState(false)
@@ -113,9 +127,9 @@ export function ImportStepMapping({
     }
     const trimmedTemplateName = templateName.trim()
     if (saveAsTemplate && trimmedTemplateName.length > 0) {
-      onSubmit(realMapping, values.dedup_strategy, { name: trimmedTemplateName })
+      onSubmit(realMapping, values.dedup_strategy, values.global_config, { name: trimmedTemplateName })
     } else {
-      onSubmit(realMapping, values.dedup_strategy)
+      onSubmit(realMapping, values.dedup_strategy, values.global_config)
     }
   })
 
@@ -230,6 +244,18 @@ export function ImportStepMapping({
               </StepAlert>
             ) : null}
 
+            {globalFields.length > 0 ? (
+              <>
+                <Separator />
+                <StepSectionHeader
+                  icon={Settings2}
+                  title={t('config.title')}
+                  description={t('config.subtitle')}
+                />
+                <ImportConfigFields globalFields={globalFields} control={form.control} />
+              </>
+            ) : null}
+
             <Separator />
 
             <StepSectionHeader
@@ -276,10 +302,7 @@ export function ImportStepMapping({
 
             <Separator />
 
-            <div className="flex justify-between">
-              <Button type="button" variant="outline" onClick={onBack}>
-                {t('config.back')}
-              </Button>
+            <div className="flex justify-end">
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
                 {isSubmitting ? t('mapping.submitting') : t('mapping.submit')}

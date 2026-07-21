@@ -1,13 +1,24 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AgGridReact } from 'ag-grid-react'
-import { themeQuartz, type GetRowIdParams, type GridOptions } from 'ag-grid-community'
+import {
+  themeQuartz,
+  type GetRowIdParams,
+  type GridApi,
+  type GridOptions,
+  type GridReadyEvent,
+  type IServerSideSelectionState,
+  type RowSelectionOptions,
+  type SelectionChangedEvent,
+} from 'ag-grid-community'
 import { AG_GRID_LOCALE_EN, AG_GRID_LOCALE_IT } from '@ag-grid-community/locale'
 import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
 import { buildReviewColumnDefs } from '@/features/imports/wizard/review-columns'
+import { ReviewBulkAssignBar, type ReviewBulkSelectionState } from '@/features/imports/wizard/review-bulk-assign-bar'
 import type { ReviewGeoGridContext } from '@/features/imports/wizard/review-geo-editor'
 import type { ReviewOperatorGridContext } from '@/features/imports/wizard/review-operator-editor'
-import { useReviewRows } from '@/features/imports/wizard/use-review-rows'
+import type { ReviewSiteGridContext } from '@/features/imports/wizard/review-site-editor'
+import { buildBulkAssignPayload, useReviewRows } from '@/features/imports/wizard/use-review-rows'
 import type { ImportRunDetail, ImportRunRowCounts, ImportRunRowItem } from '@/features/imports/wizard/types'
 
 // Register enterprise modules + license once, at module load (idempotent,
@@ -44,6 +55,32 @@ const reviewGridTheme = themeQuartz.withParams({
 /** No-op counters callback for the read-only mode, which never edits a row. */
 function noopRowUpdated(): void {}
 
+/** `global_fields` id carrying the run's default operator (`Leads/LeadImportFieldCatalog::globalConfig`). */
+const GLOBAL_OPERATOR_FIELD_ID = 'operator_id'
+
+/** No selection: the bulk-assign bar stays hidden and the bar's own payload never applies. */
+const EMPTY_SELECTION: ReviewBulkSelectionState = { selectAll: false, toggledNodes: [] }
+
+/**
+ * Checkbox multi-selection (bulk operator assign), `selectAll: 'all'` so the
+ * header checkbox drives a true server-side "select all" — not capped to the
+ * loaded page — matching the bulk-assign contract 1:1
+ * (`gridApi.getServerSideSelectionState()`). Disabled entirely in `readOnly`
+ * mode (the concluded-run detail page never bulk-assigns).
+ */
+const ROW_SELECTION: RowSelectionOptions<ImportRunRowItem> = {
+  mode: 'multiRow',
+  checkboxes: true,
+  headerCheckbox: true,
+  selectAll: 'all',
+}
+
+/** Reads the run's global default operator id (`global_config.operator_id`), or `null` when unset. */
+function resolveGlobalDefaultOperatorId(run: ImportRunDetail): number | null {
+  const raw = run.global_config?.[GLOBAL_OPERATOR_FIELD_ID]
+  return typeof raw === 'number' ? raw : null
+}
+
 export interface ReviewGridProps {
   domain: string
   run: ImportRunDetail
@@ -69,18 +106,27 @@ export interface ReviewGridProps {
 export function ReviewGrid({ domain, run, onRowUpdated = noopRowUpdated, readOnly = false }: ReviewGridProps) {
   const { t } = useTranslation('importWizard')
   const { i18n } = useTranslation()
+  const gridApiRef = useRef<GridApi<ImportRunRowItem> | null>(null)
+  const [selection, setSelection] = useState<ReviewBulkSelectionState>(EMPTY_SELECTION)
 
   const localeText = useMemo(
     () => (i18n.language.startsWith('it') ? AG_GRID_LOCALE_IT : AG_GRID_LOCALE_EN),
     [i18n.language],
   )
 
-  const { datasource, handleCellValueChanged, handleResolutionChange, handleApplyGeo, handleApplyOperator } =
-    useReviewRows({
-      domain,
-      importRunId: run.id,
-      onRowUpdated,
-    })
+  const {
+    datasource,
+    handleCellValueChanged,
+    handleResolutionChange,
+    handleApplyGeo,
+    handleApplyOperator,
+    handleApplySite,
+    handleBulkAssign: handleBulkAssignRows,
+  } = useReviewRows({
+    domain,
+    importRunId: run.id,
+    onRowUpdated,
+  })
 
   const columnDefs = useMemo(
     () => buildReviewColumnDefs(run, t, readOnly, handleResolutionChange),
@@ -89,14 +135,52 @@ export function ReviewGrid({ domain, run, onRowUpdated = noopRowUpdated, readOnl
 
   const getRowId = useCallback((params: GetRowIdParams<ImportRunRowItem>) => String(params.data.id), [])
 
-  // The geo/operator popups' apply callbacks are shared by all 4 geo columns
-  // and the operator column respectively, never column-specific, so they
-  // travel via `gridOptions.context` instead of `cellRendererParams` — every
-  // `ReviewGeoCell`/`ReviewOperatorCell` reads them off `params.context`,
-  // with no per-colDef prop drilling.
-  const gridContext = useMemo<ReviewGeoGridContext & ReviewOperatorGridContext>(
-    () => ({ onApplyGeo: handleApplyGeo, onApplyOperator: handleApplyOperator }),
-    [handleApplyGeo, handleApplyOperator],
+  const globalDefaultOperatorId = useMemo(() => resolveGlobalDefaultOperatorId(run), [run])
+
+  // The geo/operator/site popups' apply callbacks are shared by all 4 geo
+  // columns, the operator column and the site column respectively, never
+  // column-specific, so they travel via `gridOptions.context` instead of
+  // `cellRendererParams` — every `ReviewGeoCell`/`ReviewOperatorCell`/
+  // `ReviewSiteCell` reads them off `params.context`, with no per-colDef prop
+  // drilling. `globalDefaultOperatorId` is read once here from the run, not
+  // prop-drilled per column either; `globalDefaultSiteId` is always `null`
+  // (the operational site has no global-config default, spec delta).
+  const gridContext = useMemo<ReviewGeoGridContext & ReviewOperatorGridContext & ReviewSiteGridContext>(
+    () => ({
+      onApplyGeo: handleApplyGeo,
+      onApplyOperator: handleApplyOperator,
+      globalDefaultOperatorId,
+      onApplySite: handleApplySite,
+      globalDefaultSiteId: null,
+    }),
+    [handleApplyGeo, handleApplyOperator, globalDefaultOperatorId, handleApplySite],
+  )
+
+  const handleGridReady = useCallback((event: GridReadyEvent<ImportRunRowItem>) => {
+    gridApiRef.current = event.api
+  }, [])
+
+  // Reads AG Grid's own server-side selection state after every toggle
+  // (single row or header "select all") rather than tracking it by hand —
+  // `{ selectAll, toggledNodes }` is exactly the shape the bulk-assign
+  // payload needs (spec: mirrors `gridApi.getServerSideSelectionState()` 1:1).
+  const handleSelectionChanged = useCallback((event: SelectionChangedEvent<ImportRunRowItem>) => {
+    const state = event.api.getServerSideSelectionState() as IServerSideSelectionState | null
+    setSelection(state ? { selectAll: state.selectAll, toggledNodes: state.toggledNodes } : EMPTY_SELECTION)
+  }, [])
+
+  // Step 1: PATCH the combined bulk assignment (operator and/or site) from
+  // the current selection. Step 2: on success, refresh the SSRM cache (purge
+  // so the Operator/Sede columns re-fetch the server's copy) and clear the
+  // selection; on failure, leave the selection and grid untouched (the
+  // mutation already toasted the error) so the operator can retry.
+  const handleBulkAssign = useCallback(
+    (input: { operatorId: number | null; siteId: number | null }) =>
+      handleBulkAssignRows(buildBulkAssignPayload(selection, input)).then(() => {
+        gridApiRef.current?.setServerSideSelectionState(EMPTY_SELECTION)
+        gridApiRef.current?.refreshServerSide({ purge: true })
+      }),
+    [handleBulkAssignRows, selection],
   )
 
   const gridOptions = useMemo<GridOptions<ImportRunRowItem>>(
@@ -114,17 +198,30 @@ export function ReviewGrid({ domain, run, onRowUpdated = noopRowUpdated, readOnl
       singleClickEdit: !readOnly,
       stopEditingWhenCellsLoseFocus: !readOnly,
       onCellValueChanged: readOnly ? undefined : handleCellValueChanged,
+      rowSelection: readOnly ? undefined : ROW_SELECTION,
+      onSelectionChanged: readOnly ? undefined : handleSelectionChanged,
     }),
-    [datasource, getRowId, gridContext, handleCellValueChanged, readOnly],
+    [datasource, getRowId, gridContext, handleCellValueChanged, handleSelectionChanged, readOnly],
   )
 
+  const hasSelection = selection.selectAll || selection.toggledNodes.length > 0
+
   return (
-    <div
-      className="flex h-[55vh] min-h-[320px] max-h-[640px] w-full flex-col"
-      role="region"
-      aria-label={t('review.gridLabel')}
-    >
-      <AgGridReact theme={reviewGridTheme} columnDefs={columnDefs} localeText={localeText} {...gridOptions} />
+    <div className="flex flex-col gap-2">
+      {hasSelection ? <ReviewBulkAssignBar selection={selection} onAssign={handleBulkAssign} /> : null}
+      <div
+        className="flex h-[55vh] min-h-[320px] max-h-[640px] w-full flex-col"
+        role="region"
+        aria-label={t('review.gridLabel')}
+      >
+        <AgGridReact
+          theme={reviewGridTheme}
+          columnDefs={columnDefs}
+          localeText={localeText}
+          onGridReady={handleGridReady}
+          {...gridOptions}
+        />
+      </div>
     </div>
   )
 }
