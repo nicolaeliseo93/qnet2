@@ -13,11 +13,11 @@ use Illuminate\Support\Collection;
  *
  * `criteria` is REQUIRED, min:1 (AC-008): a list of {field, value_id} pairs,
  * one per allow-listed field (App\Support\OpportunityWorkflows\
- * CriterionFieldRegistry). `statuses` is OPTIONAL. The 2 system rows
- * (open/closed, AC-004) are always created by the Service via
+ * CriterionFieldRegistry). `statuses` is OPTIONAL. The 3 system rows
+ * (open/closed_won/closed_lost, AC-004) are always created by the Service via
  * WorkflowStatusWriter; when the client tags a submitted row with a
- * `system_key`, its name/color SEED that system row (the user can name
- * open/closed up front) — otherwise the writer's defaults apply. Untagged
+ * `system_key`, its name/color SEED that system row (the user can name the
+ * pinned rows up front) — otherwise the writer's defaults apply. Untagged
  * rows are the intermediate CUSTOM rows.
  */
 final readonly class CreateOpportunityWorkflowData
@@ -26,7 +26,8 @@ final readonly class CreateOpportunityWorkflowData
      * @param  array<int, array{field: string, value_id: int}>  $criteria
      * @param  array<int, array{name: string, color: ?string, group: string}>  $statuses  custom rows only
      * @param  array{name: string, color: ?string}|null  $openStatus  name/color seed for the pinned 'open' row (null = writer default)
-     * @param  array{name: string, color: ?string}|null  $closedStatus  name/color seed for the pinned 'closed' row (null = writer default)
+     * @param  array{name: string, color: ?string}|null  $closedWonStatus  name/color seed for the pinned 'closed_won' row (null = writer default)
+     * @param  array{name: string, color: ?string}|null  $closedLostStatus  name/color seed for the pinned 'closed_lost' row (null = writer default)
      */
     public function __construct(
         public string $name,
@@ -34,7 +35,8 @@ final readonly class CreateOpportunityWorkflowData
         public array $criteria,
         public array $statuses,
         public ?array $openStatus = null,
-        public ?array $closedStatus = null,
+        public ?array $closedWonStatus = null,
+        public ?array $closedLostStatus = null,
     ) {}
 
     /**
@@ -53,7 +55,8 @@ final readonly class CreateOpportunityWorkflowData
             criteria: self::normalizeCriteria($data['criteria']),
             statuses: self::normalizeStatuses($statuses),
             openStatus: self::extractSystemStatus($statuses, WorkflowStatusSystemKey::Open),
-            closedStatus: self::extractSystemStatus($statuses, WorkflowStatusSystemKey::Closed),
+            closedWonStatus: self::extractSystemStatus($statuses, WorkflowStatusSystemKey::ClosedWon),
+            closedLostStatus: self::extractSystemStatus($statuses, WorkflowStatusSystemKey::ClosedLost),
         );
     }
 

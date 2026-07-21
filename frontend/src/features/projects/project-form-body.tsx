@@ -11,9 +11,9 @@ import { MetaField } from '@/features/authorization/MetaField'
 import { RelationSelectField } from '@/components/form/relation-select-field'
 import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-statuses/for-select-api'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
-import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
+import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import { useProjectForm } from '@/features/projects/use-project-form'
 import { ProjectGeographySection } from '@/features/projects/project-geography-section'
 import { ProjectPlanningSection } from '@/features/projects/project-planning-section'
@@ -41,7 +41,7 @@ const SECTION_REVEAL_CLASSIFICATION =
  * The project create/edit form UI: the manual/read-only `code` (spec 0025,
  * editable only in create — gated by the `code` field permission, editable
  * in create and read-only in update), identity (name, description), the
- * required Stato relation (D-5) plus the 5 optional relation pickers
+ * required Stato relation (D-5) plus the 4 optional relation pickers
  * (`ProjectRelationField`), the geo cascade (spec 0027 BR-4,
  * `ProjectGeographySection`), planning dates (BR-6) and budget/target
  * (`ProjectPlanningSection`) — all wrapped in `MetaField` (spec 0004). All
@@ -52,7 +52,7 @@ const SECTION_REVEAL_CLASSIFICATION =
 export function ProjectFormBody({ mode, onSuccess, onCancel, initialCode }: ProjectFormBodyProps) {
   const { t } = useTranslation()
   const { form, serverError, onSubmit } = useProjectForm({ mode, onSuccess, initialCode })
-  const original = mode.type === 'edit' ? mode.project : null
+  const original = mode.type === 'edit' ? mode.project : mode.type === 'duplicate' ? mode.source : null
 
   const relationLabels = {
     placeholder: t('projects.form.selectPlaceholder'),
@@ -152,17 +152,6 @@ export function ProjectFormBody({ mode, onSuccess, onCancel, initialCode }: Proj
 
               <RelationSelectField
                 control={form.control}
-                name="source_id"
-                metaKey="source_id"
-                label={t('projects.form.source')}
-                resource={SOURCES_FOR_SELECT_RESOURCE}
-                searchPlaceholder={t('projects.form.sourceSearch')}
-                selected={original?.source ?? null}
-                {...relationLabels}
-              />
-
-              <RelationSelectField
-                control={form.control}
                 name="business_function_id"
                 metaKey="business_function_id"
                 label={t('projects.form.businessFunction')}
@@ -199,6 +188,22 @@ export function ProjectFormBody({ mode, onSuccess, onCancel, initialCode }: Proj
                 resource={REFERENTS_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('projects.form.partnerSearch')}
                 selected={original?.partner ?? null}
+                {...relationLabels}
+              />
+
+              <RelationSelectField
+                control={form.control}
+                name="operational_site_id"
+                metaKey="operational_site_id"
+                label={t('projects.form.operationalSite')}
+                hint={t('projects.form.hints.operationalSite')}
+                resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('projects.form.operationalSiteSearch')}
+                selected={
+                  original?.operational_site
+                    ? { id: original.operational_site.id, name: original.operational_site.label }
+                    : null
+                }
                 {...relationLabels}
               />
             </div>

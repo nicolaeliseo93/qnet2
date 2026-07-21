@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { Can } from '@/features/auth/can'
 import { MetaField } from '@/features/authorization/MetaField'
 import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select-api'
-import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-api'
+import { CAMPAIGNS_FOR_SELECT_RESOURCE, type CampaignForSelectItem } from '@/features/campaigns/for-select-api'
 import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
@@ -23,7 +23,6 @@ import { NOTES_MAX_LENGTH } from '@/features/leads/lead-schema'
 import { ExtraFieldsEditor } from '@/features/leads/extra-fields-editor'
 import type { LeadDetail, LeadFormMode } from '@/features/leads/types'
 import type { ForSelectItem } from '@/features/for-select/types'
-import type { OperationalSiteForSelectItem } from '@/features/operational-sites/for-select-api'
 
 interface LeadFormBodyProps {
   mode: LeadFormMode
@@ -53,24 +52,23 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
   const notesValue = useWatch({ control: form.control, name: 'notes' })
   const notesLength = notesValue?.length ?? 0
 
-  // Directive 2026-07-21: the just-picked Sede's Regione, hydrated instantly
-  // from its `meta` (no extra fetch) so the trigger shows the right label the
-  // moment it auto-fills `state_id` — mirrors the `quickCreated` pattern in
-  // `RelationSelectField`. Wired as the Sede select's `onItemChange` (event
-  // handler, not a derived-state effect); a site with no region leaves the
-  // current Regione untouched, and the user can always override/clear it.
-  const [autoFilledState, setAutoFilledState] = useState<RelationFieldRef | null>(null)
-  const handleSiteItemChange = (item: ForSelectItem | null) => {
-    // `RelationSelectField.onItemChange` is typed against the domain-agnostic
-    // `ForSelectItem` (mirrors `opportunity-relation-meta.ts`'s
-    // `RegistryForSelectItem` pattern); this field is always bound to the
-    // `operational-sites` resource, so its `meta` is really the richer
-    // `OperationalSiteForSelectMeta`.
-    const site = item as OperationalSiteForSelectItem | null
-    const stateId = site?.meta?.state_id
-    if (stateId == null) return
-    form.setValue('state_id', stateId, { shouldDirty: true, shouldValidate: true })
-    setAutoFilledState({ id: stateId, name: site?.meta?.state_label ?? '' })
+  // Project -> campaign -> lead prefill chain: the just-picked Campaign's Sede,
+  // hydrated instantly from its `meta` (no extra fetch) so the trigger shows
+  // the right label the moment it auto-fills `operational_site_id` — mirrors
+  // the (removed, directive 2026-07-21) Sede->Regione `quickCreated`-style
+  // pattern. Wired as the Campaign select's `onItemChange` (event handler,
+  // not a derived-state effect); a campaign with no Sede leaves the current
+  // value untouched, and the user can always override/clear it (prefill, not
+  // a lock). Unlike the superseded Sede->Regione auto-fill, this does NOT
+  // touch `state_id`: directive 2026-07-21 made the Regione a free,
+  // never-inherited field.
+  const [autoFilledSite, setAutoFilledSite] = useState<RelationFieldRef | null>(null)
+  const handleCampaignItemChange = (item: ForSelectItem | null) => {
+    const campaign = item as CampaignForSelectItem | null
+    const site = campaign?.meta?.operational_site
+    if (site == null) return
+    form.setValue('operational_site_id', site.id, { shouldDirty: true, shouldValidate: true })
+    setAutoFilledSite({ id: site.id, name: site.label })
   }
 
   const selectLabels = {
@@ -145,6 +143,7 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
                 original?.campaign ? { id: original.campaign.id, name: original.campaign.name } : null
               }
               required
+              onItemChange={handleCampaignItemChange}
               {...selectLabels}
             />
           </FormSection>
@@ -165,11 +164,11 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
                 resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('leads.form.operationalSiteSearch')}
                 selected={
-                  original?.operational_site
+                  autoFilledSite ??
+                  (original?.operational_site
                     ? { id: original.operational_site.id, name: original.operational_site.label }
-                    : null
+                    : null)
                 }
-                onItemChange={handleSiteItemChange}
                 {...selectLabels}
               />
 
@@ -180,7 +179,7 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
                 label={t('leads.form.state')}
                 resource={STATES_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('leads.form.stateSearch')}
-                selected={autoFilledState ?? original?.state ?? null}
+                selected={original?.state ?? null}
                 {...selectLabels}
               />
 

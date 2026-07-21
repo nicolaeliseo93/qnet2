@@ -24,8 +24,6 @@ function project(overrides: Partial<ProjectDetailWithPermissions> = {}): Project
     description: null,
     pipeline_status_id: 3,
     pipeline_status: { id: 3, name: 'Active', color: 'blue' },
-    source_id: null,
-    source: null,
     business_function_id: null,
     business_function: null,
     country_id: 1,
@@ -41,6 +39,8 @@ function project(overrides: Partial<ProjectDetailWithPermissions> = {}): Project
     product_category: null,
     partner_id: null,
     partner: null,
+    operational_site_id: null,
+    operational_site: null,
     start_date: null,
     end_date: null,
     total_budget: '1000.00',
@@ -156,5 +156,24 @@ describe('ProjectDetailView — activity log section', () => {
 
     expect(screen.queryByText('Activity log')).not.toBeInTheDocument()
     expect(activityLogSectionMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProjectDetailView — Sede (operational site)', () => {
+  it('shows the linked Sede label', () => {
+    render(
+      <ProjectDetailView
+        project={project({ operational_site_id: 8, operational_site: { id: 8, label: 'Warehouse A' } })}
+      />,
+    )
+
+    expect(screen.getByText('Warehouse A')).toBeInTheDocument()
+  })
+
+  it('shows an empty placeholder when no Sede is linked', () => {
+    render(<ProjectDetailView project={project({ operational_site_id: null, operational_site: null })} />)
+
+    expect(screen.getByText('Site')).toBeInTheDocument()
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
   })
 })

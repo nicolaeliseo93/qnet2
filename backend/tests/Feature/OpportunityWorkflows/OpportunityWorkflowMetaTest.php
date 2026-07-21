@@ -52,16 +52,16 @@ it('criterion-fields: 200 with the 4 allow-listed fields and correct for_select_
 // default-statuses — GET/PUT (AC-005/AC-010, happy + system-row guard)
 // ---------------------------------------------------------------------------
 
-it('default-statuses: GET 200 always exposes the 2 global system rows, ordered (AC-005)', function () {
+it('default-statuses: GET 200 always exposes the 3 global system rows, ordered (AC-005)', function () {
     $actor = opportunityWorkflowUserWith(['view']);
     Sanctum::actingAs($actor);
 
     $data = $this->getJson('/api/opportunity-workflows/default-statuses')->assertOk()->json('data');
 
-    expect(collect($data)->pluck('system_key')->all())->toBe(['open', 'closed']);
+    expect(collect($data)->pluck('system_key')->all())->toBe(['open', 'closed_won', 'closed_lost']);
 });
 
-it('default-statuses: PUT syncs custom rows, pinning open first / closed last', function () {
+it('default-statuses: PUT syncs custom rows, pinning open first / closed_won + closed_lost last', function () {
     $actor = opportunityWorkflowUserWith(['view', 'update']);
     Sanctum::actingAs($actor);
 
@@ -73,9 +73,9 @@ it('default-statuses: PUT syncs custom rows, pinning open first / closed last', 
 
     $data = collect($response->json('data'));
 
-    expect($data)->toHaveCount(3)
+    expect($data)->toHaveCount(4)
         ->and($data->first()['system_key'])->toBe('open')
-        ->and($data->last()['system_key'])->toBe('closed')
+        ->and($data->last()['system_key'])->toBe('closed_lost')
         ->and($data->firstWhere('name', 'In corso'))->not->toBeNull();
 
     $this->assertDatabaseHas('opportunity_workflow_statuses', [
@@ -93,7 +93,7 @@ it('default-statuses: PUT 422 when attempting to change a global system row\'s g
 
     $this->putJson('/api/opportunity-workflows/default-statuses', [
         'statuses' => [
-            ['id' => $globalOpen->id, 'name' => 'Aperta', 'group' => 'closed'],
+            ['id' => $globalOpen->id, 'name' => 'Aperta', 'group' => 'closed_won'],
         ],
     ])->assertStatus(422);
 

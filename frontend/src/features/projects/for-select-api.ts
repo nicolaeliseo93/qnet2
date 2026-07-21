@@ -22,9 +22,9 @@ export interface ProjectForSelectGeoRelation {
 }
 
 /**
- * Which geo levels the linked project already fills (spec 0027 D-5): the
- * Campaign form's source for which of the 4 cascade levels to lock/prefill
- * when a project is picked.
+ * Which geo levels the linked project already fills (spec 0027 D-5): tells
+ * the Campaign form which of the 4 cascade levels to lock/prefill when a
+ * project is picked.
  */
 export interface ProjectForSelectGeo {
   country: ProjectForSelectGeoRelation | null
@@ -35,14 +35,13 @@ export interface ProjectForSelectGeo {
 
 /**
  * The `meta` block carried by every `/projects/for-select` item (spec 0023):
- * the Campaign form's default-population source when a Project is linked
+ * feeds the Campaign form's default-population when a Project is linked
  * (AC-042) — no extra request, the picker's own response already carries it.
  * `total_budget`/`allocated_budget`/`remaining_budget` are decimal columns
  * cast `decimal:2`, serialized as numeric strings. `geo` (spec 0027 D-5) is
  * the project's own geo cascade, used to lock/prefill the campaign form.
  */
 export interface ProjectForSelectMeta {
-  source: ProjectForSelectRelation | null
   partner: ProjectForSelectRelation | null
   pipeline_status: ProjectForSelectRelation
   business_function: ProjectForSelectRelation | null
@@ -52,6 +51,8 @@ export interface ProjectForSelectMeta {
   allocated_budget: string
   remaining_budget: string | null
   geo: ProjectForSelectGeo
+  /** The project's own Sede, inherited as a prefill (never a lock) by a campaign linking this project. */
+  operational_site: ProjectForSelectRelation | null
 }
 
 /** A single project option as returned by `GET /api/projects/for-select`, label = "PRJ-0001 — Name". */

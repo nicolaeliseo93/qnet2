@@ -49,7 +49,9 @@ if (! function_exists('convertibleLeadFixture')) {
      * every reference needed to make the derivation succeed: a campaign
      * whose business function/product category ARE set (spec 0044,
      * mirrors OpportunityFromLeadTest's completeLead()), an operator, and a
-     * site. Returns both the payload and the models tests assert against.
+     * site. `source_id` is the LEAD's own (the campaign no longer carries a
+     * source; the campaign-source fallback was removed). Returns both the
+     * payload and the models tests assert against.
      *
      * @return array{payload: array<string, mixed>, registry: Registry, source: Source, businessFunction: BusinessFunction, productCategory: ProductCategory, operator: User, site: OperationalSite}
      */
@@ -60,7 +62,6 @@ if (! function_exists('convertibleLeadFixture')) {
         $businessFunction = BusinessFunction::factory()->create();
         $productCategory = ProductCategory::factory()->create(['business_function_id' => $businessFunction->id]);
         $campaign = Campaign::factory()->create([
-            'source_id' => $source->id,
             'business_function_id' => $businessFunction->id,
             'product_category_id' => $productCategory->id,
         ]);
@@ -70,6 +71,7 @@ if (! function_exists('convertibleLeadFixture')) {
         return [
             'payload' => [
                 'registry_id' => $registry->id,
+                'source_id' => $source->id,
                 'campaign_id' => $campaign->id,
                 'operator_id' => $operator->id,
                 'operational_site_id' => $site->id,

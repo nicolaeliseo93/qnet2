@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\OpportunityWorkflows\Concerns;
 
 use App\DataObjects\OpportunityWorkflows\CreateOpportunityWorkflowData;
-use App\Enums\StatusGroup;
+use App\Enums\WorkflowStatusGroup;
 use App\Enums\WorkflowStatusSystemKey;
 use App\Models\OpportunityWorkflow;
 use App\Support\OpportunityWorkflows\CriterionFieldRegistry;
@@ -54,9 +54,10 @@ trait ValidatesWorkflowCriteria
             'statuses' => ['sometimes', 'array'],
             'statuses.*.name' => ['required', 'string', 'max:191'],
             'statuses.*.color' => ['nullable', 'string', 'max:32'],
-            'statuses.*.group' => ['required', Rule::enum(StatusGroup::class)],
-            // Create carries the 2 pinned rows tagged open/closed so the user
-            // can name them up front (AC-004); a custom row is null/absent.
+            'statuses.*.group' => ['required', Rule::enum(WorkflowStatusGroup::class)],
+            // Create carries the 3 pinned rows tagged open/closed_won/
+            // closed_lost so the user can name them up front (AC-004); a custom
+            // row is null/absent.
             'statuses.*.system_key' => ['sometimes', 'nullable', Rule::enum(WorkflowStatusSystemKey::class)],
         ];
 

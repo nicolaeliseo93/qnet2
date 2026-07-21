@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\StatusGroup;
 use App\Models\BusinessFunction;
 use App\Models\Opportunity;
 use App\Models\OpportunityWorkflow;
@@ -19,10 +18,10 @@ uses(TestCase::class, RefreshDatabase::class);
 
 if (! function_exists('workflowWithSystemStatuses')) {
     /**
-     * A workflow carrying its own pinned open/closed system rows (AC-004,
-     * normally created by the Lane A configurator service — not built by this
-     * lane — so tests build them directly via the factory, mirroring the
-     * migration's seedGlobalDefaultSet shape).
+     * A workflow carrying its own pinned open/closed_won/closed_lost system
+     * rows (AC-004, normally created by the Lane A configurator service — not
+     * built by this lane — so tests build them directly via the factory,
+     * mirroring the migration's regenerated system-row shape).
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -30,21 +29,11 @@ if (! function_exists('workflowWithSystemStatuses')) {
     {
         $workflow = OpportunityWorkflow::factory()->create($attributes);
 
-        OpportunityWorkflowStatus::factory()->create([
-            'opportunity_workflow_id' => $workflow->id,
-            'system_key' => 'open',
-            'name' => 'Aperta',
-            'sort_order' => 0,
-            'group' => StatusGroup::Open,
-        ]);
-
-        OpportunityWorkflowStatus::factory()->create([
-            'opportunity_workflow_id' => $workflow->id,
-            'system_key' => 'closed',
-            'name' => 'Chiusa',
-            'sort_order' => 999,
-            'group' => StatusGroup::Closed,
-        ]);
+        foreach (['open', 'closed_won', 'closed_lost'] as $key) {
+            OpportunityWorkflowStatus::factory()
+                ->system($key)
+                ->create(['opportunity_workflow_id' => $workflow->id]);
+        }
 
         return $workflow;
     }
@@ -173,12 +162,12 @@ it('re-maps by system_key when the resolved set changes and the current status d
     $oldWorkflow = workflowWithSystemStatuses();
     $newWorkflow = workflowWithSystemStatuses();
 
-    $oldClosed = $oldWorkflow->statuses()->where('system_key', 'closed')->sole();
+    $oldClosed = $oldWorkflow->statuses()->where('system_key', 'closed_won')->sole();
     $opportunity = Opportunity::factory()->create(['opportunity_workflow_status_id' => $oldClosed->id]);
 
     $target = workflowResolver()->targetStatus($opportunity, $newWorkflow);
 
-    $newClosed = $newWorkflow->statuses()->where('system_key', 'closed')->sole();
+    $newClosed = $newWorkflow->statuses()->where('system_key', 'closed_won')->sole();
     expect($target->id)->toBe($newClosed->id);
 });
 

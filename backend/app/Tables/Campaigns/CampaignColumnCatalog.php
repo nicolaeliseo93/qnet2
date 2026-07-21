@@ -9,10 +9,10 @@ namespace App\Tables\Campaigns;
  *
  * `code`/`name`/`start_date`/`end_date`/`total_budget`/`target_lead`/
  * `created_at` are real DB columns handled entirely by the generic engine.
- * `project`/`pipeline_status`/`source` have no real column of
+ * `project`/`pipeline_status` have no real column of
  * their own and are DERIVED, resolved by CampaignsTableDefinition — only
- * `project` is sortable (a correlated subquery); `pipeline_status`/
- * `source` are filterable-only (spec 0023 table_definitions).
+ * `project` is sortable (a correlated subquery); `pipeline_status`
+ * is filterable-only (spec 0023 table_definitions).
  *
  * `country`/`state`/`province`/`city`/`geo_scope` (spec 0027, BR-5/D-2) are
  * DISPLAY-ONLY: neither sortable nor filterable. The MERGED (campaign-or-
@@ -50,12 +50,12 @@ final class CampaignColumnCatalog
                 'searchable' => true,
             ],
             self::derivedColumn('pipeline_status', 'campaigns.columns.pipeline_status'),
-            self::derivedColumn('source', 'campaigns.columns.source'),
             self::displayOnlyColumn('country', 'campaigns.columns.country'),
             self::displayOnlyColumn('state', 'campaigns.columns.state'),
             self::displayOnlyColumn('province', 'campaigns.columns.province'),
             self::displayOnlyColumn('city', 'campaigns.columns.city'),
             self::displayOnlyColumn('geo_scope', 'campaigns.columns.geo_scope'),
+            self::displayOnlyColumn('operational_site', 'campaigns.columns.operational_site'),
             [
                 'id' => 'start_date',
                 'label' => 'campaigns.columns.start_date',
@@ -194,6 +194,14 @@ final class CampaignColumnCatalog
                 'type' => 'danger',
                 'confirm' => true,
                 'permission' => 'campaigns.delete',
+            ],
+            [
+                'key' => 'duplicate',
+                'label' => 'actions.duplicate',
+                'icon' => 'copy',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'campaigns.create',
             ],
             [
                 'key' => 'activity',

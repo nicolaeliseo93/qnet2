@@ -19,8 +19,8 @@ function values(overrides: Partial<CampaignFormValues> = {}): CampaignFormValues
     project_id: null,
     name: 'Spring push',
     description: null,
-    source_id: null,
     partner_id: null,
+    operational_site_id: null,
     pipeline_status_id: 1,
     business_function_id: 2,
     product_category_id: 4,
@@ -46,10 +46,10 @@ function original(overrides: Partial<CampaignDetail> = {}): CampaignDetail {
     project: null,
     name: 'Spring push',
     description: null,
-    source_id: null,
-    source: null,
     partner_id: null,
     partner: null,
+    operational_site_id: null,
+    operational_site: null,
     derived_from_project: false,
     pipeline_status_id: 1,
     pipeline_status: { id: 1, name: 'Active', color: 'blue' },
@@ -84,8 +84,8 @@ describe('buildCreatePayload — standalone (BR-2/BR-5)', () => {
       name: 'Spring push',
       project_id: null,
       description: null,
-      source_id: null,
       partner_id: null,
+      operational_site_id: null,
       pipeline_status_id: 1,
       business_function_id: 2,
       product_category_id: 4,
@@ -254,6 +254,22 @@ describe('buildUpdatePayload — geo per-level diff (spec 0027 BR-5)', () => {
   it('diffs an always-unlocked level normally', () => {
     const payload = buildUpdatePayload(values({ province_id: 5 }), original())
     expect(payload).toEqual({ province_id: 5 })
+  })
+
+  it('includes the changed operational_site_id (always-own field, like partner_id)', () => {
+    const payload = buildUpdatePayload(
+      values({ operational_site_id: 81 }),
+      original({ operational_site_id: null }),
+    )
+    expect(payload).toEqual({ operational_site_id: 81 })
+  })
+
+  it('omits operational_site_id when unchanged', () => {
+    const payload = buildUpdatePayload(
+      values({ operational_site_id: 81 }),
+      original({ operational_site_id: 81 }),
+    )
+    expect(payload).toEqual({})
   })
 
   it('unlinking the project sends every previously-locked level, regardless of value equality', () => {

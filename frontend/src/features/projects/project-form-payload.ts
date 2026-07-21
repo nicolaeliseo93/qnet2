@@ -20,7 +20,6 @@ export function buildCreatePayload(values: ProjectFormValues): CreateProjectPayl
     // Nullable/optional (spec 0039 D-3): the server falls back to the system "Nuovo" status when omitted.
     pipeline_status_id: values.pipeline_status_id,
     description: values.description,
-    source_id: values.source_id,
     business_function_id: values.business_function_id,
     country_id: values.country_id,
     state_id: values.state_id,
@@ -28,6 +27,7 @@ export function buildCreatePayload(values: ProjectFormValues): CreateProjectPayl
     city_id: values.city_id,
     product_category_id: values.product_category_id,
     partner_id: values.partner_id,
+    operational_site_id: values.operational_site_id,
     start_date: values.start_date || null,
     end_date: values.end_date || null,
     total_budget: values.total_budget,
@@ -56,9 +56,6 @@ export function buildUpdatePayload(
   if (values.description !== original.description) {
     payload.description = values.description
   }
-  if (values.source_id !== original.source_id) {
-    payload.source_id = values.source_id
-  }
   if (values.business_function_id !== original.business_function_id) {
     payload.business_function_id = values.business_function_id
   }
@@ -79,6 +76,9 @@ export function buildUpdatePayload(
   }
   if (values.partner_id !== original.partner_id) {
     payload.partner_id = values.partner_id
+  }
+  if (values.operational_site_id !== original.operational_site_id) {
+    payload.operational_site_id = values.operational_site_id
   }
   const startDate = values.start_date || null
   if (startDate !== original.start_date) {

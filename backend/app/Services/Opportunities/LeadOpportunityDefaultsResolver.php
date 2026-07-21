@@ -18,8 +18,10 @@ use Illuminate\Database\Eloquent\Model;
  * drift apart.
  *
  * `registry_id` comes straight off the lead (spec 0041 D-3: `registry_id` is
- * now the LEAD's own, no longer the campaign's); `source_id` falls back to
- * the campaign's own source when the lead has none. `referent_id` is NOT
+ * now the LEAD's own, no longer the campaign's); `source_id` derives ONLY
+ * from the lead's own source — the campaign-source fallback was removed
+ * once Campaign stopped carrying a `source` (the campaign/project modules no
+ * longer have a source_id/source at all). `referent_id` is NOT
  * derived (spec 0041 D-3): it stays a plain field, scoped to the chosen
  * registry (BR-4, spec 0040).
  *
@@ -62,7 +64,6 @@ final class LeadOpportunityDefaultsResolver
         'source',
         'operator',
         'opportunity',
-        'campaign.source',
         'campaign.businessFunction',
         'campaign.productCategory',
         'campaign.project.businessFunction',
@@ -75,7 +76,7 @@ final class LeadOpportunityDefaultsResolver
 
         $campaign = $lead->campaign;
 
-        $effectiveSource = $lead->source_id !== null ? $lead->source : $campaign->source;
+        $effectiveSource = $lead->source;
 
         $values = [
             'source_id' => $effectiveSource?->id,

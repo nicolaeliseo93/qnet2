@@ -47,9 +47,11 @@ function baseFields(t: TFunction) {
       .min(1, t('campaigns.form.nameRequired'))
       .max(NAME_MAX_LENGTH, t('campaigns.form.nameMax')),
     description: z.string().nullable(),
-    // Always the campaign's own, editable relation (AC-042 prefills but never locks these).
-    source_id: z.number().nullable(),
+    // Always the campaign's own, editable relation (AC-042 prefills but never locks it).
     partner_id: z.number().nullable(),
+    // The Sede: same prefill-not-lock treatment as partner_id above — picking
+    // a project prefills it from `meta.operational_site`, still freely editable.
+    operational_site_id: z.number().nullable(),
     // Derived (BR-2): required when standalone, forced null/read-only when linked;
     // held nullable so the controlled selects can represent "unset" — the
     // required-when-standalone superRefine below mirrors the backend's rule.
@@ -69,10 +71,12 @@ function baseFields(t: TFunction) {
     // from `CampaignDetail.geo_locked_levels` (edit). Drives both
     // `<GeoSelect lockedLevels>` and this schema's hierarchy rule.
     geo_locked_levels: z.array(z.enum(GEO_LEVELS)),
-    // Date inputs hold `''` for "empty" (never `null`); both required now
-    // (dates are the campaign's own, never inherited from the project).
+    // Date inputs hold `''` for "empty" (never `null`); the campaign's own,
+    // never inherited from the project. `start_date` is required; `end_date`
+    // is optional (converted to null at the payload boundary), only its
+    // ordering vs `start_date` is enforced (BR-6).
     start_date: z.string().min(1, t('campaigns.form.startDateRequired')),
-    end_date: z.string().min(1, t('campaigns.form.endDateRequired')),
+    end_date: z.string(),
     total_budget: z.number().nonnegative(t('campaigns.form.totalBudgetInvalid')).nullable(),
     target_lead: z.number().int().nonnegative(t('campaigns.form.targetLeadInvalid')).nullable(),
   }

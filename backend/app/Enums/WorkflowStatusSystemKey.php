@@ -3,17 +3,19 @@
 namespace App\Enums;
 
 /**
- * The mandatory system rows every OpportunityWorkflowStatus set (a
- * workflow's own, or the global default set) carries (spec 0047, AC-004):
- * an initial 'open' row and a terminal 'closed' row, pinned and
- * non-deletable. Persisted as `opportunity_workflow_statuses.system_key`
- * (nullable — custom rows have none). Never mass-assignable (only the
- * service that creates/syncs a workflow's status set writes it).
+ * The mandatory system rows every OpportunityWorkflowStatus set (a workflow's
+ * own, or the global default set) carries (spec 0047, AC-004): an initial
+ * 'open' row and the two terminal closed-outcome rows 'closed_won'/
+ * 'closed_lost', all pinned and non-deletable. Persisted as
+ * `opportunity_workflow_statuses.system_key` (nullable — custom rows have
+ * none). Never mass-assignable (only the service that creates/syncs a
+ * workflow's status set writes it).
  */
 enum WorkflowStatusSystemKey: string
 {
     case Open = 'open';
-    case Closed = 'closed';
+    case ClosedWon = 'closed_won';
+    case ClosedLost = 'closed_lost';
 
     /**
      * @return array<int, string>
@@ -21,5 +23,16 @@ enum WorkflowStatusSystemKey: string
     public static function values(): array
     {
         return array_column(self::cases(), 'value');
+    }
+
+    /**
+     * The two terminal closed-outcome system rows, in pinned order (positive
+     * before negative) — always placed last, after every custom row.
+     *
+     * @return array<int, self>
+     */
+    public static function closedKeys(): array
+    {
+        return [self::ClosedWon, self::ClosedLost];
     }
 }

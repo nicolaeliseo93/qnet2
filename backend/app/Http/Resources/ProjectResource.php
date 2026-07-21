@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\GeoScopeLevel;
+use App\Models\Address;
 use App\Models\Project;
 use App\Support\Geo\GeoNameLocalizer;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +12,13 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * @mixin Project
+ *
+ * `operational_site` (prefill-modifiable sede, no server-side inheritance)
+ * has no own name column: its label is composed from the site's primary
+ * address `line1` plus " - {city}" when present, the same composition
+ * LeadResource/OperationalSiteForSelectResource use. Relies on
+ * ProjectService::loadDetail() having eager-loaded
+ * `operationalSite.addresses.city`.
  */
 class ProjectResource extends JsonResource
 {
@@ -31,8 +39,6 @@ class ProjectResource extends JsonResource
             'pipeline_status' => $this->pipelineStatus !== null
                 ? ['id' => $this->pipelineStatus->id, 'name' => $this->pipelineStatus->name, 'color' => $this->pipelineStatus->color]
                 : null,
-            'source_id' => $this->source_id,
-            'source' => $this->summarize($this->source),
             'business_function_id' => $this->business_function_id,
             'business_function' => $this->summarize($this->businessFunction),
             'country_id' => $this->country_id,
@@ -48,6 +54,8 @@ class ProjectResource extends JsonResource
             'product_category' => $this->summarize($this->productCategory),
             'partner_id' => $this->partner_id,
             'partner' => $this->summarize($this->partner),
+            'operational_site_id' => $this->operational_site_id,
+            'operational_site' => $this->summarizeOperationalSite($this->operationalSite),
             'start_date' => $this->start_date,
             'end_date' => $this->end_date,
             'total_budget' => $totalBudget,
@@ -81,5 +89,31 @@ class ProjectResource extends JsonResource
     private function formatMoney(float $value): string
     {
         return number_format($value, 2, '.', '');
+    }
+
+    /**
+     * @return array{id: int, label: string}|null
+     */
+    private function summarizeOperationalSite(mixed $site): ?array
+    {
+        if ($site === null) {
+            return null;
+        }
+
+        /** @var Address|null $address */
+        $address = $site->addresses->first();
+
+        return ['id' => $site->id, 'label' => $this->composeSiteLabel($address)];
+    }
+
+    private function composeSiteLabel(?Address $address): string
+    {
+        if ($address === null) {
+            return '';
+        }
+
+        $city = $address->city?->localizedName();
+
+        return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
     }
 }

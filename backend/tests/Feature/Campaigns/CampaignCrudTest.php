@@ -342,6 +342,9 @@ it('update: 403 without campaigns.update', function () {
     $this->patchJson("/api/campaigns/{$target->id}", ['name' => 'Nope'])->assertForbidden();
 });
 
+// operational_site_id tests (sede inheritance cascade) live in
+// CampaignOperationalSiteTest.php (file-size split, engineering.md §6).
+
 // ---------------------------------------------------------------------------
 // spec 0025 (AC-001..AC-009 for campaigns, mirroring projects) — `code`
 // manual-on-create, replacing the former AC-029 "explicit code is ignored".
@@ -434,24 +437,6 @@ it('update: a `code` different from the persisted one -> 422, code unchanged (AC
 
     $this->assertDatabaseHas('campaigns', ['id' => $campaign->id, 'code' => 'CMP-0001']);
 });
-
-// ---------------------------------------------------------------------------
-// start_date/end_date — now required on every campaign (linked or standalone)
-// ---------------------------------------------------------------------------
-
-it('create: 422 when start_date/end_date is missing, even for a linked campaign', function (string $missing) {
-    $actor = campaignUserWith(['create']);
-    $project = Project::factory()->create();
-    Sanctum::actingAs($actor);
-
-    $payload = ['name' => 'Linked No Date', 'project_id' => $project->id, ...campaignStoreDates()];
-    unset($payload[$missing]);
-
-    $this->postJson('/api/campaigns', $payload)
-        ->assertStatus(422)->assertJsonValidationErrors($missing);
-
-    expect(Campaign::count())->toBe(0);
-})->with(['start_date', 'end_date']);
 
 // ---------------------------------------------------------------------------
 // next-code — GET /api/campaigns/next-code (spec 0025, auto-fill suggestion)

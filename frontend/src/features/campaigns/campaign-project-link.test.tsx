@@ -13,7 +13,7 @@ import type { ProjectGeoMeta } from '@/features/campaigns/campaign-geo'
 
 /**
  * Spec 0023 FRONTEND acceptance criteria:
- * - AC-042: picking a Project prefills Source/Partner (editable) and
+ * - AC-042: picking a Project prefills Partner (editable) and
  *   forces the 3 classification fields read-only from the project's values,
  *   which are excluded from the payload regardless of what they display.
  * - AC-043: clearing the Project makes the 3 classification fields editable
@@ -143,7 +143,6 @@ function projectForSelectItem(overrides: {
     id: TEST_PROJECT_ID,
     label: 'PRJ-0042 — Acme rollout',
     meta: {
-      source: { id: 21, label: 'Referral' },
       partner: { id: 31, label: 'Jane Partner' },
       pipeline_status: { id: 41, label: 'Active' },
       business_function: { id: 51, label: 'Marketing' },
@@ -152,6 +151,7 @@ function projectForSelectItem(overrides: {
       total_budget: '1000.00',
       allocated_budget: '600.00',
       remaining_budget: '400.00',
+      operational_site: { id: 81, label: 'Warehouse A' },
       ...overrides.meta,
       geo: {
         country: { id: 61, name: 'Italy' },
@@ -174,10 +174,10 @@ function campaign(
     project: null,
     name: 'Spring push',
     description: null,
-    source_id: null,
-    source: null,
     partner_id: null,
     partner: null,
+    operational_site_id: null,
+    operational_site: null,
     derived_from_project: false,
     pipeline_status_id: 1,
     pipeline_status: { id: 1, name: 'Active', color: 'blue' },
@@ -226,7 +226,7 @@ beforeEach(() => {
 })
 
 describe('CampaignForm — selecting a Project (AC-042)', () => {
-  it('prefills Source/Partner, forces the 3 classification fields read-only, and locks the geo levels the project fills (BR-5)', async () => {
+  it('prefills Partner, forces the 3 classification fields read-only, and locks the geo levels the project fills (BR-5)', async () => {
     createCampaignMock.mockResolvedValue(campaign({ project_id: TEST_PROJECT_ID }))
 
     render(<CampaignForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
@@ -237,18 +237,19 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Linked campaign' } })
     fireEvent.click(screen.getByRole('button', { name: 'select Project' }))
 
-    await waitFor(() => expect(screen.getByTestId('value-Source')).toHaveTextContent('21'))
-    expect(screen.getByTestId('value-Partner')).toHaveTextContent('31')
+    await waitFor(() => expect(screen.getByTestId('value-Partner')).toHaveTextContent('31'))
     expect(screen.getByTestId('value-Status')).toHaveTextContent('41')
     expect(screen.getByTestId('value-Business function')).toHaveTextContent('51')
     expect(screen.getByTestId('value-Product category')).toHaveTextContent('71')
+    // The Sede is prefilled from the project's own meta (project -> campaign -> lead chain).
+    expect(screen.getByTestId('value-Site')).toHaveTextContent('81')
 
-    // The 3 derived fields are forced read-only while linked; Source/Partner stay editable.
+    // The 3 derived fields are forced read-only while linked; Partner/Sede stay editable.
     expect(screen.getByTestId('disabled-Status')).toHaveTextContent('true')
     expect(screen.getByTestId('disabled-Business function')).toHaveTextContent('true')
     expect(screen.getByTestId('disabled-Product category')).toHaveTextContent('true')
-    expect(screen.getByTestId('disabled-Source')).toHaveTextContent('false')
     expect(screen.getByTestId('disabled-Partner')).toHaveTextContent('false')
+    expect(screen.getByTestId('disabled-Site')).toHaveTextContent('false')
 
     // BR-5: the project's own country is prefilled and locked; the rest stay editable/empty.
     await waitFor(() => expect(screen.getByTestId('geo-select')).toHaveAttribute('data-country', '61'))
@@ -269,8 +270,34 @@ describe('CampaignForm — selecting a Project (AC-042)', () => {
     expect(payload).not.toHaveProperty('product_category_id')
     expect(payload).not.toHaveProperty('country_id')
     expect(payload.project_id).toBe(TEST_PROJECT_ID)
-    expect(payload.source_id).toBe(21)
     expect(payload.partner_id).toBe(31)
+    expect(payload.operational_site_id).toBe(81)
+  })
+
+  it('prefills the SELECTED project meta, not items[0]: the for-select page returns other projects first, the picked one is appended', async () => {
+    // The endpoint returns the first page (ordered by name) PLUS the requested
+    // id appended at the end, so the picked project is NOT items[0]. A decoy
+    // sits first with a different Sede; the prefill must read the picked one.
+    const decoy = {
+      id: 777,
+      label: 'PRJ-0001 — Alpha',
+      meta: { ...projectForSelectItem().meta, operational_site: { id: 1, label: 'Decoy site' } },
+    }
+    fetchProjectsForSelectMock.mockResolvedValue({
+      items: [decoy, projectForSelectItem()],
+      export_link: null,
+      pagination: { total: 2, offset: 0, limit: 25, total_pages: 1 },
+    })
+
+    render(<CampaignForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'select Project' }))
+
+    // The picked project's Sede (81), never the decoy's (1).
+    await waitFor(() => expect(screen.getByTestId('value-Site')).toHaveTextContent('81'))
   })
 })
 
@@ -281,6 +308,8 @@ describe('CampaignForm — deselecting the Project (AC-043)', () => {
       project: { id: TEST_PROJECT_ID, code: 'PRJ-0042', name: 'Acme rollout' },
       derived_from_project: true,
       geo_locked_levels: ['country'],
+      operational_site_id: 81,
+      operational_site: { id: 81, label: 'Warehouse A' },
     })
 
     render(
@@ -299,6 +328,8 @@ describe('CampaignForm — deselecting the Project (AC-043)', () => {
     expect(screen.getByTestId('value-Product category')).toHaveTextContent('')
     expect(screen.getByTestId('geo-select')).toHaveAttribute('data-locked', '')
     expect(screen.getByTestId('geo-select')).toHaveAttribute('data-country', '')
+    // The Sede is an always-own field (like Partner): unlinking never resets it.
+    expect(screen.getByTestId('value-Site')).toHaveTextContent('81')
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 

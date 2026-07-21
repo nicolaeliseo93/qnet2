@@ -146,8 +146,6 @@ function project(
     description: null,
     pipeline_status_id: 3,
     pipeline_status: { id: 3, name: 'Active', color: 'blue' },
-    source_id: null,
-    source: null,
     business_function_id: 2,
     business_function: { id: 2, name: 'Sales' },
     country_id: 1,
@@ -163,6 +161,8 @@ function project(
     product_category: { id: 4, name: 'Widgets' },
     partner_id: null,
     partner: null,
+    operational_site_id: null,
+    operational_site: null,
     start_date: '2026-01-01',
     end_date: '2026-12-31',
     total_budget: null,
@@ -432,5 +432,43 @@ describe('ProjectForm — end_date validation (BR-6)', () => {
       expect(screen.getByText('End date must not be earlier than the start date.')).toBeInTheDocument(),
     )
     expect(updateProjectMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProjectForm — Sede (operational site)', () => {
+  it('renders the Site field and pre-fills it from the loaded project in edit mode', async () => {
+    render(
+      <ProjectForm
+        mode={{
+          type: 'edit',
+          project: project({ operational_site_id: 8, operational_site: { id: 8, label: 'Warehouse A' } }),
+        }}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByTestId('select-Site')).toBeInTheDocument())
+    expect(screen.getByTestId('select-Site')).toHaveTextContent('8')
+  })
+
+  it('sends the picked operational_site_id in the create payload', async () => {
+    createProjectMock.mockResolvedValue(project())
+
+    render(<ProjectForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Acme rollout' } })
+    fireEvent.click(screen.getByTestId('select-Status'))
+    fireEvent.click(screen.getByTestId('geo-select'))
+    fireEvent.click(screen.getByTestId('select-Site'))
+    completeRequiredCreateFields()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(createProjectMock).toHaveBeenCalledTimes(1))
+    expect(createProjectMock.mock.calls[0][0].operational_site_id).toBe(3)
   })
 })

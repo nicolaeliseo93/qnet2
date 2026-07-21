@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Http\Resources\Abstracts\ForSelectResource;
+use App\Models\Address;
 use App\Models\Project;
 use App\Support\Geo\GeoNameLocalizer;
 use Illuminate\Database\Eloquent\Model;
@@ -11,10 +12,12 @@ use Illuminate\Http\Request;
 /**
  * For-select projection of a Project (GET /api/projects/for-select, spec
  * 0023). Label is "{code} — {name}"; `meta` carries the campaign-form
- * defaults (source/partner/pipeline_status/business_function/state/
- * product_category, each {id, label} or null) plus the BR-7 budget figures,
- * so selecting a project in the Campaign form precompiles it with no extra
- * request (ADR 0011).
+ * defaults (partner/pipeline_status/business_function/state/
+ * product_category/operational_site, each {id, label} or null) plus the BR-7
+ * budget figures, so selecting a project in the Campaign form precompiles it
+ * with no extra request (ADR 0011). `operational_site` (prefill-modifiable
+ * sede) has no own name column: its label is composed the same way
+ * LeadResource/OperationalSiteForSelectResource do.
  *
  * @mixin Project
  */
@@ -32,12 +35,12 @@ class ProjectForSelectResource extends ForSelectResource
             'id' => $this->id,
             'label' => sprintf('%s — %s', $this->code, $this->name),
             'meta' => [
-                'source' => $this->summarize($this->source),
                 'partner' => $this->summarize($this->partner),
                 'pipeline_status' => $this->summarize($this->pipelineStatus),
                 'business_function' => $this->summarize($this->businessFunction),
                 'state' => $this->summarize($this->state, geo: true),
                 'product_category' => $this->summarize($this->productCategory),
+                'operational_site' => $this->summarizeOperationalSite($this->operationalSite),
                 'total_budget' => $totalBudget === null ? null : $this->formatMoney((float) $totalBudget),
                 'allocated_budget' => $this->formatMoney($allocatedBudget),
                 'remaining_budget' => $totalBudget === null ? null : $this->formatMoney((float) $totalBudget - $allocatedBudget),
@@ -90,5 +93,31 @@ class ProjectForSelectResource extends ForSelectResource
     private function formatMoney(float $value): string
     {
         return number_format($value, 2, '.', '');
+    }
+
+    /**
+     * @return array{id: int, label: string}|null
+     */
+    private function summarizeOperationalSite(mixed $site): ?array
+    {
+        if ($site === null) {
+            return null;
+        }
+
+        /** @var Address|null $address */
+        $address = $site->addresses->first();
+
+        return ['id' => $site->id, 'label' => $this->composeSiteLabel($address)];
+    }
+
+    private function composeSiteLabel(?Address $address): string
+    {
+        if ($address === null) {
+            return '';
+        }
+
+        $city = $address->city?->localizedName();
+
+        return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
     }
 }

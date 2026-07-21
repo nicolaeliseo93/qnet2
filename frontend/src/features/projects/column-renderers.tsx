@@ -1,4 +1,4 @@
-import { Boxes, Briefcase, Handshake, Radio } from 'lucide-react'
+import { Boxes, Briefcase, Handshake, MapPin } from 'lucide-react'
 import { DateTimeCell } from '@/features/table/cell-renderers'
 import {
   CodeBadgeCell,
@@ -24,7 +24,6 @@ import type { TableRendererMap } from '@/features/table/renderer-registry'
 export const projectColumnRenderers: TableRendererMap = {
   code: (params) => <CodeBadgeCell {...params} />,
   pipeline_status: (params) => <StatusBadgeCell {...params} />,
-  source: (params) => <RelationCell {...params} icon={Radio} />,
   business_function: (params) => <RelationCell {...params} icon={Briefcase} />,
   country: (params) => <RelationCell {...params} />,
   state: (params) => <RelationCell {...params} />,
@@ -33,6 +32,7 @@ export const projectColumnRenderers: TableRendererMap = {
   geo_scope: (params) => <GeoScopeCell {...params} />,
   product_category: (params) => <RelationCell {...params} icon={Boxes} />,
   partner: (params) => <RelationCell {...params} icon={Handshake} />,
+  operational_site: (params) => <RelationCell {...params} icon={MapPin} />,
   start_date: (params) => <DateCell {...params} />,
   end_date: (params) => <DateCell {...params} />,
   total_budget: (params) => <CurrencyCell {...params} />,

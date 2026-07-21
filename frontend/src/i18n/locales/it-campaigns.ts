@@ -12,7 +12,7 @@ export const campaigns = {
     project: 'Progetto',
     name: 'Denominazione',
     pipeline_status: 'Stato',
-    source: 'Fonte',
+    operational_site: 'Sede',
     country: 'Nazione',
     state: 'Regione',
     province: 'Provincia',
@@ -27,7 +27,6 @@ export const campaigns = {
   advancedFilters: {
     project: 'Progetto',
     pipelineStatus: 'Stato',
-    source: 'Fonte',
     partner: 'Partner',
     budgetRange: 'Budget',
     createdRange: 'Creato il',
@@ -53,7 +52,7 @@ export const campaigns = {
       },
       project: {
         title: 'Collegamento al progetto',
-        description: 'Collegando un progetto si precompilano Fonte e Partner qui sotto.',
+        description: 'Collegando un progetto si precompila Partner qui sotto.',
       },
       classification: {
         title: 'Classificazione',
@@ -77,6 +76,7 @@ export const campaigns = {
       project: 'Collegare un progetto precompila e blocca Classificazione e Geografia qui sotto.',
       classification: 'Ereditati dal progetto collegato.',
       partner: 'Compila se la campagna è richiesta dal partner (i costi sono imputati al partner).',
+      operationalSite: 'Precompilata dal progetto collegato quando ne selezioni uno; resta liberamente modificabile.',
       geography:
         'Nazione, regione, provincia e città seguono una cascata dall\'alto in basso; i livelli valorizzati da un progetto collegato sono ereditati e bloccati.',
     },
@@ -92,8 +92,6 @@ export const campaigns = {
     projectSearch: 'Cerca progetti…',
     status: 'Stato',
     statusSearch: 'Cerca stati…',
-    source: 'Fonte',
-    sourceSearch: 'Cerca fonti…',
     businessFunction: 'Funzione aziendale',
     businessFunctionSearch: 'Cerca funzioni aziendali…',
     businessFunctionRequired:
@@ -108,13 +106,14 @@ export const campaigns = {
       'La categoria prodotto è obbligatoria quando la campagna non è collegata a un progetto.',
     partner: 'Partner',
     partnerSearch: 'Cerca partner…',
+    operationalSite: 'Sede',
+    operationalSiteSearch: 'Cerca sedi…',
     selectPlaceholder: 'Seleziona…',
     selectEmpty: 'Nessun risultato trovato.',
     selectError: 'Impossibile caricare le opzioni.',
     startDate: 'Data inizio',
     startDateRequired: 'La data di inizio è obbligatoria.',
     endDate: 'Data fine',
-    endDateRequired: 'La data di fine è obbligatoria.',
     endDateBeforeStartDate: 'La data di fine non può essere precedente alla data di inizio.',
     totalBudget: 'Budget totale',
     totalBudgetInvalid: 'Inserisci un importo non negativo.',

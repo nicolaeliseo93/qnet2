@@ -17,6 +17,7 @@ export function buildModuleRoutes(): RouteObject[] {
       { path: `${base}/new`, element: <ModuleFormPage domain={entry.domain} /> },
       { path: `${base}/:id`, element: <ModuleDetailPage domain={entry.domain} /> },
       { path: `${base}/:id/edit`, element: <ModuleFormPage domain={entry.domain} /> },
+      { path: `${base}/:id/duplicate`, element: <ModuleFormPage domain={entry.domain} variant="duplicate" /> },
     ]
   })
 }

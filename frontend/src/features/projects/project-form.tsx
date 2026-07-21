@@ -26,11 +26,12 @@ export function ProjectForm(props: ProjectFormProps) {
   const { t } = useTranslation()
   const meta = useProjectFormMeta(props.mode)
 
-  // Create-only: fetch the next sequential code to auto-fill the (required,
-  // editable) `code` field. Kept uncached (staleTime/gcTime 0) so each new
-  // form gets a fresh suggestion; an error degrades gracefully to an empty
-  // field the user fills manually.
-  const isCreate = props.mode.type === 'create'
+  // Create AND duplicate (row action "duplicate" still submits via the create
+  // path): fetch the next sequential code to auto-fill the (required,
+  // editable) `code` field, discarding the source's own code. Kept uncached
+  // (staleTime/gcTime 0) so each new form gets a fresh suggestion; an error
+  // degrades gracefully to an empty field the user fills manually.
+  const isCreate = props.mode.type === 'create' || props.mode.type === 'duplicate'
   const nextCode = useQuery({
     queryKey: ['projects', 'next-code'],
     queryFn: fetchProjectNextCode,

@@ -34,10 +34,10 @@ final readonly class UpdateCampaignData
         public ?string $name = null,
         public ?string $description = null,
         public bool $descriptionSubmitted = false,
-        public ?int $sourceId = null,
-        public bool $sourceIdSubmitted = false,
         public ?int $partnerId = null,
         public bool $partnerIdSubmitted = false,
+        public ?int $operationalSiteId = null,
+        public bool $operationalSiteIdSubmitted = false,
         public ?int $pipelineStatusId = null,
         public bool $pipelineStatusIdSubmitted = false,
         public ?int $businessFunctionId = null,
@@ -75,10 +75,10 @@ final readonly class UpdateCampaignData
             name: array_key_exists('name', $data) ? (string) $data['name'] : null,
             description: array_key_exists('description', $data) ? $data['description'] : null,
             descriptionSubmitted: array_key_exists('description', $data),
-            sourceId: self::nullableInt($data, 'source_id'),
-            sourceIdSubmitted: array_key_exists('source_id', $data),
             partnerId: self::nullableInt($data, 'partner_id'),
             partnerIdSubmitted: array_key_exists('partner_id', $data),
+            operationalSiteId: self::nullableInt($data, 'operational_site_id'),
+            operationalSiteIdSubmitted: array_key_exists('operational_site_id', $data),
             pipelineStatusId: self::nullableInt($data, 'pipeline_status_id'),
             pipelineStatusIdSubmitted: array_key_exists('pipeline_status_id', $data),
             businessFunctionId: self::nullableInt($data, 'business_function_id'),
@@ -128,12 +128,12 @@ final readonly class UpdateCampaignData
             $attributes['description'] = $this->description;
         }
 
-        if ($this->sourceIdSubmitted) {
-            $attributes['source_id'] = $this->sourceId;
-        }
-
         if ($this->partnerIdSubmitted) {
             $attributes['partner_id'] = $this->partnerId;
+        }
+
+        if ($this->operationalSiteIdSubmitted) {
+            $attributes['operational_site_id'] = $this->operationalSiteId;
         }
 
         if ($this->pipelineStatusIdSubmitted) {

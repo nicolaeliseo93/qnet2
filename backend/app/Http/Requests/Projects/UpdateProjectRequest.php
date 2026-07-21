@@ -47,7 +47,6 @@ class UpdateProjectRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:191'],
             'pipeline_status_id' => ['sometimes', 'required', 'integer', Rule::exists('pipeline_statuses', 'id')],
             'description' => ['sometimes', 'nullable', 'string'],
-            'source_id' => ['sometimes', 'nullable', 'integer', Rule::exists('sources', 'id')],
             'business_function_id' => ['sometimes', 'required', 'integer', Rule::exists('business_functions', 'id')],
             'country_id' => ['sometimes', 'required', 'integer', Rule::exists('countries', 'id')],
             'state_id' => ['sometimes', 'nullable', 'integer', Rule::exists('states', 'id')],
@@ -55,8 +54,9 @@ class UpdateProjectRequest extends FormRequest
             'city_id' => ['sometimes', 'nullable', 'integer', Rule::exists('cities', 'id')],
             'product_category_id' => ['sometimes', 'required', 'integer', Rule::exists('product_categories', 'id')],
             'partner_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
+            'operational_site_id' => ['sometimes', 'nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'start_date' => ['sometimes', 'required', 'date'],
-            'end_date' => ['sometimes', 'required', 'date', 'after_or_equal:start_date'],
+            'end_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:start_date'],
             'total_budget' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'target_lead' => ['sometimes', 'nullable', 'integer', 'min:0'],
         ];

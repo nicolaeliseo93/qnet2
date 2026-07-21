@@ -61,6 +61,10 @@ export function CampaignFormScreen({ mode, onSuccess, onCancel }: ModuleFormScre
     return <CampaignForm mode={{ type: 'create' }} onSuccess={handleSuccess} onCancel={onCancel} />
   }
 
+  if (mode.type === 'duplicate') {
+    return <CampaignDuplicateScreen campaignId={mode.id} onSuccess={handleSuccess} onCancel={onCancel} />
+  }
+
   return <CampaignEditScreen campaignId={mode.id} onSuccess={handleSuccess} onCancel={onCancel} />
 }
 
@@ -107,6 +111,52 @@ function CampaignEditScreen({ campaignId, onSuccess, onCancel }: CampaignEditScr
 
   return (
     <CampaignForm mode={{ type: 'edit', campaign }} onSuccess={onSuccess} onCancel={onCancel} />
+  )
+}
+
+interface CampaignDuplicateScreenProps {
+  campaignId: number
+  onSuccess: (campaign: CampaignDetail) => void
+  onCancel: () => void
+}
+
+/**
+ * Fetches the fresh, re-authorized source campaign before mounting the
+ * create form pre-filled from it (row action "duplicate"): the copy still
+ * submits via the create path (`CampaignFormMode: 'duplicate'`).
+ */
+function CampaignDuplicateScreen({ campaignId, onSuccess, onCancel }: CampaignDuplicateScreenProps) {
+  const { t } = useTranslation()
+  const {
+    data: campaign,
+    isLoading,
+    isError,
+    refetch,
+  } = useEntityDetail(campaignDetailQueryKey(campaignId), () => fetchCampaign(campaignId))
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-start gap-3 p-4">
+        <p className="text-sm text-destructive">{t('campaigns.detail.loadError')}</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          {t('common.retry')}
+        </Button>
+      </div>
+    )
+  }
+
+  if (isLoading || !campaign) {
+    return (
+      <div className="flex flex-col gap-4 p-4">
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+    )
+  }
+
+  return (
+    <CampaignForm mode={{ type: 'duplicate', source: campaign }} onSuccess={onSuccess} onCancel={onCancel} />
   )
 }
 

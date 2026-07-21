@@ -52,7 +52,6 @@ class StoreProjectRequest extends FormRequest
             'name' => ['required', 'string', 'max:191'],
             'pipeline_status_id' => ['nullable', 'integer', Rule::exists('pipeline_statuses', 'id')],
             'description' => ['nullable', 'string'],
-            'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
             'business_function_id' => ['required', 'integer', Rule::exists('business_functions', 'id')],
             'country_id' => ['required', 'integer', Rule::exists('countries', 'id')],
             'state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
@@ -60,8 +59,9 @@ class StoreProjectRequest extends FormRequest
             'city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')],
             'product_category_id' => ['required', 'integer', Rule::exists('product_categories', 'id')],
             'partner_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
+            'operational_site_id' => ['nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'total_budget' => ['nullable', 'numeric', 'min:0'],
             'target_lead' => ['nullable', 'integer', 'min:0'],
         ];

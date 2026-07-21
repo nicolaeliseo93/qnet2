@@ -29,8 +29,8 @@ if (! function_exists('opportunityWorkflowUserWith')) {
 }
 
 // ---------------------------------------------------------------------------
-// AC-006 — a system row (open/closed) never changes group/system_key, never
-// deletes
+// AC-006 — a system row (open/closed_won/closed_lost) never changes group/
+// system_key, never deletes
 // ---------------------------------------------------------------------------
 
 it('update: 422 when a system row\'s group is changed via statuses sync (AC-006)', function () {
@@ -47,7 +47,7 @@ it('update: 422 when a system row\'s group is changed via statuses sync (AC-006)
 
     $this->patchJson("/api/opportunity-workflows/{$created['id']}", [
         'statuses' => [
-            ['id' => $openId, 'name' => 'Aperta', 'group' => 'closed'],
+            ['id' => $openId, 'name' => 'Aperta', 'group' => 'closed_won'],
         ],
     ])->assertStatus(422);
 
@@ -92,7 +92,7 @@ it('update: omitting a system row from the statuses sync does NOT delete it (AC-
     ])->assertCreated()->json('data');
 
     $openId = collect($created['statuses'])->firstWhere('system_key', 'open')['id'];
-    $closedId = collect($created['statuses'])->firstWhere('system_key', 'closed')['id'];
+    $closedId = collect($created['statuses'])->firstWhere('system_key', 'closed_won')['id'];
     $customId = collect($created['statuses'])->firstWhere('name', 'Custom')['id'];
 
     // The sync payload omits BOTH system rows entirely — only the custom row
@@ -106,17 +106,18 @@ it('update: omitting a system row from the statuses sync does NOT delete it (AC-
         ],
     ])->assertOk();
 
-    expect($response->json('data.statuses'))->toHaveCount(3);
+    expect($response->json('data.statuses'))->toHaveCount(4);
 
     $this->assertDatabaseHas('opportunity_workflow_statuses', ['id' => $openId, 'system_key' => 'open']);
-    $this->assertDatabaseHas('opportunity_workflow_statuses', ['id' => $closedId, 'system_key' => 'closed']);
+    $this->assertDatabaseHas('opportunity_workflow_statuses', ['id' => $closedId, 'system_key' => 'closed_won']);
 });
 
 // ---------------------------------------------------------------------------
-// AC-007 — statuses sync resequences only customs, open first / closed last
+// AC-007 — statuses sync resequences only customs, open first / closed_won +
+// closed_lost last
 // ---------------------------------------------------------------------------
 
-it('update: statuses sync resequences customs, open stays first and closed stays last (AC-007)', function () {
+it('update: statuses sync resequences customs, open stays first and closed_won/closed_lost stay last (AC-007)', function () {
     $actor = opportunityWorkflowUserWith(['create', 'update']);
     Sanctum::actingAs($actor);
 
@@ -138,14 +139,14 @@ it('update: statuses sync resequences customs, open stays first and closed stays
         'statuses' => [
             ['id' => $stepB['id'], 'name' => 'Step B', 'group' => 'pending'],
             ['id' => $stepA['id'], 'name' => 'Step A', 'group' => 'open'],
-            ['name' => 'Step C', 'group' => 'closed'],
+            ['name' => 'Step C', 'group' => 'closed_won'],
         ],
     ])->assertOk();
 
     $statuses = collect($response->json('data.statuses'))->sortBy('sort_order')->values();
 
     expect($statuses->first()['system_key'])->toBe('open')
-        ->and($statuses->last()['system_key'])->toBe('closed')
+        ->and($statuses->last()['system_key'])->toBe('closed_lost')
         ->and($statuses->pluck('name')->slice(1, 3)->values()->all())->toBe(['Step B', 'Step A', 'Step C']);
 });
 
@@ -169,7 +170,7 @@ it('update: a custom row omitted from the statuses sync is deleted (AC-007)', fu
         'statuses' => [
             ['id' => $keep['id'], 'name' => 'Keep', 'group' => 'open'],
         ],
-    ])->assertOk()->assertJsonCount(3, 'data.statuses');
+    ])->assertOk()->assertJsonCount(4, 'data.statuses');
 
     $this->assertDatabaseMissing('opportunity_workflow_statuses', ['name' => 'Drop']);
     $this->assertDatabaseHas('opportunity_workflow_statuses', ['id' => $keep['id']]);

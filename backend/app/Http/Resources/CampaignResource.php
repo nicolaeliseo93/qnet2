@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\GeoScopeLevel;
+use App\Models\Address;
 use App\Models\Campaign;
 use App\Models\Project;
 use App\Support\Geo\GeoNameLocalizer;
@@ -63,10 +64,10 @@ class CampaignResource extends JsonResource
             ],
             'name' => $this->name,
             'description' => $this->description,
-            'source_id' => $this->source_id,
-            'source' => $this->summarize($this->source),
             'partner_id' => $this->partner_id,
             'partner' => $this->summarize($this->partner),
+            'operational_site_id' => $this->operational_site_id,
+            'operational_site' => $this->summarizeOperationalSite($this->operationalSite),
             'derived_from_project' => $derivedFromProject,
             'pipeline_status_id' => $pipelineStatus?->id,
             'pipeline_status' => $pipelineStatus === null ? null : [
@@ -132,5 +133,36 @@ class CampaignResource extends JsonResource
         $name = $geo ? GeoNameLocalizer::toItalian($related->name) : $related->name;
 
         return ['id' => $related->id, 'name' => $name];
+    }
+
+    /**
+     * The campaign's OWN sede (never the project's — independently editable
+     * and stored, spec: prefill-modifiable, not read-through). No own name
+     * column: label composed the same way LeadResource/
+     * OperationalSiteForSelectResource do.
+     *
+     * @return array{id: int, label: string}|null
+     */
+    private function summarizeOperationalSite(mixed $site): ?array
+    {
+        if ($site === null) {
+            return null;
+        }
+
+        /** @var Address|null $address */
+        $address = $site->addresses->first();
+
+        return ['id' => $site->id, 'label' => $this->composeSiteLabel($address)];
+    }
+
+    private function composeSiteLabel(?Address $address): string
+    {
+        if ($address === null) {
+            return '';
+        }
+
+        $city = $address->city?->localizedName();
+
+        return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
     }
 }

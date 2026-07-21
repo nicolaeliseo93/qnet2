@@ -53,8 +53,8 @@ it('GET /api/tables/campaigns/columns: 200 with the declared columns, 403 withou
 
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
-        'id', 'code', 'project', 'name', 'pipeline_status', 'source',
-        'country', 'state', 'province', 'city', 'geo_scope',
+        'id', 'code', 'project', 'name', 'pipeline_status',
+        'country', 'state', 'province', 'city', 'geo_scope', 'operational_site',
         'start_date', 'end_date', 'total_budget', 'target_lead', 'created_at',
     ]);
 
@@ -164,4 +164,58 @@ it('rows: a standalone campaign\'s pipeline_status shows its OWN status', functi
     $row = collect($response->json('items'))->firstWhere('id', $campaign->id);
 
     expect($row['pipeline_status'])->toMatchArray(['id' => $status->id, 'name' => 'Standalone Status']);
+});
+
+// ---------------------------------------------------------------------------
+// duplicate row action — gated on campaigns.create (not a per-row ability),
+// mirrors LeadsTableActionsTest's convert_to_opportunity pattern.
+// ---------------------------------------------------------------------------
+
+it('catalogue includes duplicate for an actor with campaigns.create', function () {
+    $actor = campaignUserWith(['viewAny', 'create']);
+    Sanctum::actingAs($actor);
+
+    $actions = collect($this->getJson('/api/tables/campaigns/columns')->assertOk()->json('data.actions'));
+    $entry = $actions->firstWhere('key', 'duplicate');
+
+    expect($entry)->not->toBeNull()
+        ->and($entry)->toMatchArray([
+            'key' => 'duplicate',
+            'label' => 'actions.duplicate',
+            'type' => 'action',
+            'confirm' => false,
+        ])
+        ->and($entry)->not->toHaveKey('permission');
+});
+
+it('catalogue omits duplicate for an actor without campaigns.create', function () {
+    $actor = campaignUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $actionKeys = collect($this->getJson('/api/tables/campaigns/columns')->assertOk()->json('data.actions'))
+        ->pluck('key')->all();
+
+    expect($actionKeys)->not->toContain('duplicate');
+});
+
+it('row.actions contains duplicate for an actor with campaigns.create', function () {
+    $actor = campaignUserWith(['viewAny', 'create']);
+    $campaign = Campaign::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/campaigns/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $campaign->id)['actions'])->toContain('duplicate');
+});
+
+it('row.actions omits duplicate for an actor without campaigns.create', function () {
+    $actor = campaignUserWith(['viewAny']);
+    $campaign = Campaign::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/campaigns/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $campaign->id)['actions'])->not->toContain('duplicate');
 });

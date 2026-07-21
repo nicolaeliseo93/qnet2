@@ -137,9 +137,9 @@ it('create: with no matching workflow, opportunity_workflow_status_id resolves t
         ->and($response->json('data.workflow_status.system_key'))->toBe('open')
         ->and($response->json('data.workflow_status.name'))->toBe($globalOpen->name);
 
-    // AC-003: the resolved set is exposed too (the global set's 2 system rows).
+    // AC-003: the resolved set is exposed too (the global set's 3 system rows).
     $statusKeys = collect($response->json('data.workflow_statuses'))->pluck('system_key')->all();
-    expect($statusKeys)->toEqualCanonicalizing(['open', 'closed']);
+    expect($statusKeys)->toEqualCanonicalizing(['open', 'closed_won', 'closed_lost']);
 
     $this->assertDatabaseHas('opportunities', [
         'id' => $response->json('data.id'),
@@ -206,7 +206,7 @@ it('update: changing source_id to match a new workflow remaps the closed status 
     $workflow->criteria()->create(['field' => 'source_id', 'value_id' => $source->id]);
     $workflowClosed = OpportunityWorkflowStatus::factory()->create([
         'opportunity_workflow_id' => $workflow->id,
-        'system_key' => 'closed',
+        'system_key' => 'closed_won',
         'name' => 'Chiusa personalizzata',
     ]);
     Sanctum::actingAs($actor);
@@ -219,15 +219,15 @@ it('update: changing source_id to match a new workflow remaps the closed status 
 
     $globalClosed = OpportunityWorkflowStatus::query()
         ->whereNull('opportunity_workflow_id')
-        ->where('system_key', 'closed')
+        ->where('system_key', 'closed_won')
         ->sole();
 
-    // Force the current status to the GLOBAL closed row before the update.
+    // Force the current status to the GLOBAL closed_won row before the update.
     Opportunity::whereKey($opportunityId)->update(['opportunity_workflow_status_id' => $globalClosed->id]);
 
     $response = $this->patchJson("/api/opportunities/{$opportunityId}", ['source_id' => $source->id])
         ->assertOk();
 
     expect($response->json('data.opportunity_workflow_status_id'))->toBe($workflowClosed->id)
-        ->and($response->json('data.workflow_status.system_key'))->toBe('closed');
+        ->and($response->json('data.workflow_status.system_key'))->toBe('closed_won');
 });

@@ -52,6 +52,8 @@ export const it: TranslationResources = {
     edit: 'Modifica',
     new: 'Nuovo',
     viewProfile: 'Vedi il profilo di {{name}}',
+    /** Appended to the name when duplicating a record (row action "duplicate"); leading space by design. */
+    copySuffix: ' (copia)',
   },
   config: {
     error: {
@@ -106,6 +108,7 @@ export const it: TranslationResources = {
     view: 'Visualizza',
     edit: 'Modifica',
     delete: 'Elimina',
+    duplicate: 'Duplica',
     activity: 'Attività',
     convertToOpportunity: 'Converti in Opportunità',
   },

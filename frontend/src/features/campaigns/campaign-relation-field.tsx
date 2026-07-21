@@ -6,15 +6,15 @@ import type { CampaignRelationRef } from '@/features/campaigns/types'
 
 /**
  * The campaign's 5 single-relation fields, all sharing the exact same picker
- * shape: 2 always-own/editable (source, partner) and 3 BR-2 classification
- * fields that are only editable while the campaign is standalone
- * (`forceDisabled` while linked, AC-042/AC-043). `state_id` left this group
- * (spec 0027 D-3): it is now one of the 4 geo fields rendered by
+ * shape: 2 always-own/editable (partner, operational_site) and 3 BR-2
+ * classification fields that are only editable while the campaign is
+ * standalone (`forceDisabled` while linked, AC-042/AC-043). `state_id` left
+ * this group (spec 0027 D-3): it is now one of the 4 geo fields rendered by
  * `<GeoSelect>`, following BR-5 instead.
  */
 type CampaignRelationFieldName =
-  | 'source_id'
   | 'partner_id'
+  | 'operational_site_id'
   | 'pipeline_status_id'
   | 'business_function_id'
   | 'product_category_id'

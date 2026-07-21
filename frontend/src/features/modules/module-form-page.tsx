@@ -11,19 +11,27 @@ import NotFoundPage from '@/pages/not-found-page'
 interface ModuleFormPageProps {
   /** The registry domain this route was generated for (spec 0042). */
   domain: string
+  /**
+   * When set to `'duplicate'`, this instance renders `${basePath}/:id/duplicate`
+   * (row action "duplicate"): a create form pre-filled from the source `id`,
+   * gated by `.create` (not `.update`) since it still submits via the create
+   * path.
+   */
+  variant?: 'duplicate'
 }
 
 /**
- * Generic dedicated create/edit page for any registered module (spec 0042).
- * One page serves both `${basePath}/new` (no `:id`) and `${basePath}/:id/edit`,
- * gated by the matching `.create`/`.update` permission. Replaces the
- * per-module `*-form-page.tsx` files for the 4 Wave 0 modules: the header
- * chrome (title/subtitle) is generic because every module already follows
- * the same `${domain}.form.{create,edit}{Title,Subtitle}` i18n convention;
- * everything else (fetch-for-edit, the actual form) lives in the domain's
+ * Generic dedicated create/edit/duplicate page for any registered module
+ * (spec 0042). Serves `${basePath}/new` (no `:id`), `${basePath}/:id/edit`
+ * and `${basePath}/:id/duplicate`, gated by the matching `.create`/`.update`
+ * permission. Replaces the per-module `*-form-page.tsx` files for the 4 Wave 0
+ * modules: the header chrome (title/subtitle) is generic because every module
+ * already follows the same `${domain}.form.{create,edit}{Title,Subtitle}`
+ * i18n convention (duplicate reuses the create strings); everything else
+ * (fetch-for-edit/duplicate, the actual form) lives in the domain's
  * `FormScreen`.
  */
-export default function ModuleFormPage({ domain }: ModuleFormPageProps) {
+export default function ModuleFormPage({ domain, variant }: ModuleFormPageProps) {
   const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
@@ -34,7 +42,8 @@ export default function ModuleFormPage({ domain }: ModuleFormPageProps) {
   // the invariant check right before render.
   const basePath = entry?.basePath ?? ''
 
-  const isEdit = id !== undefined
+  const isDuplicate = variant === 'duplicate'
+  const isEdit = id !== undefined && !isDuplicate
   const entityId = parseEntityId(id)
 
   const onSuccess = useCallback(
@@ -45,27 +54,33 @@ export default function ModuleFormPage({ domain }: ModuleFormPageProps) {
   )
 
   const onCancel = useCallback(() => {
+    if (isDuplicate) {
+      void navigate(`${basePath}/${entityId}`)
+      return
+    }
     void navigate(isEdit ? `${basePath}/${entityId}` : basePath)
-  }, [isEdit, navigate, basePath, entityId])
+  }, [isDuplicate, isEdit, navigate, basePath, entityId])
 
   if (!entry) {
     throw new Error(`ModuleFormPage: "${domain}" is not registered in the module registry.`)
   }
 
-  if (isEdit && entityId === null) {
+  if ((isEdit || isDuplicate) && entityId === null) {
     return <NotFoundPage />
   }
 
   const { FormScreen } = entry
 
-  // Narrow on `entityId` itself (not `isEdit`) so TS refines it to `number` in
-  // the edit branch without a cast: the `isEdit && entityId === null` case
-  // already returned above, so here `entityId !== null` is exactly "edit".
-  // The create branch is the FormScreen's only params channel (spec 0045):
-  // a bare `${basePath}/new` yields `params: undefined`, so consumers no
-  // longer need their own `useSearchParams()` for a deep-linked create.
+  // Narrow on `entityId` itself so TS refines it to `number` without a cast:
+  // the `(isEdit || isDuplicate) && entityId === null` case already returned
+  // above, so here `entityId !== null` is exactly "edit or duplicate". The
+  // create branch is the FormScreen's only params channel (spec 0045): a bare
+  // `${basePath}/new` yields `params: undefined`, so consumers no longer need
+  // their own `useSearchParams()` for a deep-linked create.
   let mode: ModuleFormScreenMode
-  if (entityId !== null) {
+  if (isDuplicate && entityId !== null) {
+    mode = { type: 'duplicate', id: entityId }
+  } else if (entityId !== null) {
     mode = { type: 'edit', id: entityId }
   } else {
     const query = searchParams.toString()

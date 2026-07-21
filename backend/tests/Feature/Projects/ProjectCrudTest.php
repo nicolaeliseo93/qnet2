@@ -312,7 +312,7 @@ it('create: 422 when end_date < start_date (AC-013)', function () {
     expect(Project::count())->toBe(0);
 });
 
-it('create: 422 when a newly-mandatory field is missing (business_function/product_category/start_date/end_date)', function (string $missing) {
+it('create: 422 when a mandatory field is missing (business_function/product_category/start_date)', function (string $missing) {
     $actor = projectUserWith(['create']);
     Sanctum::actingAs($actor);
 
@@ -328,7 +328,27 @@ it('create: 422 when a newly-mandatory field is missing (business_function/produ
         ->assertStatus(422)->assertJsonValidationErrors($missing);
 
     expect(Project::count())->toBe(0);
-})->with(['business_function_id', 'product_category_id', 'start_date', 'end_date']);
+})->with(['business_function_id', 'product_category_id', 'start_date']);
+
+it('create: succeeds when end_date is omitted (optional)', function () {
+    $actor = projectUserWith(['create']);
+    Sanctum::actingAs($actor);
+
+    $payload = [
+        'name' => 'No End Date',
+        'pipeline_status_id' => PipelineStatus::factory()->create()->id,
+        'country_id' => Country::factory()->create()->id,
+        ...projectStoreExtras(),
+    ];
+    unset($payload['end_date']);
+
+    $this->postJson('/api/projects', $payload)->assertCreated();
+
+    expect(Project::query()->where('name', 'No End Date')->sole()->end_date)->toBeNull();
+});
+
+// operational_site_id tests (sede inheritance cascade) live in
+// ProjectOperationalSiteTest.php (file-size split, engineering.md §6).
 
 // ---------------------------------------------------------------------------
 // next-code — GET /api/projects/next-code (spec 0025, auto-fill suggestion)

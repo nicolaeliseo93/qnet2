@@ -78,8 +78,8 @@ class UpdateCampaignRequest extends FormRequest
             'project_id' => ['sometimes', 'nullable', 'integer', Rule::exists('projects', 'id')],
             'name' => ['sometimes', 'required', 'string', 'max:191'],
             'description' => ['sometimes', 'nullable', 'string'],
-            'source_id' => ['sometimes', 'nullable', 'integer', Rule::exists('sources', 'id')],
             'partner_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
+            'operational_site_id' => ['sometimes', 'nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'pipeline_status_id' => $this->derivedFieldRules('pipeline_statuses'),
             'business_function_id' => $this->derivedFieldRules('business_functions'),
             'country_id' => $this->countryIdRules(),
@@ -88,7 +88,7 @@ class UpdateCampaignRequest extends FormRequest
             'city_id' => $this->geoLevelRules('city_id', 'cities'),
             'product_category_id' => $this->derivedFieldRules('product_categories'),
             'start_date' => ['sometimes', 'required', 'date'],
-            'end_date' => ['sometimes', 'required', 'date', 'after_or_equal:start_date'],
+            'end_date' => ['sometimes', 'nullable', 'date', 'after_or_equal:start_date'],
             'total_budget' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'target_lead' => ['sometimes', 'nullable', 'integer', 'min:0'],
         ];

@@ -1,4 +1,4 @@
-import { Eye, History, MoreHorizontal, Pencil, Trash, type LucideIcon } from 'lucide-react'
+import { Copy, Eye, History, MoreHorizontal, Pencil, Trash, type LucideIcon } from 'lucide-react'
 
 /** Action icon name → Lucide component. Provided by domains for custom icons. */
 export type ActionIconMap = Record<string, LucideIcon>
@@ -15,6 +15,7 @@ export const defaultActionIconMap: ActionIconMap = {
   pencil: Pencil,
   trash: Trash,
   history: History,
+  copy: Copy,
 }
 
 /** Neutral fallback used when an icon name is not mapped, so the menu never breaks. */

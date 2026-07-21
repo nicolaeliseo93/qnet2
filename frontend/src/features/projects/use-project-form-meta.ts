@@ -11,11 +11,12 @@ export type ProjectFormMetaState =
 /**
  * Resolves the `ResourcePermissions` backing the form (spec 0004). Edit mode
  * seeds it from the already-loaded instance detail (`mode.project.permissions`,
- * fetched by the `show` endpoint); create mode fetches the create-context
+ * fetched by the `show` endpoint); create AND duplicate mode (row action
+ * "duplicate" still submits via the create path) fetch the create-context
  * metadata (`GET /meta/projects`) once.
  */
 export function useProjectFormMeta(mode: ProjectFormMode): ProjectFormMetaState {
-  const metaQuery = useResourceMeta('projects', mode.type === 'create')
+  const metaQuery = useResourceMeta('projects', mode.type !== 'edit')
 
   if (mode.type === 'edit') {
     return { status: 'ready', permissions: mode.project.permissions }

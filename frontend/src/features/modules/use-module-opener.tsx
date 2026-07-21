@@ -42,6 +42,7 @@ type SheetState =
   | { kind: 'create'; params?: ModuleCreateParams }
   | { kind: 'view'; row: TableRow }
   | { kind: 'edit'; row: TableRow }
+  | { kind: 'duplicate'; row: TableRow }
 
 export interface UseModuleOpenerOptions {
   /**
@@ -69,6 +70,8 @@ export interface UseModuleOpenerResult {
   openCreateWith: (params: ModuleCreateParams) => void
   openView: (row: TableRow) => void
   openEdit: (row: TableRow) => void
+  /** Opens the create form pre-filled from `row` (row action "duplicate"): the source is still fetched fresh, submit still goes through the create path. */
+  openDuplicate: (row: TableRow) => void
   /** The modal Sheet when the resolved mode is `'modal'`, `null` in `'page'` mode. Render it once, anywhere in the table adapter's tree. */
   sheet: ReactNode
 }
@@ -139,6 +142,17 @@ export function useModuleOpener(domain: string, options: UseModuleOpenerOptions 
     [mode, navigate, basePath],
   )
 
+  const openDuplicate = useCallback(
+    (row: TableRow) => {
+      if (mode === OPEN_MODE_MODAL) {
+        setSheetState({ kind: 'duplicate', row })
+      } else {
+        void navigate(`${basePath}/${row.id}/duplicate`)
+      }
+    },
+    [mode, navigate, basePath],
+  )
+
   const handleSaved = useCallback(() => {
     closeSheet()
     onSaved?.()
@@ -200,9 +214,23 @@ export function useModuleOpener(domain: string, options: UseModuleOpenerOptions 
               />
             </>
           )}
+
+          {sheetState.kind === 'duplicate' && (
+            <>
+              <SheetHeader>
+                <SheetTitle>{t(`${ns}.form.createTitle`)}</SheetTitle>
+                <SheetDescription>{t(`${ns}.form.createSubtitle`)}</SheetDescription>
+              </SheetHeader>
+              <FormScreen
+                mode={{ type: 'duplicate', id: sheetState.row.id }}
+                onSuccess={handleSaved}
+                onCancel={closeSheet}
+              />
+            </>
+          )}
         </SheetContent>
       </Sheet>
     ) : null
 
-  return { openCreate, openCreateWith, openView, openEdit, sheet }
+  return { openCreate, openCreateWith, openView, openEdit, openDuplicate, sheet }
 }

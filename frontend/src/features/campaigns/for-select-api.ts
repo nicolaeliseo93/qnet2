@@ -10,6 +10,28 @@ import type {
 export const CAMPAIGNS_FOR_SELECT_RESOURCE = 'campaigns'
 
 /**
+ * The linked Sede's `{id, label}` identity inside `CampaignForSelectItem.meta`
+ * (project -> campaign -> lead prefill chain), so a picker built on this
+ * resource can prefill the Lead's `operational_site_id` without a second
+ * fetch. No Regione here: the Lead's Regione is a free, never-inherited
+ * field (user decision, supersedes the earlier "auto-fill from Sede" spec).
+ */
+export interface CampaignForSelectOperationalSite {
+  id: number
+  label: string
+}
+
+/** The `meta` block carried by every `/campaigns/for-select` item, feeding the Lead form's Sede prefill on selection. */
+export interface CampaignForSelectMeta {
+  operational_site: CampaignForSelectOperationalSite | null
+}
+
+/** A single campaign option as returned by `GET /api/campaigns/for-select`, carrying its `meta` default-population block. */
+export interface CampaignForSelectItem extends ForSelectItem {
+  meta?: CampaignForSelectMeta
+}
+
+/**
  * Fetches a page of campaign options from `GET /api/campaigns/for-select`.
  * Thin wrapper over the generic for-select fetcher, bound to the `campaigns`
  * resource. Items carry `label` (name) and `subtitle` (code).

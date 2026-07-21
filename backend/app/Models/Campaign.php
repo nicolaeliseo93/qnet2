@@ -12,8 +12,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Campaign entity (spec 0023): optionally linked to a Project via
- * `project_id`. `source_id`/`partner_id` are ALWAYS the
- * campaign's own. `pipeline_status_id`/`business_function_id`/
+ * `project_id`. `partner_id` is ALWAYS the campaign's own.
+ * `pipeline_status_id`/`business_function_id`/
  * `product_category_id` are the DERIVED set (BR-2): forced NULL by the
  * service when linked to a project (their effective value is then read
  * through `project`), required when standalone. `code` (CMP-0001...) is
@@ -31,7 +31,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'project_id',
     'name',
     'description',
-    'source_id',
     'partner_id',
     'pipeline_status_id',
     'business_function_id',
@@ -40,6 +39,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'province_id',
     'city_id',
     'product_category_id',
+    'operational_site_id',
     'start_date',
     'end_date',
     'total_budget',
@@ -69,11 +69,6 @@ class Campaign extends BaseModel
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
-    }
-
-    public function source(): BelongsTo
-    {
-        return $this->belongsTo(Source::class);
     }
 
     /**
@@ -127,6 +122,16 @@ class Campaign extends BaseModel
     public function productCategory(): BelongsTo
     {
         return $this->belongsTo(ProductCategory::class);
+    }
+
+    /**
+     * The sede (spec 0047-style inheritance cascade project -> campaign ->
+     * lead): a prefill-modifiable field, not a read-through — no server-side
+     * inheritance/lock, the frontend only pre-fills the child form from it.
+     */
+    public function operationalSite(): BelongsTo
+    {
+        return $this->belongsTo(OperationalSite::class);
     }
 
     /**

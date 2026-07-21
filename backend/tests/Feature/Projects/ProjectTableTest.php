@@ -53,16 +53,14 @@ it('GET /api/tables/projects/columns: 200 with the declared columns, 403 without
 
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
-        'id', 'code', 'name', 'pipeline_status', 'source', 'business_function',
-        'country', 'state', 'province', 'city', 'geo_scope', 'product_category', 'partner',
+        'id', 'code', 'name', 'pipeline_status', 'business_function',
+        'country', 'state', 'province', 'city', 'geo_scope', 'product_category', 'partner', 'operational_site',
         'start_date', 'end_date', 'total_budget', 'target_lead', 'created_at',
     ]);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['pipeline_status']['sortable'])->toBeTrue()
-        ->and($columns['pipeline_status']['filterType'])->toBe('set')
-        ->and($columns['source']['sortable'])->toBeFalse()
-        ->and($columns['source']['filterType'])->toBe('set');
+        ->and($columns['pipeline_status']['filterType'])->toBe('set');
 });
 
 // ---------------------------------------------------------------------------
@@ -178,4 +176,58 @@ it('the derived pipeline_status set filter matches by the related status name', 
 
     $names = collect($response->json('items'))->pluck('name');
     expect($names->all())->toBe(['Project A']);
+});
+
+// ---------------------------------------------------------------------------
+// duplicate row action — gated on projects.create (not a per-row ability),
+// mirrors LeadsTableActionsTest's convert_to_opportunity pattern.
+// ---------------------------------------------------------------------------
+
+it('catalogue includes duplicate for an actor with projects.create', function () {
+    $actor = projectUserWith(['viewAny', 'create']);
+    Sanctum::actingAs($actor);
+
+    $actions = collect($this->getJson('/api/tables/projects/columns')->assertOk()->json('data.actions'));
+    $entry = $actions->firstWhere('key', 'duplicate');
+
+    expect($entry)->not->toBeNull()
+        ->and($entry)->toMatchArray([
+            'key' => 'duplicate',
+            'label' => 'actions.duplicate',
+            'type' => 'action',
+            'confirm' => false,
+        ])
+        ->and($entry)->not->toHaveKey('permission');
+});
+
+it('catalogue omits duplicate for an actor without projects.create', function () {
+    $actor = projectUserWith(['viewAny']);
+    Sanctum::actingAs($actor);
+
+    $actionKeys = collect($this->getJson('/api/tables/projects/columns')->assertOk()->json('data.actions'))
+        ->pluck('key')->all();
+
+    expect($actionKeys)->not->toContain('duplicate');
+});
+
+it('row.actions contains duplicate for an actor with projects.create', function () {
+    $actor = projectUserWith(['viewAny', 'create']);
+    $project = Project::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/projects/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $project->id)['actions'])->toContain('duplicate');
+});
+
+it('row.actions omits duplicate for an actor without projects.create', function () {
+    $actor = projectUserWith(['viewAny']);
+    $project = Project::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/projects/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $project->id)['actions'])->not->toContain('duplicate');
 });

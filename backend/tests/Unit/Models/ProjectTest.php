@@ -25,11 +25,12 @@ it('creates the projects table with the expected columns', function () {
     expect(Schema::hasTable('projects'))->toBeTrue();
     expect(Schema::hasColumns('projects', [
         'id', 'code', 'name', 'description', 'pipeline_status_id',
-        'source_id', 'business_function_id', 'state_id', 'product_category_id',
+        'business_function_id', 'state_id', 'product_category_id',
         'partner_id', 'start_date', 'end_date', 'total_budget', 'target_lead',
         'created_at', 'updated_at',
     ]))->toBeTrue();
     expect(Schema::hasColumn('projects', 'registry_id'))->toBeFalse();
+    expect(Schema::hasColumn('projects', 'source_id'))->toBeFalse();
 });
 
 it('code is unique at the database level', function () {

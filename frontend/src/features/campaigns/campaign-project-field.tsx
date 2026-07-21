@@ -31,18 +31,19 @@ function toForSelectItemFromRef(ref: RelationFieldRef | null): ForSelectItem | n
 }
 
 /**
- * The campaign's optional Project link. Picking a project prefills Fonte
- * (`source_id`) and Partner (`partner_id`) — still editable — plus the 3
- * BR-2 classification fields (which the sibling
- * `CampaignRelationField`s then force read-only) and the geo levels the
- * project fills (BR-5, spec 0027: the sibling `<GeoSelect lockedLevels>`
- * then forces those read-only), straight from the picker's own `for-select`
- * `meta` block (AC-042): a single one-shot fetch, run as a direct consequence
- * of the user's selection (never a render-time effect), so it never
- * re-overwrites the user's own edits on a later re-render. Clearing the
- * project resets the 3 classification fields AND all 4 geo levels to `null`
- * (and unlocks them), so they become editable and required again (AC-043);
- * the 3 always-own fields are left untouched.
+ * The campaign's optional Project link. Picking a project prefills Partner
+ * (`partner_id`) and the Sede (`operational_site_id`, project -> campaign ->
+ * lead inheritance chain) — both still editable — plus the 3 BR-2
+ * classification fields (which the sibling `CampaignRelationField`s then
+ * force read-only) and the geo levels the project fills (BR-5, spec 0027: the
+ * sibling `<GeoSelect lockedLevels>` then forces those read-only), straight
+ * from the picker's own `for-select` `meta` block (AC-042): a single one-shot
+ * fetch, run as a direct consequence of the user's selection (never a
+ * render-time effect), so it never re-overwrites the user's own edits on a
+ * later re-render. Clearing the project resets the 3 classification fields
+ * AND all 4 geo levels to `null` (and unlocks them), so they become editable
+ * and required again (AC-043); the always-own fields (Partner, Sede) are
+ * left untouched.
  */
 export function CampaignProjectField({ control, setValue, selected }: CampaignProjectFieldProps) {
   const { t } = useTranslation()
@@ -66,8 +67,8 @@ export function CampaignProjectField({ control, setValue, selected }: CampaignPr
     if (!meta) {
       return
     }
-    setValue('source_id', meta.source?.id ?? null, { shouldDirty: true })
     setValue('partner_id', meta.partner?.id ?? null, { shouldDirty: true })
+    setValue('operational_site_id', meta.operational_site?.id ?? null, { shouldDirty: true })
     setValue('pipeline_status_id', meta.pipeline_status.id, { shouldDirty: true, shouldValidate: true })
     setValue('business_function_id', meta.business_function?.id ?? null, { shouldDirty: true })
     setValue('product_category_id', meta.product_category?.id ?? null, { shouldDirty: true })

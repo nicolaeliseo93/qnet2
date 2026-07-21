@@ -5,7 +5,6 @@ use App\Models\Campaign;
 use App\Models\PipelineStatus;
 use App\Models\Project;
 use App\Models\Referent;
-use App\Models\Source;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -55,12 +54,10 @@ it('forbids actors without projects.viewAny (403)', function () {
 it('maps a project to label "{code} — {name}" with the full campaign-form meta block (AC-017)', function () {
     $actor = projectUserWith(['viewAny']);
     $status = PipelineStatus::factory()->create(['name' => 'Attivo']);
-    $source = Source::factory()->create(['name' => 'Fiera']);
     $partner = Referent::factory()->create(['name' => 'Ada Partner']);
     $businessFunction = BusinessFunction::factory()->create(['name' => 'Marketing']);
     $project = Project::factory()->create([
         'pipeline_status_id' => $status->id,
-        'source_id' => $source->id,
         'partner_id' => $partner->id,
         'business_function_id' => $businessFunction->id,
         'total_budget' => 1000,
@@ -73,7 +70,6 @@ it('maps a project to label "{code} — {name}" with the full campaign-form meta
 
     expect($item['label'])->toBe(sprintf('%s — %s', $project->code, $project->name))
         ->and($item['meta']['pipeline_status'])->toMatchArray(['id' => $status->id, 'label' => 'Attivo'])
-        ->and($item['meta']['source'])->toMatchArray(['id' => $source->id, 'label' => 'Fiera'])
         ->and($item['meta']['partner'])->toMatchArray(['id' => $partner->id, 'label' => 'Ada Partner'])
         ->and($item['meta']['business_function'])->toMatchArray(['id' => $businessFunction->id, 'label' => 'Marketing'])
         ->and($item['meta']['total_budget'])->toBe('1000.00')
@@ -84,7 +80,6 @@ it('maps a project to label "{code} — {name}" with the full campaign-form meta
 it('meta fields are null when the corresponding relation is unset', function () {
     $actor = projectUserWith(['viewAny']);
     $project = Project::factory()->create([
-        'source_id' => null,
         'partner_id' => null,
         'business_function_id' => null,
         'state_id' => null,
@@ -96,8 +91,7 @@ it('meta fields are null when the corresponding relation is unset', function () 
     $response = $this->getJson('/api/projects/for-select')->assertOk();
     $item = collect($response->json('items'))->firstWhere('id', $project->id);
 
-    expect($item['meta']['source'])->toBeNull()
-        ->and($item['meta']['partner'])->toBeNull()
+    expect($item['meta']['partner'])->toBeNull()
         ->and($item['meta']['business_function'])->toBeNull()
         ->and($item['meta']['state'])->toBeNull()
         ->and($item['meta']['product_category'])->toBeNull()

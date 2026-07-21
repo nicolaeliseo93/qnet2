@@ -26,7 +26,6 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
     'name',
     'description',
     'pipeline_status_id',
-    'source_id',
     'business_function_id',
     'country_id',
     'state_id',
@@ -34,6 +33,7 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
     'city_id',
     'product_category_id',
     'partner_id',
+    'operational_site_id',
     'start_date',
     'end_date',
     'total_budget',
@@ -60,11 +60,6 @@ class Project extends BaseModel
     public function pipelineStatus(): BelongsTo
     {
         return $this->belongsTo(PipelineStatus::class);
-    }
-
-    public function source(): BelongsTo
-    {
-        return $this->belongsTo(Source::class);
     }
 
     public function businessFunction(): BelongsTo
@@ -104,6 +99,16 @@ class Project extends BaseModel
     public function partner(): BelongsTo
     {
         return $this->belongsTo(Referent::class, 'partner_id');
+    }
+
+    /**
+     * The sede (spec 0047-style inheritance cascade project -> campaign ->
+     * lead): a prefill-modifiable field, not a read-through — no server-side
+     * inheritance/lock, the frontend only pre-fills the child form from it.
+     */
+    public function operationalSite(): BelongsTo
+    {
+        return $this->belongsTo(OperationalSite::class);
     }
 
     /**

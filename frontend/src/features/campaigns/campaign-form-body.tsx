@@ -12,9 +12,9 @@ import { cn } from '@/lib/utils'
 import { MetaField } from '@/features/authorization/MetaField'
 import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-statuses/for-select-api'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
-import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
+import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import { useCampaignForm } from '@/features/campaigns/use-campaign-form'
 import { CampaignProjectField } from '@/features/campaigns/campaign-project-field'
 import { CampaignRelationField } from '@/features/campaigns/campaign-relation-field'
@@ -57,7 +57,7 @@ function sectionRevealClassName(index: number): string {
 export function CampaignFormBody({ mode, onSuccess, onCancel, initialCode }: CampaignFormBodyProps) {
   const { t } = useTranslation()
   const { form, serverError, onSubmit } = useCampaignForm({ mode, onSuccess, initialCode })
-  const original = mode.type === 'edit' ? mode.campaign : null
+  const original = mode.type === 'edit' ? mode.campaign : mode.type === 'duplicate' ? mode.source : null
 
   const projectId = useWatch({ control: form.control, name: 'project_id' })
   const isLinked = projectId !== null
@@ -158,16 +158,6 @@ export function CampaignFormBody({ mode, onSuccess, onCancel, initialCode }: Cam
             <div className="grid gap-3 sm:grid-cols-2">
               <CampaignRelationField
                 control={form.control}
-                name="source_id"
-                metaKey="source_id"
-                label={t('campaigns.form.source')}
-                resource={SOURCES_FOR_SELECT_RESOURCE}
-                searchPlaceholder={t('campaigns.form.sourceSearch')}
-                selected={original?.source ?? null}
-              />
-
-              <CampaignRelationField
-                control={form.control}
                 name="partner_id"
                 metaKey="partner_id"
                 label={t('campaigns.form.partner')}
@@ -175,6 +165,21 @@ export function CampaignFormBody({ mode, onSuccess, onCancel, initialCode }: Cam
                 resource={REFERENTS_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('campaigns.form.partnerSearch')}
                 selected={original?.partner ?? null}
+              />
+
+              <CampaignRelationField
+                control={form.control}
+                name="operational_site_id"
+                metaKey="operational_site_id"
+                label={t('campaigns.form.operationalSite')}
+                hint={t('campaigns.form.hints.operationalSite')}
+                resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('campaigns.form.operationalSiteSearch')}
+                selected={
+                  original?.operational_site
+                    ? { id: original.operational_site.id, name: original.operational_site.label }
+                    : null
+                }
               />
             </div>
           </FormSection>

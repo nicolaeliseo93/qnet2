@@ -107,9 +107,6 @@ export function ProjectDetailView({ project }: ProjectDetailViewProps) {
       <DetailSection title={t('projects.form.sections.classification.title')} icon={<Tags />}>
         <DetailGrid>
           <DetailField label={t('projects.form.status')}>{project.pipeline_status.name}</DetailField>
-          <DetailField label={t('projects.form.source')}>
-            {project.source?.name ?? <DetailEmpty />}
-          </DetailField>
           <DetailField label={t('projects.form.businessFunction')}>
             {project.business_function?.name ?? <DetailEmpty />}
           </DetailField>
@@ -118,6 +115,9 @@ export function ProjectDetailView({ project }: ProjectDetailViewProps) {
           </DetailField>
           <DetailField label={t('projects.form.partner')}>
             {project.partner?.name ?? <DetailEmpty />}
+          </DetailField>
+          <DetailField label={t('projects.form.operationalSite')}>
+            {project.operational_site?.label ?? <DetailEmpty />}
           </DetailField>
         </DetailGrid>
       </DetailSection>

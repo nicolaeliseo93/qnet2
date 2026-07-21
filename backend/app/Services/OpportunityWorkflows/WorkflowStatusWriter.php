@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\OpportunityWorkflows;
 
-use App\Enums\StatusGroup;
+use App\Enums\WorkflowStatusGroup;
 use App\Enums\WorkflowStatusSystemKey;
 use App\Models\OpportunityWorkflowStatus;
 use Illuminate\Support\Collection;
@@ -17,8 +17,9 @@ use Illuminate\Support\Facades\DB;
  * App\Services\Statuses\StatusOrderManager (spec 0039/0043), NOT reused
  * directly: those two are hardcoded to the PipelineStatus/OpportunityStatus
  * shape (a single global set, StatusSystemKey::New tail-anchoring), whereas
- * every OpportunityWorkflowStatus set independently pins its OWN open/closed
- * pair (AC-004/AC-005).
+ * every OpportunityWorkflowStatus set independently pins its OWN system rows —
+ * the initial 'open' row plus the two terminal closed-outcome rows
+ * 'closed_won'/'closed_lost' (AC-004/AC-005).
  *
  * `opportunity_workflow_id`/`system_key` are DELIBERATELY absent from
  * OpportunityWorkflowStatus's #[Fillable] (never mass-assignable from a
@@ -32,20 +33,23 @@ final class WorkflowStatusWriter
 
     /**
      * Creates a brand-new set (AC-004): the pinned 'open' row (sort_order 0),
-     * every $customStatuses row in submission order (STEP apart), then the
-     * pinned 'closed' row (always last). $openOverride/$closedOverride seed
-     * the pinned rows' name/color when the client named them up front; null
-     * falls back to the default label.
+     * every $customStatuses row in submission order (STEP apart), then the two
+     * pinned terminal rows 'closed_won'/'closed_lost' (always last, in that
+     * order). $openOverride/$closedWonOverride/$closedLostOverride seed the
+     * pinned rows' name/color when the client named them up front; null falls
+     * back to the default label.
      *
      * @param  array<int, array{name: string, color: ?string, group: string}>  $customStatuses
      * @param  array{name: string, color: ?string}|null  $openOverride
-     * @param  array{name: string, color: ?string}|null  $closedOverride
+     * @param  array{name: string, color: ?string}|null  $closedWonOverride
+     * @param  array{name: string, color: ?string}|null  $closedLostOverride
      */
     public function createWithCustoms(
         ?int $workflowId,
         array $customStatuses,
         ?array $openOverride = null,
-        ?array $closedOverride = null,
+        ?array $closedWonOverride = null,
+        ?array $closedLostOverride = null,
     ): void {
         $this->forceCreateSystemRow($workflowId, WorkflowStatusSystemKey::Open, 0, $openOverride);
 
@@ -56,13 +60,22 @@ final class WorkflowStatusWriter
             $sortOrder += self::STEP;
         }
 
-        $this->forceCreateSystemRow($workflowId, WorkflowStatusSystemKey::Closed, $sortOrder, $closedOverride);
+        $closedOverrides = [
+            WorkflowStatusSystemKey::ClosedWon->value => $closedWonOverride,
+            WorkflowStatusSystemKey::ClosedLost->value => $closedLostOverride,
+        ];
+
+        foreach (WorkflowStatusSystemKey::closedKeys() as $key) {
+            $this->forceCreateSystemRow($workflowId, $key, $sortOrder, $closedOverrides[$key->value]);
+            $sortOrder += self::STEP;
+        }
     }
 
     /**
      * Authoritative sync of $set's CUSTOM rows (id present = update, absent =
      * new; existing customs not included = deleted), resequencing sort_order
-     * so 'open' stays first and 'closed' stays last. A submitted row whose
+     * so 'open' stays first and the two 'closed_won'/'closed_lost' rows stay
+     * last. A submitted row whose
      * `id` matches an existing SYSTEM row is routed to
      * assertMutableSystemRow() instead (name/color only, spec 0047 data
      * contract) and never counted as a custom / never deleted.
@@ -104,9 +117,11 @@ final class WorkflowStatusWriter
      */
     private function forceCreateSystemRow(?int $workflowId, WorkflowStatusSystemKey $key, int $sortOrder, ?array $override = null): void
     {
-        [$defaultName, $group] = $key === WorkflowStatusSystemKey::Open
-            ? ['Aperta', StatusGroup::Open]
-            : ['Chiusa', StatusGroup::Closed];
+        [$defaultName, $group] = match ($key) {
+            WorkflowStatusSystemKey::Open => ['Aperta', WorkflowStatusGroup::Open],
+            WorkflowStatusSystemKey::ClosedWon => ['Chiusa positiva', WorkflowStatusGroup::ClosedWon],
+            WorkflowStatusSystemKey::ClosedLost => ['Chiusa negativa', WorkflowStatusGroup::ClosedLost],
+        };
 
         OpportunityWorkflowStatus::query()->forceCreate([
             'opportunity_workflow_id' => $workflowId,
@@ -238,9 +253,12 @@ final class WorkflowStatusWriter
             $sortOrder += self::STEP;
         }
 
-        OpportunityWorkflowStatus::query()
-            ->where('opportunity_workflow_id', $workflowId)
-            ->where('system_key', WorkflowStatusSystemKey::Closed->value)
-            ->update(['sort_order' => $sortOrder]);
+        foreach (WorkflowStatusSystemKey::closedKeys() as $key) {
+            OpportunityWorkflowStatus::query()
+                ->where('opportunity_workflow_id', $workflowId)
+                ->where('system_key', $key->value)
+                ->update(['sort_order' => $sortOrder]);
+            $sortOrder += self::STEP;
+        }
     }
 }

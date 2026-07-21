@@ -2,6 +2,173 @@
 
 > Injected at session start. Update at every green state.
 
+## AZIONE "DUPLICA" su Progetti e Campagne (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
+
+Nuova row-action `duplicate` sulle tabelle Projects e Campaigns. Decisioni utente: (1) apre il
+form di CREATE PRECOMPILATO dal sorgente (nessun clone server-side istantaneo); (2) `name` =
+nome sorgente + `" (copia)"`, `code` svuotato -> rigenerato dal server al save; ogni altro campo
+copiato (FK, date, budget, target_lead, description, custom fields; per Campaign anche `project_id`).
+Salvataggio via i POST /projects e /campaigns ESISTENTI: NESSUN nuovo endpoint / service / permesso /
+migrazione. Gating: permesso `.create` del modulo (`projects.create` / `campaigns.create`).
+Funziona in ENTRAMBE le open-mode (spec 0042): modale Sheet + pagina dedicata `/:id/duplicate`.
+
+BACKEND (additivo, 4 file + 2 test):
+- `ProjectColumnCatalog::actions()` / `CampaignColumnCatalog::actions()`: nuova entry
+  `{key:'duplicate', label:'actions.duplicate', icon:'copy', type:'action', confirm:false,
+  permission:'projects.create'|'campaigns.create'}`, inserita TRA `delete` e `activity`
+  (ordine finale: view, edit, delete, duplicate, activity → inline resta view/edit/delete, duplicate
+  e activity nel menu overflow, `INLINE_ACTION_LIMIT=3` invariato).
+- `ProjectsTableDefinition::actionsFor()` / `CampaignsTableDefinition::actionsFor()`: append
+  `'duplicate'` quando `Gate::forUser($actor)->allows('create', Project|Campaign::class)` (ability
+  di CLASSE, non d'istanza — `create` non e' per-record). `resolveActions()` gia' filtra il catalogo
+  per permesso e strippa `permission` prima della serializzazione → chi non ha `.create` non vede
+  ne' l'entry nel catalogo ne' `duplicate` nel whitelist di riga.
+
+FRONTEND (module-layer domain-agnostic + prefill per-dominio):
+- `ModuleFormScreenMode` += `{type:'duplicate', id:number}` (porta solo l'id; il FormScreen di ogni
+  dominio fa il fetch del detail da se', come l'edit loader).
+- `use-module-opener.tsx`: `openDuplicate(row)` (modale → SheetState `{kind:'duplicate'}` con titolo
+  CREATE; page → naviga `${basePath}/${id}/duplicate`).
+- `module-routes.tsx`: genera `${base}/:id/duplicate` → `<ModuleFormPage variant="duplicate">`.
+- `module-form-page.tsx`: nuovo prop `variant?:'duplicate'`; `isEdit=false` per duplicate → gate
+  `.create` + titoli create; onCancel torna a `${basePath}/${id}`.
+- Per-dominio (projects + campaigns speculari): `*FormMode` += `{type:'duplicate', source}`;
+  nuovo `project-duplicate-loader.tsx` / `CampaignDuplicateScreen` (mirror dell'edit loader);
+  `use-*-form-meta` risolve i permessi CREATE per duplicate (`mode.type !== 'edit'`);
+  `use-*-form.ts` con helper condiviso `map*ToFormValues()` (usato da edit+duplicate),
+  branch duplicate con `code:initialCode`, `name:source.name + t('common.copySuffix')`,
+  onSubmit = path CREATE. Custom fields seminati da `source.custom_fields`.
+- BUGFIX trovato: l'effetto spec-0039 "preseleziona lo status di sistema Nuovo" era gated su
+  `!isEdit`, vero anche in duplicate → avrebbe sovrascritto il `pipeline_status_id` copiato.
+  Ri-gated su `isStandaloneCreate = mode.type === 'create'`.
+- Icona: `copy → lucide Copy` in `defaultActionIconMap`. i18n: `actions.duplicate` (it/en) +
+  `common.copySuffix` (`' (copia)'`/`' (copy)'`, spazio iniziale voluto).
+
+VERIFICA (green reale, eseguita in indipendenza dal lead): BE `php artisan test tests/Feature/Projects
+tests/Feature/Campaigns` 142/142 (642 assertions). FE `tsc --noEmit` pulito; `vitest run
+src/features/{projects,campaigns,modules}` 211/211 (21 file), inclusi 2 nuovi test duplicate.
+UNICO rosso: `src/features/table/cell-renderers.test.tsx` (3 test, locale leak it/en) — PREESISTENTE
+ad HEAD (confermato con `git stash -u`), NON toccato da questo lavoro. NON committato (regola §3.6).
+
+## SEDE PREFILL — 2 BUGFIX RUNTIME (2026-07-21) — GREEN, NON COMMITTATO
+
+Dopo l'implementazione sede, due bug emersi in uso reale (confermati risolti dall'utente):
+
+1. Colonna tabella `operational_site` mostrava `[object Object]` su projects/campaigns: la colonna
+   display-only emette un oggetto `{id,label}` (la sede non ha `name`, label composta "{line1} - {city}"),
+   ma mancava il cell renderer. FIX: registrato `operational_site: (p) => <RelationCell {...p} icon={MapPin}/>`
+   in `features/{projects,campaigns}/column-renderers.tsx` (leads lo aveva gia').
+
+2. Prefill campagna dal progetto leggeva il progetto SBAGLIATO. `ProjectService::forSelect` ritorna sempre
+   la prima pagina (ordinata per name) + gli `ids` richiesti APPESI IN CODA (`appendHydratedIds`), quindi
+   `page.items[0]` NON e' il progetto selezionato. `use-campaign-project-meta.ts::loadProjectMeta` faceva
+   `page.items[0]?.meta` -> FIX: `page.items.find(i => i.id === projectId)?.meta`. Sistemava in un colpo
+   sede+partner+geo+budget (tutti da quella funzione). Regressione aggiunta in `campaign-project-link.test.tsx`
+   (decoy primo, selezionato in coda). Il lato lead usa `onItemChange` sull'item cliccato -> nessun bug items[0].
+
+VERIFICA: tsc EXIT 0; ESLint pulito; vitest projects+campaigns+leads 271/271.
+
+## SEDE (OperationalSite) EREDITATA project -> campaign -> lead, PREFILL MODIFICABILE (2026-07-21) — GREEN BACKEND, NON COMMITTATO
+
+Contratto congelato: aggiunta `operational_site_id` a `projects` e `campaigns` (gia' presente su `leads`).
+NESSUN read-through/lock/inheritance server-side: il campo e' un normale FK, editabile a ogni livello, nessun
+forcing nel Service (a differenza di BR-2/BR-5 su pipeline_status/business_function/geo). Il frontend fa da
+solo il prefill del form figlio dal valore corrente del genitore — questo backend non lo forza in alcun modo.
+
+MODIFICHE BE (layering completo):
+- Migration NUOVA `2026_07_21_010000_add_operational_site_id_to_projects_and_campaigns_tables.php`: rispecchia
+  la forma di `..._add_geo_columns_to_projects_and_campaigns_tables.php` (foreignId nullable + nullOnDelete +
+  index esplicito, down con dropForeign/dropIndex/dropColumn).
+- Model `Project`/`Campaign`: `operational_site_id` in `#[Fillable]` + relazione `operationalSite(): BelongsTo`
+  (mirror di `Lead::operationalSite()`).
+- FormRequest Store/Update Project/Campaign: regola `['nullable','integer', Rule::exists('operational_sites','id')]`
+  (identica a StoreLeadRequest), NESSUN `prohibited`/derivation.
+- DTO `Create/UpdateProject/CampaignData`: proprieta' `operationalSiteId` (+`operationalSiteIdSubmitted` sugli
+  Update, pattern `UpdateLeadData`), cablata in `attributes()`/`submittedAttributes()`. ATTENZIONE: il
+  costruttore di `CreateProjectData` ha parametri POSIZIONALI misti required/optional — se aggiungi un campo
+  required in mezzo, aggiornalo SIA in `fromValidated()` SIA in `attributes()` (bug reale incontrato:
+  `ArgumentCountError` per aver dimenticato `operationalSiteId:` in `fromValidated()`).
+- Service `ProjectService`/`CampaignService`: `operational_site_id` passa come FK normale; `operationalSite.addresses.city`
+  aggiunta a DETAIL_RELATIONS e alle query for-select (niente `applyGeoInheritance`-style forcing).
+- Resource `ProjectResource`/`CampaignResource`/`ProjectForSelectResource`/`CampaignForSelectResource`: emettono
+  `operational_site_id` + `operational_site: {id,label}|null` (label composta "{line1} - {city}", stessa logica
+  di `LeadResource`/`OperationalSiteForSelectResource` — NESSUN helper condiviso esisteva, quindi replicata,
+  non estratta, per blast radius minimo). `CampaignForSelectResource.meta.operational_site` è `{id,label}`,
+  STESSA shape di Project (CORREZIONE 2026-07-21: la prima versione aggiungeva anche `state_id`/`state_label`
+  per un ipotetico auto-fill Regione lato Lead form — rimosso su decisione utente, "la Regione del Lead resta
+  LIBERA, mai auto-compilata dalla sede": quel bag era dead code, mai consumato dal FE).
+  Scostamento dal testo del task: NON uso `whenLoaded()` (avrebbe rotto il tipo/richiesto MissingValue-handling
+  e questi Resource non lo usano mai per nessun'altra relazione, sempre eager-loaded dal Service) — accesso
+  diretto come tutte le altre relazioni dello stesso Resource.
+- TableDefinition: colonna `operational_site` DISPLAY-ONLY (no sort/filter) su `ProjectColumnCatalog`
+  (nuovo helper privato `displayOnlyColumn()`, mirror di `CampaignColumnCatalog`) e `CampaignColumnCatalog`;
+  mapRow la valorizza dal relation eager-load (per le campagne e' la Sede PROPRIA della campagna, mai quella
+  del project — coerente col "nessun forcing").
+- Authorization `ProjectsAuthorization`/`CampaignsAuthorization`: `operational_site_id` aggiunto come campo
+  editabile non-mandatory (righe `source_id` del diff in-progress NON toccate).
+
+TEST NUOVI (file-size split, ProjectCrudTest/CampaignCrudTest gia' vicini al hard-limit 500): create/update
+persistono `operational_site_id`, 422 su id inesistente, resource/for-select espongono `operational_site` —
+in `tests/Feature/Projects/ProjectOperationalSiteTest.php` e `tests/Feature/Campaigns/CampaignOperationalSiteTest.php`
+(NUOVI). Aggiornati `ProjectMetaTest`/`ProjectTableTest`/`CampaignTableTest` (liste colonne/campi ora includono
+`operational_site_id`/`operational_site` — requisito cambiato, non test-tampering).
+
+VERIFICA (green reale): BE `php artisan test tests/Feature/Projects tests/Feature/Campaigns` 134/134 pass,
+612 assertions. Suite BE completa: 3099/3111 pass; gli 11 rossi sono PREESISTENTI/estranei (navigation-node
+su Attributes/Companies/CompanySites/CustomFields/ProductCategories/Products/ReferentTypes/Referents/VatRates
++ 1 Migration preview test) — nessuno tocca file di questo cambio, confermato anche isolando
+`tests/Feature/Leads tests/Feature/OperationalSites tests/Unit/Models` (375/376, unico rosso lo stesso
+`OperationalSiteSecurityTest` navigation-node). Pint pulito (`--dirty --test` + esplicito sui file toccati).
+
+NON TOCCATO (fuori scope, di competenza frontend): nessun file `frontend/`. Il prefill del form figlio dal
+Sede del genitore e la label i18n `projects.columns.operational_site`/`campaigns.columns.operational_site`
+restano da fare lato FE.
+
+## CAMPAGNA E PROGETTO — DATA FINE (end_date) NON OBBLIGATORIA (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
+
+Direttiva utente: "campagna e progetto, Data fine non obbligatorio". `end_date` diventa opzionale
+(nullable) su Progetti e Campagne; `start_date` RESTA obbligatorio. La regola d'ordine BR-6
+(`end_date >= start_date`) resta ma vale solo quando entrambe presenti.
+
+CONTRATTO: DB gia' nullable (nessuna migrazione), DTO gia' `?string $endDate`, payload FE gia' converte
+`'' -> null`. Cambiate solo le regole di validazione e i marker "required":
+- BE requests: `end_date` `required`->`nullable` (Store) e `sometimes,required`->`sometimes,nullable`
+  (Update) in Store/Update ProjectRequest e CampaignRequest. `after_or_equal:start_date` invariato
+  (nullable short-circuita su null).
+- BE authorization: in ProjectsAuthorization + CampaignsAuthorization, `end_date` FieldDefinition da
+  `mandatory: true` -> default (non-mandatory: la matrice ruoli non forza piu' required) e ceiling da
+  `visibleEditable(required: true)` -> `visibleEditable()` (via l'asterisco FE). `start_date` invariato.
+- FE schema: `end_date: z.string().min(1,...)` -> `z.string()` in project-schema.ts e campaign-schema.ts.
+  Rimosse le 4 chiavi i18n orfane `endDateRequired` (en/it x projects/campaigns).
+
+TEST: ProjectCrudTest (dataset mandatory perde 'end_date'; +test "succeeds when end_date omitted").
+Campaign: estratti i test date in NUOVO tests/Feature/Campaigns/CampaignDatesTest.php (start_date required
++ end_date optional) perche' CampaignCrudTest superava il hard-limit 500 (ora 480; helper
+campaignUserWith/campaignStoreDates ridefiniti con guard function_exists, convenzione esistente). FE schema
+test: end_date ora "accepts missing" invece di "rejects"; campaign test verifica start_date-only error.
+
+VERIFICA (green reale): BE `php artisan test tests/Feature/Projects tests/Feature/Campaigns` 124 pass/566
+assert; ProjectFieldPermission+Meta 7 pass; Pint pass. FE `vitest run src/features/projects
+src/features/campaigns` 174 pass; `tsc --noEmit` EXIT 0; ESLint pulito sui file toccati.
+
+## LEAD FORM — REGIONE LIBERA, SENZA EREDITARIETA' DAL SEDE (2026-07-21) — GREEN FE, NON COMMITTATO
+
+Direttiva utente: "Lead form, rendere regione libero, senza ereditarieta'". La Regione (`state_id`)
+resta un picker first-class always-editable, ma NON eredita piu' dal Sede (operational site): rimosso
+l'auto-fill che copiava `site.meta.state_id`/`state_label` nel campo Regione. Solo frontend, contratto API
+invariato (`state_id` continua a essere inviato unconditionally in create/update, sparse diff invariato).
+
+MODIFICHE (`frontend/src/features/leads/`):
+- `lead-form-body.tsx`: rimossi `autoFilledState` state, `handleSiteItemChange`, `onItemChange` sul Sede
+  select, e i type import `RelationFieldRef`/`ForSelectItem`/`OperationalSiteForSelectItem` ora inutili.
+  Il Regione select usa `selected={original?.state ?? null}` (prima `autoFilledState ?? original?.state`).
+- `lead-schema.ts` / `lead-form-payload.ts`: aggiornati i commenti (Regione = campo libero, mai ereditato).
+- `lead-form-body-region.test.tsx`: riscritti i test auto-fill -> "does NOT inherit from Sede" +
+  "free user-editable, sends picked state_id" (payload ora `state_id: 3`, non piu' 7 dal Sede);
+  mock select semplificato (rimossi SITE_META e onItemChange). `lead-form-body.test.tsx`: stesso mock semplificato.
+
+VERIFICA (green): FE `vitest run src/features/leads` 82/82 pass; `tsc --noEmit` EXIT 0; ESLint pulito sui file toccati.
+
 ## COLONNA ID DI DEFAULT NASCOSTA (PRIMA) PER OGNI TABELLA (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
 
 Direttiva utente: "Aggiungere colonna id di default nascosta per ogni tabella" + follow-up "la colonna

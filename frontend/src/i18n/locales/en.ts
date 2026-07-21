@@ -59,6 +59,8 @@ export const en = {
     edit: 'Edit',
     new: 'New',
     viewProfile: "View {{name}}'s profile",
+    /** Appended to the name when duplicating a record (row action "duplicate"); leading space by design. */
+    copySuffix: ' (copy)',
   },
   config: {
     error: {
@@ -113,6 +115,7 @@ export const en = {
     view: 'View',
     edit: 'Edit',
     delete: 'Delete',
+    duplicate: 'Duplicate',
     activity: 'Activity',
     convertToOpportunity: 'Convert to Opportunity',
   },

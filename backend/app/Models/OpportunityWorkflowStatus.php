@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Enums\StatusGroup;
+use App\Enums\WorkflowStatusGroup;
 use App\Models\Abstracts\BaseModel;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\OpportunityWorkflowStatusFactory;
@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * (AC-005/AC-010). `system_key`/`opportunity_workflow_id` are DELIBERATELY
  * absent from #[Fillable] — never mass-assignable, written only by the
  * migration seed and the service that creates/syncs a workflow's status set.
+ * `group` (App\Enums\WorkflowStatusGroup) classifies the row as
+ * open/pending/closed_won/closed_lost — the closed phase carries its outcome.
  */
 #[Fillable(['name', 'color', 'sort_order', 'group'])]
 class OpportunityWorkflowStatus extends BaseModel
@@ -32,7 +34,7 @@ class OpportunityWorkflowStatus extends BaseModel
     {
         return [
             'sort_order' => 'int',
-            'group' => StatusGroup::class,
+            'group' => WorkflowStatusGroup::class,
         ];
     }
 
@@ -42,8 +44,8 @@ class OpportunityWorkflowStatus extends BaseModel
     }
 
     /**
-     * Whether this is a pinned system row ('open'/'closed', AC-004) rather
-     * than a custom, user-created status.
+     * Whether this is a pinned system row ('open'/'closed_won'/'closed_lost',
+     * AC-004) rather than a custom, user-created status.
      */
     public function isSystem(): bool
     {

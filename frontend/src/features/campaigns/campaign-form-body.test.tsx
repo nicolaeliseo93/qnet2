@@ -147,10 +147,10 @@ function campaign(
     project: null,
     name: 'Spring push',
     description: null,
-    source_id: null,
-    source: null,
     partner_id: null,
     partner: null,
+    operational_site_id: null,
+    operational_site: null,
     derived_from_project: false,
     pipeline_status_id: 1,
     pipeline_status: { id: 1, name: 'Active', color: 'blue' },
@@ -385,5 +385,47 @@ describe('CampaignForm — product category depends on business function (spec 0
 
     await waitFor(() => expect(screen.getByTestId('select-Product category')).toBeInTheDocument())
     expect(screen.getByTestId('select-Product category')).toBeEnabled()
+  })
+})
+
+describe('CampaignForm — Sede (operational site)', () => {
+  it('renders the Site field, always editable, and pre-fills it from the loaded campaign in edit mode', async () => {
+    render(
+      <CampaignForm
+        mode={{
+          type: 'edit',
+          campaign: campaign({ operational_site_id: 8, operational_site: { id: 8, label: 'Warehouse A' } }),
+        }}
+        onSuccess={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    )
+
+    await waitFor(() => expect(screen.getByTestId('select-Site')).toBeInTheDocument())
+    expect(screen.getByTestId('select-Site')).toHaveTextContent('8')
+    expect(screen.getByTestId('select-Site')).not.toBeDisabled()
+  })
+
+  it('sends the picked operational_site_id on a standalone create', async () => {
+    createCampaignMock.mockResolvedValue(campaign())
+
+    render(<CampaignForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Spring push' } })
+    fireEvent.click(screen.getByTestId('select-Status'))
+    fireEvent.click(screen.getByTestId('select-Business function'))
+    fireEvent.click(screen.getByTestId('select-Product category'))
+    fireEvent.click(screen.getByTestId('geo-select'))
+    fireEvent.click(screen.getByTestId('select-Site'))
+    fillRequiredDates()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(createCampaignMock).toHaveBeenCalledTimes(1))
+    const payload = createCampaignMock.mock.calls[0][0] as Record<string, unknown>
+    expect(payload.operational_site_id).toBe(3)
   })
 })

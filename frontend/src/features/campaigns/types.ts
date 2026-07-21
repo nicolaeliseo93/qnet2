@@ -6,11 +6,14 @@
 
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
-import type { ProjectRelationRef, PipelineStatusRef } from '@/features/projects/types'
+import type { ProjectOperationalSiteRef, ProjectRelationRef, PipelineStatusRef } from '@/features/projects/types'
 import type { GeoScope } from '@/features/geo/geo-scope'
 
-/** Hydrated `{id, name}` relation shared by source/partner/business_function/state/product_category (identical shape to a project's, reused rather than redeclared). */
+/** Hydrated `{id, name}` relation shared by partner/business_function/state/product_category (identical shape to a project's, reused rather than redeclared). */
 export type CampaignRelationRef = ProjectRelationRef
+
+/** The linked operational site's identity, as exposed by `CampaignResource.operational_site` (identical shape to a project's, reused rather than redeclared). */
+export type CampaignOperationalSiteRef = ProjectOperationalSiteRef
 
 /** The linked project's minimal identity, as exposed by `CampaignResource.project`. */
 export interface CampaignProjectRef {
@@ -38,10 +41,11 @@ export interface CampaignDetail {
   project: CampaignProjectRef | null
   name: string
   description: string | null
-  source_id: number | null
-  source: CampaignRelationRef | null
   partner_id: number | null
   partner: CampaignRelationRef | null
+  /** The campaign's own Sede: prefilled (never locked) from the linked project's on selection, always editable (directive: project -> campaign -> lead prefill chain). */
+  operational_site_id: number | null
+  operational_site: CampaignOperationalSiteRef | null
   derived_from_project: boolean
   pipeline_status_id: number | null
   pipeline_status: PipelineStatusRef | null
@@ -96,8 +100,8 @@ export interface CreateCampaignPayload {
   name: string
   project_id?: number | null
   description?: string | null
-  source_id?: number | null
   partner_id?: number | null
+  operational_site_id?: number | null
   pipeline_status_id?: number | null
   business_function_id?: number | null
   product_category_id?: number | null
@@ -120,3 +124,5 @@ export type UpdateCampaignPayload = Partial<CreateCampaignPayload>
 export type CampaignFormMode =
   | { type: 'create' }
   | { type: 'edit'; campaign: CampaignDetailWithPermissions }
+  /** Create form pre-filled from `source` (row action "duplicate"): still submits via the create path. */
+  | { type: 'duplicate'; source: CampaignDetail }

@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Enums\StatusGroup;
+use App\Enums\WorkflowStatusGroup;
 use App\Models\OpportunityWorkflow;
 use App\Models\OpportunityWorkflowStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -28,19 +28,21 @@ class OpportunityWorkflowStatusFactory extends Factory
             'color' => fake()->randomElement(['slate', 'green', 'red', 'blue']),
             'sort_order' => self::$nextSortOrder++,
             'system_key' => null,
-            'group' => StatusGroup::Open,
+            'group' => WorkflowStatusGroup::Open,
         ];
     }
 
     /**
-     * Marks the row as one of the two mandatory system rows ('open'/'closed',
-     * spec 0047 AC-004), mirroring OpportunityStatusFactory::system().
+     * Marks the row as one of the three mandatory system rows ('open'/
+     * 'closed_won'/'closed_lost', spec 0047 AC-004), mirroring
+     * OpportunityStatusFactory::system().
      */
     public function system(string $key): static
     {
         return $this->state(fn () => match ($key) {
-            'closed' => ['system_key' => 'closed', 'name' => 'Chiusa', 'sort_order' => 999, 'group' => StatusGroup::Closed],
-            default => ['system_key' => 'open', 'name' => 'Aperta', 'sort_order' => 0, 'group' => StatusGroup::Open],
+            'closed_won' => ['system_key' => 'closed_won', 'name' => 'Chiusa positiva', 'sort_order' => 998, 'group' => WorkflowStatusGroup::ClosedWon],
+            'closed_lost' => ['system_key' => 'closed_lost', 'name' => 'Chiusa negativa', 'sort_order' => 999, 'group' => WorkflowStatusGroup::ClosedLost],
+            default => ['system_key' => 'open', 'name' => 'Aperta', 'sort_order' => 0, 'group' => WorkflowStatusGroup::Open],
         });
     }
 

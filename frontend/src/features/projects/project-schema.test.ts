@@ -21,7 +21,6 @@ function baseValues() {
     name: 'New project',
     description: null,
     pipeline_status_id: 1,
-    source_id: null,
     business_function_id: 5,
     country_id: 1,
     state_id: null,
@@ -29,6 +28,7 @@ function baseValues() {
     city_id: null,
     product_category_id: 6,
     partner_id: null,
+    operational_site_id: null,
     start_date: '2026-01-01',
     end_date: '2026-12-31',
     total_budget: null,
@@ -92,13 +92,10 @@ describe('buildCreateProjectSchema', () => {
     }
   })
 
-  it('rejects a missing end_date (now required)', () => {
+  it('accepts a missing end_date (optional)', () => {
     const schema = buildCreateProjectSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
     const result = schema.safeParse({ ...baseValues(), end_date: '' })
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.issues.some((issue) => issue.path.join('.') === 'end_date')).toBe(true)
-    }
+    expect(result.success).toBe(true)
   })
 
   it('rejects a null business_function_id (now required)', () => {

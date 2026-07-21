@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\OpportunityWorkflows;
 
-use App\Enums\StatusGroup;
+use App\Enums\WorkflowStatusGroup;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -37,7 +37,7 @@ class UpdateDefaultStatusesRequest extends FormRequest
             'statuses.*.id' => ['sometimes', 'integer'],
             'statuses.*.name' => ['required', 'string', 'max:191'],
             'statuses.*.color' => ['nullable', 'string', 'max:32'],
-            'statuses.*.group' => ['required', Rule::enum(StatusGroup::class)],
+            'statuses.*.group' => ['required', Rule::enum(WorkflowStatusGroup::class)],
         ];
     }
 

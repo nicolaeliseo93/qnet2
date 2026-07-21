@@ -9,10 +9,20 @@ import type { CustomFieldValue } from '@/features/custom-fields/types'
 import type { GeoScope } from '@/features/geo/geo-scope'
 import type { AdvancedFilterValues } from '@/features/table/advanced-filters/types'
 
-/** Hydrated projection of a plain `{id, name}` relation (source/business_function/state/product_category/partner). */
+/** Hydrated projection of a plain `{id, name}` relation (business_function/state/product_category/partner). */
 export interface ProjectRelationRef {
   id: number
   name: string
+}
+
+/**
+ * The linked operational site's identity, as exposed by `ProjectResource.operational_site`.
+ * `operational_sites` has no `name` column (mirrors `LeadOperationalSiteRef`):
+ * the identity is a server-composed "{line1} - {city}" label.
+ */
+export interface ProjectOperationalSiteRef {
+  id: number
+  label: string
 }
 
 /** Hydrated projection of the project's status, carrying its display color token. */
@@ -37,8 +47,6 @@ export interface ProjectDetail {
   description: string | null
   pipeline_status_id: number
   pipeline_status: PipelineStatusRef
-  source_id: number | null
-  source: ProjectRelationRef | null
   business_function_id: number | null
   business_function: ProjectRelationRef | null
   /** Geo cascade (spec 0027 BR-4): `country_id` is required server-side, the other three optional. */
@@ -56,6 +64,9 @@ export interface ProjectDetail {
   product_category: ProjectRelationRef | null
   partner_id: number | null
   partner: ProjectRelationRef | null
+  /** The Sede inherited by every campaign/lead created under this project (prefill, not a lock). */
+  operational_site_id: number | null
+  operational_site: ProjectOperationalSiteRef | null
   start_date: string | null
   end_date: string | null
   total_budget: string | null
@@ -92,7 +103,6 @@ export interface CreateProjectPayload {
   name: string
   pipeline_status_id?: number | null
   description?: string | null
-  source_id?: number | null
   business_function_id?: number | null
   /** Geo cascade (spec 0027 BR-4): `country_id` is required on create. */
   country_id?: number | null
@@ -101,6 +111,7 @@ export interface CreateProjectPayload {
   city_id?: number | null
   product_category_id?: number | null
   partner_id?: number | null
+  operational_site_id?: number | null
   start_date?: string | null
   end_date?: string | null
   total_budget?: number | null
@@ -116,6 +127,8 @@ export type UpdateProjectPayload = Partial<CreateProjectPayload>
 export type ProjectFormMode =
   | { type: 'create' }
   | { type: 'edit'; project: ProjectDetailWithPermissions }
+  /** Create form pre-filled from `source` (row action "duplicate"): still submits via the create path. */
+  | { type: 'duplicate'; source: ProjectDetail }
 
 /** Per-card action affordances, computed server-side with the Gate (spec 0026 BR-2). */
 export interface ProjectCardPermissions {

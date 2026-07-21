@@ -6,6 +6,7 @@ import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { fetchProject, projectDetailQueryKey } from '@/features/projects/api'
 import { ProjectForm } from '@/features/projects/project-form'
 import { ProjectEditLoader } from '@/features/projects/project-edit-loader'
+import { ProjectDuplicateLoader } from '@/features/projects/project-duplicate-loader'
 import { ProjectDetailView } from '@/features/projects/project-detail'
 import { OPEN_MODE_MODAL } from '@/features/modules/types'
 import type {
@@ -59,6 +60,10 @@ export function ProjectFormScreen({ mode, onSuccess, onCancel }: ModuleFormScree
 
   if (mode.type === 'create') {
     return <ProjectForm mode={{ type: 'create' }} onSuccess={handleSuccess} onCancel={onCancel} />
+  }
+
+  if (mode.type === 'duplicate') {
+    return <ProjectDuplicateLoader projectId={mode.id} onSuccess={handleSuccess} onCancel={onCancel} />
   }
 
   return <ProjectEditLoader projectId={mode.id} onSuccess={handleSuccess} onCancel={onCancel} />

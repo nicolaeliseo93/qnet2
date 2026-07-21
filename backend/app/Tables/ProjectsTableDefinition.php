@@ -3,6 +3,7 @@
 namespace App\Tables;
 
 use App\Enums\GeoScopeLevel;
+use App\Models\OperationalSite;
 use App\Models\PipelineStatus;
 use App\Models\Project;
 use App\Models\User;
@@ -18,8 +19,8 @@ use Illuminate\Support\Facades\Gate;
  * Table definition for the `projects` domain (spec 0023).
  *
  * Real columns (code, name, start_date, end_date, total_budget, target_lead,
- * created_at) are handled entirely by the generic engine. The 9
- * classification/geo FKs (pipeline_status, source,
+ * created_at) are handled entirely by the generic engine. The 8
+ * classification/geo FKs (pipeline_status,
  * business_function, country, state, province, city, product_category,
  * partner) have no real column of their own — each is DERIVED against the
  * related row's `name`, resolved here generically via DERIVED_RELATIONS: a
@@ -41,7 +42,7 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     private const int MAX_FILTER_VALUES = 200;
 
     /**
-     * Allow-list of the 9 classification/geo FKs with no real column of
+     * Allow-list of the 8 classification/geo FKs with no real column of
      * their own: relation accessor, related table and owning FK column,
      * keyed by the derived column id. Single source of truth for
      * applyDerivedFilter/applyDerivedSort/distinctValues below.
@@ -50,7 +51,6 @@ class ProjectsTableDefinition extends AbstractTableDefinition
      */
     private const array DERIVED_RELATIONS = [
         'pipeline_status' => ['relation' => 'pipelineStatus', 'table' => 'pipeline_statuses', 'fk' => 'pipeline_status_id'],
-        'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
         'business_function' => ['relation' => 'businessFunction', 'table' => 'business_functions', 'fk' => 'business_function_id'],
         'country' => ['relation' => 'country', 'table' => 'countries', 'fk' => 'country_id'],
         'state' => ['relation' => 'state', 'table' => 'states', 'fk' => 'state_id'],
@@ -93,8 +93,11 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     public function baseQuery(): Builder
     {
         // Eager-load every classification FK to avoid N+1 when each row
-        // projects all 7 of them.
-        return Project::query()->with(array_column(self::DERIVED_RELATIONS, 'relation'));
+        // projects all 7 of them, plus the display-only `operational_site`
+        // column's composed-label source (mirrors LeadOperationalSiteColumn).
+        return Project::query()
+            ->with(array_column(self::DERIVED_RELATIONS, 'relation'))
+            ->with('operationalSite.addresses.city');
     }
 
     /**
@@ -171,6 +174,7 @@ class ProjectsTableDefinition extends AbstractTableDefinition
         $mapped['pipeline_status'] = $this->summarizePipelineStatus($row->pipelineStatus);
 
         $mapped['geo_scope'] = GeoScopeLevel::for($row->country_id, $row->state_id, $row->province_id, $row->city_id)?->value;
+        $mapped['operational_site'] = $this->summarizeOperationalSite($row->operationalSite);
 
         $mapped['start_date'] = $row->start_date;
         $mapped['end_date'] = $row->end_date;
@@ -197,6 +201,28 @@ class ProjectsTableDefinition extends AbstractTableDefinition
         $name = $geo ? GeoNameLocalizer::toItalian($related->name) : $related->name;
 
         return ['id' => $related->id, 'name' => $name];
+    }
+
+    /**
+     * The display-only `operational_site` column: the site has no own name
+     * column, so its label is composed ("{line1} - {city}"), the same
+     * composition LeadResource/OperationalSiteForSelectResource use. Relies
+     * on baseQuery() eager-loading `operationalSite.addresses.city`.
+     *
+     * @return array{id: int, label: string}|null
+     */
+    private function summarizeOperationalSite(?Model $related): ?array
+    {
+        if ($related === null) {
+            return null;
+        }
+
+        /** @var OperationalSite $related */
+        $address = $related->addresses->first();
+        $city = $address?->city?->localizedName();
+        $label = $address === null ? '' : ($city === null ? (string) $address->line1 : "{$address->line1} - {$city}");
+
+        return ['id' => $related->id, 'label' => $label];
     }
 
     /**
@@ -236,6 +262,10 @@ class ProjectsTableDefinition extends AbstractTableDefinition
             $allowed[] = 'delete';
         }
 
+        if (Gate::forUser($actor)->allows('create', Project::class)) {
+            $allowed[] = 'duplicate';
+        }
+
         if (Gate::forUser($actor)->allows('viewActivity', $row)) {
             $allowed[] = 'activity';
         }
@@ -244,7 +274,7 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Handle the 7 derived set filters via whereHas on the related row's
+     * Handle the 6 derived set filters via whereHas on the related row's
      * name, generically resolved from DERIVED_RELATIONS. Every real column
      * falls through to the generic engine.
      *
@@ -314,7 +344,7 @@ class ProjectsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Excel-like distinct values (spec 0004/0005) for each of the 7 derived
+     * Excel-like distinct values (spec 0004/0005) for each of the 6 derived
      * columns: distinct related-row NAMES among the projects matching
      * `$query` (already scoped by every OTHER active filter).
      *

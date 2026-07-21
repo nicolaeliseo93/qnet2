@@ -63,7 +63,6 @@ class CampaignService
         'project.province',
         'project.city',
         'project.productCategory',
-        'source',
         'partner',
         'pipelineStatus',
         'businessFunction',
@@ -72,6 +71,7 @@ class CampaignService
         'province',
         'city',
         'productCategory',
+        'operationalSite.addresses.city',
     ];
 
     public function loadDetail(Campaign $campaign): Campaign
@@ -187,7 +187,9 @@ class CampaignService
      */
     public function forSelect(ForSelectQuery $query): ForSelectResult
     {
-        $base = Campaign::query()->select(['id', 'code', 'name']);
+        $base = Campaign::query()
+            ->select(['id', 'code', 'name', 'operational_site_id'])
+            ->with(['operationalSite.addresses.city', 'operationalSite.addresses.state']);
 
         if ($query->hasSearch()) {
             $base->where(function ($relatedQuery) use ($query): void {
@@ -238,7 +240,8 @@ class CampaignService
 
         /** @var Collection<int, Campaign> $hydrated */
         $hydrated = Campaign::query()
-            ->select(['id', 'code', 'name'])
+            ->select(['id', 'code', 'name', 'operational_site_id'])
+            ->with(['operationalSite.addresses.city', 'operationalSite.addresses.state'])
             ->whereIn('id', $missingIds)
             ->orderBy('name')
             ->orderBy('id')

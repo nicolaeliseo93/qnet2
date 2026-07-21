@@ -17,6 +17,7 @@ import { PROJECT_STATUSES_FOR_SELECT_RESOURCE } from '@/features/pipeline-status
 import { useDefaultSystemStatusId } from '@/features/status-reorder/use-default-system-status'
 import type { CampaignDetail, CampaignFormMode } from '@/features/campaigns/types'
 import { useCustomFieldsForm } from '@/features/custom-fields/use-custom-fields-form'
+import type { CustomFieldValue } from '@/features/custom-fields/types'
 
 /** Server-side field names mapped onto the form for 422 handling. `total_budget` also carries BR-3's insufficient-budget message. */
 const SERVER_ERROR_FIELDS = [
@@ -24,8 +25,8 @@ const SERVER_ERROR_FIELDS = [
   'name',
   'project_id',
   'description',
-  'source_id',
   'partner_id',
+  'operational_site_id',
   'pipeline_status_id',
   'business_function_id',
   'product_category_id',
@@ -40,6 +41,40 @@ const SERVER_ERROR_FIELDS = [
 ] as const
 
 export type CampaignFormValues = CreateCampaignFormValues
+
+/**
+ * Maps every form field shared by edit and duplicate (row action "duplicate")
+ * from a loaded campaign — `code`/`name` are excluded since the two modes
+ * diverge there (edit keeps the saved code/name, duplicate clears the code
+ * for server regeneration and appends the copy suffix to the name); `project_id`
+ * IS copied (spec: duplicate carries the linked project over). Kept as a
+ * single source of truth so the two `defaultValues` branches below never
+ * drift apart.
+ */
+function mapCampaignToFormValues(
+  campaign: CampaignDetail,
+  customFieldsDefaultValues: Record<string, CustomFieldValue>,
+): Omit<CampaignFormValues, 'code' | 'name'> {
+  return {
+    project_id: campaign.project_id,
+    description: campaign.description,
+    partner_id: campaign.partner_id,
+    operational_site_id: campaign.operational_site_id,
+    pipeline_status_id: campaign.pipeline_status_id,
+    business_function_id: campaign.business_function_id,
+    product_category_id: campaign.product_category_id,
+    country_id: campaign.country_id,
+    state_id: campaign.state_id,
+    province_id: campaign.province_id,
+    city_id: campaign.city_id,
+    geo_locked_levels: campaign.geo_locked_levels,
+    start_date: campaign.start_date ?? '',
+    end_date: campaign.end_date ?? '',
+    total_budget: campaign.total_budget === null ? null : Number(campaign.total_budget),
+    target_lead: campaign.target_lead,
+    custom_fields: customFieldsDefaultValues,
+  }
+}
 
 interface UseCampaignFormArgs {
   mode: CampaignFormMode
@@ -61,14 +96,21 @@ export function useCampaignForm({ mode, onSuccess, initialCode }: UseCampaignFor
   const [serverError, setServerError] = useState<string | null>(null)
 
   const isEdit = mode.type === 'edit'
+  // Only a bare standalone create preselects the system default status below
+  // (duplicate must keep the copied source status; edit never applies it either).
+  const isStandaloneCreate = mode.type === 'create'
 
   // Custom fields (spec 0021): the single reusable integration — builds the
   // dynamic schema, defaults and 422 paths; `<CustomFieldsSection>` renders.
+  // Duplicate seeds its values from the source, exactly like edit, even
+  // though it submits through the create payload builder.
   const customFields = useCustomFieldsForm(
     'campaigns',
     mode.type === 'edit'
       ? { type: 'edit', customFields: mode.campaign.custom_fields }
-      : { type: 'create' },
+      : mode.type === 'duplicate'
+        ? { type: 'edit', customFields: mode.source.custom_fields }
+        : { type: 'create' },
   )
 
   const schema = useMemo(
@@ -81,27 +123,17 @@ export function useCampaignForm({ mode, onSuccess, initialCode }: UseCampaignFor
 
   const defaultValues = useMemo<CampaignFormValues>(() => {
     if (mode.type === 'edit') {
-      const { campaign } = mode
       return {
-        code: campaign.code,
-        project_id: campaign.project_id,
-        name: campaign.name,
-        description: campaign.description,
-        source_id: campaign.source_id,
-        partner_id: campaign.partner_id,
-        pipeline_status_id: campaign.pipeline_status_id,
-        business_function_id: campaign.business_function_id,
-        product_category_id: campaign.product_category_id,
-        country_id: campaign.country_id,
-        state_id: campaign.state_id,
-        province_id: campaign.province_id,
-        city_id: campaign.city_id,
-        geo_locked_levels: campaign.geo_locked_levels,
-        start_date: campaign.start_date ?? '',
-        end_date: campaign.end_date ?? '',
-        total_budget: campaign.total_budget === null ? null : Number(campaign.total_budget),
-        target_lead: campaign.target_lead,
-        custom_fields: customFields.defaultValues,
+        code: mode.campaign.code,
+        name: mode.campaign.name,
+        ...mapCampaignToFormValues(mode.campaign, customFields.defaultValues),
+      }
+    }
+    if (mode.type === 'duplicate') {
+      return {
+        code: initialCode ?? '',
+        name: mode.source.name + t('common.copySuffix'),
+        ...mapCampaignToFormValues(mode.source, customFields.defaultValues),
       }
     }
     return {
@@ -109,8 +141,8 @@ export function useCampaignForm({ mode, onSuccess, initialCode }: UseCampaignFor
       project_id: null,
       name: '',
       description: null,
-      source_id: null,
       partner_id: null,
+      operational_site_id: null,
       pipeline_status_id: null,
       business_function_id: null,
       product_category_id: null,
@@ -125,23 +157,31 @@ export function useCampaignForm({ mode, onSuccess, initialCode }: UseCampaignFor
       target_lead: null,
       custom_fields: customFields.defaultValues,
     }
-  }, [mode, customFields.defaultValues, initialCode])
+  }, [mode, customFields.defaultValues, initialCode, t])
 
   const form = useForm<CampaignFormValues>({
     resolver: zodResolver(schema),
     defaultValues,
   })
 
-  // Spec 0039 D-3: preselect the system "Nuovo" status on a standalone
+  // Spec 0039 D-3: preselect the system "Nuovo" status on a standalone bare
   // create, once the for-select resolves, but only if the field is still
   // untouched — the user (or a faster manual pick, or linking a project,
-  // which overwrites it itself) always wins. Guarded to apply at most once:
-  // an effect is the correct tool here, since RHF's `defaultValues` are
-  // fixed at mount and this value only becomes known asynchronously.
-  const defaultStatus = useDefaultSystemStatusId(PROJECT_STATUSES_FOR_SELECT_RESOURCE, 'new', !isEdit)
+  // which overwrites it itself) always wins. Gated on `isStandaloneCreate`
+  // (not `!isEdit`): duplicate is not edit either, but it already prefilled
+  // `pipeline_status_id`/`project_id` from the source and must keep them, not
+  // have the status silently overwritten by the system default. Guarded to
+  // apply at most once: an effect is the correct tool here, since RHF's
+  // `defaultValues` are fixed at mount and this value only becomes known
+  // asynchronously.
+  const defaultStatus = useDefaultSystemStatusId(
+    PROJECT_STATUSES_FOR_SELECT_RESOURCE,
+    'new',
+    isStandaloneCreate,
+  )
   const appliedDefaultStatus = useRef(false)
   useEffect(() => {
-    if (isEdit || appliedDefaultStatus.current || defaultStatus.data == null) {
+    if (!isStandaloneCreate || appliedDefaultStatus.current || defaultStatus.data == null) {
       return
     }
     if (form.getValues('project_id') !== null || form.getFieldState('pipeline_status_id').isDirty) {
@@ -150,7 +190,7 @@ export function useCampaignForm({ mode, onSuccess, initialCode }: UseCampaignFor
     }
     form.setValue('pipeline_status_id', defaultStatus.data)
     appliedDefaultStatus.current = true
-  }, [isEdit, defaultStatus.data, form])
+  }, [isStandaloneCreate, defaultStatus.data, form])
 
   const onSubmit = async (values: CampaignFormValues) => {
     setServerError(null)

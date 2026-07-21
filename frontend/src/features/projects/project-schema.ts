@@ -39,7 +39,6 @@ function baseFields(t: TFunction) {
     // "Nuovo" status when omitted, and the create form preselects it as soon
     // as the for-select resolves.
     pipeline_status_id: z.number().nullable(),
-    source_id: z.number().nullable(),
     business_function_id: z.number().nullable(),
     // Geo cascade (spec 0027 BR-4): `country_id` required (withGeoHierarchyRule
     // below), the other three optional but parent-gated.
@@ -49,10 +48,15 @@ function baseFields(t: TFunction) {
     city_id: z.number().nullable(),
     product_category_id: z.number().nullable(),
     partner_id: z.number().nullable(),
-    // Date inputs hold `''` for "empty" (never `null`); both required now
-    // (BR-6 unchanged for ordering). Converted at the payload boundary.
+    // The Sede (spec directive 2026-07-21): the project's own, always
+    // editable relation, inherited as a prefill by every campaign/lead
+    // created under it (never a lock).
+    operational_site_id: z.number().nullable(),
+    // Date inputs hold `''` for "empty" (never `null`). `start_date` is
+    // required; `end_date` is optional (converted to null at the payload
+    // boundary), only its ordering vs `start_date` is enforced (BR-6).
     start_date: z.string().min(1, t('projects.form.startDateRequired')),
-    end_date: z.string().min(1, t('projects.form.endDateRequired')),
+    end_date: z.string(),
     total_budget: z.number().nonnegative(t('projects.form.totalBudgetInvalid')).nullable(),
     target_lead: z.number().int().nonnegative(t('projects.form.targetLeadInvalid')).nullable(),
   }

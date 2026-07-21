@@ -11,11 +11,12 @@ export type CampaignFormMetaState =
 /**
  * Resolves the `ResourcePermissions` backing the form (spec 0004). Edit mode
  * seeds it from the already-loaded instance detail (`mode.campaign.permissions`,
- * fetched by the `show` endpoint); create mode fetches the create-context
+ * fetched by the `show` endpoint); create AND duplicate mode (row action
+ * "duplicate" still submits via the create path) fetch the create-context
  * metadata (`GET /meta/campaigns`) once.
  */
 export function useCampaignFormMeta(mode: CampaignFormMode): CampaignFormMetaState {
-  const metaQuery = useResourceMeta('campaigns', mode.type === 'create')
+  const metaQuery = useResourceMeta('campaigns', mode.type !== 'edit')
 
   if (mode.type === 'edit') {
     return { status: 'ready', permissions: mode.campaign.permissions }

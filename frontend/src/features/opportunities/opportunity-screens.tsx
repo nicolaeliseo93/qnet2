@@ -78,7 +78,8 @@ export function OpportunityFormScreen({ mode, onSuccess, onCancel }: ModuleFormS
     )
   }
 
-  const leadId = parseEntityId(String(mode.params?.lead_id ?? ''))
+  const leadId =
+    mode.type === 'create' ? parseEntityId(String(mode.params?.lead_id ?? '')) : null
   return <OpportunityCreateScreen leadId={leadId} onSuccess={handleSuccess} onCancel={onCancel} />
 }
 

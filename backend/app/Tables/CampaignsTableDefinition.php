@@ -4,6 +4,7 @@ namespace App\Tables;
 
 use App\Enums\GeoScopeLevel;
 use App\Models\Campaign;
+use App\Models\OperationalSite;
 use App\Models\PipelineStatus;
 use App\Models\Project;
 use App\Models\User;
@@ -20,8 +21,8 @@ use Illuminate\Support\Facades\Gate;
  * Table definition for the `campaigns` domain (spec 0023).
  *
  * Real columns (code, name, start_date, end_date, total_budget, target_lead,
- * created_at) are handled entirely by the generic engine. `project` and
- * `source` are simple relation-name derived columns (own FK on
+ * created_at) are handled entirely by the generic engine. `project` is a
+ * simple relation-name derived column (own FK on
  * the campaign), resolved generically via DERIVED_RELATIONS — a `whereHas`
  * set filter (allow-listed columns only, never orderByRaw/whereRaw on raw
  * input — backend.md §8) and, for `project` only (the sole sortable one), a
@@ -57,7 +58,6 @@ class CampaignsTableDefinition extends AbstractTableDefinition
      */
     private const array DERIVED_RELATIONS = [
         'project' => ['relation' => 'project', 'table' => 'projects', 'fk' => 'project_id'],
-        'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
     ];
 
     public function __construct(private readonly CampaignPipelineStatusResolver $pipelineStatusResolver) {}
@@ -94,12 +94,12 @@ class CampaignsTableDefinition extends AbstractTableDefinition
             'project.state',
             'project.province',
             'project.city',
-            'source',
             'pipelineStatus',
             'country',
             'state',
             'province',
             'city',
+            'operationalSite.addresses.city',
         ]);
     }
 
@@ -174,12 +174,12 @@ class CampaignsTableDefinition extends AbstractTableDefinition
             'project' => $this->summarizeProject($project),
             'name' => $row->name,
             'pipeline_status' => $this->summarizePipelineStatus($this->pipelineStatusResolver->effectiveStatus($row)),
-            'source' => $this->summarize($row->source),
             'country' => $this->summarize($country, geo: true),
             'state' => $this->summarize($state, geo: true),
             'province' => $this->summarize($province, geo: true),
             'city' => $this->summarize($city, geo: true),
             'geo_scope' => GeoScopeLevel::for($country?->id, $state?->id, $province?->id, $city?->id)?->value,
+            'operational_site' => $this->summarizeOperationalSite($row->operationalSite),
             'start_date' => $row->start_date,
             'end_date' => $row->end_date,
             'total_budget' => $row->total_budget,
@@ -220,6 +220,30 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     }
 
     /**
+     * The display-only `operational_site` column: the campaign's OWN site
+     * (never the project's — the field is independently editable and stored,
+     * spec: prefill-modifiable, not read-through). No own name column, so its
+     * label is composed ("{line1} - {city}"), the same composition
+     * LeadResource/OperationalSiteForSelectResource use. Relies on
+     * baseQuery() eager-loading `operationalSite.addresses.city`.
+     *
+     * @return array{id: int, label: string}|null
+     */
+    private function summarizeOperationalSite(?Model $related): ?array
+    {
+        if ($related === null) {
+            return null;
+        }
+
+        /** @var OperationalSite $related */
+        $address = $related->addresses->first();
+        $city = $address?->city?->localizedName();
+        $label = $address === null ? '' : ($city === null ? (string) $address->line1 : "{$address->line1} - {$city}");
+
+        return ['id' => $related->id, 'label' => $label];
+    }
+
+    /**
      * The effective pipeline status projected WITH its `color` token, so the grid
      * renders the colored status badge like leads (generic summarize() would drop
      * the color). Mirrors ProjectsTableDefinition::summarizePipelineStatus.
@@ -257,6 +281,10 @@ class CampaignsTableDefinition extends AbstractTableDefinition
             $allowed[] = 'delete';
         }
 
+        if (Gate::forUser($actor)->allows('create', Campaign::class)) {
+            $allowed[] = 'duplicate';
+        }
+
         if (Gate::forUser($actor)->allows('viewActivity', $row)) {
             $allowed[] = 'activity';
         }
@@ -270,7 +298,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
      * match the campaign's own status OR its linked project's — delegated to
      * CampaignPipelineStatusResolver::applyIdFilter(). Every other advanced
      * filter declared in CampaignAdvancedFilterCatalog (`project`/
-     * `source`/`partner` relation-by-id, `budget_range`/`created_range`
+     * `partner` relation-by-id, `budget_range`/`created_range`
      * direct-column) is handled by the generic default.
      *
      * @param  Builder<Campaign>  $query
@@ -292,7 +320,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Handle the `project`/`source` set filters via whereHas on
+     * Handle the `project` set filter via whereHas on
      * the related row's name; `pipeline_status` is delegated to
      * CampaignPipelineStatusResolver (AC-032). Every real column falls
      * through to the generic engine.
@@ -347,7 +375,7 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     /**
      * ORDER BY the linked project's name via a correlated subquery — only
      * `project` is declared sortable (spec 0023 table_definitions);
-     * `pipeline_status`/`source` are never asked to sort (not in
+     * `pipeline_status` is never asked to sort (not in
      * sortableColumnIds()).
      *
      * @param  Builder<Campaign>  $query
@@ -371,8 +399,8 @@ class CampaignsTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Excel-like distinct values (spec 0004/0005). `project`/
-     * `source` are plain related-row names; `pipeline_status` is delegated to
+     * Excel-like distinct values (spec 0004/0005). `project` is a
+     * plain related-row name; `pipeline_status` is delegated to
      * CampaignPipelineStatusResolver (AC-032).
      *
      * @param  Builder<Campaign>  $query

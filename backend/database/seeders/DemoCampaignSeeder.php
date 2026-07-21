@@ -8,7 +8,6 @@ use App\Models\PipelineStatus;
 use App\Models\ProductCategory;
 use App\Models\Project;
 use App\Models\Referent;
-use App\Models\Source;
 use App\Models\State;
 use App\Services\CampaignService;
 use Database\Seeders\Concerns\ResolvesCategoryBusinessFunction;
@@ -69,7 +68,6 @@ class DemoCampaignSeeder extends Seeder
         $statuses = PipelineStatus::query()->orderBy('sort_order')->get();
         $productCategories = ProductCategory::query()->orderBy('name')->get();
         $states = $this->italianStates();
-        $sources = Source::query()->orderBy('name')->get();
         $partners = Referent::query()->orderBy('name')->get();
 
         // The business function is DERIVED from each category's effective one
@@ -85,15 +83,15 @@ class DemoCampaignSeeder extends Seeder
             return;
         }
 
-        $this->seedStandaloneCampaigns($faker, $statuses, $states, $classificationPairs, $sources, $partners);
+        $this->seedStandaloneCampaigns($faker, $statuses, $states, $classificationPairs, $partners);
     }
 
     /**
      * One or two campaigns per project, budgeted as a fraction of that
      * project's OWN remaining budget so BR-3 holds with margin. Every 4th
      * project deliberately gets none (exercises BR-5's "no campaigns" delete
-     * path). source/partner default to the project's own but the
-     * partner is occasionally varied (D-2: "copiati dal progetto ma
+     * path). partner defaults to the project's own but is
+     * occasionally varied (D-2: "copiati dal progetto ma
      * eventualmente variati").
      *
      * @param  Collection<int, Project>  $projects
@@ -125,7 +123,6 @@ class DemoCampaignSeeder extends Seeder
                 $this->createCampaign($faker, [
                     'project_id' => $project->id,
                     'name' => $faker->unique()->bs(),
-                    'source_id' => $project->source_id,
                     'partner_id' => $partnerId,
                     'total_budget' => $budget,
                     'country_id' => $geo['country_id'] ?? null,
@@ -174,7 +171,6 @@ class DemoCampaignSeeder extends Seeder
      * @param  Collection<int, PipelineStatus>  $statuses
      * @param  Collection<int, State>  $states
      * @param  Collection<int, array{product_category_id: int, business_function_id: int}>  $classificationPairs
-     * @param  Collection<int, Source>  $sources
      * @param  Collection<int, Referent>  $partners
      */
     private function seedStandaloneCampaigns(
@@ -182,7 +178,6 @@ class DemoCampaignSeeder extends Seeder
         Collection $statuses,
         Collection $states,
         Collection $classificationPairs,
-        Collection $sources,
         Collection $partners,
     ): void {
         for ($index = 0; $index < self::STANDALONE_CAMPAIGNS; $index++) {
@@ -192,7 +187,6 @@ class DemoCampaignSeeder extends Seeder
             $this->createCampaign($faker, [
                 'project_id' => null,
                 'name' => $faker->unique()->bs(),
-                'source_id' => $this->pick($sources, $index)?->id,
                 'partner_id' => $this->pick($partners, $index)?->id,
                 'pipeline_status_id' => $statuses[$index % $statuses->count()]->id,
                 'business_function_id' => $pair['business_function_id'],
@@ -227,8 +221,8 @@ class DemoCampaignSeeder extends Seeder
             projectId: $overrides['project_id'] ?? null,
             name: $overrides['name'],
             description: $faker->boolean(50) ? $faker->sentence() : null,
-            sourceId: $overrides['source_id'] ?? null,
             partnerId: $overrides['partner_id'] ?? null,
+            operationalSiteId: $overrides['operational_site_id'] ?? null,
             pipelineStatusId: $overrides['pipeline_status_id'] ?? null,
             businessFunctionId: $overrides['business_function_id'] ?? null,
             stateId: $overrides['state_id'] ?? null,

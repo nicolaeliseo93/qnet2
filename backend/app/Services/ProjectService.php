@@ -47,14 +47,13 @@ class ProjectService
 
     /**
      * Relations eager-loaded for the detail/write-result read tree
-     * (ProjectResource), so a single query never N+1s across the 7
+     * (ProjectResource), so a single query never N+1s across the 6
      * classification FKs plus the 4 geo levels (spec 0027).
      *
      * @var array<int, string>
      */
     private const array DETAIL_RELATIONS = [
         'pipelineStatus',
-        'source',
         'businessFunction',
         'country',
         'state',
@@ -62,6 +61,7 @@ class ProjectService
         'city',
         'productCategory',
         'partner',
+        'operationalSite.addresses.city',
     ];
 
     /**
@@ -161,7 +161,7 @@ class ProjectService
     /**
      * Minimal, searchable, paginated project list for the for-select
      * standard (ADR 0011, spec 0023), carrying the campaign-form default
-     * `meta` (source/partner/pipeline_status/business_function/
+     * `meta` (partner/pipeline_status/business_function/
      * state/product_category + the BR-7 budget figures) so the Campaign form
      * can precompile its defaults with no extra request.
      */
@@ -272,7 +272,7 @@ class ProjectService
     private function forSelectBaseQuery(): Builder
     {
         return Project::query()
-            ->select(['id', 'code', 'name', 'pipeline_status_id', 'source_id', 'business_function_id', 'country_id', 'state_id', 'province_id', 'city_id', 'product_category_id', 'partner_id', 'total_budget'])
+            ->select(['id', 'code', 'name', 'pipeline_status_id', 'business_function_id', 'country_id', 'state_id', 'province_id', 'city_id', 'product_category_id', 'partner_id', 'operational_site_id', 'total_budget'])
             ->with(self::DETAIL_RELATIONS)
             ->withSum('campaigns as allocated_budget_sum', 'total_budget');
     }

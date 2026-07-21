@@ -75,13 +75,14 @@ if (! function_exists('opportunityFromLeadActor')) {
 
 if (! function_exists('completeLead')) {
     /**
-     * A lead with its own registry (spec 0041 D-3) and NOT NULL on every
-     * other BR-1-derivable source column, so both locked fields lock. The
-     * lead's own `operational_site_id` (unrelated to Opportunity, which no
-     * longer has that field) still carries a real site, mirroring the
-     * common-case fixture. The category's OWN business_function_id matches the
-     * campaign's (amendment rev.3): the product_lines row the defaults
-     * endpoint prefills must satisfy the SAME
+     * A lead with its own registry AND its own source (spec 0041 D-3), so
+     * both locked fields lock — `source_id` derives ONLY from the lead's own
+     * source (the campaign no longer carries one, campaign-source fallback
+     * removed). The lead's own `operational_site_id` (unrelated to
+     * Opportunity, which no longer has that field) still carries a real
+     * site, mirroring the common-case fixture. The category's OWN
+     * business_function_id matches the campaign's (amendment rev.3): the
+     * product_lines row the defaults endpoint prefills must satisfy the SAME
      * CategoryHierarchy::effectiveBusinessFunction() check the write path
      * enforces, so the two never drift apart in this fixture. Shared with
      * OpportunityFromLeadProductLinesTest (file-size split, engineering.md §6).
@@ -94,7 +95,6 @@ if (! function_exists('completeLead')) {
         $productCategory = ProductCategory::factory()->create(['business_function_id' => $businessFunction->id]);
 
         $campaign = Campaign::factory()->create([
-            'source_id' => $source->id,
             'business_function_id' => $businessFunction->id,
             'product_category_id' => $productCategory->id,
         ]);
@@ -103,7 +103,7 @@ if (! function_exists('completeLead')) {
             'campaign_id' => $campaign->id,
             'registry_id' => $registry->id,
             'operational_site_id' => OperationalSite::factory()->withAddress()->create()->id,
-            'source_id' => null,
+            'source_id' => $source->id,
         ]);
     }
 }
@@ -127,7 +127,7 @@ it('opportunity-defaults: a complete lead locks both derivable fields (AC-060, A
     expect($response->json('data.lead_id'))->toBe($lead->id);
     expect($response->json('data.existing_opportunity_id'))->toBeNull();
     expect($response->json('data.values.registry_id'))->toBe($lead->registry_id);
-    expect($response->json('data.values.source_id'))->toBe($lead->campaign->source_id);
+    expect($response->json('data.values.source_id'))->toBe($lead->source_id);
     expect($response->json('data.values'))->not->toHaveKey('business_function_id');
     expect($response->json('data.values'))->not->toHaveKey('product_category_id');
     expect($response->json('data.values'))->not->toHaveKey('operational_site_id');
@@ -197,7 +197,7 @@ it('create with lead_id: the server writes the derived attributes (AC-063)', fun
         'id' => $response->json('data.id'),
         'lead_id' => $lead->id,
         'registry_id' => $lead->registry_id,
-        'source_id' => $lead->campaign->source_id,
+        'source_id' => $lead->source_id,
     ]);
 });
 

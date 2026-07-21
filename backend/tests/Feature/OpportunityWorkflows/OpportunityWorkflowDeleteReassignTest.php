@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\StatusGroup;
 use App\Models\Opportunity;
 use App\Models\OpportunityWorkflow;
 use App\Models\OpportunityWorkflowStatus;
@@ -44,18 +43,12 @@ it('delete: re-resolves every impacted opportunity to the global open row when n
     $workflow = OpportunityWorkflow::factory()->create(['is_active' => true]);
     $workflow->criteria()->create(['field' => 'source_id', 'value_id' => $source->id]);
 
-    $openStatus = OpportunityWorkflowStatus::factory()->create([
-        'opportunity_workflow_id' => $workflow->id,
-        'system_key' => 'open',
-        'sort_order' => 0,
-        'group' => StatusGroup::Open,
-    ]);
-    $closedStatus = OpportunityWorkflowStatus::factory()->create([
-        'opportunity_workflow_id' => $workflow->id,
-        'system_key' => 'closed',
-        'sort_order' => 999,
-        'group' => StatusGroup::Closed,
-    ]);
+    $openStatus = OpportunityWorkflowStatus::factory()
+        ->system('open')
+        ->create(['opportunity_workflow_id' => $workflow->id]);
+    $closedStatus = OpportunityWorkflowStatus::factory()
+        ->system('closed_won')
+        ->create(['opportunity_workflow_id' => $workflow->id]);
 
     $openOpportunity = Opportunity::factory()->create([
         'source_id' => $source->id,
@@ -114,18 +107,12 @@ it('delete via table bulk-delete also re-resolves impacted opportunities (AC-018
     $workflow = OpportunityWorkflow::factory()->create(['is_active' => true]);
     $workflow->criteria()->create(['field' => 'source_id', 'value_id' => $source->id]);
 
-    $openStatus = OpportunityWorkflowStatus::factory()->create([
-        'opportunity_workflow_id' => $workflow->id,
-        'system_key' => 'open',
-        'sort_order' => 0,
-        'group' => StatusGroup::Open,
-    ]);
-    OpportunityWorkflowStatus::factory()->create([
-        'opportunity_workflow_id' => $workflow->id,
-        'system_key' => 'closed',
-        'sort_order' => 999,
-        'group' => StatusGroup::Closed,
-    ]);
+    $openStatus = OpportunityWorkflowStatus::factory()
+        ->system('open')
+        ->create(['opportunity_workflow_id' => $workflow->id]);
+    OpportunityWorkflowStatus::factory()
+        ->system('closed_won')
+        ->create(['opportunity_workflow_id' => $workflow->id]);
 
     $opportunity = Opportunity::factory()->create([
         'source_id' => $source->id,

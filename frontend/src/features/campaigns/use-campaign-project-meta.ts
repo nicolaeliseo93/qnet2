@@ -20,10 +20,15 @@ export function campaignProjectMetaQueryKey(projectId: number | null) {
   return ['projects', 'meta-for-campaign', projectId] as const
 }
 
-/** Fetches the single project's `for-select` item by id and extracts its `meta` block. */
+/**
+ * Fetches the project's `for-select` item by id and extracts its `meta` block.
+ * The endpoint returns the first page PLUS the requested id appended at the end
+ * (`appendHydratedIds`), so the item must be matched by id — never `items[0]`,
+ * which is the first project by name, not the selected one.
+ */
 async function loadProjectMeta(projectId: number): Promise<ProjectMetaWithGeo | null> {
   const page = await fetchProjectsForSelect({ ids: [projectId] })
-  return page.items[0]?.meta ?? null
+  return page.items.find((item) => item.id === projectId)?.meta ?? null
 }
 
 /**

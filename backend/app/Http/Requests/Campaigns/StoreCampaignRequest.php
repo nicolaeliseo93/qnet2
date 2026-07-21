@@ -75,8 +75,8 @@ class StoreCampaignRequest extends FormRequest
             'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')],
             'name' => ['required', 'string', 'max:191'],
             'description' => ['nullable', 'string'],
-            'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
             'partner_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
+            'operational_site_id' => ['nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'pipeline_status_id' => $linked
                 ? ['prohibited']
                 : ['nullable', 'integer', Rule::exists('pipeline_statuses', 'id')],
@@ -91,7 +91,7 @@ class StoreCampaignRequest extends FormRequest
                 ? ['prohibited']
                 : ['required', 'integer', Rule::exists('product_categories', 'id')],
             'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'total_budget' => ['nullable', 'numeric', 'min:0'],
             'target_lead' => ['nullable', 'integer', 'min:0'],
         ];

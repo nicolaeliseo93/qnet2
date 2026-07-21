@@ -82,8 +82,8 @@ final class OpportunityWorkflowResolver
      * The status $opportunity should carry within $workflow's resolved set
      * (D3): its current status verbatim when that status already belongs to
      * the set; otherwise the set's row sharing the current status'
-     * system_key (open->open, closed->closed); otherwise the set's initial
-     * 'open' row.
+     * system_key (open->open, closed_won->closed_won, closed_lost->
+     * closed_lost); otherwise the set's initial 'open' row.
      */
     public function targetStatus(Opportunity $opportunity, ?OpportunityWorkflow $workflow): OpportunityWorkflowStatus
     {
@@ -112,7 +112,7 @@ final class OpportunityWorkflowResolver
 
         if ($open === null) {
             // Defense in depth: every set (a workflow's own, or the global
-            // one) is seeded with its 2 system rows (AC-004/AC-005) — should
+            // one) is seeded with its 3 system rows (AC-004/AC-005) — should
             // never happen.
             abort(500, 'The workflow status set has no open system row.');
         }

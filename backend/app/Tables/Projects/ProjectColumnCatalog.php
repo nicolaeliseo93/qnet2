@@ -9,7 +9,7 @@ namespace App\Tables\Projects;
  *
  * `code`/`name`/`start_date`/`end_date`/`total_budget`/`target_lead`/
  * `created_at` are real DB columns handled entirely by the generic engine.
- * `pipeline_status`/`source`/`business_function`/`country`/
+ * `pipeline_status`/`business_function`/`country`/
  * `state`/`province`/`city`/`product_category`/`partner` have no real column
  * of their own (each is the related row's name) and are DERIVED, resolved by
  * ProjectsTableDefinition — only `pipeline_status` is sortable (a
@@ -47,7 +47,6 @@ final class ProjectColumnCatalog
                 'searchable' => true,
             ],
             self::derivedColumn('pipeline_status', 'projects.columns.pipeline_status', sortable: true),
-            self::derivedColumn('source', 'projects.columns.source'),
             self::derivedColumn('business_function', 'projects.columns.business_function'),
             self::derivedColumn('country', 'projects.columns.country'),
             self::derivedColumn('state', 'projects.columns.state'),
@@ -63,6 +62,7 @@ final class ProjectColumnCatalog
             ],
             self::derivedColumn('product_category', 'projects.columns.product_category'),
             self::derivedColumn('partner', 'projects.columns.partner'),
+            self::displayOnlyColumn('operational_site', 'projects.columns.operational_site'),
             [
                 'id' => 'start_date',
                 'label' => 'projects.columns.start_date',
@@ -132,6 +132,24 @@ final class ProjectColumnCatalog
     }
 
     /**
+     * A COMPUTED, DISPLAY-ONLY column: no real column/relation of its own to
+     * sort or filter on, mirroring CampaignColumnCatalog's own helper.
+     *
+     * @return array<string, mixed>
+     */
+    private static function displayOnlyColumn(string $id, string $label): array
+    {
+        return [
+            'id' => $id,
+            'label' => $label,
+            'type' => 'text',
+            'visible' => true,
+            'sortable' => false,
+            'filterable' => false,
+        ];
+    }
+
+    /**
      * Only FILTERABLE columns get a filter declaration — `geo_scope`
      * (display-only, spec 0027) has no `filterType` to declare.
      *
@@ -182,6 +200,14 @@ final class ProjectColumnCatalog
                 'type' => 'danger',
                 'confirm' => true,
                 'permission' => 'projects.delete',
+            ],
+            [
+                'key' => 'duplicate',
+                'label' => 'actions.duplicate',
+                'icon' => 'copy',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'projects.create',
             ],
             [
                 'key' => 'activity',

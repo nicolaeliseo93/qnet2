@@ -27,8 +27,8 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     project_id: null,
     name: 'New campaign',
     description: null,
-    source_id: null,
     partner_id: null,
+    operational_site_id: null,
     pipeline_status_id: 1,
     business_function_id: 2,
     product_category_id: 4,
@@ -97,14 +97,26 @@ describe('buildCreateCampaignSchema — standalone (project_id null)', () => {
     }
   })
 
-  it('rejects a missing start_date/end_date (now required, even when linked)', () => {
+  it('rejects a missing start_date but accepts a missing end_date (optional), even when linked', () => {
     const schema = buildCreateCampaignSchema(i18n.t, EMPTY_CUSTOM_FIELDS_SCHEMA)
-    const result = schema.safeParse(baseValues({ project_id: 7, pipeline_status_id: null, business_function_id: null, product_category_id: null, country_id: null, geo_locked_levels: ['country'], start_date: '', end_date: '' }))
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      const paths = result.error.issues.map((issue) => issue.path.join('.'))
-      expect(paths).toEqual(expect.arrayContaining(['start_date', 'end_date']))
+    const linkedBase = {
+      project_id: 7,
+      pipeline_status_id: null,
+      business_function_id: null,
+      product_category_id: null,
+      country_id: null,
+      geo_locked_levels: ['country'] as const,
     }
+
+    const missingStart = schema.safeParse(baseValues({ ...linkedBase, start_date: '' }))
+    expect(missingStart.success).toBe(false)
+    if (!missingStart.success) {
+      const paths = missingStart.error.issues.map((issue) => issue.path.join('.'))
+      expect(paths).toContain('start_date')
+      expect(paths).not.toContain('end_date')
+    }
+
+    expect(schema.safeParse(baseValues({ ...linkedBase, end_date: '' })).success).toBe(true)
   })
 })
 

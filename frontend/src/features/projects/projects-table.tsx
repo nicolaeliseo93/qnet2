@@ -64,7 +64,9 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
       invalidateStats()
     }, [refreshGrid, invalidateStats])
 
-    const { openCreate, openView, openEdit, sheet } = useModuleOpener(PROJECTS_DOMAIN, { onSaved })
+    const { openCreate, openView, openEdit, openDuplicate, sheet } = useModuleOpener(PROJECTS_DOMAIN, {
+      onSaved,
+    })
 
     const runDelete = useCallback(
       async (row: TableRow) => {
@@ -99,6 +101,9 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
           case 'edit':
             openEdit(row)
             break
+          case 'duplicate':
+            openDuplicate(row)
+            break
           case 'delete':
             void runDelete(row)
             break
@@ -109,7 +114,7 @@ export const ProjectsTable = forwardRef<ProjectsTableHandle, ProjectsTableProps>
             break
         }
       },
-      [openView, openEdit, runDelete],
+      [openView, openEdit, openDuplicate, runDelete],
     )
 
     const isBusy = useCallback((row: TableRow) => row.id === deletingId, [deletingId])

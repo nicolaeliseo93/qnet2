@@ -9,8 +9,8 @@ import type { ResourceMeta } from '@/features/authorization/types'
 
 /**
  * Directive 2026-07-21 (supersedes spec 0047 D1's read-only Regione): the
- * Regione is now a first-class, always-editable picker, auto-filled from the
- * chosen Sede's `meta.state_id` but freely overridable, and always sent.
+ * Regione is a first-class, always-editable, FREE picker — never inherited
+ * from the chosen Sede (no auto-fill), and always sent.
  * Split out of `lead-form-body.test.tsx` for size (engineering.md §6).
  */
 
@@ -45,30 +45,19 @@ vi.mock('@/features/auth/use-abilities', () => ({
 }))
 
 /**
- * Sede's `meta` payload the mocked select forwards through `onItemChange`
- * when picked, so the Regione auto-fill is exercisable without a real
- * dropdown/network — mirrors the shape `OperationalSiteForSelectResource` sends.
- */
-const SITE_META: Record<string, unknown> = { state_id: 7, state_label: 'Lombardy' }
-
-/**
  * Stubs every single-select field, keyed by its accessible trigger label
  * (mirrors `lead-form-body.test.tsx`). Renders as a button calling
- * `onChange(3)` and `onItemChange` with a canned item (`meta` only for the
- * Site field) so the auto-fill/override flows are drivable without a real
- * dropdown.
+ * `onChange(3)` so the free-picker flows are drivable without a real dropdown.
  */
 vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
     value,
     onChange,
-    onItemChange,
     labels,
     disabled,
   }: {
     value: number | null
     onChange: (value: number) => void
-    onItemChange?: (item: { id: number; label: string; meta?: Record<string, unknown> } | null) => void
     labels: { triggerLabel: string }
     disabled?: boolean
   }) => (
@@ -77,14 +66,7 @@ vi.mock('@/components/ui/async-paginated-select', () => ({
       data-testid={`select-${labels.triggerLabel}`}
       data-disabled={disabled ? 'true' : 'false'}
       disabled={disabled}
-      onClick={() => {
-        onChange(3)
-        onItemChange?.({
-          id: 3,
-          label: `${labels.triggerLabel} 3`,
-          meta: labels.triggerLabel === 'Site' ? SITE_META : undefined,
-        })
-      }}
+      onClick={() => onChange(3)}
     >
       {value ?? ''}
     </button>
@@ -134,7 +116,7 @@ beforeEach(() => {
   canMock.mockReturnValue(true)
 })
 
-describe('LeadFormBody — Regione (editable + Sede auto-fill, directive 2026-07-21)', () => {
+describe('LeadFormBody — Regione (free picker, no inheritance, directive 2026-07-21)', () => {
   it('create mode: renders empty and enabled, no Sede chosen yet', async () => {
     render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
@@ -159,7 +141,7 @@ describe('LeadFormBody — Regione (editable + Sede auto-fill, directive 2026-07
     expect(screen.getByTestId('select-Region')).not.toBeDisabled()
   })
 
-  it('auto-fills the Regione from the picked Sede’s meta.state_id', async () => {
+  it('does NOT inherit the Regione from the picked Sede', async () => {
     render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
@@ -167,26 +149,13 @@ describe('LeadFormBody — Regione (editable + Sede auto-fill, directive 2026-07
     await waitFor(() => expect(screen.getByTestId('select-Site')).toBeInTheDocument())
     expect(screen.getByTestId('select-Region')).toHaveTextContent('')
 
+    // Picking a Sede must leave the free Regione untouched (no auto-fill).
     fireEvent.click(screen.getByTestId('select-Site'))
 
-    expect(screen.getByTestId('select-Region')).toHaveTextContent('7')
+    expect(screen.getByTestId('select-Region')).toHaveTextContent('')
   })
 
-  it('stays user-editable/clearable after the auto-fill (manual override)', async () => {
-    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Site')).toBeInTheDocument())
-    fireEvent.click(screen.getByTestId('select-Site'))
-    expect(screen.getByTestId('select-Region')).toHaveTextContent('7')
-
-    // The user picks a different region by hand; the auto-fill never sticks.
-    fireEvent.click(screen.getByTestId('select-Region'))
-    expect(screen.getByTestId('select-Region')).toHaveTextContent('3')
-  })
-
-  it('sends the auto-filled state_id in the create payload', async () => {
+  it('is freely user-editable and sends the picked state_id in the create payload', async () => {
     createLeadMock.mockResolvedValue(lead())
 
     render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
@@ -196,23 +165,13 @@ describe('LeadFormBody — Regione (editable + Sede auto-fill, directive 2026-07
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
     fireEvent.click(screen.getByTestId('select-Registry'))
     fireEvent.click(screen.getByTestId('select-Campaign'))
-    fireEvent.click(screen.getByTestId('select-Site'))
+    // The user picks the Regione by hand; the mocked select sets it to 3.
+    fireEvent.click(screen.getByTestId('select-Region'))
+    expect(screen.getByTestId('select-Region')).toHaveTextContent('3')
     fireEvent.click(screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(createLeadMock).toHaveBeenCalledTimes(1))
-    expect(createLeadMock.mock.calls[0][0].state_id).toBe(7)
-  })
-
-  it('a Sede with no region leaves the current Regione untouched', async () => {
-    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Source')).toBeInTheDocument())
-    // A field whose mocked `onItemChange` carries no `meta` (any label other
-    // than "Site" in this file's mock) must not touch the Regione.
-    fireEvent.click(screen.getByTestId('select-Source'))
-    expect(screen.getByTestId('select-Region')).toHaveTextContent('')
+    expect(createLeadMock.mock.calls[0][0].state_id).toBe(3)
   })
 })

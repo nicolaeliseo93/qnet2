@@ -49,7 +49,6 @@ class OpportunityService
         'lead.registry',
         'lead.operationalSite.addresses.city',
         'lead.source',
-        'lead.campaign.source',
         'lead.campaign.businessFunction',
         'lead.campaign.productCategory',
         'lead.campaign.project.businessFunction',

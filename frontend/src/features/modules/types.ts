@@ -43,10 +43,12 @@ export const DEFAULT_MODULE_OPEN_PREFERENCES: ModuleOpenPreferences = {
  */
 export type ModuleCreateParams = Record<string, string | number>
 
-/** Which entity (create vs edit) a `FormScreen` renders. */
+/** Which entity (create vs edit vs duplicate) a `FormScreen` renders. */
 export type ModuleFormScreenMode =
   | { type: 'create'; params?: ModuleCreateParams }
   | { type: 'edit'; id: number }
+  /** Create form pre-filled from the source row `id` (row action "duplicate"): still submits via the create path. */
+  | { type: 'duplicate'; id: number }
 
 export interface ModuleDetailScreenProps {
   id: number

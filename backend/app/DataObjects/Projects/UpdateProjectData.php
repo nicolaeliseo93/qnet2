@@ -28,8 +28,6 @@ final readonly class UpdateProjectData
         public ?int $pipelineStatusId = null,
         public ?string $description = null,
         public bool $descriptionSubmitted = false,
-        public ?int $sourceId = null,
-        public bool $sourceIdSubmitted = false,
         public ?int $businessFunctionId = null,
         public bool $businessFunctionIdSubmitted = false,
         public ?int $countryId = null,
@@ -44,6 +42,8 @@ final readonly class UpdateProjectData
         public bool $productCategoryIdSubmitted = false,
         public ?int $partnerId = null,
         public bool $partnerIdSubmitted = false,
+        public ?int $operationalSiteId = null,
+        public bool $operationalSiteIdSubmitted = false,
         public ?string $startDate = null,
         public bool $startDateSubmitted = false,
         public ?string $endDate = null,
@@ -66,8 +66,6 @@ final readonly class UpdateProjectData
             pipelineStatusId: array_key_exists('pipeline_status_id', $data) ? (int) $data['pipeline_status_id'] : null,
             description: array_key_exists('description', $data) ? $data['description'] : null,
             descriptionSubmitted: array_key_exists('description', $data),
-            sourceId: self::nullableInt($data, 'source_id'),
-            sourceIdSubmitted: array_key_exists('source_id', $data),
             businessFunctionId: self::nullableInt($data, 'business_function_id'),
             businessFunctionIdSubmitted: array_key_exists('business_function_id', $data),
             countryId: self::nullableInt($data, 'country_id'),
@@ -82,6 +80,8 @@ final readonly class UpdateProjectData
             productCategoryIdSubmitted: array_key_exists('product_category_id', $data),
             partnerId: self::nullableInt($data, 'partner_id'),
             partnerIdSubmitted: array_key_exists('partner_id', $data),
+            operationalSiteId: self::nullableInt($data, 'operational_site_id'),
+            operationalSiteIdSubmitted: array_key_exists('operational_site_id', $data),
             startDate: array_key_exists('start_date', $data) ? $data['start_date'] : null,
             startDateSubmitted: array_key_exists('start_date', $data),
             endDate: array_key_exists('end_date', $data) ? $data['end_date'] : null,
@@ -116,10 +116,6 @@ final readonly class UpdateProjectData
             $attributes['description'] = $this->description;
         }
 
-        if ($this->sourceIdSubmitted) {
-            $attributes['source_id'] = $this->sourceId;
-        }
-
         if ($this->businessFunctionIdSubmitted) {
             $attributes['business_function_id'] = $this->businessFunctionId;
         }
@@ -146,6 +142,10 @@ final readonly class UpdateProjectData
 
         if ($this->partnerIdSubmitted) {
             $attributes['partner_id'] = $this->partnerId;
+        }
+
+        if ($this->operationalSiteIdSubmitted) {
+            $attributes['operational_site_id'] = $this->operationalSiteId;
         }
 
         if ($this->startDateSubmitted) {

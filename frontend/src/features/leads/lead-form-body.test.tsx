@@ -48,31 +48,19 @@ vi.mock('@/features/auth/use-abilities', () => ({
 }))
 
 /**
- * Sede's `meta` payload the mocked select forwards through `onItemChange`
- * when picked, so the Regione auto-fill (directive 2026-07-21) is
- * exercisable without a real dropdown/network — mirrors the shape
- * `OperationalSiteForSelectResource` sends.
- */
-const SITE_META: Record<string, unknown> = { state_id: 7, state_label: 'Lombardy' }
-
-/**
  * Stubs every single-select field, keyed by its accessible trigger label
  * (mirrors `campaign-form-body.test.tsx`). Renders as a button calling
- * `onChange(3)` (and `onItemChange` with a canned item, `meta` only for the
- * Site field) so the AC-043 submit test and the Regione auto-fill test can
- * drive it without a real dropdown.
+ * `onChange(3)` so the AC-043 submit test can drive it without a real dropdown.
  */
 vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
     value,
     onChange,
-    onItemChange,
     labels,
     disabled,
   }: {
     value: number | null
     onChange: (value: number) => void
-    onItemChange?: (item: { id: number; label: string; meta?: Record<string, unknown> } | null) => void
     labels: { triggerLabel: string }
     disabled?: boolean
   }) => (
@@ -81,14 +69,7 @@ vi.mock('@/components/ui/async-paginated-select', () => ({
       data-testid={`select-${labels.triggerLabel}`}
       data-disabled={disabled ? 'true' : 'false'}
       disabled={disabled}
-      onClick={() => {
-        onChange(3)
-        onItemChange?.({
-          id: 3,
-          label: `${labels.triggerLabel} 3`,
-          meta: labels.triggerLabel === 'Site' ? SITE_META : undefined,
-        })
-      }}
+      onClick={() => onChange(3)}
     >
       {value ?? ''}
     </button>

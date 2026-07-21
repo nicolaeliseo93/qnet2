@@ -15,7 +15,6 @@ function values(overrides: Partial<ProjectFormValues> = {}): ProjectFormValues {
     name: 'Acme rollout',
     description: null,
     pipeline_status_id: 3,
-    source_id: null,
     business_function_id: null,
     country_id: 1,
     state_id: null,
@@ -23,6 +22,7 @@ function values(overrides: Partial<ProjectFormValues> = {}): ProjectFormValues {
     city_id: null,
     product_category_id: null,
     partner_id: null,
+    operational_site_id: null,
     start_date: '',
     end_date: '',
     total_budget: null,
@@ -40,8 +40,6 @@ function original(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
     description: null,
     pipeline_status_id: 3,
     pipeline_status: { id: 3, name: 'Active', color: 'blue' },
-    source_id: null,
-    source: null,
     business_function_id: null,
     business_function: null,
     country_id: 1,
@@ -57,6 +55,8 @@ function original(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
     product_category: null,
     partner_id: null,
     partner: null,
+    operational_site_id: null,
+    operational_site: null,
     start_date: null,
     end_date: null,
     total_budget: null,
@@ -77,7 +77,6 @@ describe('buildCreatePayload', () => {
       name: 'Acme rollout',
       pipeline_status_id: 3,
       description: null,
-      source_id: null,
       business_function_id: null,
       country_id: 1,
       state_id: null,
@@ -85,6 +84,7 @@ describe('buildCreatePayload', () => {
       city_id: null,
       product_category_id: null,
       partner_id: null,
+      operational_site_id: null,
       start_date: null,
       end_date: null,
       total_budget: null,
@@ -162,5 +162,21 @@ describe('buildUpdatePayload', () => {
       original({ state_id: null, city_id: null }),
     )
     expect(payload).toEqual({ state_id: 10, city_id: 100 })
+  })
+
+  it('includes the changed operational_site_id', () => {
+    const payload = buildUpdatePayload(
+      values({ operational_site_id: 8 }),
+      original({ operational_site_id: null }),
+    )
+    expect(payload).toEqual({ operational_site_id: 8 })
+  })
+
+  it('omits operational_site_id when unchanged', () => {
+    const payload = buildUpdatePayload(
+      values({ operational_site_id: 8 }),
+      original({ operational_site_id: 8 }),
+    )
+    expect(payload).toEqual({})
   })
 })

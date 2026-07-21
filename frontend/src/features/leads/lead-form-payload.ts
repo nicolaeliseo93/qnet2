@@ -7,8 +7,8 @@ import type { LeadFormValues } from '@/features/leads/use-lead-form'
  * non-null by the schema's refine before submit (BR-1, D-1). Lead status is
  * derived server-side and is not submitted. `state_id` (directive
  * 2026-07-21) is sent unconditionally, mirroring the opportunity form: the
- * user-editable Regione, auto-filled from the Sede but always the form's
- * current value.
+ * free, user-editable Regione — the form's current value, never inherited
+ * from the Sede.
  */
 export function buildCreatePayload(values: LeadFormValues): CreateLeadPayload {
   return {
