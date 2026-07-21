@@ -315,6 +315,7 @@ class ImportController extends BaseApiController
                 $importRun,
                 $request->selectAll(),
                 $request->rowIds(),
+                $request->mode(),
                 $request->operatorId(),
                 $request->operationalSiteId(),
             );

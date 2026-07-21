@@ -10,16 +10,13 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GridApi, GridReadyEvent } from 'ag-grid-community'
-import { Download, Trash2 } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import {
-  ACTIONS_COLUMN_ID,
-  DataTable,
-} from '@/components/data-table/data-table'
+import { ACTIONS_COLUMN_ID, DataTable } from '@/components/data-table/data-table'
 import { useAbilities } from '@/features/auth/use-abilities'
 import { createSsrmDatasource } from '@/features/table/ssrm-datasource'
 import { SavedViewsSlot } from '@/features/table/saved-views-slot'
@@ -28,7 +25,7 @@ import { useTableToolbarState } from '@/features/table/use-table-toolbar-state'
 import { AdvancedFilterPanel, ADVANCED_FILTER_PANEL_ANIMATION } from '@/features/table/advanced-filters/advanced-filter-panel'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useTableAdvancedFilters } from '@/features/table/advanced-filters/use-table-advanced-filters'
-import { useBulkDelete } from '@/features/table/use-bulk-delete'
+import { useBulkActionsSlot, type BulkAction, type TableSelection } from '@/features/table/use-bulk-actions-slot'
 import { ExportDialog } from '@/features/exports/export-dialog'
 import {
   createRowActionsRenderer,
@@ -42,11 +39,9 @@ import {
   useResetTablePreferences,
   useSaveTablePreferences,
 } from '@/features/table/use-table-preferences'
-import {
-  useResetTableFilters,
-  useSaveTableFilters,
-} from '@/features/table/use-table-filters'
+import { useResetTableFilters, useSaveTableFilters } from '@/features/table/use-table-filters'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
+import type { TableRow } from '@/features/table/types'
 
 /** Debounce window for persisting layout changes after the user stops editing. */
 const PERSIST_DEBOUNCE_MS = 500
@@ -58,6 +53,8 @@ const EMPTY_FILTER_MODEL: Record<string, unknown> = {}
 export interface TableViewHandle {
   /** Purges and reloads the SSRM cache (call after a CRUD mutation). */
   refresh: () => void
+  /** Clears the current row selection (call after a bulk action succeeds). */
+  clearSelection: () => void
 }
 
 interface TableViewProps extends RowActionsOptions {
@@ -77,6 +74,23 @@ interface TableViewProps extends RowActionsOptions {
    * only forwards the node.
    */
   importSlot?: ReactNode
+  /**
+   * Optional per-row predicate gating which rows can be checked for bulk
+   * selection (spec 0048 AC-040, e.g. a Lead already assigned is not
+   * selectable). Forwarded verbatim to `DataTable`; omitted, every row stays
+   * selectable.
+   */
+  isRowSelectable?: (row: TableRow) => boolean
+  /**
+   * Extra bulk action(s) merged into the single "Actions" dropdown alongside
+   * the built-in "delete selected" whenever the selection is non-empty (spec
+   * 0048 AC-041). Receives the current selection (ids AND row data — AC-031
+   * needs the latter) and returns action descriptors; the domain adapter owns
+   * everything about each action (dialog, mutation, permission gate) —
+   * TableView only reserves the slot and enables the checkbox column when
+   * this is supplied.
+   */
+  getBulkActions?: (selection: TableSelection) => BulkAction[]
 }
 
 /**
@@ -95,7 +109,7 @@ interface TableViewProps extends RowActionsOptions {
  */
 export const TableView = forwardRef<TableViewHandle, TableViewProps>(
   function TableView(
-    { domain, renderers, onAction, isBusy, decorateRow, iconMap, importSlot },
+    { domain, renderers, onAction, isBusy, decorateRow, iconMap, importSlot, isRowSelectable, getBulkActions },
     ref,
   ) {
     const { t } = useTranslation()
@@ -126,10 +140,8 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
 
     // Same immediate-feedback pattern for the saved filter state: a "Reset
     // filters" action shows whenever filters are active (this session or persisted).
-    const [filtersCustomizedLocally, setFiltersCustomizedLocally] =
-      useState(false)
-    const isFilterCustomized =
-      filtersCustomizedLocally || (config?.filtersCustomized ?? false)
+    const [filtersCustomizedLocally, setFiltersCustomizedLocally] = useState(false)
+    const isFilterCustomized = filtersCustomizedLocally || (config?.filtersCustomized ?? false)
 
     // The saved filterModel replayed into the grid on mount. Stable identity per
     // config load so it can seed the persisted-baseline ref below.
@@ -154,26 +166,21 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       gridApi?.refreshServerSide({ purge: true })
     }, [gridApi])
 
-    // Bulk selection (current page only, per the SSRM select-all contract) and
-    // the generic bulk-delete flow, gated on the domain's own action catalog:
-    // the affordance only shows up when the backend actually exposes 'delete'
-    // for this user (already permission-filtered server-side).
-    const [selectedIds, setSelectedIds] = useState<number[]>([])
-    const canBulkDelete = useMemo(
-      () => config?.actions.some((action) => action.key === 'delete') ?? false,
-      [config],
-    )
-    const { runBulkDelete, isDeleting } = useBulkDelete({
+    // Bulk selection (current page only, per the SSRM select-all contract),
+    // the generic bulk-delete flow and any domain-supplied extra bulk action
+    // (spec 0048 AC-041) — see `use-bulk-actions-slot.ts`.
+    const {
+      onSelectionChanged: handleSelectionChanged,
+      clearSelection,
+      enableSelection,
+      bulkActionsSlot,
+    } = useBulkActionsSlot({
       domain,
       gridApi,
+      actions: config?.actions,
       refresh: refreshGrid,
+      getBulkActions,
     })
-    const handleBulkDelete = useCallback(async () => {
-      const didDelete = await runBulkDelete(selectedIds)
-      if (didDelete) {
-        setSelectedIds([])
-      }
-    }, [runBulkDelete, selectedIds])
 
     // The domain's global quick-search allow-list (spec 0009); empty ⇒ no search
     // box. Drives both the search affordance and the placeholder labels.
@@ -208,7 +215,10 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
       [domain, toolbar.getSearchTerm, advancedFilters.getApplied],
     )
 
-    useImperativeHandle(ref, () => ({ refresh: refreshGrid }), [refreshGrid])
+    useImperativeHandle(ref, () => ({ refresh: refreshGrid, clearSelection }), [
+      refreshGrid,
+      clearSelection,
+    ])
 
     // The domain's real column ids: mirrors the server's Rule::in allow-list, so
     // synthetic grid columns (row-actions, selection) are dropped from the saved
@@ -380,8 +390,9 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
           initialFilterModel={initialFilterModel}
           onFilterChanged={handleFilterChanged}
           onRowCountChanged={toolbar.setRowCount}
-          enableSelection={canBulkDelete}
-          onSelectionChanged={setSelectedIds}
+          enableSelection={enableSelection}
+          onSelectionChanged={handleSelectionChanged}
+          isRowSelectable={isRowSelectable}
         />
       )
     }
@@ -395,25 +406,6 @@ export const TableView = forwardRef<TableViewHandle, TableViewProps>(
         onFilterModelApplied={setFiltersCustomizedLocally}
       />
     )
-
-    const bulkActionsSlot =
-      canBulkDelete && selectedIds.length > 0 ? (
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="hidden whitespace-nowrap text-xs font-medium text-muted-foreground sm:inline">
-            {t('table.selectedCount', { count: selectedIds.length })}
-          </span>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            disabled={isDeleting}
-            onClick={() => void handleBulkDelete()}
-          >
-            <Trash2 aria-hidden="true" />
-            {t('table.deleteSelected', { count: selectedIds.length })}
-          </Button>
-        </div>
-      ) : null
 
     const exportSlot = canExport ? (
       <DropdownMenuItem

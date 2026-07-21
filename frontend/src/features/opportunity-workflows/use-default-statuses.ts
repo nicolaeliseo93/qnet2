@@ -5,9 +5,10 @@ import { toast } from 'sonner'
 import type { ApiErrorResponse } from '@/api/types'
 import { fetchDefaultStatuses, updateDefaultStatuses } from '@/features/opportunity-workflows/api'
 import { buildDefaultStatusesPayload } from '@/features/opportunity-workflows/opportunity-workflow-form-payload'
-import type {
-  OpportunityWorkflowStatusItem,
-  WorkflowStatusFormRow,
+import {
+  isClosedWorkflowSystemKey,
+  type OpportunityWorkflowStatusItem,
+  type WorkflowStatusFormRow,
 } from '@/features/opportunity-workflows/types'
 
 /** Query key for the GLOBAL default status set (fresh-on-open pattern, mirrors `useStatusReorder`). */
@@ -76,7 +77,7 @@ export function useDefaultStatuses({ enabled, labels }: UseDefaultStatusesArgs) 
       system_key: null,
     }
     setRows((current) => {
-      const closedIndex = current.findIndex((row) => row.system_key === 'closed')
+      const closedIndex = current.findIndex((row) => isClosedWorkflowSystemKey(row.system_key))
       const insertAt = closedIndex === -1 ? current.length : closedIndex
       return [...current.slice(0, insertAt), newRow, ...current.slice(insertAt)]
     })

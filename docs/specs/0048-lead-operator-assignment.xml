@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spec 0048 — Assegnazione unificata Operatori ai Lead.
+  Contract-first: la shape sotto e' CONGELATA prima del dispatch dei teammate.
+  Estende (non riscrive) i campi Lead.operator_id / Lead.operational_site_id
+  (spec 0024) e la barra di bulk-assign dell'import (spec 0045/b1cbcf6).
+-->
+<spec id="0048-lead-operator-assignment" status="draft" owner="utente" date="2026-07-21">
+
+  <goal>
+    Un unico sistema per assegnare gli Operatori (users) ai Lead, riusabile in
+    tre contesti:
+      1. step di REVISIONE dell'import Lead (potenzia la barra esistente);
+      2. tabella Lead, selezionando via checkbox i Lead NON ancora assegnati;
+      3. form del singolo Lead (create + edit): Sede e Operatore collegati e
+         reciprocamente filtranti.
+    Per l'assegnazione multipla un popup "Assegna operatori" offre: scelta Sede,
+    Operatori filtrati per Sede, "Smistamento equo" (bilanciamento del carico) e
+    "Assegna a operatore" (tutti a un operatore).
+  </goal>
+
+  <context>
+    Nomi reali verificati nel codebase (NON ipotizzare, riusare esatti):
+      - Lead (app/Models/Lead.php): #[Fillable([registry_id, campaign_id,
+        operational_site_id, source_id, operator_id, notes, extra_fields, state_id])].
+        operator() -> User ("Operatore"), operationalSite() -> OperationalSite ("Sede"),
+        entrambi nullable. lifecycleStatus(): LeadLifecycleStatus
+        ('not_associated' | 'associated' | 'converted_to_opportunity'), derivato.
+      - "Operatori di una Sede" = users il cui profilo di impiego punta a quella
+        Sede: User::employment() (HasOne EmploymentProfile, trait HasEmployment),
+        EmploymentProfile.operational_site_id, EmploymentProfile::operationalSite().
+        Nessun filtro di ruolo/permesso (decisione utente 2026-07-21): un operatore
+        e' qualunque user assegnato a quella Sede.
+      - LeadPolicy extends BasePolicy -> ability = "leads.{ability}". La bulk-assign
+        e' un UPDATE dei Lead: gate = leads.update.
+      - Envelope: BaseApiController::ok()/created()/fail() -> { success, message, data }.
+      - ForSelectQuery (app/DataObjects/Shared/ForSelectQuery.php) ha gia' un param
+        opzionale additivo `businessFunctionId` consumato solo da un service: si
+        AGGIUNGE `operationalSiteId` con lo STESSO pattern (default null, retro-compat).
+      - Users for-select: UserForSelectController + UserForSelectRequest (solo
+        search/offset/limit/ids) + UserService::forSelect + UserForSelectResource
+        (label=name, subtitle=email, avatar_url). Nessun filtro Sede oggi.
+      - OperationalSite non ha `name`: label composta "{line1} - {city}" dalla primary
+        address (OperationalSiteForSelectResource / LeadOperationalSiteColumn). Nessun
+        helper condiviso: la composizione va replicata dove serve (blast radius minimo,
+        precedente in HANDOFF 2026-07-21).
+      - Tabella generica SSRM: DataTable ha ROW_SELECTION (multiRow, checkbox,
+        selectAll:'currentPage'); TableView calcola selectedIds e passa un
+        bulkActionsSlot al TableToolbar (oggi solo "elimina selezionati"). Bulk delete:
+        POST /tables/{domain}/bulk-delete. NON esiste bulk-assign generico.
+      - Import review: ReviewBulkAssignBar (operatore + sede, assegna-a-uno) ->
+        PATCH /imports/{domain}/{importRun}/rows/assign (BulkAssignRequest +
+        ImportService::bulkAssign, mass update). Selection = { selectAll, toggledNodes }
+        (getServerSideSelectionState). ImportRunRow ha operator_id + operational_site_id.
+      - FE for-select: AsyncPaginatedSelect (props resource/value/onChange/onItemChange/
+        selectedItem/params) e RelationSelectField (RHF wrapper, props resource/params/
+        selected/onItemChange). Il pattern `meta` e' TIPATO PER FEATURE
+        (OperationalSiteForSelectItem.meta = {state_id,state_label}).
+
+    DECISIONI UTENTE (2026-07-21):
+      1. Operatori di una Sede = users con employment.operational_site_id = Sede
+         (nessun ruolo/permesso).
+      2. Import: POTENZIARE la barra di revisione esistente col popup unificato
+         (operatori filtrati per Sede + smistamento equo + assegna a operatore).
+      3. "Smistamento equo" = BILANCIAMENTO DEL CARICO TOTALE: considera i Lead
+         gia' assegnati a ciascun operatore e riempie prima chi ne ha meno.
+      4. Tabella Lead: le checkbox sono attive SOLO sui Lead non ancora assegnati
+         (lifecycle 'not_associated' / operator_id null).
+         --- AMENDMENT 2026-07-21 (decisione utente): DERUBRICATA. Le azioni bulk
+         della tabella Lead sono confluite in un unico menu "Azioni" generico
+         (elimina + assegna operatori) con selezione checkbox CONDIVISA; il gate
+         AG Grid isRowSelectable e' a livello tabella, non per-azione. Si accetta
+         quindi che TUTTE le righe siano selezionabili anche per l'assegnazione:
+         assegnare a un Lead gia' assegnato equivale a RIASSEGNARLO. AC-040 sotto
+         e' aggiornata di conseguenza. La capability generica isRowSelectable resta
+         disponibile ma NON e' usata dalla tabella Lead. ---
+  </context>
+
+  <!-- ============================ CONTRATTO API (congelato) ============================ -->
+
+  <api-contract>
+
+    <!-- (A) users/for-select: filtro Sede + meta Sede sull'operatore -->
+    <endpoint method="GET" path="/api/users/for-select">
+      <change>Param opzionale ADDITIVO `operational_site_id` (int). Se presente,
+        filtra ai soli users con employment.operational_site_id = valore.
+        Retro-compatibile: assente = comportamento attuale (tutti gli users).</change>
+      <change>Ogni item guadagna `meta?: { operational_site_id: number|null,
+        operational_site_label: string|null }` derivato dal profilo di impiego
+        (Sede dell'operatore). Serve al form Lead per auto-impostare la Sede quando
+        si sceglie prima l'Operatore. Omesso/null se l'operatore non ha Sede.</change>
+      <request-params>search, offset, limit, ids[], operational_site_id?</request-params>
+    </endpoint>
+
+    <!-- (B) bulk-assign su Lead REALI (nuovo) -->
+    <endpoint method="POST" path="/api/leads/assign-operators">
+      <auth>leads.update (LeadPolicy). Ogni lead_id autorizzato via policy update.</auth>
+      <request><![CDATA[
+        {
+          "lead_ids": number[],            // required, min:1, exists:leads,id
+          "operational_site_id": number,   // required, exists:operational_sites,id
+          "mode": "single" | "balanced",   // required
+          "operator_id": number            // required_if mode=single, exists:users,id
+        }
+      ]]></request>
+      <behavior>
+        Transazione. Tutti i Lead selezionati ricevono operational_site_id.
+        - mode="single": tutti ricevono operator_id.
+        - mode="balanced": enumera gli operatori della Sede (employment.
+          operational_site_id = operational_site_id, ordinati per id). Se ZERO
+          operatori -> 422 { success:false, message } (chiave i18n dedicata).
+          Distribuzione = algoritmo BILANCIATO (vedi br-balanced).
+        Il backend NON verifica che i Lead siano "non assegnati" (la UI limita la
+        selezione; l'endpoint resta permissivo e riassegnabile). NESSUN throttle.
+      </behavior>
+      <response>200 ok({ assigned: number }, message)</response>
+    </endpoint>
+
+    <!-- (C) import bulk-assign: aggiunta modalita' -->
+    <endpoint method="PATCH" path="/api/imports/{domain}/{importRun}/rows/assign">
+      <change>BulkAssignRequest guadagna `mode: "single"|"balanced"` (default "single"
+        per retro-compat). `operator_id` diventa required_if mode=single;
+        `operational_site_id` required quando mode=balanced (serve a enumerare gli
+        operatori). Regole selezione (select_all/row_ids, anti-IDOR) invariate.</change>
+      <change>ImportService::bulkAssign: se mode=balanced, distribuisce le righe
+        staged selezionate tra gli operatori della Sede con lo STESSO algoritmo
+        bilanciato (carico = Lead REALI gia' assegnati per operatore; le righe del
+        batch incrementano il carico via via). Per-riga operator_id + operational_site_id,
+        is_edited=true. mode=single invariato (mass update esistente).</change>
+    </endpoint>
+
+    <business-rule id="br-balanced">
+      SMISTAMENTO EQUO (bilanciamento carico). Servizio condiviso
+      `LeadOperatorDistributor` (riusato da bulk-assign Lead reali E import):
+        1. operators = users con employment.operational_site_id = Sede, ordinati per id.
+           Vuoto -> errore (422 lato Lead; 422 lato import).
+        2. load[op] = count Lead reali con operator_id = op.id (carico corrente).
+        3. Per ogni target (Lead o riga, in ordine deterministico per id): assegna
+           all'operatore con load minimo (parita' risolta per id operatore piu' basso),
+           poi load[op]++. Risultato: distribuzione che uniforma il totale finale.
+      Deterministico e testabile in isolamento (unit test sull'algoritmo).
+    </business-rule>
+  </api-contract>
+
+  <!-- ============================ ACCEPTANCE CRITERIA ============================ -->
+
+  <acceptance-criteria>
+
+    <!-- Backend: users for-select -->
+    <ac id="AC-001">GET /users/for-select senza operational_site_id -> comportamento
+      identico ad oggi (tutti gli users, meta assente o coerente).</ac>
+    <ac id="AC-002">GET /users/for-select?operational_site_id=S -> solo users con
+      employment.operational_site_id = S.</ac>
+    <ac id="AC-003">Ogni item con Sede espone meta.operational_site_id + label
+      composta "{line1} - {city}"; null se l'operatore non ha Sede.</ac>
+
+    <!-- Backend: bulk-assign Lead reali -->
+    <ac id="AC-010">POST /leads/assign-operators mode=single -> tutti i lead_ids
+      hanno operator_id e operational_site_id impostati; response { assigned }.</ac>
+    <ac id="AC-011">mode=balanced con K operatori e N lead -> distribuzione bilanciata
+      (differenza max-min sul carico finale &lt;= 1 a parita' di carico iniziale;
+      rispetta i carichi pre-esistenti).</ac>
+    <ac id="AC-012">mode=balanced su Sede senza operatori -> 422, nessun lead modificato.</ac>
+    <ac id="AC-013">Utente senza leads.update -> 403. Payload invalido (lead_ids vuoto,
+      site inesistente, operator_id mancante in single) -> 422.</ac>
+
+    <!-- Backend: import balanced -->
+    <ac id="AC-020">PATCH rows/assign mode=single -> invariato (retro-compat).</ac>
+    <ac id="AC-021">PATCH rows/assign mode=balanced -> righe staged selezionate
+      distribuite tra gli operatori della Sede (bilanciato); operator_id +
+      operational_site_id per riga, is_edited=true.</ac>
+
+    <!-- Frontend: popup unificato -->
+    <ac id="AC-030">Il popup "Assegna operatori" mostra: select Sede; select Operatore
+      FILTRATO per Sede (params.operational_site_id); azione "Smistamento equo"
+      (mode=balanced, non richiede operatore) e "Assegna a operatore" (mode=single,
+      abilitata solo con operatore scelto).</ac>
+    <ac id="AC-031">Se i Lead selezionati condividono una Sede, questa e' PRECOMPILATA
+      nel popup, sempre modificabile. Cambiando Sede la lista operatori si aggiorna.</ac>
+
+    <!-- Frontend: tabella Lead -->
+    <ac id="AC-040">DERUBRICATA (amendment 2026-07-21): tutte le righe Lead sono
+      selezionabili; assegnare a un Lead gia' assegnato = riassegnazione. Il vincolo
+      "solo non assegnati" NON e' piu' richiesto (selezione condivisa col menu Azioni
+      generico, gate isRowSelectable a livello tabella).</ac>
+    <ac id="AC-041">Con selezione non vuota e permesso leads.update compare la voce
+      "Assegna operatori" nel menu "Azioni" generico della tabella; apre il popup; al
+      successo refresh SSRM + deseleziona + toast.</ac>
+
+    <!-- Frontend: import review -->
+    <ac id="AC-050">La barra di revisione import usa lo STESSO popup (operatori per
+      Sede + smistamento equo + assegna a operatore) al posto della barra attuale.</ac>
+
+    <!-- Frontend: form singolo Lead -->
+    <ac id="AC-060">Scegliendo prima la Sede, il select Operatore mostra SOLO gli
+      operatori di quella Sede (params.operational_site_id).</ac>
+    <ac id="AC-061">Scegliendo prima l'Operatore, la Sede si auto-imposta dalla
+      meta.operational_site_id/label dell'operatore (istantanea, come il prefill
+      campagna->sede esistente), restando modificabile.</ac>
+    <ac id="AC-062">Cambiando Sede verso un valore diverso, l'Operatore selezionato
+      (se di un'altra Sede) viene azzerato.</ac>
+    <ac id="AC-063">In edit, se il Lead ha gia' Sede e/o Operatore, i campi sono
+      correttamente precompilati e coerenti tra loro.</ac>
+  </acceptance-criteria>
+
+  <non-goals>
+    - Nessuna relazione User&lt;-&gt;OperationalSite nuova via pivot: si usa employment.
+    - Nessun select-all cross-pagina sulla tabella Lead reale (SSRM
+      selectAll:'currentPage' esistente: selezione = id espliciti di pagina).
+    - Nessun throttle sui nuovi endpoint (regola backend.md §2).
+    - Il form singolo NON usa l'endpoint bulk: salva operator_id/operational_site_id
+      via i POST/PATCH /leads esistenti.
+  </non-goals>
+</spec>

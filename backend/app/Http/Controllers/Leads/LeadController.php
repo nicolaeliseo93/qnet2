@@ -6,12 +6,14 @@ use App\Authorization\AuthorizationRegistry;
 use App\Authorization\ResourcePermissionsBuilder;
 use App\Enums\HttpStatusEnum;
 use App\Http\Controllers\Abstract\BaseApiController;
+use App\Http\Requests\Leads\AssignOperatorsRequest;
 use App\Http\Requests\Leads\StoreLeadRequest;
 use App\Http\Requests\Leads\UpdateLeadRequest;
 use App\Http\Resources\LeadResource;
 use App\Models\Lead;
 use App\Models\Opportunity;
 use App\Models\User;
+use App\Services\LeadAssignmentService;
 use App\Services\LeadService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +38,7 @@ class LeadController extends BaseApiController
 
     public function __construct(
         private readonly LeadService $service,
+        private readonly LeadAssignmentService $assignmentService,
         private readonly AuthorizationRegistry $authorization,
         private readonly ResourcePermissionsBuilder $permissionsBuilder,
     ) {}
@@ -102,6 +105,36 @@ class LeadController extends BaseApiController
             );
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['lead' => $lead->id]);
+        }
+    }
+
+    /**
+     * POST /api/leads/assign-operators — bulk-assign a Sede and an Operatore
+     * to many REAL leads at once (spec 0048). Every targeted lead is
+     * authorized individually via LeadPolicy (`leads.update` — the policy
+     * carries no per-record ownership rule, so this is equivalent to a
+     * single blanket check, but stays instance-based to match every other
+     * Lead endpoint and to remain correct should the policy ever gain one).
+     */
+    public function assignOperators(AssignOperatorsRequest $request): JsonResponse
+    {
+        try {
+            $leadIds = $request->leadIds();
+
+            foreach (Lead::query()->whereIn('id', $leadIds)->get() as $lead) {
+                $this->authorize('update', $lead);
+            }
+
+            $assigned = $this->assignmentService->assignOperators(
+                $leadIds,
+                $request->operationalSiteId(),
+                $request->mode(),
+                $request->operatorId(),
+            );
+
+            return $this->ok(['assigned' => $assigned], 'Operators assigned');
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
         }
     }
 

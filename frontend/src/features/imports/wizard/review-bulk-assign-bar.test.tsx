@@ -6,22 +6,32 @@ import { ReviewBulkAssignBar } from '@/features/imports/wizard/review-bulk-assig
 
 /**
  * Compact toolbar shown above the review grid while the SSRM selection is
- * non-empty: selection count (or "All"), an operator picker, a site picker
- * and a single "Assign" action applying whichever field(s) are set.
- * Assign-only — no bulk clear, the single-row cells already cover it.
+ * non-empty: selection count (or "All") plus a single trigger opening the
+ * SHARED "Assegna operatori" popup (spec 0048 AC-050) — the real
+ * `AssignOperatorsDialog`, with only its `AsyncPaginatedSelect` pickers
+ * stubbed (mirrors `assign-operators-dialog.test.tsx`).
  */
+
+const SITE_PICK_ID = 7
+const OPERATOR_PICK_ID = 42
 
 vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
+    resource,
     value,
     onChange,
     labels,
   }: {
+    resource: string
     value: number | null
     onChange: (value: number | null) => void
     labels: { triggerLabel: string }
   }) => (
-    <button type="button" aria-label={labels.triggerLabel} onClick={() => onChange(labels.triggerLabel === 'Assign operator…' ? 42 : 84)}>
+    <button
+      type="button"
+      aria-label={labels.triggerLabel}
+      onClick={() => onChange(resource === 'operational-sites' ? SITE_PICK_ID : OPERATOR_PICK_ID)}
+    >
       {value ?? 'none'}
     </button>
   ),
@@ -35,11 +45,16 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe('ReviewBulkAssignBar', () => {
+function openDialog() {
+  fireEvent.click(screen.getByRole('button', { name: 'Assign operators' }))
+}
+
+describe('ReviewBulkAssignBar — selection label', () => {
   it('shows the selected-count label for a partial selection', () => {
     render(
       <ReviewBulkAssignBar
         selection={{ selectAll: false, toggledNodes: ['1', '2', '3'] }}
+        totalRows={10}
         onAssign={vi.fn().mockResolvedValue(undefined)}
       />,
     )
@@ -50,6 +65,7 @@ describe('ReviewBulkAssignBar', () => {
     render(
       <ReviewBulkAssignBar
         selection={{ selectAll: true, toggledNodes: [] }}
+        totalRows={10}
         onAssign={vi.fn().mockResolvedValue(undefined)}
       />,
     )
@@ -60,88 +76,132 @@ describe('ReviewBulkAssignBar', () => {
     render(
       <ReviewBulkAssignBar
         selection={{ selectAll: true, toggledNodes: ['9'] }}
+        totalRows={10}
         onAssign={vi.fn().mockResolvedValue(undefined)}
       />,
     )
     expect(screen.getByText('All rows selected (1 excluded)')).toBeInTheDocument()
   })
 
-  it('renders both an operator and a site picker', () => {
-    render(
-      <ReviewBulkAssignBar
-        selection={{ selectAll: false, toggledNodes: ['1'] }}
-        onAssign={vi.fn().mockResolvedValue(undefined)}
-      />,
-    )
-    expect(screen.getByRole('button', { name: 'Assign operator…' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Assign site…' })).toBeInTheDocument()
-  })
-
-  it('disables Assign until at least one of operator/site is picked', () => {
-    render(
-      <ReviewBulkAssignBar
-        selection={{ selectAll: false, toggledNodes: ['1'] }}
-        onAssign={vi.fn().mockResolvedValue(undefined)}
-      />,
-    )
-    expect(screen.getByRole('button', { name: 'Assign' })).toBeDisabled()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Assign operator…' }))
-    expect(screen.getByRole('button', { name: 'Assign' })).not.toBeDisabled()
-  })
-
-  it('calls onAssign with only the operator id when only the operator is picked', async () => {
-    const onAssign = vi.fn().mockResolvedValue(undefined)
-    render(<ReviewBulkAssignBar selection={{ selectAll: false, toggledNodes: ['1'] }} onAssign={onAssign} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Assign operator…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
-
-    await waitFor(() => expect(onAssign).toHaveBeenCalledWith({ operatorId: 42, siteId: null }))
-  })
-
-  it('calls onAssign with only the site id when only the site is picked', async () => {
-    const onAssign = vi.fn().mockResolvedValue(undefined)
-    render(<ReviewBulkAssignBar selection={{ selectAll: false, toggledNodes: ['1'] }} onAssign={onAssign} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Assign site…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
-
-    await waitFor(() => expect(onAssign).toHaveBeenCalledWith({ operatorId: null, siteId: 84 }))
-  })
-
-  it('calls onAssign with both ids when both are picked, and resets both picks on success', async () => {
-    const onAssign = vi.fn().mockResolvedValue(undefined)
-    render(<ReviewBulkAssignBar selection={{ selectAll: false, toggledNodes: ['1'] }} onAssign={onAssign} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Assign operator…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Assign site…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
-
-    await waitFor(() => expect(onAssign).toHaveBeenCalledWith({ operatorId: 42, siteId: 84 }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Assign' })).toBeDisabled())
-  })
-
-  it('keeps the picks when onAssign rejects (already surfaced by the caller)', async () => {
-    const onAssign = vi.fn().mockRejectedValue(new Error('failed'))
-    render(<ReviewBulkAssignBar selection={{ selectAll: false, toggledNodes: ['1'] }} onAssign={onAssign} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Assign operator…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
-
-    await waitFor(() => expect(onAssign).toHaveBeenCalledTimes(1))
-    expect(screen.getByRole('button', { name: 'Assign' })).not.toBeDisabled()
-  })
-
   it('exposes an accessible toolbar landmark', () => {
     render(
       <ReviewBulkAssignBar
         selection={{ selectAll: false, toggledNodes: ['1'] }}
+        totalRows={10}
         onAssign={vi.fn().mockResolvedValue(undefined)}
       />,
     )
     expect(
       screen.getByRole('toolbar', { name: 'Bulk-assign operator/site to the selected rows' }),
     ).toBeInTheDocument()
+  })
+})
+
+describe('ReviewBulkAssignBar — opens the shared popup', () => {
+  it('renders a trigger that opens the shared "Assegna operatori" popup', () => {
+    render(
+      <ReviewBulkAssignBar
+        selection={{ selectAll: false, toggledNodes: ['1', '2'] }}
+        totalRows={10}
+        onAssign={vi.fn().mockResolvedValue(undefined)}
+      />,
+    )
+
+    expect(screen.queryByText('2 lead(s) selected.')).not.toBeInTheDocument()
+    openDialog()
+
+    expect(screen.getByText('2 lead(s) selected.')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Balanced split' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Assign to operator' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Assign' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced split' }))
+    expect(screen.getByRole('button', { name: 'Site' })).toBeInTheDocument()
+  })
+
+  it('passes the toggled-node count as selectionCount for a partial selection', () => {
+    render(
+      <ReviewBulkAssignBar
+        selection={{ selectAll: false, toggledNodes: ['1', '2', '3'] }}
+        totalRows={10}
+        onAssign={vi.fn().mockResolvedValue(undefined)}
+      />,
+    )
+    openDialog()
+    expect(screen.getByText('3 lead(s) selected.')).toBeInTheDocument()
+  })
+
+  it('approximates selectionCount from totalRows minus excluded nodes on select-all', () => {
+    render(
+      <ReviewBulkAssignBar
+        selection={{ selectAll: true, toggledNodes: ['9'] }}
+        totalRows={10}
+        onAssign={vi.fn().mockResolvedValue(undefined)}
+      />,
+    )
+    openDialog()
+    expect(screen.getByText('9 lead(s) selected.')).toBeInTheDocument()
+  })
+
+  it('calls onAssign with mode "balanced" (site only) and closes on success', async () => {
+    const onAssign = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ReviewBulkAssignBar
+        selection={{ selectAll: false, toggledNodes: ['1'] }}
+        totalRows={10}
+        onAssign={onAssign}
+      />,
+    )
+    openDialog()
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced split' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Site' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
+
+    await waitFor(() =>
+      expect(onAssign).toHaveBeenCalledWith({ operational_site_id: SITE_PICK_ID, mode: 'balanced' }),
+    )
+    await waitFor(() => expect(screen.queryByText('1 lead(s) selected.')).not.toBeInTheDocument())
+  })
+
+  it('calls onAssign with mode "single" (site + operator)', async () => {
+    const onAssign = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ReviewBulkAssignBar
+        selection={{ selectAll: false, toggledNodes: ['1'] }}
+        totalRows={10}
+        onAssign={onAssign}
+      />,
+    )
+    openDialog()
+    fireEvent.click(screen.getByRole('radio', { name: 'Assign to operator' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Site' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Operator' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
+
+    await waitFor(() =>
+      expect(onAssign).toHaveBeenCalledWith({
+        operational_site_id: SITE_PICK_ID,
+        mode: 'single',
+        operator_id: OPERATOR_PICK_ID,
+      }),
+    )
+  })
+
+  it('keeps the popup open when onAssign rejects (already surfaced by the caller)', async () => {
+    const onAssign = vi.fn().mockRejectedValue(new Error('failed'))
+    render(
+      <ReviewBulkAssignBar
+        selection={{ selectAll: false, toggledNodes: ['1'] }}
+        totalRows={10}
+        onAssign={onAssign}
+      />,
+    )
+    openDialog()
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced split' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Site' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
+
+    await waitFor(() => expect(onAssign).toHaveBeenCalledTimes(1))
+    expect(screen.getByText('1 lead(s) selected.')).toBeInTheDocument()
   })
 })

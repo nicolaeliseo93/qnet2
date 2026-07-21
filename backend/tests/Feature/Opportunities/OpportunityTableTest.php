@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\GenerateExportJob;
+use App\Models\Attachment;
 use App\Models\BusinessFunction;
 use App\Models\ExportRun;
 use App\Models\Opportunity;
@@ -21,7 +22,7 @@ if (! function_exists('opportunityTableUserWith')) {
      */
     function opportunityTableUserWith(array $abilities): User
     {
-        foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import'] as $ability) {
+        foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import', 'viewDocuments'] as $ability) {
             Permission::findOrCreate("opportunities.{$ability}");
         }
 
@@ -223,6 +224,64 @@ it('rows: supervisor carries avatar_url and managers surface as an ordered avata
     ])->assertOk();
 
     expect(collect($filtered->json('items'))->pluck('id')->all())->toBe([$opportunity->id]);
+});
+
+// ---------------------------------------------------------------------------
+// `documents` row action + documents_count (HasAttachments 'documents'
+// collection, gated by OpportunityPolicy::viewDocuments)
+// ---------------------------------------------------------------------------
+
+it('row.actions contains documents for an actor with opportunities.viewDocuments', function () {
+    $actor = opportunityTableUserWith(['viewAny', 'viewDocuments']);
+    $opportunity = Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/opportunities/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $opportunity->id)['actions'])->toContain('documents');
+});
+
+it('row.actions omits documents for an actor without opportunities.viewDocuments', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    $opportunity = Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/opportunities/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $opportunity->id)['actions'])->not->toContain('documents');
+});
+
+it('rows: documents_count reflects only the documents-collection attachments of that opportunity', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    $withDocuments = Opportunity::factory()->create();
+    $otherOpportunity = Opportunity::factory()->create();
+
+    Attachment::factory()->for($withDocuments, 'attachable')->count(2)->create(['collection' => 'documents']);
+    // A different collection on the SAME opportunity must not be counted.
+    Attachment::factory()->for($withDocuments, 'attachable')->create(['collection' => 'other']);
+    // An attachment in 'documents' on a DIFFERENT opportunity must not leak in.
+    Attachment::factory()->for($otherOpportunity, 'attachable')->create(['collection' => 'documents']);
+
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/opportunities/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $withDocuments->id)['documents_count'])->toBe(2)
+        ->and($items->firstWhere('id', $otherOpportunity->id)['documents_count'])->toBe(1);
+});
+
+it('rows: documents_count is 0 when the opportunity has no attachments', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    $opportunity = Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $items = collect($this->postJson('/api/tables/opportunities/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+
+    expect($items->firstWhere('id', $opportunity->id)['documents_count'])->toBe(0);
 });
 
 // ---------------------------------------------------------------------------

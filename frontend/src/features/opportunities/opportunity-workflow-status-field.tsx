@@ -20,9 +20,9 @@ interface OpportunityWorkflowStatusFieldProps {
    * The resolved working-state set for THIS opportunity (spec 0047,
    * `OpportunityResource.workflow_statuses`). `null` = unknown yet (create
    * mode: the set depends on server-resolved criteria, only known once the
-   * opportunity is saved) — renders an explanatory hint instead of the
-   * select. An empty array degrades the same way (defensive only: the
-   * backend always seeds at least the 'open'/'closed' system rows).
+   * opportunity is saved) — the field is not rendered. An empty array
+   * degrades the same way (defensive only: the backend always seeds at least
+   * the 'open'/'closed_won'/'closed_lost' system rows).
    */
   statuses: OpportunityWorkflowStatusRef[] | null
 }
@@ -44,17 +44,13 @@ function StatusSwatch({ color }: { color: string | null }) {
  * already resolved for this opportunity — never a remote for-select, a plain
  * shadcn `Select` over `statuses`. Edit mode only: on create the set is not
  * yet known (it depends on server-resolved criteria), so the caller passes
- * `statuses={null}` and this renders a hint instead.
+ * `statuses={null}` and this renders nothing.
  */
 export function OpportunityWorkflowStatusField({ control, statuses }: OpportunityWorkflowStatusFieldProps) {
   const { t } = useTranslation()
 
   if (!statuses || statuses.length === 0) {
-    return (
-      <p className="self-end pb-2 text-xs text-muted-foreground">
-        {t('opportunities.form.workflowStatusPendingHint')}
-      </p>
-    )
+    return null
   }
 
   return (

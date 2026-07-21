@@ -63,6 +63,7 @@ export const table = {
   noSavedViews: 'Nessuna vista salvata.',
   selectedCount_one: '{{count}} riga selezionata',
   selectedCount_other: '{{count}} righe selezionate',
+  bulkActions: 'Azioni ({{count}})',
   deleteSelected: 'Elimina selezionati ({{count}})',
   bulkDeleteConfirmTitle: 'Elimina le righe selezionate',
   bulkDeleteConfirmBody_one:

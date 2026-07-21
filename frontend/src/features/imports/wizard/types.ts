@@ -239,13 +239,19 @@ export interface ImportRunRowUpdateResult {
  * Grid's own server-side selection state 1:1
  * (`gridApi.getServerSideSelectionState()`): `select_all: false` — `row_ids`
  * are the selected (included) row ids, never empty; `select_all: true` —
- * `row_ids` are the deselected (excluded) row ids. At least one of
- * `operator_id`/`operational_site_id` is present. Assign-only: there is no
+ * `row_ids` are the deselected (excluded) row ids. Assign-only: there is no
  * bulk clear, the single-row cell already covers that.
+ *
+ * `mode` (spec 0048): the shared "Assegna operatori" popup always sends it —
+ * `single` (requires `operator_id`) or `balanced` (requires
+ * `operational_site_id`, enumerating the Sede's operators server-side).
+ * Optional for backward compat with the legacy (pre-0048) caller contract,
+ * where at least one of `operator_id`/`operational_site_id` alone sufficed.
  */
 export interface BulkAssignImportRowPayload {
   operator_id?: number
   operational_site_id?: number
+  mode?: 'single' | 'balanced'
   select_all: boolean
   row_ids: number[]
 }

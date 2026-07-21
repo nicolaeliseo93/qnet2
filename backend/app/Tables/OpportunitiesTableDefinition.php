@@ -92,10 +92,14 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
         // Eager-load every relation mapRow touches to avoid N+1 across the page.
         // supervisor/managers pull their avatar relation too, so each row can
         // project the inline avatar (data URI) without a per-row query.
-        return Opportunity::query()->with([
-            'registry', 'referent', 'commercial', 'supervisor.avatar', 'source', 'opportunityStatus',
-            'managers.avatar', 'productLines.businessFunction', 'productLines.productCategory',
-        ]);
+        return Opportunity::query()
+            ->with([
+                'registry', 'referent', 'commercial', 'supervisor.avatar', 'source', 'opportunityStatus',
+                'managers.avatar', 'productLines.businessFunction', 'productLines.productCategory',
+            ])
+            // Per-row count for the `documents` action badge (HasAttachments),
+            // scoped to the 'documents' collection only — never other collections.
+            ->withCount(['attachments as documents_count' => fn (Builder $q) => $q->where('collection', 'documents')]);
     }
 
     /**
@@ -174,6 +178,7 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
             'start_date' => $row->start_date,
             'expected_close_date' => $row->expected_close_date,
             'created_at' => $row->created_at,
+            'documents_count' => (int) ($row->documents_count ?? 0),
         ];
     }
 
@@ -245,6 +250,10 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
 
         if (Gate::forUser($actor)->allows('viewActivity', $row)) {
             $allowed[] = 'activity';
+        }
+
+        if (Gate::forUser($actor)->allows('viewDocuments', $row)) {
+            $allowed[] = 'documents';
         }
 
         return $allowed;

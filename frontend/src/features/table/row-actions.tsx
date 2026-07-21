@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MoreHorizontal } from 'lucide-react'
 import type { ICellRendererParams } from 'ag-grid-community'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useConfirm } from '@/components/confirm-dialog-context'
 import {
@@ -29,7 +30,7 @@ import type { TableActionDefinition, TableRow } from '@/features/table/types'
  * and every remaining action moves into the overflow (three-dots) menu, keeping
  * the actions column narrow while the most frequent actions stay one click away.
  */
-export const INLINE_ACTION_LIMIT = 3
+export const INLINE_ACTION_LIMIT = 4
 
 /** Fired when the user triggers an action on a row. */
 export type RowActionHandler = (
@@ -55,6 +56,37 @@ interface RowActionsProps extends RowActionsOptions {
   /** Full action catalog from the config (how to render each key). */
   catalog: TableActionDefinition[]
   onAction: RowActionHandler
+}
+
+/**
+ * Reads `row[action.count_field]` and coerces it to a finite positive count,
+ * or `null` when the action has no `count_field` or the value doesn't render
+ * a badge (missing, non-numeric, zero). Centralizes the guard so both the
+ * inline and overflow renderers agree on when a badge shows.
+ */
+function resolveActionCount(action: TableActionDefinition, row: TableRow): number | null {
+  if (!action.count_field) {
+    return null
+  }
+  const value = row[String(action.count_field)]
+  const count = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(count) && count > 0 ? count : null
+}
+
+/**
+ * Small numeric badge overlaid on an inline icon button's top-right corner
+ * (e.g. the "documents" row action's attachment count). Purely presentational;
+ * the caller decides whether to render it at all (see `resolveActionCount`).
+ */
+function ActionCountBadge({ count }: { count: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none text-primary-foreground"
+    >
+      {count}
+    </span>
+  )
 }
 
 /**
@@ -125,22 +157,23 @@ function RowActions({
         {visible.map((action) => {
           const Icon = resolveActionIcon(action.icon, iconMap)
           const label = t(action.label)
+          const count = resolveActionCount(action, effectiveRow)
           return (
             <Tooltip key={action.key}>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={label}
+                  aria-label={count !== null ? `${label} (${count})` : label}
                   disabled={busy}
                   onClick={() => handleSelect(action)}
-                  className={
-                    action.type === 'danger'
-                      ? 'text-destructive hover:text-destructive'
-                      : undefined
-                  }
+                  className={cn(
+                    'relative',
+                    action.type === 'danger' && 'text-destructive hover:text-destructive',
+                  )}
                 >
                   <Icon aria-hidden="true" />
+                  {count !== null && <ActionCountBadge count={count} />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{label}</TooltipContent>
@@ -164,6 +197,7 @@ function RowActions({
           <DropdownMenuContent align="end">
             {overflow.map((action) => {
               const Icon = resolveActionIcon(action.icon, iconMap)
+              const count = resolveActionCount(action, effectiveRow)
               return (
                 <DropdownMenuItem
                   key={action.key}
@@ -172,6 +206,9 @@ function RowActions({
                 >
                   <Icon aria-hidden="true" />
                   {t(action.label)}
+                  {count !== null && (
+                    <span className="text-muted-foreground">({count})</span>
+                  )}
                 </DropdownMenuItem>
               )
             })}

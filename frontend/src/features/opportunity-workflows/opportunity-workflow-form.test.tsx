@@ -13,7 +13,7 @@ import type { ResourcePermissions } from '@/features/authorization/types'
 /**
  * Spec 0047 AC-024 (3 sections; criteria editor add/remove, value select
  * dependent on the field) and AC-025 (`<SortableList>` statuses editor: the
- * pinned open/closed rows have no drag handle/remove action; custom rows are
+ * pinned open/closed_won/closed_lost rows have no drag handle/remove action; custom rows are
  * reorderable and the order lands in the payload). Mirrors
  * `opportunity-status-form.test.tsx`/`status-reorder-sheet.test.tsx`'s
  * mocking boundaries (HTTP + `sonner`), driving the SAME real
@@ -123,7 +123,7 @@ function opportunityWorkflow(
       { id: 10, name: 'Open', color: null, sort_order: 0, system_key: 'open', group: 'open' },
       { id: 11, name: 'Alpha', color: 'blue', sort_order: 10, system_key: null, group: 'pending' },
       { id: 12, name: 'Bravo', color: 'green', sort_order: 20, system_key: null, group: 'pending' },
-      { id: 13, name: 'Closed', color: null, sort_order: 30, system_key: 'closed', group: 'closed' },
+      { id: 13, name: 'Closed', color: null, sort_order: 30, system_key: 'closed_won', group: 'closed_won' },
     ],
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -239,7 +239,7 @@ describe('OpportunityWorkflowForm — statuses editor (AC-025)', () => {
     expect(payload.statuses.map((status: { id?: number }) => status.id)).toEqual([10, 12, 11, 13])
   })
 
-  it('seeds editable open/closed rows and sends them with the added custom row in the create payload', async () => {
+  it('seeds editable open/closed_won/closed_lost rows and sends them with the added custom row in the create payload', async () => {
     createOpportunityWorkflowMock.mockResolvedValue(opportunityWorkflow())
     const onSuccess = vi.fn()
 
@@ -248,12 +248,13 @@ describe('OpportunityWorkflowForm — statuses editor (AC-025)', () => {
       { wrapper: wrapper() },
     )
 
-    // The 2 pinned rows are present and editable from the start (seeded).
+    // The 3 pinned rows are present and editable from the start (seeded).
     expect(screen.getByDisplayValue('Open')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('Closed')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Closed (won)')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Closed (lost)')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Add status' }))
-    // 3 name inputs now: open (0), the new custom (1), closed (2).
+    // 4 name inputs now: open (0), the new custom (1), closed_won (2), closed_lost (3).
     const nameInputs = screen.getAllByRole('textbox', { name: 'Status name' })
     fireEvent.change(nameInputs[1], { target: { value: 'In review' } })
 
@@ -269,7 +270,8 @@ describe('OpportunityWorkflowForm — statuses editor (AC-025)', () => {
     expect(payload.statuses).toEqual([
       { name: 'Open', color: null, group: 'open', system_key: 'open' },
       { name: 'In review', color: null, group: 'pending', system_key: null },
-      { name: 'Closed', color: null, group: 'closed', system_key: 'closed' },
+      { name: 'Closed (won)', color: null, group: 'closed_won', system_key: 'closed_won' },
+      { name: 'Closed (lost)', color: null, group: 'closed_lost', system_key: 'closed_lost' },
     ])
     expect(payload.criteria).toEqual([{ field: 'state_id', value_id: 101 }])
     expect(onSuccess).toHaveBeenCalled()

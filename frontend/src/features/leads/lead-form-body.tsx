@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWatch } from 'react-hook-form'
 import { CircleAlert, ClipboardList, Contact, Handshake, Loader2, StickyNote } from 'lucide-react'
@@ -16,7 +16,7 @@ import { REGISTRIES_FOR_SELECT_RESOURCE } from '@/features/registries/for-select
 import { CAMPAIGNS_FOR_SELECT_RESOURCE, type CampaignForSelectItem } from '@/features/campaigns/for-select-api'
 import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
-import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
+import { USERS_FOR_SELECT_RESOURCE, type UserForSelectItem } from '@/features/users/for-select-api'
 import { STATES_FOR_SELECT_RESOURCE } from '@/features/geo/state-for-select-api'
 import { useLeadForm } from '@/features/leads/use-lead-form'
 import { NOTES_MAX_LENGTH } from '@/features/leads/lead-schema'
@@ -62,6 +62,15 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
   // a lock). Unlike the superseded Sede->Regione auto-fill, this does NOT
   // touch `state_id`: directive 2026-07-21 made the Regione a free,
   // never-inherited field.
+  // Sede <-> Operatore, reciprocally filtering/linked (spec 0048 AC-060..062).
+  // `previousSiteIdRef` is the baseline every auto-fill/clear below reasons
+  // against: it starts at the loaded lead's Sede (edit) or null (create) and
+  // only ever moves inside an event handler (never read/written during
+  // render), so a real Sede pick can be told apart from the programmatic
+  // auto-fills (which never go through the Sede field's own `onItemChange`).
+  const previousSiteIdRef = useRef<number | null>(original?.operational_site_id ?? null)
+  const siteId = useWatch({ control: form.control, name: 'operational_site_id' })
+
   const [autoFilledSite, setAutoFilledSite] = useState<RelationFieldRef | null>(null)
   const handleCampaignItemChange = (item: ForSelectItem | null) => {
     const campaign = item as CampaignForSelectItem | null
@@ -69,6 +78,38 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
     if (site == null) return
     form.setValue('operational_site_id', site.id, { shouldDirty: true, shouldValidate: true })
     setAutoFilledSite({ id: site.id, name: site.label })
+    previousSiteIdRef.current = site.id
+  }
+
+  // Operatore -> Sede (AC-061): picking an Operatore hydrates its own Sede
+  // from `meta` (no extra fetch), mirroring the Campaign->Sede chain above.
+  // An operator with no Sede leaves the current value untouched.
+  const handleOperatorItemChange = (item: ForSelectItem | null) => {
+    const operator = item as UserForSelectItem | null
+    const site = operator?.meta
+    if (site?.operational_site_id == null) return
+    form.setValue('operational_site_id', site.operational_site_id, {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
+    setAutoFilledSite({
+      id: site.operational_site_id,
+      name: site.operational_site_label ?? `#${site.operational_site_id}`,
+    })
+    previousSiteIdRef.current = site.operational_site_id
+  }
+
+  // Sede -> Operatore (AC-062): a real pick/clear on the Sede field re-scopes
+  // the Operatore list, so a stale Operatore from another Sede can no longer
+  // be assumed valid and is cleared — but only on an ACTUAL change, not the
+  // programmatic auto-fills above, and never on mount (`onItemChange` is only
+  // ever invoked from a user pick/clear, see `AsyncPaginatedSelect`).
+  const handleSiteItemChange = (item: ForSelectItem | null) => {
+    const nextSiteId = item?.id ?? null
+    if (nextSiteId !== previousSiteIdRef.current) {
+      form.setValue('operator_id', null, { shouldDirty: true })
+    }
+    previousSiteIdRef.current = nextSiteId
   }
 
   const selectLabels = {
@@ -169,6 +210,7 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
                     ? { id: original.operational_site.id, name: original.operational_site.label }
                     : null)
                 }
+                onItemChange={handleSiteItemChange}
                 {...selectLabels}
               />
 
@@ -195,18 +237,27 @@ export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
                 {...selectLabels}
               />
 
-              <RelationSelectField
-                control={form.control}
-                name="operator_id"
-                metaKey="operator_id"
-                label={t('leads.form.operator')}
-                hint={t('leads.form.hints.operator')}
-                resource={USERS_FOR_SELECT_RESOURCE}
-                searchPlaceholder={t('leads.form.operatorSearch')}
-                selected={original?.operator ?? null}
-                showAvatar
-                {...selectLabels}
-              />
+              <div className="space-y-1.5">
+                <RelationSelectField
+                  control={form.control}
+                  name="operator_id"
+                  metaKey="operator_id"
+                  label={t('leads.form.operator')}
+                  hint={t('leads.form.hints.operator')}
+                  resource={USERS_FOR_SELECT_RESOURCE}
+                  searchPlaceholder={t('leads.form.operatorSearch')}
+                  selected={original?.operator ?? null}
+                  onItemChange={handleOperatorItemChange}
+                  params={siteId != null ? { operational_site_id: siteId } : undefined}
+                  showAvatar
+                  {...selectLabels}
+                />
+                {siteId != null && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('leads.form.hints.operatorFilteredBySite')}
+                  </p>
+                )}
+              </div>
             </div>
           </FormSection>
 

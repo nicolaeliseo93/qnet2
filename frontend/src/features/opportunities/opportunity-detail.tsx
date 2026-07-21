@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Building2, Contact, Handshake, History, Users } from 'lucide-react'
+import { Building2, Contact, Handshake, History, Paperclip, Users } from 'lucide-react'
 import {
   DetailEmpty,
   DetailField,
@@ -16,6 +16,8 @@ import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/features/table/cell-renderers'
 import { formatDecimal } from '@/features/products/column-renderers'
 import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
+import { DocumentsSection } from '@/features/attachments/documents-section'
+import { useAbilities } from '@/features/auth/use-abilities'
 import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
 import { OPPORTUNITY_STATUS_BADGE_CLASSES } from '@/features/opportunities/column-renderers'
 import type {
@@ -51,6 +53,24 @@ function formatDate(value: string | null): string | null {
   }
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString()
+}
+
+/**
+ * Derives the attachments abilities and renders the documents section. Kept
+ * as its own mount (rather than calling `useAbilities()` unconditionally in
+ * `OpportunityDetailView`) so the underlying `useQuery` calls only run while
+ * the section is actually authorized to render.
+ */
+function OpportunityDocumentsPanel({ opportunityId }: { opportunityId: number }) {
+  const { can } = useAbilities()
+  return (
+    <DocumentsSection
+      resource="opportunity"
+      id={opportunityId}
+      canUpload={can('attachments.create')}
+      canDelete={can('attachments.delete')}
+    />
+  )
 }
 
 /**
@@ -176,6 +196,12 @@ export function OpportunityDetailView({ opportunity }: OpportunityDetailViewProp
           </DetailField>
         </DetailGrid>
       </DetailSection>
+
+      {opportunity.permissions.actions.view_documents ? (
+        <DetailSection title={t('attachments.title')} icon={<Paperclip />}>
+          <OpportunityDocumentsPanel opportunityId={opportunity.id} />
+        </DetailSection>
+      ) : null}
 
       {opportunity.permissions.actions.view_activity ? (
         <DetailSection title={t('activityLog.title')} icon={<History />}>

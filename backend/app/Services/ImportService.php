@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\ImportRowStatus;
 use App\Enums\ImportStatus;
+use App\Enums\LeadAssignmentMode;
 use App\Exceptions\Import\ImportConversionNotReadyException;
 use App\Imports\ImportDefinition;
 use App\Imports\RowOutcome;
@@ -40,7 +41,10 @@ class ImportService
 
     private const string DIRECTORY = 'imports';
 
-    public function __construct(private readonly ImportOpportunityConvertibility $convertibility) {}
+    public function __construct(
+        private readonly ImportOpportunityConvertibility $convertibility,
+        private readonly LeadOperatorDistributor $distributor,
+    ) {}
 
     /**
      * Store the uploaded file, create the ImportRun (status=validating) and
@@ -210,20 +214,33 @@ class ImportService
 
     /**
      * Bulk-assign an operator and/or an operational site to a batch of a
-     * run's staged rows in a SINGLE mass UPDATE (spec 0045 bulk increment,
-     * extended to a COMBINED operator+site assignment) — AG Grid
+     * run's staged rows (spec 0045 bulk increment, extended to a COMBINED
+     * operator+site assignment, then to `$mode` — spec 0048) — AG Grid
      * `getServerSideSelectionState()` semantics: `$rowIds` are the rows to
      * target when `$selectAll` is false, the rows to EXCLUDE (empty = every
      * row) when true. Every id in `$rowIds` is trusted to already belong to
      * `$run` — validated by the caller's FormRequest (BulkAssignRequest)
-     * BEFORE this runs, never re-checked here. Marks every targeted row
-     * `is_edited` too, same as a single-row PATCH.
+     * BEFORE this runs, never re-checked here.
+     *
+     * `$mode = single` (default, AC-020 retro-compat) is the original SINGLE
+     * mass UPDATE, unchanged. `$mode = balanced` (AC-021) distributes the
+     * targeted rows across `$operationalSiteId`'s operators via
+     * LeadOperatorDistributor (load = REAL leads already assigned per
+     * operator) — same algorithm as LeadAssignmentService's real-lead
+     * bulk-assign. Marks every targeted row `is_edited` too, same as a
+     * single-row PATCH.
      *
      * @param  array<int, int>  $rowIds
      * @return int the number of rows updated
      */
-    public function bulkAssign(ImportRun $run, bool $selectAll, array $rowIds, ?int $operatorId, ?int $operationalSiteId): int
+    public function bulkAssign(ImportRun $run, bool $selectAll, array $rowIds, LeadAssignmentMode $mode, ?int $operatorId, ?int $operationalSiteId): int
     {
+        if ($mode === LeadAssignmentMode::Balanced) {
+            // BulkAssignRequest guarantees operational_site_id is present
+            // whenever mode=balanced.
+            return $this->bulkAssignBalanced($run, $selectAll, $rowIds, (int) $operationalSiteId);
+        }
+
         $attributes = [
             ...($operatorId !== null ? ['operator_id' => $operatorId] : []),
             ...($operationalSiteId !== null ? ['operational_site_id' => $operationalSiteId] : []),
@@ -238,6 +255,50 @@ class ImportService
             ->when(! $selectAll, fn ($query) => $query->whereIn('id', $rowIds))
             ->when($selectAll && $rowIds !== [], fn ($query) => $query->whereNotIn('id', $rowIds))
             ->update([...$attributes, 'is_edited' => true]);
+    }
+
+    /**
+     * The `mode=balanced` branch of bulkAssign() (br-balanced, spec 0048):
+     * resolve the targeted staged row ids (same select_all/row_ids
+     * semantics), distribute them across $operationalSiteId's operators, and
+     * write operator_id + operational_site_id + is_edited=true per operator
+     * group (one mass UPDATE per operator, not per row). 422 when the Sede
+     * has zero operators (AC-012's import-side counterpart).
+     *
+     * @param  array<int, int>  $rowIds
+     */
+    private function bulkAssignBalanced(ImportRun $run, bool $selectAll, array $rowIds, int $operationalSiteId): int
+    {
+        $targetRowIds = ImportRunRow::query()
+            ->where('import_run_id', $run->id)
+            ->when(! $selectAll, fn ($query) => $query->whereIn('id', $rowIds))
+            ->when($selectAll && $rowIds !== [], fn ($query) => $query->whereNotIn('id', $rowIds))
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        if ($targetRowIds === []) {
+            return 0;
+        }
+
+        $operatorIds = $this->distributor->operatorIdsForSite($operationalSiteId);
+
+        if ($operatorIds === []) {
+            abort(422, 'The selected Sede has no operators to distribute rows to.');
+        }
+
+        $loads = $this->distributor->currentLoads($operatorIds);
+        $assignments = $this->distributor->distribute($operatorIds, $loads, $targetRowIds);
+
+        foreach ($this->distributor->groupByOperator($assignments) as $assignedOperatorId => $ids) {
+            ImportRunRow::query()->whereIn('id', $ids)->update([
+                'operator_id' => $assignedOperatorId,
+                'operational_site_id' => $operationalSiteId,
+                'is_edited' => true,
+            ]);
+        }
+
+        return count($assignments);
     }
 
     /**

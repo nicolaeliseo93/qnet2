@@ -4,8 +4,8 @@
  * `.claude/rules/engineering.md` §6). A workflow is a NEW, distinct
  * dimension from `opportunityStatuses` (the sales pipeline): criteria-matched
  * per opportunity, each with its own set of "processing statuses" (a pinned
- * `open` first row, a pinned `closed` last row, and reorderable custom rows
- * in between).
+ * `open` first row, the two pinned terminal `closed_won`/`closed_lost` rows
+ * last, and reorderable custom rows in between).
  */
 
 export const opportunityWorkflows = {
@@ -91,12 +91,14 @@ export const opportunityWorkflows = {
       remove: 'Remove status',
       nameRequired: 'Every status needs a name.',
       defaultOpenName: 'Open',
-      defaultClosedName: 'Closed',
+      defaultClosedWonName: 'Closed (won)',
+      defaultClosedLostName: 'Closed (lost)',
       group: {
         label: 'Group',
         open: 'Open',
         pending: 'Pending',
-        closed: 'Closed',
+        closed_won: 'Closed (won)',
+        closed_lost: 'Closed (lost)',
       },
     },
   },

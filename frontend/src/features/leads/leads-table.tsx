@@ -2,11 +2,12 @@ import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { ArrowRightLeft, FileUp, Plus } from 'lucide-react'
+import { ArrowRightLeft, FileUp, Plus, UserCog } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { Can } from '@/features/auth/can'
+import { useAbilities } from '@/features/auth/use-abilities'
 import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
@@ -14,12 +15,20 @@ import { useStatsPanel } from '@/features/stats/use-stats-panel'
 import { useInvalidateModuleStats } from '@/features/stats/use-invalidate-module-stats'
 import { useModuleOpener } from '@/features/modules/use-module-opener'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
+import type { BulkAction, TableSelection } from '@/features/table/use-bulk-actions-slot'
 import type { ActionIconMap } from '@/features/table/action-icon-map'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
 import { leadColumnRenderers } from '@/features/leads/column-renderers'
 import { deleteLead } from '@/features/leads/api'
 import { useLeadConversion } from '@/features/leads/use-lead-conversion'
+import {
+  AssignOperatorsDialog,
+  type AssignOperatorsDialogInput,
+  type AssignOperatorsDialogSite,
+} from '@/features/leads/assign-operators-dialog'
+import { useAssignOperators } from '@/features/leads/use-assign-operators'
+import type { LeadOperationalSiteRef } from '@/features/leads/types'
 
 /** Domain key used to mount the generic table for leads. */
 const LEADS_DOMAIN = 'leads'
@@ -34,6 +43,21 @@ const LEADS_DOMAIN = 'leads'
 const LEADS_ACTION_ICONS: ActionIconMap = { 'arrow-right-left': ArrowRightLeft }
 
 /**
+ * The Sede to precompile in the "Assegna operatori" popup (spec 0048 AC-031):
+ * present only when every selected row's `operational_site` (the same shape
+ * `LeadsTableDefinition`/`LeadOperationalSiteColumn` project onto the grid
+ * row, `{id, label}` or `null`) shares one non-null id. Any null or mismatch
+ * across the selection leaves the popup's Sede unset, same as today.
+ */
+function resolveSharedOperationalSite(rows: TableRow[]): LeadOperationalSiteRef | null {
+  const [first, ...rest] = rows.map((row) => row.operational_site as LeadOperationalSiteRef | null)
+  if (!first) {
+    return null
+  }
+  return rest.every((site) => site?.id === first.id) ? first : null
+}
+
+/**
  * Thin Leads adapter over the generic table. It mounts `<TableView>` with the
  * `leads` domain, its custom cell renderers and a row-action handler, and
  * delegates the open mode (modal Sheet vs dedicated page) of view/edit/create
@@ -45,6 +69,7 @@ const LEADS_ACTION_ICONS: ActionIconMap = { 'arrow-right-left': ArrowRightLeft }
 export function LeadsTable() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { can } = useAbilities()
   const stats = useStatsPanel(LEADS_DOMAIN)
   const invalidateStats = useInvalidateModuleStats(LEADS_DOMAIN)
 
@@ -121,6 +146,62 @@ export function LeadsTable() {
 
   const isBusy = useCallback((row: TableRow) => row.id === deletingId, [deletingId])
 
+  // Bulk operator assignment (spec 0048 AC-041): the shared popup collects
+  // Sede + mode + operator; this adapter owns the selection, the mutation and
+  // its own success/error feedback.
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [assignIds, setAssignIds] = useState<number[]>([])
+  const [assignDefaultSite, setAssignDefaultSite] = useState<AssignOperatorsDialogSite | null>(null)
+  const canAssignOperators = can('leads.update')
+
+  const assignMutation = useAssignOperators({
+    onSuccess: (result) => {
+      toast.success(t('leads.assign.success', { count: result.assigned }))
+      refreshGrid()
+      tableRef.current?.clearSelection()
+      invalidateStats()
+    },
+  })
+
+  const handleAssign = useCallback(
+    async (input: AssignOperatorsDialogInput) => {
+      try {
+        await assignMutation.mutateAsync({ lead_ids: assignIds, ...input })
+      } catch (error) {
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined
+        toast.error(
+          status === 422 && input.mode === 'balanced'
+            ? t('leads.assign.errors.noOperators')
+            : t('leads.assign.errors.generic'),
+        )
+        throw error
+      }
+    },
+    [assignMutation, assignIds, t],
+  )
+
+  // AC-031: precompiles the popup's Sede when every selected row shares one.
+  const openAssignDialog = useCallback((selection: TableSelection) => {
+    setAssignIds(selection.ids)
+    setAssignDefaultSite(resolveSharedOperationalSite(selection.rows))
+    setAssignOpen(true)
+  }, [])
+
+  // Surfaced inside the generic table's single "Actions" dropdown. Only wired
+  // when the actor can update Leads: `undefined` (not a function returning an
+  // empty array) so the checkbox column stays off entirely without it, rather
+  // than offering an empty menu with no reachable bulk action.
+  const getBulkActions = canAssignOperators
+    ? (selection: TableSelection): BulkAction[] => [
+        {
+          key: 'assign-operators',
+          label: t('leads.assign.tableButton'),
+          icon: UserCog,
+          onSelect: () => openAssignDialog(selection),
+        },
+      ]
+    : undefined
+
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
@@ -156,6 +237,15 @@ export function LeadsTable() {
         onAction={handleAction}
         isBusy={isBusy}
         iconMap={LEADS_ACTION_ICONS}
+        getBulkActions={getBulkActions}
+      />
+
+      <AssignOperatorsDialog
+        open={assignOpen}
+        onOpenChange={setAssignOpen}
+        selectionCount={assignIds.length}
+        defaultSite={assignDefaultSite}
+        onAssign={handleAssign}
       />
 
       {sheet}

@@ -426,16 +426,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::post('notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 
-    // Polymorphic file attachments: upload + metadata + authenticated download
-    // + delete. Any model can own attachments (HasAttachments trait); the
-    // attachable target is restricted to config('attachments.attachable_types').
-    // Authorization (attachments.create/view/delete) is enforced server-side in
+    // Polymorphic file attachments: list + upload + metadata + authenticated
+    // download/inline view + delete. Any model can own attachments
+    // (HasAttachments trait); the attachable target is restricted to
+    // config('attachments.attachable_types'). Authorization
+    // (attachments.viewAny/create/view/delete) is enforced server-side in
     // AttachmentController via the AttachmentPolicy on every endpoint. The
-    // binary is never served statically — download streams through the
-    // authorized endpoint only.
+    // binary is never served statically — download/view stream through the
+    // authorized endpoints only.
+    Route::get('attachments', [AttachmentController::class, 'index']);
     Route::post('attachments', [AttachmentController::class, 'store']);
     Route::get('attachments/{attachment}', [AttachmentController::class, 'show']);
     Route::get('attachments/{attachment}/download', [AttachmentController::class, 'download']);
+    Route::get('attachments/{attachment}/view', [AttachmentController::class, 'view']);
     Route::delete('attachments/{attachment}', [AttachmentController::class, 'destroy']);
 
     // PersonalData / Contact / Address — the reusable, polymorphic personal-data

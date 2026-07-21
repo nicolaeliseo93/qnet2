@@ -13,6 +13,7 @@ import { companySites } from './en-company-sites'
 import { operationalSites } from './en-operational-sites'
 import { imports } from './en-imports'
 import { activityLog } from './en-activity-log'
+import { attachments } from './en-attachments'
 import { exports } from './en-exports'
 import { table } from './en-table'
 import { referents, referentTypes } from './en-referents'
@@ -118,6 +119,7 @@ export const en = {
     duplicate: 'Duplicate',
     activity: 'Activity',
     convertToOpportunity: 'Convert to Opportunity',
+    documents: 'Documents',
   },
   table,
   // Strings of the generic statistics panel (spec 0026). The per-module widget
@@ -489,6 +491,7 @@ export const en = {
   opportunityStatuses,
   opportunityWorkflows,
   importRuns: { stats: moduleStats.importRuns },
+  attachments,
 }
 
 export type TranslationResources = typeof en

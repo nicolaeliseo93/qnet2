@@ -188,6 +188,15 @@ final class OpportunityColumnCatalog
                 'permission' => 'opportunities.delete',
             ],
             [
+                'key' => 'documents',
+                'label' => 'actions.documents',
+                'icon' => 'paperclip',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'opportunities.viewDocuments',
+                'count_field' => 'documents_count',
+            ],
+            [
                 'key' => 'activity',
                 'label' => 'actions.activity',
                 'icon' => 'history',

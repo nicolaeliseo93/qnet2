@@ -94,7 +94,6 @@ export const opportunities = {
     workflowStatus: 'Working status',
     workflowStatusHint:
       'The internal working status, distinct from the Opportunity Status: limited to the set resolved for this opportunity.',
-    workflowStatusPendingHint: 'Assigned automatically on save.',
     productLines: {
       fieldLabel: 'Function/category rows',
       rowLabel: 'Row {{n}}',

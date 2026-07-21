@@ -10,9 +10,30 @@ import type {
 export const USERS_FOR_SELECT_RESOURCE = 'users'
 
 /**
+ * The operator's own Sede (spec 0048), as composed by
+ * `UserForSelectResource::meta` from the user's `EmploymentProfile`. Lets the
+ * Lead form auto-fill `operational_site_id` when the Operatore is chosen
+ * first — omitted/null when the user has no employment Sede.
+ */
+export interface UserForSelectMeta {
+  operational_site_id: number | null
+  operational_site_label: string | null
+}
+
+/**
+ * A single user option as returned by `GET /api/users/for-select`, carrying
+ * its Sede presentation bag so a caller can auto-fill a dependent Sede field
+ * without a second fetch (mirrors `OperationalSiteForSelectItem`).
+ */
+export interface UserForSelectItem extends ForSelectItem {
+  meta?: UserForSelectMeta
+}
+
+/**
  * Fetches a page of user options from `GET /api/users/for-select`. Thin wrapper
  * over the generic for-select fetcher, bound to the `users` resource. For users
- * the item carries `label` (name) and `subtitle` (email).
+ * the item carries `label` (name) and `subtitle` (email). `params.operational_site_id`
+ * (spec 0048) filters to the operators of that Sede; omitted, every user is returned.
  */
 export function fetchUsersForSelect(
   params: ForSelectParams = {},
@@ -24,6 +45,8 @@ interface UseUsersForSelectOptions {
   search: string
   ids?: number[]
   enabled?: boolean
+  /** Extra query params, e.g. `{ operational_site_id }` (spec 0048) to scope the Sede's operators. */
+  params?: Record<string, string | number>
 }
 
 /**
@@ -34,11 +57,13 @@ export function useUsersForSelect({
   search,
   ids,
   enabled,
+  params,
 }: UseUsersForSelectOptions) {
   return useForSelect({
     resource: USERS_FOR_SELECT_RESOURCE,
     search,
     ids,
     enabled,
+    params,
   })
 }

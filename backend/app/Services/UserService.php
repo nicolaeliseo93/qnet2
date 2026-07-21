@@ -9,6 +9,7 @@ use App\DataObjects\Users\EmploymentData;
 use App\DataObjects\Users\ProfileData;
 use App\DataObjects\Users\UpdateUserData;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -221,12 +222,24 @@ class UserService
      * `total` reflects only the searchable population; the hydrated `ids[]` are
      * appended deduplicated AFTER the page, bypass the search filter, and do NOT
      * inflate the total (edit-mode hydration).
+     *
+     * `$query->operationalSiteId` (spec 0048), when set, restricts the list to
+     * users whose employment profile points to that Sede. The employment/site/
+     * address/city relations are always eager-loaded (filtered or not) so
+     * UserForSelectResource can emit the operator's Sede `meta` without N+1.
      */
     public function forSelect(ForSelectQuery $query): ForSelectResult
     {
         $base = User::query()
             ->select(['id', 'name', 'email'])
-            ->with('avatar');
+            ->with(['avatar', 'employment.operationalSite.addresses.city']);
+
+        if ($query->operationalSiteId !== null) {
+            $siteId = $query->operationalSiteId;
+            $base->whereHas('employment', function (Builder $employmentQuery) use ($siteId): void {
+                $employmentQuery->where('operational_site_id', $siteId);
+            });
+        }
 
         if ($query->hasSearch()) {
             $term = '%'.$query->search.'%';
@@ -257,8 +270,11 @@ class UserService
 
     /**
      * Append the explicitly-requested `ids[]` (edit-mode hydration) that are not
-     * already on the page, deduplicated. They bypass search and the same id/name/
-     * email projection applies. Total is unaffected.
+     * already on the page, deduplicated. They bypass every narrowing filter
+     * (search, `operational_site_id`) — same precedent as ProductCategoryService/
+     * OperationalSiteService's own hydration — but eager-load the SAME
+     * employment/site/address/city tree as the main query, so their `meta`
+     * resolves without N+1. Total is unaffected.
      *
      * @param  Collection<int, User>  $page
      * @return Collection<int, User>
@@ -279,7 +295,7 @@ class UserService
         /** @var Collection<int, User> $hydrated */
         $hydrated = User::query()
             ->select(['id', 'name', 'email'])
-            ->with('avatar')
+            ->with(['avatar', 'employment.operationalSite.addresses.city'])
             ->whereIn('id', $missingIds)
             ->orderBy('name')
             ->orderBy('id')

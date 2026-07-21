@@ -29,6 +29,10 @@ class AttachmentResource extends JsonResource
             // Authenticated, authorized download endpoint — the binary is never
             // served statically. The storage path/disk are intentionally hidden.
             'download_url' => url("/api/attachments/{$this->id}/download"),
+            // Same authorization boundary as download_url, but served inline
+            // (no Content-Disposition: attachment) so a browser/iframe can
+            // preview the file instead of forcing a save-as prompt.
+            'view_url' => url("/api/attachments/{$this->id}/view"),
             'created_at' => $this->created_at,
         ];
     }

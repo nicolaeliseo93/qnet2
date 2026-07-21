@@ -2,22 +2,33 @@
 
 namespace App\Http\Requests\Import;
 
+use App\Enums\LeadAssignmentMode;
 use App\Models\ImportRun;
 use App\Models\ImportRunRow;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
  * Validates PATCH /api/imports/{domain}/{importRun}/rows/assign (spec 0045
- * bulk increment, extended to a COMBINED operator+site assignment): bulk-
- * assign an operator and/or an operational site to a batch of staged rows —
- * distinct from the single-row PATCH .../rows/{row}. AG Grid
- * `getServerSideSelectionState()` semantics: `row_ids` are the rows to
+ * bulk increment, extended to a COMBINED operator+site assignment, then to a
+ * `mode` — spec 0048): bulk-assign an operator and/or an operational site to
+ * a batch of staged rows — distinct from the single-row PATCH .../rows/{row}.
+ * AG Grid `getServerSideSelectionState()` semantics: `row_ids` are the rows to
  * TARGET when `select_all` is false (required, non-empty), the rows to
  * EXCLUDE when `select_all` is true (optional, empty = every row in the
  * run). Bulk-only ASSIGNS — `operator_id`/`operational_site_id` are never
- * nullable; clearing a single row's override stays PATCH .../rows/{row}. At
- * least ONE of the two must be present.
+ * nullable; clearing a single row's override stays PATCH .../rows/{row}.
+ *
+ * `mode` (spec 0048) is OPTIONAL and purely ADDITIVE: when absent, the
+ * original rule stands unchanged — at least one of operator_id/
+ * operational_site_id required (validateAtLeastOneAssignment), neither
+ * individually mandatory (AC-020, full retro-compat with every pre-0048
+ * caller). When the caller opts into `mode` explicitly, it tightens the
+ * contract for the unified "Assegna operatori" popup: `single` requires
+ * operator_id (assign every targeted row to that one operator); `balanced`
+ * requires operational_site_id (needed to enumerate the Sede's operators —
+ * LeadOperatorDistributor, same algorithm as POST /leads/assign-operators).
  *
  * `row_ids` existence is checked SCOPED to the bound {importRun} (a plain
  * `exists:import_run_rows,id` would let an id from ANOTHER run through —
@@ -39,8 +50,9 @@ class BulkAssignRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'operator_id' => ['sometimes', 'integer', 'exists:users,id'],
-            'operational_site_id' => ['sometimes', 'integer', 'exists:operational_sites,id'],
+            'operator_id' => ['required_if:mode,single', 'integer', 'exists:users,id'],
+            'operational_site_id' => ['required_if:mode,balanced', 'integer', 'exists:operational_sites,id'],
+            'mode' => ['sometimes', Rule::enum(LeadAssignmentMode::class)],
             'select_all' => ['nullable', 'boolean'],
             'row_ids' => ['array'],
             'row_ids.*' => ['integer'],
@@ -126,5 +138,14 @@ class BulkAssignRequest extends FormRequest
     public function operationalSiteId(): ?int
     {
         return $this->has('operational_site_id') ? (int) $this->input('operational_site_id') : null;
+    }
+
+    /**
+     * Defaults to `single` when the caller omits `mode` entirely — every
+     * pre-0048 caller (AC-020 retro-compat).
+     */
+    public function mode(): LeadAssignmentMode
+    {
+        return $this->has('mode') ? LeadAssignmentMode::from((string) $this->input('mode')) : LeadAssignmentMode::Single;
     }
 }

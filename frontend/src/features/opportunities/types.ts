@@ -7,7 +7,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
-import type { StatusGroupValue } from '@/features/status-reorder/types'
+import type { WorkflowStatusGroupValue } from '@/features/opportunity-workflows/types'
 
 /** A hydrated `{id, name}` relation projection, shared by every plain single-relation field. */
 export interface OpportunityRelationRef {
@@ -36,15 +36,15 @@ export interface OpportunityLeadRef {
 /**
  * A resolved working-state row (spec 0047): the NEW "stato di lavorazione"
  * dimension, distinct from `opportunity_status` (sales pipeline). `system_key`
- * is `'open'|'closed'|null` (a pinned system row vs a custom one); `group` is
- * one of the 3 fixed `StatusGroupValue`s.
+ * is `'open'|'closed_won'|'closed_lost'|null` (a pinned system row vs a custom
+ * one); `group` is one of the 4 fixed `WorkflowStatusGroupValue`s.
  */
 export interface OpportunityWorkflowStatusRef {
   id: number
   name: string
   color: string | null
   system_key: string | null
-  group: StatusGroupValue
+  group: WorkflowStatusGroupValue
 }
 
 /** A manager ref carrying its static "G.A. n" `position` (1-based) on top of the person ref. */

@@ -219,32 +219,30 @@ describe('useReviewRows — site popup apply', () => {
 })
 
 describe('buildBulkAssignPayload', () => {
-  it('includes only operator_id when only the operator is set', () => {
+  it('mode "single": forwards operational_site_id, mode and operator_id', () => {
     expect(
-      buildBulkAssignPayload({ selectAll: false, toggledNodes: ['3', '7'] }, { operatorId: 42, siteId: null }),
+      buildBulkAssignPayload(
+        { selectAll: false, toggledNodes: ['3', '7'] },
+        { operational_site_id: 84, mode: 'single', operator_id: 42 },
+      ),
     ).toEqual({
+      operational_site_id: 84,
+      mode: 'single',
       operator_id: 42,
       select_all: false,
       row_ids: [3, 7],
     })
   })
 
-  it('includes only operational_site_id when only the site is set', () => {
+  it('mode "balanced": forwards operational_site_id and mode, no operator_id', () => {
     expect(
-      buildBulkAssignPayload({ selectAll: false, toggledNodes: ['3', '7'] }, { operatorId: null, siteId: 84 }),
+      buildBulkAssignPayload(
+        { selectAll: false, toggledNodes: ['3', '7'] },
+        { operational_site_id: 84, mode: 'balanced' },
+      ),
     ).toEqual({
       operational_site_id: 84,
-      select_all: false,
-      row_ids: [3, 7],
-    })
-  })
-
-  it('includes both keys when both are set', () => {
-    expect(
-      buildBulkAssignPayload({ selectAll: false, toggledNodes: ['3', '7'] }, { operatorId: 42, siteId: 84 }),
-    ).toEqual({
-      operator_id: 42,
-      operational_site_id: 84,
+      mode: 'balanced',
       select_all: false,
       row_ids: [3, 7],
     })
@@ -252,8 +250,13 @@ describe('buildBulkAssignPayload', () => {
 
   it('maps a select-all selection to select_all: true with the excluded row ids', () => {
     expect(
-      buildBulkAssignPayload({ selectAll: true, toggledNodes: ['9'] }, { operatorId: 42, siteId: null }),
+      buildBulkAssignPayload(
+        { selectAll: true, toggledNodes: ['9'] },
+        { operational_site_id: 84, mode: 'single', operator_id: 42 },
+      ),
     ).toEqual({
+      operational_site_id: 84,
+      mode: 'single',
       operator_id: 42,
       select_all: true,
       row_ids: [9],

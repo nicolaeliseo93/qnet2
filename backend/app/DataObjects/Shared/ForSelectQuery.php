@@ -16,6 +16,9 @@ namespace App\DataObjects\Shared;
  * - `businessFunctionId` (spec 0040 amendment rev.3): ADDITIVE, consumed ONLY
  *   by ProductCategoryService::forSelect — every other for-select consumer
  *   defaults it to null (retrocompatible, no behaviour change).
+ * - `operationalSiteId` (spec 0048): ADDITIVE, consumed ONLY by
+ *   UserService::forSelect (users/for-select filtered by Sede) — same
+ *   retrocompatible pattern as `businessFunctionId`.
  */
 final readonly class ForSelectQuery
 {
@@ -28,6 +31,7 @@ final readonly class ForSelectQuery
         public int $limit,
         public array $ids,
         public ?int $businessFunctionId = null,
+        public ?int $operationalSiteId = null,
     ) {}
 
     /**
@@ -51,6 +55,7 @@ final readonly class ForSelectQuery
             limit: (int) ($data['limit'] ?? 25),
             ids: $ids,
             businessFunctionId: isset($data['business_function_id']) ? (int) $data['business_function_id'] : null,
+            operationalSiteId: isset($data['operational_site_id']) ? (int) $data['operational_site_id'] : null,
         );
     }
 

@@ -31,6 +31,12 @@ Route::get('leads/for-select', LeadForSelectController::class);
 // in LeadOpportunityDefaultsController itself.
 Route::get('leads/{lead}/opportunity-defaults', LeadOpportunityDefaultsController::class);
 
+// Bulk-assign Operatore + Sede to many existing leads at once (spec 0048).
+// POST-only (never a GET/PUT/PATCH/DELETE leads/{lead} collision, so
+// placement relative to the wildcard below is safe either way). Gated
+// per-lead by leads.update in LeadController::assignOperators.
+Route::post('leads/assign-operators', [LeadController::class, 'assignOperators']);
+
 // Leads CRUD. Authorization (leads.view/create/update/delete) is enforced
 // server-side in LeadController via LeadPolicy on every endpoint.
 Route::get('leads/{lead}', [LeadController::class, 'show']);

@@ -65,7 +65,7 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
      */
     public function actions(): array
     {
-        return ['delete', 'export', 'import', 'view_activity'];
+        return ['delete', 'export', 'import', 'view_activity', 'view_documents'];
     }
 
     /**
@@ -107,6 +107,10 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
             // record-level `opportunities.view` boundary is enforced
             // separately by GET /api/activity-log/opportunities/{id} itself.
             'view_activity' => $model !== null && $actor->can('opportunities.viewActivity'),
+            // Gates the documents section in the detail (reused polymorphic
+            // Attachment subsystem); the per-attachment boundary is enforced
+            // separately by AttachmentPolicy on each attachment endpoint.
+            'view_documents' => $model !== null && $actor->can('opportunities.viewDocuments'),
         ];
     }
 }

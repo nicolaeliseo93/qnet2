@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Abstracts\BaseModel;
+use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\OpportunityFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -46,7 +47,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Opportunity extends BaseModel
 {
     /** @use HasFactory<OpportunityFactory> */
-    use HasFactory, LogsModelActivity;
+    use HasAttachments, HasFactory, LogsModelActivity;
 
     /**
      * @return array<string, string>

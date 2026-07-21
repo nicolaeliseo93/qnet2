@@ -13,8 +13,11 @@ import {
 import { SortableList } from '@/components/ui/sortable-list'
 import { ColorTokenPicker } from '@/features/custom-fields/components/color-token-picker'
 import { BADGE_COLOR_CLASSES } from '@/features/table/cell-renderers'
-import { STATUS_GROUPS, type StatusGroupValue } from '@/features/status-reorder/types'
-import type { WorkflowStatusFormRow } from '@/features/opportunity-workflows/types'
+import {
+  WORKFLOW_STATUS_GROUPS,
+  type WorkflowStatusFormRow,
+  type WorkflowStatusGroupValue,
+} from '@/features/opportunity-workflows/types'
 import { cn } from '@/lib/utils'
 
 export interface WorkflowStatusesEditorProps {
@@ -28,25 +31,27 @@ export interface WorkflowStatusesEditorProps {
 }
 
 /** i18n key per fixed group value, kept out of the JSX so the option list stays a plain map (mirrors `opportunity-status-form-body`). */
-const GROUP_LABEL_KEYS: Record<StatusGroupValue, string> = {
+const GROUP_LABEL_KEYS: Record<WorkflowStatusGroupValue, string> = {
   open: 'opportunityWorkflows.form.statuses.group.open',
   pending: 'opportunityWorkflows.form.statuses.group.pending',
-  closed: 'opportunityWorkflows.form.statuses.group.closed',
+  closed_won: 'opportunityWorkflows.form.statuses.group.closed_won',
+  closed_lost: 'opportunityWorkflows.form.statuses.group.closed_lost',
 }
 
-/** Soft-badge color per group, matching the enum swatch tokens the opportunity-statuses table uses (`GROUP_SWATCH_TOKENS` in `rich-cells`): open=green, pending=orange, closed=red. */
-const GROUP_BADGE_CLASSES: Record<StatusGroupValue, string> = {
+/** Soft-badge color per group: open=green (active), pending=orange (waiting), closed_won=emerald (positive outcome), closed_lost=red (negative outcome). */
+const GROUP_BADGE_CLASSES: Record<WorkflowStatusGroupValue, string> = {
   open: BADGE_COLOR_CLASSES.green,
   pending: BADGE_COLOR_CLASSES.orange,
-  closed: BADGE_COLOR_CLASSES.red,
+  closed_won: BADGE_COLOR_CLASSES.emerald,
+  closed_lost: BADGE_COLOR_CLASSES.red,
 }
 
 /**
  * Shared SortableList-based status editor (spec 0047 AC-025), reused by both
  * a workflow's own `statuses` section (`OpportunityWorkflowFormBody`) and
  * the GLOBAL default set (`DefaultStatusesSheet`) — the single place this
- * drag & drop UI is implemented. The two per-set pinned rows (`open`/
- * `closed`) render without a drag handle or a remove action (`isPinned`
+ * drag & drop UI is implemented. The three per-set pinned rows (`open`/
+ * `closed_won`/`closed_lost`) render without a drag handle or a remove action (`isPinned`
  * keeps `<SortableList>` from ever letting a drag cross them, and their
  * fixed `group` shows as a read-only badge) — but their NAME/color are
  * always editable, including in create mode where they seed the
@@ -133,14 +138,14 @@ function WorkflowStatusRowContent({ row, onUpdateRow, onRemoveCustom, disabled }
         {isCustom ? (
           <Select
             value={row.group}
-            onValueChange={(next) => onUpdateRow(row.id, { group: next as StatusGroupValue })}
+            onValueChange={(next) => onUpdateRow(row.id, { group: next as WorkflowStatusGroupValue })}
             disabled={disabled}
           >
             <SelectTrigger className="min-w-0 flex-1" aria-label={t('opportunityWorkflows.form.statuses.group.label')}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {STATUS_GROUPS.map((group) => (
+              {WORKFLOW_STATUS_GROUPS.map((group) => (
                 <SelectItem key={group} value={group}>
                   {t(GROUP_LABEL_KEYS[group])}
                 </SelectItem>

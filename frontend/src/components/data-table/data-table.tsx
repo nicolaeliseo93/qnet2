@@ -31,6 +31,7 @@ import {
 } from '@/components/data-table/column-defaults'
 import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
 import { buildDataTableTheme } from '@/components/data-table/data-table-theme'
+import { buildRowSelectionOptions } from '@/components/data-table/row-selection'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { TableColumn, TableRow } from '@/features/table/types'
 import { MAX_COLUMN_WIDTH } from '@/features/table/use-table-preferences'
@@ -49,20 +50,6 @@ export const ACTIONS_COLUMN_ID = '__actions'
 
 /** Default minimum width for data columns without an explicit backend width. */
 const DEFAULT_MIN_WIDTH = 120
-
-/**
- * Row-selection config shared by every domain that opts in (`enableSelection`).
- * Multi-row checkboxes with a header "select all"; `selectAll: 'currentPage'`
- * caps select-all at the loaded page instead of every row across the SSRM
- * dataset, matching the bulk-delete contract (explicit ids only, no
- * server-side "select all" semantics).
- */
-const ROW_SELECTION: RowSelectionOptions<TableRow> = {
-  mode: 'multiRow',
-  checkboxes: true,
-  headerCheckbox: true,
-  selectAll: 'currentPage',
-}
 
 /**
  * Fixed width of the row-actions column. The default holds up to three compact
@@ -202,10 +189,20 @@ interface DataTableProps {
    */
   enableSelection?: boolean
   /**
-   * Fired with the ids of the currently-selected rows whenever the selection
-   * changes. Only wired when `enableSelection` is true.
+   * Fired with the currently-selected rows' ids AND their full row data
+   * whenever the selection changes. Only wired when `enableSelection` is
+   * true. `rows` (spec 0048 AC-031) lets a domain adapter read a field off
+   * the selection (e.g. the Lead's Sede) without a second fetch — omit it if
+   * a caller only needs ids.
    */
-  onSelectionChanged?: (ids: number[]) => void
+  onSelectionChanged?: (selection: { ids: number[]; rows: TableRow[] }) => void
+  /**
+   * Optional per-row predicate gating which rows can be checked for bulk
+   * selection (e.g. spec 0048 AC-040: a Lead already assigned to an operator
+   * is not selectable). Domain-agnostic and additive: omitted, every row
+   * stays selectable exactly as before, so no other domain regresses.
+   */
+  isRowSelectable?: (row: TableRow) => boolean
 }
 
 /**
@@ -232,6 +229,7 @@ export function DataTable({
   onRowCountChanged,
   enableSelection,
   onSelectionChanged,
+  isRowSelectable,
 }: DataTableProps) {
   const { t, i18n } = useTranslation()
 
@@ -380,14 +378,24 @@ export function DataTable({
   const handleSelectionChanged = useCallback(
     (event: SelectionChangedEvent<TableRow>) => {
       const ids: number[] = []
+      const rows: TableRow[] = []
       event.api.forEachNode((node) => {
         if (node.isSelected() && node.data) {
           ids.push(node.data.id)
+          rows.push(node.data)
         }
       })
-      onSelectionChanged?.(ids)
+      onSelectionChanged?.({ ids, rows })
     },
     [onSelectionChanged],
+  )
+
+  // The row-selection config, gated on `isRowSelectable` when the caller
+  // supplies one (spec 0048 AC-040) — see `buildRowSelectionOptions`. Omitted
+  // entirely, every row stays selectable (pre-existing behavior).
+  const rowSelection = useMemo<RowSelectionOptions<TableRow> | undefined>(
+    () => (enableSelection ? buildRowSelectionOptions(isRowSelectable) : undefined),
+    [enableSelection, isRowSelectable],
   )
 
   // Apply the saved filters once, at grid creation, so the first SSRM request is
@@ -441,9 +449,9 @@ export function DataTable({
       // Stable row ids are required for SSRM selection to survive block
       // reloads; only wired when selection is actually enabled.
       getRowId: enableSelection ? getRowId : undefined,
-      rowSelection: enableSelection ? ROW_SELECTION : undefined,
+      rowSelection,
     }),
-    [datasource, blockSize, enableSelection, getRowId],
+    [datasource, blockSize, enableSelection, getRowId, rowSelection],
   )
 
   return (

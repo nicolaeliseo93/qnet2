@@ -129,3 +129,20 @@ export type UpdateLeadPayload = Partial<CreateLeadPayload>
 export type LeadFormMode = { type: 'create' } | { type: 'edit'; lead: LeadDetailWithPermissions }
 
 export type LeadLifecycleStatus = 'not_associated' | 'associated' | 'converted_to_opportunity'
+
+/**
+ * Payload for POST /leads/assign-operators (spec 0048): the unified bulk
+ * assignment, shared by the Lead table and (via its own PATCH) the import
+ * review bar. `operator_id` is required only when `mode` is `'single'`.
+ */
+export interface AssignOperatorsPayload {
+  lead_ids: number[]
+  operational_site_id: number
+  mode: 'single' | 'balanced'
+  operator_id?: number
+}
+
+/** Response of POST /leads/assign-operators: how many leads were updated. */
+export interface AssignOperatorsResult {
+  assigned: number
+}

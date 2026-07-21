@@ -9,13 +9,13 @@ import type { ImportRunDetail } from '@/features/imports/wizard/types'
 /**
  * Checkbox multi-selection over the SSRM review grid drives a bulk operator
  * assign: the toolbar appears only once AG Grid's own server-side selection
- * state is non-empty, "Assegna" maps that state 1:1 onto the bulk PATCH
- * payload (`buildBulkAssignPayload`, unit-tested in
- * `use-review-rows.test.tsx`), and a successful assign refreshes the SSRM
- * cache and clears the selection. `AgGridReact` is stubbed — this codebase
- * never mounts the real grid in tests (see `data-table.test.tsx`); the stub
- * exposes the grid api AG Grid would otherwise own and lets the test fire
- * `onSelectionChanged` directly.
+ * state is non-empty, its trigger opens the SHARED "Assegna operatori" popup
+ * (spec 0048 AC-050) whose input maps 1:1 onto the bulk PATCH payload
+ * (`buildBulkAssignPayload`, unit-tested in `use-review-rows-assign.test.tsx`),
+ * and a successful assign refreshes the SSRM cache and clears the selection.
+ * `AgGridReact` is stubbed — this codebase never mounts the real grid in
+ * tests (see `data-table.test.tsx`); the stub exposes the grid api AG Grid
+ * would otherwise own and lets the test fire `onSelectionChanged` directly.
  */
 
 let capturedProps: Record<string, unknown> = {}
@@ -53,21 +53,27 @@ vi.mock('@/features/imports/wizard/use-review-rows', () => ({
   }),
   buildBulkAssignPayload: (
     selection: { selectAll: boolean; toggledNodes: string[] },
-    { operatorId, siteId }: { operatorId: number | null; siteId: number | null },
+    input: { operational_site_id: number; mode: 'single' | 'balanced'; operator_id?: number },
   ) => ({
-    ...(operatorId != null ? { operator_id: operatorId } : {}),
-    ...(siteId != null ? { operational_site_id: siteId } : {}),
+    operational_site_id: input.operational_site_id,
+    mode: input.mode,
+    ...(input.mode === 'single' ? { operator_id: input.operator_id } : {}),
     select_all: selection.selectAll,
     row_ids: selection.toggledNodes.map(Number),
   }),
 }))
 
+const SITE_PICK_ID = 84
+const OPERATOR_PICK_ID = 42
+
 vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
+    resource,
     value,
     onChange,
     labels,
   }: {
+    resource: string
     value: number | null
     onChange: (value: number | null) => void
     labels: { triggerLabel: string }
@@ -75,7 +81,7 @@ vi.mock('@/components/ui/async-paginated-select', () => ({
     <button
       type="button"
       aria-label={labels.triggerLabel}
-      onClick={() => onChange(labels.triggerLabel === 'Assign operator…' ? 42 : 84)}
+      onClick={() => onChange(resource === 'operational-sites' ? SITE_PICK_ID : OPERATOR_PICK_ID)}
     >
       {value ?? 'none'}
     </button>
@@ -121,16 +127,36 @@ beforeEach(() => {
   handleBulkAssignMock.mockReset()
 })
 
-function fireSelectionChanged(state: { selectAll: boolean; toggledNodes: string[] } | null) {
+/**
+ * `selectedSiteIds` seeds a `forEachNode` stub with one selected node per
+ * entry (AC-031's site-precompile reads `node.data.operational_site_id` off
+ * exactly that); omitted by every pre-existing test, which does not care
+ * about the popup's precompiled Sede.
+ */
+function fireSelectionChanged(
+  state: { selectAll: boolean; toggledNodes: string[] } | null,
+  selectedSiteIds: Array<number | null> = [],
+) {
   const onSelectionChanged = capturedProps.onSelectionChanged as
     | ((event: SelectionChangedEvent) => void)
     | undefined
+  const forEachNode = (
+    callback: (node: { isSelected: () => boolean; data: { operational_site_id: number | null } }) => void,
+  ) => {
+    selectedSiteIds.forEach((operational_site_id) => callback({ isSelected: () => true, data: { operational_site_id } }))
+  }
   act(() => {
-    onSelectionChanged?.({ api: { getServerSideSelectionState: () => state } } as unknown as SelectionChangedEvent)
+    onSelectionChanged?.({
+      api: { getServerSideSelectionState: () => state, forEachNode },
+    } as unknown as SelectionChangedEvent)
   })
 }
 
-describe('ReviewGrid — bulk assign (operator + site)', () => {
+function openAssignPopup() {
+  fireEvent.click(screen.getByRole('button', { name: 'Assign operators' }))
+}
+
+describe('ReviewGrid — bulk assign via the shared popup', () => {
   it('hides the bulk-assign bar with no selection', () => {
     render(<ReviewGrid domain="leads" run={baseRun()} />)
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
@@ -143,17 +169,20 @@ describe('ReviewGrid — bulk assign (operator + site)', () => {
     expect(screen.getByText('2 row(s) selected')).toBeInTheDocument()
   })
 
-  it('sends select_all: false with the included row ids for a partial selection', async () => {
+  it('sends select_all: false, mode "balanced" with the included row ids for a partial selection', async () => {
     handleBulkAssignMock.mockResolvedValue({ updated: 2 })
     render(<ReviewGrid domain="leads" run={baseRun()} />)
     fireSelectionChanged({ selectAll: false, toggledNodes: ['1', '2'] })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Assign operator…' }))
+    openAssignPopup()
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced split' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Site' }))
     fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
 
     await waitFor(() =>
       expect(handleBulkAssignMock).toHaveBeenCalledWith({
-        operator_id: 42,
+        operational_site_id: SITE_PICK_ID,
+        mode: 'balanced',
         select_all: false,
         row_ids: [1, 2],
       }),
@@ -165,31 +194,37 @@ describe('ReviewGrid — bulk assign (operator + site)', () => {
     render(<ReviewGrid domain="leads" run={baseRun()} />)
     fireSelectionChanged({ selectAll: true, toggledNodes: ['5'] })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Assign operator…' }))
+    openAssignPopup()
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced split' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Site' }))
     fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
 
     await waitFor(() =>
       expect(handleBulkAssignMock).toHaveBeenCalledWith({
-        operator_id: 42,
+        operational_site_id: SITE_PICK_ID,
+        mode: 'balanced',
         select_all: true,
         row_ids: [5],
       }),
     )
   })
 
-  it('sends both operator_id and operational_site_id when both are picked', async () => {
+  it('sends operator_id alongside operational_site_id for mode "single"', async () => {
     handleBulkAssignMock.mockResolvedValue({ updated: 2 })
     render(<ReviewGrid domain="leads" run={baseRun()} />)
     fireSelectionChanged({ selectAll: false, toggledNodes: ['1', '2'] })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Assign operator…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Assign site…' }))
+    openAssignPopup()
+    fireEvent.click(screen.getByRole('radio', { name: 'Assign to operator' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Site' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Operator' }))
     fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
 
     await waitFor(() =>
       expect(handleBulkAssignMock).toHaveBeenCalledWith({
-        operator_id: 42,
-        operational_site_id: 84,
+        operational_site_id: SITE_PICK_ID,
+        mode: 'single',
+        operator_id: OPERATOR_PICK_ID,
         select_all: false,
         row_ids: [1, 2],
       }),
@@ -201,7 +236,9 @@ describe('ReviewGrid — bulk assign (operator + site)', () => {
     render(<ReviewGrid domain="leads" run={baseRun()} />)
     fireSelectionChanged({ selectAll: false, toggledNodes: ['1', '2'] })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Assign operator…' }))
+    openAssignPopup()
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced split' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Site' }))
     fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
 
     await waitFor(() =>
@@ -214,5 +251,34 @@ describe('ReviewGrid — bulk assign (operator + site)', () => {
     render(<ReviewGrid domain="leads" run={baseRun()} readOnly />)
     fireSelectionChanged({ selectAll: false, toggledNodes: ['1'] })
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
+  })
+})
+
+describe('ReviewGrid — popup Sede precompile (AC-031)', () => {
+  it('precompiles the Sede when every selected row shares one', () => {
+    render(<ReviewGrid domain="leads" run={baseRun()} />)
+    fireSelectionChanged({ selectAll: false, toggledNodes: ['1', '2'] }, [5, 5])
+
+    openAssignPopup()
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced split' }))
+    expect(screen.getByRole('button', { name: 'Site' })).toHaveTextContent('5')
+  })
+
+  it('leaves the Sede unset when the selected rows have different sites', () => {
+    render(<ReviewGrid domain="leads" run={baseRun()} />)
+    fireSelectionChanged({ selectAll: false, toggledNodes: ['1', '2'] }, [5, 8])
+
+    openAssignPopup()
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced split' }))
+    expect(screen.getByRole('button', { name: 'Site' })).toHaveTextContent('none')
+  })
+
+  it('skips the precompile for a select-all selection (no cheap shared-site read)', () => {
+    render(<ReviewGrid domain="leads" run={baseRun()} />)
+    fireSelectionChanged({ selectAll: true, toggledNodes: ['9'] }, [5, 5])
+
+    openAssignPopup()
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced split' }))
+    expect(screen.getByRole('button', { name: 'Site' })).toHaveTextContent('none')
   })
 })

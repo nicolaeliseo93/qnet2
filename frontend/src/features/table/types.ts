@@ -138,6 +138,8 @@ export interface TableActionDefinition {
   type: ActionType
   /** Whether the action requires UI confirmation before firing. */
   confirm: boolean
+  /** The row field whose numeric value renders as a count badge on the action. */
+  count_field?: string | null
 }
 
 /** A single sort directive. */

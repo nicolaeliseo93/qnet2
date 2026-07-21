@@ -2,6 +2,8 @@ import { apiClient } from '@/api/client'
 import type { ApiResponse, ApiResponseWithPermissions } from '@/api/types'
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type {
+  AssignOperatorsPayload,
+  AssignOperatorsResult,
   CreateLeadPayload,
   LeadDetail,
   LeadDetailWithPermissions,
@@ -44,4 +46,20 @@ export async function updateLead(id: number, payload: UpdateLeadPayload): Promis
 /** Deletes a lead. Backend responds 204 with no body. */
 export async function deleteLead(id: number): Promise<void> {
   await apiClient.delete(`/leads/${id}`)
+}
+
+/**
+ * Unified bulk operator assignment (spec 0048): assigns `operational_site_id`
+ * to every lead in `lead_ids`, plus either a single `operator_id` (mode
+ * `'single'`) or a load-balanced split across the Sede's operators (mode
+ * `'balanced'`). Returns how many leads were updated.
+ */
+export async function assignLeadOperators(
+  payload: AssignOperatorsPayload,
+): Promise<AssignOperatorsResult> {
+  const { data } = await apiClient.post<ApiResponse<AssignOperatorsResult>>(
+    '/leads/assign-operators',
+    payload,
+  )
+  return data.data
 }

@@ -21,10 +21,11 @@ import {
   buildUpdateOpportunityWorkflowSchema,
   type CreateOpportunityWorkflowFormValues,
 } from '@/features/opportunity-workflows/opportunity-workflow-schema'
-import type {
-  OpportunityWorkflowDetail,
-  OpportunityWorkflowFormMode,
-  WorkflowStatusFormRow,
+import {
+  isClosedWorkflowSystemKey,
+  type OpportunityWorkflowDetail,
+  type OpportunityWorkflowFormMode,
+  type WorkflowStatusFormRow,
 } from '@/features/opportunity-workflows/types'
 
 /** How long the (static reference data) allow-listed criterion fields stay fresh. */
@@ -39,11 +40,11 @@ export type OpportunityWorkflowFormValues = CreateOpportunityWorkflowFormValues
 const EMPTY_CRITERION_ROW = { field: null, value_id: null }
 
 /**
- * The two pinned system rows before a workflow exists (AC-004): editable
- * from the start, pre-filled with the default open/closed labels. The user
- * may rename them up front; they are sent in the create payload
- * (`buildCreatePayload`) so the backend seeds the auto-created rows with
- * these names. Non-deletable/non-reorderable (enforced by the editor).
+ * The three pinned system rows before a workflow exists (AC-004): editable
+ * from the start, pre-filled with the default open / closed-won / closed-lost
+ * labels. The user may rename them up front; they are sent in the create
+ * payload (`buildCreatePayload`) so the backend seeds the auto-created rows
+ * with these names. Non-deletable/non-reorderable (enforced by the editor).
  */
 function initialSystemStatusRows(t: TFunction): WorkflowStatusFormRow[] {
   return [
@@ -55,11 +56,18 @@ function initialSystemStatusRows(t: TFunction): WorkflowStatusFormRow[] {
       system_key: 'open',
     },
     {
-      id: 'system-closed',
-      name: t('opportunityWorkflows.form.statuses.defaultClosedName'),
+      id: 'system-closed-won',
+      name: t('opportunityWorkflows.form.statuses.defaultClosedWonName'),
       color: null,
-      group: 'closed',
-      system_key: 'closed',
+      group: 'closed_won',
+      system_key: 'closed_won',
+    },
+    {
+      id: 'system-closed-lost',
+      name: t('opportunityWorkflows.form.statuses.defaultClosedLostName'),
+      color: null,
+      group: 'closed_lost',
+      system_key: 'closed_lost',
     },
   ]
 }
@@ -146,7 +154,7 @@ export function useOpportunityWorkflowForm({ mode, onSuccess }: UseOpportunityWo
       system_key: null,
     }
     setStatusRows((rows) => {
-      const closedIndex = rows.findIndex((row) => row.system_key === 'closed')
+      const closedIndex = rows.findIndex((row) => isClosedWorkflowSystemKey(row.system_key))
       const insertAt = closedIndex === -1 ? rows.length : closedIndex
       return [...rows.slice(0, insertAt), newRow, ...rows.slice(insertAt)]
     })

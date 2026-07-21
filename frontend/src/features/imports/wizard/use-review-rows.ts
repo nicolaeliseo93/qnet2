@@ -17,7 +17,8 @@ import {
 } from '@/features/imports/wizard/api'
 import { importWizardKeys } from '@/features/imports/wizard/query-keys'
 import { reviewValueKeyOf } from '@/features/imports/wizard/review-columns'
-import type { ReviewBulkAssignInput, ReviewBulkSelectionState } from '@/features/imports/wizard/review-bulk-assign-bar'
+import type { ReviewBulkSelectionState } from '@/features/imports/wizard/review-bulk-assign-bar'
+import type { AssignOperatorsDialogInput } from '@/features/leads/assign-operators-dialog'
 import { resolveImportWizardErrorMessage } from '@/features/imports/wizard/resolve-error-message'
 import type {
   BulkAssignImportRowPayload,
@@ -31,20 +32,22 @@ import type {
 const DEFAULT_BLOCK_SIZE = 25
 
 /**
- * Maps AG Grid's own server-side selection state onto the combined
- * bulk-assign payload, 1:1 (spec: `select_all = state.selectAll`, `row_ids =
- * state.toggledNodes.map(Number)`). A pure function so the two selection
- * shapes (partial vs. select-all) are unit-testable without mounting the
- * grid. Each of `operator_id`/`operational_site_id` is included only when its
- * id is set (`!= null`) — the backend requires at least one of the two.
+ * Maps AG Grid's own server-side selection state and the shared "Assegna
+ * operatori" popup's input onto the combined bulk-assign payload (spec
+ * 0048): `select_all = state.selectAll`, `row_ids = state.toggledNodes.map
+ * (Number)`, `operational_site_id`/`mode` always forwarded, `operator_id`
+ * only for `mode: 'single'` (the backend requires it exactly then — see
+ * `BulkAssignRequest`). A pure function so the two selection shapes (partial
+ * vs. select-all) stay unit-testable without mounting the grid.
  */
 export function buildBulkAssignPayload(
   selection: ReviewBulkSelectionState,
-  { operatorId, siteId }: ReviewBulkAssignInput,
+  input: AssignOperatorsDialogInput,
 ): BulkAssignImportRowPayload {
   return {
-    ...(operatorId != null ? { operator_id: operatorId } : {}),
-    ...(siteId != null ? { operational_site_id: siteId } : {}),
+    operational_site_id: input.operational_site_id,
+    mode: input.mode,
+    ...(input.mode === 'single' ? { operator_id: input.operator_id as number } : {}),
     select_all: selection.selectAll,
     row_ids: selection.toggledNodes.map(Number),
   }

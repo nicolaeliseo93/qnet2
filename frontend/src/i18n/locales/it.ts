@@ -6,6 +6,7 @@ import { companySites } from './it-company-sites'
 import { operationalSites } from './it-operational-sites'
 import { imports } from './it-imports'
 import { activityLog } from './it-activity-log'
+import { attachments } from './it-attachments'
 import { exports } from './it-exports'
 import { table } from './it-table'
 import { referents, referentTypes } from './it-referents'
@@ -111,6 +112,7 @@ export const it: TranslationResources = {
     duplicate: 'Duplica',
     activity: 'Attività',
     convertToOpportunity: 'Converti in Opportunità',
+    documents: 'Documenti',
   },
   table,
   statsPanel,
@@ -473,4 +475,5 @@ export const it: TranslationResources = {
   opportunityStatuses,
   opportunityWorkflows,
   importRuns: { stats: moduleStats.importRuns },
+  attachments,
 }

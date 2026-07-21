@@ -63,6 +63,7 @@ export const table = {
   noSavedViews: 'No saved views yet.',
   selectedCount_one: '{{count}} row selected',
   selectedCount_other: '{{count}} rows selected',
+  bulkActions: 'Actions ({{count}})',
   deleteSelected: 'Delete selected ({{count}})',
   bulkDeleteConfirmTitle: 'Delete selected rows',
   bulkDeleteConfirmBody_one:

@@ -67,6 +67,12 @@ class DemoDataSeeder extends Seeder
         // DemoUsersSeeder (optional) — must run after all of them.
         $this->call(DemoLeadSeeder::class);
         $this->call(DemoOpportunityStatusSeeder::class);
+        // Depends on DemoSourceSeeder (mandatory criterion values) and
+        // DemoBusinessFunctionSeeder (optional, two-criteria workflow), both
+        // seeded above. MUST run before DemoOpportunitySeeder so opportunities
+        // whose source matches a workflow resolve to that workflow's own
+        // statuses at creation time (the "reference opportunities").
+        $this->call(DemoOpportunityWorkflowSeeder::class);
         // Depends on DemoRegistrySeeder (mandatory) plus every optional lookup
         // above (company/company-sites/operational-sites/business-functions/
         // referents/users/sources/product-categories), DemoLeadSeeder (for

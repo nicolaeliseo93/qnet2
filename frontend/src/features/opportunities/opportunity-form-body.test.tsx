@@ -83,7 +83,7 @@ function editOpportunity(): OpportunityDetailWithPermissions {
     workflow_statuses: [
       { id: 100, name: 'Open', color: 'blue', system_key: 'open', group: 'open' },
       { id: 101, name: 'In progress', color: 'amber', system_key: null, group: 'open' },
-      { id: 102, name: 'Closed', color: 'green', system_key: 'closed', group: 'closed' },
+      { id: 102, name: 'Closed', color: 'green', system_key: 'closed_won', group: 'closed_won' },
     ],
     product_lines: [
       {

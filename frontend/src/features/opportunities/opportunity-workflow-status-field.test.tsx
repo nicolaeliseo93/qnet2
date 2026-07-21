@@ -111,7 +111,7 @@ function editOpportunity(
     workflow_statuses: [
       { id: 100, name: 'Open', color: 'blue', system_key: 'open', group: 'open' },
       { id: 101, name: 'In progress', color: 'amber', system_key: null, group: 'open' },
-      { id: 102, name: 'Closed', color: 'green', system_key: 'closed', group: 'closed' },
+      { id: 102, name: 'Closed', color: 'green', system_key: 'closed_won', group: 'closed_won' },
     ],
     product_lines: [
       {
@@ -149,7 +149,7 @@ beforeEach(() => {
 })
 
 describe('OpportunityFormBody — Regione + working-state (spec 0047, AC-026)', () => {
-  it('create mode: Regione renders editable and the working-state select is replaced by a hint', async () => {
+  it('create mode: Regione renders editable and the working-state field is not rendered', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
@@ -157,7 +157,7 @@ describe('OpportunityFormBody — Regione + working-state (spec 0047, AC-026)', 
     await waitFor(() => expect(screen.getByTestId('select-Region')).toBeInTheDocument())
     expect(screen.getByTestId('disabled-Region')).toHaveTextContent('false')
     expect(screen.queryByRole('combobox', { name: 'Working status' })).not.toBeInTheDocument()
-    expect(screen.getByText('Assigned automatically on save.')).toBeInTheDocument()
+    expect(screen.queryByText('Assigned automatically on save.')).not.toBeInTheDocument()
   })
 
   it('edit mode, standalone opportunity: Regione stays editable', async () => {

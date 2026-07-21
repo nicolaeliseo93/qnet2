@@ -2,6 +2,318 @@
 
 > Injected at session start. Update at every green state.
 
+## AZIONE RIGA "documents" CON BADGE COUNT NELLA TABELLA OPPORTUNITA (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
+
+Direttiva utente: oltre alla sezione documenti nel dettaglio, un'icona documenti con badge del conteggio
+"nelle azioni" (colonna azioni riga della tabella opportunità), gated da permessi/policy, cliccabile.
+Estende la feature DOCUMENTI OPPORTUNITA (vedi entry sotto). Due teammate paralleli, contratto congelato.
+
+CONTRATTO: catalogo azione `{key:'documents',label:'actions.documents',icon:'paperclip',type:'action',
+confirm:false,permission:'opportunities.viewDocuments',count_field:'documents_count'}` (ordine
+view/edit/delete/documents/activity). Ogni riga porta `documents_count:int`. `count_field` = nuovo attributo
+generico dell'azione: il FE disegna un badge col valore di `row[count_field]`.
+
+BE (teammate, OpportunityTableTest 14 test / Pint pulito): `OpportunityColumnCatalog::actions()` +entry
+documents; `OpportunitiesTableDefinition`: `baseQuery` `withCount(['attachments as documents_count' =>
+where collection=documents])`, `mapRow` espone `documents_count`, `actionsFor` aggiunge 'documents' se
+`Gate viewDocuments`. `resolveActions()` è pass-through (count_field passa senza whitelist). Suite BE
+3151/3163 (11 rossi preesistenti noti).
+
+FE (teammate, tsc+eslint puliti, 136 test): `TableActionDefinition.count_field?`; `row-actions.tsx`
+`INLINE_ACTION_LIMIT` 3→4 + `ActionCountBadge`/`resolveActionCount` (badge overlay su icona inline con count
+nell'aria-label; `(n)` muted sugli item di overflow; nessun badge senza count_field o count 0).
+`opportunities-table.tsx`: `OPPORTUNITIES_ACTION_ICONS` (paperclip→Paperclip), state `documentsRowId`,
+`case 'documents'` apre `OpportunityDocumentsDialog` (nuovo, Dialog che monta `DocumentsSection`
+resource="opportunity", canUpload/canDelete da attachments.create/delete), refresh griglia alla chiusura
+(badge aggiornato). i18n `actions.documents` en/it. `table-view.tsx` NON toccato (importa INLINE_ACTION_LIMIT,
+prende il nuovo valore da solo).
+
+VERIFICA CONSOLIDATA (main session): `tsc -b` pulito; vitest row-actions+table+opportunities+attachments+leads
+29 file/256 test verdi. Unico rosso residuo suite FE: `cell-renderers.test.tsx` ContactsCell (3) — PREESISTENTE.
+
+## UI FIX tone-on-tone nei popup + FIX test stale leads-table-assign (2026-07-21) — GREEN FE, NON COMMITTATO
+
+Direttiva utente: nei popup c'era un background e dentro delle "card" (i bottoni-radio di scelta)
+con bordo piu' chiaro ma STESSO colore di sfondo del popup (tone-on-tone). Richiesto: dare alle card
+un colore diverso, piu' bianco, qui e nelle altre parti col problema.
+
+Causa: il `Dialog` (`components/ui/dialog.tsx`) usa `bg-background` che in questo tema e' GRIGIO
+(`--background: hsl(218 16% 91%)`), mentre `--card`/`--popover` sono bianco puro. Le card selezionabili
+senza fill mostravano il grigio del popup.
+
+FIX (bg-card = bianco sulle card selezionabili dentro i dialog):
+- `features/leads/assign-operators-dialog.tsx`: i radio-card di modalita' ora `bg-card`; selezione via
+  `border-primary ring-1 ring-primary/40` (prima `bg-primary/5` translucido, appariva grigio sul popup).
+- `features/exports/export-dialog.tsx`: stessi radio-card formato, stesso fix.
+- Non toccati (gia' a posto o non-popup): `opportunity-from-lead-banner`/`mapping-template-controls`
+  (hanno gia' un tint `bg-primary/5`/`bg-muted/30`), `documents-section` (dropzone dashed, trasparente
+  per convenzione), `roles/role-form-body` (card/chip IN PAGINA, non popup — candidato se serve, chiedere).
+
+FIX TEST (correzione claim "green" errato del blocco 0048 sotto): `leads-table-assign.test.tsx` era
+ROSSO 6/9 anche in isolamento — usava il vecchio flusso del dialog (Site prima della modalita', trattava
+"Balanced split" come button, nessun click di conferma). Il dialog e' MODE-FIRST: si sceglie il radio
+modalita', poi compaiono i picker Site/Operator, poi il singolo bottone "Assign". Aggiornato ai nuovi
+helper (`openPopup`/`openAndPickBalanced`/`assignBalanced`) allineati al sibling gia' verde
+`assign-operators-dialog.test.tsx`. Requisito cambiato (refactor mode-first), non test-tampering.
+
+VERIFICA (green reale): `npx tsc -b` EXIT 0; ESLint pulito sui file toccati; vitest scope
+(leads + imports/wizard + exports/export-dialog + data-table/row-selection) 32 file / 264 test PASS.
+BE scope 0048 invariato (27 pass). Fix SOLO frontend, nessun contratto/API toccato.
+
+## ASSEGNAZIONE UNIFICATA OPERATORI AI LEAD (spec 0048) (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
+
+Sistema unico per assegnare Operatori (users) ai Lead in 3 contesti: (1) barra di REVISIONE
+dell'import Lead (potenziata); (2) tabella Lead via menu "Azioni" generico; (3) form singolo Lead
+(Sede<->Operatore collegati). Contratto congelato in `docs/specs/0048-lead-operator-assignment.xml`.
+DECISIONI UTENTE (2026-07-21): operatori di una Sede = users con `employment.operational_site_id`=Sede
+(nessun ruolo/permesso); "Smistamento equo" = BILANCIAMENTO carico totale (considera i lead gia'
+assegnati per operatore, riempie prima chi ne ha meno); AC-040 DERUBRICATA (vedi sotto).
+
+CONTRATTO API (congelato):
+- `GET /users/for-select?operational_site_id=S` — filtro additivo (mirror di `businessFunctionId` su
+  `ForSelectQuery`): solo users con employment.operational_site_id=S. Ogni item porta
+  `meta?: {operational_site_id, operational_site_label}` (label "{line1} - {city}", null se senza Sede)
+  — serve al form per l'auto-fill Sede quando si sceglie prima l'Operatore.
+- `POST /leads/assign-operators` (NUOVO, gate `leads.update`) — body
+  `{lead_ids[], operational_site_id, mode:'single'|'balanced', operator_id?}` → `{assigned:number}`.
+  single=tutti a un operatore; balanced=distribuzione bilanciata tra operatori della Sede; Sede senza
+  operatori → 422. Tutti i lead ricevono comunque operational_site_id. NESSUN throttle.
+- `PATCH /imports/{domain}/{run}/rows/assign` — +`mode` (default 'single', retro-compat; balanced usa
+  lo stesso distributor sulle righe staged, carico = lead REALI per operatore).
+
+BACKEND (be-assign, verde 372/372, Pint pulito):
+- `ForSelectQuery` +`operationalSiteId`; `UserForSelectRequest` +regola; `UserService::forSelect`
+  whereHas('employment',...) + eager-load `employment.operationalSite.addresses.city`;
+  `UserForSelectResource` +meta (label replicata da OperationalSiteForSelectResource, no helper condiviso).
+- NUOVI: `App\Enums\LeadAssignmentMode` (Single|Balanced), `App\Services\LeadOperatorDistributor`
+  (algoritmo greedy least-loaded, tie-break id operatore piu' basso — PURO/testabile, riusato da lead+import),
+  `App\Services\LeadAssignmentService`, `App\Http\Requests\Leads\AssignOperatorsRequest` (authorize()=true,
+  authz PER-LEAD nel controller: `foreach $lead: $this->authorize('update',$lead)` — `can('update',Lead::class)`
+  crasherebbe con BasePolicy::update che richiede il Model). `LeadController::assignOperators` + route.
+- Import: `BulkAssignRequest` +mode (`required_if` mirati, contratto pre-0048 invariato quando mode assente),
+  `ImportService::bulkAssign` branch balanced, `ImportController`.
+- Test: `LeadOperatorDistributorTest` (7), `UserForSelectSiteFilterTest` (5), `LeadAssignOperatorsTest` (9),
+  `ImportBulkAssignBalancedTest` (7).
+
+FRONTEND (fe-foundation + fe-consumers):
+- Foundation: `features/users/for-select-api.ts` (+`UserForSelectItem`/`UserForSelectMeta`, param
+  passthrough); `features/leads/{types,api,use-assign-operators}.ts` (payload/result, `assignLeadOperators`,
+  hook mutation generico); NUOVO `features/leads/assign-operators-dialog.tsx` (popup shared: Sede select +
+  Operatore filtrato per Sede `params={{operational_site_id}}` + azioni "Smistamento equo"/"Assegna a
+  operatore"; props `defaultSite`/`defaultSiteId`, `onAssign(input)`); i18n `leads.assign.*` +
+  `leads.form.hints.operatorFilteredBySite`.
+- Consumers: tabella Lead `leads-table.tsx` (voce "Assegna operatori" nel menu "Azioni" generico via
+  `getBulkActions`, gate `can('leads.update')`; AC-031 `resolveSharedOperationalSite` → `defaultSite`);
+  form `lead-form-body.tsx` (Operatore `params` per Sede; operator onItemChange auto-fill Sede da meta;
+  Sede onItemChange azzera operator solo su cambio reale via `previousSiteIdRef`); import
+  `review-bulk-assign-bar.tsx`/`review-grid.tsx` (stesso dialog, invia `mode`; AC-031 `defaultSiteId` da
+  righe selezionate non-selectAll — solo id, il dialog idrata la label).
+- Plumbing tabella generica (additivo): `data-table.tsx` onSelectionChanged emette `{ids,rows}`;
+  `use-bulk-actions-slot.tsx` (`TableSelection`, `getBulkActions`); `table-view.tsx`
+  (`getBulkActions`, `isRowSelectable` forward, handle `clearSelection`); `row-selection.ts`
+  (`buildRowSelectionOptions`).
+
+AC-040 DERUBRICATA (decisione utente 2026-07-21): una sessione CONCORRENTE ha unificato le azioni bulk
+della tabella Lead in un menu "Azioni" (elimina + assegna) con selezione CONDIVISA; il gate AG Grid
+`isRowSelectable` e' a livello tabella (non per-azione). Deciso: TUTTE le righe selezionabili anche per
+l'assegnazione (assegnare a un lead gia' assegnato = riassegnazione). La capability generica
+`isRowSelectable` RESTA in `data-table/table-view/row-selection` ma la tabella Lead NON la passa piu'
+(capability inutilizzata — rimovibile se si vuole, ma tocca file della sessione concorrente: lasciata).
+Spec 0048 AC-040/AC-041 + decisione 4 aggiornate con l'amendment.
+
+FIX del lead (mio, oltre al coordinamento): `src/components/data-table/row-selection.ts` — il gate Stop
+`tsc -b` (che tipa il progetto di test; `tsc --noEmit` e' un NO-OP su questo tsconfig solution-style
+`files:[]`+references) segnalava union-widening: `ROW_SELECTION` ora usa `satisfies RowSelectionOptions<TableRow>`
+e `buildRowSelectionOptions` ritorna `typeof ROW_SELECTION & {isRowSelectable?}` così i test leggono
+`headerCheckbox`/`selectAll`. NOTA PER FE: verificare sempre con `npx tsc -b`, NON `--noEmit`.
+
+VERIFICA (green reale): BE `php artisan test tests/Feature/Leads tests/Feature/Users tests/Feature/Imports
+tests/Unit/Services/LeadOperatorDistributorTest.php` 372/372 (1560 assert); Pint pulito sui file 0048.
+FE `npx tsc -b` EXIT 0; vitest feature scope (leads+imports+table+data-table+users) 505 pass / unico rosso
+il PRE-ESISTENTE `features/table/cell-renderers.test.tsx` (3 test ContactsCell i18n bleed, confermato via
+git stash, non toccato). Verifier indipendente (verify-0048) confermo' tutte le AC leggendo il codice.
+CAVEAT PRE-ESISTENTI (non nostri): bare `tests/Unit` SEGFAULTA su main (memory/xdebug) — usare run scoped;
+`AbstractMigrationSourcePreviewTest` rosso su main.
+
+NON NOSTRO nel working tree (sessioni concorrenti, NON committare come 0048): il menu "Azioni" bulk
+generico + revert isRowSelectable su leads-table; `backend/database/seeders/DemoDataSeeder.php` +
+`DemoOpportunityWorkflowSeeder.php`; i file `opportunity-workflows`/`*-opportunity-workflows.ts`.
+Staging file-per-file al commit.
+
+## BULK ACTIONS → UNICO DROPDOWN + LEADS RIGHE SEMPRE SELEZIONABILI (2026-07-21) — GREEN FE, NON COMMITTATO
+
+Direttiva utente (2 richieste): (1) le azioni massive non devono essere più bottoni sciolti ma UN
+solo select/dropdown "Azioni", a scalare su tutto il progetto; (2) una lead già associata deve restare
+selezionabile col checkbox per poterla comunque eliminare (revert del gate AC-040).
+
+Poiché TUTTE le azioni massive passano da un unico punto (`useBulkActionsSlot`), il fix è centralizzato
+lì → copre l'intero progetto.
+
+MODIFICHE FE (scope isolato, area tabella/leads):
+- `features/table/use-bulk-actions-slot.tsx`: cambiato contratto da `renderBulkActions?: (ids) => ReactNode`
+  (ritornava un `<Button>`) a `getBulkActions?: (ids) => BulkAction[]` (descrittori). NUOVO export
+  `interface BulkAction { key,label,icon?:LucideIcon,onSelect,destructive?,disabled? }`. Il render è ora
+  UN solo `DropdownMenu` (trigger `variant="secondary"` compatto "Azioni (N)" + ChevronDown) con le azioni
+  di dominio prima e il built-in "Elimina selezionati" (destructive) in coda, separati da `DropdownMenuSeparator`.
+  `useBulkDelete` invariato (confirm interno preservato).
+- `features/table/table-view.tsx`: prop `renderBulkActions` → `getBulkActions` (tipo `BulkAction[]`),
+  import `type BulkAction`. Plumbing `isRowSelectable` generico LASCIATO invariato (capability generica,
+  unit-testata in `row-selection.test.ts`).
+- `features/leads/leads-table.tsx`: RIMOSSO `isLeadSelectable` + `isRowSelectable={...}` (task 2 → tutte
+  le righe selezionabili/eliminabili). `renderBulkActions` (Button) → `getBulkActions` che ritorna il
+  descrittore "assign-operators" (icon UserCog, apre `AssignOperatorsDialog`), gated da `canAssignOperators`.
+- i18n `en-table.ts`/`it-table.ts`: nuova chiave `table.bulkActions` ("Actions ({{count}})"/"Azioni ({{count}})").
+- Test `leads-table-assign.test.tsx`: stub aggiornato al nuovo contratto (mappa i descrittori a bottoni per
+  l'accessible name); il test AC-040 "solo unassigned selezionabili" è stato SOSTITUITO da "non restringe la
+  selezionabilità" (`capturedIsRowSelectable` undefined) — requisito cambiato per direttiva utente (dichiarato).
+
+VERIFICA (green reale): `tsc -b` pulito (0 errori). ESLint pulito sui 4 file. Vitest: `features/leads`
+12 file/107 test verdi (incl. leads-table-assign 10/10), `row-selection.test.ts` verde. UNICO rosso residuo:
+`features/table/cell-renderers.test.tsx` ContactsCell (3 test "primary contacts") — PREESISTENTE su file
+committati/puliti (fallisce anche in isolamento, mai toccato da questo cambio), tra i rossi noti.
+
+NOTA working tree: `use-bulk-actions-slot.ts` era stato creato con estensione `.ts` pur contenendo JSX
+(crash typecheck) → rinominato in `.tsx` (unico importer usa path senza estensione, rename sicuro).
+
+## DOCUMENTI OPPORTUNITA (riuso sistema Attachment) (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
+
+Direttiva utente: gestione documenti sulle opportunità con import/upload + sezione visiva dove l'operatore
+visualizza (anteprima inline) e scarica i file, riusando tabelle/script esistenti. Decisioni: anteprima
+inline+download; action dedicata `view_documents`; componente condiviso `features/attachments/`.
+Costruita con due teammate paralleli (backend/ vs frontend/src/) su contratto congelato.
+
+CONTRATTO: `AttachmentResource` = { id, collection, original_name, mime_type, extension, size,
+attachable_type, attachable_id, uploaded_by, download_url, **view_url**, created_at }. Alias morph
+`attachable_type='opportunity'` (SINGOLARE — distinto dalla chiave table-registry plurale 'opportunities').
+- `GET /api/attachments?attachable_type=opportunity&attachable_id={id}&collection=documents` (index, authz
+  attachments.viewAny) — newest first.
+- `GET /api/attachments/{attachment}/view` — stream INLINE (authz attachments.view), 404 JSON fallback.
+- `POST /api/attachments` (esistente): file + attachable_type=opportunity + attachable_id + collection='documents'.
+- `DELETE /api/attachments/{id}` (esistente).
+
+BE (teammate backend, 220 test verdi / Pint pulito):
+- `Opportunity` → `use HasAttachments`. `config/attachments.php` alias 'opportunity'. Morph map in
+  AppServiceProvider aveva GIA 'opportunity' (nessuna modifica). AttachmentResource +view_url. Controller
+  +index()/+view(). Nuovo `IndexAttachmentRequest`. Rotte in routes/api.php (non-named, come le sorelle).
+- Permesso `opportunities.viewDocuments`: NON nei seeder (in questo repo i permessi sono auto-derivati da
+  `BasePolicy::abilities()` via `permissions:sync`). Aggiunto override `abilities()`+`viewDocuments()` in
+  `OpportunityPolicy` (precedente: ImportRunPolicy) + action `view_documents` in `OpportunitiesAuthorization`
+  → compare in `permissions.actions.view_documents` sul payload GET /opportunities/{id}. super-admin lo prende
+  via roles:create-super-admin.
+
+FE (teammate frontend, tsc+eslint puliti, attachments 9/9, opportunity-detail 5/5):
+- Nuova feature `features/attachments/`: types.ts (Attachment + DOCUMENTS_COLLECTION), api.ts
+  (listAttachments/uploadAttachment[FormData]/deleteAttachment via apiClient axios, `attachable_type=resource`),
+  use-attachments.ts (useQuery+useMutation con invalidazione), format-bytes.ts, attachment-tile.tsx (thumbnail
+  image via view_url / icona per categoria MIME; anchor preview `view_url` + download `download_url` con
+  rel=noopener; delete guardato), documents-section.tsx (`DocumentsSection({resource,id,collection='documents',
+  canUpload,canDelete})`, dropzone da import-step-upload, loading/empty/error, delete via useConfirm).
+- Montata in `opportunity-detail.tsx` come `DetailSection` (icona Paperclip) gated da
+  `permissions.actions.view_documents` (mirror Activity Log). Sub-componente `OpportunityDocumentsPanel`
+  montato solo quando autorizzato (perché useAbilities usa useQuery e il test di detail non ha QueryClient).
+  Passata `resource="opportunity"` (SINGOLARE = alias) — non "opportunities". canUpload/canDelete da
+  attachments.create/attachments.delete.
+- i18n en-attachments.ts/it-attachments.ts registrati in en.ts/it.ts.
+
+VERIFICA CONSOLIDATA (main session): `tsc -b` pulito; vitest attachments+opportunities+leads 27 file/246 test
+verdi. Unico rosso residuo in tutta la suite: `features/table/cell-renderers.test.tsx` ContactsCell (3) —
+PREESISTENTE (confermato via git stash dal teammate), i18n language-leak in quel file, estraneo a questo lavoro.
+Seed demo attachments NON creato (non richiesto). Endpoint testati ma DB dev non ripopolato.
+
+## DEMO SEED CONFIGURATORE STATI LAVORAZIONE + OPPORTUNITA DI RIFERIMENTO (2026-07-21) — GREEN BE, NON COMMITTATO
+
+Direttiva utente: factory + seed per il configuratore stati di lavorazione (spec 0047) e opportunità
+di riferimento, così da avere esempi. I 3 factory esistevano già ed erano completi/usati dai test
+(`OpportunityWorkflowFactory`, `OpportunityWorkflowStatusFactory` con stati `system()`/`global()`,
+`OpportunityWorkflowCriterionFactory`) → NESSUNA modifica ai factory (YAGNI). Mancava solo il seeder.
+
+NUOVO `database/seeders/DemoOpportunityWorkflowSeeder.php` (demo path): crea 3 workflow via il write
+path reale `OpportunityWorkflowService::create()` (stessa via del POST — signature, 3 righe di sistema
+pinnate open/closed_won/closed_lost, sync criteri), NON insert raw:
+- "Vendite Web" (criterio source_id=Website) + 3 custom (Primo contatto/Qualificazione/Demo prodotto).
+- "Segnalazioni" (source_id=Referral) + 2 custom.
+- "Vendite Web Commerciale" (source_id=Website AND business_function_id="Commerciale e Vendite") — 2
+  criteri, più specifico, dimostra il tie-break AC-011; skippato se manca la business function.
+Inoltre arricchisce il SET GLOBALE di default via `syncDefaultStatuses()` con 3 custom intermedi
+(Da lavorare/In lavorazione/In attesa cliente). Idempotente: `OpportunityWorkflow::query()->delete()`
+in testa (cascade su criteri/stati) + default set full-replace. No-op se non ci sono sources.
+
+Registrato in `DemoDataSeeder` DOPO DemoSource/DemoBusinessFunction e PRIMA di DemoOpportunitySeeder:
+così le opportunità demo il cui source matcha un workflow risolvono allo stato 'open' del workflow al
+create (il resolver gira in `OpportunityService::create`) → sono le "opportunità di riferimento".
+Match deterministici (source assegnato round-robin da faker seed 20260716 in DemoOpportunitySeeder).
+
+VERIFICA (green reale): test temporaneo (poi rimosso) sul DB test in-memory — 6 asserzioni verdi:
+3 workflow con righe di sistema+custom corrette, default set arricchito, e un'opportunità su source
+Website che risolve allo stato open del workflow "Vendite Web". Suite `tests/Feature/OpportunityWorkflows
+tests/Unit/OpportunityWorkflows` 75/75. Pint pulito (--dirty). Seed NON ancora eseguito sul DB dev
+MySQL `qnet2` (reseed on-demand `php artisan db:seed --class=DemoDataSeeder`) — da lanciare se si vuole
+popolare la demo.
+
+## STATI LAVORAZIONE OPPORTUNITA — "closed" SPLIT IN closed_won/closed_lost (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
+
+Direttiva utente: gli stati di lavorazione (`OpportunityWorkflowStatus`, spec 0047) non devono avere
+solo aperto/in pending/chiuso — il "chiuso" si sdoppia in "chiuso con esito positivo" e "chiuso con
+esito negativo". Decisioni utente: (1) SOSTITUIRE `Closed` con `ClosedWon`+`ClosedLost` (no chiuso
+generico); (2) SCOPE SOLO opportunity-workflow → nuovo enum dedicato, `StatusGroup` (pipeline /
+opportunity statuses, spec 0039/0043) RESTA Open/Pending/Closed INVARIATO; (3) "entrambe closed":
+non una sola riga terminale ma DUE righe di sistema terminali; (4) migrazione dati: RIGENERA le righe
+di sistema (delete+recreate, custom intatte).
+
+MODIFICHE BE:
+- NUOVO enum `App\Enums\WorkflowStatusGroup` (Open/Pending/ClosedWon/ClosedLost, valori
+  open/pending/closed_won/closed_lost) — SOLO per `opportunity_workflow_statuses.group`. Il `group`
+  NON guida alcuna logica condizionale (solo classificazione/colore per la UI), quindi niente helper
+  `isClosed()` (YAGNI).
+- `WorkflowStatusSystemKey`: da Open/Closed → Open/ClosedWon/ClosedLost (3 righe di sistema pinnate,
+  non eliminabili). Nuovo helper `closedKeys()` = [ClosedWon, ClosedLost] (riuso in writer+migration).
+- `OpportunityWorkflowStatus`: cast `group => WorkflowStatusGroup`.
+- `WorkflowStatusWriter`: `createWithCustoms` ora accetta `$openOverride,$closedWonOverride,
+  $closedLostOverride`; pinna open (0), custom (STEP), poi closed_won e closed_lost in coda.
+  `resequence()` cicla `closedKeys()`. `forceCreateSystemRow` match 3 chiavi (nomi default
+  'Aperta'/'Chiusa positiva'/'Chiusa negativa'). `assertMutableSystemRow` invariato (group
+  immutabile su system row).
+- DTO `CreateOpportunityWorkflowData`: `$closedStatus` → `$closedWonStatus`+`$closedLostStatus`
+  (estratti per system_key). Service `create()` passa entrambi.
+- Requests `UpdateDefaultStatusesRequest` + `ValidatesWorkflowCriteria`: `Rule::enum` da StatusGroup
+  → WorkflowStatusGroup. `statuses.*.system_key` ora accetta open/closed_won/closed_lost.
+- `OpportunityWorkflowResolver`: NESSUNA modifica di logica — il remap per system_key è già generico
+  (closed_won→closed_won ecc.); solo docblock aggiornato.
+- Factory `OpportunityWorkflowStatusFactory::system()`: chiavi 'open'/'closed_won'/'closed_lost'.
+- MIGRAZIONE NUOVA `2026_07_21_120000_regenerate_opportunity_workflow_status_system_rows.php`
+  (la create-migration 2026_07_20_110200 è GIÀ COMMITTATA → non modificata, §3 backend.md): per ogni
+  set (workflow_id incl. null) elimina le righe system e ricrea open+closed_won+closed_lost, custom
+  intatte, closed in coda dopo max sort_order. `down()` ripristina la singola riga 'closed'.
+
+VERIFICA (green reale): `php artisan test tests/Feature/OpportunityWorkflows tests/Unit/OpportunityWorkflows`
+75/75. `tests/Feature/Opportunities tests/Feature/Leads tests/Unit/Models` 424/424. Suite BE completa
+3107/3119; gli 11 rossi sono i PREESISTENTI/estranei (navigation-node + 1 migration-preview), nessuno
+tocca file di questo cambio. Pint pulito (--dirty --test).
+
+MIGRAZIONE APPLICATA: `php artisan migrate --force` eseguito sul DB dev (era Pending) → il set di default
+globale ora è open/closed_won/closed_lost.
+
+MODIFICHE FRONTEND (feature `opportunity-workflows`, scope isolato — lo shared `StatusGroupValue` di
+`status-reorder/types` RESTA open/pending/closed per pipeline/opportunity statuses):
+- `opportunity-workflows/types.ts`: NUOVI `WORKFLOW_STATUS_GROUPS`
+  (open/pending/closed_won/closed_lost) + `WorkflowStatusGroupValue` (mirror dell'enum BE, NON riusa
+  lo shared). `WorkflowStatusSystemKey` = 'open'|'closed_won'|'closed_lost'|null. Helper
+  `isClosedWorkflowSystemKey()` (riuso in 2 hook per trovare il punto di inserimento dei custom).
+- `workflow-statuses-editor.tsx`: `GROUP_LABEL_KEYS`/`GROUP_BADGE_CLASSES` a 4 valori (open=green,
+  pending=orange, closed_won=emerald, closed_lost=red); Select su `WORKFLOW_STATUS_GROUPS`.
+- `use-opportunity-workflow-form.ts`: `initialSystemStatusRows` (CREATE mode) ora semina 3 righe
+  pinnate — Aperto, Chiuso con esito positivo, Chiuso con esito negativo. addCustom usa il nuovo helper.
+- `use-default-statuses.ts`: addCustom usa il nuovo helper.
+- i18n `it/en-opportunity-workflows.ts`: `defaultClosedName` → `defaultClosedWonName`+`defaultClosedLostName`;
+  `group.closed` → `group.closed_won`+`group.closed_lost` ("Chiuso con esito positivo/negativo").
+- `opportunities/types.ts`: `OpportunityWorkflowStatusRef.group` ora `WorkflowStatusGroupValue`
+  (import da opportunity-workflows/types, no ciclo runtime — solo type).
+
+VERIFICA FE (green reale): `tsc --noEmit` + `tsc -b` 0 errori; `vitest run src/features/opportunity-workflows
+src/features/opportunities` 154/154; ESLint 0 sui file toccati. NB: l'errore typecheck segnalato prima
+dal Stop hook su `opportunity-screens.tsx:81` era un artefatto di build incrementale stantio — un `tsc -b`
+pulito passa (0 errori), file non modificato da questo task.
+
 ## AZIONE "DUPLICA" su Progetti e Campagne (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
 
 Nuova row-action `duplicate` sulle tabelle Projects e Campaigns. Decisioni utente: (1) apre il

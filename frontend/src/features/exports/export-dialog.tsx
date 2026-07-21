@@ -128,10 +128,12 @@ export function ExportDialog({
                       aria-checked={selected}
                       onClick={() => setFormat(value)}
                       className={cn(
-                        'flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+                        // bg-card (white) lifts each option off the gray dialog
+                        // surface (bg-background); a bare border blended tone-on-tone.
+                        'flex flex-1 items-center justify-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium transition-colors',
                         selected
-                          ? 'border-primary bg-primary/5 text-foreground'
-                          : 'border-border text-muted-foreground hover:text-foreground',
+                          ? 'border-primary ring-1 ring-primary/40 text-foreground'
+                          : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted/60',
                       )}
                     >
                       <Icon aria-hidden="true" className="size-4" />
