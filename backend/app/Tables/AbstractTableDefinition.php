@@ -5,6 +5,7 @@ namespace App\Tables;
 use App\Enums\AdvancedFilterType;
 use App\Models\User;
 use App\Services\Table\AdvancedFilterApplier;
+use App\Tables\Concerns\InjectsDefaultIdColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -24,6 +25,8 @@ use Illuminate\Support\Facades\Gate;
  */
 abstract class AbstractTableDefinition implements TableDefinition
 {
+    use InjectsDefaultIdColumn;
+
     public function resource(): string
     {
         return $this->domain();
@@ -101,7 +104,7 @@ abstract class AbstractTableDefinition implements TableDefinition
             'resource' => $this->resource(),
             'columns' => array_map(
                 fn (array $column): array => $this->resolveColumn($column, $actor, $layout),
-                $this->columns(),
+                $this->columnsWithDefaultId(),
             ),
             'filters' => $this->resolveFilters($actor),
             'actions' => $this->resolveActions($actor),
@@ -208,7 +211,7 @@ abstract class AbstractTableDefinition implements TableDefinition
         $layout = [];
         $position = 0;
 
-        foreach ($this->columns() as $column) {
+        foreach ($this->columnsWithDefaultId() as $column) {
             $position++;
 
             $layout[$column['id']] = [
@@ -310,7 +313,7 @@ abstract class AbstractTableDefinition implements TableDefinition
     {
         $ids = [];
 
-        foreach ($this->columns() as $column) {
+        foreach ($this->columnsWithDefaultId() as $column) {
             if (($column['sortable'] ?? false) === true) {
                 $ids[] = $column['id'];
             }
@@ -341,7 +344,7 @@ abstract class AbstractTableDefinition implements TableDefinition
     {
         $ids = [];
 
-        foreach ($this->columns() as $column) {
+        foreach ($this->columnsWithDefaultId() as $column) {
             if (($column['searchable'] ?? false) === true) {
                 $ids[] = $column['id'];
             }
@@ -361,7 +364,7 @@ abstract class AbstractTableDefinition implements TableDefinition
     {
         $columns = [];
 
-        foreach ($this->columns() as $column) {
+        foreach ($this->columnsWithDefaultId() as $column) {
             if (($column['filterable'] ?? false) === true) {
                 $columns[$column['id']] = $column;
             }

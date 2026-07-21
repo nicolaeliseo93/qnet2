@@ -39,11 +39,6 @@ export const leads = {
     createOpportunity: 'Crea opportunità',
     goToOpportunity: "Vai all'opportunità",
   },
-  conversion: {
-    correctTitle: 'Completa prima il lead',
-    correctSubtitle:
-      "A questo lead mancano l'Operatore o la Sede. Compilali prima di creare l'Opportunità: si aprirà in automatico.",
-  },
   form: {
     newLead: 'Nuovo lead',
     importLeads: 'Importa lead',
@@ -52,6 +47,10 @@ export const leads = {
     editTitle: 'Modifica lead',
     editSubtitle: 'Aggiorna il lead selezionato.',
     sections: {
+      conversion: {
+        title: 'Conversione in Opportunità',
+        description: "Genera automaticamente l'Opportunità collegata alla creazione del Lead.",
+      },
       contact: {
         title: 'Anagrafica e campagna',
         description: "L'anagrafica, la campagna che l'ha generata e lo stato del lead.",
@@ -80,8 +79,7 @@ export const leads = {
     operationalSite: 'Sede',
     operationalSiteSearch: 'Cerca sedi…',
     state: 'Regione',
-    stateEmpty: '— (derivata dalla sede)',
-    stateCreateHint: 'Derivata dalla sede selezionata.',
+    stateSearch: 'Cerca regioni…',
     source: 'Fonte',
     sourceSearch: 'Cerca fonti…',
     operator: 'Operatore',
@@ -92,10 +90,7 @@ export const leads = {
       operator: "L'utente interno incaricato di seguire il lead.",
     },
     convertToOpportunity: 'Converti automaticamente in Opportunità',
-    convertToOpportunityHint:
-      "Alla creazione del Lead verrà generata automaticamente l'Opportunità collegata. Operatore e Sede diventano obbligatori.",
-    operatorRequired: "L'Operatore è obbligatorio per la conversione in Opportunità.",
-    operationalSiteRequired: 'La Sede è obbligatoria per la conversione in Opportunità.',
+    convertToOpportunityHint: "Alla creazione del Lead verrà generata automaticamente l'Opportunità collegata.",
     notes: 'Note',
     notesPlaceholder: 'Scrivi una nota su questo lead…',
     notesMax: 'Le note devono avere al massimo 5000 caratteri.',

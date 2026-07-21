@@ -60,7 +60,7 @@ class OpportunityWorkflowService
             $workflow = OpportunityWorkflow::query()->forceCreate([...$data->attributes(), 'criteria_signature' => $signature]);
 
             $this->syncCriteria($workflow, $data->criteria);
-            $this->statusWriter->createWithCustoms($workflow->id, $data->statuses);
+            $this->statusWriter->createWithCustoms($workflow->id, $data->statuses, $data->openStatus, $data->closedStatus);
 
             return $workflow;
         });

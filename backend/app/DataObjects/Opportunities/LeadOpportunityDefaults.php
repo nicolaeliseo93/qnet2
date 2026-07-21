@@ -16,6 +16,12 @@ namespace App\DataObjects\Opportunities;
  * BR-2-locked); `productLines` carries the 0-or-1 row derived from the
  * lead/campaign's EFFECTIVE business function + product category, when BOTH
  * are present.
+ *
+ * User directive 2026-07-21: the lead's Operator no longer prefills the
+ * Opportunity's Supervisor — it seeds the FIRST "Gestore Account" slot
+ * instead (`managerSlots`/`managerRefs`), and the Supervisor stays empty.
+ * A 0-or-1-element list (the lead has at most one Operator, AC-025), never
+ * locked.
  */
 final readonly class LeadOpportunityDefaults
 {
@@ -24,6 +30,8 @@ final readonly class LeadOpportunityDefaults
      * @param  array<string, array{id: int, name: string}|null>  $references  same keys, {id,name} summaries
      * @param  array<int, string>  $lockedFields  the subset of $values whose derivation is non-null (BR-2)
      * @param  array<int, array{business_function: array{id: int, name: string}, product_category: array{id: int, name: string}}>  $productLines  0 or 1 row, editable/removable in the form (never locked)
+     * @param  array<int, int>  $managerSlots  0 or 1 slot: the lead's Operator id, prefilling the first "Gestore Account" (never locked)
+     * @param  array<int, array{id: int, name: string}>  $managerRefs  {id,name} summaries paired with $managerSlots, for the slot's trigger-label hydration
      */
     public function __construct(
         public array $values,
@@ -31,5 +39,7 @@ final readonly class LeadOpportunityDefaults
         public array $lockedFields,
         public array $productLines,
         public ?int $existingOpportunityId,
+        public array $managerSlots,
+        public array $managerRefs,
     ) {}
 }

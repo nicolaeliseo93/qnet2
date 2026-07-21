@@ -67,10 +67,12 @@ export interface LeadDetail {
   source_id: number | null
   source: LeadRelationRef | null
   /**
-   * Spec 0047 (D1, AC-001): the Regione, DERIVED server-side from the
-   * operational site's primary address — never a client input, no picker.
-   * Optional (like `opportunity` below) so every pre-existing `LeadDetail`
-   * fixture keeps type-checking unchanged; a missing key means `null`.
+   * The Regione (spec 0047 D1). Directive 2026-07-21: now a first-class user
+   * input, always editable in the form — auto-filled from the chosen Sede's
+   * `meta.state_id` but freely overridable/clearable; when omitted from a
+   * write, the backend still derives it from the Sede as a fallback. Optional
+   * (like `opportunity` below) so every pre-existing `LeadDetail` fixture
+   * keeps type-checking unchanged; a missing key means `null`.
    */
   state_id?: number | null
   state?: LeadRelationRef | null
@@ -103,6 +105,13 @@ export interface CreateLeadPayload {
   operational_site_id?: number | null
   source_id?: number | null
   operator_id?: number | null
+  /**
+   * The Regione (spec 0047, directive 2026-07-21): a user input, sent
+   * unconditionally from the form's current value (auto-filled from the
+   * Sede, freely overridable). Omitted from a write, the backend derives it
+   * from the Sede instead.
+   */
+  state_id?: number | null
   notes?: string | null
   extra_fields?: Record<string, string> | null
   /**

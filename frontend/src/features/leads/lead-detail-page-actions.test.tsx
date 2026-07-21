@@ -27,16 +27,6 @@ vi.mock('@/features/leads/api', () => ({
   leadDetailQueryKey: (id: number | null) => ['leads', 'detail', id] as const,
 }))
 
-// The conversion correction step mounts the real `LeadForm`; its submission is
-// owned by another suite, so it is stubbed to a button that drives `onSuccess`.
-vi.mock('@/features/leads/lead-form', () => ({
-  LeadForm: ({ onSuccess }: { onSuccess: (lead: LeadDetail) => void }) => (
-    <button type="button" onClick={() => onSuccess({ id: 9 } as LeadDetail)}>
-      stub-correct-save
-    </button>
-  ),
-}))
-
 const canMock = vi.fn<(permission: string) => boolean>()
 vi.mock('@/features/auth/use-abilities', () => ({
   useAbilities: () => ({ can: canMock, hasRole: () => false, roles: [], isLoading: false }),
@@ -90,8 +80,6 @@ vi.mock('@/features/opportunities/opportunity-screens', () => ({
   },
 }))
 
-// Ready by default (Operator + Site set) so the conversion skips the correction
-// step; the correction tests pass explicit nulls to trigger the gate.
 function lead(overrides: Partial<LeadDetail> = {}): LeadDetail {
   return {
     id: 9,
@@ -155,7 +143,8 @@ describe('LeadDetailPageActions', () => {
     expect(screen.queryByRole('button', { name: /create opportunity/i })).not.toBeInTheDocument()
   })
 
-  it('spec 0044 (revised): a lead missing the Operator opens the correction form before the Opportunity', async () => {
+  /** Directive 2026-07-21: Operator/Site are optional, so the former correction gate is gone — every lead opens the Opportunity form directly. */
+  it('a lead missing Operator/Site opens the prefilled Opportunity form directly, no correction step', async () => {
     fetchLeadMock.mockResolvedValue(
       lead({ opportunity: null, operator_id: null, operational_site_id: null }),
     )
@@ -163,24 +152,11 @@ describe('LeadDetailPageActions', () => {
     renderActions()
 
     fireEvent.click(await screen.findByRole('button', { name: /create opportunity/i }))
-
-    expect(await screen.findByText('Complete the lead first')).toBeInTheDocument()
-    expect(screen.queryByText('opportunity-form-create')).not.toBeInTheDocument()
-    expect(navigateMock).not.toHaveBeenCalled()
-  })
-
-  it('chains into the prefilled Opportunity form once the lead is corrected', async () => {
-    fetchLeadMock.mockResolvedValue(
-      lead({ opportunity: null, operator_id: null, operational_site_id: null }),
-    )
-
-    renderActions()
-
-    fireEvent.click(await screen.findByRole('button', { name: /create opportunity/i }))
-    fireEvent.click(await screen.findByText('stub-correct-save'))
 
     expect(await screen.findByText('opportunity-form-create')).toBeInTheDocument()
     expect(screen.getByText('opportunity-params:{"lead_id":9}')).toBeInTheDocument()
+    expect(screen.queryByText('Complete the lead first')).not.toBeInTheDocument()
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 
   it('AC-022: a ready lead opens the Opportunity modal Sheet prefilled, no navigation', async () => {

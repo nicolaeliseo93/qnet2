@@ -24,6 +24,7 @@ const SERVER_ERROR_FIELDS = [
   'operational_site_id',
   'source_id',
   'operator_id',
+  'state_id',
   'notes',
   'convert_to_opportunity',
 ] as const
@@ -34,15 +35,6 @@ interface UseLeadFormArgs {
   mode: LeadFormMode
   /** Called after a successful create/update so the caller can navigate to the detail page. */
   onSuccess: (lead: LeadDetail) => void
-  /**
-   * Deferred conversion (spec 0044, revised): when the edit form is opened as
-   * the correction step before creating an Opportunity, Operator and Site
-   * become required — reusing the same conditional rule the create checkbox
-   * drives, by seeding `convert_to_opportunity` to `true`. The PATCH still
-   * ignores the flag (`buildUpdatePayload`), so no atomic conversion happens
-   * here; the caller chains to the Opportunity form on success instead.
-   */
-  requireConversionFields?: boolean
 }
 
 /**
@@ -50,7 +42,7 @@ interface UseLeadFormArgs {
  * values, server 422 mapping and the create/update submit. The component
  * stays UI-only; this hook is the orchestration point (`onSubmit`).
  */
-export function useLeadForm({ mode, onSuccess, requireConversionFields = false }: UseLeadFormArgs) {
+export function useLeadForm({ mode, onSuccess }: UseLeadFormArgs) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { can } = useAbilities()
@@ -78,13 +70,12 @@ export function useLeadForm({ mode, onSuccess, requireConversionFields = false }
         operational_site_id: lead.operational_site_id,
         source_id: lead.source_id,
         operator_id: lead.operator_id,
+        state_id: lead.state_id ?? null,
         notes: lead.notes,
         extra_fields: recordToEntries(lead.extra_fields),
         // Create-only control (spec 0044): edit mode never renders the
-        // checkbox. It defaults to false, unless this edit is the deferred
-        // conversion's correction step, which turns on the same Operator/Site
-        // required rule without ever submitting the flag (see args).
-        convert_to_opportunity: requireConversionFields,
+        // checkbox, so it always defaults to false here.
+        convert_to_opportunity: false,
       }
     }
     return {
@@ -93,11 +84,12 @@ export function useLeadForm({ mode, onSuccess, requireConversionFields = false }
       operational_site_id: null,
       source_id: null,
       operator_id: null,
+      state_id: null,
       notes: null,
       extra_fields: [],
       convert_to_opportunity: canConvertToOpportunity,
     }
-  }, [mode, requireConversionFields, canConvertToOpportunity])
+  }, [mode, canConvertToOpportunity])
 
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(schema),

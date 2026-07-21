@@ -81,6 +81,35 @@ it('create: 201 with statuses omitted still creates the 2 system rows only', fun
         ->and($workflow->statuses()->pluck('system_key')->sort()->values()->all())->toBe(['closed', 'open']);
 });
 
+it('create: seeds the 2 pinned rows with the names/colors the client tagged with system_key (AC-004)', function () {
+    $actor = opportunityWorkflowUserWith(['create']);
+    $source = Source::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/opportunity-workflows', [
+        'name' => 'Named systems',
+        'criteria' => [['field' => 'source_id', 'value_id' => $source->id]],
+        'statuses' => [
+            ['name' => 'Aperto (in corso)', 'color' => 'green', 'group' => 'open', 'system_key' => 'open'],
+            ['name' => 'Custom', 'color' => 'blue', 'group' => 'pending', 'system_key' => null],
+            ['name' => 'Chiuso (definitivo)', 'color' => 'red', 'group' => 'closed', 'system_key' => 'closed'],
+        ],
+    ])->assertCreated()->assertJsonCount(3, 'data.statuses');
+
+    $workflow = OpportunityWorkflow::where('name', 'Named systems')->sole();
+
+    $open = $workflow->statuses()->where('system_key', 'open')->sole();
+    $closed = $workflow->statuses()->where('system_key', 'closed')->sole();
+
+    expect($open->name)->toBe('Aperto (in corso)')
+        ->and($open->color)->toBe('green')
+        ->and($open->sort_order)->toBe(0)
+        ->and($closed->name)->toBe('Chiuso (definitivo)')
+        ->and($closed->color)->toBe('red')
+        ->and($closed->sort_order)->toBeGreaterThan(0)
+        ->and($workflow->statuses()->whereNull('system_key')->sole()->name)->toBe('Custom');
+});
+
 // ---------------------------------------------------------------------------
 // create — AC-008 (criteria validation)
 // ---------------------------------------------------------------------------

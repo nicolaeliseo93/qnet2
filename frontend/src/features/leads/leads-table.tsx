@@ -64,14 +64,12 @@ export function LeadsTable() {
 
   const { openCreate, openView, openEdit, sheet } = useModuleOpener(LEADS_DOMAIN, { onSaved })
 
-  // Lead -> opportunity conversion controller (spec 0044, revised): gates a
-  // lead missing Operator/Site into a correction step before the Opportunity
-  // form, then chains into it. Reuses the same `onSaved` (grid refresh + stats
-  // invalidation) as the leads opener above — both the correction and the
-  // opportunity change the converted row, which AC-024 requires reflected.
+  // Lead -> opportunity conversion controller (spec 0044, revised;
+  // directive 2026-07-21 dropped the correction gate): opens the prefilled
+  // Opportunity form directly. Reuses the same `onSaved` (grid refresh +
+  // stats invalidation) as the leads opener above.
   const { startConversion, sheets: conversionSheets } = useLeadConversion({
     onOpportunitySaved: onSaved,
-    onLeadCorrected: onSaved,
   })
 
   const runDelete = useCallback(
@@ -112,7 +110,7 @@ export function LeadsTable() {
           setActivityRow(row)
           break
         case 'convert_to_opportunity':
-          void startConversion(row.id)
+          startConversion(row.id)
           break
         default:
           break

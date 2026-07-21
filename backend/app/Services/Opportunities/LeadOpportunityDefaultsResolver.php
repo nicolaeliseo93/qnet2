@@ -32,11 +32,11 @@ use Illuminate\Database\Eloquent\Model;
  * are present. User directive 2026-07-17: `operational_site_id` is REMOVED
  * from the derivable set entirely.
  *
- * Spec 0044 (AC-030/031/032): `supervisor_id`/`supervisor` carry
- * `lead->operator_id`/`lead->operator` as a PRECOMPILED SUGGESTION, not a
- * BR-2 lock — deliberately kept OUT of `DERIVED_FIELDS` so `lockedFields()`
- * never includes it and `StoreOpportunityRequest::derivableRule()` never
- * turns it 'prohibited'. The user may freely override it (AC-033/AC-034).
+ * User directive 2026-07-21: the lead's Operator carries `managerSlots`/
+ * `managerRefs` (the FIRST "Gestore Account" prefill), NOT `supervisor_id`
+ * anymore — the Supervisor is left empty. Like the former supervisor
+ * suggestion it is deliberately OUT of `DERIVED_FIELDS`/`lockedFields()`, a
+ * plain editable prefill the user may freely change or clear.
  */
 final class LeadOpportunityDefaultsResolver
 {
@@ -80,7 +80,6 @@ final class LeadOpportunityDefaultsResolver
         $values = [
             'source_id' => $effectiveSource?->id,
             'registry_id' => $lead->registry_id,
-            'supervisor_id' => $lead->operator_id,
             // spec 0047 (AC-002, D1): the Regione inherited from the lead's
             // own state_id. NOT in DERIVED_FIELDS — a plain default value,
             // never BR-2-locked (an opportunity's Regione stays editable even
@@ -91,8 +90,13 @@ final class LeadOpportunityDefaultsResolver
         $references = [
             'source' => $this->summarizeByName($effectiveSource),
             'registry' => $this->summarizeByName($lead->registry),
-            'supervisor' => $this->summarizeByName($lead->operator),
         ];
+
+        // User directive 2026-07-21: the lead's Operator seeds the first
+        // "Gestore Account" slot (0 or 1 element — a lead has at most one
+        // Operator), never the Supervisor.
+        $operator = $lead->operator;
+        $managerRef = $this->summarizeByName($operator);
 
         return new LeadOpportunityDefaults(
             values: $values,
@@ -100,6 +104,8 @@ final class LeadOpportunityDefaultsResolver
             lockedFields: $this->lockedFields($values),
             productLines: $this->productLines($this->effectiveBusinessFunction($campaign), $this->effectiveProductCategory($campaign)),
             existingOpportunityId: $lead->opportunity?->id,
+            managerSlots: $operator === null ? [] : [$operator->id],
+            managerRefs: $managerRef === null ? [] : [$managerRef],
         );
     }
 

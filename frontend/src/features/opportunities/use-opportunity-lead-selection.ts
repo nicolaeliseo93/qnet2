@@ -28,14 +28,13 @@ export interface OpportunityLeadSelectionState {
   /** The lead's anagrafica (its identity, spec 0041 D-3): the single source for both the Lead select's own trigger label and the registry picker's. */
   registry: RelationFieldRef | null
   /**
-   * Spec 0044 AC-034: the lead's Operator, set ONLY when this selection just
-   * prefilled an empty Supervisor field — `null` otherwise (an already-chosen
-   * Supervisor was left untouched, or the lead has no Operator, AC-025).
-   * Feeds the Supervisor picker's trigger-label hydration the same way
-   * `registry` feeds the registry picker's, since `setValue` alone writes the
-   * id but not the display name.
+   * Directive 2026-07-21: the lead's Operator, set ONLY when this selection
+   * just appended it as a new "Gestore Account" slot — `null` otherwise (the
+   * Operator was already among the slots, or the lead has none). Feeds the
+   * slot's trigger-label hydration the same way `registry` feeds the registry
+   * picker's, since `setValue` alone writes the id but not the display name.
    */
-  supervisor: RelationFieldRef | null
+  managers: RelationFieldRef[] | null
   /**
    * The lead's derived product line (spec 0040 amendment rev.3, AC-102/103),
    * 0 or 1 row: seeded into `product_lines` on a successful selection,
@@ -55,7 +54,7 @@ const EMPTY_STATE: OpportunityLeadSelectionState = {
   lockedFields: [],
   existingOpportunityId: null,
   registry: null,
-  supervisor: null,
+  managers: null,
   derivedProductLines: [],
   isApplying: false,
   isError: false,
@@ -81,11 +80,12 @@ export interface OpportunityLeadSelectionInitial {
  * manually before picking/clearing the lead. A lead already linked to
  * another opportunity (D-2) is surfaced without ever writing to the form.
  *
- * Spec 0044 AC-034/AC-025: selecting a lead also prefills the Supervisor from
- * the lead's Operator, but ONLY into a field that is still empty — `getValues`
- * is read at the exact moment of selection so an already-picked Supervisor is
- * never overwritten, and a lead without an Operator simply leaves the
- * (required, editable) field untouched.
+ * Directive 2026-07-21: selecting a lead also appends the lead's Operator as
+ * a new "Gestore Account" slot, but ONLY when it isn't already among the
+ * current slots — `getValues` is read at the exact moment of selection so an
+ * existing manager selection is never overwritten, and a lead without an
+ * Operator simply leaves the slots untouched. The Supervisor is no longer
+ * prefilled from the lead.
  */
 export function useOpportunityLeadSelection(
   initial: OpportunityLeadSelectionInitial | null,
@@ -153,13 +153,15 @@ export function useOpportunityLeadSelection(
       setValue('registry_id', defaults.values.registry_id, { shouldDirty: true })
       applyProductLines(defaults.product_lines)
 
-      // AC-034/AC-025: never overwrite a Supervisor the user already picked;
-      // a lead with no Operator (`supervisor_id` null) is a no-op, leaving
-      // the required field empty for manual entry.
-      let supervisor: RelationFieldRef | null = null
-      if (getValues('supervisor_id') === null && defaults.values.supervisor_id !== null) {
-        setValue('supervisor_id', defaults.values.supervisor_id, { shouldDirty: true })
-        supervisor = defaults.references.supervisor
+      // Directive 2026-07-21: append the lead's Operator as a new "Gestore
+      // Account" slot, but only when it isn't already among the current
+      // slots — never overwrites an existing selection; a lead with no
+      // Operator (empty `manager_slots`) is a no-op.
+      let managers: RelationFieldRef[] | null = null
+      const operatorId = defaults.manager_slots[0] ?? null
+      if (operatorId !== null && !getValues('manager_slots').includes(operatorId)) {
+        setValue('manager_slots', [...getValues('manager_slots'), operatorId], { shouldDirty: true })
+        managers = defaults.manager_refs
       }
 
       setState({
@@ -167,7 +169,7 @@ export function useOpportunityLeadSelection(
         lockedFields: defaults.locked_fields,
         existingOpportunityId: null,
         registry: defaults.references.registry,
-        supervisor,
+        managers,
         derivedProductLines: defaults.product_lines,
         isApplying: false,
         isError: false,

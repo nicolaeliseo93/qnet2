@@ -43,12 +43,14 @@ const EMPTY_SELECTED_ITEMS: OpportunitySelectedItems = {
  * `leadSelection.registry` (spec 0041 AC-051) takes precedence over
  * `mode.fromLead.references.registry`: it reflects the in-form "Lead" picker,
  * which can supersede the initial deep-link lead after mount, while the
- * latter only ever hydrates the very first render. `supervisor` mirrors the
- * same precedence (spec 0044 AC-034): `leadSelection.supervisor` is set only
- * right after a fresh in-form selection actually prefilled the field, so it
- * naturally falls back to `references.supervisor` (deep-link mount) or `null`
- * (no prefill happened — an already-chosen Supervisor keeps its own label,
- * resolved by the picker itself, not by this hydration).
+ * latter only ever hydrates the very first render. `managers` mirrors the
+ * same precedence (directive 2026-07-21): `leadSelection.managers` is set only
+ * right after a fresh in-form selection actually appended the lead's Operator
+ * as a "Gestore Account" slot, so it naturally falls back to
+ * `mode.fromLead.managerRefs` (deep-link mount) or `[]` (no prefill happened —
+ * an already-chosen manager keeps its own label, resolved by the slot picker
+ * itself, not by this hydration). The Supervisor is no longer prefilled from
+ * the lead; it only hydrates in edit mode.
  */
 export function useOpportunitySelectedItems(
   mode: OpportunityFormMode,
@@ -69,15 +71,18 @@ export function useOpportunitySelectedItems(
         managers: opportunity.managers.map((manager) => ({ id: manager.id, label: manager.name })),
       }
     }
-    const references = mode.fromLead?.references
-    if (!references && !leadSelection.registry) {
+    const fromLead = mode.fromLead
+    if (!fromLead && !leadSelection.registry) {
       return EMPTY_SELECTED_ITEMS
     }
+    // Directive 2026-07-21: the lead's Operator hydrates the first "Gestore
+    // Account" slot's trigger label, not the Supervisor.
+    const managerRefs = leadSelection.managers ?? fromLead?.managerRefs ?? []
     return {
       ...EMPTY_SELECTED_ITEMS,
-      registry: leadSelection.registry ?? references?.registry ?? null,
-      source: references?.source ?? null,
-      supervisor: leadSelection.supervisor ?? references?.supervisor ?? null,
+      registry: leadSelection.registry ?? fromLead?.references.registry ?? null,
+      source: fromLead?.references.source ?? null,
+      managers: managerRefs.map((ref) => ({ id: ref.id, label: ref.name })),
     }
-  }, [mode, leadSelection.registry, leadSelection.supervisor])
+  }, [mode, leadSelection.registry, leadSelection.managers])
 }

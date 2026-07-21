@@ -153,6 +153,9 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
     return {
       ...empty,
       ...mode.fromLead.values,
+      // Directive 2026-07-21: the lead's Operator seeds the first "Gestore
+      // Account" slot (editable/removable), the Supervisor stays empty.
+      manager_slots: mode.fromLead.managerSlots,
       product_lines: mode.fromLead.productLines.map((line) => ({
         business_function_id: line.business_function.id,
         product_category_id: line.product_category.id,

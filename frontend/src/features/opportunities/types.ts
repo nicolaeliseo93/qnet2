@@ -212,12 +212,6 @@ export interface OpportunityDefaultValues {
   referent_id: number | null
   source_id: number | null
   registry_id: number | null
-  /**
-   * Spec 0044 AC-030/031: the lead's `operator_id`, precompiled but NEVER
-   * part of `locked_fields` (AC-032) — the Supervisor stays editable, unlike
-   * `source_id`/`registry_id`.
-   */
-  supervisor_id: number | null
 }
 
 /**
@@ -228,8 +222,6 @@ export interface OpportunityDefaultValues {
 export interface OpportunityDefaultReferences {
   source: OpportunityRelationRef | null
   registry: OpportunityRelationRef | null
-  /** Spec 0044 AC-030/031: the lead's `operator`, mirrors `supervisor_id` above. */
-  supervisor: OpportunityRelationRef | null
 }
 
 /** Response of `GET /leads/{lead}/opportunity-defaults` (spec 0040 MT-6, amendment rev.3), already unwrapped from the envelope. */
@@ -247,6 +239,14 @@ export interface OpportunityDefaults {
    * REMOVABLE in the form, never part of `locked_fields`.
    */
   product_lines: OpportunityProductLine[]
+  /**
+   * User directive 2026-07-21: the lead's Operator prefills the FIRST "Gestore
+   * Account" slot (0 or 1 element — a lead has at most one Operator), never
+   * the Supervisor. Editable/removable in the form, never locked.
+   */
+  manager_slots: number[]
+  /** {id,name} summaries paired with `manager_slots`, for the slot's trigger-label hydration. */
+  manager_refs: OpportunityRelationRef[]
 }
 
 /**
@@ -261,6 +261,10 @@ export interface OpportunityFromLeadContext {
   lockedFields: string[]
   /** AC-102/103: the lead's 0/1 seed row, editable/removable, never locked. */
   productLines: OpportunityProductLine[]
+  /** Directive 2026-07-21: the lead's Operator seeding the first "Gestore Account" slot (0/1), editable/removable, never locked. */
+  managerSlots: number[]
+  /** {id,name} summaries paired with `managerSlots`, for the slot's trigger-label hydration. */
+  managerRefs: OpportunityRelationRef[]
 }
 
 /** Discriminated form mode shared by the form hook/meta-resolver and `OpportunityForm`. */

@@ -13,8 +13,11 @@ use Illuminate\Http\Request;
  * A site has no own name (identity = its address, see OperationalSite): label
  * is composed from the primary address' `line1`, plus " - {city}" when the
  * address has a city; subtitle = postal_code when present (omitted otherwise,
- * ForSelectResource's null-optional rule). Relies on the Service eager-loading
- * the primary address (+ city) — never a full OperationalSiteResource.
+ * ForSelectResource's null-optional rule). `meta` carries the site's Regione
+ * ({state_id, state_label}, directive 2026-07-21) so the Lead form can
+ * auto-fill it when a Sede is picked; omitted when the site has no region.
+ * Relies on the Service eager-loading the primary address (+ city, + state) —
+ * never a full OperationalSiteResource.
  *
  * @mixin OperationalSite
  */
@@ -32,6 +35,7 @@ class OperationalSiteForSelectResource extends ForSelectResource
             'id' => $this->id,
             'label' => $this->composeLabel($address),
             'subtitle' => $address?->postal_code,
+            'meta' => $this->composeMeta($address),
         ];
     }
 
@@ -44,5 +48,25 @@ class OperationalSiteForSelectResource extends ForSelectResource
         $city = $address->city?->localizedName();
 
         return $city === null ? (string) $address->line1 : "{$address->line1} - {$city}";
+    }
+
+    /**
+     * The Regione bag consumed by the Lead form's auto-fill: the primary
+     * address' `state_id` plus its localized name (same label the `states`
+     * for-select shows). Null — hence omitted by ForSelectResource — when the
+     * site's primary address has no region.
+     *
+     * @return array{state_id: int, state_label: string|null}|null
+     */
+    private function composeMeta(?Address $address): ?array
+    {
+        if ($address?->state_id === null) {
+            return null;
+        }
+
+        return [
+            'state_id' => $address->state_id,
+            'state_label' => $address->state?->localizedName(),
+        ];
     }
 }

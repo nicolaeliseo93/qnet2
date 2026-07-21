@@ -13,7 +13,10 @@ export type {
 /**
  * Minimal projection of an entity option as returned by
  * `GET /api/{resource}/for-select`. `id` + `label` are always present;
- * `subtitle` is the optional secondary line (e.g. the user email).
+ * `subtitle` is the optional secondary line (e.g. the user email). A
+ * concrete resource with a richer presentation bag extends this with its own
+ * typed `meta` (see `ProjectForSelectItem`, `OperationalSiteForSelectItem`,
+ * ...) rather than widening this base shape.
  */
 export interface ForSelectItem {
   id: number

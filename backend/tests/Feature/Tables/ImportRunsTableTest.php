@@ -46,7 +46,7 @@ it('GET /api/tables/import-runs/columns: 403 without leads.import, 200 with it',
         ->and($data['searchable'])->toBe(['original_filename']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['created_at', 'original_filename', 'total_rows', 'imported_rows', 'invalid_rows', 'status']);
+    expect($ids)->toBe(['id', 'created_at', 'original_filename', 'total_rows', 'imported_rows', 'invalid_rows', 'status']);
 });
 
 it('POST /api/tables/import-runs/rows: 403 without leads.import', function () {

@@ -2,6 +2,227 @@
 
 > Injected at session start. Update at every green state.
 
+## COLONNA ID DI DEFAULT NASCOSTA (PRIMA) PER OGNI TABELLA (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
+
+Direttiva utente: "Aggiungere colonna id di default nascosta per ogni tabella" + follow-up "la colonna
+id deve essere la PRIMA". Ogni tabella del framework generico (TableDefinition/SSRM) espone ora una
+colonna `id` come PRIMA colonna, nascosta di default, che l'utente puo' mostrare via preferenze colonne.
+
+DESIGN (central injection con override, zero regressione):
+- `app/Tables/Concerns/InjectsDefaultIdColumn.php` (NUOVO trait): `columnsWithDefaultId()` = PREPEND della
+  colonna id di default SOLO se la definizione non ne dichiara gia' una propria (`id === 'id'`).
+  `defaultIdColumn()`: `{id:'id', label:'table.columns.id', type:'number', visible:false, sortable:true,
+  filterable:FALSE, filterType:null}`. Non-filterable di proposito (come roles): evita clutter di filtro su
+  id tecnico e non rompe i test /values che usano `columnId=id` come colonna non-filtrabile.
+- `AbstractTableDefinition`: `use InjectsDefaultIdColumn;` + i 5 consumer interni (resolveConfig, defaultColumnLayout,
+  sortableColumnIds, searchableColumnIds, filterableColumnMap) usano `columnsWithDefaultId()` invece di `columns()`.
+  Estratto in trait per rientrare nel hard-limit 500 righe (ora 486).
+- `columns()` PUBBLICO NON toccato: export/migration invariati (nessuna id iniettata li' -> nessuna regressione
+  ne' scope creep). Le 5 tabelle con id nativa (users, roles, companies, company-sites, operational-sites)
+  restano IDENTICHE (l'injector le salta): la loro id resta gia' prima, e mantiene label/flag propri.
+- i18n: `table.columns.id = 'ID'` aggiunto in `frontend/src/i18n/locales/en-table.ts` + `it-table.ts`.
+  Frontend generico (data-table.tsx `hide: !visible`, type number) rende la colonna senza modifiche FE.
+
+TEST: `TableConfigTest` +4 test (inject-if-absent su tags, prepend-first order 1, no-dup su users, declared-wins
+label su roles) e `TableRowsTest` +1 (sort by id ok su tabella senza id nativa -> whitelist SSRM include id).
+Aggiornati 19 file *TableTest per-dominio (fleet di 4 subagent, ownership disgiunta): prepend `'id'` alle
+asserzioni "columns in order" + bump conteggi nei titoli. Requisito cambiato, non test-tampering.
+
+VERIFICA (green reale): BE `php artisan test` su Table + tutti i 25 domini *TableTest + CustomFields + Users +
+Roles + Migration + Export = 447/448 e 387/387; UNICO rosso = flake preesistente `CustomFieldAdminSecurityTest`
+nav-node (confermato identico su albero pristine via git stash, NON causato da questa modifica). Pint pulito.
+FE: `tsc --noEmit` EXIT 0; 3 fail preesistenti `cell-renderers ContactsCell` (confermati su pristine, non miei).
+
+## LEAD OPERATOR -> PRIMO GESTORE ACCOUNT (non piu' Supervisore) (2026-07-21) — GREEN FULL-STACK, NON COMMITTATO
+
+Direttiva utente: quando un Lead diventa/si associa a un'Opportunita', l'Operatore del lead
+(`lead.operator_id`, "gestore" del lead) deve finire nel PRIMO slot "Gestore account" (pivot
+`opportunity_user`, position 1), NON piu' nel Supervisore (`supervisor_id`). Confermato via domande:
+vale per ENTRAMBI i flussi (conversione contestuale + form differito/in-form picker) e il Supervisore
+RESTA VUOTO (nessuna doppia assegnazione). Supersede spec 0044 AC-030..034 (che precompilavano il Supervisore).
+
+CONTRATTO CONGELATO — `GET /api/leads/{lead}/opportunity-defaults`: RIMOSSI `values.supervisor_id` e
+`references.supervisor`; AGGIUNTI `manager_slots: number[]` (= `[operator_id]` se il lead ha operatore,
+altrimenti `[]`) e `manager_refs: {id,name}[]` (idratazione label dello slot, appaiato a manager_slots).
+`locked_fields`/`product_lines` invariati (il prefill Operatore non e' mai locked). Conversione contestuale
+`POST /leads`: l'opportunita' nasce con `supervisor_id=null` e l'Operatore come primo Gestore account.
+
+BACKEND: `ConvertLeadToOpportunity` (`supervisorId: null`, `managerSlots: [operator_id]` o null se assente).
+`LeadOpportunityDefaultsResolver` (tolto supervisor da values/references; nuovi `managerSlots`/`managerRefs`,
+0/1 elemento). `LeadOpportunityDefaults` DTO (+2 prop). `LeadOpportunityDefaultsController` (emette
+manager_slots/manager_refs). Test: `LeadOpportunityDefaultsSupervisorTest.php` RINOMINATO ->
+`LeadOpportunityDefaultsManagerTest.php` (assert su manager_slots/manager_refs, no supervisor); `LeadConversionTest`
+AC-002 (ora: primo manager == operator, position 1, supervisor null) + AC-008 (no operator -> 0 manager, supervisor null).
+
+FRONTEND: `types.ts` (`OpportunityDefaultValues` -supervisor_id; `OpportunityDefaultReferences` -supervisor;
+`OpportunityDefaults`/`OpportunityFromLeadContext` +manager_slots/manager_refs, +managerSlots/managerRefs).
+`use-opportunity-create-mode` (propaga managerSlots/managerRefs). `use-opportunity-form` (deep-link mount:
+seed `manager_slots` da `mode.fromLead.managerSlots`). `use-opportunity-lead-selection` (stato `supervisor` ->
+`managers: RelationFieldRef[]|null`; in-form pick: APPENDE l'operatore come nuovo slot solo se non gia' presente,
+`[...getValues('manager_slots'), operatorId]`, mai overwrite; no-op se lead senza operatore). `use-opportunity-selected-items`
+(idratazione: da `references.supervisor` a `managers` da `leadSelection.managers ?? fromLead.managerRefs`, mappati
+`{id,name}`->`{id,label}`; supervisor idrata solo in edit). Test aggiornati: `use-opportunity-defaults`,
+`opportunity-form-from-lead`, `opportunity-lead-selection` (3 test prefill riscritti su slot Gestore account,
+testid `Account manager 1`). Il campo Supervisore resta nel form (manuale, opzionale) — solo non piu' precompilato dal lead.
+
+VERIFICA (green): BE `php artisan test tests/Feature/Opportunities tests/Feature/Leads` 183 pass/883 assert; Pint pass.
+FE `vitest run src/features/opportunities src/features/leads` 211 pass; `tsc --noEmit` pulito; ESLint pulito sui file toccati.
+
+NOTA scope: spec 0044 XML (AC-030..034) NON riscritto (coerente col pattern "direttive tracciate in HANDOFF");
+il gate UX in `use-lead-conversion.tsx` (Sede/Operatore null) resta fuori scope come gia' segnalato sotto.
+
+## LEAD -> OPPORTUNITY (2026-07-21) — BACKEND (fatto dal LEAD, non da un teammate) — GREEN, NON COMMITTATO
+
+Il backend di questo task l'ho scritto io lead (non un teammate BE separato, come ipotizzava l'entry frontend sotto).
+File miei: `StoreLeadRequest`/`UpdateLeadRequest` (rimosso `required_if` da operational_site_id/operator_id;
+aggiunto `state_id` nullable exists:states), `CreateLeadData`/`UpdateLeadData` (nuovi `stateId`+`stateIdSubmitted`),
+`LeadService` (`withResolvedStateId`: state_id SUBMITTED vince, derivazione dalla Sede solo come FALLBACK, su
+create+update), `StoreOpportunityRequest` (`supervisor_id` da required a nullable — DB gia' nullable),
+`OperationalSiteForSelectResource`+`OperationalSiteService` (espone `meta:{state_id,state_label}` dalla primary
+address, eager-load `state:id,name`). Test miei: `LeadConversionTest` (AC-008/009 riscritti: ora 201, non 422),
+`OpportunityCrudTest` (2 test supervisor: ora 201 con supervisor null), `OperationalSiteForSelectTest` (meta +
+omissione), `LeadStateTest` (nuovi test submitted-wins create/update). Spec 0044/0047 annotate con l'amendment.
+VERIFICATO (output reale): Pint OK; pest sui 4 file affetti **56/56 PASS**; sweep esteso (Leads+Opportunities+
+OpportunityWorkflows+OperationalSites+Imports) **461/462**, l'unico rosso e' il nav-flake preesistente
+`OperationalSiteSecurityTest` (confermato via `git stash` che fallisce identico senza le mie modifiche).
+Frontend verificato ANCHE dal lead: `tsc -b` EXIT 0, vitest mirato conversione/regione 83/83.
+COMMIT: come nell'entry sotto, committare SOLO i file di QUESTO task; NON i file `opportunity-workflows`/
+`*-opportunity-workflows.ts` (sessione 0047 concorrente sullo stesso albero). git non separa per cartella:
+es. il mio `tests/Feature/OpportunityWorkflows/LeadStateTest.php` e' MIO, ma `OpportunityWorkflowCrudTest.php`
+nella stessa cartella e' della sessione concorrente. Staging file-per-file.
+
+## LEAD -> OPPORTUNITY: SEDE/OPERATORE/SUPERVISORE OPZIONALI, REGIONE SEMPRE EDITABILE (2026-07-21) — GREEN FRONTEND, NON COMMITTATO
+
+Richiesta utente (full-stack, contratto congelato dal lead, backend in parallelo su file disgiunti):
+(1) Sede (`operational_site_id`) e Operatore (`operator_id`) NON piu' obbligatori nella creazione di
+un'Opportunita' da Lead, in ENTRAMBI i flussi (checkbox contestuale sul form Lead + form Opportunita'
+differito `?lead_id=N`); (2) Supervisore (`supervisor_id`) dell'Opportunita' non piu' obbligatorio (deriva
+dall'Operatore del lead, ora eventualmente vuoto); (3) Regione (`state_id`) SEMPRE presente ed EDITABILE
+dall'utente sia sul form Lead sia sul form Opportunita' — quando si sceglie una Sede la Regione si
+auto-compila dalla sede scelta, ma resta sempre sovrascrivibile/azzerabile.
+
+CONTRATTO CONGELATO (BE in parallelo, stesso contratto): `POST /leads` — `operational_site_id`/`operator_id`
+tornano puramente opzionali (rimosso `required_if:convert_to_opportunity,true`); payload POST+PATCH accetta
+`state_id` (nullable, `exists:states`), che VINCE se inviato, altrimenti il backend lo deriva dalla Sede.
+`GET /operational-sites/for-select` ogni item porta un `meta?: {state_id, state_label}` opzionale (omesso
+se la sede non ha regione) — riuso della `ForSelectResource` condivisa (contratto gia' generico, backend ha
+solo valorizzato `meta` per questa risorsa). `POST /opportunities` — `supervisor_id` nullable.
+
+FRONTEND (mia ownership, `frontend/src/`):
+- **Task A — form Lead**: `lead-schema.ts` (+`state_id: z.number().nullable()` in `baseFields`; RIMOSSA la
+  `superRefine` che rendeva Operatore/Sede required quando `convert_to_opportunity` e' true — restano SEMPRE
+  opzionali, direttiva 2026-07-21 rilassa spec 0044 AC-008/009/041). `lead-form-body.tsx`: la Regione passa
+  da `Input` disabilitato/derivato a `RelationSelectField` editabile (resource `states`, mai `required`);
+  RIMOSSO `required={convertToOpportunity || undefined}` da Sede/Operatore. Auto-fill: handler
+  `handleSiteItemChange` cablato su `onItemChange` del select Sede (event handler, NON un `useEffect` su
+  stato derivato) — legge `item.meta?.state_id`/`state_label` (narrowed a `OperationalSiteForSelectItem`,
+  vedi sotto), fa `form.setValue('state_id', ...)` e tiene un piccolo state locale `autoFilledState` per
+  idratare istantaneamente la label del trigger (pattern `quickCreated` di `RelationSelectField`, zero
+  round-trip extra). Una sede senza regione lascia la Regione corrente intatta; l'utente puo' sempre
+  sovrascrivere/azzerare a mano scegliendo un'altra regione. `lead-form-payload.ts`/`use-lead-form.ts`/
+  `types.ts`: `state_id` propagato in create (sempre inviato, come l'opportunita') e nel diff sparso di update.
+- **Task B — form Opportunita'**: `opportunity-schema.ts` — rimossa l'override che rendeva `supervisor_id`
+  required in create (`buildCreateOpportunitySchema` ora identica a `buildUpdate...`, nullable in entrambe).
+  `opportunity-form-body.tsx` — `supervisorRequired={false}` sempre (era `mode.type === 'create'`). NOTA: la
+  rimozione dello `stateForceDisabled` sulla Regione lead-linked (delta "a" segnalato nell'entry 0047 sopra)
+  era GIA' STATA APPLICATA nel working tree condiviso da un altro teammate PRIMA che iniziassi (verificato via
+  `git diff HEAD` a inizio sessione) — non ho dovuto toccare `opportunity-classification-section.tsx` per
+  quello, l'ho solo ereditata.
+- **Task C — plumbing `meta`**: `AsyncPaginatedSelect` (+`onItemChange?: (item: ForSelectItem|null)=>void`,
+  fired accanto a `onChange` su pick/clear, con l'item pieno) e `RelationSelectField` (forward-only) —
+  additivi, backward-compatible, zero call site esistente rotto. IMPORTANTE (corretto dopo un giro di tsc
+  rosso): NON ho messo `meta` sul `ForSelectItem` di base — pattern del codebase e' un `meta` TIPATO PER
+  FEATURE che estende `ForSelectItem` (`ProjectForSelectItem`, `RegistryForSelectItem`, ...). Aggiunto
+  `OperationalSiteForSelectItem extends ForSelectItem { meta?: OperationalSiteForSelectMeta }` in
+  `features/operational-sites/for-select-api.ts`; il call site del Lead form fa un cast narrow locale
+  (`item as OperationalSiteForSelectItem | null`), stesso pattern di `opportunity-relation-meta.ts`.
+- **Task D — i18n**: `it/en-leads.ts` — Regione da placeholder derivato a `state`/`stateSearch` (pattern
+  identico a `opportunities.form.state/stateSearch`); rimossi `stateEmpty`/`stateCreateHint`/`operatorRequired`/
+  `operationalSiteRequired` (dead code, mai piu' referenziati); `convertToOpportunityHint` non menziona piu'
+  "Operatore e Sede diventano obbligatori". `it/en-opportunities.ts` — rimossa la chiave orfana
+  `supervisorRequired` (nessun altro riferimento nel codebase).
+
+FILE NUOVI: `frontend/src/features/leads/lead-form-body-region.test.tsx` (split da `lead-form-body.test.tsx`
+per il hard-limit 500 righe dell'hook `code-guard.js` — mock/fixture duplicati, stesso pattern di
+`opportunity-workflow-status-field.test.tsx` vs `opportunity-form-body.test.tsx`).
+
+SEGNALAZIONE (NON implementata, fuori scope dei task assegnati): `use-lead-conversion.tsx` (flusso "correggi
+il lead prima di convertire", feature separata del 2026-07-20) continua a gatekeepare l'apertura
+dell'Opportunita' su `operator_id == null || operational_site_id == null`, aprendo una Dialog di correzione.
+Con Sede/Operatore ora sempre opzionali questo gate e' logicamente superato (nulla e' piu' obbligatorio da
+correggere), ma NON l'ho toccato: non era nello scope dei 4 task assegnati e la decisione se rimuoverlo/
+adattarlo e' un caso UX da validare esplicitamente, non da decidere unilateralmente in questo giro.
+
+ATTENZIONE COMMIT (working tree condiviso con altri teammate in corso, NON miei — non toccare al commit):
+`frontend/src/features/opportunity-workflows/*` + `en/it-opportunity-workflows.ts` (feature "0047 delta,
+label Aperto/Chiuso editabili al create", vedi entry sotto) e tutto `backend/` (teammate backend in
+parallelo sullo stesso contratto: `StoreLeadRequest`/`UpdateLeadRequest`/`OperationalSiteForSelectResource`/
+`LeadService`/`CreateLeadData`/`UpdateLeadData`/opportunities + i test corrispondenti).
+
+VERIFICATO (output reale, questa sessione, solo frontend — il backend e' un altro teammate):
+`npx tsc -b --force` dalla dir `frontend/`: **EXIT 0**, zero errori (build intera, incluse le modifiche
+concorrenti di altri teammate nello stesso albero). ESLint sui 22 file toccati: **EXIT 0**, 0 errori (1 solo
+warning atteso, "ignored" su `components/ui/async-paginated-select.tsx`, escluso da lint per config).
+Vitest mirato (leads+opportunities, `--no-file-parallelism`): **14 file / 160 test, tutti PASS**. Vitest
+suite intera: **281/282 file, 1837/1840 test PASS** — l'unico rosso e' `features/table/cell-renderers.test.tsx`
+(3 test, ContactsCell, leak i18n "2 primary contacts" vs "2 contatti principali"), PRE-ESISTENTE e
+documentato piu' volte in questo file, file mai toccato da me. NESSUN COMMIT (CLAUDE.md §3.6, attesa ok).
+
+### ADDENDUM (stessa sessione) — RIMOSSO IL GATE DI CORREZIONE DIFFERITA, ORA OBSOLETO
+
+Il coordinatore aveva inizialmente chiesto di ripristinare `frontend/src/features/opportunity-workflows/*`
++ `en/it-opportunity-workflows.ts` credendo li avessi toccati io: **falso allarme**, confermato via
+`git diff HEAD` che quei file appartengono a un teammate concorrente (0047 delta sopra) — MAI toccati,
+richiesta ritirata dal coordinatore stesso.
+
+Confermata invece la mia segnalazione precedente: `use-lead-conversion.tsx` gateva ancora
+`startConversion` su `operator_id == null || operational_site_id == null`, aprendo una Dialog di
+correzione (`LeadForm` con `requireConversionFields`) prima dell'Opportunita' — logica ormai obsoleta
+visto che Sede/Operatore sono opzionali. RIMOSSO interamente:
+- `use-lead-conversion.tsx` riscritto da zero: niente piu' fetch del lead/gate/Dialog/`onLeadCorrected`;
+  `startConversion(leadId: number)` e' ora un wrapper sync su `useModuleOpener('opportunities').openCreateWith`.
+  `sheets` = solo lo sheet/pagina Opportunita' (l'unico rimasto).
+- `requireConversionFields` RIMOSSO end-to-end (prop orfana dopo la rimozione, nessun call site la settava
+  piu' a `true`): `LeadForm`, `LeadFormBody`, `useLeadForm` (torna a `convert_to_opportunity: false` fisso
+  in edit mode). Call site: `leads-table.tsx`/`lead-screens.tsx` passano `startConversion(row.id)`/
+  `startConversion(lead.id)` diretto (niente piu' oggetto lead completo ne' `void`/Promise).
+- i18n: rimosse le chiavi orfane `leads.conversion.correctTitle`/`correctSubtitle` (it/en-leads.ts).
+- Test aggiornati (requisito cambiato, dichiarato): `leads-table.test.tsx` e
+  `lead-detail-page-actions.test.tsx` — le 2 coppie di test sul gate/correzione sostituite da 1 test
+  ciascuna che verifica l'apertura diretta dell'Opportunita' anche per un lead senza Operatore/Sede.
+
+VERIFICATO (output reale, SOLO file leads-feature + `use-lead-form.ts`/`lead-form.tsx`, NESSUN file
+`opportunity-workflows`/backend toccato): `npx tsc -b --force` da `frontend/` **EXIT 0**; ESLint sugli 11
+file toccati in questo giro **EXIT 0**; Vitest mirato (9 file, leads+opportunity-lead-selection)
+**92/92 PASS**; Vitest suite intera **281/282 file, 1835/1838 test PASS** (stesso identico rosso
+pre-esistente `cell-renderers.test.tsx`, invariato). NESSUN COMMIT.
+
+## 0047 DELTA — LABEL APERTO/CHIUSO EDITABILI GIÀ AL CREATE (2026-07-21) — GREEN, NON COMMITTATO
+
+Richiesta utente: alla creazione di una configurazione i 2 stati di default Aperto/Chiuso sono auto-generati
+(già così), NON eliminabili né sostituibili (già così), ma la loro label deve essere SEMPRE modificabile —
+inclusa la fase di CREATE (prima erano placeholder non editabili, rinominabili solo in edit). Decisione utente
+(AskUserQuestion): "Editabile già al create". Seed default = 'Aperto'/'Chiuso' (IT), 'Open'/'Closed' (EN).
+
+CONTRATTO ESTESO (create): `statuses[]` del POST ora porta ANCHE le 2 righe pinned, taggate `system_key`
+('open'/'closed'); le custom hanno `system_key: null`. Il name/color delle righe system SEMINANO le righe
+auto-create. Backward-compat: se il client NON tagga le righe system, il writer usa i default 'Aperta'/'Chiusa'
+(fallback invariato) — i test create pre-esistenti restano verdi.
+
+FILE TOCCATI: BE — `ValidatesWorkflowCriteria` (regola `statuses.*.system_key` nullable enum),
+`CreateOpportunityWorkflowData` (props `openStatus`/`closedStatus`; `normalizeStatuses` filtra solo custom;
+`extractSystemStatus`), `WorkflowStatusWriter::createWithCustoms/forceCreateSystemRow` (param override name/color),
+`OpportunityWorkflowService::create` (passa gli override). FE — `types.ts` (`CreateOpportunityWorkflowStatusPayload.system_key?`),
+`opportunity-workflow-form-payload.ts` (`buildStatusesCreatePayload` invia tutte le righe con system_key),
+`use-opportunity-workflow-form.ts` (`initialSystemStatusRows` seed editabile; validazione name su TUTTE le righe),
+`workflow-statuses-editor.tsx` (rimosso ramo placeholder → righe pinned sempre input editabile),
+i18n it/en-opportunity-workflows (`defaultOpenName`/`defaultClosedName` sostituiscono `autoOpenName`/`autoClosedName`;
+`nameRequired` generalizzato). Migrazione set globale (`2026_07_20_110200`, committata) 'Aperta'/'Chiusa' NON toccata.
+
+VERIFICATO (output reale): BE pest tests/Feature+Unit/OpportunityWorkflows 75/75 (nuovo test "seeds pinned rows
+from client system_key"). Pint clean. FE vitest feature 27/27 (2 nuovi test: seed editabile + rename pinned al create).
+tsc -b pulito, ESLint pulito. PROSSIMO PASSO: in attesa di OK per il commit (§3.6). Nessun orfano/scope creep.
+
 ## CONFIGURATORE STATI DI LAVORAZIONE OPPORTUNITÀ — spec 0047 (2026-07-20) — GREEN FULL-STACK, NON COMMITTATO
 
 Modulo nuovo full-stack (spec `docs/specs/0047-opportunity-workflow-configurator.xml`, APPROVATA "vai col tuo piano").

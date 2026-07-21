@@ -32,7 +32,7 @@ if (! function_exists('vatRateUserWith')) {
 // columns config
 // ---------------------------------------------------------------------------
 
-it('returns the 3 columns in order with the declared flags, 403 without viewAny', function () {
+it('returns the 4 columns in order with the declared flags, 403 without viewAny', function () {
     $actor = vatRateUserWith([]);
     Sanctum::actingAs($actor);
     $this->getJson('/api/tables/vat-rates/columns')->assertForbidden();
@@ -51,7 +51,7 @@ it('returns the 3 columns in order with the declared flags, 403 without viewAny'
         ->and($data['searchable'])->toBe(['name']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['name', 'rate', 'created_at']);
+    expect($ids)->toBe(['id', 'name', 'rate', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['name']['sortable'])->toBeTrue()

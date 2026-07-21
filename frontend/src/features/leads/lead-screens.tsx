@@ -124,15 +124,14 @@ export function LeadDetailPageActions({ id }: ModuleDetailScreenProps) {
   const queryClient = useQueryClient()
   const { data: lead } = useEntityDetail(leadDetailQueryKey(id), () => fetchLead(id))
 
-  // Lead -> opportunity conversion (spec 0044, revised): a lead missing
-  // Operator/Site is corrected first, then the prefilled Opportunity form
-  // opens. On either save, invalidates THIS lead's detail query so the button
+  // Lead -> opportunity conversion (spec 0044, revised; directive 2026-07-21
+  // dropped the correction gate): opens the prefilled Opportunity form
+  // directly. On save, invalidates THIS lead's detail query so the button
   // flips to "Go to opportunity" once `lead.opportunity` comes back populated.
   const invalidateDetail = () =>
     queryClient.invalidateQueries({ queryKey: leadDetailQueryKey(id) })
   const { startConversion, sheets } = useLeadConversion({
     onOpportunitySaved: invalidateDetail,
-    onLeadCorrected: invalidateDetail,
   })
 
   if (!lead) {
@@ -152,7 +151,7 @@ export function LeadDetailPageActions({ id }: ModuleDetailScreenProps) {
 
   return (
     <Can permission="opportunities.create">
-      <Button variant="outline" onClick={() => void startConversion(lead)}>
+      <Button variant="outline" onClick={() => startConversion(lead.id)}>
         <Handshake aria-hidden="true" />
         {t('leads.detail.createOpportunity')}
       </Button>

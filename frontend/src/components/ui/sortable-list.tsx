@@ -44,6 +44,8 @@ interface SortableListProps<T extends SortableListItem> {
   /** Accessible name for every drag handle button (translated by the caller). */
   dragHandleLabel: string
   className?: string
+  /** Overrides the pinned row's default muted background (e.g. `bg-card` to match the sortable rows). */
+  pinnedRowClassName?: string
 }
 
 /** Splits `items` into a leading pinned run, the reorderable middle, and a trailing pinned run. */
@@ -78,9 +80,13 @@ interface RowProps<T extends SortableListItem> {
 }
 
 /** Fixed row: same shape as a draggable row but without a handle, so labels stay aligned. */
-function PinnedRow<T extends SortableListItem>({ item, renderItem }: RowProps<T>) {
+function PinnedRow<T extends SortableListItem>({
+  item,
+  renderItem,
+  className,
+}: RowProps<T> & { className?: string }) {
   return (
-    <li className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5 text-sm">
+    <li className={cn("flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5 text-sm", className)}>
       <span className="size-3.5 shrink-0" aria-hidden="true" />
       <div className="min-w-0 flex-1">{renderItem(item)}</div>
     </li>
@@ -139,6 +145,7 @@ function SortableList<T extends SortableListItem>({
   isPinned,
   dragHandleLabel,
   className,
+  pinnedRowClassName,
 }: SortableListProps<T>) {
   // Mirrors `items` for optimistic in-place reordering, and re-syncs
   // whenever the caller passes a new `items` reference (e.g. to revert an
@@ -183,7 +190,7 @@ function SortableList<T extends SortableListItem>({
   return (
     <ul className={cn("flex flex-col gap-1.5", className)}>
       {leading.map((item) => (
-        <PinnedRow key={item.id} item={item} renderItem={renderItem} />
+        <PinnedRow key={item.id} item={item} renderItem={renderItem} className={pinnedRowClassName} />
       ))}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
@@ -193,7 +200,7 @@ function SortableList<T extends SortableListItem>({
         </SortableContext>
       </DndContext>
       {trailing.map((item) => (
-        <PinnedRow key={item.id} item={item} renderItem={renderItem} />
+        <PinnedRow key={item.id} item={item} renderItem={renderItem} className={pinnedRowClassName} />
       ))}
     </ul>
   )

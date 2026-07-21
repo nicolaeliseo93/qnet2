@@ -16,10 +16,10 @@ const values: CreateOpportunityWorkflowFormValues = {
   ],
 }
 
-const PLACEHOLDER_STATUS_ROWS: WorkflowStatusFormRow[] = [
-  { id: 'open', name: '', color: null, group: 'open', system_key: 'open' },
+const CREATE_STATUS_ROWS: WorkflowStatusFormRow[] = [
+  { id: 'system-open', name: 'Aperto', color: null, group: 'open', system_key: 'open' },
   { id: 'c1', name: 'In progress', color: 'blue', group: 'pending', system_key: null },
-  { id: 'closed', name: '', color: null, group: 'closed', system_key: 'closed' },
+  { id: 'system-closed', name: 'Chiuso', color: null, group: 'closed', system_key: 'closed' },
 ]
 
 const PERSISTED_STATUS_ROWS: WorkflowStatusFormRow[] = [
@@ -30,15 +30,19 @@ const PERSISTED_STATUS_ROWS: WorkflowStatusFormRow[] = [
 ]
 
 describe('buildCreatePayload', () => {
-  it('builds the full create payload, dropping incomplete/placeholder rows', () => {
-    expect(buildCreatePayload(values, PLACEHOLDER_STATUS_ROWS)).toEqual({
+  it('builds the full create payload: pinned rows (tagged system_key) + custom rows, in order', () => {
+    expect(buildCreatePayload(values, CREATE_STATUS_ROWS)).toEqual({
       name: 'EMEA workflow',
       is_active: true,
       criteria: [
         { field: 'state_id', value_id: 1 },
         { field: 'source_id', value_id: 2 },
       ],
-      statuses: [{ name: 'In progress', color: 'blue', group: 'pending' }],
+      statuses: [
+        { name: 'Aperto', color: null, group: 'open', system_key: 'open' },
+        { name: 'In progress', color: 'blue', group: 'pending', system_key: null },
+        { name: 'Chiuso', color: null, group: 'closed', system_key: 'closed' },
+      ],
     })
   })
 
@@ -50,9 +54,11 @@ describe('buildCreatePayload', () => {
     expect(buildCreatePayload(incomplete, []).criteria).toEqual([{ field: 'state_id', value_id: 1 }])
   })
 
-  it('never includes the pinned system rows in the create statuses payload', () => {
-    const payload = buildCreatePayload(values, PLACEHOLDER_STATUS_ROWS)
-    expect(payload.statuses?.every((status) => 'id' in status)).toBe(false)
+  it('sends the pinned rows with their system_key and no id (nothing persisted yet)', () => {
+    const payload = buildCreatePayload(values, CREATE_STATUS_ROWS)
+    const systemKeys = payload.statuses?.map((status) => status.system_key)
+    expect(systemKeys).toEqual(['open', null, 'closed'])
+    expect(payload.statuses?.every((status) => !('id' in status))).toBe(true)
   })
 })
 

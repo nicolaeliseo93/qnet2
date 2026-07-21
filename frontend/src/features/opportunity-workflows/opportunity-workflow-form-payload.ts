@@ -28,15 +28,18 @@ function buildCriteriaPayload(rows: CriterionFormRow[]): CreateOpportunityWorkfl
 }
 
 /**
- * Builds the CREATE `statuses[]` payload: only the CUSTOM (intermediate)
- * rows, in their visual order — the two pinned system rows are placeholders
- * before the workflow exists (AC-004: the backend auto-creates the real
- * open/closed rows), so they never reach this payload.
+ * Builds the CREATE `statuses[]` payload: every row in visual order — the
+ * custom (intermediate) rows plus the 2 pinned rows carrying their
+ * `system_key`, so the backend seeds the auto-created open/closed rows with
+ * the name/color the user typed (AC-004).
  */
 function buildStatusesCreatePayload(rows: WorkflowStatusFormRow[]): CreateOpportunityWorkflowStatusPayload[] {
-  return rows
-    .filter((row) => row.system_key === null)
-    .map((row) => ({ name: row.name, color: row.color, group: row.group }))
+  return rows.map((row) => ({
+    name: row.name,
+    color: row.color,
+    group: row.group,
+    system_key: row.system_key,
+  }))
 }
 
 /**

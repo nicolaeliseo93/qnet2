@@ -64,7 +64,7 @@ class LeadService
      */
     public function create(CreateLeadData $data): Lead
     {
-        $attributes = $this->withDerivedStateId($data->attributes(), $data->operationalSiteId);
+        $attributes = $this->withResolvedStateId($data);
 
         if (! $data->convertToOpportunity) {
             $lead = Lead::create($attributes);
@@ -86,11 +86,13 @@ class LeadService
     {
         $attributes = $data->submittedAttributes();
 
-        // Only re-derive when operational_site_id was actually submitted
-        // (partial PATCH, AC-001): an untouched sede must leave the
-        // previously derived state_id alone, and this keeps the derivation
-        // to a single query, fired only when it can actually change.
-        if ($data->operationalSiteIdSubmitted) {
+        // Regione resolution (directive 2026-07-21): a submitted state_id (a
+        // user edit, even an explicit clear to null) wins; otherwise, when
+        // only the Sede changed, re-derive from it (partial PATCH, AC-001) —
+        // an untouched sede leaves the previously stored state_id alone.
+        if ($data->stateIdSubmitted) {
+            $attributes['state_id'] = $data->stateId;
+        } elseif ($data->operationalSiteIdSubmitted) {
             $attributes['state_id'] = $this->deriveStateId($data->operationalSiteId);
         }
 
@@ -103,19 +105,23 @@ class LeadService
     }
 
     /**
-     * Overlay the server-derived `state_id` (spec 0047, D1) onto $attributes
-     * — mirrors OpportunityService::applyLeadDefaults' overlay pattern
-     * rather than threading it through CreateLeadData: `state_id` is not a
-     * client input (BR: "never user-editable directly"), so it has no place
-     * on the request-validated DTO, only on the mass-assignment array the
-     * Service itself builds.
+     * Overlay the create's `state_id` (Regione) onto the mass-assignment
+     * $attributes. Directive 2026-07-21: the Regione is now a user input, so a
+     * submitted value (even an explicit null) wins; when the client sent none,
+     * it is derived from the Sede (spec 0047, D1) — the fallback that keeps
+     * API/import clients that don't send a Regione behaving as before. Kept
+     * off CreateLeadData::attributes() so the derivation-vs-submitted decision
+     * lives in one place.
      *
-     * @param  array<string, mixed>  $attributes
      * @return array<string, mixed>
      */
-    private function withDerivedStateId(array $attributes, ?int $operationalSiteId): array
+    private function withResolvedStateId(CreateLeadData $data): array
     {
-        $attributes['state_id'] = $this->deriveStateId($operationalSiteId);
+        $attributes = $data->attributes();
+
+        $attributes['state_id'] = $data->stateIdSubmitted
+            ? $data->stateId
+            : $this->deriveStateId($data->operationalSiteId);
 
         return $attributes;
     }

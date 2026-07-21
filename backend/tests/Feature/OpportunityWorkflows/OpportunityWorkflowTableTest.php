@@ -81,7 +81,7 @@ it('columns: 200 with the declared columns, 403 without viewAny', function () {
         ->and($data['searchable'])->toBe(['name']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['name', 'criteria_fields', 'criteria_values', 'statuses_count', 'is_active', 'updated_at']);
+    expect($ids)->toBe(['id', 'name', 'criteria_fields', 'criteria_values', 'statuses_count', 'is_active', 'updated_at']);
 });
 
 it('row actions respect the actor\'s permissions (edit hidden without update)', function () {

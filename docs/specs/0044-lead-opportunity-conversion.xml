@@ -6,6 +6,21 @@
 -->
 <spec id="0044-lead-opportunity-conversion" status="draft" owner="utente" date="2026-07-20">
 
+  <!--
+    AMENDMENT 2026-07-21 (direttiva utente "Creazione Opportunita' da Lead"):
+    Sede (operational_site_id) e Operatore (operator_id) NON sono piu' obbligatori
+    in conversione. Ricade su:
+      - StoreLeadRequest: rimosso `required_if:convert_to_opportunity,true` da
+        operational_site_id e operator_id (restano nullable).
+      - StoreOpportunityRequest: supervisor_id passa da `required` a `nullable`
+        (la colonna DB e' sempre stata nullable). ConvertLeadToOpportunity
+        gia' passa supervisor_id = lead.operator_id, ora legittimamente null.
+      - AC-008/AC-009 sotto sono RISCRITTI: la conversione senza Sede/Operatore
+        risponde 201 (non piu' 422). AC-025/AC-034 (Supervisore editabile,
+        prefill non vincolante) restano validi: ora il Supervisore e' anche
+        non obbligatorio. Vedi anche l'amendment 2026-07-21 di spec 0047
+        (Regione = input utente con auto-fill dalla Sede).
+  -->
   <goal>
     Permettere la conversione di un Lead in Opportunita' in tre modi complementari:
     contestuale alla creazione del Lead (checkbox), differita su un Lead esistente
@@ -189,8 +204,8 @@
     <criterion id="AC-005">Dato lo scenario AC-001, allora l'Opportunity creata ha name uguale al nome della categoria prodotto derivata.</criterion>
     <criterion id="AC-006">Dato lo scenario AC-001, allora l'Opportunity creata ha opportunity_status_id pari allo stato di sistema con system_key 'new'.</criterion>
     <criterion id="AC-007">Dato lo scenario AC-001, allora la risposta espone data.opportunity = {id,name} non null e data.lead_status = 'converted_to_opportunity'.</criterion>
-    <criterion id="AC-008">Dato convert_to_opportunity=true e operator_id assente, quando POST /api/leads, allora risponde 422 con errore sul campo operator_id e nessun Lead viene creato.</criterion>
-    <criterion id="AC-009">Dato convert_to_opportunity=true e operational_site_id assente, quando POST /api/leads, allora risponde 422 con errore sul campo operational_site_id e nessun Lead viene creato.</criterion>
+    <criterion id="AC-008">[AMENDED 2026-07-21] Dato convert_to_opportunity=true e operator_id assente, quando POST /api/leads, allora risponde 201: il Lead e l'Opportunity collegata sono creati e l'Opportunity ha supervisor_id null.</criterion>
+    <criterion id="AC-009">[AMENDED 2026-07-21] Dato convert_to_opportunity=true e operational_site_id assente, quando POST /api/leads, allora risponde 201: il Lead e l'Opportunity collegata sono creati (leads.state_id resta quello eventualmente inviato dall'utente, altrimenti null).</criterion>
     <criterion id="AC-010">Dato convert_to_opportunity=false (o assente) e operator_id/operational_site_id assenti, quando POST /api/leads, allora risponde 201, il Lead esiste e nessuna Opportunity viene creata (retrocompatibilita' del flusso attuale).</criterion>
     <criterion id="AC-011">Dato un utente CON leads.create ma SENZA opportunities.create, quando POST /api/leads con convert_to_opportunity=true, allora risponde 403 e nessun Lead viene creato.</criterion>
     <criterion id="AC-012">Data una campagna priva di business function o categoria prodotto (dato legacy), quando POST /api/leads con convert_to_opportunity=true, allora risponde 422 con messaggio esplicito e NESSUN Lead resta persistito (rollback verificato con un conteggio prima/dopo).</criterion>

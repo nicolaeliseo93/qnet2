@@ -43,6 +43,10 @@ class LeadOpportunityDefaultsController extends BaseApiController
                 'references' => $defaults->references,
                 'locked_fields' => $defaults->lockedFields,
                 'product_lines' => $defaults->productLines,
+                // User directive 2026-07-21: the lead's Operator prefills the
+                // first "Gestore Account" slot, not the Supervisor.
+                'manager_slots' => $defaults->managerSlots,
+                'manager_refs' => $defaults->managerRefs,
             ]);
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__, ['lead' => $lead->id]);

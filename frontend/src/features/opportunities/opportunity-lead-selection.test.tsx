@@ -18,11 +18,10 @@ import type { ResourceMeta } from '@/features/authorization/types'
  * deep-link create-from-lead) is covered there; here only the Lead field
  * itself is under test.
  *
- * Spec 0044 (AC-025/AC-030..034): a lead selection now also prefills the
- * Supervisor from the lead's Operator, into an empty field only, never
- * locked. The fixtures below carry `values.supervisor_id`/`references.supervisor`
- * (contract requirement added by spec 0044, not present when this file was
- * first written).
+ * User directive 2026-07-21: a lead selection now appends the lead's Operator
+ * as the first "Gestore Account" slot (not the Supervisor, which stays empty),
+ * only when it isn't already among the slots. The fixtures below carry
+ * `manager_slots`/`manager_refs` accordingly.
  */
 
 const createOpportunityMock = vi.fn()
@@ -59,11 +58,11 @@ vi.mock('@/features/status-reorder/api', () => ({
 const TEST_REGISTRY_ID = 10
 const TEST_LEAD_ID = 900
 const TEST_LEAD_ALREADY_LINKED_ID = 901
-/** Spec 0044 AC-025: a lead with no Operator — `values.supervisor_id`/`references.supervisor` both null. */
+/** A lead with no Operator — `manager_slots`/`manager_refs` both empty. */
 const TEST_LEAD_NO_OPERATOR_ID = 902
 const TEST_OPPORTUNITY_STATUS_ID = 5
-/** Spec 0044 AC-030: the Operator derived onto `TEST_LEAD_ID`. */
-const TEST_SUPERVISOR_ID = 300
+/** Directive 2026-07-21: the Operator derived onto `TEST_LEAD_ID`, seeding the first Gestore Account slot. */
+const TEST_OPERATOR_ID = 300
 
 /** Fixed selection ids exposed per field (by accessible trigger label), mirrors `opportunity-form-body.test.tsx`. */
 const SELECT_IDS: Record<string, number[]> = {
@@ -200,10 +199,12 @@ beforeEach(() => {
       return {
         lead_id: leadId,
         existing_opportunity_id: 777,
-        values: { referent_id: null, source_id: null, registry_id: null, supervisor_id: null },
-        references: { source: null, registry: null, supervisor: null },
+        values: { referent_id: null, source_id: null, registry_id: null },
+        references: { source: null, registry: null },
         locked_fields: [],
         product_lines: [],
+        manager_slots: [],
+        manager_refs: [],
       }
     }
     return {
@@ -214,16 +215,11 @@ beforeEach(() => {
         referent_id: null,
         source_id: 20,
         registry_id: TEST_REGISTRY_ID,
-        // Spec 0044 AC-030/031: derived from the lead's Operator, absent for TEST_LEAD_NO_OPERATOR_ID.
-        supervisor_id: leadId === TEST_LEAD_NO_OPERATOR_ID ? null : TEST_SUPERVISOR_ID,
       },
       references: {
         source: { id: 20, name: 'Web' },
         registry: { id: TEST_REGISTRY_ID, name: 'Acme S.p.A.' },
-        supervisor:
-          leadId === TEST_LEAD_NO_OPERATOR_ID ? null : { id: TEST_SUPERVISOR_ID, name: 'Giulia Bianchi' },
       },
-      // AC-032: supervisor_id is never among locked_fields, whether derived or not.
       locked_fields: ['source_id', 'registry_id'],
       // Amendment rev.3 (AC-102/103): editable/removable seed row, never locked.
       product_lines: [
@@ -233,6 +229,11 @@ beforeEach(() => {
           product_category: { id: 50, name: 'Consulting' },
         },
       ],
+      // Directive 2026-07-21: the lead's Operator seeds the first Gestore
+      // Account slot, absent for TEST_LEAD_NO_OPERATOR_ID. Never locked.
+      manager_slots: leadId === TEST_LEAD_NO_OPERATOR_ID ? [] : [TEST_OPERATOR_ID],
+      manager_refs:
+        leadId === TEST_LEAD_NO_OPERATOR_ID ? [] : [{ id: TEST_OPERATOR_ID, name: 'Giulia Bianchi' }],
     }
   })
 })
@@ -345,26 +346,29 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     expect(createOpportunityMock).not.toHaveBeenCalled()
   })
 
-  it('prefills the empty Supervisor from the lead Operator on selection, still editable (AC-034)', async () => {
+  it('appends the lead Operator as the first Gestore Account slot on selection, still editable, Supervisor left empty', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
 
     await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
-    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('')
+    // No slot yet: `manager_slots` starts empty, so no G.A. row is rendered.
+    expect(screen.queryByTestId('value-Account manager 1')).not.toBeInTheDocument()
 
     screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
 
     await waitFor(() =>
-      expect(screen.getByTestId('value-Supervisor')).toHaveTextContent(String(TEST_SUPERVISOR_ID)),
+      expect(screen.getByTestId('value-Account manager 1')).toHaveTextContent(String(TEST_OPERATOR_ID)),
     )
     // Precompiled, never locked: the user can still change it (unlike Registry/Source above).
-    expect(screen.getByTestId('disabled-Supervisor')).toHaveTextContent('false')
+    expect(screen.getByTestId('disabled-Account manager 1')).toHaveTextContent('false')
     // The trigger label is hydrated too — `setValue` alone writes the id, not the name.
-    expect(screen.getByTestId('label-Supervisor')).toHaveTextContent('Giulia Bianchi')
+    expect(screen.getByTestId('label-Account manager 1')).toHaveTextContent('Giulia Bianchi')
+    // The Supervisor is no longer prefilled from the lead.
+    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('')
   })
 
-  it('leaves the required Supervisor empty and editable when the picked lead has no Operator (AC-025)', async () => {
+  it('leaves the Gestori account empty when the picked lead has no Operator', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
@@ -373,24 +377,28 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     screen.getByRole('button', { name: `select Lead ${TEST_LEAD_NO_OPERATOR_ID}` }).click()
 
     await waitFor(() => expect(screen.getByTestId('value-Registry')).toHaveTextContent(String(TEST_REGISTRY_ID)))
+    // No Operator -> no slot seeded, Supervisor stays empty.
+    expect(screen.queryByTestId('value-Account manager 1')).not.toBeInTheDocument()
     expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('')
-    expect(screen.getByTestId('disabled-Supervisor')).toHaveTextContent('false')
   })
 
-  it('never overwrites a Supervisor the user already picked (AC-034)', async () => {
+  it('appends the Operator alongside a manager the user already picked, never overwriting it', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
 
     await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'select Supervisor 1' }))
-    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('1')
+    // Manually add a first G.A. slot and pick a user (mock id 1) into it.
+    fireEvent.click(screen.getByRole('button', { name: 'Add account manager' }))
+    fireEvent.click(screen.getByRole('button', { name: 'select Account manager 1 1' }))
+    expect(screen.getByTestId('value-Account manager 1')).toHaveTextContent('1')
 
     screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
 
     await waitFor(() => expect(screen.getByTestId('value-Registry')).toHaveTextContent(String(TEST_REGISTRY_ID)))
-    // The user's own pick wins over the lead's derived Operator.
-    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('1')
+    // The user's own manager is kept in slot 1; the Operator is appended as slot 2.
+    expect(screen.getByTestId('value-Account manager 1')).toHaveTextContent('1')
+    expect(screen.getByTestId('value-Account manager 2')).toHaveTextContent(String(TEST_OPERATOR_ID))
   })
 })
 

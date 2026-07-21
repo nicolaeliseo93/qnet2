@@ -46,6 +46,14 @@ interface AsyncPaginatedSelectProps {
   /** Called with the next selection: a new id replaces the current one, `null` clears it. */
   onChange: (value: number | null) => void
   /**
+   * Optional sibling of `onChange` that also exposes the full selected
+   * `ForSelectItem` (including `meta`) — lets a caller auto-fill a dependent
+   * field from a resource-specific presentation bag (e.g. the Lead form
+   * prefilling Regione from a Sede's `meta.state_id`). Fired alongside
+   * `onChange` on pick/clear; omitted, callers keep working with just the id.
+   */
+  onItemChange?: (item: ForSelectItem | null) => void
+  /**
    * Already-known item for the selected id, used to render the trigger's label
    * when it is not on the current page (edit-mode hydration). Overridden by
    * whatever the query returns once loaded.
@@ -103,6 +111,7 @@ export function AsyncPaginatedSelect({
   resource,
   value,
   onChange,
+  onItemChange,
   selectedItem = null,
   labels,
   showAvatar = false,
@@ -217,13 +226,15 @@ export function AsyncPaginatedSelect({
     )
   }, [])
 
-  const select = (id: number) => {
-    onChange(id)
+  const select = (item: ForSelectItem) => {
+    onChange(item.id)
+    onItemChange?.(item)
     setOpen(false)
   }
 
   const clear = () => {
     onChange(null)
+    onItemChange?.(null)
   }
 
   const triggerLabel = selected?.label ?? (value !== null ? `#${value}` : null)
@@ -359,11 +370,11 @@ export function AsyncPaginatedSelect({
                       role="option"
                       aria-selected={checked}
                       tabIndex={0}
-                      onClick={() => select(item.id)}
+                      onClick={() => select(item)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault()
-                          select(item.id)
+                          select(item)
                         }
                       }}
                       className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-[2px] focus-visible:ring-ring/50"

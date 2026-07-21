@@ -6,8 +6,9 @@ import {
 } from '@/features/opportunities/opportunity-schema'
 
 /**
- * AC-070: create requires the identity fields and supervisor; edit keeps the
- * supervisor nullable; probability out of 0..100 is rejected.
+ * AC-070: create requires the identity fields; probability out of 0..100 is
+ * rejected. Directive 2026-07-21: supervisor_id is nullable in BOTH create
+ * and edit (it derives from the linked Lead's Operatore, which may be empty).
  */
 
 function baseValues(overrides: Record<string, unknown> = {}) {
@@ -87,19 +88,12 @@ describe('buildCreateOpportunitySchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('rejects a missing supervisor_id with the localized required message', () => {
+  /** Directive 2026-07-21 (relaxes AC-070's supervisor requirement): a missing supervisor_id is accepted on create too. */
+  it('accepts a missing supervisor_id', () => {
     const schema = buildCreateOpportunitySchema(i18n.t)
     const result = schema.safeParse(baseValues({ supervisor_id: null }))
 
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.issues).toContainEqual(
-        expect.objectContaining({
-          path: ['supervisor_id'],
-          message: 'Supervisor is required.',
-        }),
-      )
-    }
+    expect(result.success).toBe(true)
   })
 
   /**

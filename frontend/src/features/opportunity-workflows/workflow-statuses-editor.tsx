@@ -12,8 +12,10 @@ import {
 } from '@/components/ui/select'
 import { SortableList } from '@/components/ui/sortable-list'
 import { ColorTokenPicker } from '@/features/custom-fields/components/color-token-picker'
+import { BADGE_COLOR_CLASSES } from '@/features/table/cell-renderers'
 import { STATUS_GROUPS, type StatusGroupValue } from '@/features/status-reorder/types'
 import type { WorkflowStatusFormRow } from '@/features/opportunity-workflows/types'
+import { cn } from '@/lib/utils'
 
 export interface WorkflowStatusesEditorProps {
   rows: WorkflowStatusFormRow[]
@@ -32,17 +34,25 @@ const GROUP_LABEL_KEYS: Record<StatusGroupValue, string> = {
   closed: 'opportunityWorkflows.form.statuses.group.closed',
 }
 
+/** Soft-badge color per group, matching the enum swatch tokens the opportunity-statuses table uses (`GROUP_SWATCH_TOKENS` in `rich-cells`): open=green, pending=orange, closed=red. */
+const GROUP_BADGE_CLASSES: Record<StatusGroupValue, string> = {
+  open: BADGE_COLOR_CLASSES.green,
+  pending: BADGE_COLOR_CLASSES.orange,
+  closed: BADGE_COLOR_CLASSES.red,
+}
+
 /**
  * Shared SortableList-based status editor (spec 0047 AC-025), reused by both
  * a workflow's own `statuses` section (`OpportunityWorkflowFormBody`) and
  * the GLOBAL default set (`DefaultStatusesSheet`) — the single place this
  * drag & drop UI is implemented. The two per-set pinned rows (`open`/
  * `closed`) render without a drag handle or a remove action (`isPinned`
- * keeps `<SortableList>` from ever letting a drag cross them); a
- * not-yet-persisted pinned row (create mode) renders as a static
- * placeholder — the real row is auto-created server-side (AC-004). Custom
- * rows are freely reorderable, editable, and removable. All non-render
- * logic (row mutation, reorder) lives in the caller's hook.
+ * keeps `<SortableList>` from ever letting a drag cross them, and their
+ * fixed `group` shows as a read-only badge) — but their NAME/color are
+ * always editable, including in create mode where they seed the
+ * auto-created rows (AC-004). Custom rows are freely reorderable, editable,
+ * and removable. All non-render logic (row mutation, reorder) lives in the
+ * caller's hook.
  */
 export function WorkflowStatusesEditor({
   rows,
@@ -60,6 +70,7 @@ export function WorkflowStatusesEditor({
       <SortableList
         items={rows}
         isPinned={(row) => row.system_key !== null}
+        pinnedRowClassName="bg-card"
         dragHandleLabel={t('opportunityWorkflows.form.statuses.dragHandleLabel')}
         onReorder={onReorder}
         renderItem={(row) => (
@@ -102,71 +113,59 @@ interface WorkflowStatusRowContentProps {
 
 function WorkflowStatusRowContent({ row, onUpdateRow, onRemoveCustom, disabled }: WorkflowStatusRowContentProps) {
   const { t } = useTranslation()
-  const isPlaceholder = row.system_key !== null && row.statusId === undefined
   const isCustom = row.system_key === null
 
-  if (isPlaceholder) {
-    return (
-      <span className="text-sm text-muted-foreground italic">
-        {t(
-          row.system_key === 'open'
-            ? 'opportunityWorkflows.form.statuses.autoOpenName'
-            : 'opportunityWorkflows.form.statuses.autoClosedName',
-        )}
-      </span>
-    )
-  }
-
   return (
-    <div className="flex flex-1 items-center gap-2">
+    <div className="flex flex-1 flex-col gap-2">
       <Input
         aria-label={t('opportunityWorkflows.form.statuses.name')}
-        className="flex-1"
         value={row.name}
         disabled={disabled}
         onChange={(event) => onUpdateRow(row.id, { name: event.target.value })}
       />
-      <ColorTokenPicker
-        value={row.color ?? ''}
-        onChange={(color) => onUpdateRow(row.id, { color: color === '' ? null : color })}
-        disabled={disabled}
-        className="w-40 shrink-0"
-      />
-      {isCustom ? (
-        <Select
-          value={row.group}
-          onValueChange={(next) => onUpdateRow(row.id, { group: next as StatusGroupValue })}
+      <div className="flex items-center gap-2">
+        <ColorTokenPicker
+          value={row.color ?? ''}
+          onChange={(color) => onUpdateRow(row.id, { color: color === '' ? null : color })}
           disabled={disabled}
-        >
-          <SelectTrigger className="w-32 shrink-0" aria-label={t('opportunityWorkflows.form.statuses.group.label')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUS_GROUPS.map((group) => (
-              <SelectItem key={group} value={group}>
-                {t(GROUP_LABEL_KEYS[group])}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : (
-        <Badge variant="secondary" className="shrink-0">
-          {t(GROUP_LABEL_KEYS[row.group])}
-        </Badge>
-      )}
-      {isCustom ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="shrink-0 text-muted-foreground hover:text-destructive"
-          aria-label={t('opportunityWorkflows.form.statuses.remove')}
-          disabled={disabled}
-          onClick={() => onRemoveCustom(row.id)}
-        >
-          <Trash2 aria-hidden="true" />
-        </Button>
-      ) : null}
+          className="min-w-0 flex-1"
+        />
+        {isCustom ? (
+          <Select
+            value={row.group}
+            onValueChange={(next) => onUpdateRow(row.id, { group: next as StatusGroupValue })}
+            disabled={disabled}
+          >
+            <SelectTrigger className="min-w-0 flex-1" aria-label={t('opportunityWorkflows.form.statuses.group.label')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_GROUPS.map((group) => (
+                <SelectItem key={group} value={group}>
+                  {t(GROUP_LABEL_KEYS[group])}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Badge className={cn('shrink-0', GROUP_BADGE_CLASSES[row.group])}>
+            {t(GROUP_LABEL_KEYS[row.group])}
+          </Badge>
+        )}
+        {isCustom ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+            aria-label={t('opportunityWorkflows.form.statuses.remove')}
+            disabled={disabled}
+            onClick={() => onRemoveCustom(row.id)}
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
+        ) : null}
+      </div>
     </div>
   )
 }

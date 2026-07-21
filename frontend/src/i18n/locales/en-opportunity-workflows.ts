@@ -89,9 +89,9 @@ export const opportunityWorkflows = {
       dragHandleLabel: 'Drag to reorder',
       add: 'Add status',
       remove: 'Remove status',
-      nameRequired: 'Every custom status needs a name.',
-      autoOpenName: 'Open (created automatically)',
-      autoClosedName: 'Closed (created automatically)',
+      nameRequired: 'Every status needs a name.',
+      defaultOpenName: 'Open',
+      defaultClosedName: 'Closed',
       group: {
         label: 'Group',
         open: 'Open',

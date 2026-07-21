@@ -338,3 +338,74 @@ it('exposes all action keys to a user with the full ability set', function () {
 
     expect($actionKeys)->toEqualCanonicalizing(['view', 'edit', 'delete']);
 });
+
+/**
+ * Grant a freshly-created user the `<domain>.viewAny` ability, so a
+ * non-users table's config endpoint can be exercised for the default
+ * hidden `id` column injection (InjectsDefaultIdColumn).
+ */
+if (! function_exists('userWithViewAnyOn')) {
+    function userWithViewAnyOn(string $domain): User
+    {
+        Permission::findOrCreate("{$domain}.viewAny");
+
+        $user = User::factory()->create();
+        $user->givePermissionTo("{$domain}.viewAny");
+
+        return $user;
+    }
+}
+
+it('injects a default hidden id column into a table that does not declare one', function () {
+    Sanctum::actingAs(userWithViewAnyOn('tags'));
+
+    $idColumns = collect($this->getJson('/api/tables/tags/columns')->json('data.columns'))
+        ->where('id', 'id')
+        ->values();
+
+    expect($idColumns)->toHaveCount(1);
+
+    expect($idColumns->first())
+        ->label->toBe('table.columns.id')
+        ->type->toBe('number')
+        ->visible->toBeFalse()
+        ->sortable->toBeTrue()
+        // Not filterable by default (see InjectsDefaultIdColumn): a table that
+        // wants a filterable id declares its own (users/companies do).
+        ->filterable->toBeFalse()
+        ->filterType->toBeNull();
+});
+
+it('prepends the injected id column as the first column', function () {
+    Sanctum::actingAs(userWithViewAnyOn('tags'));
+
+    $columns = collect($this->getJson('/api/tables/tags/columns')->json('data.columns'));
+
+    // The injected id is the leftmost column, with order 1.
+    expect($columns->first()['id'])->toBe('id')
+        ->and($columns->first()['order'])->toBe(1);
+});
+
+it('does not duplicate the id column when a table already declares its own', function () {
+    Sanctum::actingAs(userWithUserAbilities(['viewAny']));
+
+    $idColumns = collect($this->getJson('/api/tables/users/columns')->json('data.columns'))
+        ->where('id', 'id')
+        ->values();
+
+    // users declares its own id column — the injector must not append a second
+    // one, and the table's own label wins over the default.
+    expect($idColumns)->toHaveCount(1)
+        ->and($idColumns->first()['label'])->toBe('users.columns.id');
+});
+
+it('keeps a table-declared id column authoritative over the default (its own label wins)', function () {
+    Sanctum::actingAs(userWithViewAnyOn('roles'));
+
+    $id = collect($this->getJson('/api/tables/roles/columns')->json('data.columns'))
+        ->firstWhere('id', 'id');
+
+    // roles declares its own id column: its label (not the default
+    // `table.columns.id`) proves the declared column wins over the injector.
+    expect($id['label'])->toBe('roles.columns.id');
+});

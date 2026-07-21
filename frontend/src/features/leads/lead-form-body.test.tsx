@@ -48,20 +48,31 @@ vi.mock('@/features/auth/use-abilities', () => ({
 }))
 
 /**
+ * Sede's `meta` payload the mocked select forwards through `onItemChange`
+ * when picked, so the Regione auto-fill (directive 2026-07-21) is
+ * exercisable without a real dropdown/network — mirrors the shape
+ * `OperationalSiteForSelectResource` sends.
+ */
+const SITE_META: Record<string, unknown> = { state_id: 7, state_label: 'Lombardy' }
+
+/**
  * Stubs every single-select field, keyed by its accessible trigger label
  * (mirrors `campaign-form-body.test.tsx`). Renders as a button calling
- * `onChange(3)` so the AC-043 submit test can satisfy Operator/Site without
- * a real dropdown.
+ * `onChange(3)` (and `onItemChange` with a canned item, `meta` only for the
+ * Site field) so the AC-043 submit test and the Regione auto-fill test can
+ * drive it without a real dropdown.
  */
 vi.mock('@/components/ui/async-paginated-select', () => ({
   AsyncPaginatedSelect: ({
     value,
     onChange,
+    onItemChange,
     labels,
     disabled,
   }: {
     value: number | null
     onChange: (value: number) => void
+    onItemChange?: (item: { id: number; label: string; meta?: Record<string, unknown> } | null) => void
     labels: { triggerLabel: string }
     disabled?: boolean
   }) => (
@@ -70,7 +81,14 @@ vi.mock('@/components/ui/async-paginated-select', () => ({
       data-testid={`select-${labels.triggerLabel}`}
       data-disabled={disabled ? 'true' : 'false'}
       disabled={disabled}
-      onClick={() => onChange(3)}
+      onClick={() => {
+        onChange(3)
+        onItemChange?.({
+          id: 3,
+          label: `${labels.triggerLabel} 3`,
+          meta: labels.triggerLabel === 'Site' ? SITE_META : undefined,
+        })
+      }}
     >
       {value ?? ''}
     </button>
@@ -121,7 +139,7 @@ beforeEach(() => {
 })
 
 describe('LeadForm — fields render (AC-061, AC-016)', () => {
-  it('renders the 6 fields: 5 relational selects and a notes textarea', async () => {
+  it('renders the 6 relational selects (Region included, directive 2026-07-21) and a notes textarea', async () => {
     render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
@@ -129,6 +147,7 @@ describe('LeadForm — fields render (AC-061, AC-016)', () => {
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
     expect(screen.getByTestId('select-Campaign')).toBeInTheDocument()
     expect(screen.getByTestId('select-Site')).toBeInTheDocument()
+    expect(screen.getByTestId('select-Region')).toBeInTheDocument()
     expect(screen.getByTestId('select-Source')).toBeInTheDocument()
     expect(screen.getByTestId('select-Operator')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Notes' })).toBeInTheDocument()
@@ -336,23 +355,25 @@ describe('LeadForm — convert to opportunity (spec 0044, AC-040..AC-043)', () =
     ).not.toBeInTheDocument()
   })
 
-  it('AC-041: submitting with the control on but Operator/Site empty shows field errors and does not submit', async () => {
+  it('directive 2026-07-21 (supersedes AC-041): submitting with the control on and Operator/Site empty still submits, with a null supervisor-deriving pair', async () => {
+    createLeadMock.mockResolvedValue(lead())
+
     render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
 
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('select-Registry'))
+    fireEvent.click(screen.getByTestId('select-Campaign'))
 
     // The control is ON by default; submit straight away with Operator/Site empty.
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(
-      await screen.findByText('The Operator is required to convert to an Opportunity.'),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText('The Site is required to convert to an Opportunity.'),
-    ).toBeInTheDocument()
-    expect(createLeadMock).not.toHaveBeenCalled()
+    await waitFor(() => expect(createLeadMock).toHaveBeenCalledTimes(1))
+    const payload = createLeadMock.mock.calls[0][0]
+    expect(payload.convert_to_opportunity).toBe(true)
+    expect(payload.operator_id).toBeNull()
+    expect(payload.operational_site_id).toBeNull()
   })
 
   it('AC-042: Operator and Site stay optional and the form submits with the control off', async () => {
@@ -397,64 +418,5 @@ describe('LeadForm — convert to opportunity (spec 0044, AC-040..AC-043)', () =
     expect(payload.convert_to_opportunity).toBe(true)
     expect(payload.operator_id).toBe(3)
     expect(payload.operational_site_id).toBe(3)
-  })
-})
-
-/**
- * Spec 0047 (D1): the Regione is DERIVED server-side from the operational
- * site — a read-only display, never a picker, never sent in the payload.
- */
-describe('LeadFormBody — Regione (read-only, spec 0047)', () => {
-  it('create mode: shows the "derived from the site" hint, disabled', async () => {
-    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
-    const state = screen.getByPlaceholderText('Derived from the selected site.')
-    expect(state).toBeDisabled()
-    expect(state).toHaveValue('')
-  })
-
-  it('edit mode: shows the derived region name, disabled', async () => {
-    render(
-      <LeadForm
-        mode={{ type: 'edit', lead: lead({ state_id: 3, state: { id: 3, name: 'Lombardy' } }) }}
-        onSuccess={vi.fn()}
-        onCancel={vi.fn()}
-      />,
-      { wrapper: wrapper() },
-    )
-
-    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
-    const state = screen.getByDisplayValue('Lombardy')
-    expect(state).toBeDisabled()
-  })
-
-  it('edit mode, no derived region yet: shows the empty placeholder', async () => {
-    render(
-      <LeadForm mode={{ type: 'edit', lead: lead({ state_id: null, state: null }) }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
-      { wrapper: wrapper() },
-    )
-
-    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
-    expect(screen.getByPlaceholderText('— (derived from the site)')).toBeInTheDocument()
-  })
-
-  it('never sends state_id in the create payload', async () => {
-    createLeadMock.mockResolvedValue(lead())
-
-    render(<LeadForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
-    fireEvent.click(screen.getByTestId('select-Registry'))
-    fireEvent.click(screen.getByTestId('select-Campaign'))
-    fireEvent.click(screen.getByRole('switch', { name: 'Automatically convert to Opportunity' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => expect(createLeadMock).toHaveBeenCalledTimes(1))
-    expect(createLeadMock.mock.calls[0][0]).not.toHaveProperty('state_id')
   })
 })

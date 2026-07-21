@@ -174,7 +174,7 @@ describe('OpportunityFormBody — Regione + working-state (spec 0047, AC-026)', 
     expect(screen.getByTestId('disabled-Region')).toHaveTextContent('false')
   })
 
-  it('edit mode, lead-linked opportunity: Regione is forced read-only', async () => {
+  it('edit mode, lead-linked opportunity: Regione is pre-filled from the Lead but stays editable', async () => {
     render(
       <OpportunityForm
         mode={{
@@ -193,7 +193,7 @@ describe('OpportunityFormBody — Regione + working-state (spec 0047, AC-026)', 
     )
 
     await waitFor(() => expect(screen.getByTestId('select-Region')).toBeInTheDocument())
-    expect(screen.getByTestId('disabled-Region')).toHaveTextContent('true')
+    expect(screen.getByTestId('disabled-Region')).toHaveTextContent('false')
     expect(screen.getByTestId('value-Region')).toHaveTextContent('3')
   })
 

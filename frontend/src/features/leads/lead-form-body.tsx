@@ -1,16 +1,14 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWatch } from 'react-hook-form'
-import { CircleAlert, ClipboardList, Contact, Loader2, StickyNote } from 'lucide-react'
+import { CircleAlert, ClipboardList, Contact, Handshake, Loader2, StickyNote } from 'lucide-react'
 import { FormSection } from '@/components/form-section'
 import { sectionRevealClassName } from '@/components/form-section-reveal'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Form, FormControl, FormDescription } from '@/components/ui/form'
-import { RelationSelectField } from '@/components/form/relation-select-field'
+import { RelationSelectField, type RelationFieldRef } from '@/components/form/relation-select-field'
 import { cn } from '@/lib/utils'
 import { Can } from '@/features/auth/can'
 import { MetaField } from '@/features/authorization/MetaField'
@@ -19,17 +17,18 @@ import { CAMPAIGNS_FOR_SELECT_RESOURCE } from '@/features/campaigns/for-select-a
 import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
 import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
+import { STATES_FOR_SELECT_RESOURCE } from '@/features/geo/state-for-select-api'
 import { useLeadForm } from '@/features/leads/use-lead-form'
 import { NOTES_MAX_LENGTH } from '@/features/leads/lead-schema'
 import { ExtraFieldsEditor } from '@/features/leads/extra-fields-editor'
 import type { LeadDetail, LeadFormMode } from '@/features/leads/types'
+import type { ForSelectItem } from '@/features/for-select/types'
+import type { OperationalSiteForSelectItem } from '@/features/operational-sites/for-select-api'
 
 interface LeadFormBodyProps {
   mode: LeadFormMode
   onSuccess: (lead: LeadDetail) => void
   onCancel: () => void
-  /** See `LeadForm`: makes Operator/Site required for the conversion correction step. */
-  requireConversionFields?: boolean
 }
 
 /**
@@ -40,9 +39,9 @@ interface LeadFormBodyProps {
  * wrapped in `MetaField` (spec 0004). All non-render logic lives in
  * `useLeadForm`.
  */
-export function LeadFormBody({ mode, onSuccess, onCancel, requireConversionFields }: LeadFormBodyProps) {
+export function LeadFormBody({ mode, onSuccess, onCancel }: LeadFormBodyProps) {
   const { t } = useTranslation()
-  const { form, serverError, onSubmit } = useLeadForm({ mode, onSuccess, requireConversionFields })
+  const { form, serverError, onSubmit } = useLeadForm({ mode, onSuccess })
   const original = mode.type === 'edit' ? mode.lead : null
 
   const { errors, isSubmitting } = form.formState
@@ -53,9 +52,26 @@ export function LeadFormBody({ mode, onSuccess, onCancel, requireConversionField
 
   const notesValue = useWatch({ control: form.control, name: 'notes' })
   const notesLength = notesValue?.length ?? 0
-  // AC-041: drives the Operator/Site required marker while the schema's
-  // superRefine enforces the same rule (spec 0044).
-  const convertToOpportunity = useWatch({ control: form.control, name: 'convert_to_opportunity' })
+
+  // Directive 2026-07-21: the just-picked Sede's Regione, hydrated instantly
+  // from its `meta` (no extra fetch) so the trigger shows the right label the
+  // moment it auto-fills `state_id` — mirrors the `quickCreated` pattern in
+  // `RelationSelectField`. Wired as the Sede select's `onItemChange` (event
+  // handler, not a derived-state effect); a site with no region leaves the
+  // current Regione untouched, and the user can always override/clear it.
+  const [autoFilledState, setAutoFilledState] = useState<RelationFieldRef | null>(null)
+  const handleSiteItemChange = (item: ForSelectItem | null) => {
+    // `RelationSelectField.onItemChange` is typed against the domain-agnostic
+    // `ForSelectItem` (mirrors `opportunity-relation-meta.ts`'s
+    // `RegistryForSelectItem` pattern); this field is always bound to the
+    // `operational-sites` resource, so its `meta` is really the richer
+    // `OperationalSiteForSelectMeta`.
+    const site = item as OperationalSiteForSelectItem | null
+    const stateId = site?.meta?.state_id
+    if (stateId == null) return
+    form.setValue('state_id', stateId, { shouldDirty: true, shouldValidate: true })
+    setAutoFilledState({ id: stateId, name: site?.meta?.state_label ?? '' })
+  }
 
   const selectLabels = {
     placeholder: t('leads.form.selectPlaceholder'),
@@ -69,6 +85,37 @@ export function LeadFormBody({ mode, onSuccess, onCancel, requireConversionField
     <div className="flex flex-1 flex-col overflow-y-auto">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 p-4" noValidate>
+          {mode.type === 'create' && (
+            <Can permission="opportunities.create">
+              <FormSection
+                icon={Handshake}
+                title={t('leads.form.sections.conversion.title')}
+                description={t('leads.form.sections.conversion.description')}
+                className={sectionRevealClassName(0)}
+              >
+                <MetaField
+                  control={form.control}
+                  name="convert_to_opportunity"
+                  metaKey="convert_to_opportunity"
+                  label={t('leads.form.convertToOpportunity')}
+                  description={
+                    <FormDescription>{t('leads.form.convertToOpportunityHint')}</FormDescription>
+                  }
+                >
+                  {({ field, disabled }) => (
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={disabled}
+                      />
+                    </FormControl>
+                  )}
+                </MetaField>
+              </FormSection>
+            </Can>
+          )}
+
           <FormSection
             icon={Contact}
             title={t('leads.form.sections.contact.title')}
@@ -122,21 +169,20 @@ export function LeadFormBody({ mode, onSuccess, onCancel, requireConversionField
                     ? { id: original.operational_site.id, name: original.operational_site.label }
                     : null
                 }
-                required={convertToOpportunity || undefined}
+                onItemChange={handleSiteItemChange}
                 {...selectLabels}
               />
 
-              <div className="grid gap-2">
-                <Label>{t('leads.form.state')}</Label>
-                <Input
-                  value={original?.state?.name ?? ''}
-                  placeholder={
-                    mode.type === 'create' ? t('leads.form.stateCreateHint') : t('leads.form.stateEmpty')
-                  }
-                  disabled
-                  readOnly
-                />
-              </div>
+              <RelationSelectField
+                control={form.control}
+                name="state_id"
+                metaKey="state_id"
+                label={t('leads.form.state')}
+                resource={STATES_FOR_SELECT_RESOURCE}
+                searchPlaceholder={t('leads.form.stateSearch')}
+                selected={autoFilledState ?? original?.state ?? null}
+                {...selectLabels}
+              />
 
               <RelationSelectField
                 control={form.control}
@@ -159,34 +205,9 @@ export function LeadFormBody({ mode, onSuccess, onCancel, requireConversionField
                 resource={USERS_FOR_SELECT_RESOURCE}
                 searchPlaceholder={t('leads.form.operatorSearch')}
                 selected={original?.operator ?? null}
-                required={convertToOpportunity || undefined}
                 showAvatar
                 {...selectLabels}
               />
-
-              {mode.type === 'create' && (
-                <Can permission="opportunities.create">
-                  <MetaField
-                    control={form.control}
-                    name="convert_to_opportunity"
-                    metaKey="convert_to_opportunity"
-                    label={t('leads.form.convertToOpportunity')}
-                    description={
-                      <FormDescription>{t('leads.form.convertToOpportunityHint')}</FormDescription>
-                    }
-                  >
-                    {({ field, disabled }) => (
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={disabled}
-                        />
-                      </FormControl>
-                    )}
-                  </MetaField>
-                </Can>
-              )}
             </div>
           </FormSection>
 

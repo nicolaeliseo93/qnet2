@@ -39,11 +39,6 @@ export const leads = {
     createOpportunity: 'Create opportunity',
     goToOpportunity: 'Go to opportunity',
   },
-  conversion: {
-    correctTitle: 'Complete the lead first',
-    correctSubtitle:
-      'This lead is missing the Operator or the Site. Fill them in before creating the Opportunity, then it opens automatically.',
-  },
   form: {
     newLead: 'New lead',
     importLeads: 'Import leads',
@@ -52,6 +47,10 @@ export const leads = {
     editTitle: 'Edit lead',
     editSubtitle: 'Update the selected lead.',
     sections: {
+      conversion: {
+        title: 'Opportunity conversion',
+        description: 'Automatically generate the linked Opportunity when the Lead is created.',
+      },
       contact: {
         title: 'Registry & campaign',
         description: 'The registry, the campaign that generated it and the lead status.',
@@ -80,8 +79,7 @@ export const leads = {
     operationalSite: 'Site',
     operationalSiteSearch: 'Search sites…',
     state: 'Region',
-    stateEmpty: '— (derived from the site)',
-    stateCreateHint: 'Derived from the selected site.',
+    stateSearch: 'Search regions…',
     source: 'Source',
     sourceSearch: 'Search sources…',
     operator: 'Operator',
@@ -92,10 +90,7 @@ export const leads = {
       operator: 'The internal user in charge of following up on this lead.',
     },
     convertToOpportunity: 'Automatically convert to Opportunity',
-    convertToOpportunityHint:
-      'The linked Opportunity will be created automatically with the Lead. Operator and Site become mandatory.',
-    operatorRequired: 'The Operator is required to convert to an Opportunity.',
-    operationalSiteRequired: 'The Site is required to convert to an Opportunity.',
+    convertToOpportunityHint: 'The linked Opportunity will be created automatically with the Lead.',
     notes: 'Notes',
     notesPlaceholder: 'Write a note about this lead…',
     notesMax: 'Notes must be at most 5000 characters.',

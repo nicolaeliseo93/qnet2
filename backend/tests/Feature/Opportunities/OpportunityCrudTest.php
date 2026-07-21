@@ -149,28 +149,32 @@ it('create: missing registry_id -> 422 on that field, no row created', function 
     expect(Opportunity::count())->toBe(0);
 });
 
-it('create: missing supervisor_id -> 422 on that field, no row created', function () {
+// Directive 2026-07-21 (relaxing spec 0044): supervisor_id is now OPTIONAL on
+// create — it derives from the lead's Operatore, which may be empty.
+it('create: missing supervisor_id -> 201, opportunity created with null supervisor', function () {
     $actor = opportunityUserWith(['create']);
     $fks = mandatoryOpportunityFks();
     unset($fks['supervisor_id']);
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/opportunities', array_merge(['name' => 'No Supervisor'], $fks))
-        ->assertStatus(422)->assertJsonValidationErrors('supervisor_id');
+        ->assertCreated();
 
-    expect(Opportunity::count())->toBe(0);
+    expect(Opportunity::count())->toBe(1);
+    expect(Opportunity::sole()->supervisor_id)->toBeNull();
 });
 
-it('create: null supervisor_id -> 422 on that field, no row created', function () {
+it('create: null supervisor_id -> 201, opportunity created with null supervisor', function () {
     $actor = opportunityUserWith(['create']);
     $fks = mandatoryOpportunityFks();
     $fks['supervisor_id'] = null;
     Sanctum::actingAs($actor);
 
     $this->postJson('/api/opportunities', array_merge(['name' => 'Null Supervisor'], $fks))
-        ->assertStatus(422)->assertJsonValidationErrors('supervisor_id');
+        ->assertCreated();
 
-    expect(Opportunity::count())->toBe(0);
+    expect(Opportunity::count())->toBe(1);
+    expect(Opportunity::sole()->supervisor_id)->toBeNull();
 });
 
 it('create: 403 without opportunities.create, no row created (AC-012)', function () {

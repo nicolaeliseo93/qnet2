@@ -12,12 +12,6 @@ interface LeadFormProps {
   onSuccess: (lead: LeadDetail) => void
   /** Called when the user cancels the form. */
   onCancel: () => void
-  /**
-   * Deferred conversion correction step (spec 0044, revised): forwarded to
-   * the form hook to make Operator and Site required in edit mode. Ignored in
-   * create mode, where the checkbox drives the same rule.
-   */
-  requireConversionFields?: boolean
 }
 
 /**

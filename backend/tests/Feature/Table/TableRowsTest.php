@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -264,3 +265,21 @@ it('limits per-row actions[] to view-only for a read-only actor', function () {
 // Personal-data/geo-derived row coverage (user_type/primary_address/
 // primary_contact/country/region/province/city) lives in
 // TableRowsPersonalDataTest.php (file-size split, engineering.md §6).
+
+it('accepts sorting by the injected default id column on a table that does not declare one', function () {
+    // tags has no native id column in its catalogue: the injected default
+    // (InjectsDefaultIdColumn) must place `id` on the SSRM sort whitelist, so
+    // ORDER BY id is accepted (200) rather than rejected (422).
+    Permission::findOrCreate('tags.viewAny');
+    $actor = User::factory()->create();
+    $actor->givePermissionTo('tags.viewAny');
+    Sanctum::actingAs($actor);
+
+    Tag::factory()->count(3)->create();
+
+    $ids = collect($this->postJson('/api/tables/tags/rows', rowsPayload([
+        'sortModel' => [['colId' => 'id', 'sort' => 'desc']],
+    ]))->assertOk()->json('data.rows'))->pluck('id')->all();
+
+    expect($ids)->toBe(collect($ids)->sortDesc()->values()->all());
+});

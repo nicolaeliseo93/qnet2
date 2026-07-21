@@ -99,7 +99,7 @@ it('AC-001: creates exactly one Opportunity linked to the new lead', function ()
     expect(Opportunity::where('lead_id', $response->json('data.id'))->count())->toBe(1);
 });
 
-it('AC-002: the created Opportunity has supervisor_id equal to lead.operator_id', function () {
+it('AC-002: the created Opportunity has the lead.operator as its first Gestore Account, and an empty supervisor', function () {
     $actor = leadConversionActor(['create'], ['create']);
     $fixture = convertibleLeadFixture();
     Sanctum::actingAs($actor);
@@ -107,7 +107,14 @@ it('AC-002: the created Opportunity has supervisor_id equal to lead.operator_id'
     $response = $this->postJson('/api/leads', $fixture['payload'])->assertCreated();
 
     $opportunity = Opportunity::where('lead_id', $response->json('data.id'))->firstOrFail();
-    expect($opportunity->supervisor_id)->toBe($fixture['operator']->id);
+    $opportunity->load('managers');
+
+    // Directive 2026-07-21: the Operator becomes the first "Gestore Account"
+    // (position 1), not the Supervisor — which stays empty.
+    expect($opportunity->supervisor_id)->toBeNull();
+    expect($opportunity->managers)->toHaveCount(1);
+    expect($opportunity->managers->first()->id)->toBe($fixture['operator']->id);
+    expect($opportunity->managers->first()->pivot->position)->toBe(1);
 });
 
 it('AC-003: the created Opportunity has registry_id/source_id derived from the lead', function () {
@@ -174,33 +181,41 @@ it('AC-007: the response exposes data.opportunity {id,name} and lead_status conv
 });
 
 // ---------------------------------------------------------------------------
-// B) Conditional requiredness + rollback (AC-008..AC-012)
+// B) Sede/Operatore optional on conversion + rollback (AC-008..AC-012)
+//
+// Directive 2026-07-21 relaxed spec 0044 AC-008/009: Sede (operational_site_id)
+// and Operatore (operator_id) are NO LONGER required when converting. A Lead
+// converts without them — the derived Opportunity inherits a null supervisor.
 // ---------------------------------------------------------------------------
 
-it('AC-008: missing operator_id with convert_to_opportunity -> 422 on operator_id, no lead created', function () {
+it('AC-008: missing operator_id with convert_to_opportunity -> 201, opportunity created with no supervisor and no manager', function () {
     $actor = leadConversionActor(['create'], ['create']);
     $fixture = convertibleLeadFixture();
     $payload = $fixture['payload'];
     unset($payload['operator_id']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/leads', $payload)
-        ->assertStatus(422)->assertJsonValidationErrors('operator_id');
+    $response = $this->postJson('/api/leads', $payload)->assertCreated();
 
-    expect(Lead::count())->toBe(0);
+    $opportunity = Opportunity::where('lead_id', $response->json('data.id'))->firstOrFail();
+    $opportunity->load('managers');
+
+    // No Operator on the lead -> no first Gestore Account seeded, empty supervisor.
+    expect($opportunity->supervisor_id)->toBeNull();
+    expect($opportunity->managers)->toHaveCount(0);
 });
 
-it('AC-009: missing operational_site_id with convert_to_opportunity -> 422 on operational_site_id, no lead created', function () {
+it('AC-009: missing operational_site_id with convert_to_opportunity -> 201, opportunity created', function () {
     $actor = leadConversionActor(['create'], ['create']);
     $fixture = convertibleLeadFixture();
     $payload = $fixture['payload'];
     unset($payload['operational_site_id']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/leads', $payload)
-        ->assertStatus(422)->assertJsonValidationErrors('operational_site_id');
+    $response = $this->postJson('/api/leads', $payload)->assertCreated();
 
-    expect(Lead::count())->toBe(0);
+    expect(Opportunity::where('lead_id', $response->json('data.id'))->count())->toBe(1);
+    expect(Lead::find($response->json('data.id'))->state_id)->toBeNull();
 });
 
 it('AC-010: convert_to_opportunity absent keeps the legacy behavior, no opportunity created', function () {

@@ -65,11 +65,14 @@ final class ConvertLeadToOpportunity
             referentId: null,
             commercialId: null,
             reporterId: null,
-            supervisorId: $lead->operator_id,
+            // User directive 2026-07-21: the lead's Operator no longer becomes
+            // the Supervisor — it seeds the first "Gestore Account" slot below,
+            // and the Supervisor is left empty.
+            supervisorId: null,
             sourceId: $defaults->values['source_id'],
             leadId: $lead->id,
             opportunityStatusId: $this->systemStatusGuard->resolveNewStatusId(OpportunityStatus::class),
-            managerSlots: null,
+            managerSlots: $lead->operator_id === null ? null : [$lead->operator_id],
             productLines: $this->toProductLineAttributes($defaults->productLines),
             startDate: null,
             estimatedValue: null,

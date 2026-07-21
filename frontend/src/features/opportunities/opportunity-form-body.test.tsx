@@ -255,13 +255,15 @@ describe('OpportunityFormBody — fields render (AC-071)', () => {
     expect(screen.queryByTestId('select-Business function 1')).not.toBeInTheDocument()
   })
 
-  it('marks supervisor required only when the form mode is create', async () => {
+  /** Directive 2026-07-21: supervisor is never required, in either mode (it derives from the linked Lead's Operatore, which may be empty). */
+  it('never marks supervisor required, in create or edit mode', async () => {
     const create = render(
       <OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
       { wrapper: wrapper() },
     )
 
-    await waitFor(() => expect(labelFor('Supervisor')).toHaveTextContent('Supervisor*'))
+    await waitFor(() => expect(labelFor('Supervisor')).toBeInTheDocument())
+    expect(labelFor('Supervisor')).not.toHaveTextContent('*')
     create.unmount()
 
     render(

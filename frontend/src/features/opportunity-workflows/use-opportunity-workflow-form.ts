@@ -3,6 +3,7 @@ import { useFieldArray, useForm } from 'react-hook-form'
 import type { Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
@@ -38,14 +39,28 @@ export type OpportunityWorkflowFormValues = CreateOpportunityWorkflowFormValues
 const EMPTY_CRITERION_ROW = { field: null, value_id: null }
 
 /**
- * The two pinned system rows before a workflow exists: display-only
- * placeholders (AC-004, the backend auto-creates the real rows on create),
- * never sent in the create payload (`buildCreatePayload`).
+ * The two pinned system rows before a workflow exists (AC-004): editable
+ * from the start, pre-filled with the default open/closed labels. The user
+ * may rename them up front; they are sent in the create payload
+ * (`buildCreatePayload`) so the backend seeds the auto-created rows with
+ * these names. Non-deletable/non-reorderable (enforced by the editor).
  */
-function placeholderStatusRows(): WorkflowStatusFormRow[] {
+function initialSystemStatusRows(t: TFunction): WorkflowStatusFormRow[] {
   return [
-    { id: 'placeholder-open', name: '', color: null, group: 'open', system_key: 'open' },
-    { id: 'placeholder-closed', name: '', color: null, group: 'closed', system_key: 'closed' },
+    {
+      id: 'system-open',
+      name: t('opportunityWorkflows.form.statuses.defaultOpenName'),
+      color: null,
+      group: 'open',
+      system_key: 'open',
+    },
+    {
+      id: 'system-closed',
+      name: t('opportunityWorkflows.form.statuses.defaultClosedName'),
+      color: null,
+      group: 'closed',
+      system_key: 'closed',
+    },
   ]
 }
 
@@ -116,7 +131,7 @@ export function useOpportunityWorkflowForm({ mode, onSuccess }: UseOpportunityWo
   const criteria = useFieldArray({ control: form.control, name: 'criteria' })
 
   const [statusRows, setStatusRows] = useState<WorkflowStatusFormRow[]>(() =>
-    mode.type === 'edit' ? statusRowsFromDetail(mode.opportunityWorkflow) : placeholderStatusRows(),
+    mode.type === 'edit' ? statusRowsFromDetail(mode.opportunityWorkflow) : initialSystemStatusRows(t),
   )
 
   const nextCustomRowId = useRef(0)
@@ -157,12 +172,10 @@ export function useOpportunityWorkflowForm({ mode, onSuccess }: UseOpportunityWo
     })
   }
 
-  /** Custom rows need a non-empty name (server `required`); pinned rows are never blank once persisted. */
+  /** Every row (custom AND the now-editable pinned rows) needs a non-empty name (server `required`). */
   const validateStatusRows = (): boolean => {
-    const hasEmptyCustomName = statusRows.some(
-      (row) => row.system_key === null && row.name.trim() === '',
-    )
-    if (hasEmptyCustomName) {
+    const hasEmptyName = statusRows.some((row) => row.name.trim() === '')
+    if (hasEmptyName) {
       setStatusesError(t('opportunityWorkflows.form.statuses.nameRequired'))
       return false
     }

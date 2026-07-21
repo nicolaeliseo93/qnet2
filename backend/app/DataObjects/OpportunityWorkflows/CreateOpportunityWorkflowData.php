@@ -2,6 +2,7 @@
 
 namespace App\DataObjects\OpportunityWorkflows;
 
+use App\Enums\WorkflowStatusSystemKey;
 use Illuminate\Support\Collection;
 
 /**
@@ -12,22 +13,28 @@ use Illuminate\Support\Collection;
  *
  * `criteria` is REQUIRED, min:1 (AC-008): a list of {field, value_id} pairs,
  * one per allow-listed field (App\Support\OpportunityWorkflows\
- * CriterionFieldRegistry). `statuses` is OPTIONAL — ONLY the intermediate
- * CUSTOM rows; the 2 system rows (open/closed, AC-004) are created
- * automatically by the Service via WorkflowStatusWriter, never accepted from
- * the client.
+ * CriterionFieldRegistry). `statuses` is OPTIONAL. The 2 system rows
+ * (open/closed, AC-004) are always created by the Service via
+ * WorkflowStatusWriter; when the client tags a submitted row with a
+ * `system_key`, its name/color SEED that system row (the user can name
+ * open/closed up front) — otherwise the writer's defaults apply. Untagged
+ * rows are the intermediate CUSTOM rows.
  */
 final readonly class CreateOpportunityWorkflowData
 {
     /**
      * @param  array<int, array{field: string, value_id: int}>  $criteria
-     * @param  array<int, array{name: string, color: ?string, group: string}>  $statuses
+     * @param  array<int, array{name: string, color: ?string, group: string}>  $statuses  custom rows only
+     * @param  array{name: string, color: ?string}|null  $openStatus  name/color seed for the pinned 'open' row (null = writer default)
+     * @param  array{name: string, color: ?string}|null  $closedStatus  name/color seed for the pinned 'closed' row (null = writer default)
      */
     public function __construct(
         public string $name,
         public bool $isActive,
         public array $criteria,
         public array $statuses,
+        public ?array $openStatus = null,
+        public ?array $closedStatus = null,
     ) {}
 
     /**
@@ -37,11 +44,16 @@ final readonly class CreateOpportunityWorkflowData
      */
     public static function fromValidated(array $data): self
     {
+        /** @var array<int, array<string, mixed>> $statuses */
+        $statuses = $data['statuses'] ?? [];
+
         return new self(
             name: (string) $data['name'],
             isActive: array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true,
             criteria: self::normalizeCriteria($data['criteria']),
-            statuses: self::normalizeStatuses($data['statuses'] ?? []),
+            statuses: self::normalizeStatuses($statuses),
+            openStatus: self::extractSystemStatus($statuses, WorkflowStatusSystemKey::Open),
+            closedStatus: self::extractSystemStatus($statuses, WorkflowStatusSystemKey::Closed),
         );
     }
 
@@ -72,19 +84,43 @@ final readonly class CreateOpportunityWorkflowData
     }
 
     /**
-     * @param  array<int, array{name: mixed, color?: mixed, group: mixed}>  $statuses
+     * The CUSTOM (intermediate) rows only — a submitted row tagged with a
+     * `system_key` seeds a pinned row instead (see extractSystemStatus()).
+     *
+     * @param  array<int, array{name: mixed, color?: mixed, group: mixed, system_key?: mixed}>  $statuses
      * @return array<int, array{name: string, color: ?string, group: string}>
      */
     public static function normalizeStatuses(array $statuses): array
     {
-        return array_map(
+        return array_values(array_map(
             static fn (array $status): array => [
                 'name' => (string) $status['name'],
                 'color' => array_key_exists('color', $status) ? $status['color'] : null,
                 'group' => (string) $status['group'],
             ],
-            $statuses,
-        );
+            array_filter($statuses, static fn (array $status): bool => ($status['system_key'] ?? null) === null),
+        ));
+    }
+
+    /**
+     * The name/color seed the client submitted for a pinned system row, or
+     * null when it left that row untagged (the writer then uses its default).
+     *
+     * @param  array<int, array{name: mixed, color?: mixed, system_key?: mixed}>  $statuses
+     * @return array{name: string, color: ?string}|null
+     */
+    private static function extractSystemStatus(array $statuses, WorkflowStatusSystemKey $key): ?array
+    {
+        foreach ($statuses as $status) {
+            if (($status['system_key'] ?? null) === $key->value) {
+                return [
+                    'name' => (string) $status['name'],
+                    'color' => array_key_exists('color', $status) ? $status['color'] : null,
+                ];
+            }
+        }
+
+        return null;
     }
 
     /**

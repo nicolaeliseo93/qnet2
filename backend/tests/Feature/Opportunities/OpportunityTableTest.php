@@ -60,13 +60,18 @@ it('GET /api/tables/opportunities/columns: 200 with the declared columns, 403 wi
     // relation-derived column, right after `source`. `managers` (opportunity_user
     // pivot, avatar stack) sits next to `supervisor`.
     expect($ids)->toBe([
-        'name', 'registry', 'referent', 'commercial', 'supervisor', 'managers', 'source', 'opportunity_status',
+        'id', 'name', 'registry', 'referent', 'commercial', 'supervisor', 'managers', 'source', 'opportunity_status',
         'product_category', 'business_function', 'estimated_value', 'success_probability', 'start_date',
         'expected_close_date', 'created_at',
     ]);
 
     $columns = collect($data['columns'])->keyBy('id');
-    expect($columns['registry']['sortable'])->toBeTrue()
+    expect($columns['id']['type'])->toBe('number')
+        ->and($columns['id']['visible'])->toBeFalse()
+        ->and($columns['id']['sortable'])->toBeTrue()
+        ->and($columns['id']['filterable'])->toBeFalse()
+        ->and($columns['id']['filterType'])->toBeNull()
+        ->and($columns['registry']['sortable'])->toBeTrue()
         ->and($columns['registry']['filterType'])->toBe('set')
         ->and($columns['estimated_value']['filterType'])->toBe('number');
 

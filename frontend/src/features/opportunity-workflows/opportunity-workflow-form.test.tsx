@@ -239,7 +239,7 @@ describe('OpportunityWorkflowForm — statuses editor (AC-025)', () => {
     expect(payload.statuses.map((status: { id?: number }) => status.id)).toEqual([10, 12, 11, 13])
   })
 
-  it('adds a custom status between open and closed, and includes it in the create payload', async () => {
+  it('seeds editable open/closed rows and sends them with the added custom row in the create payload', async () => {
     createOpportunityWorkflowMock.mockResolvedValue(opportunityWorkflow())
     const onSuccess = vi.fn()
 
@@ -248,10 +248,14 @@ describe('OpportunityWorkflowForm — statuses editor (AC-025)', () => {
       { wrapper: wrapper() },
     )
 
+    // The 2 pinned rows are present and editable from the start (seeded).
+    expect(screen.getByDisplayValue('Open')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Closed')).toBeInTheDocument()
+
     fireEvent.click(screen.getByRole('button', { name: 'Add status' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Status name' }), {
-      target: { value: 'In review' },
-    })
+    // 3 name inputs now: open (0), the new custom (1), closed (2).
+    const nameInputs = screen.getAllByRole('textbox', { name: 'Status name' })
+    fireEvent.change(nameInputs[1], { target: { value: 'In review' } })
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Field' }))
     fireEvent.click(await screen.findByRole('option', { name: 'Region' }))
@@ -262,8 +266,35 @@ describe('OpportunityWorkflowForm — statuses editor (AC-025)', () => {
 
     await waitFor(() => expect(createOpportunityWorkflowMock).toHaveBeenCalledTimes(1))
     const [payload] = createOpportunityWorkflowMock.mock.calls[0]
-    expect(payload.statuses).toEqual([{ name: 'In review', color: null, group: 'pending' }])
+    expect(payload.statuses).toEqual([
+      { name: 'Open', color: null, group: 'open', system_key: 'open' },
+      { name: 'In review', color: null, group: 'pending', system_key: null },
+      { name: 'Closed', color: null, group: 'closed', system_key: 'closed' },
+    ])
     expect(payload.criteria).toEqual([{ field: 'state_id', value_id: 101 }])
     expect(onSuccess).toHaveBeenCalled()
+  })
+
+  it('lets the user rename a pinned row up front; the new label lands in the create payload', async () => {
+    createOpportunityWorkflowMock.mockResolvedValue(opportunityWorkflow())
+
+    render(
+      <OpportunityWorkflowForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />,
+      { wrapper: wrapper() },
+    )
+
+    fireEvent.change(screen.getByDisplayValue('Open'), { target: { value: 'Aperto (in corso)' } })
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Field' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Region' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Pick Value' }))
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'EMEA workflow' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(createOpportunityWorkflowMock).toHaveBeenCalledTimes(1))
+    const [payload] = createOpportunityWorkflowMock.mock.calls[0]
+    const openRow = payload.statuses.find((status: { system_key: string | null }) => status.system_key === 'open')
+    expect(openRow.name).toBe('Aperto (in corso)')
   })
 })

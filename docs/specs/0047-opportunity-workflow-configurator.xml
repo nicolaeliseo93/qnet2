@@ -7,6 +7,16 @@
     D2 = "stati di lavorazione" = NUOVA tabella dedicata, dimensione interna DISTINTA da opportunity_statuses (pipeline vendita).
     D3 = al re-match, mappatura per system_key (open->open, closed->closed), altrimenti stato iniziale.
     D4 = tie-break a parità di specificità: workflow più vecchio (id asc). Nessun campo priority.
+
+  AMENDMENT 2026-07-21 (direttiva utente "Creazione Opportunità da Lead"): D1 rivisto.
+  La Regione (state_id) NON è più derivata read-only: è un INPUT UTENTE, sempre presente e
+  modificabile, sia sul form Lead sia sul form Opportunità. Semantica backend "submitted wins":
+  un state_id inviato dal client vince; se assente, LeadService lo deriva dalla Sede come
+  FALLBACK (retrocompat API/import). Auto-fill client-side: alla selezione di una Sede la Regione
+  si valorizza con quella della Sede (esposta come meta.state_id/meta.state_label nel for-select
+  delle operational-sites), restando modificabile. Cade il forceDisabled sulla Regione
+  dell'opportunità lead-linked (chiude il delta "a" dell'HANDOFF). AC-001/AC-026 sotto vanno letti
+  con questa semantica (derivazione = fallback, non più unica fonte; Regione editabile, non read-only).
 -->
 <spec id="0047-opportunity-workflow-configurator" status="draft" owner="tu" date="2026-07-20">
 

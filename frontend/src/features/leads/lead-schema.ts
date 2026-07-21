@@ -47,6 +47,10 @@ function baseFields(t: TFunction) {
     operational_site_id: z.number().nullable(),
     source_id: z.number().nullable(),
     operator_id: z.number().nullable(),
+    // Directive 2026-07-21: the Regione is now a first-class user input,
+    // always present and freely editable/clearable. Auto-filled from the
+    // chosen Sede's `meta.state_id` (see `LeadFormBody`), never required.
+    state_id: z.number().nullable(),
     notes: z.string().max(NOTES_MAX_LENGTH, t('leads.form.notesMax')).nullable(),
     extra_fields: z.array(extraFieldEntrySchema(t)),
   }
@@ -56,13 +60,14 @@ function baseFields(t: TFunction) {
  * Create schema. A top-level `superRefine` flags duplicate `extra_fields`
  * keys (case-insensitive): two rows resolving to the same `Record` key
  * would silently overwrite one another at the API boundary, so it is
- * caught here instead. It also enforces spec 0044's conditional rule:
- * once `convert_to_opportunity` is on, Operator and Site (otherwise
- * optional) become required, mirroring the backend's `required_if`.
- * The flag is deliberately NOT `.default(false)`: a Zod default makes the
- * schema's input and output types diverge, which collapses the resolver's
- * inference and untypes every `control` in the form. `use-lead-form`
- * supplies the `false` default instead.
+ * caught here instead.
+ *
+ * Directive 2026-07-21 (relaxes spec 0044 AC-008/009/041): Operator and Site
+ * stay optional even when `convert_to_opportunity` is on — the derived
+ * Opportunity simply inherits a null supervisor. The flag is deliberately
+ * NOT `.default(false)`: a Zod default makes the schema's input and output
+ * types diverge, which collapses the resolver's inference and untypes every
+ * `control` in the form. `use-lead-form` supplies the `false` default instead.
  */
 export function buildCreateLeadSchema(t: TFunction) {
   return z
@@ -82,32 +87,13 @@ export function buildCreateLeadSchema(t: TFunction) {
         }
         seenKeys.add(normalizedKey)
       })
-
-      if (values.convert_to_opportunity) {
-        if (values.operator_id === null) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: t('leads.form.operatorRequired'),
-            path: ['operator_id'],
-          })
-        }
-        if (values.operational_site_id === null) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: t('leads.form.operationalSiteRequired'),
-            path: ['operational_site_id'],
-          })
-        }
-      }
     })
 }
 
 /**
  * Edit schema (same shape; partial PATCH is computed by the caller).
- * `convert_to_opportunity` is create-only in the UI (never rendered or
- * set in edit mode, `use-lead-form` always defaults it to `false`), so
- * the conditional Operator/Site requirement above never triggers here —
- * update never inherits the new obligation.
+ * `convert_to_opportunity` is create-only in the UI: never rendered, and
+ * `use-lead-form` always defaults it to `false` in edit mode.
  */
 export function buildUpdateLeadSchema(t: TFunction) {
   return buildCreateLeadSchema(t)

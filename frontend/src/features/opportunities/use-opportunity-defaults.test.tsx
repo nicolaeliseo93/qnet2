@@ -27,14 +27,10 @@ function defaults(overrides: Partial<OpportunityDefaults> = {}): OpportunityDefa
       referent_id: null,
       source_id: 20,
       registry_id: 30,
-      // Spec 0044: not under test in this file (this hook only reads/caches
-      // the defaults query; the prefill decision is `use-opportunity-lead-selection.ts`'s).
-      supervisor_id: null,
     },
     references: {
       source: { id: 20, name: 'Web' },
       registry: { id: 30, name: 'Acme S.p.A.' },
-      supervisor: null,
     },
     locked_fields: ['source_id', 'registry_id'],
     // Amendment rev.3 (AC-102/103): 0/1 seed row, editable/removable, never locked.
@@ -45,6 +41,11 @@ function defaults(overrides: Partial<OpportunityDefaults> = {}): OpportunityDefa
         product_category: { id: 50, name: 'Consulting' },
       },
     ],
+    // Directive 2026-07-21: the lead's Operator prefills the first "Gestore
+    // Account" slot; not under test in this file (this hook only reads/caches
+    // the defaults query; the prefill decision is `use-opportunity-lead-selection.ts`'s).
+    manager_slots: [],
+    manager_refs: [],
     ...overrides,
   }
 }

@@ -62,11 +62,17 @@ export interface CreateOpportunityWorkflowCriterionPayload {
   value_id: number
 }
 
-/** One `statuses[]` entry accepted by POST (create): custom, intermediate rows only — no `id`, the system rows are auto-created. */
+/**
+ * One `statuses[]` entry accepted by POST (create): the intermediate custom
+ * rows (`system_key` null/absent) plus the 2 pinned rows tagged
+ * `system_key: 'open'|'closed'`, whose name/color seed those auto-created
+ * system rows (AC-004). No `id` — nothing is persisted yet.
+ */
 export interface CreateOpportunityWorkflowStatusPayload {
   name: string
   color?: string | null
   group: StatusGroupValue
+  system_key?: WorkflowStatusSystemKey
 }
 
 /**
@@ -111,10 +117,9 @@ export type OpportunityWorkflowFormMode =
  * `StatusReorderItem`/`useStatusReorder`). `id` is the STRING identity
  * `<SortableList>` requires (mirrors every other row's stringified id);
  * `statusId` is the persisted backend id, or `undefined` for a row not yet
- * created (a freshly-added custom row, or a placeholder pinned system row
- * shown before the workflow itself is created — AC-004: the backend
- * auto-creates the real open/closed rows on create, so a placeholder never
- * reaches the payload).
+ * created (a freshly-added custom row, or the 2 pinned system rows in create
+ * mode — the backend then persists the real open/closed rows, seeded with
+ * the name/color the user typed, AC-004).
  */
 export interface WorkflowStatusFormRow {
   id: string

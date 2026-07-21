@@ -149,3 +149,78 @@ it('update: clearing operational_site_id to null clears state_id too (AC-001)', 
 
     expect($response->json('data.state_id'))->toBeNull();
 });
+
+// ---------------------------------------------------------------------------
+// Regione as a user input (directive 2026-07-21): a submitted state_id wins
+// over the Sede-derived fallback; the derivation only fills the gap.
+// ---------------------------------------------------------------------------
+
+it('create: a submitted state_id overrides the Sede-derived Regione', function () {
+    $actor = leadStateUserWith(['create']);
+    $registry = Registry::factory()->create();
+    $campaign = Campaign::factory()->create();
+    $siteState = State::factory()->create();
+    $chosenState = State::factory()->create();
+    $site = siteWithState($siteState);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/leads', [
+        'registry_id' => $registry->id,
+        'campaign_id' => $campaign->id,
+        'operational_site_id' => $site->id,
+        'state_id' => $chosenState->id,
+    ])->assertCreated();
+
+    expect($response->json('data.state_id'))->toBe($chosenState->id);
+    $this->assertDatabaseHas('leads', ['id' => $response->json('data.id'), 'state_id' => $chosenState->id]);
+});
+
+it('create: a submitted state_id is stored even with no Sede', function () {
+    $actor = leadStateUserWith(['create']);
+    $registry = Registry::factory()->create();
+    $campaign = Campaign::factory()->create();
+    $chosenState = State::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/leads', [
+        'registry_id' => $registry->id,
+        'campaign_id' => $campaign->id,
+        'state_id' => $chosenState->id,
+    ])->assertCreated();
+
+    expect($response->json('data.state_id'))->toBe($chosenState->id);
+});
+
+it('update: a submitted state_id wins even when the Sede also changes', function () {
+    $actor = leadStateUserWith(['update']);
+    $firstState = State::factory()->create();
+    $secondState = State::factory()->create();
+    $chosenState = State::factory()->create();
+    $firstSite = siteWithState($firstState);
+    $secondSite = siteWithState($secondState);
+    $lead = Lead::factory()->create(['operational_site_id' => $firstSite->id, 'state_id' => $firstState->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->patchJson("/api/leads/{$lead->id}", [
+        'operational_site_id' => $secondSite->id,
+        'state_id' => $chosenState->id,
+    ])->assertOk();
+
+    expect($response->json('data.state_id'))->toBe($chosenState->id);
+    $this->assertDatabaseHas('leads', ['id' => $lead->id, 'state_id' => $chosenState->id]);
+});
+
+it('update: submitting state_id alone changes the Regione without touching the Sede', function () {
+    $actor = leadStateUserWith(['update']);
+    $state = State::factory()->create();
+    $newState = State::factory()->create();
+    $site = siteWithState($state);
+    $lead = Lead::factory()->create(['operational_site_id' => $site->id, 'state_id' => $state->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->patchJson("/api/leads/{$lead->id}", ['state_id' => $newState->id])
+        ->assertOk();
+
+    expect($response->json('data.state_id'))->toBe($newState->id);
+    $this->assertDatabaseHas('leads', ['id' => $lead->id, 'operational_site_id' => $site->id, 'state_id' => $newState->id]);
+});

@@ -102,13 +102,10 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
               referent_id: null,
               source_id: 20,
               registry_id: 30,
-              // Spec 0044: not under test here (no Supervisor assertion below).
-              supervisor_id: null,
             },
             references: {
               source: { id: 20, name: 'Web' },
               registry: { id: 30, name: 'Acme S.p.A.' },
-              supervisor: null,
             },
             lockedFields: ['registry_id', 'source_id'],
             productLines: [
@@ -118,6 +115,10 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
                 product_category: { id: 50, name: 'Consulting' },
               },
             ],
+            // Directive 2026-07-21: no Operator on this fixture's lead — the
+            // first "Gestore Account" slot stays empty (not under test here).
+            managerSlots: [],
+            managerRefs: [],
           },
         }}
         onSuccess={vi.fn()}

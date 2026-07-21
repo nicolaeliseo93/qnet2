@@ -14,6 +14,7 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     operational_site_id: null,
     source_id: null,
     operator_id: null,
+    state_id: null,
     notes: null,
     extra_fields: [],
     convert_to_opportunity: false,
@@ -50,18 +51,30 @@ describe('buildCreateLeadSchema', () => {
     }
   })
 
-  it('accepts the 4 optional fields left null', () => {
+  it('accepts the 5 optional fields left null', () => {
     const schema = buildCreateLeadSchema(i18n.t)
     const result = schema.safeParse(
-      baseValues({ operational_site_id: null, source_id: null, operator_id: null, notes: null }),
+      baseValues({
+        operational_site_id: null,
+        source_id: null,
+        operator_id: null,
+        state_id: null,
+        notes: null,
+      }),
     )
     expect(result.success).toBe(true)
   })
 
-  it('accepts the 4 optional fields when set', () => {
+  it('accepts the 5 optional fields when set', () => {
     const schema = buildCreateLeadSchema(i18n.t)
     const result = schema.safeParse(
-      baseValues({ operational_site_id: 3, source_id: 4, operator_id: 5, notes: 'Some note' }),
+      baseValues({
+        operational_site_id: 3,
+        source_id: 4,
+        operator_id: 5,
+        state_id: 6,
+        notes: 'Some note',
+      }),
     )
     expect(result.success).toBe(true)
   })
@@ -124,36 +137,32 @@ describe('buildCreateLeadSchema — extra_fields', () => {
   })
 })
 
-/** AC-041/AC-042 (spec 0044): Operator/Site become required only once convert_to_opportunity is on. */
+/**
+ * Directive 2026-07-21 (relaxes spec 0044 AC-041): Operator and Site stay
+ * optional regardless of `convert_to_opportunity` — the derived Opportunity
+ * simply inherits a null supervisor.
+ */
 describe('buildCreateLeadSchema — convert_to_opportunity', () => {
-  it('AC-042: accepts operator_id/operational_site_id left null when the flag is off', () => {
+  it('accepts operator_id/operational_site_id left null when the flag is off', () => {
     const schema = buildCreateLeadSchema(i18n.t)
     const result = schema.safeParse(baseValues({ convert_to_opportunity: false }))
     expect(result.success).toBe(true)
   })
 
-  it('AC-041: rejects a missing operator_id when the flag is on', () => {
+  it('accepts a missing operator_id when the flag is on', () => {
     const schema = buildCreateLeadSchema(i18n.t)
     const result = schema.safeParse(
       baseValues({ convert_to_opportunity: true, operational_site_id: 3, operator_id: null }),
     )
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.issues.some((issue) => issue.path.join('.') === 'operator_id')).toBe(true)
-    }
+    expect(result.success).toBe(true)
   })
 
-  it('AC-041: rejects a missing operational_site_id when the flag is on', () => {
+  it('accepts a missing operational_site_id when the flag is on', () => {
     const schema = buildCreateLeadSchema(i18n.t)
     const result = schema.safeParse(
       baseValues({ convert_to_opportunity: true, operator_id: 5, operational_site_id: null }),
     )
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(
-        result.error.issues.some((issue) => issue.path.join('.') === 'operational_site_id'),
-      ).toBe(true)
-    }
+    expect(result.success).toBe(true)
   })
 
   it('accepts the flag on when both operator_id and operational_site_id are set', () => {

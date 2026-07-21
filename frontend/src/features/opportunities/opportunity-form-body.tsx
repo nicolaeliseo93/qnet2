@@ -124,12 +124,10 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
   const registryId = useWatch({ control: form.control, name: 'registry_id' })
   const registryChosen = registryId !== null
 
-  // Spec 0047 (AC-026): the Regione stays read-only in the UI once the
-  // opportunity is linked to a Lead (edit mode only — a create-from-lead has
-  // no `lead_id` yet, so it stays editable until saved). The working-state
-  // select is limited to the resolved set exposed on the loaded instance;
-  // `null` in create mode (the set is not yet known server-side).
-  const stateForceDisabled = mode.type === 'edit' && mode.opportunity.lead_id !== null
+  // Spec 0047 (D1): the Regione is inherited from the Lead only as an initial
+  // value and stays freely editable at any time (backend keeps state_id out of
+  // the locked fields). The working-state select is limited to the resolved set
+  // exposed on the loaded instance; `null` in create mode (set not yet known).
   const workflowStatuses = mode.type === 'edit' ? (mode.opportunity.workflow_statuses ?? []) : null
 
   // A-4: recap of the chosen person's primary contacts, under each of the 3
@@ -250,7 +248,6 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
             control={form.control}
             selectedItems={selectedItems}
             lockedFields={lockedFields}
-            stateForceDisabled={stateForceDisabled}
             workflowStatuses={workflowStatuses}
             className={sectionRevealClassName(1)}
           />
@@ -266,7 +263,9 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
           <OpportunityTeamSection
             control={form.control}
             selectedItems={selectedItems}
-            supervisorRequired={mode.type === 'create'}
+            // Directive 2026-07-21: supervisor_id is never required — it
+            // derives from the linked Lead's Operatore, which may be empty.
+            supervisorRequired={false}
             className={sectionRevealClassName(3)}
           />
 

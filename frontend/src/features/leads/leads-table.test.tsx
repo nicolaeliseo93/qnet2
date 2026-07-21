@@ -45,8 +45,9 @@ const mockLead: LeadDetailWithPermissions = {
   },
 }
 
-// A lead already carrying both Operator and Site: conversion skips the
-// correction step and opens the Opportunity form directly (spec 0044 revised).
+// A lead already carrying both Operator and Site (used interchangeably with
+// `mockLead` for conversion: directive 2026-07-21 removed the correction
+// gate, so both open the Opportunity form directly regardless).
 const readyLead: LeadDetailWithPermissions = {
   ...mockLead,
   operational_site_id: 3,
@@ -324,7 +325,7 @@ describe('LeadsTable — Sheet-based CRUD (AC-024)', () => {
     )
   })
 
-  it('AC-020: a ready lead opens the Opportunity modal Sheet prefilled, no correction, no navigation', async () => {
+  it('AC-020: a ready lead opens the Opportunity modal Sheet prefilled, no navigation', async () => {
     fetchLeadMock.mockResolvedValue(readyLead)
     renderTable()
 
@@ -360,29 +361,17 @@ describe('LeadsTable — Sheet-based CRUD (AC-024)', () => {
     expect(refreshMock).toHaveBeenCalled()
   })
 
-  it('gates a lead missing Operator/Site into the correction form before the Opportunity', async () => {
+  /** Directive 2026-07-21: Operator/Site are optional, so the former correction gate is gone — a lead missing them still opens the Opportunity form directly. */
+  it('a lead missing Operator/Site opens the Opportunity form directly, no correction step', async () => {
     fetchLeadMock.mockResolvedValue(mockLead)
     renderTable()
 
     fireEvent.click(screen.getByText('trigger-convert'))
-
-    expect(await screen.findByText('Complete the lead first')).toBeInTheDocument()
-    expect(screen.queryByText('opportunity-form-create')).not.toBeInTheDocument()
-    expect(navigateMock).not.toHaveBeenCalled()
-  })
-
-  it('opens the prefilled Opportunity form after the lead is corrected, and refreshes the grid', async () => {
-    fetchLeadMock.mockResolvedValue(mockLead)
-    renderTable()
-
-    fireEvent.click(screen.getByText('trigger-convert'))
-    expect(await screen.findByText('Complete the lead first')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByText('stub-save'))
 
     expect(await screen.findByText('opportunity-form-create')).toBeInTheDocument()
     expect(screen.getByText('opportunity-params:{"lead_id":33}')).toBeInTheDocument()
-    expect(refreshMock).toHaveBeenCalled()
+    expect(screen.queryByText('Complete the lead first')).not.toBeInTheDocument()
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 
   it("threads an icon override for the 'arrow-right-left' action key (spec 0044 action catalog)", () => {

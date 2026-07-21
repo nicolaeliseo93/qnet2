@@ -89,9 +89,9 @@ export const opportunityWorkflows = {
       dragHandleLabel: 'Trascina per riordinare',
       add: 'Aggiungi stato',
       remove: 'Rimuovi stato',
-      nameRequired: 'Ogni stato personalizzato richiede un nome.',
-      autoOpenName: 'Aperto (creato automaticamente)',
-      autoClosedName: 'Chiuso (creato automaticamente)',
+      nameRequired: 'Ogni stato richiede un nome.',
+      defaultOpenName: 'Aperto',
+      defaultClosedName: 'Chiuso',
       group: {
         label: 'Gruppo',
         open: 'Aperto',

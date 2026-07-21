@@ -57,10 +57,15 @@ it('GET /api/tables/leads/columns: 200 with the declared columns, 403 without vi
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['registry', 'campaign', 'operational_site', 'source', 'operator', 'lead_status', 'created_at']);
+    expect($ids)->toBe(['id', 'registry', 'campaign', 'operational_site', 'source', 'operator', 'lead_status', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
-    expect($columns['operational_site']['sortable'])->toBeTrue()
+    expect($columns['id']['type'])->toBe('number')
+        ->and($columns['id']['visible'])->toBeFalse()
+        ->and($columns['id']['sortable'])->toBeTrue()
+        ->and($columns['id']['filterable'])->toBeFalse()
+        ->and($columns['id']['filterType'])->toBeNull()
+        ->and($columns['operational_site']['sortable'])->toBeTrue()
         ->and($columns['operational_site']['filterType'])->toBe('set')
         ->and($columns['registry']['sortable'])->toBeTrue()
         ->and($columns['lead_status']['type'])->toBe('badge')

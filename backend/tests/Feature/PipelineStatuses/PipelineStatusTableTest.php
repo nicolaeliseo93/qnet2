@@ -52,10 +52,15 @@ it('GET /api/tables/pipeline-statuses/columns: 200 with the declared columns, 40
     // requirement changed (spec 0039 pivot): `group` is a new real column
     // between `sort_order` and `created_at`.
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['name', 'color', 'sort_order', 'group', 'created_at']);
+    expect($ids)->toBe(['id', 'name', 'color', 'sort_order', 'group', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
-    expect($columns['name']['sortable'])->toBeTrue()
+    expect($columns['id']['sortable'])->toBeTrue()
+        ->and($columns['id']['filterable'])->toBeFalse()
+        ->and($columns['id']['filterType'])->toBeNull()
+        ->and($columns['id']['type'])->toBe('number')
+        ->and($columns['id']['visible'])->toBeFalse()
+        ->and($columns['name']['sortable'])->toBeTrue()
         ->and($columns['color']['sortable'])->toBeFalse()
         ->and($columns['color']['filterable'])->toBeFalse()
         ->and($columns['sort_order']['filterType'])->toBe('number');

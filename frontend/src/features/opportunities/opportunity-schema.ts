@@ -114,12 +114,13 @@ function baseFields(t: TFunction) {
   }
 }
 
-/** Create schema. */
+/**
+ * Create schema. Directive 2026-07-21: `supervisor_id` is no longer required
+ * on create either — it derives from the linked Lead's Operatore, which may
+ * now be empty — so create and edit share the exact same (nullable) shape.
+ */
 export function buildCreateOpportunitySchema(t: TFunction) {
-  return z.object({
-    ...baseFields(t),
-    supervisor_id: requiredRelationId(t('opportunities.form.supervisorRequired')),
-  })
+  return z.object(baseFields(t))
 }
 
 /** Edit schema; partial PATCH is computed by the caller and supervisor remains nullable. */

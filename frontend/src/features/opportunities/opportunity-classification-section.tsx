@@ -16,8 +16,6 @@ interface OpportunityClassificationSectionProps {
   selectedItems: OpportunitySelectedItems
   /** BR-2: keys derived from a linked Lead, forced read-only (spec 0040 MT-6; empty outside that flow). */
   lockedFields: ReadonlySet<string>
-  /** Spec 0047 (D1): forces the Regione read-only when the opportunity is linked to a Lead (edit mode only). */
-  stateForceDisabled: boolean
   /** Spec 0047 (AC-026): the resolved working-state set, or `null` in create mode (not yet known). */
   workflowStatuses: OpportunityWorkflowStatusRef[] | null
   className?: string
@@ -32,7 +30,6 @@ export function OpportunityClassificationSection({
   control,
   selectedItems,
   lockedFields,
-  stateForceDisabled,
   workflowStatuses,
   className,
 }: OpportunityClassificationSectionProps) {
@@ -86,7 +83,6 @@ export function OpportunityClassificationSection({
           resource={STATES_FOR_SELECT_RESOURCE}
           searchPlaceholder={t('opportunities.form.stateSearch')}
           selected={selectedItems.state}
-          forceDisabled={stateForceDisabled}
           {...selectLabels}
         />
 

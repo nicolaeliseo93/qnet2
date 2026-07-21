@@ -33,13 +33,21 @@ final class WorkflowStatusWriter
     /**
      * Creates a brand-new set (AC-004): the pinned 'open' row (sort_order 0),
      * every $customStatuses row in submission order (STEP apart), then the
-     * pinned 'closed' row (always last).
+     * pinned 'closed' row (always last). $openOverride/$closedOverride seed
+     * the pinned rows' name/color when the client named them up front; null
+     * falls back to the default label.
      *
      * @param  array<int, array{name: string, color: ?string, group: string}>  $customStatuses
+     * @param  array{name: string, color: ?string}|null  $openOverride
+     * @param  array{name: string, color: ?string}|null  $closedOverride
      */
-    public function createWithCustoms(?int $workflowId, array $customStatuses): void
-    {
-        $this->forceCreateSystemRow($workflowId, WorkflowStatusSystemKey::Open, 0);
+    public function createWithCustoms(
+        ?int $workflowId,
+        array $customStatuses,
+        ?array $openOverride = null,
+        ?array $closedOverride = null,
+    ): void {
+        $this->forceCreateSystemRow($workflowId, WorkflowStatusSystemKey::Open, 0, $openOverride);
 
         $sortOrder = self::STEP;
 
@@ -48,7 +56,7 @@ final class WorkflowStatusWriter
             $sortOrder += self::STEP;
         }
 
-        $this->forceCreateSystemRow($workflowId, WorkflowStatusSystemKey::Closed, $sortOrder);
+        $this->forceCreateSystemRow($workflowId, WorkflowStatusSystemKey::Closed, $sortOrder, $closedOverride);
     }
 
     /**
@@ -91,16 +99,19 @@ final class WorkflowStatusWriter
         }
     }
 
-    private function forceCreateSystemRow(?int $workflowId, WorkflowStatusSystemKey $key, int $sortOrder): void
+    /**
+     * @param  array{name: string, color: ?string}|null  $override  client-supplied name/color seed for this pinned row
+     */
+    private function forceCreateSystemRow(?int $workflowId, WorkflowStatusSystemKey $key, int $sortOrder, ?array $override = null): void
     {
-        [$name, $group] = $key === WorkflowStatusSystemKey::Open
+        [$defaultName, $group] = $key === WorkflowStatusSystemKey::Open
             ? ['Aperta', StatusGroup::Open]
             : ['Chiusa', StatusGroup::Closed];
 
         OpportunityWorkflowStatus::query()->forceCreate([
             'opportunity_workflow_id' => $workflowId,
-            'name' => $name,
-            'color' => null,
+            'name' => $override['name'] ?? $defaultName,
+            'color' => $override['color'] ?? null,
             'sort_order' => $sortOrder,
             'system_key' => $key->value,
             'group' => $group,

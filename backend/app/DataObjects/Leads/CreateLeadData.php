@@ -21,6 +21,13 @@ namespace App\DataObjects\Leads;
  * attribute: it drives LeadService::create()'s conversion branch and is
  * deliberately absent from attributes() — it must never reach
  * `Lead::create()`'s mass assignment.
+ *
+ * `stateId` (Regione, spec 0047 / directive 2026-07-21) is a user input:
+ * `stateIdSubmitted` carries whether the client actually sent it, so
+ * LeadService can honour a submitted value (including an explicit null) and
+ * fall back to deriving it from the Sede only when the key was absent. Like
+ * `state_id` on the DB, it is set by the Service's overlay, not through
+ * attributes().
  */
 final readonly class CreateLeadData
 {
@@ -36,6 +43,8 @@ final readonly class CreateLeadData
         public ?string $notes,
         public ?array $extraFields = null,
         public bool $convertToOpportunity = false,
+        public ?int $stateId = null,
+        public bool $stateIdSubmitted = false,
     ) {}
 
     /**
@@ -54,12 +63,15 @@ final readonly class CreateLeadData
             notes: $data['notes'] ?? null,
             extraFields: $data['extra_fields'] ?? null,
             convertToOpportunity: (bool) ($data['convert_to_opportunity'] ?? false),
+            stateId: isset($data['state_id']) ? (int) $data['state_id'] : null,
+            stateIdSubmitted: array_key_exists('state_id', $data),
         );
     }
 
     /**
      * The lead attributes for a mass-assignment create (framework array
-     * boundary).
+     * boundary). `state_id` is intentionally excluded — LeadService overlays
+     * it (submitted value or Sede-derived fallback).
      *
      * @return array<string, mixed>
      */

@@ -16,11 +16,17 @@ use Illuminate\Validation\Rule;
  * not accepted in the write contract.
  *
  * `convert_to_opportunity` (spec 0044) is a request-level flag, not a Lead
- * column: when true, `operator_id`/`operational_site_id` become required so
- * the contextual conversion (ConvertLeadToOpportunity, via LeadService) has
- * a supervisor and a complete Lead to work from. The `opportunities.create`
- * authorization for the flag stays in the controller, alongside the plain
- * `leads.create` check.
+ * column. Sede (`operational_site_id`) and Operatore (`operator_id`) stay
+ * OPTIONAL even when it is true (user directive 2026-07-21, relaxing spec
+ * 0044 AC-008/009): a Lead can be converted without them — the derived
+ * Opportunity simply inherits a null supervisor (supervisor_id is DB-nullable).
+ * The `opportunities.create` authorization for the flag stays in the
+ * controller, alongside the plain `leads.create` check.
+ *
+ * `state_id` (Regione, spec 0047) is now a first-class USER input (directive
+ * 2026-07-21): freely editable, auto-filled client-side from the chosen Sede
+ * but overridable. When omitted, LeadService derives it from the Sede as a
+ * fallback; a submitted value always wins.
  *
  * Authorization is intentionally NOT handled here (it stays in the
  * controller via authorize('create', Lead::class)). EnforcesFieldPermissions
@@ -45,9 +51,10 @@ class StoreLeadRequest extends FormRequest
         return [
             'registry_id' => ['required', 'integer', Rule::exists('registries', 'id')],
             'campaign_id' => ['required', 'integer', Rule::exists('campaigns', 'id')],
-            'operational_site_id' => ['nullable', 'integer', Rule::exists('operational_sites', 'id'), 'required_if:convert_to_opportunity,true'],
+            'operational_site_id' => ['nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'source_id' => ['nullable', 'integer', Rule::exists('sources', 'id')],
-            'operator_id' => ['nullable', 'integer', Rule::exists('users', 'id'), 'required_if:convert_to_opportunity,true'],
+            'operator_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
             'notes' => ['nullable', 'string', 'max:5000'],
             'extra_fields' => ['nullable', 'array'],
             'extra_fields.*' => ['string'],

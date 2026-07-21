@@ -9,18 +9,20 @@ use Laravel\Sanctum\Sanctum;
 uses(RefreshDatabase::class);
 
 /**
- * Spec 0044 (AC-030/031/032/033): `GET /api/leads/{lead}/opportunity-defaults`
- * additive prefill of the Supervisor derived from `lead->operator`. Reuses
- * `completeLead()`/`opportunityFromLeadActor()`/`nonDerivableOpportunityFks()`
- * (globally declared, guarded with `function_exists`, in
- * OpportunityFromLeadTest.php — file-size split, engineering.md §6).
+ * User directive 2026-07-21: `GET /api/leads/{lead}/opportunity-defaults`
+ * prefills the FIRST "Gestore Account" slot (`manager_slots`/`manager_refs`)
+ * from `lead->operator`, and NO LONGER the Supervisor (which stays empty).
+ * Reuses `completeLead()`/`opportunityFromLeadActor()`/
+ * `nonDerivableOpportunityFks()` (globally declared, guarded with
+ * `function_exists`, in OpportunityFromLeadTest.php — file-size split,
+ * engineering.md §6).
  */
 
 // ---------------------------------------------------------------------------
-// AC-030/031 — values.supervisor_id / references.supervisor
+// manager_slots / manager_refs derived from the lead's Operator
 // ---------------------------------------------------------------------------
 
-it('opportunity-defaults: a lead with an operator prefills supervisor_id/supervisor (AC-030)', function () {
+it('opportunity-defaults: a lead with an operator prefills the first manager slot, never the supervisor', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
     $operator = User::factory()->create();
@@ -29,14 +31,17 @@ it('opportunity-defaults: a lead with an operator prefills supervisor_id/supervi
 
     $response = $this->getJson("/api/leads/{$lead->id}/opportunity-defaults")->assertOk();
 
-    expect($response->json('data.values.supervisor_id'))->toBe($operator->id);
-    expect($response->json('data.references.supervisor'))->toBe([
+    expect($response->json('data.manager_slots'))->toBe([$operator->id]);
+    expect($response->json('data.manager_refs'))->toBe([[
         'id' => $operator->id,
         'name' => $operator->name,
-    ]);
+    ]]);
+    // The Supervisor is no longer derived from the lead's Operator.
+    expect($response->json('data.values'))->not->toHaveKey('supervisor_id');
+    expect($response->json('data.references'))->not->toHaveKey('supervisor');
 });
 
-it('opportunity-defaults: a lead without an operator prefills a null supervisor (AC-031)', function () {
+it('opportunity-defaults: a lead without an operator prefills empty manager slots', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
     Sanctum::actingAs($actor);
@@ -44,15 +49,15 @@ it('opportunity-defaults: a lead without an operator prefills a null supervisor 
     $response = $this->getJson("/api/leads/{$lead->id}/opportunity-defaults")->assertOk();
 
     expect($lead->operator_id)->toBeNull();
-    expect($response->json('data.values.supervisor_id'))->toBeNull();
-    expect($response->json('data.references.supervisor'))->toBeNull();
+    expect($response->json('data.manager_slots'))->toBe([]);
+    expect($response->json('data.manager_refs'))->toBe([]);
 });
 
 // ---------------------------------------------------------------------------
-// AC-032 — supervisor_id NEVER locked
+// The manager prefill is never a lock: locked_fields stays untouched
 // ---------------------------------------------------------------------------
 
-it('opportunity-defaults: supervisor_id is never in locked_fields, which stays exactly [source_id, registry_id] (AC-032)', function () {
+it('opportunity-defaults: the operator prefill never enters locked_fields, which stays exactly [source_id, registry_id]', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
     $lead->update(['operator_id' => User::factory()->create()->id]);
@@ -60,15 +65,15 @@ it('opportunity-defaults: supervisor_id is never in locked_fields, which stays e
 
     $response = $this->getJson("/api/leads/{$lead->id}/opportunity-defaults")->assertOk();
 
-    expect($response->json('data.locked_fields'))->not->toContain('supervisor_id');
+    expect($response->json('data.locked_fields'))->not->toContain('manager_slots');
     expect($response->json('data.locked_fields'))->toEqualCanonicalizing(['source_id', 'registry_id']);
 });
 
 // ---------------------------------------------------------------------------
-// AC-033 — the prefill is a suggestion, not a lock: the user-sent value wins
+// The prefill is a suggestion: an explicitly chosen supervisor still wins
 // ---------------------------------------------------------------------------
 
-it('create with lead_id: a supervisor_id different from lead.operator_id is accepted as-is (AC-033)', function () {
+it('create with lead_id: an explicit supervisor_id is accepted as-is (the manager prefill never blocks it)', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
     $operator = User::factory()->create();
@@ -79,11 +84,10 @@ it('create with lead_id: a supervisor_id different from lead.operator_id is acce
     $fks = array_merge(nonDerivableOpportunityFks(), ['supervisor_id' => $chosenSupervisor->id]);
 
     $response = $this->postJson('/api/opportunities', array_merge([
-        'name' => 'Overridden supervisor',
+        'name' => 'Explicit supervisor',
         'lead_id' => $lead->id,
     ], $fks))->assertCreated();
 
-    expect($chosenSupervisor->id)->not->toBe($operator->id);
     $this->assertDatabaseHas('opportunities', [
         'id' => $response->json('data.id'),
         'lead_id' => $lead->id,

@@ -36,7 +36,7 @@ if (! function_exists('referentUserWith')) {
 // AC-015 — columns config
 // ---------------------------------------------------------------------------
 
-it('returns the 5 columns in order with the declared flags, 403 without viewAny', function () {
+it('returns the 6 columns in order with the declared flags, 403 without viewAny', function () {
     $actor = referentUserWith([]);
     Sanctum::actingAs($actor);
     $this->getJson('/api/tables/referents/columns')->assertForbidden();
@@ -55,7 +55,7 @@ it('returns the 5 columns in order with the declared flags, 403 without viewAny'
         ->and($data['searchable'])->toBe(['name']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['name', 'referent_type', 'contact_scope', 'primary_contact', 'created_at']);
+    expect($ids)->toBe(['id', 'name', 'referent_type', 'contact_scope', 'primary_contact', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
     expect($columns['name']['filterType'])->toBe('text')

@@ -6,6 +6,7 @@ namespace App\Http\Requests\OpportunityWorkflows\Concerns;
 
 use App\DataObjects\OpportunityWorkflows\CreateOpportunityWorkflowData;
 use App\Enums\StatusGroup;
+use App\Enums\WorkflowStatusSystemKey;
 use App\Models\OpportunityWorkflow;
 use App\Support\OpportunityWorkflows\CriterionFieldRegistry;
 use Illuminate\Contracts\Validation\Validator;
@@ -42,8 +43,9 @@ trait ValidatesWorkflowCriteria
 
     /**
      * @param  bool  $allowIds  update passes true (statuses.*.id identifies
-     *                          an existing row); store passes false (every submitted status is
-     *                          necessarily new).
+     *                          an existing row); store passes false (a submitted status is
+     *                          either a new custom row or one of the 2 pinned system rows,
+     *                          tagged by `system_key`).
      * @return array<string, array<int, mixed>>
      */
     protected function statusesRules(bool $allowIds): array
@@ -53,6 +55,9 @@ trait ValidatesWorkflowCriteria
             'statuses.*.name' => ['required', 'string', 'max:191'],
             'statuses.*.color' => ['nullable', 'string', 'max:32'],
             'statuses.*.group' => ['required', Rule::enum(StatusGroup::class)],
+            // Create carries the 2 pinned rows tagged open/closed so the user
+            // can name them up front (AC-004); a custom row is null/absent.
+            'statuses.*.system_key' => ['sometimes', 'nullable', Rule::enum(WorkflowStatusSystemKey::class)],
         ];
 
         if ($allowIds) {

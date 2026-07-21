@@ -12,6 +12,7 @@ function values(overrides: Partial<LeadFormValues> = {}): LeadFormValues {
     operational_site_id: null,
     source_id: null,
     operator_id: null,
+    state_id: null,
     notes: null,
     extra_fields: [],
     convert_to_opportunity: false,
@@ -44,7 +45,7 @@ function original(overrides: Partial<LeadDetail> = {}): LeadDetail {
 describe('buildCreatePayload', () => {
   it('includes the required registry_id/campaign_id and the optional fields', () => {
     const payload = buildCreatePayload(
-      values({ operational_site_id: 3, source_id: 4, operator_id: 5, notes: 'Note' }),
+      values({ operational_site_id: 3, source_id: 4, operator_id: 5, state_id: 6, notes: 'Note' }),
     )
 
     expect(payload).toEqual({
@@ -53,6 +54,7 @@ describe('buildCreatePayload', () => {
       operational_site_id: 3,
       source_id: 4,
       operator_id: 5,
+      state_id: 6,
       notes: 'Note',
       extra_fields: null,
       convert_to_opportunity: false,
@@ -68,10 +70,22 @@ describe('buildCreatePayload', () => {
       operational_site_id: null,
       source_id: null,
       operator_id: null,
+      state_id: null,
       notes: null,
       extra_fields: null,
       convert_to_opportunity: false,
     })
+  })
+
+  /** Directive 2026-07-21: the Regione is a user input, sent unconditionally like the opportunity form. */
+  it('sends state_id unconditionally, even when the convert checkbox is on', () => {
+    const payload = buildCreatePayload(
+      values({ convert_to_opportunity: true, state_id: 7, operator_id: null, operational_site_id: null }),
+    )
+
+    expect(payload.state_id).toBe(7)
+    expect(payload.operator_id).toBeNull()
+    expect(payload.operational_site_id).toBeNull()
   })
 
   it('includes extra_fields as an object when rows are set (AC-014)', () => {
@@ -121,6 +135,20 @@ describe('buildUpdatePayload', () => {
       original({ source_id: 4, source: { id: 4, name: 'Web' } }),
     )
     expect(payload).toEqual({ source_id: null })
+  })
+
+  /** Directive 2026-07-21: the Regione is now a user-editable field, diffed like any other. */
+  it('includes state_id when changed', () => {
+    const payload = buildUpdatePayload(
+      values({ state_id: 3 }),
+      original({ state_id: null }),
+    )
+    expect(payload).toEqual({ state_id: 3 })
+  })
+
+  it('omits state_id when unchanged', () => {
+    const payload = buildUpdatePayload(values({ state_id: 3 }), original({ state_id: 3 }))
+    expect(payload).toEqual({})
   })
 
   it('omits extra_fields when the rows are unchanged (order-independent, AC-014)', () => {

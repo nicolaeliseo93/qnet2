@@ -43,6 +43,13 @@ interface RelationSelectFieldProps<
    */
   onValueChange?: (next: FieldPathValue<TFieldValues, TName>) => void
   /**
+   * Fired alongside `onValueChange` (pick/clear) with the full selected
+   * `ForSelectItem`, including `meta` — for a caller that needs more than the
+   * id (e.g. auto-filling a dependent field from a presentation bag). See
+   * `AsyncPaginatedSelect.onItemChange`.
+   */
+  onItemChange?: (item: ForSelectItem | null) => void
+  /**
    * Extra, resource-specific query parameters forwarded to the for-select
    * request (spec 0032 `dependency.param`, e.g. `{ registry_id }` to scope a
    * referent picker, spec 0040 BR-4). Omitted for a plain, unscoped picker.
@@ -86,6 +93,7 @@ export function RelationSelectField<
   forceDisabled = false,
   required,
   onValueChange,
+  onItemChange,
   params,
   placeholder,
   emptyLabel,
@@ -122,6 +130,7 @@ export function RelationSelectField<
                 field.onChange(value)
                 onValueChange?.(value)
               }}
+              onItemChange={onItemChange}
               selectedItem={toForSelectItem(quickCreatedMatch ?? selected)}
               showAvatar={showAvatar}
               disabled={isDisabled}

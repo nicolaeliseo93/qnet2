@@ -53,13 +53,18 @@ it('GET /api/tables/campaigns/columns: 200 with the declared columns, 403 withou
 
     $ids = collect($data['columns'])->pluck('id')->all();
     expect($ids)->toBe([
-        'code', 'project', 'name', 'pipeline_status', 'source',
+        'id', 'code', 'project', 'name', 'pipeline_status', 'source',
         'country', 'state', 'province', 'city', 'geo_scope',
         'start_date', 'end_date', 'total_budget', 'target_lead', 'created_at',
     ]);
 
     $columns = collect($data['columns'])->keyBy('id');
-    expect($columns['project']['sortable'])->toBeTrue()
+    expect($columns['id']['type'])->toBe('number')
+        ->and($columns['id']['visible'])->toBeFalse()
+        ->and($columns['id']['sortable'])->toBeTrue()
+        ->and($columns['id']['filterable'])->toBeFalse()
+        ->and($columns['id']['filterType'])->toBeNull()
+        ->and($columns['project']['sortable'])->toBeTrue()
         ->and($columns['pipeline_status']['sortable'])->toBeFalse()
         ->and($columns['pipeline_status']['filterType'])->toBe('set');
 });

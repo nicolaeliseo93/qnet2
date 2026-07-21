@@ -77,10 +77,12 @@ function defaults(leadId: number): OpportunityDefaults {
   return {
     lead_id: leadId,
     existing_opportunity_id: null,
-    values: { referent_id: null, source_id: 20, registry_id: 30, supervisor_id: null },
-    references: { source: { id: 20, name: 'Web' }, registry: { id: 30, name: 'Acme S.p.A.' }, supervisor: null },
+    values: { referent_id: null, source_id: 20, registry_id: 30 },
+    references: { source: { id: 20, name: 'Web' }, registry: { id: 30, name: 'Acme S.p.A.' } },
     locked_fields: ['source_id', 'registry_id'],
     product_lines: [],
+    manager_slots: [],
+    manager_refs: [],
   }
 }
 

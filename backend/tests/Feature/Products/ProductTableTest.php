@@ -34,7 +34,7 @@ if (! function_exists('productUserWith')) {
 // AC-018 — columns config
 // ---------------------------------------------------------------------------
 
-it('returns the 8 columns in order with the declared flags, 403 without viewAny', function () {
+it('returns the 9 columns in order with the declared flags, 403 without viewAny', function () {
     $actor = productUserWith([]);
     Sanctum::actingAs($actor);
     $this->getJson('/api/tables/products/columns')->assertForbidden();
@@ -49,10 +49,15 @@ it('returns the 8 columns in order with the declared flags, 403 without viewAny'
         ->and($data['searchable'])->toBe(['name']);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['name', 'description', 'cost', 'price', 'category', 'business_function', 'product_type', 'created_at']);
+    expect($ids)->toBe(['id', 'name', 'description', 'cost', 'price', 'category', 'business_function', 'product_type', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
-    expect($columns['description']['sortable'])->toBeFalse()
+    expect($columns['id']['sortable'])->toBeTrue()
+        ->and($columns['id']['filterable'])->toBeFalse()
+        ->and($columns['id']['filterType'])->toBeNull()
+        ->and($columns['id']['type'])->toBe('number')
+        ->and($columns['id']['visible'])->toBeFalse()
+        ->and($columns['description']['sortable'])->toBeFalse()
         ->and($columns['category']['filterType'])->toBe('set')
         ->and($columns['business_function']['filterType'])->toBe('set')
         ->and($columns['business_function']['sortable'])->toBeFalse()

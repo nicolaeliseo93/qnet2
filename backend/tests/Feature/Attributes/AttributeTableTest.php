@@ -32,7 +32,7 @@ if (! function_exists('attributeUserWith')) {
 // AC-006 — columns config
 // ---------------------------------------------------------------------------
 
-it('returns the 4 columns in order with the declared flags, 403 without viewAny', function () {
+it('returns the 5 columns in order with the declared flags, 403 without viewAny', function () {
     $actor = attributeUserWith([]);
     Sanctum::actingAs($actor);
     $this->getJson('/api/tables/attributes/columns')->assertForbidden();
@@ -48,10 +48,15 @@ it('returns the 4 columns in order with the declared flags, 403 without viewAny'
         ->and($data['defaultSort'])->toBe([['columnId' => 'created_at', 'direction' => 'desc']]);
 
     $ids = collect($data['columns'])->pluck('id')->all();
-    expect($ids)->toBe(['code', 'name', 'type', 'created_at']);
+    expect($ids)->toBe(['id', 'code', 'name', 'type', 'created_at']);
 
     $columns = collect($data['columns'])->keyBy('id');
-    expect($columns['type']['type'])->toBe('badge')
+    expect($columns['id']['type'])->toBe('number')
+        ->and($columns['id']['visible'])->toBeFalse()
+        ->and($columns['id']['sortable'])->toBeTrue()
+        ->and($columns['id']['filterable'])->toBeFalse()
+        ->and($columns['id']['filterType'])->toBeNull()
+        ->and($columns['type']['type'])->toBe('badge')
         ->and($columns['type']['filterType'])->toBe('set')
         ->and($columns['type']['badges'])->toHaveCount(13);
 });

@@ -36,10 +36,10 @@ use Illuminate\Validation\Rule;
  * lockable scalars. User directive 2026-07-17: `product_lines` is REQUIRED
  * (at least one {business_function_id, product_category_id} row) to create;
  * `company_id`/`company_site_id`/`operational_site_id` are REMOVED entirely.
- * `opportunity_status_id` (spec 0043, D-3) and `supervisor_id` are REQUIRED —
- * every opportunity carries a working-state classification and supervisor
- * from creation. The database column remains nullable because updates may
- * explicitly clear the supervisor.
+ * `opportunity_status_id` (spec 0043, D-3) is REQUIRED. `supervisor_id` is
+ * NULLABLE (directive 2026-07-21, relaxing spec 0044): it derives from the
+ * lead's Operatore, which may be empty, so an opportunity created from a lead
+ * without one carries no supervisor — the DB column has always been nullable.
  */
 class StoreOpportunityRequest extends FormRequest
 {
@@ -71,7 +71,7 @@ class StoreOpportunityRequest extends FormRequest
             'referent_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'commercial_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'reporter_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
-            'supervisor_id' => ['required', 'integer', Rule::exists('users', 'id')],
+            'supervisor_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'source_id' => $this->derivableRule($locked, 'source_id', required: false, table: 'sources'),
             'opportunity_status_id' => ['required', 'integer', Rule::exists('opportunity_statuses', 'id')],
             'lead_id' => ['nullable', 'integer', Rule::exists('leads', 'id'), Rule::unique('opportunities', 'lead_id')],
