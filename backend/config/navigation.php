@@ -156,6 +156,18 @@ return [
                     'route' => '/opportunity-workflows',
                     'permission' => 'opportunity-workflows.viewAny',
                 ],
+                [
+                    // Request Management (spec 0049): the operative
+                    // "Gestione Richieste" view over Opportunities for
+                    // commercial operators (D-1, no new entity). Gated by its
+                    // OWN `request-management.*` permission set, never
+                    // `opportunities.*`.
+                    'key' => 'request-management',
+                    'label' => 'navigation.requestManagement',
+                    'icon' => 'clipboard-list',
+                    'route' => '/request-management',
+                    'permission' => 'request-management.view',
+                ],
             ],
         ],
 

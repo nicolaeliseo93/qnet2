@@ -19,6 +19,7 @@ use App\Tables\ProjectsTableDefinition;
 use App\Tables\ReferentsTableDefinition;
 use App\Tables\ReferentTypesTableDefinition;
 use App\Tables\RegistriesTableDefinition;
+use App\Tables\RequestManagementTableDefinition;
 use App\Tables\RolesTableDefinition;
 use App\Tables\SectorsTableDefinition;
 use App\Tables\SourcesTableDefinition;
@@ -73,6 +74,7 @@ return [
         'opportunities' => OpportunitiesTableDefinition::class,
         'opportunity-statuses' => OpportunityStatusesTableDefinition::class,
         'opportunity-workflows' => OpportunityWorkflowsTableDefinition::class,
+        'request-management' => RequestManagementTableDefinition::class,
         'vat-rates' => VatRatesTableDefinition::class,
     ],
 

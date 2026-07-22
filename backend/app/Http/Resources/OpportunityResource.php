@@ -4,6 +4,8 @@ namespace App\Http\Resources;
 
 use App\Models\Opportunity;
 use App\Models\OpportunityWorkflowStatus;
+use App\RequestManagement\ApplicableAttribute;
+use App\RequestManagement\ApplicableAttributesResolver;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
 use App\Services\Opportunities\OpportunityWorkflowResolver;
 use Illuminate\Database\Eloquent\Model;
@@ -36,6 +38,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * limited to that set). Resolving the set re-runs the resolver (a bounded,
  * controlled query), relying on `productLines` already being eager-loaded by
  * OpportunityService::loadDetail() so it never N+1s beyond that one query.
+ *
+ * Spec 0049, D-8/AC-050 (additive, retrocompatible): `attribute_values` is the
+ * raw opportunity-level values map (`{}` when null) and `applicable_attributes`
+ * is the union/dedup-by-code set of the product lines' effective category
+ * attributes (App\RequestManagement\ApplicableAttributesResolver — same
+ * resolver the request-management module uses). Relies on
+ * OpportunityService::loadDetail() already eager-loading
+ * `productLines.productCategory`, so resolving it here never N+1s.
  */
 class OpportunityResource extends JsonResource
 {
@@ -75,6 +85,8 @@ class OpportunityResource extends JsonResource
             'expected_close_date' => $this->expected_close_date,
             'success_probability' => $this->success_probability,
             'locked_fields' => $this->resolveLockedFields(),
+            'attribute_values' => $this->attribute_values ?? [],
+            'applicable_attributes' => $this->resolveApplicableAttributes(),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
@@ -185,5 +197,17 @@ class OpportunityResource extends JsonResource
         }
 
         return app(LeadOpportunityDefaultsResolver::class)->resolve($lead)->lockedFields;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function resolveApplicableAttributes(): array
+    {
+        return app(ApplicableAttributesResolver::class)
+            ->resolve($this->resource)
+            ->map(fn (ApplicableAttribute $attribute): array => $attribute->toArray())
+            ->values()
+            ->all();
     }
 }

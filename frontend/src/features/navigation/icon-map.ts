@@ -3,6 +3,7 @@ import {
   Briefcase,
   Building2,
   Circle,
+  ClipboardList,
   ContactRound,
   DatabaseZap,
   FileUp,
@@ -54,6 +55,7 @@ const iconMap: Record<string, LucideIcon> = {
   percent: Percent,
   puzzle: Puzzle,
   'user-plus': UserPlus,
+  'clipboard-list': ClipboardList,
   workflow: Workflow,
 }
 

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { Building2, Contact, Handshake, History, Paperclip, Users } from 'lucide-react'
+import type { TFunction } from 'i18next'
+import { Building2, ClipboardList, Contact, Handshake, History, Paperclip, Users } from 'lucide-react'
 import {
   DetailEmpty,
   DetailField,
@@ -21,9 +22,14 @@ import { useAbilities } from '@/features/auth/use-abilities'
 import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
 import { OPPORTUNITY_STATUS_BADGE_CLASSES } from '@/features/opportunities/column-renderers'
 import type {
+  ApplicableAttributeSummary,
   OpportunityDetailWithPermissions as OpportunityDetailData,
   OpportunityProductLine,
 } from '@/features/opportunities/types'
+
+/** Stable empty defaults (spec 0049 D-8): a missing key on older fixtures reads the same as `[]`/`{}`. */
+const EMPTY_APPLICABLE_ATTRIBUTES: ApplicableAttributeSummary[] = []
+const EMPTY_ATTRIBUTE_VALUES: Record<string, unknown> = {}
 
 interface OpportunityDetailViewProps {
   opportunity: OpportunityDetailData
@@ -43,6 +49,90 @@ function ProductLinesList({ lines }: { lines: OpportunityProductLine[] }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+/**
+ * Formats one collected attribute value for read-only display (spec 0049
+ * D-8), per the Attribute's shared type vocabulary. Returns `null` for an
+ * unset value so the caller can fall back to `DetailEmpty`.
+ */
+function formatAttributeValue(
+  attribute: ApplicableAttributeSummary,
+  rawValue: unknown,
+  t: TFunction,
+): string | null {
+  if (rawValue === null || rawValue === undefined || rawValue === '') {
+    return null
+  }
+  if (Array.isArray(rawValue)) {
+    const items = rawValue
+      .map((item) => formatAttributeScalar(attribute, item, t))
+      .filter((item): item is string => item !== null)
+    return items.length > 0 ? items.join(', ') : null
+  }
+  return formatAttributeScalar(attribute, rawValue, t)
+}
+
+/** Formats a single (non-array) attribute value, dispatching on `type`. */
+function formatAttributeScalar(
+  attribute: ApplicableAttributeSummary,
+  rawValue: unknown,
+  t: TFunction,
+): string | null {
+  if (rawValue === null || rawValue === undefined || rawValue === '') {
+    return null
+  }
+  switch (attribute.type) {
+    case 'boolean':
+      return rawValue ? t('common.yes') : t('common.no')
+    case 'enum': {
+      const option = attribute.options.find((candidate) => candidate.value === String(rawValue))
+      return option?.label ?? String(rawValue)
+    }
+    case 'datetime':
+      return formatDateTime(rawValue) || String(rawValue)
+    case 'relation': {
+      if (rawValue && typeof rawValue === 'object') {
+        const relation = rawValue as { label?: unknown; name?: unknown; id?: unknown }
+        if (typeof relation.label === 'string') return relation.label
+        if (typeof relation.name === 'string') return relation.name
+        if (relation.id !== undefined) return String(relation.id)
+      }
+      return String(rawValue)
+    }
+    default:
+      return String(rawValue)
+  }
+}
+
+/**
+ * Read-only "Collected information" section (spec 0049 D-8, AC-064): one
+ * `DetailField` per applicable Attribute, its value formatted per `type`.
+ * Absent entirely when the opportunity has no applicable Attribute (no
+ * product-category row defines any).
+ */
+function CollectedAttributesSection({
+  attributes,
+  values,
+}: {
+  attributes: ApplicableAttributeSummary[]
+  values: Record<string, unknown>
+}) {
+  const { t } = useTranslation()
+  if (attributes.length === 0) {
+    return null
+  }
+  return (
+    <DetailSection title={t('opportunities.detail.collectedInformation')} icon={<ClipboardList />}>
+      <DetailGrid>
+        {attributes.map((attribute) => (
+          <DetailField key={attribute.id} label={attribute.name}>
+            {formatAttributeValue(attribute, values[attribute.code], t) ?? <DetailEmpty />}
+          </DetailField>
+        ))}
+      </DetailGrid>
+    </DetailSection>
   )
 }
 
@@ -196,6 +286,11 @@ export function OpportunityDetailView({ opportunity }: OpportunityDetailViewProp
           </DetailField>
         </DetailGrid>
       </DetailSection>
+
+      <CollectedAttributesSection
+        attributes={opportunity.applicable_attributes ?? EMPTY_APPLICABLE_ATTRIBUTES}
+        values={opportunity.attribute_values ?? EMPTY_ATTRIBUTE_VALUES}
+      />
 
       {opportunity.permissions.actions.view_documents ? (
         <DetailSection title={t('attachments.title')} icon={<Paperclip />}>

@@ -59,6 +59,7 @@ class Opportunity extends BaseModel
             'expected_close_date' => 'date',
             'estimated_value' => 'decimal:2',
             'success_probability' => 'integer',
+            'attribute_values' => 'array',
         ];
     }
 

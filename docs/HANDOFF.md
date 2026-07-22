@@ -2,6 +2,107 @@
 
 > Injected at session start. Update at every green state.
 
+## MODULO "GESTIONE RICHIESTE" (request-management) — spec 0049 (2026-07-21) — GREEN, NON COMMITTATO
+
+Nuovo modulo `request-management`: VISTA OPERATIVA sulle stesse Opportunita' per i commerciali.
+NESSUNA entita'/tabella nuova, NESSUNA duplicazione: scrive sull'Opportunita' e sui dati collegati.
+Spec: `docs/specs/0049-request-management-module.xml` (approvata + rettifiche di build annotate dentro).
+
+DECISIONI UTENTE (AskUserQuestion 2026-07-21):
+- ACCESSO: set permessi DEDICATO `request-management.*` (Policy propria), NON riuso opportunities.*.
+- SCOPING: default solo opportunita' dove l'utente e' Gestore Account (pivot opportunity_user);
+  con `request-management.viewAll` -> tutte. Precedente scoping: LeadImportsTableDefinition.
+- CAMPI DINAMICI: valori a LIVELLO OPPORTUNITA' (unione dedup-per-code degli attributi EFFICACI delle
+  categorie prodotto), colonna `opportunities.attribute_values` JSON. Attributi = template (no value
+  store nativo, EAV rimosso) -> nuovo pipeline valori dedicato in `app/RequestManagement/`.
+- STATO avanzato = STATO DI LAVORAZIONE workflow (`opportunity_workflow_status_id`, spec 0047), non pipeline.
+
+CONTRATTO (congelato): `GET|PATCH /api/request-management/{opportunity}` (envelope okWithPermissions).
+PATCH body sparse `{ opportunity_workflow_status_id?, attribute_values? {code:value} }`. Lista/filtri/
+export via framework generico (domain `request-management`). Contatti: owner = ref della CARD
+PersonalData `{type:'personal_data', id}|null` (unico contactable valido), passato a ContactsManager
+(riuso, non reimplementato; endpoint contacts.* esistenti). NAMING PERMESSO: `request-management.viewAll`
+(camelCase, BasePolicy concatena letterale — NON `view-all`).
+
+RETTIFICHE DI BUILD (annotate in spec D-7 + data_contract):
+- ATTIVITA': NIENTE endpoint activity dedicato al modulo. Il framework generico ActivityLogController
+  risolve l'authz per CLASSE MODELLO (Opportunity) -> sarebbe gated opportunities.viewActivity, non
+  request-management. Percio' NIENTE registrazione in config/activity-log.php e NIENTE azione activity
+  in tabella. Il tracciamento c'e': `RequestManagementService::updateWork()` scrive una entry activity
+  ESPLICITA sull'Opportunita' (i 2 campi sono fuori Fillable -> logFillable non li cattura). Write-side testato.
+- FILTRO workflow_status = MULTISELECT set (options da OpportunityWorkflowStatus), NON Relation
+  (non esiste opportunity-workflow-statuses/for-select).
+- CONTATTI owner = card PersonalData (vedi sopra); NON l'entita' (registry/referent non sono contactable;
+  personable_types ammette solo user -> il fetch by-owner 422erebbe). Registri/referenti gestiscono i
+  contatti dal proprio flusso, non dall'index /personal-data.
+
+FILE PRINCIPALI (nuovi salvo diversa nota):
+- BE: migration add_attribute_values_to_opportunities; Opportunity.php (solo cast, NON fillable);
+  Policy/Authorization RequestManagement*; config/{authorization,tables,navigation}.php (voce nel gruppo
+  opportunities-group, icon clipboard-list); app/RequestManagement/{ApplicableAttribute,
+  ApplicableAttributesResolver,AttributeValueValidator,AttributeValueNormalizer}.php;
+  Controller/Service/Scope/UpdateRequest/Resource RequestManagement*; routes/api/request-management.php
+  (+require in api.php); Tables/RequestManagementTableDefinition + RequestManagement/{RequestColumnCatalog,
+  RequestAdvancedFilterCatalog}; OpportunityResource.php (ADDITIVO: attribute_values+applicable_attributes).
+- FE: features/request-management/* (types/api/query-keys; request-work-panel + sezioni + hook + schema +
+  payload + adapter attributi; table + column-renderers + screens (moduleScreen, defaultMode page,
+  generateRoutes:false)); pages/request-management-page.tsx; router.tsx (list + :id); i18n
+  it/en-request-management.ts + it/en.ts (en.ts SPLITTATO: estratto notifications in en/it-notifications.ts
+  per rispettare il limite 500 righe); opportunities/opportunity-detail.tsx (+ types.ts) ADDITIVO sezione
+  "Informazioni raccolte" read-only; navigation/icon-map.ts (+clipboard-list); routes/breadcrumbs.tsx.
+
+VERIFICA (verifier indipendente, reale): tutti gli AC-001..AC-070 PASS. Backend: RequestManagement +
+Unit + Opportunities 414/414; suite piena 3220 test con 12 rossi TUTTI provati pre-esistenti su baseline
+(git stash) tranne FieldCatalogueEndpointTest — CORRETTO (aggiunto 'request-management' all'atteso: nuova
+risorsa nel registry, requisito cambiato, dichiarato). FE: vitest full 1916/1918 (2 flaky non correlati,
+verdi in isolamento); `tsc -b` pulito; Pint/ESLint puliti. 3 file test fuori-scope toccati per errore da
+un subagente sono stati RIPRISTINATI a baseline (git checkout).
+
+PROSSIMO PASSO: chiedere all'utente se committare (CLAUDE.md §3.6 — nessun commit senza ordine).
+Seeder demo/ruolo commerciale con i permessi request-management.* + contacts.* NON creato (fuori scope
+esplicito); da valutare come follow-up se serve un ruolo pronto. Limitazione nota: attributi type
+`relation` renderizzano solo se `relation_target` ha shape nota; card PersonalData mancante -> contatti
+in sola lettura (nessun flusso di creazione card nel pannello, edge case raro).
+
+## FIX TEST ContactsCell + PINT + AUDIT TRADUZIONI (2026-07-21) — GREEN, NON COMMITTATO
+
+Scansione veloce del progetto + fix richiesti dall'utente. Codebase risultato molto sano
+(tsc/ESLint/Pint app puliti; nessun anti-pattern SQLi/XSS/fetch nudo; whereRaw tutte bound).
+
+FIX APPLICATI:
+- `frontend/src/features/table/cell-renderers.test.tsx`: i 3 test ContactsCell erano ROSSI da tempo
+  (preesistenti in HANDOFF). Due cause: (1) asserzioni stale in inglese mentre la locale default è `it`
+  e i fratelli BadgeCell già asseriscono italiano → allineate a `'2 contatti principali'` e bottone
+  `'Copia'` (requisito = app in italiano, dichiarato, non test-tampering); (2) il tooltip Radix non si
+  apre con `mouseEnter` sotto jsdom → usato il pattern già in uso nel repo (`fireEvent.pointerMove` +
+  `await screen.findByRole('tooltip')`, test `async`), e `within(tooltip)` per contare i 2 bottoni Copia
+  (Radix specchia il contenuto in una copia per screen-reader → query document-wide contava 4).
+- Pint: `tests/Unit/Models/PipelineStatusTest.php` (ordered_imports) e
+  `tests/Feature/CompanySites/CompanySiteUpdateTest.php` (unary spaces, eof) riformattati con `pint`.
+
+AUDIT TRADUZIONI (it vs en, foglie identiche): 68 valori identici, TUTTI internazionalismi/acronimi
+(ID, Email, PEC, IBAN, Password, Account, CSV, URL, Micro, Alias, Badge, Select, Checkbox, Placeholder,
+Pattern) o vocabolario di dominio tenuto volutamente in inglese in tutto il CRM (Lead, Partner, Budget,
+Team, Business Unit/Service, Dashboard). NESSUNA frase inglese non tradotta: la locale `it` è completa e
+la completezza strutturale è garantita da TS (`it: TranslationResources = typeof en`). NON mass-tradotti
+per non introdurre naming drift (engineering.md §1.2). Uniche stringhe inglesi hardcoded trovate: aria-label
+in componenti shadcn/ui vendored (`sheet`/`dialog` "Close" sr-only, `sidebar` "Toggle Sidebar", `stepper`
+nav "Progress", `sheet` "Resize panel") — decisione utente su se/come italianizzarle.
+
+VERIFICA (green reale): `tsc --noEmit` EXIT 0; ESLint EXIT 0; Pint `--test` EXIT 0; vitest
+`features/table` 14 file / 136 test PASS (i 3 ex-rossi ora verdi).
+
+FOLLOW-UP — TITOLO/BREADCRUMB IN INGLESE (es. "Opportunities" su /opportunities): NON era un problema
+di traduzioni mancanti. La sidebar è corretta (`nav-main.tsx` fa `t(item.label)` su chiave i18n). Il
+top-bar (breadcrumb + `AppPageTitle` h1) deriva il titolo da `SEGMENT_LABELS` in `src/routes/breadcrumbs.tsx`;
+i segmenti non mappati ricadono su `humanize(segment)` → testo inglese capitalizzato. La mappa non era
+stata aggiornata coi moduli recenti. Aggiunti i 7 segmenti mancanti (chiavi `navigation.*` già esistenti
+in it/en): `referent-types`, `operational-sites`, `sources`, `tags`, `opportunities`,
+`opportunity-statuses`, `opportunity-workflows`. Ora tutti i segmenti di route sono coperti. VERIFICA:
+`tsc` EXIT 0; ESLint EXIT 0; `breadcrumbs.test.tsx` 4/4 PASS. NB: le label di colonna/enum arrivano dal
+BE come CHIAVI i18n e le traduce il FE — quindi la lingua dipende dal profilo utente (`applyLocale` da
+`me.locale`); con utente locale `it` i contenuti sono già italiani.
+
 ## RESTYLING UI POPUP + SEZIONE FILE MODULO OPPORTUNITA (2026-07-21) — GREEN FE, NON COMMITTATO
 
 Direttiva utente: restyling COMPLETO del popup gestione file e della sezione File dell'Opportunita —

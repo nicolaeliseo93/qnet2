@@ -40,6 +40,7 @@ export const opportunities = {
     subtitle: 'Read-only view of the selected opportunity.',
     loadError: 'Unable to load the opportunity. Please try again.',
     sourceLead: 'Originating lead',
+    collectedInformation: 'Collected information',
   },
   form: {
     newOpportunity: 'New opportunity',

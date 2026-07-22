@@ -18,6 +18,7 @@ use App\Authorization\ProjectsAuthorization;
 use App\Authorization\ReferentsAuthorization;
 use App\Authorization\ReferentTypesAuthorization;
 use App\Authorization\RegistriesAuthorization;
+use App\Authorization\RequestManagementAuthorization;
 use App\Authorization\RolesAuthorization;
 use App\Authorization\SectorsAuthorization;
 use App\Authorization\SourcesAuthorization;
@@ -70,6 +71,7 @@ return [
         'opportunities' => OpportunitiesAuthorization::class,
         'opportunity-statuses' => OpportunityStatusesAuthorization::class,
         'opportunity-workflows' => OpportunityWorkflowsAuthorization::class,
+        'request-management' => RequestManagementAuthorization::class,
         'vat-rates' => VatRatesAuthorization::class,
     ],
 

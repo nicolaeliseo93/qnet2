@@ -24,6 +24,8 @@ import { leads } from './it-leads'
 import { opportunities } from './it-opportunities'
 import { opportunityStatuses } from './it-opportunity-statuses'
 import { opportunityWorkflows } from './it-opportunity-workflows'
+import { requestManagement } from './it-request-management'
+import { notifications } from './it-notifications'
 import { leadImports } from './it-lead-imports'
 import { businessFunctions } from './it-business-functions'
 import { moduleStats, statsPanel } from './it-stats'
@@ -89,6 +91,7 @@ export const it: TranslationResources = {
     opportunities: 'Opportunità',
     opportunityStatuses: 'Stati Opportunità',
     opportunityWorkflows: 'Configuratore Stati Lavorazione',
+    requestManagement: 'Gestione Richieste',
     opportunitiesAndCommesse: 'Opportunità e Commesse',
     imports: 'Importa lead',
     pipelineStatuses: 'Stati progetto/campagna',
@@ -369,23 +372,7 @@ export const it: TranslationResources = {
     passwordsDontMatch: 'Le password non coincidono.',
     genericError: 'Si è verificato un errore. Riprova.',
   },
-  notifications: {
-    title: 'Notifiche',
-    open: 'Apri notifiche',
-    filterLabel: 'Filtra notifiche',
-    filters: {
-      all: 'Tutte',
-      unread: 'Non lette',
-      read: 'Lette',
-    },
-    empty: 'Non hai notifiche.',
-    untitled: 'Notifica',
-    markAllAsRead: 'Segna tutte come lette',
-    markAsRead: 'Segna come letta',
-    unreadCount: '{{count}} notifiche non lette',
-    loadError: 'Impossibile caricare le notifiche. Riprova.',
-    actionError: 'Si è verificato un errore. Riprova.',
-  },
+  notifications,
   avatar: {
     chooseImage: 'Scegli immagine',
     removeAvatar: 'Rimuovi',
@@ -474,6 +461,7 @@ export const it: TranslationResources = {
   opportunities: { ...opportunities, stats: moduleStats.opportunities },
   opportunityStatuses,
   opportunityWorkflows,
+  requestManagement,
   importRuns: { stats: moduleStats.importRuns },
   attachments,
 }

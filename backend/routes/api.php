@@ -355,6 +355,7 @@ Route::middleware('auth:sanctum')->group(function () {
     require __DIR__.'/api/projects.php'; // Project statuses / Projects / Campaigns CRUD (spec 0023)
     require __DIR__.'/api/leads.php'; // Leads CRUD (spec 0024) + opportunity-defaults (spec 0040)
     require __DIR__.'/api/opportunities.php'; // Opportunities CRUD (spec 0040)
+    require __DIR__.'/api/request-management.php'; // Work-panel show/update (spec 0049)
     // Attributes CRUD (spec 0017): the global, reusable dynamic-attribute
     // catalogue assignable to product categories. Authorization
     // (attributes.view/create/update/delete) is enforced server-side in

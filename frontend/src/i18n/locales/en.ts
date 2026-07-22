@@ -31,6 +31,8 @@ import { leads } from './en-leads'
 import { opportunities } from './en-opportunities'
 import { opportunityStatuses } from './en-opportunity-statuses'
 import { opportunityWorkflows } from './en-opportunity-workflows'
+import { requestManagement } from './en-request-management'
+import { notifications } from './en-notifications'
 import { leadImports } from './en-lead-imports'
 import { businessFunctions } from './en-business-functions'
 import { moduleStats, statsPanel } from './en-stats'
@@ -96,6 +98,7 @@ export const en = {
     opportunities: 'Opportunities',
     opportunityStatuses: 'Opportunity Statuses',
     opportunityWorkflows: 'Workflow Configurator',
+    requestManagement: 'Request Management',
     opportunitiesAndCommesse: 'Opportunities & Contracts',
     imports: 'Import Lead',
     pipelineStatuses: 'Project/Campaign Statuses',
@@ -379,23 +382,7 @@ export const en = {
     passwordsDontMatch: 'Passwords do not match.',
     genericError: 'Something went wrong. Please try again.',
   },
-  notifications: {
-    title: 'Notifications',
-    open: 'Open notifications',
-    filterLabel: 'Filter notifications',
-    filters: {
-      all: 'All',
-      unread: 'Unread',
-      read: 'Read',
-    },
-    empty: 'You have no notifications.',
-    untitled: 'Notification',
-    markAllAsRead: 'Mark all as read',
-    markAsRead: 'Mark as read',
-    unreadCount: '{{count}} unread notifications',
-    loadError: 'Unable to load notifications. Please try again.',
-    actionError: 'Something went wrong. Please try again.',
-  },
+  notifications,
   avatar: {
     chooseImage: 'Choose image',
     removeAvatar: 'Remove',
@@ -490,6 +477,7 @@ export const en = {
   opportunities: { ...opportunities, stats: moduleStats.opportunities },
   opportunityStatuses,
   opportunityWorkflows,
+  requestManagement,
   importRuns: { stats: moduleStats.importRuns },
   attachments,
 }

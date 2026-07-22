@@ -54,6 +54,37 @@ export interface OpportunityManagerRef {
   position: number
 }
 
+/** A single labeled choice of an enum-type Attribute (spec 0049). */
+export interface AttributeOptionRef {
+  value: string
+  label: string
+  color: string | null
+}
+
+/**
+ * Spec 0049 (D-8, `data_contract` "OPPORTUNITA' (additivo)"): summary of ONE
+ * Attribute applicable to this opportunity — the union, dedup-per-`code`, of
+ * the effective Attributes of every product-category row — as exposed by
+ * `OpportunityResource.applicable_attributes`. Kept LOCAL rather than imported
+ * from `features/request-management` to keep the two modules decoupled; it
+ * mirrors the same shape by frozen contract, not by import.
+ */
+export interface ApplicableAttributeSummary {
+  id: number
+  code: string
+  name: string
+  type: string
+  description: string | null
+  help_text: string | null
+  placeholder: string | null
+  icon: string | null
+  config: Record<string, unknown> | null
+  relation_target: Record<string, unknown> | null
+  is_required: boolean
+  sort_order: number
+  options: AttributeOptionRef[]
+}
+
 /**
  * A confirmed business-function + product-category pair (spec 0040 amendment
  * rev.3, AC-097/098/101): replaces the former single `business_function_id`/
@@ -130,6 +161,20 @@ export interface OpportunityDetail {
   locked_fields: string[]
   created_at: string
   updated_at: string
+  /**
+   * Spec 0049 (D-8): opportunity-level dynamic field values collected by the
+   * "Gestione Richieste" module, keyed by Attribute `code`; `{}` when none.
+   * Optional for the same fixture-compatibility reason as `state`/
+   * `workflow_status` above — treat a missing key the same as `{}`.
+   */
+  attribute_values?: Record<string, unknown>
+  /**
+   * Spec 0049 (D-8): the union (dedup per `code`) of the effective Attributes
+   * of every product-category row, feeding `attribute_values`'s labels in the
+   * read-only "Collected information" section (`opportunity-detail.tsx`).
+   * Optional for the same fixture-compatibility reason; treat missing as `[]`.
+   */
+  applicable_attributes?: ApplicableAttributeSummary[]
 }
 
 /**

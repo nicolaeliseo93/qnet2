@@ -40,6 +40,7 @@ export const opportunities = {
     subtitle: "Visualizzazione in sola lettura dell'opportunità selezionata.",
     loadError: "Impossibile caricare l'opportunità. Riprova.",
     sourceLead: 'Lead di origine',
+    collectedInformation: 'Informazioni raccolte',
   },
   form: {
     newOpportunity: 'Nuova opportunità',
