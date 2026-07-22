@@ -32,6 +32,7 @@ export const notes = {
     send: 'Invia',
     save: 'Salva',
     hint: 'Digita @ per menzionare un collega',
+    removeMention: 'Rimuovi la menzione di {{name}}',
     charactersLeft_one: '{{count}} carattere rimasto',
     charactersLeft_other: '{{count}} caratteri rimasti',
   },

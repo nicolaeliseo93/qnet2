@@ -8,18 +8,19 @@ import {
   type KeyboardEvent,
   type SyntheticEvent,
 } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Textarea } from '@/components/ui/textarea'
-import { UserAvatar } from '@/components/user-avatar'
-import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { flattenForSelectPages } from '@/features/for-select/use-for-select'
 import { useMentionableUsers } from '@/features/notes/use-mentionable-users'
+import { MentionPickerPanel } from '@/features/notes/mention-picker-panel'
+import {
+  extractMentionIds,
+  parseMentionRefs,
+  toDisplayText,
+  toWireBody,
+} from '@/features/notes/mention-tokens'
 import type { ForSelectItem } from '@/features/for-select/types'
-
-/** Mention token stored in the body (D-12), e.g. `@[Nome Cognome](user:12)`. */
-const MENTION_TOKEN_PATTERN = /@\[([^\]]+)\]\(user:(\d+)\)/g
 
 /**
  * Matches an active `@query` right before the caret: an `@` at the start of
@@ -42,20 +43,6 @@ export interface MentionTextareaProps {
   autoFocus?: boolean
   'aria-invalid'?: boolean
   'aria-describedby'?: string
-}
-
-/** Extracts the deduplicated mention ids from the body's tokens, in order of first appearance. */
-function extractMentionIds(body: string): number[] {
-  const ids: number[] = []
-  const seen = new Set<number>()
-  for (const match of body.matchAll(MENTION_TOKEN_PATTERN)) {
-    const id = Number(match[2])
-    if (!seen.has(id)) {
-      seen.add(id)
-      ids.push(id)
-    }
-  }
-  return ids
 }
 
 /**
@@ -84,7 +71,6 @@ export function MentionTextarea({
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
 }: MentionTextareaProps) {
-  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [triggerStart, setTriggerStart] = useState<number | null>(null)
@@ -107,6 +93,16 @@ export function MentionTextarea({
 
   const options = useMemo(() => flattenForSelectPages(data?.pages), [data?.pages])
   const activeOption = options[activeIndex] as ForSelectItem | undefined
+
+  // The field shows `@Name`; the wire format (D-12) never reaches the screen.
+  const mentionRefs = useMemo(() => parseMentionRefs(value), [value])
+  const displayValue = useMemo(() => toDisplayText(value), [value])
+
+  /** Re-tokenizes an edited display text and pushes it up in the wire format. */
+  function emitDisplayText(nextDisplay: string, refs = mentionRefs) {
+    const nextValue = toWireBody(nextDisplay, refs)
+    onChange(nextValue, extractMentionIds(nextValue))
+  }
 
   useEffect(() => {
     if (pendingCaretRef.current === null) {
@@ -149,9 +145,9 @@ export function MentionTextarea({
   }
 
   function handleChange(event: ChangeEvent<HTMLTextAreaElement>) {
-    const nextValue = event.target.value
-    onChange(nextValue, extractMentionIds(nextValue))
-    updateTrigger(nextValue, event.target.selectionStart)
+    const nextDisplay = event.target.value
+    emitDisplayText(nextDisplay)
+    updateTrigger(nextDisplay, event.target.selectionStart)
   }
 
   // Covers caret moves that don't fire `onChange`: clicks and arrow-key
@@ -166,10 +162,11 @@ export function MentionTextarea({
       return
     }
     const caret = textarea.selectionStart ?? triggerStart
-    const token = `@[${item.label}](user:${item.id}) `
-    const nextValue = `${value.slice(0, triggerStart)}${token}${value.slice(caret)}`
-    pendingCaretRef.current = triggerStart + token.length
-    onChange(nextValue, extractMentionIds(nextValue))
+    const insertion = `@${item.label} `
+    const nextDisplay = `${displayValue.slice(0, triggerStart)}${insertion}${displayValue.slice(caret)}`
+    pendingCaretRef.current = triggerStart + insertion.length
+    // The picked user is not among the body's previous refs yet, hence the extra entry.
+    emitDisplayText(nextDisplay, [...mentionRefs, { id: item.id, name: item.label }])
     closePicker()
   }
 
@@ -228,7 +225,7 @@ export function MentionTextarea({
       <Textarea
         ref={textareaRef}
         id={id}
-        value={value}
+        value={displayValue}
         onChange={handleChange}
         onSelect={handleSelect}
         onKeyDown={handleKeyDown}
@@ -250,76 +247,16 @@ export function MentionTextarea({
       />
 
       {open ? (
-        <div
-          id={listboxId}
-          role="listbox"
-          aria-label={t('notes.mentionPicker.label', { defaultValue: 'Mentionable users' })}
-          className="absolute top-full left-0 z-50 mt-1.5 w-full min-w-56 overflow-hidden rounded-lg border border-muted-foreground/20 bg-white text-popover-foreground shadow-xl dark:bg-muted/40"
-        >
-          <div className="flex items-center justify-between gap-2 border-b border-muted-foreground/15 bg-muted/50 px-2 py-1">
-            <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-              {t('notes.mentionPicker.title', { defaultValue: 'Mention a colleague' })}
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              {t('notes.mentionPicker.hint', { defaultValue: 'Tab or Enter to insert' })}
-            </span>
-          </div>
-          <div className="max-h-56 overflow-y-auto p-1">
-            {isPending ? (
-              <MentionOptionsSkeleton />
-            ) : options.length === 0 ? (
-              <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-                {t('notes.mentionPicker.empty', { defaultValue: 'No matching users' })}
-              </p>
-            ) : (
-              options.map((item, index) => (
-                <div
-                  key={item.id}
-                  id={optionId(item.id)}
-                  role="option"
-                  aria-selected={index === activeIndex}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  // `mousedown` (not `click`): the textarea's own `onBlur` closes the
-                  // picker, which would unmount the option before a `click` ever
-                  // lands. Preventing the default also keeps focus in the field.
-                  onMouseDown={(event) => {
-                    event.preventDefault()
-                    selectOption(item)
-                  }}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
-                    index === activeIndex
-                      ? 'bg-accent text-accent-foreground'
-                      : 'hover:bg-muted',
-                  )}
-                >
-                  <UserAvatar name={item.label} src={item.avatar_url} size="sm" className="text-[10px]" />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate font-medium">{item.label}</span>
-                    {item.subtitle ? (
-                      <span className="truncate text-[10px] text-muted-foreground">{item.subtitle}</span>
-                    ) : null}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <MentionPickerPanel
+          listboxId={listboxId}
+          options={options}
+          isPending={isPending}
+          activeIndex={activeIndex}
+          onActiveIndexChange={setActiveIndex}
+          onSelect={selectOption}
+          optionId={optionId}
+        />
       ) : null}
-    </div>
-  )
-}
-
-/** Skeleton shaped like a short list of mention candidates. */
-function MentionOptionsSkeleton() {
-  return (
-    <div className="space-y-1 p-1" data-testid="mention-options-skeleton">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div key={index} className="flex items-center gap-2 px-2 py-1">
-          <Skeleton className="size-6 shrink-0 rounded-full" />
-          <Skeleton className="h-3 w-[60%]" />
-        </div>
-      ))}
     </div>
   )
 }

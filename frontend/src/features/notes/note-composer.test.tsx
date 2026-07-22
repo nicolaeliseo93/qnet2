@@ -120,6 +120,33 @@ describe('NoteComposer — create/reply payload (AC-071)', () => {
   })
 })
 
+describe('NoteComposer — mention badges', () => {
+  it('shows a badge per mentioned user and keeps the field free of raw tokens', () => {
+    renderComposer()
+
+    fireEvent.change(bodyField(), { target: { value: 'Hi @[Alice Verdi](user:12)' } })
+
+    expect(screen.getByRole('button', { name: "Remove Alice Verdi's mention" })).toBeInTheDocument()
+    expect(bodyField()).toHaveValue('Hi @Alice Verdi')
+  })
+
+  it('dismissing a badge strips the mention from both the body and the payload', async () => {
+    createMutateAsync.mockResolvedValue(ROOT_NOTE)
+    renderComposer()
+
+    fireEvent.change(bodyField(), { target: { value: 'Hi @[Alice Verdi](user:12) ciao' } })
+    fireEvent.click(screen.getByRole('button', { name: "Remove Alice Verdi's mention" }))
+
+    expect(bodyField()).toHaveValue('Hi ciao')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ body: 'Hi ciao', mentions: [] }),
+      ),
+    )
+  })
+})
+
 describe('NoteComposer — edit mode', () => {
   it('pre-fills the body and PATCHes with the edited body/mentions on save', async () => {
     updateMutateAsync.mockResolvedValue({ ...ROOT_NOTE, body: 'Edited body' })

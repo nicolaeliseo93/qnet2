@@ -3,12 +3,14 @@ import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Loader2, Send } from 'lucide-react'
+import { Loader2, Send, X } from 'lucide-react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
+import { UserAvatar } from '@/components/user-avatar'
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
 import { MentionTextarea } from '@/features/notes/mention-textarea'
+import { extractMentionIds, parseMentionRefs, removeMention } from '@/features/notes/mention-tokens'
 import { useCreateNote, useUpdateNote } from '@/features/notes/use-note-mutations'
 import type { Note } from '@/features/notes/types'
 
@@ -139,6 +141,15 @@ export function NoteComposer({
                   autoFocus={autoFocus}
                 />
               </FormControl>
+              <MentionBadges
+                body={field.value}
+                disabled={pending}
+                onRemove={(userId) => {
+                  const nextBody = removeMention(field.value, userId)
+                  field.onChange(nextBody)
+                  setMentions(extractMentionIds(nextBody))
+                }}
+              />
               <FormMessage />
             </FormItem>
           )}
@@ -172,5 +183,52 @@ export function NoteComposer({
         </div>
       </form>
     </Form>
+  )
+}
+
+interface MentionBadgesProps {
+  /** Wire body (D-12): the badges are derived from the tokens it still carries. */
+  body: string
+  disabled?: boolean
+  onRemove: (userId: number) => void
+}
+
+/**
+ * The people the draft mentions, as removable badges. The field itself only
+ * ever shows the readable `@Name`, so this row is where a mention becomes a
+ * visible, dismissible entity instead of raw markup.
+ */
+function MentionBadges({ body, disabled, onRemove }: MentionBadgesProps) {
+  const { t } = useTranslation()
+  const refs = parseMentionRefs(body)
+
+  if (refs.length === 0) {
+    return null
+  }
+
+  return (
+    <ul className="flex flex-wrap items-center gap-1.5 pt-1.5">
+      {refs.map((ref) => (
+        <li
+          key={ref.id}
+          className="flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 py-0.5 pr-0.5 pl-1 text-xs text-primary"
+        >
+          <UserAvatar name={ref.name} size="sm" className="size-4 text-[9px]" />
+          <span className="max-w-40 truncate font-medium">{ref.name}</span>
+          <button
+            type="button"
+            onClick={() => onRemove(ref.id)}
+            disabled={disabled}
+            aria-label={t('notes.composer.removeMention', {
+              defaultValue: 'Rimuovi la menzione di {{name}}',
+              name: ref.name,
+            })}
+            className="flex size-4 items-center justify-center rounded-full transition-colors hover:bg-primary/20 disabled:pointer-events-none disabled:opacity-50"
+          >
+            <X className="size-3" aria-hidden="true" />
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }

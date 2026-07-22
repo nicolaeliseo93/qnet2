@@ -32,6 +32,7 @@ export const notes = {
     send: 'Send',
     save: 'Save',
     hint: 'Type @ to mention a colleague',
+    removeMention: "Remove {{name}}'s mention",
     charactersLeft_one: '{{count}} character left',
     charactersLeft_other: '{{count}} characters left',
   },

@@ -8228,3 +8228,29 @@ su `src/features/notes`. NIENTE COMMIT (attesa via libera §3.6).
   pagine di dettaglio NON vanno ritinte (tentativo di mettere `bg-card` sul DialogContent
   respinto dall'utente e revertito). Gerarchia attuale: host (bianco in pagina / 91% nel dialog)
   -> vassoio 84% -> bolle bianche. Verde: 71/71 test note+request-management, tsc + eslint puliti.
+
+## 0052 UPDATE — MENZIONI LEGGIBILI + BADGE NEL COMPOSER (2026-07-22) — VERDE, NON COMMITTATO
+
+Il token grezzo `@[Nome Cognome](user:8)` non compare piu' a schermo. Il FORMATO SUL FILO resta
+INVARIATO (D-12): e' solo la rappresentazione nel campo che cambia.
+
+- NUOVO `features/notes/mention-tokens.ts`: unica sede di `MENTION_TOKEN_PATTERN`,
+  `extractMentionIds`, `parseMentionRefs`, `toDisplayText` (wire -> `@Nome`), `toWireBody`
+  (`@Nome` -> token), `splitIntoSegments` (usato anche da `note-body.tsx`, prima duplicato),
+  `removeMention`. `toWireBody` ordina i ref per NOME PIU' LUNGO PRIMA: senza, `@Ann` mangerebbe
+  il prefisso di `@Anna`. Cancellare a mano parte del nome fa cadere l'id da solo — comportamento
+  voluto e coperto da test.
+- `MentionTextarea`: la textarea ora e' guidata da `toDisplayText(value)`; ogni edit torna su in
+  formato wire via `toWireBody`. Selezione candidato inserisce `@Nome ` (non piu' il token), il
+  caret pendente e' in coordinate DISPLAY.
+- NUOVO `mention-picker-panel.tsx`: pannello candidati estratto (il file era a 325 righe, sopra
+  il soft limit 300; ora 262 + 100).
+- `NoteComposer`: riga di BADGE rimovibili sotto il campo (`MentionBadges`, avatar + nome + X,
+  `notes.composer.removeMention`), derivata dai token del body con `parseMentionRefs`.
+- TEST AGGIORNATI DI PROPOSITO (requisito cambiato su richiesta utente): le asserzioni su
+  `field()` ora attendono `@Alice Verdi `, e l'Harness espone `Body: [...]` per verificare che il
+  token D-12 arrivi comunque intatto al parent. Non e' test tampering: e' il contratto UI che e'
+  cambiato, quello API no.
+
+VERIFICA ESEGUITA: `vitest run notes + request-management` 74/74 verdi (44 nel modulo note),
+suite allargata a opportunities 206/206, `tsc -b --noEmit` pulito, ESLint pulito. NIENTE COMMIT.

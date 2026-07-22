@@ -1,13 +1,5 @@
 import { Fragment } from 'react'
-
-/** Matches a mention token `@[Name Surname](user:12)` (D-12). */
-const MENTION_TOKEN_PATTERN = /@\[([^\]]+)\]\(user:(\d+)\)/g
-
-interface NoteBodySegment {
-  key: string
-  type: 'text' | 'mention'
-  content: string
-}
+import { splitIntoSegments } from '@/features/notes/mention-tokens'
 
 export interface NoteBodyProps {
   /** Raw note body, with mention tokens still inline (D-12). */
@@ -25,7 +17,7 @@ export function NoteBody({ body }: NoteBodyProps) {
   const segments = splitIntoSegments(body)
 
   return (
-    <p className="whitespace-pre-wrap break-words text-sm text-foreground">
+    <p className="text-sm break-words whitespace-pre-wrap text-foreground">
       {segments.map((segment) =>
         segment.type === 'mention' ? (
           <span
@@ -40,25 +32,4 @@ export function NoteBody({ body }: NoteBodyProps) {
       )}
     </p>
   )
-}
-
-/** Splits a raw body into alternating text/mention segments, in source order. */
-function splitIntoSegments(body: string): NoteBodySegment[] {
-  const segments: NoteBodySegment[] = []
-  const pattern = new RegExp(MENTION_TOKEN_PATTERN)
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = pattern.exec(body)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ key: `text-${lastIndex}`, type: 'text', content: body.slice(lastIndex, match.index) })
-    }
-    segments.push({ key: `mention-${match.index}`, type: 'mention', content: match[1] })
-    lastIndex = match.index + match[0].length
-  }
-  if (lastIndex < body.length) {
-    segments.push({ key: `text-${lastIndex}`, type: 'text', content: body.slice(lastIndex) })
-  }
-
-  return segments
 }

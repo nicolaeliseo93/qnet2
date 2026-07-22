@@ -40,6 +40,8 @@ function Harness({ initialValue = '' }: { initialValue?: string }) {
         entityId={1}
       />
       <p>Mentions: [{mentions.join(',')}]</p>
+      {/* The wire body the parent receives — asserts D-12 survives the readable field. */}
+      <p>Body: [{value}]</p>
     </>
   )
 }
@@ -134,7 +136,9 @@ describe('MentionTextarea', () => {
     fireEvent.change(field(), { target: { value: '@' } })
     fireEvent.keyDown(field(), { key: 'Enter' })
 
-    expect(field()).toHaveValue('@[Alice Verdi](user:12) ')
+    // The field stays readable; the frozen wire token travels to the parent.
+    expect(field()).toHaveValue('@Alice Verdi ')
+    expect(screen.getByText('Body: [@[Alice Verdi](user:12) ]')).toBeInTheDocument()
     expect(screen.getByText('Mentions: [12]')).toBeInTheDocument()
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
@@ -145,7 +149,8 @@ describe('MentionTextarea', () => {
     fireEvent.change(field(), { target: { value: '@' } })
     fireEvent.keyDown(field(), { key: 'Tab' })
 
-    expect(field()).toHaveValue('@[Alice Verdi](user:12) ')
+    expect(field()).toHaveValue('@Alice Verdi ')
+    expect(screen.getByText('Body: [@[Alice Verdi](user:12) ]')).toBeInTheDocument()
     expect(screen.getByText('Mentions: [12]')).toBeInTheDocument()
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
@@ -157,7 +162,7 @@ describe('MentionTextarea', () => {
     fireEvent.keyDown(field(), { key: 'ArrowDown' })
     fireEvent.keyDown(field(), { key: 'Tab' })
 
-    expect(field()).toHaveValue('@[Bob Neri](user:7) ')
+    expect(field()).toHaveValue('@Bob Neri ')
   })
 
   it('Tab moves focus as usual when the picker is closed', () => {
@@ -175,7 +180,7 @@ describe('MentionTextarea', () => {
     fireEvent.change(field(), { target: { value: '@' } })
     fireEvent.mouseDown(screen.getByRole('option', { name: /Carla Blu/ }))
 
-    expect(field()).toHaveValue('@[Carla Blu](user:9) ')
+    expect(field()).toHaveValue('@Carla Blu ')
     expect(screen.getByText('Mentions: [9]')).toBeInTheDocument()
   })
 
@@ -186,25 +191,28 @@ describe('MentionTextarea', () => {
     fireEvent.keyDown(field(), { key: 'ArrowDown' })
     fireEvent.keyDown(field(), { key: 'Enter' })
 
-    expect(field()).toHaveValue('@[Bob Neri](user:7) ')
+    expect(field()).toHaveValue('@Bob Neri ')
     expect(screen.getByText('Mentions: [7]')).toBeInTheDocument()
   })
 
-  it('CRITICAL: deleting a token by hand drops its id from mentions on the next change', () => {
+  it('renders an existing body as readable text, never as raw tokens', () => {
     render(<Harness initialValue="Hello @[Alice Verdi](user:12) bye" />)
 
-    // The user backspaces the token out of the body by hand.
+    expect(field()).toHaveValue('Hello @Alice Verdi bye')
+  })
+
+  it('CRITICAL: deleting a mention by hand drops its id from mentions on the next change', () => {
+    render(<Harness initialValue="Hello @[Alice Verdi](user:12) bye" />)
+
+    // The user backspaces the readable mention out of the field by hand.
     fireEvent.change(field(), { target: { value: 'Hello  bye' } })
 
     expect(screen.getByText('Mentions: []')).toBeInTheDocument()
   })
 
   it('a user mentioned twice in the body appears only once in mentions', () => {
-    render(<Harness />)
-
-    fireEvent.change(field(), {
-      target: { value: '@[Alice Verdi](user:12) ping again @[Alice Verdi](user:12)' },
-    })
+    render(<Harness initialValue="@[Alice Verdi](user:12) ping" />)
+    fireEvent.change(field(), { target: { value: '@Alice Verdi ping again @Alice Verdi' } })
 
     expect(screen.getByText('Mentions: [12]')).toBeInTheDocument()
   })
