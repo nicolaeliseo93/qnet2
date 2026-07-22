@@ -13,10 +13,10 @@ function panel(overrides: Partial<RequestWorkPanel> = {}): RequestWorkPanel {
     referent: { id: 20, name: 'Mario Rossi' },
     commercial: null,
     opportunity_status: { id: 5, name: 'New', color: 'slate' },
-    workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open' },
+    workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false },
     workflow_statuses: [
-      { id: 100, name: 'Open', color: 'blue', system_key: 'open' },
-      { id: 101, name: 'In progress', color: 'amber', system_key: null },
+      { id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false },
+      { id: 101, name: 'In progress', color: 'amber', system_key: null, description: null, requires_note: false },
     ],
     product_lines: [],
     client_contacts: { owner: { type: 'personal_data', id: 10 }, items: [] },

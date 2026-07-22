@@ -20,8 +20,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * migration seed and the service that creates/syncs a workflow's status set.
  * `group` (App\Enums\WorkflowStatusGroup) classifies the row as
  * open/pending/closed_won/closed_lost — the closed phase carries its outcome.
+ * `description` is the free-text explanation surfaced in the configurator,
+ * the working-status select and the table badge tooltip; `requires_note`
+ * marks a status as one that requires an explanatory note — CONFIGURATION
+ * ONLY (no note is enforced anywhere yet), it drives the UI marker.
  */
-#[Fillable(['name', 'color', 'sort_order', 'group'])]
+#[Fillable(['name', 'description', 'color', 'sort_order', 'group', 'requires_note'])]
 class OpportunityWorkflowStatus extends BaseModel
 {
     /** @use HasFactory<OpportunityWorkflowStatusFactory> */
@@ -35,6 +39,7 @@ class OpportunityWorkflowStatus extends BaseModel
         return [
             'sort_order' => 'int',
             'group' => WorkflowStatusGroup::class,
+            'requires_note' => 'bool',
         ];
     }
 

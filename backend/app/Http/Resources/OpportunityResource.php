@@ -152,16 +152,18 @@ class OpportunityResource extends JsonResource
      * `system_key`/`group` so the FE can tell a pinned system row apart from
      * a custom one.
      *
-     * @return array{id: int, name: string, color: string|null, system_key: string|null, group: string}|null
+     * @return array{id: int, name: string, description: string|null, color: string|null, system_key: string|null, group: string, requires_note: bool}|null
      */
     private function summarizeWorkflowStatus(?OpportunityWorkflowStatus $status): ?array
     {
         return $status === null ? null : [
             'id' => $status->id,
             'name' => $status->name,
+            'description' => $status->description,
             'color' => $status->color,
             'system_key' => $status->system_key,
             'group' => $status->group->value,
+            'requires_note' => $status->requires_note,
         ];
     }
 
@@ -170,7 +172,7 @@ class OpportunityResource extends JsonResource
      * opportunity RIGHT NOW (spec 0047) — feeds the FE's "stato di
      * lavorazione" select, limited to that set (AC-017).
      *
-     * @return array<int, array{id: int, name: string, color: string|null, system_key: string|null, group: string}>
+     * @return array<int, array{id: int, name: string, description: string|null, color: string|null, system_key: string|null, group: string, requires_note: bool}>
      */
     private function resolveWorkflowStatuses(): array
     {

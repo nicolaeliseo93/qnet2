@@ -36,13 +36,13 @@ final class WorkflowStatusWriter
      * every $customStatuses row in submission order (STEP apart), then the two
      * pinned terminal rows 'closed_won'/'closed_lost' (always last, in that
      * order). $openOverride/$closedWonOverride/$closedLostOverride seed the
-     * pinned rows' name/color when the client named them up front; null falls
-     * back to the default label.
+     * pinned rows' descriptive fields when the client filled them up front;
+     * null falls back to the default label.
      *
-     * @param  array<int, array{name: string, color: ?string, group: string}>  $customStatuses
-     * @param  array{name: string, color: ?string}|null  $openOverride
-     * @param  array{name: string, color: ?string}|null  $closedWonOverride
-     * @param  array{name: string, color: ?string}|null  $closedLostOverride
+     * @param  array<int, array{name: string, description: ?string, color: ?string, group: string, requires_note: bool}>  $customStatuses
+     * @param  array{name: string, description: ?string, color: ?string, requires_note: bool}|null  $openOverride
+     * @param  array{name: string, description: ?string, color: ?string, requires_note: bool}|null  $closedWonOverride
+     * @param  array{name: string, description: ?string, color: ?string, requires_note: bool}|null  $closedLostOverride
      */
     public function createWithCustoms(
         ?int $workflowId,
@@ -77,10 +77,10 @@ final class WorkflowStatusWriter
      * so 'open' stays first and the two 'closed_won'/'closed_lost' rows stay
      * last. A submitted row whose
      * `id` matches an existing SYSTEM row is routed to
-     * assertMutableSystemRow() instead (name/color only, spec 0047 data
-     * contract) and never counted as a custom / never deleted.
+     * assertMutableSystemRow() instead (everything but `group`, spec 0047
+     * data contract) and never counted as a custom / never deleted.
      *
-     * @param  array<int, array{id: ?int, name: string, color: ?string, group: string}>  $statusRows
+     * @param  array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>  $statusRows
      */
     public function syncCustoms(?int $workflowId, array $statusRows): void
     {
@@ -99,21 +99,40 @@ final class WorkflowStatusWriter
     }
 
     /**
-     * A system row accepts only a `name`/`color` change (spec 0047 data
+     * A system row accepts every descriptive change (name, description,
+     * color, requires_note) but never a `group` one (spec 0047 data
      * contract): rejects, with a 422, any submission whose `group` differs
      * from what is currently persisted.
      *
-     * @param  array{id: ?int, name: string, color: ?string, group: string}  $submitted
+     * @param  array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}  $submitted
      */
     public function assertMutableSystemRow(OpportunityWorkflowStatus $status, array $submitted): void
     {
         if ($submitted['group'] !== $status->group->value) {
-            abort(422, "The '{$status->name}' status is a system status: only name/color may change.");
+            abort(422, "The '{$status->name}' status is a system status: its group cannot change.");
         }
     }
 
     /**
-     * @param  array{name: string, color: ?string}|null  $override  client-supplied name/color seed for this pinned row
+     * The purely DESCRIPTIVE attributes every row (system or custom) accepts:
+     * name, description, color and the `requires_note` marker — everything
+     * but `group`, which a system row may never change.
+     *
+     * @param  array{name: string, description: ?string, color: ?string, requires_note: bool}  $row
+     * @return array<string, mixed>
+     */
+    private function descriptiveAttributes(array $row): array
+    {
+        return [
+            'name' => $row['name'],
+            'description' => $row['description'],
+            'color' => $row['color'],
+            'requires_note' => $row['requires_note'],
+        ];
+    }
+
+    /**
+     * @param  array{name: string, description: ?string, color: ?string, requires_note: bool}|null  $override  client-supplied descriptive seed for this pinned row
      */
     private function forceCreateSystemRow(?int $workflowId, WorkflowStatusSystemKey $key, int $sortOrder, ?array $override = null): void
     {
@@ -126,25 +145,29 @@ final class WorkflowStatusWriter
         OpportunityWorkflowStatus::query()->forceCreate([
             'opportunity_workflow_id' => $workflowId,
             'name' => $override['name'] ?? $defaultName,
+            'description' => $override['description'] ?? null,
             'color' => $override['color'] ?? null,
             'sort_order' => $sortOrder,
             'system_key' => $key->value,
             'group' => $group,
+            'requires_note' => $override['requires_note'] ?? false,
         ]);
     }
 
     /**
-     * @param  array{name: string, color: ?string, group: string}  $status
+     * @param  array{name: string, description: ?string, color: ?string, group: string, requires_note: bool}  $status
      */
     private function forceCreateCustomRow(?int $workflowId, array $status, int $sortOrder): void
     {
         OpportunityWorkflowStatus::query()->forceCreate([
             'opportunity_workflow_id' => $workflowId,
             'name' => $status['name'],
+            'description' => $status['description'],
             'color' => $status['color'],
             'sort_order' => $sortOrder,
             'system_key' => null,
             'group' => $status['group'],
+            'requires_note' => $status['requires_note'],
         ]);
     }
 
@@ -152,9 +175,9 @@ final class WorkflowStatusWriter
      * Splits $statusRows into [systemRows, customRows] by whether a
      * submitted `id` resolves to an existing SYSTEM row in $existing.
      *
-     * @param  array<int, array{id: ?int, name: string, color: ?string, group: string}>  $statusRows
+     * @param  array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>  $statusRows
      * @param  Collection<int, OpportunityWorkflowStatus>  $existing
-     * @return array{0: array<int, array{id: ?int, name: string, color: ?string, group: string}>, 1: array<int, array{id: ?int, name: string, color: ?string, group: string}>}
+     * @return array{0: array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>, 1: array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>}
      */
     private function partitionSubmitted(array $statusRows, Collection $existing): array
     {
@@ -175,7 +198,7 @@ final class WorkflowStatusWriter
     }
 
     /**
-     * @param  array<int, array{id: ?int, name: string, color: ?string, group: string}>  $systemRows
+     * @param  array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>  $systemRows
      * @param  Collection<int, OpportunityWorkflowStatus>  $existing
      */
     private function applySystemUpdates(array $systemRows, Collection $existing): void
@@ -186,7 +209,7 @@ final class WorkflowStatusWriter
 
             $this->assertMutableSystemRow($status, $row);
 
-            $status->fill(['name' => $row['name'], 'color' => $row['color']])->save();
+            $status->fill($this->descriptiveAttributes($row))->save();
         }
     }
 
@@ -195,7 +218,7 @@ final class WorkflowStatusWriter
      * deletes the customs left out, and returns the kept ids IN ORDER — the
      * sequence resequence() places between 'open' and 'closed'.
      *
-     * @param  array<int, array{id: ?int, name: string, color: ?string, group: string}>  $customRows
+     * @param  array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>  $customRows
      * @param  Collection<int, OpportunityWorkflowStatus>  $existing
      * @return array<int, int>
      */
@@ -207,8 +230,7 @@ final class WorkflowStatusWriter
             if ($row['id'] === null) {
                 $created = OpportunityWorkflowStatus::query()->forceCreate([
                     'opportunity_workflow_id' => $workflowId,
-                    'name' => $row['name'],
-                    'color' => $row['color'],
+                    ...$this->descriptiveAttributes($row),
                     'sort_order' => 0,
                     'system_key' => null,
                     'group' => $row['group'],
@@ -225,7 +247,7 @@ final class WorkflowStatusWriter
                 abort(422, "Unknown custom status id [{$row['id']}] for this workflow.");
             }
 
-            $status->fill(['name' => $row['name'], 'color' => $row['color'], 'group' => $row['group']])->save();
+            $status->fill([...$this->descriptiveAttributes($row), 'group' => $row['group']])->save();
             $keptIds[] = $status->id;
         }
 

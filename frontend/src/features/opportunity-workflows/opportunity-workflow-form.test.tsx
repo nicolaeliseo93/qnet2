@@ -120,10 +120,10 @@ function opportunityWorkflow(
     is_active: true,
     criteria: [{ id: 1, field: 'state_id', value_id: 5, value_label: 'Lombardy' }],
     statuses: [
-      { id: 10, name: 'Open', color: null, sort_order: 0, system_key: 'open', group: 'open' },
-      { id: 11, name: 'Alpha', color: 'blue', sort_order: 10, system_key: null, group: 'pending' },
-      { id: 12, name: 'Bravo', color: 'green', sort_order: 20, system_key: null, group: 'pending' },
-      { id: 13, name: 'Closed', color: null, sort_order: 30, system_key: 'closed_won', group: 'closed_won' },
+      { id: 10, name: 'Open', color: null, sort_order: 0, system_key: 'open', group: 'open', description: null, requires_note: false },
+      { id: 11, name: 'Alpha', color: 'blue', sort_order: 10, system_key: null, group: 'pending', description: null, requires_note: false },
+      { id: 12, name: 'Bravo', color: 'green', sort_order: 20, system_key: null, group: 'pending', description: null, requires_note: false },
+      { id: 13, name: 'Closed', color: null, sort_order: 30, system_key: 'closed_won', group: 'closed_won', description: null, requires_note: false },
     ],
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -268,10 +268,10 @@ describe('OpportunityWorkflowForm — statuses editor (AC-025)', () => {
     await waitFor(() => expect(createOpportunityWorkflowMock).toHaveBeenCalledTimes(1))
     const [payload] = createOpportunityWorkflowMock.mock.calls[0]
     expect(payload.statuses).toEqual([
-      { name: 'Open', color: null, group: 'open', system_key: 'open' },
-      { name: 'In review', color: null, group: 'pending', system_key: null },
-      { name: 'Closed (won)', color: null, group: 'closed_won', system_key: 'closed_won' },
-      { name: 'Closed (lost)', color: null, group: 'closed_lost', system_key: 'closed_lost' },
+      { name: 'Open', color: null, group: 'open', system_key: 'open', description: null, requires_note: false },
+      { name: 'In review', color: null, group: 'pending', system_key: null, description: null, requires_note: false },
+      { name: 'Closed (won)', color: null, group: 'closed_won', system_key: 'closed_won', description: null, requires_note: false },
+      { name: 'Closed (lost)', color: null, group: 'closed_lost', system_key: 'closed_lost', description: null, requires_note: false },
     ])
     expect(payload.criteria).toEqual([{ field: 'state_id', value_id: 101 }])
     expect(onSuccess).toHaveBeenCalled()

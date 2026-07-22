@@ -4,6 +4,7 @@ import { Check, X, type LucideIcon } from 'lucide-react'
 import i18n from '@/i18n'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   BADGE_BASE,
   BADGE_COLOR_CLASSES,
@@ -58,16 +59,20 @@ export function RelationCell({ value, icon: Icon }: ICellRendererParams & { icon
   )
 }
 
-/** A status relation `{name, color}`: colored pill with a leading solid status dot. */
+/** A status relation `{name, color}`, optionally carrying its `description` (working statuses, spec 0047). */
 interface StatusLike {
   name?: string | null
   color?: string | null
+  description?: string | null
 }
 
 /**
- * Renders a status relation (`pipeline_status`, `lead_status`) as a colored
- * badge with a leading solid dot in the token's strong shade — the enterprise
- * status-chip look. Colorless statuses fall back to the neutral badge.
+ * Renders a status relation (`pipeline_status`, `lead_status`,
+ * `workflow_status`) as a colored badge with a leading solid dot in the
+ * token's strong shade — the enterprise status-chip look. Colorless statuses
+ * fall back to the neutral badge. When the projected row carries a
+ * `description` (only the working statuses do today), the badge explains
+ * itself through a tooltip.
  */
 export function StatusBadgeCell({ value }: ICellRendererParams) {
   const status = value as StatusLike | null | undefined
@@ -76,14 +81,28 @@ export function StatusBadgeCell({ value }: ICellRendererParams) {
     return <EmptyCell />
   }
   const dotClass = swatchClassFor(status?.color)
+  const badge = (
+    <Badge variant="secondary" className={cn(BADGE_BASE, 'gap-1.5', badgeColorClass(status?.color))}>
+      {dotClass ? (
+        <span className={cn('size-1.5 shrink-0 rounded-full', dotClass)} aria-hidden="true" />
+      ) : null}
+      <span className="truncate">{name}</span>
+    </Badge>
+  )
+  const description = status?.description
+  if (typeof description !== 'string' || description === '') {
+    return <div className={CELL_WRAPPER}>{badge}</div>
+  }
   return (
     <div className={CELL_WRAPPER}>
-      <Badge variant="secondary" className={cn(BADGE_BASE, 'gap-1.5', badgeColorClass(status?.color))}>
-        {dotClass ? (
-          <span className={cn('size-1.5 shrink-0 rounded-full', dotClass)} aria-hidden="true" />
-        ) : null}
-        <span className="truncate">{name}</span>
-      </Badge>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex cursor-default">{badge}</span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-64">{description}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   )
 }

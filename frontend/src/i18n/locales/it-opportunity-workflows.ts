@@ -86,6 +86,10 @@ export const opportunityWorkflows = {
     },
     statuses: {
       name: 'Nome stato',
+      description: 'Descrizione dello stato',
+      descriptionPlaceholder: 'Spiega quando si applica questo stato…',
+      requiresNote: 'Richiede una nota esplicativa',
+      requiresNoteBadge: 'Nota richiesta',
       dragHandleLabel: 'Trascina per riordinare',
       add: 'Aggiungi stato',
       remove: 'Rimuovi stato',

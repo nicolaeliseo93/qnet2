@@ -53,8 +53,10 @@ trait ValidatesWorkflowCriteria
         $rules = [
             'statuses' => ['sometimes', 'array'],
             'statuses.*.name' => ['required', 'string', 'max:191'],
+            'statuses.*.description' => ['sometimes', 'nullable', 'string', 'max:500'],
             'statuses.*.color' => ['nullable', 'string', 'max:32'],
             'statuses.*.group' => ['required', Rule::enum(WorkflowStatusGroup::class)],
+            'statuses.*.requires_note' => ['sometimes', 'boolean'],
             // Create carries the 3 pinned rows tagged open/closed_won/
             // closed_lost so the user can name them up front (AC-004); a custom
             // row is null/absent.

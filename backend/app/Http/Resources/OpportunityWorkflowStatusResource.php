@@ -19,10 +19,12 @@ class OpportunityWorkflowStatusResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'description' => $this->description,
             'color' => $this->color,
             'sort_order' => $this->sort_order,
             'system_key' => $this->system_key,
             'group' => $this->group->value,
+            'requires_note' => $this->requires_note,
         ];
     }
 }

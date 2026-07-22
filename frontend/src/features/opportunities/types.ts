@@ -42,9 +42,13 @@ export interface OpportunityLeadRef {
 export interface OpportunityWorkflowStatusRef {
   id: number
   name: string
+  /** Free-text explanation of the status, shown under the option in the working-status select. */
+  description: string | null
   color: string | null
   system_key: string | null
   group: WorkflowStatusGroupValue
+  /** Marks the status as one requiring an explanatory note (configuration only). */
+  requires_note: boolean
 }
 
 /** A manager ref carrying its static "G.A. n" `position` (1-based) on top of the person ref. */

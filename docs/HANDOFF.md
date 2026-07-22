@@ -2,6 +2,112 @@
 
 > Injected at session start. Update at every green state.
 
+## STATI DI LAVORAZIONE: DESCRIZIONE + FLAG "RICHIEDE NOTA" (2026-07-22) — GREEN, NON COMMITTATO
+
+Emendamento alla spec 0047. Ogni `opportunity_workflow_statuses` porta due colonne nuove:
+`description` (string 500, nullable) e `requires_note` (boolean, default false).
+DECISIONE UTENTE (AskUserQuestion 2026-07-22): `requires_note` e' SOLA CONFIGURAZIONE —
+nessuna nota viene imposta a runtime (non esiste oggi alcun campo nota su Opportunity).
+Il flag guida solo il marcatore UI. Non trasformarlo in enforcement senza nuova richiesta.
+
+CONTRATTO (additivo, retrocompatibile): entrambe le chiavi compaiono in
+`OpportunityWorkflowStatusResource`, nel blocco `statuses` di `OpportunityWorkflowResource`,
+in `OpportunityResource::summarizeWorkflowStatus` e in
+`RequestManagementResource::summarizeWorkflowStatus`. In scrittura sono accettate su OGNI riga
+(custom E system) da `statuses.*.description` (`nullable|string|max:500`) e
+`statuses.*.requires_note` (`boolean`), sia POST/PATCH workflow sia PUT default-statuses.
+REGOLA INVARIATA: una riga system continua a NON poter cambiare `group` (422); ora pero'
+accetta tutti i campi descrittivi — il messaggio 422 e' stato riscritto di conseguenza e
+`WorkflowStatusWriter::descriptiveAttributes()` e' l'unico punto che compone name/description/
+color/requires_note.
+Colonna tabellare `workflow_status` (RequestManagementTableDefinition::summarizeWithColor):
+proietta anche `description` per il tooltip del badge.
+
+FE — la descrizione compare in 3 punti (scelta utente): editor del configuratore (Textarea,
+maxLength 500), opzione del select "stato di lavorazione" (sia Opportunita' sia Gestione
+Richieste), tooltip del badge in tabella. Il flag si imposta con uno Switch nell'editor e si
+mostra col badge ambra "Nota richiesta". Nuovi componenti condivisi (unico punto di verita'):
+`features/opportunity-workflows/requires-note-badge.tsx` e `workflow-status-option.tsx` —
+`StatusSwatch` locale di `opportunity-workflow-status-field.tsx` e' stato rimosso perche'
+assorbito dall'opzione condivisa. `StatusBadgeCell` (`features/table/rich-cells.tsx`) e' ora
+tooltip-aware: mostra il tooltip SOLO quando la riga proietta un `description` non vuoto
+(nessun impatto su pipeline_status/lead_status/opportunity_status, che non lo inviano).
+`WorkflowStatusRowPatch` (in `opportunity-workflows/types.ts`) e' il tipo unico dei patch di riga.
+
+VERIFICA ESEGUITA: Pest OpportunityWorkflows 62/62, Opportunities 120/120, RequestManagement
+49/49, Unit/OpportunityWorkflows 19/19 (+ nuovo `WorkflowStatusDescriptionTest`, 6 test);
+Pint pulito. Vitest opportunity-workflows 32/32 (nuovo `workflow-statuses-editor.test.tsx`),
+table/rich-cells 26/26. `tsc --noEmit` pulito sui file di questo lavoro.
+NON MIEI (lavoro 0051 in corso in parallelo nella working copy, gia' rosso prima): errore tsc
+su `i18n/locales/it.ts` -> `requestManagement.workPanel.contacts.registryTitle` mancante in it;
+`request-management-table.test.tsx` (modal sheet) rosso per `useConfirm must be used within a
+ConfirmDialogProvider` in ContactsManager; i 3 test ContactsCell di `table/cell-renderers.test.tsx`;
+`tests/Unit/Migrations` va in segfault (exit 139) sull'ambiente locale.
+
+PROSSIMO PASSO: chiedere all'utente se committare.
+
+## LOGIN AS CUSTOMER / IMPERSONATION — spec 0050 (2026-07-22) — GREEN, NON COMMITTATO
+
+Un utente con `users.impersonate` puo' impersonificare un altro utente del CRM: durante
+la sessione opera A TUTTI GLI EFFETTI come il target (permessi, letture, scritture), con
+un banner sempre visibile che ricorda l'identita' originale e consente il rientro.
+Spec: `docs/specs/0050-user-impersonation.xml` (contratto congelato prima del dispatch).
+
+MECCANISMO (D-1, la decisione portante): l'impersonificazione emette un NUOVO token Sanctum
+intestato al TARGET, marcato con la colonna nuova `personal_access_tokens.impersonated_by`
+= id dell'attore. Cosi' ogni Policy/Gate/query gira gia' con `$request->user()` = target:
+permessi e scritture sono del target SENZA toccare una riga di autorizzazione esistente.
+NON e' un layer di "permessi effettivi" parallelo — non reintrodurne uno.
+
+CONTRATTO (congelato):
+- `POST /api/users/{user}/impersonate` -> `{token, token_type:"Bearer", user}` | 403 | 422
+- `POST /api/auth/stop-impersonation` -> stessa shape, user = originale | 403
+- `GET  /api/auth/impersonation` -> `{ impersonator: {id,name,email} | null }`
+  (endpoint DEDICATO per il banner, D-5: `/auth/me` e `UserResource` sono condivise da
+  tutti i moduli e NON vanno modificate per questo)
+- Azione riga tabella users: key `impersonate`, icon `log-in`, confirm true.
+
+INVARIANTI DI SICUREZZA (non indebolirle):
+- 403 vs 422 e' deliberato: il Gate produce sempre 403, quindi la Policy porta SOLO i due
+  veri casi di autorizzazione (manca `users.impersonate`; non-super-admin che punta a un
+  super-admin). Self-impersonation, target inattivo e no-nesting stanno NEL SERVICE (422)
+  perche' `Gate::before` cortocircuita la Policy per il super-admin.
+- D-2 no nesting: chiude la strada all'escalation indiretta (impersonare X per impersonare
+  un super-admin). Verificato con test avversariali dal verifier.
+- `stop()` verifica `is_active` dell'utente ORIGINALE: se disattivato durante la sessione,
+  il token di impersonificazione viene revocato e si risponde 403 — un account disattivato
+  non puo' riottenere una sessione (specchio del gate is_active di AuthService::login).
+  Difetto trovato in review dal lead, non dai test iniziali.
+- `impersonated_by` non e' fillable: scritto solo via `forceFill()` nel Service.
+- Nessun `throttle` su questi endpoint (decisione 2026-07-15).
+- Audit: entry activity esplicite `impersonation.started` / `impersonation.stopped`,
+  causer = attore originale, subject = target.
+
+FILE: BE `app/Services/Auth/ImpersonationService.php`, `app/Http/Controllers/Auth/
+ImpersonationController.php`, `app/Policies/UserPolicy.php` (abilities()+impersonate()),
+`app/Tables/UsersTableDefinition.php` + `Users/UserColumnCatalog.php`, migration
+2026_07_22_120000, `routes/api.php`, `lang/{en,it}/auth.php`.
+FE `features/auth/{use-impersonation-actions.ts,impersonation-banner.tsx,api.ts,types.ts,
+auth-provider.tsx,auth-context.ts,query-keys.ts}`, `features/users/users-table.tsx`,
+`features/table/action-icon-map.ts` (+'log-in'), `layouts/app-layout.tsx`,
+`i18n/locales/{en,it}-impersonation.ts`. Su start E stop: swap token + `queryClient.clear()`
+(nessun dato dell'identita' precedente puo' sopravvivere in cache).
+
+VERIFICA (verifier indipendente, eseguita): AC-001..AC-024 tutti PASS. Pest impersonation
+18/18 (59 assertion); Auth+Users+Policies+Table+Navigation 387/387; vitest impersonation
+9/9; `tsc -b`, ESLint, Pint puliti; migrazione reversibile testata.
+
+PRE-ESISTENTI (NON introdotti da 0050, non ripulire alla cieca): suite piena BE 3238 test /
+11 rossi — 10 test "navigation node" rotti da una riorganizzazione di `config/navigation.php`
+anteriore a 0049 (gia' nel commit 9af6b5a), + AbstractMigrationSourcePreviewTest. FE: 3 test
+in `features/table/cell-renderers.test.tsx` rossi anche in isolamento (asserzioni in inglese
+con locale default 'it'): il fix annotato nell'HANDOFF del 2026-07-21 e' andato PERSO,
+verosimilmente nel ripristino a baseline dei 3 file di test citato nell'handoff di 0049.
+
+PROSSIMO PASSO: chiedere all'utente se committare. Nessun ruolo/seeder con `users.impersonate`
+e' stato creato (fuori scope): per usarla serve assegnare il permesso a un ruolo dopo
+`php artisan permissions:sync`.
+
 ## CONVERSIONE LEAD -> OPPORTUNITA': OPERATORE = G.A. 2 (2026-07-22) — GREEN, NON COMMITTATO
 
 Direttiva utente: convertendo un Lead in Opportunita', l'Operatore del lead diventa il

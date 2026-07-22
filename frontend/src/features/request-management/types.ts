@@ -32,8 +32,12 @@ export interface RequestOpportunityStatusRef {
 export interface RequestWorkflowStatusRef {
   id: number
   name: string
+  /** Free-text explanation of the status, shown under the option in the working-status select. */
+  description: string | null
   color: string | null
   system_key: string | null
+  /** Marks the status as one requiring an explanatory note (configuration only). */
+  requires_note: boolean
 }
 
 /** A business-function + product-category pair of one of the opportunity's rows. */

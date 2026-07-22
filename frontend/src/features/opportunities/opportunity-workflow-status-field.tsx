@@ -9,8 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { MetaField } from '@/features/authorization/MetaField'
-import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
-import { cn } from '@/lib/utils'
+import { WorkflowStatusOption } from '@/features/opportunity-workflows/workflow-status-option'
 import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
 import type { OpportunityWorkflowStatusRef } from '@/features/opportunities/types'
 
@@ -25,16 +24,6 @@ interface OpportunityWorkflowStatusFieldProps {
    * the 'open'/'closed_won'/'closed_lost' system rows).
    */
   statuses: OpportunityWorkflowStatusRef[] | null
-}
-
-/** A status option's leading color dot, mirrors the read-only detail's swatch (`OpportunityWorkflowDetailView`). */
-function StatusSwatch({ color }: { color: string | null }) {
-  return (
-    <span
-      className={cn('size-2.5 shrink-0 rounded-full border', swatchClassFor(color) ?? 'bg-transparent')}
-      aria-hidden="true"
-    />
-  )
 }
 
 /**
@@ -75,10 +64,12 @@ export function OpportunityWorkflowStatusField({ control, statuses }: Opportunit
           <SelectContent>
             {statuses.map((status) => (
               <SelectItem key={status.id} value={String(status.id)}>
-                <span className="flex items-center gap-2">
-                  <StatusSwatch color={status.color} />
-                  {status.name}
-                </span>
+                <WorkflowStatusOption
+                  name={status.name}
+                  description={status.description}
+                  color={status.color}
+                  requiresNote={status.requires_note}
+                />
               </SelectItem>
             ))}
           </SelectContent>

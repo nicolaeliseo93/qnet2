@@ -79,11 +79,11 @@ function editOpportunity(): OpportunityDetailWithPermissions {
     state_id: null,
     state: null,
     opportunity_workflow_status_id: 100,
-    workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open', group: 'open' },
+    workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open', group: 'open', description: null, requires_note: false },
     workflow_statuses: [
-      { id: 100, name: 'Open', color: 'blue', system_key: 'open', group: 'open' },
-      { id: 101, name: 'In progress', color: 'amber', system_key: null, group: 'open' },
-      { id: 102, name: 'Closed', color: 'green', system_key: 'closed_won', group: 'closed_won' },
+      { id: 100, name: 'Open', color: 'blue', system_key: 'open', group: 'open', description: null, requires_note: false },
+      { id: 101, name: 'In progress', color: 'amber', system_key: null, group: 'open', description: null, requires_note: false },
+      { id: 102, name: 'Closed', color: 'green', system_key: 'closed_won', group: 'closed_won', description: null, requires_note: false },
     ],
     product_lines: [
       {

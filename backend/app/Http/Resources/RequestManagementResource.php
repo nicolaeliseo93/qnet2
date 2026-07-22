@@ -88,21 +88,23 @@ class RequestManagementResource extends JsonResource
     }
 
     /**
-     * @return array{id: int, name: string, color: string|null, system_key: string|null}|null
+     * @return array{id: int, name: string, description: string|null, color: string|null, system_key: string|null, requires_note: bool}|null
      */
     private function summarizeWorkflowStatus(?OpportunityWorkflowStatus $status): ?array
     {
         return $status === null ? null : [
             'id' => $status->id,
             'name' => $status->name,
+            'description' => $status->description,
             'color' => $status->color,
             'system_key' => $status->system_key,
+            'requires_note' => $status->requires_note,
         ];
     }
 
     /**
      * @param  Collection<int, OpportunityWorkflowStatus>  $statuses
-     * @return array<int, array{id: int, name: string, color: string|null, system_key: string|null}>
+     * @return array<int, array{id: int, name: string, description: string|null, color: string|null, system_key: string|null, requires_note: bool}>
      */
     private function summarizeWorkflowStatuses(Collection $statuses): array
     {

@@ -3,6 +3,9 @@ import { Plus, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -13,10 +16,12 @@ import {
 import { SortableList } from '@/components/ui/sortable-list'
 import { ColorTokenPicker } from '@/features/custom-fields/components/color-token-picker'
 import { BADGE_COLOR_CLASSES } from '@/features/table/cell-renderers'
+import { RequiresNoteBadge } from '@/features/opportunity-workflows/requires-note-badge'
 import {
   WORKFLOW_STATUS_GROUPS,
   type WorkflowStatusFormRow,
   type WorkflowStatusGroupValue,
+  type WorkflowStatusRowPatch,
 } from '@/features/opportunity-workflows/types'
 import { cn } from '@/lib/utils'
 
@@ -25,10 +30,13 @@ export interface WorkflowStatusesEditorProps {
   onReorder: (orderedIds: string[]) => void
   onAddCustom: () => void
   onRemoveCustom: (id: string) => void
-  onUpdateRow: (id: string, patch: Partial<Pick<WorkflowStatusFormRow, 'name' | 'color' | 'group'>>) => void
+  onUpdateRow: (id: string, patch: WorkflowStatusRowPatch) => void
   disabled?: boolean
   error?: string | null
 }
+
+/** Backend `opportunity_workflow_statuses.description` column limit (`max:500`). */
+const STATUS_DESCRIPTION_MAX_LENGTH = 500
 
 /** i18n key per fixed group value, kept out of the JSX so the option list stays a plain map (mirrors `opportunity-status-form-body`). */
 const GROUP_LABEL_KEYS: Record<WorkflowStatusGroupValue, string> = {
@@ -53,8 +61,9 @@ const GROUP_BADGE_CLASSES: Record<WorkflowStatusGroupValue, string> = {
  * drag & drop UI is implemented. The three per-set pinned rows (`open`/
  * `closed_won`/`closed_lost`) render without a drag handle or a remove action (`isPinned`
  * keeps `<SortableList>` from ever letting a drag cross them, and their
- * fixed `group` shows as a read-only badge) — but their NAME/color are
- * always editable, including in create mode where they seed the
+ * fixed `group` shows as a read-only badge) — but their name, description,
+ * color and `requires_note` flag are always editable, including in create
+ * mode where they seed the
  * auto-created rows (AC-004). Custom rows are freely reorderable, editable,
  * and removable. All non-render logic (row mutation, reorder) lives in the
  * caller's hook.
@@ -119,6 +128,7 @@ interface WorkflowStatusRowContentProps {
 function WorkflowStatusRowContent({ row, onUpdateRow, onRemoveCustom, disabled }: WorkflowStatusRowContentProps) {
   const { t } = useTranslation()
   const isCustom = row.system_key === null
+  const requiresNoteId = `workflow-status-requires-note-${row.id}`
 
   return (
     <div className="flex flex-1 flex-col gap-2">
@@ -127,6 +137,18 @@ function WorkflowStatusRowContent({ row, onUpdateRow, onRemoveCustom, disabled }
         value={row.name}
         disabled={disabled}
         onChange={(event) => onUpdateRow(row.id, { name: event.target.value })}
+      />
+      <Textarea
+        aria-label={t('opportunityWorkflows.form.statuses.description')}
+        placeholder={t('opportunityWorkflows.form.statuses.descriptionPlaceholder')}
+        value={row.description ?? ''}
+        rows={2}
+        maxLength={STATUS_DESCRIPTION_MAX_LENGTH}
+        disabled={disabled}
+        className="min-h-14 text-xs"
+        onChange={(event) =>
+          onUpdateRow(row.id, { description: event.target.value === '' ? null : event.target.value })
+        }
       />
       <div className="flex items-center gap-2">
         <ColorTokenPicker
@@ -170,6 +192,18 @@ function WorkflowStatusRowContent({ row, onUpdateRow, onRemoveCustom, disabled }
             <Trash2 aria-hidden="true" />
           </Button>
         ) : null}
+      </div>
+      <div className="flex items-center gap-2">
+        <Switch
+          id={requiresNoteId}
+          checked={row.requires_note}
+          disabled={disabled}
+          onCheckedChange={(checked) => onUpdateRow(row.id, { requires_note: checked })}
+        />
+        <Label htmlFor={requiresNoteId} className="text-xs font-normal text-muted-foreground">
+          {t('opportunityWorkflows.form.statuses.requiresNote')}
+        </Label>
+        {row.requires_note ? <RequiresNoteBadge className="ml-auto" /> : null}
       </div>
     </div>
   )

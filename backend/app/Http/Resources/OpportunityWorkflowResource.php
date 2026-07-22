@@ -32,10 +32,12 @@ class OpportunityWorkflowResource extends JsonResource
             'statuses' => $this->statuses->map(fn ($status): array => [
                 'id' => $status->id,
                 'name' => $status->name,
+                'description' => $status->description,
                 'color' => $status->color,
                 'sort_order' => $status->sort_order,
                 'system_key' => $status->system_key,
                 'group' => $status->group->value,
+                'requires_note' => $status->requires_note,
             ])->all(),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

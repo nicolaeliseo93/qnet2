@@ -21,7 +21,7 @@ final readonly class UpdateOpportunityWorkflowData
 {
     /**
      * @param  ?array<int, array{field: string, value_id: int}>  $criteria
-     * @param  ?array<int, array{id: ?int, name: string, color: ?string, group: string}>  $statuses
+     * @param  ?array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>  $statuses
      */
     public function __construct(
         public ?string $name = null,
@@ -83,8 +83,8 @@ final readonly class UpdateOpportunityWorkflowData
     }
 
     /**
-     * @param  array<int, array{id?: mixed, name: mixed, color?: mixed, group: mixed}>  $statuses
-     * @return array<int, array{id: ?int, name: string, color: ?string, group: string}>
+     * @param  array<int, array{id?: mixed, name: mixed, description?: mixed, color?: mixed, group: mixed, requires_note?: mixed}>  $statuses
+     * @return array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>
      */
     private static function normalizeStatuses(array $statuses): array
     {
@@ -92,8 +92,10 @@ final readonly class UpdateOpportunityWorkflowData
             static fn (array $status): array => [
                 'id' => isset($status['id']) ? (int) $status['id'] : null,
                 'name' => (string) $status['name'],
+                'description' => array_key_exists('description', $status) ? $status['description'] : null,
                 'color' => array_key_exists('color', $status) ? $status['color'] : null,
                 'group' => (string) $status['group'],
+                'requires_note' => (bool) ($status['requires_note'] ?? false),
             ],
             $statuses,
         );

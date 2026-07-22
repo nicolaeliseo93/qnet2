@@ -17,18 +17,18 @@ const values: CreateOpportunityWorkflowFormValues = {
 }
 
 const CREATE_STATUS_ROWS: WorkflowStatusFormRow[] = [
-  { id: 'system-open', name: 'Aperto', color: null, group: 'open', system_key: 'open' },
-  { id: 'c1', name: 'In progress', color: 'blue', group: 'pending', system_key: null },
-  { id: 'system-closed-won', name: 'Chiuso positivo', color: null, group: 'closed_won', system_key: 'closed_won' },
-  { id: 'system-closed-lost', name: 'Chiuso negativo', color: null, group: 'closed_lost', system_key: 'closed_lost' },
+  { id: 'system-open', name: 'Aperto', color: null, group: 'open', system_key: 'open', description: null, requires_note: false },
+  { id: 'c1', name: 'In progress', color: 'blue', group: 'pending', system_key: null, description: null, requires_note: false },
+  { id: 'system-closed-won', name: 'Chiuso positivo', color: null, group: 'closed_won', system_key: 'closed_won', description: null, requires_note: false },
+  { id: 'system-closed-lost', name: 'Chiuso negativo', color: null, group: 'closed_lost', system_key: 'closed_lost', description: null, requires_note: false },
 ]
 
 const PERSISTED_STATUS_ROWS: WorkflowStatusFormRow[] = [
-  { id: '1', statusId: 1, name: 'Open', color: null, group: 'open', system_key: 'open' },
-  { id: '2', statusId: 2, name: 'In progress', color: 'blue', group: 'pending', system_key: null },
-  { id: '3', name: 'New custom', color: 'green', group: 'pending', system_key: null },
-  { id: '4', statusId: 4, name: 'Closed won', color: null, group: 'closed_won', system_key: 'closed_won' },
-  { id: '5', statusId: 5, name: 'Closed lost', color: null, group: 'closed_lost', system_key: 'closed_lost' },
+  { id: '1', statusId: 1, name: 'Open', color: null, group: 'open', system_key: 'open', description: null, requires_note: false },
+  { id: '2', statusId: 2, name: 'In progress', color: 'blue', group: 'pending', system_key: null, description: null, requires_note: false },
+  { id: '3', name: 'New custom', color: 'green', group: 'pending', system_key: null, description: null, requires_note: false },
+  { id: '4', statusId: 4, name: 'Closed won', color: null, group: 'closed_won', system_key: 'closed_won', description: null, requires_note: false },
+  { id: '5', statusId: 5, name: 'Closed lost', color: null, group: 'closed_lost', system_key: 'closed_lost', description: null, requires_note: false },
 ]
 
 describe('buildCreatePayload', () => {
@@ -41,10 +41,10 @@ describe('buildCreatePayload', () => {
         { field: 'source_id', value_id: 2 },
       ],
       statuses: [
-        { name: 'Aperto', color: null, group: 'open', system_key: 'open' },
-        { name: 'In progress', color: 'blue', group: 'pending', system_key: null },
-        { name: 'Chiuso positivo', color: null, group: 'closed_won', system_key: 'closed_won' },
-        { name: 'Chiuso negativo', color: null, group: 'closed_lost', system_key: 'closed_lost' },
+        { name: 'Aperto', color: null, group: 'open', system_key: 'open', description: null, requires_note: false },
+        { name: 'In progress', color: 'blue', group: 'pending', system_key: null, description: null, requires_note: false },
+        { name: 'Chiuso positivo', color: null, group: 'closed_won', system_key: 'closed_won', description: null, requires_note: false },
+        { name: 'Chiuso negativo', color: null, group: 'closed_lost', system_key: 'closed_lost', description: null, requires_note: false },
       ],
     })
   })
@@ -75,11 +75,11 @@ describe('buildUpdatePayload', () => {
         { field: 'source_id', value_id: 2 },
       ],
       statuses: [
-        { id: 1, name: 'Open', color: null, group: 'open' },
-        { id: 2, name: 'In progress', color: 'blue', group: 'pending' },
-        { id: undefined, name: 'New custom', color: 'green', group: 'pending' },
-        { id: 4, name: 'Closed won', color: null, group: 'closed_won' },
-        { id: 5, name: 'Closed lost', color: null, group: 'closed_lost' },
+        { id: 1, name: 'Open', description: null, color: null, group: 'open', requires_note: false },
+        { id: 2, name: 'In progress', description: null, color: 'blue', group: 'pending', requires_note: false },
+        { id: undefined, name: 'New custom', description: null, color: 'green', group: 'pending', requires_note: false },
+        { id: 4, name: 'Closed won', description: null, color: null, group: 'closed_won', requires_note: false },
+        { id: 5, name: 'Closed lost', description: null, color: null, group: 'closed_lost', requires_note: false },
       ],
     })
   })

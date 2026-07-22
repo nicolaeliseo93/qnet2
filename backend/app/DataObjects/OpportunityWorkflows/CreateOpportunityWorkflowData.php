@@ -16,18 +16,18 @@ use Illuminate\Support\Collection;
  * CriterionFieldRegistry). `statuses` is OPTIONAL. The 3 system rows
  * (open/closed_won/closed_lost, AC-004) are always created by the Service via
  * WorkflowStatusWriter; when the client tags a submitted row with a
- * `system_key`, its name/color SEED that system row (the user can name the
- * pinned rows up front) — otherwise the writer's defaults apply. Untagged
+ * `system_key`, its descriptive fields SEED that system row (the user can
+ * fill the pinned rows up front) — otherwise the writer's defaults apply. Untagged
  * rows are the intermediate CUSTOM rows.
  */
 final readonly class CreateOpportunityWorkflowData
 {
     /**
      * @param  array<int, array{field: string, value_id: int}>  $criteria
-     * @param  array<int, array{name: string, color: ?string, group: string}>  $statuses  custom rows only
-     * @param  array{name: string, color: ?string}|null  $openStatus  name/color seed for the pinned 'open' row (null = writer default)
-     * @param  array{name: string, color: ?string}|null  $closedWonStatus  name/color seed for the pinned 'closed_won' row (null = writer default)
-     * @param  array{name: string, color: ?string}|null  $closedLostStatus  name/color seed for the pinned 'closed_lost' row (null = writer default)
+     * @param  array<int, array{name: string, description: ?string, color: ?string, group: string, requires_note: bool}>  $statuses  custom rows only
+     * @param  array{name: string, description: ?string, color: ?string, requires_note: bool}|null  $openStatus  descriptive seed for the pinned 'open' row (null = writer default)
+     * @param  array{name: string, description: ?string, color: ?string, requires_note: bool}|null  $closedWonStatus  descriptive seed for the pinned 'closed_won' row (null = writer default)
+     * @param  array{name: string, description: ?string, color: ?string, requires_note: bool}|null  $closedLostStatus  descriptive seed for the pinned 'closed_lost' row (null = writer default)
      */
     public function __construct(
         public string $name,
@@ -90,27 +90,30 @@ final readonly class CreateOpportunityWorkflowData
      * The CUSTOM (intermediate) rows only — a submitted row tagged with a
      * `system_key` seeds a pinned row instead (see extractSystemStatus()).
      *
-     * @param  array<int, array{name: mixed, color?: mixed, group: mixed, system_key?: mixed}>  $statuses
-     * @return array<int, array{name: string, color: ?string, group: string}>
+     * @param  array<int, array{name: mixed, description?: mixed, color?: mixed, group: mixed, requires_note?: mixed, system_key?: mixed}>  $statuses
+     * @return array<int, array{name: string, description: ?string, color: ?string, group: string, requires_note: bool}>
      */
     public static function normalizeStatuses(array $statuses): array
     {
         return array_values(array_map(
             static fn (array $status): array => [
                 'name' => (string) $status['name'],
+                'description' => array_key_exists('description', $status) ? $status['description'] : null,
                 'color' => array_key_exists('color', $status) ? $status['color'] : null,
                 'group' => (string) $status['group'],
+                'requires_note' => (bool) ($status['requires_note'] ?? false),
             ],
             array_filter($statuses, static fn (array $status): bool => ($status['system_key'] ?? null) === null),
         ));
     }
 
     /**
-     * The name/color seed the client submitted for a pinned system row, or
-     * null when it left that row untagged (the writer then uses its default).
+     * The descriptive seed (name/description/color/requires_note) the client
+     * submitted for a pinned system row, or null when it left that row
+     * untagged (the writer then uses its default).
      *
-     * @param  array<int, array{name: mixed, color?: mixed, system_key?: mixed}>  $statuses
-     * @return array{name: string, color: ?string}|null
+     * @param  array<int, array{name: mixed, description?: mixed, color?: mixed, requires_note?: mixed, system_key?: mixed}>  $statuses
+     * @return array{name: string, description: ?string, color: ?string, requires_note: bool}|null
      */
     private static function extractSystemStatus(array $statuses, WorkflowStatusSystemKey $key): ?array
     {
@@ -118,7 +121,9 @@ final readonly class CreateOpportunityWorkflowData
             if (($status['system_key'] ?? null) === $key->value) {
                 return [
                     'name' => (string) $status['name'],
+                    'description' => array_key_exists('description', $status) ? $status['description'] : null,
                     'color' => array_key_exists('color', $status) ? $status['color'] : null,
+                    'requires_note' => (bool) ($status['requires_note'] ?? false),
                 ];
             }
         }

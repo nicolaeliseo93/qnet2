@@ -257,8 +257,10 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
      * A related row projected WITH its `color` token, so the grid renders the
      * colored working-state/pipeline badge — generic summarize() would drop
      * it (mirrors ProjectsTableDefinition::summarizePipelineStatus).
+     * `description` rides along so the badge can carry the status'
+     * explanation as its tooltip.
      *
-     * @return array{id: int, name: string, color: ?string}|null
+     * @return array{id: int, name: string, color: ?string, description: ?string}|null
      */
     private function summarizeWithColor(?Model $related): ?array
     {
@@ -266,7 +268,12 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
             return null;
         }
 
-        return ['id' => $related->id, 'name' => $related->name, 'color' => $related->color];
+        return [
+            'id' => $related->id,
+            'name' => $related->name,
+            'color' => $related->color,
+            'description' => $related->description,
+        ];
     }
 
     /**

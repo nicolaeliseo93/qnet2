@@ -21,7 +21,8 @@ use Illuminate\Validation\Rule;
  * when submitted, is an authoritative full-replace sync (min:1 — a workflow
  * can never be left with zero criteria); `statuses`, when submitted, syncs
  * only the CUSTOM rows (`statuses.*.id` optional: present = update, absent =
- * new) — the system rows accept only a name/color change, enforced at the
+ * new) — the system rows accept every descriptive field but never a `group`
+ * change, enforced at the
  * Service/WorkflowStatusWriter layer.
  */
 class UpdateOpportunityWorkflowRequest extends FormRequest

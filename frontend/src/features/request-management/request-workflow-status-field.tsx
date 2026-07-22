@@ -4,6 +4,7 @@ import { FormControl } from '@/components/ui/form'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MetaField } from '@/features/authorization/MetaField'
 import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
+import { WorkflowStatusOption } from '@/features/opportunity-workflows/workflow-status-option'
 import { cn } from '@/lib/utils'
 import type { RequestWorkFormValues } from '@/features/request-management/request-work-schema'
 import type { RequestWorkflowStatusRef } from '@/features/request-management/types'
@@ -64,10 +65,12 @@ export function RequestWorkflowStatusField({ control, statuses }: RequestWorkflo
           <SelectContent>
             {statuses.map((status) => (
               <SelectItem key={status.id} value={String(status.id)}>
-                <span className="flex items-center gap-2">
-                  <WorkflowStatusSwatch color={status.color} />
-                  {status.name}
-                </span>
+                <WorkflowStatusOption
+                  name={status.name}
+                  description={status.description}
+                  color={status.color}
+                  requiresNote={status.requires_note}
+                />
               </SelectItem>
             ))}
           </SelectContent>

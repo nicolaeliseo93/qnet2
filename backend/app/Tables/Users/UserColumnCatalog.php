@@ -370,7 +370,7 @@ final class UserColumnCatalog
                 // because it swaps the actor's identity for the whole session.
                 'key' => 'impersonate',
                 'label' => 'actions.impersonate',
-                'icon' => 'log-in',
+                'icon' => 'venetian-mask',
                 'type' => 'action',
                 'confirm' => true,
                 'permission' => 'users.impersonate',

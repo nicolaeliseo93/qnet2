@@ -9,6 +9,7 @@ import {
   isClosedWorkflowSystemKey,
   type OpportunityWorkflowStatusItem,
   type WorkflowStatusFormRow,
+  type WorkflowStatusRowPatch,
 } from '@/features/opportunity-workflows/types'
 
 /** Query key for the GLOBAL default status set (fresh-on-open pattern, mirrors `useStatusReorder`). */
@@ -21,9 +22,11 @@ function toFormRows(statuses: OpportunityWorkflowStatusItem[]): WorkflowStatusFo
     id: String(status.id),
     statusId: status.id,
     name: status.name,
+    description: status.description,
     color: status.color,
     group: status.group,
     system_key: status.system_key,
+    requires_note: status.requires_note,
   }))
 }
 
@@ -72,9 +75,11 @@ export function useDefaultStatuses({ enabled, labels }: UseDefaultStatusesArgs) 
     const newRow: WorkflowStatusFormRow = {
       id: `custom-${nextCustomRowId.current}`,
       name: '',
+      description: null,
       color: null,
       group: 'pending',
       system_key: null,
+      requires_note: false,
     }
     setRows((current) => {
       const closedIndex = current.findIndex((row) => isClosedWorkflowSystemKey(row.system_key))
@@ -87,7 +92,7 @@ export function useDefaultStatuses({ enabled, labels }: UseDefaultStatusesArgs) 
     setRows((current) => current.filter((row) => row.id !== id))
   }
 
-  const updateRow = (id: string, patch: Partial<Pick<WorkflowStatusFormRow, 'name' | 'color' | 'group'>>) => {
+  const updateRow = (id: string, patch: WorkflowStatusRowPatch) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)))
   }
 

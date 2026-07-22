@@ -14,7 +14,8 @@ use Illuminate\Validation\Rule;
  * shape as a workflow's own `statuses`, minus the workflow-scoping — this
  * endpoint always targets `opportunity_workflow_id` null). `statuses.*.id`
  * optional: present = update an existing row (custom OR system — a system
- * row only accepts name/color, enforced at the WorkflowStatusWriter layer),
+ * row accepts every descriptive field but never a `group` change, enforced
+ * at the WorkflowStatusWriter layer),
  * absent = a new custom row.
  *
  * Authorization is intentionally NOT handled here (it stays in the
@@ -36,13 +37,15 @@ class UpdateDefaultStatusesRequest extends FormRequest
             'statuses' => ['required', 'array'],
             'statuses.*.id' => ['sometimes', 'integer'],
             'statuses.*.name' => ['required', 'string', 'max:191'],
+            'statuses.*.description' => ['sometimes', 'nullable', 'string', 'max:500'],
             'statuses.*.color' => ['nullable', 'string', 'max:32'],
             'statuses.*.group' => ['required', Rule::enum(WorkflowStatusGroup::class)],
+            'statuses.*.requires_note' => ['sometimes', 'boolean'],
         ];
     }
 
     /**
-     * @return array<int, array{id: ?int, name: string, color: ?string, group: string}>
+     * @return array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>
      */
     public function statuses(): array
     {
@@ -53,8 +56,10 @@ class UpdateDefaultStatusesRequest extends FormRequest
             static fn (array $status): array => [
                 'id' => isset($status['id']) ? (int) $status['id'] : null,
                 'name' => (string) $status['name'],
+                'description' => array_key_exists('description', $status) ? $status['description'] : null,
                 'color' => array_key_exists('color', $status) ? $status['color'] : null,
                 'group' => (string) $status['group'],
+                'requires_note' => (bool) ($status['requires_note'] ?? false),
             ],
             $statuses,
         );

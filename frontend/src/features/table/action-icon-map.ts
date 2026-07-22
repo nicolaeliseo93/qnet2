@@ -2,10 +2,10 @@ import {
   Copy,
   Eye,
   History,
-  LogIn,
   MoreHorizontal,
   Pencil,
   Trash,
+  VenetianMask,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -26,7 +26,7 @@ export const defaultActionIconMap: ActionIconMap = {
   trash: Trash,
   history: History,
   copy: Copy,
-  'log-in': LogIn,
+  'venetian-mask': VenetianMask,
 }
 
 /** Neutral fallback used when an icon name is not mapped, so the menu never breaks. */

@@ -22,7 +22,7 @@ import { DEFAULT_MODULE_OPEN_PREFERENCES } from '@/features/modules/types'
 const ROW: TableRow = { id: 9, actions: ['view', 'edit', 'delete', 'impersonate'], name: 'Jane' }
 
 function action(key: string): TableActionDefinition {
-  return { key, label: `actions.${key}`, icon: 'log-in', type: 'action', confirm: false }
+  return { key, label: `actions.${key}`, icon: 'venetian-mask', type: 'action', confirm: false }
 }
 
 vi.mock('@/features/table/table-view', () => ({

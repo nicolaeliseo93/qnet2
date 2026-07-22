@@ -26,6 +26,7 @@ import {
   type OpportunityWorkflowDetail,
   type OpportunityWorkflowFormMode,
   type WorkflowStatusFormRow,
+  type WorkflowStatusRowPatch,
 } from '@/features/opportunity-workflows/types'
 
 /** How long the (static reference data) allow-listed criterion fields stay fresh. */
@@ -51,23 +52,29 @@ function initialSystemStatusRows(t: TFunction): WorkflowStatusFormRow[] {
     {
       id: 'system-open',
       name: t('opportunityWorkflows.form.statuses.defaultOpenName'),
+      description: null,
       color: null,
       group: 'open',
       system_key: 'open',
+      requires_note: false,
     },
     {
       id: 'system-closed-won',
       name: t('opportunityWorkflows.form.statuses.defaultClosedWonName'),
+      description: null,
       color: null,
       group: 'closed_won',
       system_key: 'closed_won',
+      requires_note: false,
     },
     {
       id: 'system-closed-lost',
       name: t('opportunityWorkflows.form.statuses.defaultClosedLostName'),
+      description: null,
       color: null,
       group: 'closed_lost',
       system_key: 'closed_lost',
+      requires_note: false,
     },
   ]
 }
@@ -78,9 +85,11 @@ function statusRowsFromDetail(opportunityWorkflow: OpportunityWorkflowDetail): W
     id: String(status.id),
     statusId: status.id,
     name: status.name,
+    description: status.description,
     color: status.color,
     group: status.group,
     system_key: status.system_key,
+    requires_note: status.requires_note,
   }))
 }
 
@@ -149,9 +158,11 @@ export function useOpportunityWorkflowForm({ mode, onSuccess }: UseOpportunityWo
     const newRow: WorkflowStatusFormRow = {
       id: `custom-${nextCustomRowId.current}`,
       name: '',
+      description: null,
       color: null,
       group: 'pending',
       system_key: null,
+      requires_note: false,
     }
     setStatusRows((rows) => {
       const closedIndex = rows.findIndex((row) => isClosedWorkflowSystemKey(row.system_key))
@@ -164,10 +175,7 @@ export function useOpportunityWorkflowForm({ mode, onSuccess }: UseOpportunityWo
     setStatusRows((rows) => rows.filter((row) => row.id !== id))
   }
 
-  const updateStatusRow = (
-    id: string,
-    patch: Partial<Pick<WorkflowStatusFormRow, 'name' | 'color' | 'group'>>,
-  ) => {
+  const updateStatusRow = (id: string, patch: WorkflowStatusRowPatch) => {
     setStatusRows((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)))
   }
 

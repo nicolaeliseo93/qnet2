@@ -25,10 +25,12 @@ class OpportunityWorkflowStatusFactory extends Factory
         return [
             'opportunity_workflow_id' => OpportunityWorkflow::factory(),
             'name' => fake()->unique()->words(2, true),
+            'description' => null,
             'color' => fake()->randomElement(['slate', 'green', 'red', 'blue']),
             'sort_order' => self::$nextSortOrder++,
             'system_key' => null,
             'group' => WorkflowStatusGroup::Open,
+            'requires_note' => false,
         ];
     }
 

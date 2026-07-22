@@ -36,8 +36,10 @@ function buildCriteriaPayload(rows: CriterionFormRow[]): CreateOpportunityWorkfl
 function buildStatusesCreatePayload(rows: WorkflowStatusFormRow[]): CreateOpportunityWorkflowStatusPayload[] {
   return rows.map((row) => ({
     name: row.name,
+    description: row.description,
     color: row.color,
     group: row.group,
+    requires_note: row.requires_note,
     system_key: row.system_key,
   }))
 }
@@ -57,8 +59,10 @@ function buildStatusesUpdatePayload(rows: WorkflowStatusFormRow[]): UpdateOpport
     .map((row) => ({
       id: row.statusId,
       name: row.name,
+      description: row.description,
       color: row.color,
       group: row.group,
+      requires_note: row.requires_note,
     }))
 }
 

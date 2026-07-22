@@ -50,10 +50,14 @@ export interface OpportunityWorkflowCriterion {
 export interface OpportunityWorkflowStatusItem {
   id: number
   name: string
+  /** Free-text explanation of the status, shown in the editor, the status select and the table badge tooltip. */
+  description: string | null
   color: string | null
   sort_order: number
   system_key: WorkflowStatusSystemKey
   group: WorkflowStatusGroupValue
+  /** Marks the status as one requiring an explanatory note. Configuration only: nothing enforces the note yet. */
+  requires_note: boolean
 }
 
 /** Full workflow detail, as returned by GET/POST/PUT/PATCH /opportunity-workflows(/{id}). */
@@ -86,8 +90,10 @@ export interface CreateOpportunityWorkflowCriterionPayload {
  */
 export interface CreateOpportunityWorkflowStatusPayload {
   name: string
+  description?: string | null
   color?: string | null
   group: WorkflowStatusGroupValue
+  requires_note?: boolean
   system_key?: WorkflowStatusSystemKey
 }
 
@@ -141,7 +147,14 @@ export interface WorkflowStatusFormRow {
   id: string
   statusId?: number
   name: string
+  description: string | null
   color: string | null
   group: WorkflowStatusGroupValue
   system_key: WorkflowStatusSystemKey
+  requires_note: boolean
 }
+
+/** The row fields the editor may patch (everything but the row identity and its pinned `system_key`). */
+export type WorkflowStatusRowPatch = Partial<
+  Pick<WorkflowStatusFormRow, 'name' | 'description' | 'color' | 'group' | 'requires_note'>
+>
