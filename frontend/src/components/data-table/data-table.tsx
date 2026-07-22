@@ -27,6 +27,7 @@ import { buildColumnFilter } from '@/components/data-table/column-filters'
 import {
   defaultValueFormatter,
   resolveCellRenderer,
+  resolveEditableColumnProps,
   type CellRenderer,
 } from '@/components/data-table/column-defaults'
 import { setupAgGrid } from '@/components/data-table/ag-grid-setup'
@@ -35,6 +36,7 @@ import { buildRowSelectionOptions } from '@/components/data-table/row-selection'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { TableColumn, TableRow } from '@/features/table/types'
 import { MAX_COLUMN_WIDTH } from '@/features/table/use-table-preferences'
+import { useTableCellEdit } from '@/features/table/use-table-cell-edit'
 import { useUiScale } from '@/features/appearance/ui-scale-context'
 
 // Re-exported so existing domain renderer maps (`features/table/renderer-registry.ts`)
@@ -238,6 +240,10 @@ export function DataTable({
   const { factor } = useUiScale()
   const theme = useMemo(() => buildDataTableTheme(factor), [factor])
 
+  // Owns the PATCH -> setData/revert cycle for inline cell edits (spec 0053):
+  // domain-agnostic, so it lives here rather than in a per-domain adapter.
+  const { handleCellValueChanged } = useTableCellEdit(domain)
+
   // AG Grid's own UI strings (filter menus, set filter, column panel, context
   // menu, pagination, "Loading…"/"No Rows To Show") come from the official
   // @ag-grid-community/locale package, selected by the active app language and
@@ -287,6 +293,7 @@ export function DataTable({
         valueFormatter: valueFormatter
           ? (params) => valueFormatter(params.value)
           : undefined,
+        ...resolveEditableColumnProps(column),
       }
     })
 
@@ -450,8 +457,12 @@ export function DataTable({
       // reloads; only wired when selection is actually enabled.
       getRowId: enableSelection ? getRowId : undefined,
       rowSelection,
+      // Inline cell editing (spec 0053, D-9): single click, Enter/blur commits.
+      singleClickEdit: true,
+      stopEditingWhenCellsLoseFocus: true,
+      onCellValueChanged: handleCellValueChanged,
     }),
-    [datasource, blockSize, enableSelection, getRowId, rowSelection],
+    [datasource, blockSize, enableSelection, getRowId, rowSelection, handleCellValueChanged],
   )
 
   return (

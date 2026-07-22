@@ -81,12 +81,7 @@ class TableService
         $models = $query->offset($offset)->limit($limit)->get()->all();
 
         $items = array_map(
-            function (Model $row) use ($definition, $actor): array {
-                $mapped = $definition->mapRow($actor, $row);
-                $mapped['actions'] = $definition->actionsFor($actor, $row);
-
-                return $mapped;
-            },
+            fn (Model $row): array => $this->mapRowWithMeta($definition, $actor, $row),
             $models,
         );
 
@@ -150,6 +145,34 @@ class TableService
             values: array_slice($values, 0, $limit),
             hasMore: count($values) > $limit,
         );
+    }
+
+    /**
+     * Map a single already-resolved row into its full grid shape (mapRow +
+     * actions + editable) — reused by the PATCH endpoint's response, whose
+     * contract requires "the same shape as POST /rows" (spec 0053, D-9), so
+     * the row-shape assembly (D-4: `editable` attached exactly where
+     * `actions` is) lives in this ONE place regardless of caller.
+     *
+     * @return array<string, mixed>
+     */
+    public function mapSingleRow(TableDefinition $definition, User $actor, Model $row): array
+    {
+        return $this->mapRowWithMeta($definition, $actor, $row);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapRowWithMeta(TableDefinition $definition, User $actor, Model $row): array
+    {
+        $mapped = $definition->mapRow($actor, $row);
+        $mapped['actions'] = $definition->actionsFor($actor, $row);
+        // Per-row inline-edit authorization (spec 0053, D-4), orthogonal to
+        // the per-column `editable` allow-list emitted by GET /columns.
+        $mapped['editable'] = $definition->authorizeUpdate($actor, $row);
+
+        return $mapped;
     }
 
     /**

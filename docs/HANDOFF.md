@@ -2,6 +2,98 @@
 
 > Injected at session start. Update at every green state.
 
+## ACTIVITY LOG DI GESTIONE RICHIESTE (2026-07-22) — GREEN, NON COMMITTATO
+
+Richiesta utente: in Gestione Richieste mancava lo storico delle modifiche, della scrittura note
+e dell'aggiunta documenti. EMENDA la decisione D-7 della spec 0049 ("nessuna superficie activity
+per il modulo"): il blocco era che `ActivityLogController` risolveva la Policy per CLASSE MODELLO
+(Opportunity), quindi il modulo sarebbe stato gated da `opportunities.*`.
+
+COME E' STATO SBLOCCATO: chiave OPZIONALE `authorizer` in `config/activity-log.php`, class-string
+di `App\ActivityLog\Contracts\ActivityLogAuthorizer` (stesso pattern di `config/notes.php` ->
+`NotableEntity`: dati puri, `config:cache`-safe). Chi la omette usa
+`PolicyActivityLogAuthorizer` = comportamento storico (`{resource}.viewActivity` + Policy `view`),
+quindi ZERO regressioni sulle altre 26 risorse. `request-management` dichiara
+`App\RequestManagement\RequestManagementActivityAuthorizer`: `request-management.viewActivity`
+IN AND con `RequestManagementScope::assertInScope()` (stessa regola GA2/`viewAll` del work panel).
+L'implementazione per-modulo sta nel namespace del modulo, `app/ActivityLog/` resta agnostico.
+
+RELAZIONI AGGREGATE (config/activity-log.php, chiave `request-management`): `notesWithTrashed`,
+`attachments`, `registry.personalData(.contacts|.addresses)`. `notesWithTrashed()` e' un metodo
+NUOVO del trait agnostico `HasNotes` (`notes()->withTrashed()`): senza di esso una nota cancellata
+porterebbe via con se' anche la propria storia. NON usarlo per renderizzare il thread (D-8: la
+cancellazione nasconde la nota).
+
+AZIONE DI RIGA: `activity` (icona `history`, gate `request-management.viewActivity`) dichiarata
+ULTIMA in `RequestColumnCatalog::actions()` e in `actionsFor()` — richiesta esplicita utente:
+essendo la quarta, con `INLINE_ACTION_LIMIT = 3` cade nel menu overflow (tre puntini), che e' il
+comportamento di default. Non spostarla in alto senza riconsiderare quel vincolo.
+
+FRONTEND: `ResourceActivityDialog` sull'azione di riga e `ActivityLogSection` in fondo al work
+panel (`FormSection` collassabile, chiusa di default), gated da `permissions.actions.view_activity`
+— gia' esposto da `RequestManagementAuthorization` da prima, ma fino ad ora non consumato da nulla.
+Aggiunte le label i18n mancanti (moduli `opportunity`/`note`/`attachment`, campi operativi).
+
+VERIFICATO: Pest `RequestManagement` + `ActivityLog` + `Notes` 189/189, Vitest
+`request-management` + `activity-log` 47/47, Pint pulito, `tsc -b` 0 errori, ESLint pulito.
+
+ATTENZIONE (ambiente): durante questo lavoro il working tree e' stato stashato da un'altra
+sessione attiva sullo stesso repo; le modifiche sono state riapplicate a mano. `stash@{0}` contiene
+ancora una copia mista di quel lavoro — non fare `stash pop` alla cieca.
+
+## ANAGRAFICA CLIENTE — DATI IDENTIFICATIVI NEL WORK PANEL (2026-07-22) — GREEN, NON COMMITTATO
+
+Richiesta utente: nella sezione "Anagrafica" del pannello Gestione Richieste mancavano i dati
+identificativi del cliente (privato/azienda, codice fiscale, partita IVA, SDI, data di nascita,
+sesso). Ora ci sono, editabili inline e salvati dallo stesso submit del pannello.
+
+CONTRATTO (esteso, non rotto): `GET/PATCH /api/request-management/{opportunity}` espone
+`client_identity` accanto a `client_contacts`/`client_address`:
+`{id, type, first_name, last_name, company_name, tax_code, vat_number, sdi_code, birth_date
+("Y-m-d"), gender}`, oppure `null` quando il cliente non ha ancora una PersonalData card (in quel
+caso il blocco NON viene renderizzato: non esiste un target di scrittura). In PATCH la chiave e'
+sparsa come le altre e vale come REPLACE COMPLETO dei campi identita' della card (nessun `id` sul
+filo: il server risolve la card dal registry dell'opportunita').
+
+INVARIANTE DA NON PERDERE: `registries.name` e' denormalizzato e derivato dalla card
+(`RegistryProfileWriter`). `RequestClientProfileWriter::writeIdentity()` ri-deriva il nome nella
+STESSA scrittura (`forceFill(['name' => $identity->displayName()])`) prima dell'upsert della card:
+senza questo, rinominare un cliente dal pannello lascerebbe un nome stantio in ogni lista.
+L'identita' e' scritta PER PRIMA cosi' un cliente senza card ne ottiene una prima che
+contatti/indirizzo debbano risolverla; subito dopo la relazione `personalData` viene scaricata.
+La regola per-tipo (individual => nome+cognome, company => ragione sociale) e' cio' che impedisce
+al nome derivato di risolversi in stringa vuota: e' obbligatoria, non cosmetica.
+
+PRIVACY: `tax_code`/`vat_number`/`birth_date` sono `$hidden` su PersonalData; la resource li
+ri-espone deliberatamente come gia' fa `PersonalDataResource` (l'accesso a proprieta' bypassa
+`$hidden`). Il gate resta `request-management.view` + `RequestManagementScope`.
+
+UI — INDIRIZZO COLLASSABILE: il gruppo "Indirizzo" e' un `Collapsible` chiuso di default con
+recap in riga (via, CAP, citta', o "Non inserito"); l'animazione riusa la classe condivisa
+`.form-section-collapsible-content` di `index.css` (la stessa di `FormSection` collassabile,
+motion-safe), niente CSS nuovo. Nota per i test: Radix SMONTA il contenuto chiuso, quindi un test
+che tocca i campi indirizzo deve prima cliccare il trigger (`getByRole('button', {name: /Address/})`).
+
+RIUSO: la UI NON duplica nulla — il gruppo "Dati identificativi" monta `PersonalDataCardForm`
+verbatim (lo stesso form di Anagrafiche/Utenti) e lo schema Zod del pannello valida la bozza con
+`buildPersonalDataSchema`, cosi' pannello e moduli anagrafici non possono divergere.
+
+File: BE `ValidatesRequestClientProfile` (regole + DTO `CreatePersonalData`),
+`RequestClientProfileWriter`, `RequestManagementService::applyClientProfile`,
+`RequestManagementResource::summarizeClientIdentity`. FE `types.ts`, `request-work-schema.ts`,
+`use-request-work-form.ts`, `request-work-payload.ts`, `request-client-section.tsx`, i18n en/it.
+
+VERDE: Pest `tests/Feature/RequestManagement/*` 69/70 (l'unico rosso e'
+`RequestManagementActivityTest` "readable only via the opportunities resource key" 403 invece di
+404 — PREESISTENTE, appartiene al lavoro in corso sull'activity-log authorizer, non a questa
+modifica). Vitest: 86/86 sui moduli toccati (nuovo test "sends the client identity edited inline
+with the same save"). `tsc -b` pulito sui file toccati (restano errori TS6133 in
+`request-management-table.tsx` e `column-defaults.test.tsx` del lavoro 0053 in corso). Pint pulito.
+
+ATTENZIONE OPERATIVA: durante questa sessione i file backend toccati sono stati riportati allo
+stato HEAD due volte da una modifica esterna (altra sessione attiva sullo stesso worktree). Le
+modifiche sono state riapplicate e verificate; se dovessero sparire, e' quella la causa.
+
 ## SPEC 0052 — DATA PROSSIMO RICHIAMO + NOTE COLLABORATIVE (2026-07-22) — GREEN, NON COMMITTATO
 
 Spec: `docs/specs/0052-callback-date-and-collaborative-notes.xml` (contratto congelato prima

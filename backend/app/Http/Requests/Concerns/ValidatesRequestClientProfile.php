@@ -6,29 +6,36 @@ namespace App\Http\Requests\Concerns;
 
 use App\DataObjects\PersonalData\CreateAddress;
 use App\DataObjects\PersonalData\CreateContact;
+use App\DataObjects\PersonalData\CreatePersonalData;
 use App\DataObjects\Users\AddressInput;
 use App\DataObjects\Users\ContactInput;
 use App\Enums\ContactTypeEnum;
+use App\Enums\GenderEnum;
+use App\Enums\PersonalDataTypeEnum;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
  * Validation + DTO assembly for the client anagraphic block the work panel
- * writes back (spec 0049 amendment): `client_contacts` and `client_address`,
- * both landing on the Registry's PersonalData card.
+ * writes back (spec 0049 amendment): `client_identity`, `client_contacts` and
+ * `client_address`, all landing on the Registry's PersonalData card.
  *
- * Deliberately NOT `ValidatesUserProfile`: that trait also owns the card's
- * IDENTITY fields (type/first_name/company_name/...), which this module must
- * never touch — `registries.name` is derived from them. Only the two child
- * collections are writable here, so the rules are their exact subset and
- * reuse the SAME rule sources (ContactTypeEnum, geo `exists`) to avoid drift.
+ * Deliberately NOT `ValidatesUserProfile`: that trait validates the SAME card
+ * but nested under a `personal_data` key and paired with the users' account
+ * fields. The identity rules below are its exact per-type mirror (same
+ * PersonalDataTypeEnum/GenderEnum sources, same lengths) so the two surfaces
+ * cannot drift, while the child collections stay this panel's narrower subset
+ * (single address, no site type/coordinates). Writing the identity here also
+ * moves `registries.name`, which is derived from the card — the writer keeps
+ * that derivation in the same write.
  *
  * Sparse semantics, consistent with the rest of the PATCH payload: an absent
  * key leaves that side untouched. `client_contacts` present (even empty) is
  * AUTHORITATIVE — it is synced against the card's full contact set.
  * `client_address` is a single create-or-update row, never an authoritative
  * sync: the client's other addresses are out of this panel's reach.
+ * `client_identity` is a full replace of the card's identity fields.
  *
  * @phpstan-require-extends FormRequest
  */
@@ -40,8 +47,11 @@ trait ValidatesRequestClientProfile
     protected function clientProfileRules(): array
     {
         $hasAddress = $this->has('client_address') && $this->input('client_address') !== null;
+        $hasIdentity = $this->has('client_identity') && $this->input('client_identity') !== null;
 
         return [
+            ...$this->clientIdentityRules($hasIdentity),
+
             'client_contacts' => ['sometimes', 'array'],
             'client_contacts.*.id' => ['sometimes', 'integer', 'min:1'],
             'client_contacts.*.type' => ['required', Rule::enum(ContactTypeEnum::class)],
@@ -60,6 +70,48 @@ trait ValidatesRequestClientProfile
             'client_address.province_id' => ['nullable', 'integer', Rule::exists('provinces', 'id')],
             'client_address.state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
             'client_address.country_id' => ['nullable', 'integer', Rule::exists('countries', 'id')],
+        ];
+    }
+
+    /**
+     * The card's identity fields, mirroring `ValidatesUserProfile::profileRules()`
+     * one-to-one: the per-type requirement (individual => first+last name,
+     * company => company name) is what keeps the derived `registries.name`
+     * from ever resolving to an empty string.
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    private function clientIdentityRules(bool $hasIdentity): array
+    {
+        return [
+            'client_identity' => ['sometimes', 'nullable', 'array'],
+            'client_identity.type' => [
+                Rule::requiredIf($hasIdentity),
+                Rule::enum(PersonalDataTypeEnum::class),
+            ],
+            'client_identity.first_name' => [
+                Rule::requiredIf(fn (): bool => $this->input('client_identity.type') === PersonalDataTypeEnum::Individual->value),
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'client_identity.last_name' => [
+                Rule::requiredIf(fn (): bool => $this->input('client_identity.type') === PersonalDataTypeEnum::Individual->value),
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'client_identity.company_name' => [
+                Rule::requiredIf(fn (): bool => $this->input('client_identity.type') === PersonalDataTypeEnum::Company->value),
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'client_identity.tax_code' => ['nullable', 'string', 'max:32'],
+            'client_identity.vat_number' => ['nullable', 'string', 'max:32'],
+            'client_identity.sdi_code' => ['nullable', 'string', 'max:32'],
+            'client_identity.birth_date' => ['nullable', 'date', 'before:today'],
+            'client_identity.gender' => ['nullable', Rule::enum(GenderEnum::class)],
         ];
     }
 
@@ -101,11 +153,15 @@ trait ValidatesRequestClientProfile
      * present only when it was submitted, so the service keeps its
      * array_key_exists() semantics for these two as for every other key.
      *
-     * @return array{client_contacts?: array<int, ContactInput>, client_address?: AddressInput}
+     * @return array{client_identity?: CreatePersonalData, client_contacts?: array<int, ContactInput>, client_address?: AddressInput}
      */
     public function clientProfilePayload(): array
     {
         $payload = [];
+
+        if ($this->has('client_identity') && $this->input('client_identity') !== null) {
+            $payload['client_identity'] = $this->buildClientIdentity();
+        }
 
         if ($this->has('client_contacts')) {
             $payload['client_contacts'] = $this->buildClientContacts();
@@ -116,6 +172,24 @@ trait ValidatesRequestClientProfile
         }
 
         return $payload;
+    }
+
+    private function buildClientIdentity(): CreatePersonalData
+    {
+        /** @var array<string, mixed> $row */
+        $row = (array) $this->input('client_identity', []);
+
+        return new CreatePersonalData(
+            type: PersonalDataTypeEnum::from((string) ($row['type'] ?? '')),
+            firstName: $row['first_name'] ?? null,
+            lastName: $row['last_name'] ?? null,
+            companyName: $row['company_name'] ?? null,
+            taxCode: $row['tax_code'] ?? null,
+            vatNumber: $row['vat_number'] ?? null,
+            sdiCode: $row['sdi_code'] ?? null,
+            birthDate: $row['birth_date'] ?? null,
+            gender: $row['gender'] ?? null,
+        );
     }
 
     /**

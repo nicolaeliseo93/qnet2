@@ -1,13 +1,14 @@
 import { render } from '@testing-library/react'
-import type { ICellRendererParams } from 'ag-grid-community'
+import type { EditableCallbackParams, ICellRendererParams } from 'ag-grid-community'
 import { describe, expect, it } from 'vitest'
 import appI18n from '@/i18n'
 import {
   defaultValueFormatter,
   resolveCellRenderer,
+  resolveEditableColumnProps,
   type CellRenderer,
 } from '@/components/data-table/column-defaults'
-import type { EnumBadge, TableColumn } from '@/features/table/types'
+import type { ColumnType, EnumBadge, TableColumn, TableRow } from '@/features/table/types'
 
 /** Minimal TableColumn stub; only the fields under test matter. */
 function stubColumn(partial: Partial<TableColumn> & Pick<TableColumn, 'id' | 'type'>): TableColumn {
@@ -130,5 +131,41 @@ describe('defaultValueFormatter', () => {
     expect(
       defaultValueFormatter(stubColumn({ id: 'custom.color', type: 'enum', source: 'custom' }), translate),
     ).toBeUndefined()
+  })
+})
+
+/** Minimal AG Grid `EditableCallbackParams` stub around a row's `editable` flag. */
+function editableParams(row: TableRow | undefined): EditableCallbackParams<TableRow> {
+  return { data: row } as EditableCallbackParams<TableRow>
+}
+
+describe('resolveEditableColumnProps (spec 0053)', () => {
+  it('is read-only when the column itself is not declared editable', () => {
+    const column = stubColumn({ id: 'name', type: 'text', editable: false })
+    expect(resolveEditableColumnProps(column)).toEqual({ editable: false })
+  })
+
+  it('is read-only when the column type has no registered cell editor (AC-023)', () => {
+    const column = stubColumn({ id: 'name', type: 'future_type' as ColumnType, editable: true })
+    expect(resolveEditableColumnProps(column)).toEqual({ editable: false })
+  })
+
+  it('wires the registered editor and an editable callback for an editable column', () => {
+    const column = stubColumn({ id: 'name', type: 'text', editable: true })
+    const props = resolveEditableColumnProps(column)
+    expect(props.cellEditor).toBe('agTextCellEditor')
+    expect(typeof props.editable).toBe('function')
+  })
+
+  it('the editable callback is true only when the ROW is also editable (AC-017)', () => {
+    const column = stubColumn({ id: 'name', type: 'text', editable: true })
+    const editableFn = resolveEditableColumnProps(column).editable as (
+      params: EditableCallbackParams<TableRow>,
+    ) => boolean
+
+    expect(editableFn(editableParams({ id: 1, actions: [], editable: true }))).toBe(true)
+    expect(editableFn(editableParams({ id: 1, actions: [], editable: false }))).toBe(false)
+    expect(editableFn(editableParams({ id: 1, actions: [] }))).toBe(false)
+    expect(editableFn(editableParams(undefined))).toBe(false)
   })
 })

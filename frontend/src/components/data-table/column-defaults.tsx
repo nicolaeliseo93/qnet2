@@ -9,11 +9,12 @@
  * dynamic id (`custom.<key>`) that no per-id renderer map can cover — these
  * fallbacks are what make them render/format correctly out of the box.
  */
-import type { ICellRendererParams } from 'ag-grid-community'
+import type { ColDef, EditableCallbackParams, ICellRendererParams } from 'ag-grid-community'
 import appI18n from '@/i18n'
+import { resolveCellEditorSpec } from '@/components/data-table/cell-editor-registry'
 import { formatBooleanFilterValue } from '@/components/data-table/column-filters'
 import { BadgeCell } from '@/features/table/cell-renderers'
-import type { TableColumn } from '@/features/table/types'
+import type { TableColumn, TableRow } from '@/features/table/types'
 
 /** A custom cell renderer keyed by column id. Receives the AG Grid cell params. */
 export type CellRenderer = (params: ICellRendererParams) => React.ReactNode
@@ -90,4 +91,28 @@ export function resolveCellRenderer(
         <BadgeCell {...params} badges={column.badges} enumKey={column.enumKey} />
       )
     : undefined
+}
+
+/**
+ * Editable-related ColDef props for a column (spec 0053): read-only unless the
+ * backend declared the column `editable` AND its `type` has a registered cell
+ * editor (AC-023 — an unregistered type stays read-only rather than crashing).
+ * The returned callback only re-checks the PER-ROW flag (`row.editable`, D-4):
+ * the column-level gate is already resolved here, once, at colDef build time.
+ */
+export function resolveEditableColumnProps(
+  column: TableColumn,
+): Pick<ColDef<TableRow>, 'editable' | 'cellEditor' | 'cellEditorParams'> {
+  if (!column.editable) {
+    return { editable: false }
+  }
+  const spec = resolveCellEditorSpec(column.type)
+  if (!spec) {
+    return { editable: false }
+  }
+  return {
+    editable: (params: EditableCallbackParams<TableRow>) => params.data?.editable === true,
+    cellEditor: spec.cellEditor,
+    cellEditorParams: spec.cellEditorParams?.(column),
+  }
 }

@@ -100,6 +100,22 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
     }
 
     /**
+     * Same deviation as authorizeViewAny() (spec 0053, D-4): the
+     * AbstractTableDefinition fail-safe default would resolve
+     * `Gate::allows('update', $row)` → OpportunityPolicy → `opportunities.update`,
+     * the WRONG permission for this domain. `baseQuery()`'s own D-3 scoping
+     * already keeps an out-of-scope row a 404 before this is ever reached; no
+     * column is declared editable for this domain in this round (D-3(b): its
+     * catalogue's writable fields are a relation FK and a custom JSON bag,
+     * both excluded — see spec 0053 handoff notes), so this exists for
+     * forward-compatibility with the day a column IS declared editable here.
+     */
+    public function authorizeUpdate(User $actor, Model $row): bool
+    {
+        return $actor->can('request-management.update');
+    }
+
+    /**
      * @return Builder<Opportunity>
      */
     public function baseQuery(): Builder
@@ -209,14 +225,15 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * `view` ("Lavora"), `notes` (spec 0052 B4b) and `documents` — both `view`
-     * and `notes` gated by the SAME `request-management.view` (D-6: reading a
-     * record's notes is inherited from the ability to open the record, no
-     * separate notes permission), never OpportunityPolicy:
+     * `view` ("Lavora"), `notes` (spec 0052 B4b), `documents` and `activity` —
+     * `view` and `notes` gated by the SAME `request-management.view` (D-6:
+     * reading a record's notes is inherited from the ability to open the
+     * record, no separate notes permission), never OpportunityPolicy:
      * `Gate::allows('view', $row)` would resolve OpportunityPolicy
-     * (`opportunities.view`), the wrong permission for this domain. No
-     * `activity` action: the module exposes no separately-gated activity
-     * surface (see RequestColumnCatalog::actions()).
+     * (`opportunities.view`), the wrong permission for this domain — same
+     * reason `activity` reads `request-management.viewActivity` directly (the
+     * endpoint re-checks it plus the GA2 scope via
+     * RequestManagementActivityAuthorizer).
      *
      * @return array<int, string>
      */
@@ -231,6 +248,10 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
 
         if ($actor->can('request-management.viewDocuments')) {
             $allowed[] = 'documents';
+        }
+
+        if ($actor->can('request-management.viewActivity')) {
+            $allowed[] = 'activity';
         }
 
         return $allowed;

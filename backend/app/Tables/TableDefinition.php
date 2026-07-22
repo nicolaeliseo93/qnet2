@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  * so the security-critical SSRM engine lives in exactly one place and every
  * domain inherits it identically.
  *
- * @phpstan-type ColumnDefinition array{id: string, label: string, type: string, visible: bool, sortable: bool, filterable: bool, filterType?: string|null, hasFilterValues?: bool, options?: array<int, scalar>|null, badges?: array<int, array<string, mixed>>|null, permission?: string|null}
+ * @phpstan-type ColumnDefinition array{id: string, label: string, type: string, visible: bool, sortable: bool, filterable: bool, filterType?: string|null, hasFilterValues?: bool, options?: array<int, scalar>|null, badges?: array<int, array<string, mixed>>|null, permission?: string|null, editable?: bool, nullable?: bool, rules?: array<int, mixed>}
  * @phpstan-type FilterDefinition array{columnId: string, type: string, options?: array<int, scalar>|null, optionsResolver?: callable}
  * @phpstan-type ActionDefinition array{key: string, label: string, icon: string, type: string, confirm: bool, permission?: string|null}
  */
@@ -275,4 +275,50 @@ interface TableDefinition
      * the rest of the batch.
      */
     public function deleteModel(Model $model): void;
+
+    /**
+     * Column ids where inline cell-editing (spec 0053) is allowed for
+     * $actor: declared `'editable' => true` in the catalogue AND
+     * `{resource}.update` AND the per-field DB permission
+     * (`role_field_permissions`, via AuthorizationRegistry) all allow it.
+     * Fail-safe (D-3): a resource unregistered in config/authorization.php,
+     * or a column id with no matching field key in that resource's
+     * catalogue, is never editable — regardless of the declaration.
+     *
+     * Drives the per-column `editable` flag resolveConfig() emits in GET
+     * /columns (D-2) — a UI HINT only. The PATCH endpoint never trusts this
+     * list: it re-derives its own guards against the REAL row (D-2: "il
+     * config è un suggerimento, la catena di guardie del PATCH è la
+     * verità").
+     *
+     * @return array<int, string>
+     */
+    public function editableColumnIds(User $actor): array;
+
+    /**
+     * Per-row authorization for inline cell-editing (spec 0053, D-4),
+     * orthogonal to the per-column allow-list above: a cell is editable iff
+     * column editable AND row editable. Default (AbstractTableDefinition):
+     * `Gate::forUser($actor)->allows('update', $row)`, the same fail-safe
+     * pattern as authorizeViewAny(). Override when the domain's update
+     * ability is NOT governed by modelClass()'s own Policy (e.g.
+     * RequestManagementTableDefinition, whose model is Opportunity but whose
+     * permission prefix is its own `request-management.*`).
+     */
+    public function authorizeUpdate(User $actor, Model $row): bool;
+
+    /**
+     * Persist one cell's new (already-validated) value on an
+     * already-authorized $row (spec 0053, D-7) and return the fresh model.
+     * Default (AbstractTableDefinition): a plain
+     * `$row->update([$columnId => $value])` — requires $columnId to be in
+     * $row's `$fillable`, so a misdeclared editable column fails LOUDLY (a
+     * mass-assignment exception) instead of silently no-op-ing. Override
+     * when the write must go through a domain Service instead of a raw
+     * Eloquent update (business rules, a column outside `$fillable`) — an
+     * override that bypasses this Eloquent update() cycle MUST emit the
+     * activity-log entry itself (D-8), since LogsModelActivity only
+     * observes the standard save/update lifecycle.
+     */
+    public function updateCell(Model $row, string $columnId, mixed $value): Model;
 }

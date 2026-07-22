@@ -35,4 +35,15 @@ trait HasNotes
     {
         return $this->morphMany(Note::class, 'notable');
     }
+
+    /**
+     * The same thread INCLUDING soft-deleted notes — for read paths that must
+     * account for removed entries (e.g. the aggregated activity log, where a
+     * deleted note's own history would otherwise vanish with it). Never use it
+     * to render the discussion: deletion hides a note from the thread (D-8).
+     */
+    public function notesWithTrashed(): MorphMany
+    {
+        return $this->notes()->withTrashed();
+    }
 }

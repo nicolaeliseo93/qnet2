@@ -85,6 +85,16 @@ export interface TableColumn {
   /** Server-side whitelist: filter accepted only when true. */
   filterable: boolean
   /**
+   * Whether the column accepts inline edits (spec 0053). Structural, not
+   * user-overridable (ADR-0004): already reduced server-side for the actor —
+   * `true` only when the column's catalog declares it editable AND the actor
+   * clears the resource + per-field permission checks. Always present on the
+   * wire; optional here (like `hasFilterValues`) so existing fixtures across
+   * the app that predate this field keep compiling — absent behaves as
+   * `false`.
+   */
+  editable?: boolean
+  /**
    * Whether the column supports a Set Filter value list (POST /values). `false`
    * for computed/derived columns without a queryable value list (e.g. a
    * concatenated address or a nested contact) — those get a conditions-only
@@ -211,6 +221,15 @@ export interface TableRow {
   id: number
   /** Allowed action keys for THIS row. */
   actions: string[]
+  /**
+   * Whether THIS row can be inline-edited (spec 0053, D-4): the per-row
+   * authorization result (`authorizeUpdate`), attached alongside `actions`. A
+   * cell is editable only when both this and the column's own `editable` are
+   * true. Always present on the wire; optional here so fixtures across the
+   * app that predate this field keep compiling — absent behaves as `false`
+   * (`resolveEditableColumnProps` reads it as `row.editable === true`).
+   */
+  editable?: boolean
   [key: string]: unknown
 }
 

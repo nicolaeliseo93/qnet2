@@ -8,9 +8,11 @@ use App\Http\Requests\Table\TableFilterStateRequest;
 use App\Http\Requests\Table\TablePreferencesRequest;
 use App\Http\Requests\Table\TableRowsRequest;
 use App\Http\Requests\Table\TableValuesRequest;
+use App\Http\Requests\Table\UpdateTableCellRequest;
 use App\Http\Resources\TableRowResource;
 use App\Models\User;
 use App\Services\TableBulkDeleteService;
+use App\Services\TableCellUpdateService;
 use App\Services\TableFilterStateService;
 use App\Services\TablePreferenceService;
 use App\Services\TableService;
@@ -40,6 +42,7 @@ class TableController extends BaseApiController
         private readonly TablePreferenceService $preferences,
         private readonly TableFilterStateService $filters,
         private readonly TableBulkDeleteService $bulkDelete,
+        private readonly TableCellUpdateService $cellUpdate,
     ) {}
 
     /**
@@ -185,6 +188,37 @@ class TableController extends BaseApiController
                 offset: $result->offset,
                 limit: $result->limit,
             );
+        } catch (Throwable $exception) {
+            return $this->handleControllerException($exception, __FUNCTION__);
+        }
+    }
+
+    /**
+     * PATCH /api/tables/{domain}/rows/{row} — inline cell edit (spec 0053).
+     * {row} is a plain int (never route-model-bound): the row is resolved
+     * from the definition's OWN baseQuery() by TableCellUpdateService (D-5),
+     * so a row outside the domain's scope 404s without ever reaching the
+     * model. Every other guard (column allow-list, per-field DB permission,
+     * value validation) lives in that service, against the REAL row.
+     */
+    public function updateRow(UpdateTableCellRequest $request, string $domain, int $row): JsonResponse
+    {
+        try {
+            $definition = $this->registry->resolve($domain); // 404 if unknown
+
+            /** @var User $actor */
+            $actor = $request->user();
+            $this->authorizeViewAny($definition->authorizeViewAny($actor));
+
+            $updated = $this->cellUpdate->update(
+                $definition,
+                $actor,
+                $row,
+                $request->validated('column'),
+                $request->validated('value'),
+            );
+
+            return $this->ok(new TableRowResource($updated), 'Row updated');
         } catch (Throwable $exception) {
             return $this->handleControllerException($exception, __FUNCTION__);
         }

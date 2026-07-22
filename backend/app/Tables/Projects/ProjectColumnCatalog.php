@@ -45,6 +45,13 @@ final class ProjectColumnCatalog
                 'filterable' => true,
                 'filterType' => 'text',
                 'searchable' => true,
+                // Inline cell-editing (spec 0053): real column, in
+                // Project::$fillable, matches the mandatory `name` field key
+                // in ProjectsAuthorization. `code` is NOT editable inline
+                // (create-only, permanently read-only once persisted — spec
+                // 0025 BR-1; also excluded from #[Fillable]).
+                'editable' => true,
+                'rules' => ['max:191'],
             ],
             self::derivedColumn('pipeline_status', 'projects.columns.pipeline_status', sortable: true),
             self::derivedColumn('business_function', 'projects.columns.business_function'),
@@ -71,6 +78,9 @@ final class ProjectColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'date',
+                // Inline cell-editing (spec 0053): real, fillable, mandatory
+                // (ProjectsAuthorization) column — never nullable inline.
+                'editable' => true,
             ],
             [
                 'id' => 'end_date',
@@ -80,6 +90,9 @@ final class ProjectColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'date',
+                // Inline cell-editing (spec 0053): real, fillable, nullable column.
+                'editable' => true,
+                'nullable' => true,
             ],
             [
                 'id' => 'total_budget',
@@ -89,6 +102,11 @@ final class ProjectColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'number',
+                // Inline cell-editing (spec 0053): real, fillable, nullable
+                // column; mirrors UpdateProjectRequest's own bound.
+                'editable' => true,
+                'nullable' => true,
+                'rules' => ['min:0'],
             ],
             [
                 'id' => 'target_lead',
@@ -98,6 +116,11 @@ final class ProjectColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'number',
+                // Inline cell-editing (spec 0053): real, fillable, nullable
+                // column; mirrors UpdateProjectRequest's own bound.
+                'editable' => true,
+                'nullable' => true,
+                'rules' => ['min:0'],
             ],
             [
                 'id' => 'created_at',

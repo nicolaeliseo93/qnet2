@@ -6,6 +6,7 @@ import type {
   TableColumnValuesPayload,
   TableColumnValuesResponse,
   TableConfig,
+  TableRow,
   TableRowsPayload,
   TableRowsResponse,
 } from '@/features/table/types'
@@ -63,6 +64,30 @@ export async function saveTablePreferences(
  */
 export async function resetTablePreferences(domain: string): Promise<void> {
   await apiClient.delete(`/tables/${domain}/preferences`)
+}
+
+/** Body accepted by `PATCH /tables/{domain}/rows/{row}` (spec 0053). */
+export interface UpdateTableCellPayload {
+  column: string
+  value: string | number | boolean | null
+}
+
+/**
+ * Persists a single inline cell edit (spec 0053). Returns the whole row,
+ * re-mapped by the same server-side shape as `fetchTableRows` (derived
+ * columns and `updated_at` included), so the caller replaces the grid's row
+ * wholesale (`node.setData`) instead of patching just the edited field.
+ */
+export async function updateTableCell(
+  domain: string,
+  rowId: number,
+  payload: UpdateTableCellPayload,
+): Promise<TableRow> {
+  const { data } = await apiClient.patch<ApiResponse<TableRow>>(
+    `/tables/${domain}/rows/${rowId}`,
+    payload,
+  )
+  return data.data
 }
 
 /** Body accepted by `POST /tables/{domain}/filters` (spec 0032: either key, or both). */

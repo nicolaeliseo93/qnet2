@@ -34,6 +34,11 @@ final class OpportunityColumnCatalog
                 'filterable' => true,
                 'filterType' => 'text',
                 'searchable' => true,
+                // Inline cell-editing (spec 0053): real column, in
+                // Opportunity::$fillable, matches the mandatory `name` field
+                // key in OpportunitiesAuthorization.
+                'editable' => true,
+                'rules' => ['max:255'],
             ],
             self::derivedColumn('registry', 'opportunities.columns.registry'),
             self::derivedColumn('referent', 'opportunities.columns.referent'),
@@ -63,6 +68,11 @@ final class OpportunityColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'number',
+                // Inline cell-editing (spec 0053): real, fillable, nullable
+                // column; mirrors UpdateOpportunityRequest's own bounds.
+                'editable' => true,
+                'nullable' => true,
+                'rules' => ['min:0', 'max:9999999999999.99'],
             ],
             [
                 'id' => 'success_probability',
@@ -72,6 +82,11 @@ final class OpportunityColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'number',
+                // Inline cell-editing (spec 0053): real, fillable, nullable
+                // column; mirrors UpdateOpportunityRequest's own bounds.
+                'editable' => true,
+                'nullable' => true,
+                'rules' => ['between:0,100'],
             ],
             [
                 'id' => 'start_date',
@@ -81,6 +96,10 @@ final class OpportunityColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'date',
+                // Inline cell-editing (spec 0053): real, fillable, nullable
+                // column, not mandatory in OpportunitiesAuthorization.
+                'editable' => true,
+                'nullable' => true,
             ],
             [
                 'id' => 'expected_close_date',
@@ -90,6 +109,9 @@ final class OpportunityColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'date',
+                // Inline cell-editing (spec 0053): real, fillable, nullable column.
+                'editable' => true,
+                'nullable' => true,
             ],
             [
                 'id' => 'created_at',

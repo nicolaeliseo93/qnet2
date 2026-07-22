@@ -6,6 +6,7 @@ use App\Enums\AdvancedFilterType;
 use App\Models\User;
 use App\Services\Table\AdvancedFilterApplier;
 use App\Tables\Concerns\InjectsDefaultIdColumn;
+use App\Tables\Concerns\ResolvesEditableColumns;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -26,6 +27,7 @@ use Illuminate\Support\Facades\Gate;
 abstract class AbstractTableDefinition implements TableDefinition
 {
     use InjectsDefaultIdColumn;
+    use ResolvesEditableColumns;
 
     public function resource(): string
     {
@@ -99,11 +101,12 @@ abstract class AbstractTableDefinition implements TableDefinition
     public function resolveConfig(User $actor): array
     {
         $layout = $this->defaultColumnLayout();
+        $editableIds = $this->editableColumnIds($actor);
 
         return [
             'resource' => $this->resource(),
             'columns' => array_map(
-                fn (array $column): array => $this->resolveColumn($column, $actor, $layout),
+                fn (array $column): array => $this->resolveColumn($column, $actor, $layout, $editableIds),
                 $this->columnsWithDefaultId(),
             ),
             'filters' => $this->resolveFilters($actor),
@@ -141,9 +144,10 @@ abstract class AbstractTableDefinition implements TableDefinition
      *
      * @param  array<string, mixed>  $column
      * @param  array<string, array{visible: bool, width: int|null, order: int}>  $layout
+     * @param  array<int, string>  $editableIds
      * @return array<string, mixed>
      */
-    private function resolveColumn(array $column, User $actor, array $layout): array
+    private function resolveColumn(array $column, User $actor, array $layout, array $editableIds): array
     {
         $resolved = [
             'id' => $column['id'],
@@ -158,6 +162,10 @@ abstract class AbstractTableDefinition implements TableDefinition
             'filterable' => $column['filterable'],
             'filterType' => $column['filterType'] ?? null,
             'hasFilterValues' => $this->hasFilterValues($column),
+            // Inline cell-editing (spec 0053, D-2): already reduced for the
+            // actor — a UI hint, never the authority (the PATCH endpoint
+            // re-derives its own guards against the real row).
+            'editable' => in_array($column['id'], $editableIds, true),
             'options' => $this->optionsFor($column['id'], $actor)
                 ?? ($column['options'] ?? null),
         ];
@@ -483,4 +491,7 @@ abstract class AbstractTableDefinition implements TableDefinition
     {
         $model->delete();
     }
+
+    // editableColumnIds()/authorizeUpdate()/updateCell() defaults (spec 0053)
+    // live in ResolvesEditableColumns (file-size budget, engineering.md §6).
 }

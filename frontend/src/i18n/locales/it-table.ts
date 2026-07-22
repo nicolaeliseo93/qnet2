@@ -23,6 +23,7 @@ export const table = {
   exitFullscreen: 'Esci da schermo intero',
   confirmAction: 'Sei sicuro di voler eseguire questa azione?',
   loadError: 'Impossibile caricare la tabella. Riprova.',
+  cellUpdateError: 'Impossibile salvare la modifica.',
   emptyConfig: 'Nessuna colonna disponibile per questa tabella.',
   noRows: 'Nessun record da mostrare.',
   resetLayout: 'Ripristina layout',

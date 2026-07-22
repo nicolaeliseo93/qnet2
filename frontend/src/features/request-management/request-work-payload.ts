@@ -1,10 +1,11 @@
 import { isEqualCustomFieldValue } from '@/features/custom-fields/custom-fields-values'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
-import type { AddressDraft, ContactDraft } from '@/features/personal-data/types'
+import type { AddressDraft, ContactDraft, PersonalDataDraft } from '@/features/personal-data/types'
 import type { RequestWorkFormValues } from '@/features/request-management/request-work-schema'
 import type {
   RequestClientAddressPayload,
   RequestClientContactPayload,
+  RequestClientIdentityPayload,
   RequestWorkPanel,
   UpdateRequestWorkPayload,
 } from '@/features/request-management/types'
@@ -37,6 +38,31 @@ type ClientAddressSource = Pick<
   AddressDraft,
   'line1' | 'line2' | 'postal_code' | 'city_id' | 'province_id' | 'state_id' | 'country_id'
 > & { id?: number }
+
+/**
+ * The card identity, in both directions: the buffered draft and the panel's
+ * loaded projection share these keys exactly, so current and original map
+ * through this same function and stay comparable.
+ */
+type ClientIdentitySource = Omit<PersonalDataDraft, 'id' | 'contacts' | 'addresses'>
+
+/** The wire shape of the client's identity (full replace of the card fields). */
+function toClientIdentityPayload(source: ClientIdentitySource): RequestClientIdentityPayload {
+  return {
+    type: source.type,
+    first_name: source.first_name,
+    last_name: source.last_name,
+    company_name: source.company_name,
+    tax_code: source.tax_code,
+    vat_number: source.vat_number,
+    sdi_code: source.sdi_code,
+    birth_date: source.birth_date,
+    // Same normalization the draft applies (individual defaults to male, a
+    // company carries none), so a legacy null on the loaded card does not read
+    // as an edit on both sides of the comparison.
+    gender: source.type === 'company' ? null : (source.gender ?? 'male'),
+  }
+}
 
 /** The wire row of one buffered client contact (`id` present = update). */
 function toClientContactPayload(draft: ClientContactSource): RequestClientContactPayload {
@@ -95,6 +121,16 @@ export function buildRequestWorkPayload(
   const codes = panel.applicable_attributes.map((attribute) => attribute.code)
   if (attributeValuesChanged(values.attribute_values, panel.attribute_values, codes)) {
     payload.attribute_values = values.attribute_values
+  }
+
+  // Sent only when the client actually has a card: without one there is no
+  // identity to replace and the server has nothing to resolve the write on.
+  const identity = values.client_identity
+  if (identity && panel.client_identity) {
+    const wire = toClientIdentityPayload(identity)
+    if (clientBlockChanged(wire, toClientIdentityPayload(panel.client_identity))) {
+      payload.client_identity = wire
+    }
   }
 
   const contacts = values.client_contacts.map(toClientContactPayload)

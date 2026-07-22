@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\RequestManagement;
 
+use App\DataObjects\PersonalData\CreatePersonalData;
 use App\DataObjects\Users\AddressInput;
 use App\DataObjects\Users\ContactInput;
 use App\Models\Opportunity;
@@ -96,7 +97,7 @@ final class RequestManagementService
      * submitted keys change) and returns the SAME work-panel shape as
      * loadWorkPanel(), post-save.
      *
-     * @param  array{opportunity_workflow_status_id?: int|null, attribute_values?: array<string, mixed>, next_callback_at?: string|null, client_contacts?: array<int, ContactInput>, client_address?: AddressInput}  $data
+     * @param  array{opportunity_workflow_status_id?: int|null, attribute_values?: array<string, mixed>, next_callback_at?: string|null, client_identity?: CreatePersonalData, client_contacts?: array<int, ContactInput>, client_address?: AddressInput}  $data
      * @return array{opportunity: Opportunity, applicable_attributes: Collection<int, ApplicableAttribute>, workflow_statuses: Collection<int, OpportunityWorkflowStatus>}
      */
     public function updateWork(Opportunity $opportunity, User $actor, array $data): array
@@ -129,9 +130,9 @@ final class RequestManagementService
 
             $opportunity->save();
 
-            // Step 4: client anagraphic block (spec 0049 amendment) — contacts
-            // and address land on the Registry's PersonalData card, not on the
-            // opportunity, so they are written outside the model save.
+            // Step 4: client anagraphic block (spec 0049 amendment) — identity,
+            // contacts and address land on the Registry's PersonalData card,
+            // not on the opportunity, so they are written outside the model save.
             $this->applyClientProfile($opportunity, $data);
 
             // Step 5: explicit activity entry (see class docblock).
@@ -144,19 +145,22 @@ final class RequestManagementService
     /**
      * Delegates the submitted client anagraphic keys to the dedicated writer,
      * then drops the loaded `registry` chain so the panel rebuilt right after
-     * re-reads the just-written contacts/addresses instead of the stale
+     * re-reads the just-written card/contacts/addresses instead of the stale
      * relation loaded before the save.
      *
      * @param  array<string, mixed>  $data
      */
     private function applyClientProfile(Opportunity $opportunity, array $data): void
     {
-        if (! array_key_exists('client_contacts', $data) && ! array_key_exists('client_address', $data)) {
+        $submitted = array_intersect_key($data, array_flip(['client_identity', 'client_contacts', 'client_address']));
+
+        if ($submitted === []) {
             return;
         }
 
         $this->clientProfileWriter->write(
             $opportunity,
+            $data['client_identity'] ?? null,
             $data['client_contacts'] ?? null,
             $data['client_address'] ?? null,
         );

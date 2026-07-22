@@ -153,11 +153,13 @@ final class RequestColumnCatalog
      * reuses the polymorphic Attachment subsystem on the same Opportunity
      * record as the opportunities module, but is gated by this module's OWN
      * permission (`request-management.viewDocuments`, D-2) and carries the
-     * per-row `documents_count` badge. No `activity` row action: the generic
-     * activity-log framework resolves its Policy by MODEL CLASS (Opportunity),
-     * so a `request-management`-gated activity surface would have been
-     * misleading (see config/activity-log.php) — the module has no
-     * separately-gated activity endpoint (lead decision).
+     * per-row `documents_count` badge. `activity` (D-7, amended) opens this
+     * module's OWN activity surface: the generic framework used to resolve its
+     * Policy by MODEL CLASS (Opportunity), which is why the action did not
+     * exist — it now goes through RequestManagementActivityAuthorizer, gated by
+     * `request-management.viewActivity`. Declared LAST on purpose: with the
+     * shared `INLINE_ACTION_LIMIT`, the fourth action falls into the overflow
+     * (three-dots) menu, which is where consultation belongs.
      * `notes` (spec 0052 B4b) opens the collaborative-notes dialog: gated by
      * `request-management.view`, NOT a notes permission — reading a record's
      * notes is inherited from the ability to open the record (D-6), while
@@ -197,6 +199,14 @@ final class RequestColumnCatalog
                 'confirm' => false,
                 'permission' => 'request-management.view',
                 'count_field' => 'notes_count',
+            ],
+            [
+                'key' => 'activity',
+                'label' => 'actions.activity',
+                'icon' => 'history',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'request-management.viewActivity',
             ],
         ];
     }

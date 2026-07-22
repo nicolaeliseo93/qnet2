@@ -25,6 +25,7 @@ use App\Models\Source;
 use App\Models\Tag;
 use App\Models\User;
 use App\Models\VatRate;
+use App\RequestManagement\RequestManagementActivityAuthorizer;
 
 return [
 
@@ -103,6 +104,30 @@ return [
         ],
         'referent-types' => [
             'model' => ReferentType::class,
+        ],
+        'request-management' => [
+            // OPERATIVE view over Opportunity (spec 0049 D-1): the root model
+            // is shared with `opportunities`, the authorization is NOT — hence
+            // the dedicated authorizer (`request-management.viewActivity` + the
+            // work panel's GA2 scope), the only resource here that overrides
+            // the default Policy gate.
+            'model' => Opportunity::class,
+            'authorizer' => RequestManagementActivityAuthorizer::class,
+            // Everything the operator can change from the work panel, in one
+            // timeline: the request itself (workflow status, dynamic values,
+            // next callback — explicit entries written by
+            // RequestManagementService), the collaborative notes (soft-deleted
+            // ones INCLUDED, so a removed note still leaves its trace), the
+            // uploaded documents, and the client anagraphic block edited
+            // inline in the panel (Registry's PersonalData card + contacts +
+            // address).
+            'relations' => [
+                'notesWithTrashed',
+                'attachments',
+                'registry.personalData',
+                'registry.personalData.contacts',
+                'registry.personalData.addresses',
+            ],
         ],
         'referents' => [
             'model' => Referent::class,

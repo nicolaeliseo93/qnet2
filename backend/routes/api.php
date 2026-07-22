@@ -105,6 +105,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // is enforced server-side in TableController on both endpoints.
     Route::get('tables/{domain}/columns', [TableController::class, 'columns']);
     Route::post('tables/{domain}/rows', [TableController::class, 'rows']);
+    Route::patch('tables/{domain}/rows/{row}', [TableController::class, 'updateRow']);
 
     // Distinct values for a single column (Excel-like set filter, spec
     // 0004): allow-list columnId + filterModel keys, cap N, cross-column

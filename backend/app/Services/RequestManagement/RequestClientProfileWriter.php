@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\Services\RequestManagement;
 
 use App\DataObjects\PersonalData\CreateAddress;
+use App\DataObjects\PersonalData\CreatePersonalData;
 use App\DataObjects\Users\AddressInput;
 use App\DataObjects\Users\ContactInput;
 use App\Models\Address;
 use App\Models\Opportunity;
 use App\Models\PersonalData;
+use App\Models\Registry;
 use App\Services\AddressService;
 use App\Services\ContactService;
+use App\Services\PersonalDataService;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -20,8 +23,13 @@ use Illuminate\Validation\ValidationException;
  * ContactService/AddressService verbatim — the same path the Registries module
  * writes through, so the two never drift.
  *
- * Two deliberately DIFFERENT write semantics:
+ * Three deliberately DIFFERENT write semantics:
  *
+ *  - identity: a create-or-update of the card itself (PersonalDataService::
+ *    upsertFor), plus the derivation of the denormalized `registries.name`
+ *    from it — exactly what RegistryProfileWriter does, so a client renamed
+ *    from this panel is renamed everywhere. Written FIRST, so a client whose
+ *    card does not exist yet gets one before contacts/address need it.
  *  - contacts: authoritative sync (ContactService::sync). The panel loads the
  *    card's FULL contact set into its buffer, so what it submits is the whole
  *    truth and a removed row must really be deleted.
@@ -35,6 +43,7 @@ use Illuminate\Validation\ValidationException;
 final class RequestClientProfileWriter
 {
     public function __construct(
+        private readonly PersonalDataService $personalData,
         private readonly ContactService $contacts,
         private readonly AddressService $addresses,
     ) {}
@@ -44,8 +53,12 @@ final class RequestClientProfileWriter
      *
      * @throws ValidationException when the client has no anagraphic card to write against
      */
-    public function write(Opportunity $opportunity, ?array $contacts, ?AddressInput $address): void
+    public function write(Opportunity $opportunity, ?CreatePersonalData $identity, ?array $contacts, ?AddressInput $address): void
     {
+        if ($identity !== null) {
+            $this->writeIdentity($opportunity, $identity);
+        }
+
         if ($contacts === null && $address === null) {
             return;
         }
@@ -59,6 +72,32 @@ final class RequestClientProfileWriter
         if ($address !== null) {
             $this->writeAddress($card, $address);
         }
+    }
+
+    /**
+     * Upserts the client's card identity and re-derives `registries.name` from
+     * it in the same write, the way RegistryProfileWriter does — the name is
+     * denormalized display data, and letting the two diverge would surface a
+     * stale client name in every list that reads it.
+     *
+     * The card relation is dropped afterwards so the contacts/address writes
+     * resolve the card just persisted (relevant when this call created it).
+     *
+     * @throws ValidationException when the request has no client to write to
+     */
+    private function writeIdentity(Opportunity $opportunity, CreatePersonalData $identity): void
+    {
+        $registry = $opportunity->registry;
+
+        if (! $registry instanceof Registry) {
+            throw ValidationException::withMessages([
+                'client_identity' => 'The request has no client to write to.',
+            ]);
+        }
+
+        $registry->forceFill(['name' => $identity->displayName()])->save();
+        $this->personalData->upsertFor($registry, $identity);
+        $registry->unsetRelation('personalData');
     }
 
     /**

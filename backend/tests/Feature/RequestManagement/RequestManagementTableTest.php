@@ -93,8 +93,8 @@ it('rows: a user with viewAll sees every opportunity, managed or not (AC-011)', 
 });
 
 // ---------------------------------------------------------------------------
-// AC-012 — 403 without viewAny; no edit/delete/activity action in the
-// catalogue; view gated by request-management.view
+// AC-012 — 403 without viewAny; no edit/delete action in the catalogue;
+// view gated by request-management.view
 // ---------------------------------------------------------------------------
 
 it('403 without request-management.viewAny on rows/columns/values (AC-012)', function () {
@@ -106,10 +106,12 @@ it('403 without request-management.viewAny on rows/columns/values (AC-012)', fun
     $this->postJson('/api/tables/request-management/values', ['columnId' => 'workflow_status'])->assertForbidden();
 });
 
-it('the action catalogue never declares edit/delete/activity, only view + notes (AC-012)', function () {
-    // Requirement changed by spec 0052 B4b: the catalogue now also declares
-    // a `notes` action (gated by request-management.view, D-6) — updated
-    // here rather than left asserting a stale exact list.
+it('the action catalogue never declares edit/delete, only view + notes + activity (AC-012)', function () {
+    // Requirement changed twice: spec 0052 B4b added `notes` (gated by
+    // request-management.view, D-6), then the D-7 amendment added `activity`
+    // (gated by request-management.viewActivity) — updated here rather than
+    // left asserting a stale exact list. `edit`/`delete` stay out: CRUD
+    // remains on `opportunities.*`.
     $actor = requestManagementUserWith(['viewAny', 'view', 'viewActivity']);
     Sanctum::actingAs($actor);
 
@@ -118,10 +120,22 @@ it('the action catalogue never declares edit/delete/activity, only view + notes 
         ->json('data.actions');
 
     $keys = collect($actions)->pluck('key');
-    expect($keys->all())->toBe(['view', 'notes'])
+    // `activity` LAST: with INLINE_ACTION_LIMIT it lands in the overflow menu.
+    expect($keys->all())->toBe(['view', 'notes', 'activity'])
         ->and($keys)->not->toContain('edit')
-        ->and($keys)->not->toContain('delete')
-        ->and($keys)->not->toContain('activity');
+        ->and($keys)->not->toContain('delete');
+});
+
+it('the activity action is gated by request-management.viewActivity (D-7 amended)', function () {
+    $withoutActivity = requestManagementUserWith(['viewAny', 'view']);
+    Sanctum::actingAs($withoutActivity);
+    $actions = $this->getJson('/api/tables/request-management/columns')->assertOk()->json('data.actions');
+    expect(collect($actions)->pluck('key'))->not->toContain('activity');
+
+    $withActivity = requestManagementUserWith(['viewAny', 'view', 'viewActivity']);
+    Sanctum::actingAs($withActivity);
+    $actions = $this->getJson('/api/tables/request-management/columns')->assertOk()->json('data.actions');
+    expect(collect($actions)->pluck('key'))->toContain('activity');
 });
 
 it('the notes action is gated by request-management.view (spec 0052 B4b, D-6)', function () {

@@ -57,6 +57,7 @@ class RequestManagementResource extends JsonResource
             'workflow_status' => $this->summarizeWorkflowStatus($opportunity->workflowStatus),
             'workflow_statuses' => $this->summarizeWorkflowStatuses($this->resource['workflow_statuses']),
             'product_lines' => $this->summarizeProductLines($opportunity->productLines),
+            'client_identity' => $this->summarizeClientIdentity($opportunity->registry),
             'client_contacts' => $this->summarizeContacts($opportunity->registry),
             'client_address' => $this->summarizeClientAddress($opportunity->registry),
             'referent_contacts' => $this->summarizeContacts($opportunity->referent),
@@ -154,6 +155,45 @@ class RequestManagementResource extends JsonResource
         return [
             'owner' => ['type' => 'personal_data', 'id' => $personalData->id],
             'items' => ContactResource::collection($personalData->contacts),
+        ];
+    }
+
+    /**
+     * The client's IDENTITY fields, the top block of the panel's "anagrafica"
+     * section: who the client is (individual vs company) and the fiscal
+     * identifiers the operator has to capture (tax code, VAT number, SDI).
+     *
+     * PRIVACY NOTE: `tax_code`, `vat_number` and `birth_date` are $hidden on
+     * PersonalData and re-exposed here on purpose, exactly as
+     * PersonalDataResource does for the identity sheet — property access
+     * bypasses $hidden, so this projection is the re-exposure point. It is
+     * reachable only through `request-management.view` plus the GA2 scope
+     * guard (RequestManagementScope), the same gate as the rest of the panel.
+     *
+     * `null` when the client has no card yet: there is nothing to show, and the
+     * panel hides the block rather than offering fields no write path accepts.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function summarizeClientIdentity(?Model $entity): ?array
+    {
+        $card = $entity?->personalData;
+
+        if ($card === null) {
+            return null;
+        }
+
+        return [
+            'id' => $card->id,
+            'type' => $card->type->value,
+            'first_name' => $card->first_name,
+            'last_name' => $card->last_name,
+            'company_name' => $card->company_name,
+            'tax_code' => $card->tax_code,
+            'vat_number' => $card->vat_number,
+            'sdi_code' => $card->sdi_code,
+            'birth_date' => $card->birth_date?->format('Y-m-d'),
+            'gender' => $card->gender?->value,
         ];
     }
 

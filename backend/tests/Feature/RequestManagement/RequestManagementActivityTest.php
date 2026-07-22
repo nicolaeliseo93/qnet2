@@ -1,7 +1,11 @@
 <?php
 
+use App\Models\Attachment;
+use App\Models\Note;
 use App\Models\Opportunity;
 use App\Models\OpportunityWorkflowStatus;
+use App\Models\PersonalData;
+use App\Models\Registry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -11,16 +15,20 @@ use Spatie\Permission\Models\Permission;
 uses(RefreshDatabase::class);
 
 // ---------------------------------------------------------------------------
-// AC-043 (write-side only) — LEAD DECISION: the module exposes NO separately-
-// gated activity endpoint. The generic ActivityLogController resolves its
-// Policy by MODEL CLASS (Opportunity), so a `request-management` resource key
-// in config/activity-log.php would have been gated by
-// `opportunities.viewActivity`/`opportunities.view`, never
-// `request-management.viewActivity` — misleading, removed. Operational
-// tracking stays: RequestManagementService::updateWork() writes an explicit
-// activity() entry directly on the Opportunity for every operative PATCH
-// (workflow status + attribute_values), reachable only through the
-// Opportunity's own activity-log resource key.
+// AC-043 — write side: RequestManagementService::updateWork() writes an
+// explicit activity() entry on the Opportunity for every operative PATCH
+// (workflow status, attribute_values, next_callback_at), which logFillable()
+// cannot capture (those columns are outside $fillable).
+//
+// Read side (D-7, AMENDED — user request 2026-07-22): the module DOES expose
+// its own activity surface, `GET /api/activity-log/request-management/{id}`.
+// The former blocker — the generic controller resolving the Policy by MODEL
+// CLASS (Opportunity), i.e. gating by `opportunities.*` — is gone: the
+// resource declares its own ActivityLogAuthorizer
+// (RequestManagementActivityAuthorizer), so the gate is
+// `request-management.viewActivity` PLUS the work panel's own GA2 scope. The
+// timeline aggregates the request, its notes (soft-deleted included), its
+// documents and the client anagraphic block edited from the panel.
 // ---------------------------------------------------------------------------
 
 if (! function_exists('requestManagementActivityUserWith')) {
@@ -29,7 +37,7 @@ if (! function_exists('requestManagementActivityUserWith')) {
      */
     function requestManagementActivityUserWith(array $abilities): User
     {
-        foreach (['viewAny', 'view', 'update', 'viewAll'] as $ability) {
+        foreach (['viewAny', 'view', 'update', 'viewAll', 'viewActivity'] as $ability) {
             Permission::findOrCreate("request-management.{$ability}");
         }
 
@@ -69,12 +77,8 @@ it('PATCH /api/request-management/{id} writes exactly one activity entry on the 
         ->toMatchArray(['opportunity_workflow_status_id' => $target->id]);
 });
 
-it('the written activity is readable only via the opportunities resource key, never request-management', function () {
-    $actor = requestManagementActivityUserWith(['viewAny', 'view', 'update', 'viewAll']);
-    Permission::findOrCreate('opportunities.viewActivity');
-    Permission::findOrCreate('opportunities.view');
-    $actor->givePermissionTo(['opportunities.viewActivity', 'opportunities.view']);
-
+it('exposes the operative change through the request-management resource key, with NO opportunities.* permission', function () {
+    $actor = requestManagementActivityUserWith(['viewAny', 'view', 'update', 'viewAll', 'viewActivity']);
     $opportunity = Opportunity::factory()->create();
     $target = OpportunityWorkflowStatus::query()
         ->whereNull('opportunity_workflow_id')
@@ -87,12 +91,63 @@ it('the written activity is readable only via the opportunities resource key, ne
         'opportunity_workflow_status_id' => $target->id,
     ])->assertOk();
 
-    $this->getJson("/api/activity-log/opportunities/{$opportunity->id}")
-        ->assertOk()
-        ->assertJsonPath('data.items.0.changes.0.field', 'opportunity_workflow_status_id');
-
-    // The `request-management` resource key is no longer registered — the
-    // module has no dedicated, separately-gated activity surface.
     $this->getJson("/api/activity-log/request-management/{$opportunity->id}")
-        ->assertNotFound();
+        ->assertOk()
+        ->assertJsonPath('data.items.0.module', $opportunity->getMorphClass())
+        ->assertJsonPath('data.items.0.changes.0.field', 'opportunity_workflow_status_id');
+});
+
+it('denies the request-management activity log without request-management.viewActivity, even holding opportunities.viewActivity', function () {
+    $actor = requestManagementActivityUserWith(['viewAny', 'view', 'viewAll']);
+    Permission::findOrCreate('opportunities.viewActivity');
+    Permission::findOrCreate('opportunities.view');
+    $actor->givePermissionTo(['opportunities.viewActivity', 'opportunities.view']);
+
+    $opportunity = Opportunity::factory()->create();
+
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/activity-log/request-management/{$opportunity->id}")->assertForbidden();
+});
+
+it('denies the request-management activity log to an actor outside the GA2 scope', function () {
+    $actor = requestManagementActivityUserWith(['viewAny', 'view', 'viewActivity']);
+    $opportunity = Opportunity::factory()->create();
+
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/activity-log/request-management/{$opportunity->id}")->assertForbidden();
+
+    // Same actor, same record: becoming the GA2 "Operatore" is enough, no
+    // viewAll needed — the panel's own boundary, verbatim.
+    $opportunity->managers()->sync([$actor->id => ['position' => 2]]);
+
+    $this->getJson("/api/activity-log/request-management/{$opportunity->id}")->assertOk();
+});
+
+it('aggregates notes (soft-deleted included), documents and the client anagraphic block', function () {
+    $actor = requestManagementActivityUserWith(['viewAny', 'view', 'viewAll', 'viewActivity']);
+
+    $registry = Registry::factory()->create();
+    $card = PersonalData::factory()->for($registry, 'personable')->create();
+    $opportunity = Opportunity::factory()->create(['registry_id' => $registry->id]);
+
+    $note = Note::factory()->for($opportunity, 'notable')->create();
+    $note->delete();
+
+    Attachment::factory()->for($opportunity, 'attachable')->create(['collection' => 'documents']);
+
+    $card->update(['first_name' => 'Nuovo']);
+
+    Sanctum::actingAs($actor);
+
+    $modules = collect(
+        $this->getJson("/api/activity-log/request-management/{$opportunity->id}")
+            ->assertOk()
+            ->json('data.items')
+    )->pluck('module')->unique();
+
+    expect($modules)->toContain($note->getMorphClass())
+        ->toContain((new Attachment)->getMorphClass())
+        ->toContain($card->getMorphClass());
 });

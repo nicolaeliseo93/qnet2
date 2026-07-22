@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0053 — Modifica inline per-cella nel framework tabellare generico.
+  Grounding VERIFICATO sul codice reale (esplorazione 2026-07-22), non ipotizzato.
+  Decisioni utente (AskUserQuestion 2026-07-22):
+    - AUTOMATISMO: opt-in ESPLICITO per colonna (chiave `editable` nel catalogo). Una colonna nuova
+      nasce READONLY finche' non la si dichiara. NON e' un default permissivo.
+    - SCRITTURA: percorso GENERICO nel framework (PATCH /api/tables/{domain}/rows/{row} + metodo di
+      contratto), NON delega ai FormRequest per-modulo.
+    - SCOPE: motore generico su tutti i 26 domini; colonne accese in questo giro su 5 domini:
+      opportunities, request-management, leads, campaigns, projects.
+    - UX: SINGLE CLICK edit, Enter/blur salva, Esc annulla, revert + toast su errore.
+    - AUDIT: le modifiche inline sono auditate con spatie/laravel-activitylog come le altre.
+-->
+<spec id="0053-inline-cell-editing" status="draft" owner="nicola" date="2026-07-22">
+
+  <goal>
+    Rendere le celle delle tabelle modificabili inline, con un unico motore generico nel framework
+    tabellare: una colonna diventa editabile dichiarando una chiave nel proprio catalogo, e da quel
+    momento eredita gratuitamente validazione, autorizzazione server-side, audit e UX di editing.
+    L'editabilita' e' SEMPRE subordinata ai permessi: permesso di update sulla risorsa, permesso
+    per-riga (scope/Policy) e permesso PER-CAMPO dalla matrice `role_field_permissions` gia'
+    esistente. Dove anche una sola di queste manca, la cella e' di sola lettura.
+  </goal>
+
+  <context>
+    Tutti i nomi sotto sono VERIFICATI sul codice reale (esplorazione 2026-07-22).
+
+    STATO ATTUALE DEL FRAMEWORK TABELLARE:
+    - Contratto `App\Tables\TableDefinition` (backend/app/Tables/TableDefinition.php:23). NON contiene
+      alcun metodo di scrittura: l'unico metodo mutante e' `deleteModel()` (:277).
+    - Base astratta `App\Tables\AbstractTableDefinition` (:26). `resolveConfig()` (:99) emette il config;
+      `resolveColumn()` (:146) e' l'UNICO punto che costruisce la shape client-facing di una colonna.
+      Distingue esplicitamente proprieta' di PRESENTAZIONE user-overridable (visible/width/order,
+      ADR-0004) da proprieta' STRUTTURALI/SICUREZZA mai overridable (sortable/filterable/filterType/
+      hasFilterValues). `editable` appartiene alla SECONDA categoria.
+    - Una colonna e' un array associativo puro (nessun DTO). Shape in phpstan-type `ColumnDefinition`
+      (TableDefinition.php:19). La chiave `permission` presente nel phpstan-type NON e' mai letta sulle
+      colonne: `resolveActions()` (AbstractTableDefinition.php:294) la legge solo sulle ACTIONS.
+    - Endpoint esistenti (routes/api.php:106-133): GET columns, POST rows, POST values, POST
+      bulk-delete, POST/DELETE preferences, POST/DELETE filters. NESSUN PATCH per-riga.
+    - Allow-list gia' usate come pattern di sicurezza: `sortableColumnIds()` (:118),
+      `filterableColumnIds()` (:125), `searchableColumnIds()` (:139), applicate in
+      `App\Http\Requests\Table\TableRowsRequest`.
+    - `TableRowResource` (app/Http/Resources/TableRowResource.php:21) e' un pass-through dell'array di
+      `mapRow()`; `TableService` (app/Services/TableService.php:86) ci attacca `actions`.
+    - Frontend: `TableRow` (frontend/src/features/table/types.ts:210) = `{ id, actions: string[], [k]: unknown }`.
+      Il mapping colonne -> ColDef e' un solo useMemo (frontend/src/components/data-table/data-table.tsx:250-324):
+      non emette ne' `editable` ne' `cellEditor`.
+    - AG Grid ENTERPRISE 35.3.1 con `AllEnterpriseModule` gia' registrato
+      (frontend/src/components/data-table/ag-grid-setup.ts:22): nessun modulo di editing da aggiungere,
+      nessuna dipendenza nuova.
+
+    PERMESSI PER-CAMPO — GIA' ESISTENTI, DA RIUSARE (NON reimplementare):
+    - Tabella `role_field_permissions` (role_id, resource, field, visible, editable, required),
+      model `App\Models\RoleFieldPermission`, lettura memoizzata `App\Authorization\FieldPermissionRepository`
+      (union additiva fra i ruoli dell'attore).
+    - Choke point unico e `final`: `App\Authorization\AbstractResourceAuthorization::fieldPermissions()`
+      (:67) — bypass super-admin, intersect ceiling x DB: la DB puo' solo RESTRINGERE.
+    - Value object `App\Authorization\FieldPermission` (:20) con `visible/editable/required/disabled` e
+      derivati `hidden`/`readonly`.
+    - Registry `App\Authorization\AuthorizationRegistry`, mappa in `config/authorization.php` (25 risorse).
+    - Enforcement in scrittura gia' esistente per i form: trait
+      `App\Http\Requests\Concerns\EnforcesFieldPermissions` (change-based: rifiuta solo se il valore cambia).
+
+    DISALLINEAMENTO NOTO FRA I DUE REGISTRI (fatto verificato, non ipotesi):
+    - `config/tables.php` registra 26 domini; `config/authorization.php` ne registra 25. `import-runs`
+      esiste SOLO in tables. Le chiavi di dominio quasi coincidono ma NON sono garantite identiche, e
+      le chiavi dei CAMPI authorization non sono garantite identiche agli ID delle COLONNE tabellari.
+      Questa spec NON assume la coincidenza: la impone e la verifica (vedi D-3 e AC-012).
+
+    PRECEDENTE ARCHITETTURALE IN REPO (da imitare, NON da riusare as-is):
+    - Il review-grid del wizard di import fa gia' cell-edit -> PATCH per-campo -> setData su successo ->
+      REVERT su errore: frontend/src/features/imports/wizard/review-columns.tsx:104-126,
+      review-grid.tsx:230-240, use-review-rows.ts:138-165; backend
+      `PATCH imports/{domain}/{importRun}/rows/{row}` (routes/api/imports.php:45,
+      ImportController::updateRow :252-289). E' un motore SEPARATO su righe di staging: non si tocca,
+      non si fonde, non si estende. Serve solo come riferimento di UX e di gestione errore.
+
+    REGISTRY PER-TIPO GIA' ESISTENTI (pattern OCP da imitare per gli editor):
+    - `CUSTOM_FIELD_COMPONENT_REGISTRY` (frontend/src/features/custom-fields/field-component-registry.tsx:23), 13 tipi.
+    - `ADVANCED_FILTER_FIELD_REGISTRY` (frontend/src/features/table/advanced-filters/field-registry.tsx:39), 17 tipi.
+  </context>
+
+  <decisions>
+    <d id="D-1" title="Opt-in esplicito, una sola chiave">
+      Una colonna diventa editabile SOLO dichiarando `'editable' => true` nel proprio catalogo. Il
+      default e' `false`. Nessuna inferenza automatica dal tipo o dallo schema DB. Conseguenza
+      accettata e messa a verbale: una colonna aggiunta in futuro nasce READONLY finche' qualcuno non
+      aggiunge quella riga. Il costo per colonna futura e' una chiave; il beneficio e' che nessuna
+      proiezione, colonna derivata o campo sensibile diventa scrivibile per distrazione.
+      Chiave opzionale accessoria: `'rules' => [...]` per i vincoli di dominio.
+    </d>
+
+    <d id="D-2" title="`editable` e' struttura, non presentazione">
+      `editable` e' risolto in `AbstractTableDefinition::resolveColumn()` insieme a sortable/filterable
+      e NON e' mai sovrascrivibile dalle preferenze utente (ADR-0004). Nel config esce gia' RIDOTTO
+      per l'attore: `editable: true` solo se la dichiarazione lo prevede E l'attore supera i controlli
+      di risorsa e di campo. La UI non deve mai vedere `editable: true` per una cella che il server
+      rifiuterebbe. Resta comunque vero che la UI nasconde e il BACKEND autorizza: il config e' un
+      suggerimento, la catena di guardie del PATCH e' la verita'.
+    </d>
+
+    <d id="D-3" title="Il permesso per-campo passa dalla matrice esistente, fail-safe">
+      L'editabilita' per-campo NON introduce un secondo sistema di permessi: usa
+      `AuthorizationRegistry::resolve($definition->resource())` e legge `FieldPermission::$editable`
+      per la chiave campo corrispondente all'id colonna. Regole FAIL-SAFE, entrambe vincolanti:
+      (a) se la risorsa NON e' registrata in `config/authorization.php` (oggi: `import-runs`), NESSUNA
+          sua colonna puo' essere editabile;
+      (b) se l'id colonna NON esiste nel catalogo `fields()` di quella risorsa, la colonna NON e'
+          editabile.
+      Il fallback permissivo del frontend (`FALLBACK_FIELD_PERMISSION`, permissions.tsx:13-20) vale
+      solo per la UI dei form e NON si applica qui: lato server, campo sconosciuto = negato.
+      Se un id colonna e la corrispondente chiave campo divergono, si NON introduce una mappa di
+      traduzione: si dichiara `editable` solo dove coincidono, e le divergenze si REPORTANO.
+    </d>
+
+    <d id="D-4" title="Autorizzazione per-riga separata da quella per-colonna">
+      Nuovo metodo di contratto `authorizeUpdate(User $actor, Model $row): bool`, con default
+      fail-safe in AbstractTableDefinition = `Gate::forUser($actor)->allows('update', $row)` — stesso
+      pattern di `authorizeViewAny()` (:44). Le definition con scope proprio (es.
+      `RequestManagementTableDefinition`, che usa `RequestManagementScope`) lo OVERRIDANO per
+      applicare il proprio scope. Il risultato viaggia per-riga come `editable: bool` accanto a
+      `actions`, attaccato da `TableService` esattamente dove oggi attacca `actions`
+      (TableService.php:86). Le due dimensioni sono ortogonali e ENTRAMBE necessarie:
+      cella editabile <=> colonna editabile AND riga editabile.
+    </d>
+
+    <d id="D-5" title="Risoluzione della riga da baseQuery(), mai dal model">
+      Il PATCH risolve la riga con `$definition->baseQuery()->findOrFail($id)`, MAI con
+      `Model::findOrFail()` ne' con route model binding. `baseQuery()` porta con se' gli scope di
+      tenancy/visibilita' del dominio: risolvere altrove riaprirebbe un IDOR cross-tenant su ogni
+      dominio in un colpo solo. Riga fuori scope -> 404 (non 403: non si conferma l'esistenza).
+    </d>
+
+    <d id="D-6" title="Validazione derivata dal tipo, estesa dalla colonna">
+      Le regole di validazione si derivano dal `type` gia' dichiarato sulla colonna
+      (text->string, number->numeric, boolean->boolean, datetime->date, date->date,
+      enum/badge->in:<options risolte>), unite alle `rules` opzionali della colonna. Nessuno schema
+      duplicato, nessuna regola inventata per colonna. `null` e' ammesso solo se la colonna dichiara
+      `'nullable' => true`. Fallimento -> 422 con envelope standard e messaggio sul campo `value`.
+    </d>
+
+    <d id="D-7" title="Scrittura di default minimale, override dove serve">
+      Default in AbstractTableDefinition: `updateCell(Model $row, string $columnId, mixed $value): Model`
+      esegue `$row->update([$columnId => $value])` e ritorna il model fresco. Questo richiede che la
+      colonna sia in `$fillable`: se non lo e', la scrittura fallisce rumorosamente invece di
+      silenziosamente (mass assignment protection). Le definition con esigenze proprie (custom fields
+      `custom.*`, campi fuori `$fillable` scritti da un Service dedicato) OVERRIDANO `updateCell()`.
+      Per i domini di questo giro, la scrittura passa dai Service esistenti dove esistono, cosi' le
+      regole di business non vengono aggirate.
+    </d>
+
+    <d id="D-8" title="Audit obbligatorio (decisione utente)">
+      Ogni modifica inline andata a buon fine e' auditata. I model dei 5 domini usano gia'
+      `LogsModelActivity`: la modifica via `update()` viene loggata dal trait senza codice aggiuntivo.
+      Dove `updateCell()` e' overridato per scrivere fuori dal ciclo Eloquent standard, la definition
+      DEVE emettere l'entry di activity esplicitamente. Un campo scritto senza traccia e' un bug.
+    </d>
+
+    <d id="D-9" title="UX: single click, revert su errore">
+      `singleClickEdit: true`, `stopEditingWhenCellsLoseFocus: true`. Enter/blur committa, Esc annulla.
+      Su risposta OK il frontend fa `node.setData(rigaRitornata)` — la risposta e' la RIGA INTERA
+      ri-mappata, non il solo campo, cosi' colonne derivate e `updated_at` restano coerenti senza un
+      refresh dell'intero blocco SSRM. Su errore la cella torna al valore precedente e si mostra un
+      toast (sonner) col messaggio del server. Nessun refresh globale: `refreshServerSide({purge:true})`
+      butterebbe via lo scroll e la selezione dell'utente ad ogni cella toccata.
+    </d>
+
+    <d id="D-10" title="Nessuna colonna derivata, nessuna relazione, in questo giro">
+      Sono escluse per costruzione: colonne calcolate/aggregate/join (indirizzi formattati, `*_count`,
+      colonne geo), che non hanno una colonna DB su cui scrivere; e le colonne di relazione
+      (`*_id` con editor a tendina `/for-select`), rimandate a una spec successiva. Dichiarare
+      `editable` su una colonna derivata e' un errore che i test devono intercettare (AC-013).
+    </d>
+  </decisions>
+
+  <contract>
+    <!-- CONGELATO PRIMA DEL DISPATCH. Backend e frontend implementano contro questo. -->
+
+    <item name="Dichiarazione colonna (catalogo, backend)">
+      [
+        'id' => 'name', 'label' => '...', 'type' => 'text',
+        'visible' => true, 'sortable' => true, 'filterable' => true, 'filterType' => 'text',
+        'editable' => true,              // opzionale, default false
+        'nullable' => false,             // opzionale, default false — ammette value: null
+        'rules' => ['max:120'],          // opzionale — vincoli di dominio aggiuntivi
+      ]
+    </item>
+
+    <item name="GET /api/tables/{domain}/columns — delta">
+      Ogni colonna del config guadagna: "editable": boolean (sempre presente, gia' ridotto per l'attore).
+      Nessun'altra chiave cambia. Le colonne non dichiarate editabili emettono false.
+    </item>
+
+    <item name="POST /api/tables/{domain}/rows — delta">
+      Ogni riga guadagna: "editable": boolean, accanto a "actions". Nessun'altra chiave cambia.
+    </item>
+
+    <item name="PATCH /api/tables/{domain}/rows/{row} — NUOVO">
+      Request: { "column": string, "value": string|number|boolean|null }
+      200: { "success": true, "message": string, "data": &lt;riga intera ri-mappata, stessa shape di POST rows&gt; }
+      403: attore senza update sulla risorsa, o senza permesso di campo, o riga non aggiornabile
+      404: dominio ignoto, oppure riga non presente in baseQuery() (fuori scope)
+      422: colonna non nell'allow-list editabile, oppure valore non valido
+      Envelope standard di progetto { success, message, ... }. Nessun nome di classe/model negli errori.
+    </item>
+
+    <item name="Contratto TableDefinition — 3 metodi nuovi">
+      public function editableColumnIds(User $actor): array;              // allow-list, stesso pattern di sortableColumnIds()
+      public function authorizeUpdate(User $actor, Model $row): bool;     // default: Gate allows('update', $row)
+      public function updateCell(Model $row, string $columnId, mixed $value): Model;  // default: $row->update([...])
+    </item>
+
+    <item name="Frontend — tipi">
+      TableColumn: + editable: boolean
+      TableRow:    + editable: boolean
+      Nuovo registry `CELL_EDITOR_REGISTRY: Record&lt;ColumnType, CellEditorSpec&gt;` in
+      frontend/src/components/data-table/ — stesso pattern OCP dei due registry esistenti.
+      Nuova api: `updateTableCell(domain, rowId, { column, value })` in features/table/api.ts.
+    </item>
+  </contract>
+
+  <scope>
+    <in>
+      Motore generico nel framework tabellare (contratto, base astratta, endpoint, FormRequest,
+      service, resource, frontend colDef + editor registry + mutation + revert).
+      Dichiarazione `editable` sulle colonne SCALARI SICURE di 5 domini: opportunities,
+      request-management, leads, campaigns, projects.
+      Test Pest (authz matrix completa) e Vitest. Audit (D-8).
+    </in>
+    <out>
+      Editor di relazione via /for-select. Colonne derivate/aggregate/geo. Bulk edit multi-cella.
+      Undo/redo. Editing nel review-grid dell'import (motore separato, non si tocca).
+      I restanti 21 domini: ereditano il motore ma nessuna colonna accesa.
+      Nessuna nuova dipendenza (AG Grid Enterprise e AllEnterpriseModule sono gia' presenti).
+    </out>
+  </scope>
+
+  <criteria>
+    <!-- AUTORIZZAZIONE — la parte che conta -->
+    <ac id="AC-001">Attore CON permesso di update, campo editable in matrice, riga in scope: PATCH su colonna dichiarata editabile -> 200, valore persistito in DB, risposta = riga intera ri-mappata.</ac>
+    <ac id="AC-002">Attore SENZA il permesso `{resource}.update`: PATCH -> 403 e nessuna scrittura in DB.</ac>
+    <ac id="AC-003">Attore con permesso di update ma con `role_field_permissions.editable = false` su quel campo: PATCH -> 403 e nessuna scrittura. Il config `columns` per lo stesso attore emette `editable: false` su quella colonna.</ac>
+    <ac id="AC-004">Riga NON presente in `baseQuery()` per quell'attore (fuori scope/tenant): PATCH -> 404, nessuna scrittura, e la risposta non rivela l'esistenza della riga.</ac>
+    <ac id="AC-005">Colonna esistente ma NON dichiarata editabile: PATCH -> 422, nessuna scrittura. Vale anche per una colonna sortable/filterable: sortable non implica editabile.</ac>
+    <ac id="AC-006">Colonna inesistente o id arbitrario dall'input: PATCH -> 422, nessuna scrittura, nessun errore SQL (l'id non raggiunge mai la query).</ac>
+    <ac id="AC-007">Attore senza `viewAny` sul dominio: PATCH -> 403, stessa guardia degli altri endpoint del framework.</ac>
+    <ac id="AC-008">Super-admin: bypassa la matrice per-campo come gia' fa `AbstractResourceAuthorization::fieldPermissions()`, ma resta soggetto a `authorizeUpdate` per-riga.</ac>
+    <ac id="AC-009">`request-management`: un operatore che NON e' gestore account del record e non ha `viewAll` riceve 404 sul PATCH, coerentemente con lo scope del modulo.</ac>
+
+    <!-- VALIDAZIONE -->
+    <ac id="AC-010">Valore del tipo sbagliato per il `type` della colonna (stringa su colonna number, data non parsabile su datetime, valore fuori dalle options di un enum) -> 422 con errore sul campo `value`, nessuna scrittura.</ac>
+    <ac id="AC-011">`value: null` -> 422 se la colonna non dichiara `nullable`, 200 con NULL persistito se lo dichiara.</ac>
+
+    <!-- INTEGRITA' DEL MECCANISMO -->
+    <ac id="AC-012">Test di guardia: per OGNI dominio registrato in config/tables.php, ogni colonna dichiarata `editable` ha una risorsa presente in config/authorization.php E una chiave campo omonima nel catalogo `fields()` di quella risorsa. Il test fallisce elencando le divergenze (D-3).</ac>
+    <ac id="AC-013">Test di guardia: nessuna colonna dichiarata `editable` ha `hasFilterValues: false` esplicito ne' e' una colonna derivata/aggregata; ogni colonna `editable` corrisponde a una colonna reale della tabella del model ed e' in `$fillable` (oppure la definition override `updateCell` per quella colonna).</ac>
+    <ac id="AC-014">Le preferenze utente non possono alterare `editable`: salvare preferences con `editable` nel payload non cambia il config risolto (resta structural, D-2).</ac>
+    <ac id="AC-015">Audit: dopo un PATCH riuscito esiste una entry di activity log per quel model con il campo modificato (D-8).</ac>
+    <ac id="AC-016">Un dominio che non dichiara alcuna colonna editabile emette `editable: false` ovunque e risponde 422 a qualunque PATCH: il motore non cambia comportamento per i 21 domini non accesi.</ac>
+
+    <!-- FRONTEND -->
+    <ac id="AC-017">Una cella e' editabile nel grid se e solo se `column.editable === true` AND `row.editable === true`. Con una delle due false, il doppio/singolo click non apre alcun editor.</ac>
+    <ac id="AC-018">Single click su cella editabile apre l'editor; Enter o blur invia il PATCH; Esc annulla senza chiamate di rete.</ac>
+    <ac id="AC-019">PATCH fallito: la cella torna al valore precedente (`node.setData` col dato originale) e appare un toast con il messaggio del server. Nessun refresh SSRM globale.</ac>
+    <ac id="AC-020">PATCH riuscito: la riga nel grid e' rimpiazzata dalla riga ritornata dal server (`node.setData`), quindi le colonne derivate e le date di modifica sono aggiornate senza refetch.</ac>
+    <ac id="AC-021">Nessuna chiamata di rete se il valore non e' cambiato (guardia `newValue === oldValue`, come use-review-rows.ts:141).</ac>
+    <ac id="AC-022">Le preferenze colonne continuano a funzionare: `toColumnPreferences` non riceve colonne sintetiche nuove e il salvataggio layout non regredisce.</ac>
+    <ac id="AC-023">Ogni `ColumnType` gestito ha una voce nel registry editor; un type senza voce rende la colonna non editabile invece di crashare.</ac>
+
+    <!-- QUALITA' -->
+    <ac id="AC-024">`vendor/bin/pest` verde sul perimetro backend; `npm run test` verde sul perimetro frontend; `tsc --noEmit` pulito; Pint pulito sui file toccati.</ac>
+    <ac id="AC-025">Diff di `composer.json` e `package.json` VUOTO: nessuna dipendenza nuova.</ac>
+  </criteria>
+
+</spec>

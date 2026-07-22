@@ -60,9 +60,11 @@ export const requestManagement = {
     },
     client: {
       title: 'Client details',
-      description: 'Contacts and address of the client.',
+      description: 'Identity, contacts and address of the client.',
+      identityGroup: 'Identity',
       contactsGroup: 'Contacts',
       addressGroup: 'Address',
+      addressEmpty: 'Not set',
     },
     context: {
       subtitle: 'Opportunity context (read-only).',

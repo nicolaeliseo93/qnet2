@@ -19,6 +19,7 @@ function panel(overrides: Partial<RequestWorkPanel> = {}): RequestWorkPanel {
       { id: 101, name: 'In progress', color: 'amber', system_key: null, description: null, requires_note: false },
     ],
     product_lines: [],
+    client_identity: null,
     client_contacts: { owner: { type: 'personal_data', id: 10 }, items: [] },
     client_address: null,
     referent_contacts: { owner: { type: 'personal_data', id: 20 }, items: [] },
@@ -65,6 +66,7 @@ function formValues(overrides: Partial<RequestWorkFormValues> = {}): RequestWork
   return {
     opportunity_workflow_status_id: 100,
     next_callback_at: null,
+    client_identity: null,
     client_contacts: [],
     client_address: [],
     attribute_values: { notes: 'existing note', budget: 1000 },

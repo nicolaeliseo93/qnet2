@@ -83,6 +83,7 @@ function panel(): RequestWorkPanelWithPermissions {
     workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false },
     workflow_statuses: [{ id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false }],
     product_lines: [],
+    client_identity: null,
     client_contacts: { owner: null, items: [] },
     client_address: null,
     referent_contacts: { owner: null, items: [] },

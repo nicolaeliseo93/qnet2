@@ -23,6 +23,7 @@ export const table = {
   exitFullscreen: 'Exit fullscreen',
   confirmAction: 'Are you sure you want to perform this action?',
   loadError: 'Unable to load the table. Please try again.',
+  cellUpdateError: 'Unable to save the change.',
   emptyConfig: 'No columns are available for this table.',
   noRows: 'No records to show.',
   resetLayout: 'Reset layout',

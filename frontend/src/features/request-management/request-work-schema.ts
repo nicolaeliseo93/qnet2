@@ -3,7 +3,8 @@ import type { TFunction } from 'i18next'
 import { isEmptyCustomFieldValue } from '@/features/custom-fields/custom-fields-values'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
 import { buildContactSchema } from '@/features/personal-data/contact-schema'
-import type { AddressDraft, ContactDraft } from '@/features/personal-data/types'
+import { buildPersonalDataSchema } from '@/features/personal-data/personal-data-schema'
+import type { AddressDraft, ContactDraft, PersonalDataDraft } from '@/features/personal-data/types'
 import type { ApplicableAttribute } from '@/features/request-management/types'
 
 /**
@@ -126,10 +127,46 @@ function buildClientAddressSchema(t: TFunction) {
   })
 }
 
+/**
+ * The client's buffered card identity, validated by the SAME
+ * `buildPersonalDataSchema` the registries/users card form uses (per-type
+ * required names, non-future birth date), so this panel and the anagraphic
+ * modules never drift. `null` when the client has no card: nothing is
+ * rendered and nothing is submitted, so there is nothing to validate.
+ */
+function buildClientIdentitySchema(t: TFunction) {
+  const card = buildPersonalDataSchema(t)
+
+  return z.custom<PersonalDataDraft | null>().superRefine((identity, ctx) => {
+    if (!identity) {
+      return
+    }
+    // The draft carries nulls where the card form carries empty strings.
+    const result = card.safeParse({
+      type: identity.type,
+      first_name: identity.first_name ?? '',
+      last_name: identity.last_name ?? '',
+      company_name: identity.company_name ?? '',
+      tax_code: identity.tax_code ?? '',
+      vat_number: identity.vat_number ?? '',
+      sdi_code: identity.sdi_code ?? '',
+      birth_date: identity.birth_date ?? '',
+      gender: identity.gender ?? undefined,
+    })
+    if (result.success) {
+      return
+    }
+    for (const issue of result.error.issues) {
+      ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+    }
+  })
+}
+
 export function buildRequestWorkSchema(attributes: ApplicableAttribute[], t: TFunction) {
   return z.object({
     opportunity_workflow_status_id: z.number().nullable(),
     next_callback_at: z.string().nullable(),
+    client_identity: buildClientIdentitySchema(t),
     client_contacts: buildClientContactsSchema(t),
     client_address: buildClientAddressSchema(t),
     attribute_values: buildAttributeValuesSchema(attributes, t) as unknown as TypedAttributeValuesSchema,

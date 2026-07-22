@@ -72,6 +72,29 @@ trait DelegatesUnaugmentedTableMethods
     }
 
     /**
+     * Inline cell-editing (spec 0053): custom fields are not eligible for
+     * inline edit in this round (no column declares `editable` for
+     * `custom.*`), so this is pure passthrough — same as every other
+     * unaugmented method.
+     *
+     * @return array<int, string>
+     */
+    public function editableColumnIds(User $actor): array
+    {
+        return $this->inner->editableColumnIds($actor);
+    }
+
+    public function authorizeUpdate(User $actor, Model $row): bool
+    {
+        return $this->inner->authorizeUpdate($actor, $row);
+    }
+
+    public function updateCell(Model $row, string $columnId, mixed $value): Model
+    {
+        return $this->inner->updateCell($row, $columnId, $value);
+    }
+
+    /**
      * Advanced filters (spec 0032) are a native-column/relation concern the
      * wrapped $inner definition owns entirely — a custom field is not (yet)
      * eligible for the advanced-filter panel, so this is pure passthrough.

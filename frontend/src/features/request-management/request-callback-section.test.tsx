@@ -62,6 +62,7 @@ function panel(overrides: Partial<RequestWorkPanelWithPermissions> = {}): Reques
     workflow_status: WORKFLOW_OPEN,
     workflow_statuses: [WORKFLOW_OPEN, WORKFLOW_IN_PROGRESS],
     product_lines: [],
+    client_identity: null,
     client_contacts: { owner: null, items: [] },
     client_address: null,
     referent_contacts: { owner: null, items: [] },

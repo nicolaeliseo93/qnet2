@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { MessageSquare, Paperclip } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
+import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { DocumentsDialog } from '@/features/attachments/documents-dialog'
 import { useModuleOpener } from '@/features/modules/use-module-opener'
 import { NotesDialog } from '@/features/notes/notes-dialog'
@@ -36,8 +37,12 @@ const REQUEST_MANAGEMENT_ACTION_ICONS: ActionIconMap = {
  * OWN `request-management.viewDocuments` (D-2). The `notes` row action opens
  * the agnostic `NotesDialog` on the same row (spec 0052), gated server-side by
  * the notes feature's own hybrid authorization (D-6) — this module only wires
- * the `entityType`/`entityId` pair. No create/edit/delete affordance — CRUD
- * stays on `opportunities.*`, never this permission set.
+ * the `entityType`/`entityId` pair. The `activity` row action — declared last
+ * in the catalog, so the shared inline limit pushes it into the three-dots
+ * overflow — opens `ResourceActivityDialog` on this module's OWN activity
+ * resource key (`request-management`, gated server-side by
+ * `request-management.viewActivity` + the GA2 scope). No create/edit/delete
+ * affordance — CRUD stays on `opportunities.*`, never this permission set.
  */
 export function RequestManagementTable() {
   const { openView, sheet } = useModuleOpener(REQUEST_MANAGEMENT_DOMAIN)
@@ -45,6 +50,7 @@ export function RequestManagementTable() {
   const tableRef = useRef<TableViewHandle>(null)
   const [documentsRowId, setDocumentsRowId] = useState<number | null>(null)
   const [notesRowId, setNotesRowId] = useState<number | null>(null)
+  const [activityRow, setActivityRow] = useState<TableRow | null>(null)
 
   const handleAction: RowActionHandler = useCallback(
     (action: TableActionDefinition, row: TableRow) => {
@@ -57,6 +63,9 @@ export function RequestManagementTable() {
           break
         case 'notes':
           setNotesRowId(row.id)
+          break
+        case 'activity':
+          setActivityRow(row)
           break
         default:
           break
@@ -80,6 +89,14 @@ export function RequestManagementTable() {
     if (!open) {
       setNotesRowId(null)
       tableRef.current?.refresh()
+    }
+  }, [])
+
+  // The activity log is read-only: no refresh needed on close, only the row
+  // whose timeline is shown is cleared.
+  const handleActivityOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setActivityRow(null)
     }
   }, [])
 
@@ -107,6 +124,12 @@ export function RequestManagementTable() {
         entityType={REQUEST_MANAGEMENT_DOMAIN}
         entityId={notesRowId}
         onOpenChange={handleNotesOpenChange}
+      />
+
+      <ResourceActivityDialog
+        resource={REQUEST_MANAGEMENT_DOMAIN}
+        row={activityRow}
+        onOpenChange={handleActivityOpenChange}
       />
     </div>
   )

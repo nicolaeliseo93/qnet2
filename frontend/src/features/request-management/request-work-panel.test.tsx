@@ -66,6 +66,18 @@ function panel(overrides: Partial<RequestWorkPanelWithPermissions> = {}): Reques
       { id: 101, name: 'In progress', color: 'amber', system_key: null, description: null, requires_note: false },
     ],
     product_lines: [{ id: 1, business_function: { id: 40, name: 'Sales' }, product_category: { id: 500, name: 'Consulting' } }],
+    client_identity: {
+      id: 1000,
+      type: 'company',
+      first_name: null,
+      last_name: null,
+      company_name: 'Acme S.p.A.',
+      tax_code: null,
+      vat_number: 'IT01234567890',
+      sdi_code: null,
+      birth_date: null,
+      gender: null,
+    },
     client_contacts: {
       owner: { type: 'personal_data', id: 1000 },
       items: [{ id: 1, type: 'email', label: null, value: 'client@acme.test', is_primary: true }],
@@ -157,8 +169,11 @@ describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
     expect(screen.getByLabelText('Phone')).toHaveValue('')
     expect(screen.getByLabelText('PEC')).toBeInTheDocument()
     expect(screen.getByLabelText('Fax')).toBeInTheDocument()
-    // ...and so is the address, blank when the client has none yet.
-    expect(screen.getByLabelText('Address')).toHaveValue('')
+    // ...and so is the address, once its collapsed group is opened: closed it
+    // recaps its value in one row instead of a full field grid.
+    expect(screen.getByRole('button', { name: /Address/ })).toHaveTextContent('Not set')
+    fireEvent.click(screen.getByRole('button', { name: /Address/ }))
+    expect(await screen.findByLabelText('Address')).toHaveValue('')
 
     // One control per applicable attribute, by type.
     expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveValue('Some notes')
@@ -197,15 +212,49 @@ describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
 
     renderPanel()
 
-    await waitFor(() => expect(screen.getByLabelText('Address')).toBeInTheDocument())
+    // The address group is collapsed by default: open it before typing.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Address/ })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Address/ }))
 
-    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'Via Roma 1' } })
+    fireEvent.change(await screen.findByLabelText('Address'), { target: { value: 'Via Roma 1' } })
     fireEvent.change(screen.getByLabelText('Postal code'), { target: { value: '20100' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(updateRequestWorkMock).toHaveBeenCalledTimes(1))
     expect(updateRequestWorkMock.mock.calls[0][1]).toMatchObject({
       client_address: { line1: 'Via Roma 1', postal_code: '20100' },
+    })
+  })
+
+  it('sends the client identity edited inline with the same save', async () => {
+    fetchRequestWorkPanelMock.mockResolvedValue(panel())
+    updateRequestWorkMock.mockResolvedValue(panel())
+
+    renderPanel()
+
+    // The identity block is prefilled from the client's card, right in the
+    // anagraphic section — not behind the Registries module.
+    await waitFor(() => expect(screen.getByLabelText('VAT number')).toHaveValue('IT01234567890'))
+    expect(screen.getByLabelText(/Company name/)).toHaveValue('Acme S.p.A.')
+
+    fireEvent.change(screen.getByLabelText('Tax code'), { target: { value: '01234567890' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(updateRequestWorkMock).toHaveBeenCalledTimes(1))
+    // A full replace of the card's identity fields, no id: the server resolves
+    // the card from the request's client.
+    expect(updateRequestWorkMock.mock.calls[0][1]).toEqual({
+      client_identity: {
+        type: 'company',
+        first_name: null,
+        last_name: null,
+        company_name: 'Acme S.p.A.',
+        tax_code: '01234567890',
+        vat_number: 'IT01234567890',
+        sdi_code: null,
+        birth_date: null,
+        gender: null,
+      },
     })
   })
 
@@ -321,5 +370,30 @@ describe('RequestWorkPanelScreen — bounded controls (spec 0049 AC-063)', () =>
 
     expect(label).toBeDefined()
     expect(label).toHaveTextContent('*')
+  })
+})
+
+describe('RequestWorkPanelScreen — activity log section (spec 0049 D-7 amended)', () => {
+  it('mounts the collapsed activity section when the actor holds view_activity', async () => {
+    fetchRequestWorkPanelMock.mockResolvedValue(
+      panel({ permissions: { ...FULL_PERMISSIONS, actions: { view_activity: true } } }),
+    )
+
+    renderPanel()
+
+    const header = await screen.findByRole('button', { name: /Activity log/ })
+    // Collapsed by default: the timeline itself is not mounted until asked for.
+    expect(header).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('hides the activity section when the action is denied', async () => {
+    fetchRequestWorkPanelMock.mockResolvedValue(
+      panel({ permissions: { ...FULL_PERMISSIONS, actions: { view_activity: false } } }),
+    )
+
+    renderPanel()
+
+    await waitFor(() => expect(screen.getByText('Enterprise deal')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Activity log/ })).not.toBeInTheDocument()
   })
 })

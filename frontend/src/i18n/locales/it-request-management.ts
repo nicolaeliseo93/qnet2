@@ -60,9 +60,11 @@ export const requestManagement = {
     },
     client: {
       title: 'Anagrafica',
-      description: 'Contatti e indirizzo del cliente.',
+      description: 'Dati identificativi, contatti e indirizzo del cliente.',
+      identityGroup: 'Dati identificativi',
       contactsGroup: 'Contatti',
       addressGroup: 'Indirizzo',
+      addressEmpty: 'Non inserito',
     },
     context: {
       subtitle: "Contesto dell'opportunità (sola lettura).",

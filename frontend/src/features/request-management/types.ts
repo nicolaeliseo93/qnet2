@@ -7,7 +7,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
-import type { Address, OwnerRef } from '@/features/personal-data/types'
+import type { Address, Gender, OwnerRef, PersonalDataType } from '@/features/personal-data/types'
 
 /** Table/stats domain key of this module, shared by the table adapter. */
 export const REQUEST_MANAGEMENT_DOMAIN = 'request-management'
@@ -65,6 +65,25 @@ export interface RequestContact {
  */
 export type RequestContactsOwnerRef = OwnerRef & { type: 'personal_data' }
 
+/**
+ * The client's identity fields, the PersonalData card of the linked registry:
+ * who the client is (individual vs company) and the fiscal identifiers
+ * (tax code, VAT number, SDI). `null` when the client has no card yet — the
+ * panel then hides the block, there being no write path for it.
+ */
+export interface RequestClientIdentity {
+  id: number
+  type: PersonalDataType
+  first_name: string | null
+  last_name: string | null
+  company_name: string | null
+  tax_code: string | null
+  vat_number: string | null
+  sdi_code: string | null
+  birth_date: string | null
+  gender: Gender | null
+}
+
 /** A contacts block: the owner to persist against, plus its current contacts. */
 export interface RequestContactsBlock {
   owner: RequestContactsOwnerRef | null
@@ -121,6 +140,8 @@ export interface RequestWorkPanel {
   /** The resolved set the workflow-status select is limited to. */
   workflow_statuses: RequestWorkflowStatusRef[]
   product_lines: RequestProductLine[]
+  /** The client's card identity, `null` when the client has no card yet. */
+  client_identity: RequestClientIdentity | null
   client_contacts: RequestContactsBlock
   /**
    * The client's PRIMARY address (AddressResource), the single row the
@@ -145,6 +166,13 @@ export interface RequestWorkPanel {
 export interface RequestWorkPanelWithPermissions extends RequestWorkPanel {
   permissions: ResourcePermissions
 }
+
+/**
+ * The client's identity write set: a FULL replace of the card's identity
+ * fields (no `id` — the server resolves the card from the request's client).
+ * Saving it also re-derives the client's display name server-side.
+ */
+export type RequestClientIdentityPayload = Omit<RequestClientIdentity, 'id'>
 
 /** One contact row of the `client_contacts` write set (`id` present = update). */
 export interface RequestClientContactPayload {
@@ -183,6 +211,7 @@ export interface UpdateRequestWorkPayload {
   opportunity_workflow_status_id?: number | null
   attribute_values?: Record<string, unknown>
   next_callback_at?: string | null
+  client_identity?: RequestClientIdentityPayload
   client_contacts?: RequestClientContactPayload[]
   client_address?: RequestClientAddressPayload
 }

@@ -83,6 +83,10 @@ final class CustomFieldColumnBuilder
             'filterable' => true,
             'filterType' => $filterType,
             'hasFilterValues' => true,
+            // Inline cell-editing (spec 0053): custom fields are not
+            // eligible for inline edit in this round — always false, same
+            // contract shape as every native column.
+            'editable' => false,
             'options' => $enum['options'] ?? null,
             'source' => 'custom',
         ];

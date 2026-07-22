@@ -83,6 +83,84 @@ it('GET returns a null client address when the client has none', function () {
 });
 
 // ---------------------------------------------------------------------------
+// Identity — full replace of the card fields, `registries.name` re-derived
+// ---------------------------------------------------------------------------
+
+it('GET exposes the client card identity, fiscal identifiers included', function () {
+    $actor = requestManagementUpdaterWith(['view']);
+    $opportunity = opportunityWithClientCard($actor);
+    clientCardOf($opportunity)->update([
+        'type' => 'company',
+        'company_name' => 'Acme S.p.A.',
+        'tax_code' => '01234567890',
+        'vat_number' => 'IT01234567890',
+    ]);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/request-management/{$opportunity->id}")
+        ->assertOk()
+        ->assertJsonPath('data.client_identity.type', 'company')
+        ->assertJsonPath('data.client_identity.company_name', 'Acme S.p.A.')
+        ->assertJsonPath('data.client_identity.tax_code', '01234567890')
+        ->assertJsonPath('data.client_identity.vat_number', 'IT01234567890');
+});
+
+it('GET returns a null client identity when the client has no card', function () {
+    $actor = requestManagementUpdaterWith(['view']);
+    $opportunity = Opportunity::factory()->create(['registry_id' => Registry::factory()->create()->id]);
+    $opportunity->managers()->sync([$actor->id => ['position' => 2]]);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/request-management/{$opportunity->id}")
+        ->assertOk()
+        ->assertJsonPath('data.client_identity', null);
+});
+
+it('PATCH client_identity writes the card and re-derives the client display name', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [
+        'client_identity' => [
+            'type' => 'company',
+            'company_name' => 'Nuova Ragione Sociale S.r.l.',
+            'tax_code' => '09876543210',
+            'vat_number' => 'IT09876543210',
+            'sdi_code' => 'ABCDEFG',
+        ],
+    ])->assertOk()->assertJsonPath('data.client_identity.vat_number', 'IT09876543210');
+
+    $card = clientCardOf($opportunity->fresh());
+    expect($card->company_name)->toBe('Nuova Ragione Sociale S.r.l.');
+    expect($card->tax_code)->toBe('09876543210');
+    // `registries.name` is denormalized from the card: it must follow the write.
+    expect($opportunity->fresh()->registry->name)->toBe('Nuova Ragione Sociale S.r.l.');
+});
+
+it('PATCH rejects an individual client identity without the names -> 422', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [
+        'client_identity' => ['type' => 'individual', 'tax_code' => '01234567890'],
+    ])->assertStatus(422)->assertJsonValidationErrors(['client_identity.first_name', 'client_identity.last_name']);
+});
+
+it('PATCH without client_identity leaves the client card untouched', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    $card = clientCardOf($opportunity);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [])->assertOk();
+
+    expect($card->fresh()->only(['type', 'first_name', 'last_name', 'company_name', 'tax_code']))
+        ->toBe($card->only(['type', 'first_name', 'last_name', 'company_name', 'tax_code']));
+});
+
+// ---------------------------------------------------------------------------
 // Contacts — authoritative sync
 // ---------------------------------------------------------------------------
 

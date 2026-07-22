@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next'
-import { Loader2 } from 'lucide-react'
+import { History, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Form } from '@/components/ui/form'
+import { FormSection } from '@/components/form-section'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
+import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { ResourcePermissionsProvider, useResourcePermissions } from '@/features/authorization/permissions'
 import { NotesSection } from '@/features/notes/notes-section'
 import { fetchRequestWorkPanel } from '@/features/request-management/api'
@@ -103,8 +105,9 @@ interface RequestWorkPanelBodyProps {
 
 function RequestWorkPanelBody({ panel }: RequestWorkPanelBodyProps) {
   const { t } = useTranslation()
-  const { canResource } = useResourcePermissions()
+  const { canAction, canResource } = useResourcePermissions()
   const canUpdate = canResource('update')
+  const canViewActivity = canAction('view_activity')
   const { form, onSubmit, serverError, isSubmitting } = useRequestWorkForm(panel)
 
   return (
@@ -134,6 +137,22 @@ function RequestWorkPanelBody({ panel }: RequestWorkPanelBodyProps) {
             record, independent of `canUpdate`. Its composer has its own native
             `<form>`, so it cannot nest inside the one above (see REQUEST_WORK_FORM_ID). */}
         <NotesSection entityType={REQUEST_MANAGEMENT_DOMAIN} entityId={panel.id} />
+
+        {/* Read-only history of everything the panel writes — the request's own
+            operative changes, the notes, the uploaded documents and the client
+            anagraphic block — gated by the server-derived `view_activity`
+            action, collapsed by default so it never pushes the work above it
+            out of view. */}
+        {canViewActivity && (
+          <FormSection
+            icon={History}
+            title={t('activityLog.title')}
+            collapsible
+            defaultOpen={false}
+          >
+            <ActivityLogSection resource={REQUEST_MANAGEMENT_DOMAIN} id={panel.id} />
+          </FormSection>
+        )}
 
         {serverError && (
           <div

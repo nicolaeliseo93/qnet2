@@ -11,6 +11,9 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
  * an explicit config map (config/activity-log.php), unknown resource →
  * ModelNotFoundException → 404 (via BaseApiController). Adding a resource is
  * one config line, no controller/service change.
+ *
+ * `authorizer` is optional: a resource that omits it is gated by its root
+ * model's own Policy (PolicyActivityLogAuthorizer, the spec-0034 rule).
  */
 final class ActivityLogRegistry
 {
@@ -19,7 +22,7 @@ final class ActivityLogRegistry
      */
     public function resolve(string $resource): ActivityLogDefinition
     {
-        /** @var array<string, array{model: class-string, relations: array<int, string>}> $definitions */
+        /** @var array<string, array{model: class-string, relations?: array<int, string>, authorizer?: class-string}> $definitions */
         $definitions = config('activity-log.resources', []);
 
         $config = $definitions[$resource] ?? null;
@@ -28,6 +31,10 @@ final class ActivityLogRegistry
             throw (new ModelNotFoundException)->setModel(ActivityLogDefinition::class, [$resource]);
         }
 
-        return new ActivityLogDefinition($config['model'], $config['relations'] ?? []);
+        return new ActivityLogDefinition(
+            $config['model'],
+            $config['relations'] ?? [],
+            $config['authorizer'] ?? PolicyActivityLogAuthorizer::class,
+        );
     }
 }

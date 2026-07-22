@@ -9,7 +9,7 @@ import { applyServerValidationErrors } from '@/features/auth/form-errors'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
 import { opportunityDetailQueryKey } from '@/features/opportunities/api'
 import { addressToDraft } from '@/features/personal-data/drafts'
-import type { ContactDraft } from '@/features/personal-data/types'
+import type { ContactDraft, PersonalDataDraft } from '@/features/personal-data/types'
 import { updateRequestWork } from '@/features/request-management/api'
 import { requestManagementKeys } from '@/features/request-management/query-keys'
 import { buildRequestWorkPayload } from '@/features/request-management/request-work-payload'
@@ -19,9 +19,35 @@ import {
 } from '@/features/request-management/request-work-schema'
 import type {
   ApplicableAttribute,
+  RequestClientIdentity,
   RequestContact,
   RequestWorkPanelWithPermissions,
 } from '@/features/request-management/types'
+
+/**
+ * Maps the client's card identity to the draft `PersonalDataCardForm` reads.
+ * Its `contacts`/`addresses` stay empty on purpose: in this panel those two
+ * live in their own RHF fields (`client_contacts`/`client_address`), the card
+ * form neither renders nor emits them.
+ */
+function toIdentityDraft(identity: RequestClientIdentity): PersonalDataDraft {
+  return {
+    id: identity.id,
+    type: identity.type,
+    first_name: identity.first_name,
+    last_name: identity.last_name,
+    company_name: identity.company_name,
+    tax_code: identity.tax_code,
+    vat_number: identity.vat_number,
+    sdi_code: identity.sdi_code,
+    birth_date: identity.birth_date,
+    // Mirrors `cardToDraft`: an individual always carries a gender (default
+    // male, backfilling a legacy null), a company carries none.
+    gender: identity.gender ?? (identity.type === 'company' ? null : 'male'),
+    contacts: [],
+    addresses: [],
+  }
+}
 
 /** Maps one panel contact projection to the buffered draft shape the managers read. */
 function toContactDraft(contact: RequestContact): ContactDraft {
@@ -51,6 +77,7 @@ function buildDefaultValues(panel: RequestWorkPanelWithPermissions): RequestWork
   return {
     opportunity_workflow_status_id: panel.workflow_status?.id ?? null,
     next_callback_at: panel.next_callback_at ?? null,
+    client_identity: panel.client_identity ? toIdentityDraft(panel.client_identity) : null,
     client_contacts: panel.client_contacts.items.map(toContactDraft),
     // 0-or-1 array: the shape `AddressCreateField` reads, empty when the
     // client has no address yet.
