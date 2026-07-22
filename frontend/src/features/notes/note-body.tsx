@@ -1,4 +1,5 @@
 import { Fragment } from 'react'
+import { MentionBadge } from '@/features/notes/mention-badge'
 import { splitIntoSegments } from '@/features/notes/mention-tokens'
 
 export interface NoteBodyProps {
@@ -19,13 +20,8 @@ export function NoteBody({ body }: NoteBodyProps) {
   return (
     <p className="text-sm break-words whitespace-pre-wrap text-foreground">
       {segments.map((segment) =>
-        segment.type === 'mention' ? (
-          <span
-            key={segment.key}
-            className="rounded bg-primary/10 px-1 py-0.5 font-medium text-primary"
-          >
-            {`@${segment.content}`}
-          </span>
+        segment.type === 'mention' && segment.userId !== undefined ? (
+          <MentionBadge key={segment.key} userId={segment.userId} name={segment.content} />
         ) : (
           <Fragment key={segment.key}>{segment.content}</Fragment>
         ),

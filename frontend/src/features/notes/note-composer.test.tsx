@@ -127,6 +127,8 @@ describe('NoteComposer — mention badges', () => {
     fireEvent.change(bodyField(), { target: { value: 'Hi @[Alice Verdi](user:12)' } })
 
     expect(screen.getByRole('button', { name: "Remove Alice Verdi's mention" })).toBeInTheDocument()
+    // The badge itself opens the profile, same affordance as the table person columns.
+    expect(screen.getByRole('button', { name: "View Alice Verdi's profile" })).toBeInTheDocument()
     expect(bodyField()).toHaveValue('Hi @Alice Verdi')
   })
 

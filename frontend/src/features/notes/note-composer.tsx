@@ -6,9 +6,9 @@ import type { TFunction } from 'i18next'
 import { Loader2, Send, X } from 'lucide-react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
-import { UserAvatar } from '@/components/user-avatar'
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { MentionBadge } from '@/features/notes/mention-badge'
 import { MentionTextarea } from '@/features/notes/mention-textarea'
 import { extractMentionIds, parseMentionRefs, removeMention } from '@/features/notes/mention-tokens'
 import { useCreateNote, useUpdateNote } from '@/features/notes/use-note-mutations'
@@ -209,12 +209,8 @@ function MentionBadges({ body, disabled, onRemove }: MentionBadgesProps) {
   return (
     <ul className="flex flex-wrap items-center gap-1.5 pt-1.5">
       {refs.map((ref) => (
-        <li
-          key={ref.id}
-          className="flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 py-0.5 pr-0.5 pl-1 text-xs text-primary"
-        >
-          <UserAvatar name={ref.name} size="sm" className="size-4 text-[9px]" />
-          <span className="max-w-40 truncate font-medium">{ref.name}</span>
+        <li key={ref.id} className="flex items-center gap-0.5">
+          <MentionBadge userId={ref.id} name={ref.name} className="max-w-40" />
           <button
             type="button"
             onClick={() => onRemove(ref.id)}
@@ -223,7 +219,7 @@ function MentionBadges({ body, disabled, onRemove }: MentionBadgesProps) {
               defaultValue: 'Rimuovi la menzione di {{name}}',
               name: ref.name,
             })}
-            className="flex size-4 items-center justify-center rounded-full transition-colors hover:bg-primary/20 disabled:pointer-events-none disabled:opacity-50"
+            className="flex size-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           >
             <X className="size-3" aria-hidden="true" />
           </button>

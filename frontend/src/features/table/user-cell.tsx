@@ -1,13 +1,13 @@
-import type { ReactNode } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { ICellRendererParams } from 'ag-grid-community'
-import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/user-avatar'
 import { AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import {
+  UserProfileHoverAction,
+  UserProfileHoverCard,
+} from '@/components/user-profile-hover-card'
 import { EmptyCell } from '@/features/table/cell-renderers'
-import { useUserDetailSheet } from '@/features/users/user-detail-sheet-context'
 
 /**
  * The shape every "person" column emits: an `{id, name}` summary, optionally
@@ -36,66 +36,6 @@ function toUser(value: unknown): UserSummary | null {
 }
 
 /**
- * The clickable row shown inside a user's hover card: avatar + name + chevron.
- * Clicking (mouse or keyboard) opens the shared read-only user detail Sheet.
- */
-function UserHoverAction({ user }: { user: UserSummary }) {
-  const { t } = useTranslation()
-  const { openUserDetail } = useUserDetailSheet()
-  return (
-    <button
-      type="button"
-      onClick={() => openUserDetail(user.id)}
-      aria-label={t('common.viewProfile', { name: user.name })}
-      className="flex w-full items-center gap-2 rounded-sm px-1.5 py-1 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <UserAvatar name={user.name} src={user.avatar_url ?? null} className="size-6 shrink-0" />
-      <span className="truncate font-medium">{user.name}</span>
-      <ChevronRight aria-hidden="true" className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
-    </button>
-  )
-}
-
-/**
- * A single person chip: a hover card whose trigger (`children`) is also the
- * button that opens the user's detail Sheet on click/Enter — so the profile is
- * reachable by keyboard without depending on the hover card (a sighted-user
- * enhancement that reveals the same "open profile" action).
- */
-function UserHoverCard({
-  user,
-  triggerClassName,
-  children,
-}: {
-  user: UserSummary
-  triggerClassName?: string
-  children: ReactNode
-}) {
-  const { t } = useTranslation()
-  const { openUserDetail } = useUserDetailSheet()
-  return (
-    <HoverCard>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          onClick={() => openUserDetail(user.id)}
-          aria-label={t('common.viewProfile', { name: user.name })}
-          className={cn(
-            'flex items-center gap-2 overflow-hidden text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            triggerClassName,
-          )}
-        >
-          {children}
-        </button>
-      </HoverCardTrigger>
-      <HoverCardContent align="start" className="w-auto min-w-56 max-w-72 p-1">
-        <UserHoverAction user={user} />
-      </HoverCardContent>
-    </HoverCard>
-  )
-}
-
-/**
  * A single-user column cell: an avatar + name, both a hover-card trigger and the
  * clickable surface that opens the user's detail Sheet. Em dash when empty.
  */
@@ -106,10 +46,10 @@ export function UserCell({ value }: ICellRendererParams) {
   }
   return (
     <div className="flex h-full items-center overflow-hidden">
-      <UserHoverCard user={user} triggerClassName="rounded-md">
+      <UserProfileHoverCard user={user} triggerClassName="rounded-md">
         <UserAvatar name={user.name} src={user.avatar_url ?? null} className={cn(CELL_AVATAR_CLASS, 'shrink-0')} />
         <span className="truncate">{user.name}</span>
-      </UserHoverCard>
+      </UserProfileHoverCard>
     </div>
   )
 }
@@ -132,9 +72,9 @@ export function UserStackCell({ value }: ICellRendererParams) {
     <div className="flex h-full items-center">
       <AvatarGroup>
         {visible.map((user) => (
-          <UserHoverCard key={user.id} user={user} triggerClassName="rounded-full">
+          <UserProfileHoverCard key={user.id} user={user} triggerClassName="rounded-full">
             <UserAvatar name={user.name} src={user.avatar_url ?? null} className={CELL_AVATAR_CLASS} />
-          </UserHoverCard>
+          </UserProfileHoverCard>
         ))}
         {overflow.length > 0 && (
           <HoverCard>
@@ -151,7 +91,7 @@ export function UserStackCell({ value }: ICellRendererParams) {
               <ul className="flex flex-col gap-0.5">
                 {overflow.map((user) => (
                   <li key={user.id}>
-                    <UserHoverAction user={user} />
+                    <UserProfileHoverAction user={user} />
                   </li>
                 ))}
               </ul>

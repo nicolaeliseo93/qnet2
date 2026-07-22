@@ -17,6 +17,8 @@ export interface NoteBodySegment {
   key: string
   type: 'text' | 'mention'
   content: string
+  /** Mentioned user id — set on `mention` segments only, so they can link to a profile. */
+  userId?: number
 }
 
 /** Extracts the deduplicated mention ids from a wire body, in order of first appearance. */
@@ -69,7 +71,12 @@ export function splitIntoSegments(body: string): NoteBodySegment[] {
     if (match.index > lastIndex) {
       segments.push({ key: `text-${lastIndex}`, type: 'text', content: body.slice(lastIndex, match.index) })
     }
-    segments.push({ key: `mention-${match.index}`, type: 'mention', content: match[1] as string })
+    segments.push({
+      key: `mention-${match.index}`,
+      type: 'mention',
+      content: match[1] as string,
+      userId: Number(match[2]),
+    })
     lastIndex = match.index + match[0].length
   }
   if (lastIndex < body.length) {

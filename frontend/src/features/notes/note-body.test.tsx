@@ -1,26 +1,33 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import i18n from '@/i18n'
 import { NoteBody } from '@/features/notes/note-body'
 
 /**
  * Spec 0052 D-12 (token -> chip) / react-security.md (never
  * `dangerouslySetInnerHTML` on untrusted, user-authored text).
  */
+beforeAll(async () => {
+  await i18n.changeLanguage('en')
+})
+
 describe('NoteBody', () => {
-  it('renders plain text and mention chips at the right positions, with the literal text intact', () => {
+  it('renders plain text around a mention badge that opens the mentioned profile', () => {
     render(<NoteBody body="Hey @[Mario Rossi](user:12), can you check this?" />)
 
-    const paragraph = screen.getByText(/Hey/)
-    expect(paragraph).toHaveTextContent('Hey @Mario Rossi, can you check this?')
-    expect(screen.getByText('@Mario Rossi')).toBeInTheDocument()
+    expect(screen.getByText(/Hey/)).toBeInTheDocument()
+    expect(screen.getByText(/can you check this\?/)).toBeInTheDocument()
+    // The badge is the same profile affordance the table's person columns use.
+    expect(screen.getByRole('button', { name: "View Mario Rossi's profile" })).toBeInTheDocument()
   })
 
-  it('renders a body with multiple tokens interleaved with text, each chip separate', () => {
+  it('renders a body with multiple tokens interleaved with text, each badge separate', () => {
     render(<NoteBody body="cc @[Mario Rossi](user:12) and @[Anna Bianchi](user:7) please" />)
 
-    expect(screen.getByText('@Mario Rossi')).toBeInTheDocument()
-    expect(screen.getByText('@Anna Bianchi')).toBeInTheDocument()
-    expect(screen.getByText(/cc/)).toHaveTextContent('cc @Mario Rossi and @Anna Bianchi please')
+    expect(screen.getByRole('button', { name: "View Mario Rossi's profile" })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: "View Anna Bianchi's profile" })).toBeInTheDocument()
+    expect(screen.getByText(/cc/)).toBeInTheDocument()
+    expect(screen.getByText(/please/)).toBeInTheDocument()
   })
 
   it('preserves line breaks', () => {
@@ -59,7 +66,7 @@ describe('NoteBody', () => {
   it('does not crash on a malformed token (non-numeric id) and renders it as literal text', () => {
     expect(() => render(<NoteBody body="Hey @[Nome](user:abc) there" />)).not.toThrow()
     expect(screen.getByText('Hey @[Nome](user:abc) there')).toBeInTheDocument()
-    expect(screen.queryByText('@Nome')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('does not crash on an empty body', () => {

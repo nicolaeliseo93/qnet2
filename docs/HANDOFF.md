@@ -8254,3 +8254,18 @@ INVARIATO (D-12): e' solo la rappresentazione nel campo che cambia.
 
 VERIFICA ESEGUITA: `vitest run notes + request-management` 74/74 verdi (44 nel modulo note),
 suite allargata a opportunities 206/206, `tsc -b --noEmit` pulito, ESLint pulito. NIENTE COMMIT.
+- 0052 UPDATE (badge menzione = persona cliccabile): il chip menzione ora e' avatar + nome con
+  HOVER CARD che apre il profilo nello Sheet condiviso, la stessa affordance della colonna
+  operatore. NUOVO `components/user-profile-hover-card.tsx` (`UserProfileHoverCard` +
+  `UserProfileHoverAction`): SPOSTATI da `features/table/user-cell.tsx`, che ora li importa —
+  niente duplicazione e le note NON dipendono da `features/table`. Il provider
+  `UserDetailSheetProvider` e' gia' montato in `App.tsx`; fuori dal provider il context ha un
+  default no-op, quindi il badge degrada a "nessun modale" invece di lanciare.
+  NUOVO `features/notes/mention-badge.tsx`, usato SIA da `note-body.tsx` SIA dai badge del
+  composer. `NoteBodySegment` porta ora anche `userId` (prima l'id del token veniva scartato):
+  senza, il chip non saprebbe quale profilo aprire. Avatar per iniziali: `NoteMention` non
+  espone `avatar_url` e il contratto API non e' stato toccato.
+  TEST AGGIORNATI (rendering cambiato su richiesta): `note-body.test.tsx` non cerca piu' il testo
+  `@Nome` ma il bottone accessibile "View X's profile"; i test di sicurezza XSS restano intatti.
+  VERIFICA: 82/82 verdi su notes + user-cell + request-management, tsc + eslint puliti. I 3 rossi
+  di `cell-renderers.test.tsx` (ContactsCell) restano PRE-ESISTENTI: verificato con git stash.
