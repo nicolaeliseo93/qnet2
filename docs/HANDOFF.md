@@ -2,6 +2,208 @@
 
 > Injected at session start. Update at every green state.
 
+## SPEC 0052 — DATA PROSSIMO RICHIAMO + NOTE COLLABORATIVE (2026-07-22) — GREEN, NON COMMITTATO
+
+Spec: `docs/specs/0052-callback-date-and-collaborative-notes.xml` (contratto congelato prima
+del dispatch). Verifier indipendente: VERDE su tutti gli AC. Backend perimetro 101/101,
+frontend modulo 30/30 + note 37/37, `tsc -b` pulito, Pint pulito sui 68 file toccati,
+diff di `composer.json`/`package.json` VUOTO.
+
+### PARTE A — data prossimo richiamo
+`opportunities.next_callback_at` DATETIME nullable + indice, piu' `next_callback_reminded_at`
+DATETIME nullable che e' SOLA PREDISPOSIZIONE: nessun job, nessuno scheduler, nessuna notifica
+di promemoria esiste. NON esporla in API.
+INVARIANTE D-4 (non rimuoverla): quando `next_callback_at` CAMBIA valore,
+`next_callback_reminded_at` torna NULL nello stesso salvataggio; se il PATCH invia lo stesso
+valore, NON si azzera. Il confronto passa dal cast su entrambi i lati
+(`RequestManagementService::callbackInstantKey()`), cosi' una differenza stringa/Carbon non
+produce un falso azzeramento. Senza questa regola un futuro job salterebbe i richiami
+riprogrammati.
+Entrambe le colonne sono FUORI da `#[Fillable]` (come `attribute_values`, 0049 D-4): scritte
+SOLO da `RequestManagementService::updateWork()`, mai per mass-assignment. Di conseguenza
+`logFillable()` non le cattura: `next_callback_at` e' incluso nella entry activity ESPLICITA
+gia' scritta dal metodo; `next_callback_reminded_at` NON e' auditata (marcatore tecnico).
+FORMATO SUL FILO — congelato: `"Y-m-d\TH:i"` (es. `"2026-08-03T15:30"`) o null. Scelto per
+entrare dritto in `<input type="datetime-local">` senza conversioni e senza librerie di date
+(`date-fns`/`dayjs` NON esistono nel progetto). Cambiarlo rompe la UI.
+Tabella: colonna `next_callback_at` (`type: datetime`, `filterType: date`, sortable+filterable)
+e filtro avanzato `next_callback_range`. NON serve `applyDerivedSort/Filter`: e' una colonna DB
+reale, cade nell'allow-list generica come `expected_close_date`.
+
+### PARTE B — note collaborative, COMPONENTE AGNOSTICO
+Non e' una feature di Gestione Richieste: e' un componente trasversale, esposto in questa fase
+SOLO li'. Agganciare un modulo futuro = UNA voce in `config/notes.php` + un `<NotesSection>`
+nella sua schermata. Nessun altro file da toccare.
+
+DOPPIO VOCABOLARIO (D-9), rispettarlo: in DATABASE morph standard `notable_type`/`notable_id`
+con l'ALIAS della morph map (`opportunity`); sul FILO l'API parla di `entity_type`/`entity_id`
+con lo SLUG DI DOMINIO (`request-management`). Lo slug e' l'unita' di autorizzazione, l'alias
+quella di identita'. Non confonderli.
+`config/notes.php` e' una mappa slug -> CLASS-STRING (`RequestManagementNotable::class`), dati
+puri come `config/attachments.php`. NON reintrodurre closures: erano state usate in prima
+stesura e rendevano il file non `config:cache`-safe (`php artisan optimize` sarebbe andato in
+fatal). La logica per-modulo sta in `app/RequestManagement/RequestManagementNotable.php`, che
+implementa `App\Notes\Contracts\NotableEntity`.
+AC-021/AC-074 sono verificati da test con grep: NULLA sotto `app/Notes/`, `app/Models/Note.php`,
+`app/Http/{Controllers,Requests,Resources}/Note*`, `app/Services/Notes/` puo' nominare
+Opportunity/RequestManagement — COMMENTI INCLUSI. Idem lato FE: nessun import da
+`features/request-management/` dentro `features/notes/`.
+
+AUTHZ IBRIDA (D-6): LETTURA ereditata dall'entita' ospite (`request-management.view` +
+`RequestManagementScope::assertInScope()`), SCRITTURA `notes.create` IN AND con la lettura.
+Servono ENTRAMBE. `NotePolicy::abilities()` e' ridotto a `['create']` — genera SOLO
+`notes.create`, non gli 8 di BasePolicy (funziona perche' `abilities()` e' `static` e
+`permissions()` usa late static binding). `update`/`delete` NON consultano permessi: sono
+author-only (D-8), con firma `(User, Model)` + guard `instanceof Note`. ATTENZIONE: restringere
+il tipo del parametro a `Note` e' un FATAL ERROR di contravarianza che rompe `permissions:sync`
+e con esso ogni percorso che carichi le Policy — e' gia' successo una volta in questo lavoro.
+THREAD A UN LIVELLO (D-7): `parent_id` punta sempre a una radice; rispondere a una risposta
+viene NORMALIZZATO alla sua radice lato server (non 422). La figlia eredita
+`notable_type`/`notable_id` dalla radice, MAI dal client.
+MENZIONI (D-10, D-12): menzionabili SOLO gli utenti che possono leggere quel record (attivi,
+con `request-management.view`, gestori account o con `viewAll`, piu' super-admin) — imposto dal
+SERVER con 422, non solo nascosto dalla UI. Endpoint dedicato
+`GET /api/notes/mentionable-users`, che risponde nella shape for-select REALE
+`{items, export_link, pagination:{...}}` di `BaseApiController::paginatedResponse()` — NON
+`{data,total,offset,limit}`, che non esiste nel progetto. Token nel body:
+`@[Nome Cognome](user:12)`; l'insieme degli id nei token deve coincidere ESATTAMENTE con
+l'array `mentions`, in entrambe le direzioni, altrimenti 422.
+SOFT DELETE (D-8): cancellare una radice la nasconde INSIEME alle risposte (la query filtra
+`parent_id IS NULL`), ma radice e risposte restano tutte in database. Nessuna cancellazione
+fisica: "storico completo" e' garantito dalla persistenza.
+NOTIFICA (D-11): `NoteMentionNotification implements ShouldQueue`, canali `database` + `mail`,
+payload costruito con `NotificationData` cosi' la campanella esistente funziona SENZA modifiche.
+Autore mai notificato, una sola notifica per utente, dispatch in coda `DB::afterCommit`.
+
+### AZIONE DI RIGA + CONTATORE (richiesta utente in corso d'opera)
+Azione `notes` (icona `message-square`) nel catalogo E in `actionsFor()` — SERVONO ENTRAMBI: il
+catalogo guida `GET .../columns`, `actionsFor()` guida le azioni per-riga di `POST .../rows`.
+Gate `request-management.view`, lo stesso di `view` (la lettura note e' ereditata, D-6).
+`notes_count` proiettato via `withCount('notes')` in `baseQuery()`, badge reso dal generico
+`features/table/row-actions.tsx`. Conteggio = radici + risposte, soft-deleted ESCLUSE (global
+scope di `Note`, verificato da test dedicato). Relazione via trait `app/Models/Concerns/HasNotes.php`
+(modellato su `HasAttachments`), non scritta a mano dentro Opportunity.
+La chiusura del dialog note fa `refresh()` della griglia, altrimenti il badge resta al valore
+vecchio dopo aver aggiunto una nota.
+
+### AMBIENTE — due trappole trovate a caro prezzo, leggerle
+1. NON esiste `.env.testing`. Qualsiasi `php artisan` NUDO (`migrate:fresh`, `cache:clear`,
+   `config:clear`, ...) gira sul MySQL di sviluppo REALE `qnet2`, ANCHE con `--env=testing`.
+   In questa sessione un `migrate:fresh --env=testing` ha AZZERATO il database di sviluppo
+   (ricostruito poi da seeder demo). Usare SOLO `php artisan test` / `vendor/bin/pest`, che
+   passano da `phpunit.xml` -> SQLite `:memory:`. I due test che chiamano `migrate:fresh`
+   (`NoteMentionNotificationTest`, `NoteMigrationRollbackTest`) hanno ora una guardia
+   `assertSafeToWipeDatabase()` che rifiuta di girare fuori da sqlite in memoria.
+2. Il wrapper `laravel/pao` a volte INGOIA l'output dei test lasciando solo l'exit code: un run
+   "muto" con exit != 0 non e' necessariamente un crash. Rilanciare con
+   `PAO_DISABLE=true php -d xdebug.mode=off vendor/bin/pest ... --colors=never`.
+
+### ROSSI PREESISTENTI, NON DI 0052 (verificati con `git status` sui file)
+11 backend: 10 test "navigation node" (toccano `config/navigation.php`, rotti da riorganizzazione
+anteriore a 0049) + `AbstractMigrationSourcePreviewTest` (chiave `description` in piu', effetto
+del lavoro 0047-emendamento — NON un segfault, come diceva una nota precedente di questo file).
+3 frontend: `ContactsCell` in `features/table/cell-renderers.test.tsx` (asserzioni in inglese con
+locale 'it'). Pint: 2 file estranei (`PipelineStatusTest`, `CompanySiteUpdateTest`).
+
+### PROSSIMO PASSO
+Chiedere all'utente se committare. Aperto, deciso di NON fare: nessuna colonna "numero note"
+ordinabile/filtrabile in tabella (il conteggio vive solo come badge sull'azione).
+
+## GESTIONE RICHIESTE: PANNELLO = POSTO DI LAVORO (2026-07-22) — GREEN, NON COMMITTATO
+
+Emendamento alla spec 0049. La pagina `/request-management/{id}` non e' piu' di consulto:
+e' un form di data entry. Nuovo ordine delle sezioni (= ordine di lavoro dell'operatore):
+header compatto read-only (contesto commerciale) -> ANAGRAFICA (contatti + indirizzo del
+CLIENTE, input inline sempre attivi e precompilati) -> INFORMAZIONI AGGIUNTIVE (attributi
+dinamici) -> ALTRE INFO (data di richiamo, stato di lavorazione) -> Note.
+
+DECISIONI UTENTE (AskUserQuestion 2026-07-22), vincolanti:
+1. SALVATAGGIO UNICO: contatti e indirizzo viaggiano nel PATCH del pannello, NON in
+   persistenza immediata per campo. Non reintrodurre `persistence` su questi manager.
+2. SOLO ANAGRAFICA CLIENTE: i contatti del referente sono stati RIMOSSI dalla pagina
+   (`referent_contacts` resta nel contratto BE, semplicemente non piu' renderizzato).
+3. Contesto commerciale = header compatto, non piu' FormSection.
+
+CONTRATTO (additivo, retrocompatibile) — `PATCH /api/request-management/{opportunity}`:
+- `client_contacts`: array, presente = AUTORITATIVO (sync completo, una riga tolta viene
+  cancellata). Regole/validazione per-tipo riusano `ContactTypeEnum::valueRules()`.
+- `client_address`: OGGETTO singolo create-or-update, MAI un sync: il cliente puo' avere
+  altri indirizzi (modulo Anagrafiche) e devono sopravvivere a un salvataggio da qui.
+GET/PATCH response aggiunge `client_address` (AddressResource dell'indirizzo PRIMARY del
+cliente, o null).
+
+BE — nuovi file: `Http/Requests/Concerns/ValidatesRequestClientProfile.php` (regole + DTO;
+NON riusa `ValidatesUserProfile` perche' quello scrive anche l'IDENTITA' della card, da cui
+deriva `registries.name`: qui la card non si tocca mai) e
+`Services/RequestManagement/RequestClientProfileWriter.php` (scrive su ContactService::sync
+e AddressService create/update). INVARIANTE DA NON ROMPERE: aggiornando l'indirizzo il
+writer RIPORTA dal record persistito `is_primary`, `site_type`, lat/long — `AddressService::
+update` sostituisce la riga per intero e senza questo un salvataggio dal pannello
+declasserebbe l'indirizzo primario (ADR 0010) e resetterebbe il site_type a `billing`.
+Cliente senza card PersonalData -> 422 sulla chiave inviata.
+`RequestManagementService::applyClientProfile()` fa `unsetRelation('registry')` dopo la
+scrittura, altrimenti il pannello ricostruito rileggerebbe le relazioni stale.
+
+FE — nuovo `features/request-management/request-client-section.tsx`; CANCELLATO
+`request-contacts-section.tsx`. I campi inline sono quelli gia' esistenti del quick-create:
+`ContactsManager createMode` (email/telefono/pec/fax) e `AddressCreateField`. NOTA:
+`createMode` e `persistence` NON compongono (i campi quick scrivono solo nel buffer): per
+questo qui non si passa `persistence` e il salvataggio e' unico. Entrambi sono legati alla
+RHF via `useController` (`client_contacts`, `client_address` come array 0..1).
+`AddressCreateField` ha una prop nuova `cityRequired` (default `true` = comportamento
+preesistente): il pannello passa `false`, come il backend che tiene la citta' opzionale in
+update. i18n: `requestManagement.workPanel.contacts.*` sostituito da `...workPanel.client.*`.
+
+VERIFICA ESEGUITA: Pest `RequestManagementClientProfileTest` (nuovo) 10/10; Update 14/14,
+Show 7/7, Table 11/11, Callback 15/15, Activity 2/2, Navigation 2/2. Pint pulito sui file
+toccati. Vitest: request-management 24/24, suite intera 1975/1978. `tsc --noEmit` e ESLint
+puliti.
+ROSSI NON MIEI (lavoro 0052 in corso nella working copy): `app/Policies/NotePolicy.php`
+(untracked) ha `update(User, Note)` incompatibile con `BasePolicy::update(User, Model)` ->
+FATAL che blocca `permissions:sync` e quindi ogni suite che lo invoca (RequestManagement
+SecurityTest, Registries, Users, Referents non partono affatto). Va sistemato da chi possiede
+le Note. Pre-esistente anche il rosso `features/table/cell-renderers.test.tsx` (3 test:
+il file cambia lingua i18n a meta' e i test ContactsCell girano in italiano).
+
+PROSSIMO PASSO: chiedere all'utente se committare.
+
+## GESTIONE RICHIESTE: DOCUMENTI (icona di riga + popup) (2026-07-22) — GREEN, NON COMMITTATO
+
+Emendamento alla spec 0049 (che escludeva i documenti dallo scope): il modulo Gestione
+Richieste espone ora la stessa superficie allegati di Opportunita', RIUSANDO i componenti
+esistenti — nessun endpoint nuovo, nessuna tabella nuova. Le righe SONO Opportunity (D-1),
+quindi l'owner polimorfico resta l'alias `opportunity` di `config('attachments.attachable_types')`.
+
+BE — permesso NUOVO `request-management.viewDocuments` (D-2: mai `opportunities.*`):
+`RequestManagementPolicy::viewDocuments()` + `abilities()`; azione `documents`
+(icona `paperclip`, `count_field: documents_count`) in `RequestColumnCatalog::actions()`;
+`RequestManagementTableDefinition` aggiunge `withCount('attachments as documents_count'
+where collection=documents)` e la ammette in `actionsFor()`. Dopo il pull serve
+`php artisan permissions:sync` (il super-admin passa comunque via `Gate::before`).
+
+SPLIT OBBLIGATO dall'hook (file oltre 500 righe): la proiezione di riga e' uscita da
+`RequestManagementTableDefinition` in `app/Tables/RequestManagement/RequestRowMapper.php`
+(iniettato in costruttore, risolto dal container in `TableRegistry`). `mapRow()` ora delega;
+`operatorSummary`/`primaryPhone`/`summarizeWithColor`/`summarizeNames` vivono NEL MAPPER —
+non ricrearli nella definition, che ora ha una sola responsabilita' (costruzione query).
+
+FE — il dialog e' stato PROMOSSO a condiviso: `features/attachments/documents-dialog.tsx`
+(`DocumentsDialog`, props `resource`/`id`/`onOpenChange`). `opportunity-documents-dialog.tsx`
+e' stato CANCELLATO e `OpportunitiesTable` usa il condiviso: non reintrodurre un dialog
+per-modulo. L'alias polimorfico e' la costante unica `OPPORTUNITY_ATTACHABLE_ALIAS`
+(`features/opportunities/api.ts`), importata da entrambi gli adapter. `RequestManagementTable`
+ha ora `tableRef` (refresh alla chiusura, per il badge `documents_count`) e
+`REQUEST_MANAGEMENT_ACTION_ICONS = { paperclip }`.
+
+VERIFICA ESEGUITA: Pest Feature/RequestManagement + Feature/Opportunities 155/155; Pint pulito.
+Vitest request-management + opportunities + attachments: 158/160 (nuova suite
+`request-management-table-documents.test.tsx`, 2/2). `tsc --noEmit` e ESLint puliti.
+NON MIEI (lavoro 0052 in corso in parallelo nella working copy): i 2 rossi di
+`request-work-panel.test.tsx` (sparse submit / 422 dinamico) e il rosso pre-esistente
+`tests/Unit/Migrations/AbstractMigrationSourcePreviewTest`.
+
+PROSSIMO PASSO: chiedere all'utente se committare.
+
 ## STATI DI LAVORAZIONE: DESCRIZIONE + FLAG "RICHIEDE NOTA" (2026-07-22) — GREEN, NON COMMITTATO
 
 Emendamento alla spec 0047. Ogni `opportunity_workflow_statuses` porta due colonne nuove:
@@ -34,10 +236,26 @@ tooltip-aware: mostra il tooltip SOLO quando la riga proietta un `description` n
 (nessun impatto su pipeline_status/lead_status/opportunity_status, che non lo inviano).
 `WorkflowStatusRowPatch` (in `opportunity-workflows/types.ts`) e' il tipo unico dei patch di riga.
 
+AGGIORNAMENTO 2026-07-22 (richiesta utente) — MARCATORE "(i)" + SEED DESCRIZIONI:
+il tooltip non e' piu' sull'intero badge: accanto a ogni badge di stato di lavorazione compare
+una "(i)" (`features/opportunity-workflows/status-description-hint.tsx`, unico punto di verita',
+i18n `opportunityWorkflows.form.statuses.descriptionHint`). Si renderizza SOLO con `description`
+non vuoto, quindi pipeline/lead/opportunity status restano invariati. Usata in `StatusBadgeCell`
+(tabella Gestione Richieste) e nel dettaglio Opportunita' (`opportunity-detail.tsx`).
+`DemoOpportunityWorkflowSeeder` ora seeda `description` + `requires_note` su TUTTE le righe:
+le custom (costanti `DEFAULT_CUSTOM_STATUSES` e liste per-workflow) e le tre righe system
+(costante `SYSTEM_STATUSES` -> `systemStatusSeed()` per i workflow creati, e re-submit delle
+righe system del set globale con la sola `description` in `describedDefaultSystemRows()`,
+perche' il writer rifiuta un cambio di `group`).
+
 VERIFICA ESEGUITA: Pest OpportunityWorkflows 62/62, Opportunities 120/120, RequestManagement
 49/49, Unit/OpportunityWorkflows 19/19 (+ nuovo `WorkflowStatusDescriptionTest`, 6 test);
 Pint pulito. Vitest opportunity-workflows 32/32 (nuovo `workflow-statuses-editor.test.tsx`),
 table/rich-cells 26/26. `tsc --noEmit` pulito sui file di questo lavoro.
+VERIFICA AGGIORNAMENTO "(i)": Pest Feature/OpportunityWorkflows 65/65 (nuovo
+`DemoOpportunityWorkflowSeederTest`, 3 test), Pint pulito, Vitest rich-cells + opportunity-workflows
+58/58, Vitest features/opportunities 134 passati, `tsc --noEmit` pulito su tutto il frontend,
+ESLint pulito sui file toccati.
 NON MIEI (lavoro 0051 in corso in parallelo nella working copy, gia' rosso prima): errore tsc
 su `i18n/locales/it.ts` -> `requestManagement.workPanel.contacts.registryTitle` mancante in it;
 `request-management-table.test.tsx` (modal sheet) rosso per `useConfirm must be used within a

@@ -20,6 +20,7 @@ function panel(overrides: Partial<RequestWorkPanel> = {}): RequestWorkPanel {
     ],
     product_lines: [],
     client_contacts: { owner: { type: 'personal_data', id: 10 }, items: [] },
+    client_address: null,
     referent_contacts: { owner: { type: 'personal_data', id: 20 }, items: [] },
     applicable_attributes: [
       {
@@ -54,6 +55,7 @@ function panel(overrides: Partial<RequestWorkPanel> = {}): RequestWorkPanel {
       },
     ],
     attribute_values: { notes: 'existing note', budget: 1000 },
+    next_callback_at: null,
     context: { estimated_value: null, expected_close_date: null, success_probability: null },
     ...overrides,
   }
@@ -62,6 +64,9 @@ function panel(overrides: Partial<RequestWorkPanel> = {}): RequestWorkPanel {
 function formValues(overrides: Partial<RequestWorkFormValues> = {}): RequestWorkFormValues {
   return {
     opportunity_workflow_status_id: 100,
+    next_callback_at: null,
+    client_contacts: [],
+    client_address: [],
     attribute_values: { notes: 'existing note', budget: 1000 },
     ...overrides,
   }
@@ -97,6 +102,55 @@ describe('buildRequestWorkPayload (spec 0049 AC-062)', () => {
       opportunity_workflow_status_id: 101,
       attribute_values: { notes: 'new', budget: 1000 },
     })
+  })
+
+  it('sends the whole client_contacts set when one channel was typed in', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({
+        client_contacts: [
+          { _key: 'c1', type: 'email', value: 'ops@acme.test', label: null, is_primary: true },
+        ],
+      }),
+      panel(),
+    )
+    expect(payload).toEqual({
+      client_contacts: [{ type: 'email', value: 'ops@acme.test', label: null, is_primary: true }],
+    })
+  })
+
+  it('keeps the loaded client contacts out of the payload when untouched', () => {
+    const loaded = { id: 7, type: 'email', value: 'ops@acme.test', label: null, is_primary: true }
+    const payload = buildRequestWorkPayload(
+      formValues({ client_contacts: [{ ...loaded, _key: 'contact-7' }] }),
+      panel({ client_contacts: { owner: { type: 'personal_data', id: 10 }, items: [loaded] } }),
+    )
+    expect(payload).toEqual({})
+  })
+
+  it('sends client_address with its id when the loaded address was edited', () => {
+    const loaded = {
+      id: 3,
+      line1: 'Via Vecchia 1',
+      line2: null,
+      postal_code: '20100',
+      city_id: 5,
+      province_id: null,
+      state_id: null,
+      country_id: 1,
+    }
+    const payload = buildRequestWorkPayload(
+      formValues({
+        client_address: [
+          { ...loaded, _key: 'address-3', line1: 'Via Nuova 2', is_primary: true, site_type: 'billing' },
+        ],
+      }),
+      panel({ client_address: { ...loaded, is_primary: true } as RequestWorkPanel['client_address'] }),
+    )
+    expect(payload).toEqual({ client_address: { ...loaded, line1: 'Via Nuova 2' } })
+  })
+
+  it('omits client_address entirely when the inline fields were left blank', () => {
+    expect(buildRequestWorkPayload(formValues({ client_address: [] }), panel())).toEqual({})
   })
 
   it('treats null and an absent original value as equal (no spurious diff)', () => {

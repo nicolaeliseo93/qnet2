@@ -21,6 +21,7 @@ import { DocumentsSection } from '@/features/attachments/documents-section'
 import { useAbilities } from '@/features/auth/use-abilities'
 import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
 import { OPPORTUNITY_STATUS_BADGE_CLASSES } from '@/features/opportunities/column-renderers'
+import { StatusDescriptionHint } from '@/features/opportunity-workflows/status-description-hint'
 import type {
   ApplicableAttributeSummary,
   OpportunityDetailWithPermissions as OpportunityDetailData,
@@ -227,16 +228,19 @@ export function OpportunityDetailView({ opportunity }: OpportunityDetailViewProp
           </DetailField>
           <DetailField label={t('opportunities.form.workflowStatus')}>
             {opportunity.workflow_status ? (
-              <Badge variant="secondary" className="h-5 min-h-5 gap-1.5">
-                <span
-                  className={cn(
-                    'size-1.5 shrink-0 rounded-full',
-                    swatchClassFor(opportunity.workflow_status.color) ?? 'bg-transparent',
-                  )}
-                  aria-hidden="true"
-                />
-                {opportunity.workflow_status.name}
-              </Badge>
+              <span className="flex min-w-0 items-center gap-1">
+                <Badge variant="secondary" className="h-5 min-h-5 gap-1.5">
+                  <span
+                    className={cn(
+                      'size-1.5 shrink-0 rounded-full',
+                      swatchClassFor(opportunity.workflow_status.color) ?? 'bg-transparent',
+                    )}
+                    aria-hidden="true"
+                  />
+                  {opportunity.workflow_status.name}
+                </Badge>
+                <StatusDescriptionHint description={opportunity.workflow_status.description} />
+              </span>
             ) : (
               <DetailEmpty />
             )}

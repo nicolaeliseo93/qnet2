@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Note;
 use App\Models\Opportunity;
 use App\Models\OpportunityWorkflowStatus;
 use App\Models\Registry;
@@ -27,6 +28,26 @@ if (! function_exists('requestManagementUserWith')) {
         }
 
         return $user;
+    }
+}
+
+if (! function_exists('createNoteOn')) {
+    /**
+     * A `Note` attached to $opportunity, written directly (not through
+     * `POST /api/notes`/NoteService — out of this lane's scope): `user_id`/
+     * `parent_id` are set as plain properties since `Note` is
+     * `#[Fillable(['body'])]` only (mirrors how RequestManagementService
+     * itself writes columns outside $fillable).
+     */
+    function createNoteOn(Opportunity $opportunity, User $author, ?int $parentId = null): Note
+    {
+        $note = new Note(['body' => 'note body']);
+        $note->notable()->associate($opportunity);
+        $note->user_id = $author->id;
+        $note->parent_id = $parentId;
+        $note->save();
+
+        return $note;
     }
 }
 
@@ -85,7 +106,10 @@ it('403 without request-management.viewAny on rows/columns/values (AC-012)', fun
     $this->postJson('/api/tables/request-management/values', ['columnId' => 'workflow_status'])->assertForbidden();
 });
 
-it('the action catalogue never declares edit/delete/activity, only view (AC-012)', function () {
+it('the action catalogue never declares edit/delete/activity, only view + notes (AC-012)', function () {
+    // Requirement changed by spec 0052 B4b: the catalogue now also declares
+    // a `notes` action (gated by request-management.view, D-6) — updated
+    // here rather than left asserting a stale exact list.
     $actor = requestManagementUserWith(['viewAny', 'view', 'viewActivity']);
     Sanctum::actingAs($actor);
 
@@ -94,13 +118,56 @@ it('the action catalogue never declares edit/delete/activity, only view (AC-012)
         ->json('data.actions');
 
     $keys = collect($actions)->pluck('key');
-    expect($keys->all())->toBe(['view'])
+    expect($keys->all())->toBe(['view', 'notes'])
         ->and($keys)->not->toContain('edit')
         ->and($keys)->not->toContain('delete')
         ->and($keys)->not->toContain('activity');
 });
 
-it('row.actions contains view only with request-management.view (AC-012)', function () {
+it('the notes action is gated by request-management.view (spec 0052 B4b, D-6)', function () {
+    $withoutView = requestManagementUserWith(['viewAny']);
+    Sanctum::actingAs($withoutView);
+    $actions = $this->getJson('/api/tables/request-management/columns')->assertOk()->json('data.actions');
+    expect(collect($actions)->pluck('key'))->not->toContain('notes');
+
+    $withView = requestManagementUserWith(['viewAny', 'view']);
+    Sanctum::actingAs($withView);
+    $actions = $this->getJson('/api/tables/request-management/columns')->assertOk()->json('data.actions');
+    // count_field expectation REVERSED by spec 0052 B4c: the user asked for a
+    // per-row note count on the icon, mirroring `documents`/`documents_count`
+    // — updated here rather than left asserting the earlier "out of scope" call.
+    $notes = collect($actions)->firstWhere('key', 'notes');
+    expect($notes)->not->toBeNull()
+        ->and($notes['count_field'])->toBe('notes_count')
+        ->and($notes)->not->toHaveKey('permission'); // stripped server-side after the gate check
+});
+
+it('rows: the per-row notes action is gated by request-management.view, same as the row itself (spec 0052 B4b)', function () {
+    // Dedicated coverage for the catalogue/row distinction found during
+    // review: `notes` living in RequestColumnCatalog::actions() does NOT by
+    // itself make it appear in a row's `actions` — that is a SEPARATE
+    // allow-list (RequestManagementTableDefinition::actionsFor()), asserted
+    // here independently of the catalogue-level test above.
+    $opportunity = Opportunity::factory()->create();
+    $actorWithoutView = requestManagementUserWith(['viewAny', 'viewAll']);
+    Sanctum::actingAs($actorWithoutView);
+
+    $items = collect($this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+    expect($items->firstWhere('id', $opportunity->id)['actions'])->not->toContain('notes');
+
+    $actorWithView = requestManagementUserWith(['viewAny', 'viewAll', 'view']);
+    Sanctum::actingAs($actorWithView);
+
+    $items = collect($this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+    expect($items->firstWhere('id', $opportunity->id)['actions'])->toContain('notes');
+});
+
+it('row.actions contains view + notes with request-management.view (AC-012)', function () {
+    // Requirement changed by spec 0052 B4b: `notes` shares the SAME gate as
+    // `view` (D-6), so it rides along on every row `view` is granted on —
+    // updated from the former `['view']`-only expectation.
     $opportunity = Opportunity::factory()->create();
 
     // viewAll makes the row visible regardless of GA2 scope; this test is about
@@ -115,7 +182,7 @@ it('row.actions contains view only with request-management.view (AC-012)', funct
     Sanctum::actingAs($actorWithView);
     $items = collect($this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])
         ->assertOk()->json('items'));
-    expect($items->firstWhere('id', $opportunity->id)['actions'])->toBe(['view']);
+    expect($items->firstWhere('id', $opportunity->id)['actions'])->toBe(['view', 'notes']);
 });
 
 // ---------------------------------------------------------------------------
@@ -175,6 +242,51 @@ it('rows: workflow_status carries color; operator_ga2 + client anagraphic column
         ->and($row['last_name'])->toBe('Rossi')
         ->and($row['tax_code'])->toBe('RSSMRA80A01H501U')
         ->and($row['phone'])->toBe('+39 02 1234567');
+});
+
+// ---------------------------------------------------------------------------
+// notes_count (spec 0052 B4c): the `notes` action badge — every message in
+// the discussion (roots + replies), soft-deleted excluded, single aggregated
+// query via HasNotes/withCount('notes').
+// ---------------------------------------------------------------------------
+
+it('rows: notes_count counts roots AND replies together', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    $opportunity = Opportunity::factory()->create();
+    $root = createNoteOn($opportunity, $actor);
+    createNoteOn($opportunity, $actor, $root->id);
+    createNoteOn($opportunity, $actor);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $opportunity->id);
+
+    expect($row['notes_count'])->toBe(3);
+});
+
+it('rows: a soft-deleted note is NOT counted in notes_count', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    $opportunity = Opportunity::factory()->create();
+    createNoteOn($opportunity, $actor);
+    createNoteOn($opportunity, $actor)->delete();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $opportunity->id);
+
+    expect($row['notes_count'])->toBe(1);
+});
+
+it('rows: a record with no notes exposes notes_count as 0, not null or absent', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    $opportunity = Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $opportunity->id);
+
+    expect($row)->toHaveKey('notes_count')
+        ->and($row['notes_count'])->toBe(0);
 });
 
 // ---------------------------------------------------------------------------

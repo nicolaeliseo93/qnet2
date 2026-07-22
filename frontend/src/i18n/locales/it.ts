@@ -25,6 +25,7 @@ import { opportunities } from './it-opportunities'
 import { opportunityStatuses } from './it-opportunity-statuses'
 import { opportunityWorkflows } from './it-opportunity-workflows'
 import { requestManagement } from './it-request-management'
+import { notes } from './it-notes'
 import { notifications } from './it-notifications'
 import { leadImports } from './it-lead-imports'
 import { businessFunctions } from './it-business-functions'
@@ -117,6 +118,7 @@ export const it: TranslationResources = {
     activity: 'Attività',
     convertToOpportunity: 'Converti in Opportunità',
     documents: 'Documenti',
+    notes: 'Note',
     impersonate: 'Impersona',
   },
   table,
@@ -464,6 +466,7 @@ export const it: TranslationResources = {
   opportunityStatuses,
   opportunityWorkflows,
   requestManagement,
+  notes,
   importRuns: { stats: moduleStats.importRuns },
   attachments,
   impersonation,

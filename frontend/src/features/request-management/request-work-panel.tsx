@@ -5,14 +5,26 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Form } from '@/components/ui/form'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { ResourcePermissionsProvider, useResourcePermissions } from '@/features/authorization/permissions'
+import { NotesSection } from '@/features/notes/notes-section'
 import { fetchRequestWorkPanel } from '@/features/request-management/api'
 import { requestManagementKeys } from '@/features/request-management/query-keys'
-import { RequestContactsSection } from '@/features/request-management/request-contacts-section'
+import { RequestCallbackSection } from '@/features/request-management/request-callback-section'
+import { RequestClientSection } from '@/features/request-management/request-client-section'
 import { RequestDynamicFields } from '@/features/request-management/request-dynamic-fields'
 import { RequestWorkContext } from '@/features/request-management/request-work-context'
 import { RequestWorkflowStatusField } from '@/features/request-management/request-workflow-status-field'
 import { useRequestWorkForm } from '@/features/request-management/use-request-work-form'
+import { REQUEST_MANAGEMENT_DOMAIN } from '@/features/request-management/types'
 import type { RequestWorkPanelWithPermissions } from '@/features/request-management/types'
+
+/**
+ * DOM id bridging the sticky submit button to the RHF `<form>` (spec 0052
+ * F1b): `<NotesSection>` owns its own native `<form>` (composer) and cannot
+ * sit inside this one — nested `<form>` elements are invalid HTML and make
+ * submit/Enter-key behaviour browser-dependent. The button below stays
+ * `type="submit"` via the HTML `form` attribute instead of DOM nesting.
+ */
+const REQUEST_WORK_FORM_ID = 'request-work-form'
 
 /** Props shape matches the module registry's `ModuleDetailScreenProps` (spec 0042), so this mounts as-is as the module's `DetailScreen`. */
 interface RequestWorkPanelScreenProps {
@@ -97,37 +109,52 @@ function RequestWorkPanelBody({ panel }: RequestWorkPanelBodyProps) {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <Form {...form}>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4 p-4" noValidate>
-          <RequestWorkContext panel={panel} />
+      <div className="flex flex-col gap-4 p-4">
+        <Form {...form}>
+          {/* `display: contents`: this native `<form>` only scopes the HTML submit
+              boundary, it must not become an extra flex box in the stack below. */}
+          {/* Section order = the operator's data-entry order: who the client
+              is (anagrafica), what the request needs (dynamic fields), how the
+              work is tracked (callback + working state). The read-only
+              commercial context sits above as a compact header. */}
+          <form id={REQUEST_WORK_FORM_ID} onSubmit={onSubmit} className="contents" noValidate>
+            <RequestWorkContext panel={panel} />
 
-          <RequestWorkflowStatusField control={form.control} statuses={panel.workflow_statuses} />
+            <RequestClientSection control={form.control} />
 
-          <RequestContactsSection registry={panel.client_contacts} referent={panel.referent_contacts} />
+            <RequestDynamicFields control={form.control} attributes={panel.applicable_attributes} />
 
-          <RequestDynamicFields control={form.control} attributes={panel.applicable_attributes} />
+            <RequestCallbackSection control={form.control} />
 
-          {serverError && (
-            <div
-              role="alert"
-              className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm font-medium text-destructive"
-            >
-              {serverError}
-            </div>
-          )}
+            <RequestWorkflowStatusField control={form.control} statuses={panel.workflow_statuses} />
+          </form>
+        </Form>
 
-          {canUpdate && (
-            <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-              <Button type="submit" disabled={isSubmitting || !form.formState.isDirty}>
-                {isSubmitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                {isSubmitting
-                  ? t('requestManagement.workPanel.saving', { defaultValue: 'Saving…' })
-                  : t('requestManagement.workPanel.save', { defaultValue: 'Save' })}
-              </Button>
-            </div>
-          )}
-        </form>
-      </Form>
+        {/* Own authorization (spec 0052 D-6): shown to any actor who can read the
+            record, independent of `canUpdate`. Its composer has its own native
+            `<form>`, so it cannot nest inside the one above (see REQUEST_WORK_FORM_ID). */}
+        <NotesSection entityType={REQUEST_MANAGEMENT_DOMAIN} entityId={panel.id} />
+
+        {serverError && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm font-medium text-destructive"
+          >
+            {serverError}
+          </div>
+        )}
+
+        {canUpdate && (
+          <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+            <Button type="submit" form={REQUEST_WORK_FORM_ID} disabled={isSubmitting || !form.formState.isDirty}>
+              {isSubmitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              {isSubmitting
+                ? t('requestManagement.workPanel.saving', { defaultValue: 'Saving…' })
+                : t('requestManagement.workPanel.save', { defaultValue: 'Save' })}
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

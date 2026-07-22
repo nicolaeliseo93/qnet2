@@ -11,10 +11,12 @@ use App\Policies\Abstracts\BasePolicy;
  * Opportunity records, but access is authorized through its OWN permission
  * set (`request-management.*`), never `opportunities.*`.
  *
- * One addition beyond BasePolicy: `viewAll` lifts the manager-scoping guard
+ * Two additions beyond BasePolicy: `viewAll` lifts the manager-scoping guard
  * (spec 0049 D-3, `RequestManagementScope`) so the actor sees every
- * opportunity instead of only the ones where they are Account Manager,
- * mirroring how OpportunityPolicy appends `viewDocuments`.
+ * opportunity instead of only the ones where they are Account Manager, and
+ * `viewDocuments` gates the documents surface (the reused polymorphic
+ * Attachment subsystem) with this module's OWN permission, exactly as
+ * OpportunityPolicy does for `opportunities.viewDocuments`.
  */
 class RequestManagementPolicy extends BasePolicy
 {
@@ -34,10 +36,20 @@ class RequestManagementPolicy extends BasePolicy
     }
 
     /**
+     * Resource-level gate for the documents surface of this module (row
+     * action + dialog). The per-attachment boundary stays with
+     * AttachmentPolicy (`attachments.*`) on each attachment endpoint.
+     */
+    public function viewDocuments(User $user): bool
+    {
+        return $user->can($this->permission('viewDocuments'));
+    }
+
+    /**
      * @return array<int, string>
      */
     public static function abilities(): array
     {
-        return [...parent::abilities(), 'viewAll'];
+        return [...parent::abilities(), 'viewAll', 'viewDocuments'];
     }
 }

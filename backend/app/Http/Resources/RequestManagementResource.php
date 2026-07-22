@@ -58,9 +58,11 @@ class RequestManagementResource extends JsonResource
             'workflow_statuses' => $this->summarizeWorkflowStatuses($this->resource['workflow_statuses']),
             'product_lines' => $this->summarizeProductLines($opportunity->productLines),
             'client_contacts' => $this->summarizeContacts($opportunity->registry),
+            'client_address' => $this->summarizeClientAddress($opportunity->registry),
             'referent_contacts' => $this->summarizeContacts($opportunity->referent),
             'applicable_attributes' => $this->summarizeApplicableAttributes($this->resource['applicable_attributes']),
             'attribute_values' => $opportunity->attribute_values ?? [],
+            'next_callback_at' => $opportunity->next_callback_at?->format('Y-m-d\TH:i'),
             'context' => [
                 'estimated_value' => $opportunity->estimated_value,
                 'expected_close_date' => $opportunity->expected_close_date?->format('Y-m-d'),
@@ -153,6 +155,26 @@ class RequestManagementResource extends JsonResource
             'owner' => ['type' => 'personal_data', 'id' => $personalData->id],
             'items' => ContactResource::collection($personalData->contacts),
         ];
+    }
+
+    /**
+     * The client's PRIMARY address, the single row the panel's "anagrafica"
+     * section edits inline (spec 0049 amendment). Falls back to the card's
+     * first address for legacy rows left without a primary flag, and stays
+     * null when the client has no card or no address yet — the section then
+     * starts blank and a save creates the first one.
+     */
+    private function summarizeClientAddress(?Model $entity): ?AddressResource
+    {
+        $addresses = $entity?->personalData?->addresses;
+
+        if ($addresses === null) {
+            return null;
+        }
+
+        $address = $addresses->firstWhere('is_primary', true) ?? $addresses->first();
+
+        return $address === null ? null : new AddressResource($address);
     }
 
     /**

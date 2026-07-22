@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- renderer registry module: cells are AG Grid render functions, not route/page components */
 import type { ICellRendererParams } from 'ag-grid-community'
-import { EmptyCell } from '@/features/table/cell-renderers'
+import { DateTimeCell, EmptyCell } from '@/features/table/cell-renderers'
 import { StatusBadgeCell } from '@/features/table/rich-cells'
 import { UserCell } from '@/features/table/user-cell'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
@@ -33,7 +33,8 @@ function TextCell({ value }: ICellRendererParams) {
  * `supervisor` column). The working state the operator advances
  * (`workflow_status`) renders as a colored badge via the shared
  * `StatusBadgeCell`; the client's PersonalData anagraphic fields and the
- * aggregated product categories are display-only text.
+ * aggregated product categories are display-only text. `next_callback_at`
+ * (spec 0052) reuses the shared `DateTimeCell`.
  */
 export const requestManagementColumnRenderers: TableRendererMap = {
   product_categories: (params) => <TextCell {...params} />,
@@ -43,4 +44,5 @@ export const requestManagementColumnRenderers: TableRendererMap = {
   last_name: (params) => <TextCell {...params} />,
   tax_code: (params) => <TextCell {...params} />,
   phone: (params) => <TextCell {...params} />,
+  next_callback_at: (params) => <DateTimeCell {...params} />,
 }

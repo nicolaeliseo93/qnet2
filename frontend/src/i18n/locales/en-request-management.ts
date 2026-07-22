@@ -10,7 +10,7 @@ export const requestManagement = {
   subtitle: 'Work opportunities: verify contacts, complete dynamic fields and advance the working status.',
   forbidden: "You don't have permission to view Request Management.",
   columns: {
-    serviceCategory: 'Reference service category',
+    productCategory: 'Product category',
     operator: 'Operator (GA2)',
     workflowStatus: 'Working status',
     firstName: 'First name',
@@ -18,6 +18,15 @@ export const requestManagement = {
     taxCode: 'Tax code',
     phone: 'Phone',
     updatedAt: 'Updated at',
+    nextCallbackAt: 'Next callback',
+  },
+  advancedFilters: {
+    registry: 'Registry',
+    referent: 'Contact',
+    workflowStatus: 'Working status',
+    opportunityStatus: 'Sales status',
+    expectedCloseRange: 'Expected close date',
+    nextCallbackRange: 'Next callback',
   },
   detail: {
     title: 'Request details',
@@ -38,12 +47,22 @@ export const requestManagement = {
       empty: 'No additional fields for this opportunity.',
     },
     workflowStatus: {
+      title: 'Working status',
+      sectionDescription: 'Advance the working state of the request.',
       label: 'Working status',
       placeholder: 'Select a status',
     },
-    contacts: {
-      registryTitle: 'Registry contacts',
-      referentTitle: 'Referent contacts',
+    callback: {
+      title: 'Next callback',
+      description: 'Plan the next follow-up call with the client.',
+      label: 'Callback date and time',
+      placeholder: 'Select date and time',
+    },
+    client: {
+      title: 'Client details',
+      description: 'Contacts and address of the client.',
+      contactsGroup: 'Contacts',
+      addressGroup: 'Address',
     },
     context: {
       subtitle: 'Opportunity context (read-only).',

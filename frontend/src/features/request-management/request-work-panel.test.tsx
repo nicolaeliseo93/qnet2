@@ -70,6 +70,7 @@ function panel(overrides: Partial<RequestWorkPanelWithPermissions> = {}): Reques
       owner: { type: 'personal_data', id: 1000 },
       items: [{ id: 1, type: 'email', label: null, value: 'client@acme.test', is_primary: true }],
     },
+    client_address: null,
     referent_contacts: { owner: { type: 'personal_data', id: 2000 }, items: [] },
     applicable_attributes: [
       {
@@ -107,6 +108,7 @@ function panel(overrides: Partial<RequestWorkPanelWithPermissions> = {}): Reques
       },
     ],
     attribute_values: { notes: 'Some notes', priority: 'low' },
+    next_callback_at: null,
     context: { estimated_value: 1234.5, expected_close_date: '2026-08-01', success_probability: null },
     permissions: FULL_PERMISSIONS,
     ...overrides,
@@ -137,17 +139,26 @@ beforeEach(() => {
 })
 
 describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
-  it('renders the read-only context, a dynamic field per attribute, the workflow select and both contact blocks', async () => {
+  it('renders the compact context header, the always-active client fields, the dynamic fields and the working state', async () => {
     fetchRequestWorkPanelMock.mockResolvedValue(panel())
 
     renderPanel()
 
     await waitFor(() => expect(screen.getByText('Enterprise deal')).toBeInTheDocument())
 
-    // Read-only context.
+    // Read-only context, now a compact header strip.
     expect(screen.getByText('Acme S.p.A.')).toBeInTheDocument()
     expect(screen.getByText('New')).toBeInTheDocument()
     expect(screen.getByText('Sales — Consulting')).toBeInTheDocument()
+
+    // Anagrafica: the client's channels are ACTIVE, prefilled inputs — not a
+    // read-only list behind an "edit" dialog.
+    expect(screen.getByLabelText('Email')).toHaveValue('client@acme.test')
+    expect(screen.getByLabelText('Phone')).toHaveValue('')
+    expect(screen.getByLabelText('PEC')).toBeInTheDocument()
+    expect(screen.getByLabelText('Fax')).toBeInTheDocument()
+    // ...and so is the address, blank when the client has none yet.
+    expect(screen.getByLabelText('Address')).toHaveValue('')
 
     // One control per applicable attribute, by type.
     expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveValue('Some notes')
@@ -155,42 +166,46 @@ describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
 
     // Workflow status select, limited to the resolved set.
     expect(screen.getByRole('combobox', { name: 'Working status' })).toHaveTextContent('Open')
-
-    // Contacts mounted for both Registry and Referent, straight off `block.owner`
-    // (the backend-resolved PersonalData CARD ref) — no card-by-owner fetch.
-    expect(screen.getByText('Registry contacts')).toBeInTheDocument()
-    expect(screen.getByText('Referent contacts')).toBeInTheDocument()
-    expect(screen.getByText('client@acme.test')).toBeInTheDocument()
-    expect(screen.getByText('No contacts yet.')).toBeInTheDocument()
   })
 
-  it('persists a new registry contact against the CARD ref (block.owner)', async () => {
+  it('sends a contact typed in the inline field with the single save, no per-field persistence', async () => {
     fetchRequestWorkPanelMock.mockResolvedValue(panel())
-    createContactMock.mockResolvedValue({
-      id: 99,
-      type: 'phone',
-      label: null,
-      value: '+39 02 1234567',
-      is_primary: false,
-      contactable_type: 'personal_data',
-      contactable_id: 1000,
-      created_at: null,
-    })
+    updateRequestWorkMock.mockResolvedValue(panel())
 
     renderPanel()
 
-    await waitFor(() => expect(screen.getByText('client@acme.test')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByLabelText('Email')).toHaveValue('client@acme.test'))
 
-    const registrySection = screen.getByText('Registry contacts').closest('section') as HTMLElement
-    fireEvent.click(within(registrySection).getByRole('button', { name: 'Add contact' }))
-    fireEvent.click(screen.getByTestId('stub-submit'))
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+39 02 1234567' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    await waitFor(() => expect(createContactMock).toHaveBeenCalledTimes(1))
-    // Persistence must target the CARD ref carried on `block.owner` (id 1000),
-    // never a registry/referent entity ref.
-    expect(createContactMock.mock.calls[0][0]).toMatchObject({
-      contactable_type: 'personal_data',
-      contactable_id: 1000,
+    await waitFor(() => expect(updateRequestWorkMock).toHaveBeenCalledTimes(1))
+    // The whole client set travels in the panel's own PATCH; the per-contact
+    // endpoints are never touched from this screen.
+    expect(updateRequestWorkMock.mock.calls[0][1]).toEqual({
+      client_contacts: [
+        { id: 1, type: 'email', value: 'client@acme.test', label: null, is_primary: true },
+        { type: 'phone', value: '+39 02 1234567', label: null, is_primary: true },
+      ],
+    })
+    expect(createContactMock).not.toHaveBeenCalled()
+  })
+
+  it('sends the client address created inline with the same save', async () => {
+    fetchRequestWorkPanelMock.mockResolvedValue(panel())
+    updateRequestWorkMock.mockResolvedValue(panel())
+
+    renderPanel()
+
+    await waitFor(() => expect(screen.getByLabelText('Address')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'Via Roma 1' } })
+    fireEvent.change(screen.getByLabelText('Postal code'), { target: { value: '20100' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(updateRequestWorkMock).toHaveBeenCalledTimes(1))
+    expect(updateRequestWorkMock.mock.calls[0][1]).toMatchObject({
+      client_address: { line1: 'Via Roma 1', postal_code: '20100' },
     })
   })
 
@@ -293,9 +308,18 @@ describe('RequestWorkPanelScreen — bounded controls (spec 0049 AC-063)', () =>
 
     renderPanel()
 
-    await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
-    const label = screen.getByText('Notes').closest('label')
-    expect(label).not.toBeNull()
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Notes' })).toBeInTheDocument(),
+    )
+
+    // The collaborative notes section renders its own "Notes" heading, so the
+    // bare text query is ambiguous: keep the one that is a field label.
+    const label = screen
+      .getAllByText('Notes')
+      .map((node) => node.closest('label'))
+      .find((node): node is HTMLLabelElement => node !== null)
+
+    expect(label).toBeDefined()
     expect(label).toHaveTextContent('*')
   })
 })

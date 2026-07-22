@@ -1,0 +1,207 @@
+<?php
+
+use App\Models\Address;
+use App\Models\City;
+use App\Models\Contact;
+use App\Models\Opportunity;
+use App\Models\PersonalData;
+use App\Models\Registry;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Permission;
+
+// The client anagraphic block of the work panel (spec 0049 amendment):
+// `client_contacts` (authoritative sync) and `client_address` (single
+// create-or-update row) written on the Registry's PersonalData card through
+// PATCH /api/request-management/{opportunity}.
+
+uses(RefreshDatabase::class);
+
+if (! function_exists('requestManagementUpdaterWith')) {
+    /**
+     * @param  array<int, string>  $abilities
+     */
+    function requestManagementUpdaterWith(array $abilities): User
+    {
+        foreach (['viewAny', 'view', 'update', 'export', 'viewActivity', 'viewAll'] as $ability) {
+            Permission::findOrCreate("request-management.{$ability}");
+        }
+
+        $user = User::factory()->create();
+
+        foreach ($abilities as $ability) {
+            $user->givePermissionTo("request-management.{$ability}");
+        }
+
+        return $user;
+    }
+}
+
+/** An opportunity managed by $manager whose client carries a personal-data card. */
+function opportunityWithClientCard(User $manager): Opportunity
+{
+    $registry = Registry::factory()->withPersonalData()->create();
+    $opportunity = Opportunity::factory()->create(['registry_id' => $registry->id]);
+    $opportunity->managers()->sync([$manager->id => ['position' => 2]]);
+
+    return $opportunity;
+}
+
+function clientCardOf(Opportunity $opportunity): PersonalData
+{
+    return $opportunity->registry->personalData;
+}
+
+// ---------------------------------------------------------------------------
+// Read surface
+// ---------------------------------------------------------------------------
+
+it('GET exposes the client primary address alongside the contacts block', function () {
+    $actor = requestManagementUpdaterWith(['view']);
+    $opportunity = opportunityWithClientCard($actor);
+    $card = clientCardOf($opportunity);
+    Address::factory()->create(['addressable_type' => 'personal_data', 'addressable_id' => $card->id, 'line1' => 'Via Secondaria 2', 'is_primary' => false]);
+    $primary = Address::factory()->create(['addressable_type' => 'personal_data', 'addressable_id' => $card->id, 'line1' => 'Via Primaria 1', 'is_primary' => true]);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/request-management/{$opportunity->id}")
+        ->assertOk()
+        ->assertJsonPath('data.client_address.id', $primary->id)
+        ->assertJsonPath('data.client_address.line1', 'Via Primaria 1')
+        ->assertJsonPath('data.client_contacts.owner.type', 'personal_data');
+});
+
+it('GET returns a null client address when the client has none', function () {
+    $actor = requestManagementUpdaterWith(['view']);
+    $opportunity = opportunityWithClientCard($actor);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/request-management/{$opportunity->id}")
+        ->assertOk()
+        ->assertJsonPath('data.client_address', null);
+});
+
+// ---------------------------------------------------------------------------
+// Contacts — authoritative sync
+// ---------------------------------------------------------------------------
+
+it('PATCH client_contacts creates, updates and deletes to match the submitted set', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    $card = clientCardOf($opportunity);
+    $kept = Contact::factory()->create(['contactable_type' => 'personal_data', 'contactable_id' => $card->id, 'type' => 'email', 'value' => 'old@example.test']);
+    $dropped = Contact::factory()->create(['contactable_type' => 'personal_data', 'contactable_id' => $card->id, 'type' => 'phone', 'value' => '0100000000']);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [
+        'client_contacts' => [
+            ['id' => $kept->id, 'type' => 'email', 'value' => 'new@example.test', 'is_primary' => true],
+            ['type' => 'mobile', 'value' => '3331234567'],
+        ],
+    ])->assertOk();
+
+    expect($kept->fresh()->value)->toBe('new@example.test');
+    expect(Contact::query()->whereKey($dropped->id)->exists())->toBeFalse();
+    expect($card->contacts()->where('type', 'mobile')->value('value'))->toBe('3331234567');
+});
+
+it('PATCH without client_contacts leaves the client contacts untouched', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    $card = clientCardOf($opportunity);
+    Contact::factory()->create(['contactable_type' => 'personal_data', 'contactable_id' => $card->id, 'type' => 'email', 'value' => 'keep@example.test']);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [])->assertOk();
+
+    expect($card->contacts()->count())->toBe(1);
+});
+
+it('PATCH rejects a client contact whose value does not match its type -> 422', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [
+        'client_contacts' => [['type' => 'email', 'value' => 'not-an-email']],
+    ])->assertStatus(422)->assertJsonValidationErrors('client_contacts.0.value');
+});
+
+// ---------------------------------------------------------------------------
+// Address — single create-or-update row, never an authoritative sync
+// ---------------------------------------------------------------------------
+
+it('PATCH client_address without an id creates the client first address', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    $city = City::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [
+        'client_address' => ['line1' => 'Via Nuova 10', 'postal_code' => '20100', 'city_id' => $city->id],
+    ])->assertOk()->assertJsonPath('data.client_address.line1', 'Via Nuova 10');
+
+    $created = clientCardOf($opportunity)->addresses()->sole();
+    expect($created->postal_code)->toBe('20100')
+        ->and($created->is_primary)->toBeTrue();
+});
+
+it('PATCH client_address with an id updates that row and keeps the client other addresses', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    $card = clientCardOf($opportunity);
+    $primary = Address::factory()->create(['addressable_type' => 'personal_data', 'addressable_id' => $card->id, 'line1' => 'Via Vecchia 1', 'is_primary' => true, 'site_type' => 'legal_seat']);
+    $other = Address::factory()->create(['addressable_type' => 'personal_data', 'addressable_id' => $card->id, 'line1' => 'Via Altra 2', 'is_primary' => false]);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [
+        'client_address' => ['id' => $primary->id, 'line1' => 'Via Aggiornata 3'],
+    ])->assertOk();
+
+    $updated = $primary->fresh();
+    expect($updated->line1)->toBe('Via Aggiornata 3')
+        // The panel never shows these two: a save here must not reset them.
+        ->and($updated->is_primary)->toBeTrue()
+        ->and($updated->site_type->value)->toBe('legal_seat');
+    expect(Address::query()->whereKey($other->id)->exists())->toBeTrue();
+});
+
+it('PATCH client_address with an id owned by another card creates instead of hijacking it', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    $foreign = Address::factory()->create([
+        'addressable_type' => 'personal_data',
+        'addressable_id' => Registry::factory()->withPersonalData()->create()->personalData->id,
+        'line1' => 'Via Estranea 9',
+    ]);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [
+        'client_address' => ['id' => $foreign->id, 'line1' => 'Via Iniettata 1'],
+    ])->assertOk();
+
+    expect($foreign->fresh()->line1)->toBe('Via Estranea 9');
+    expect(clientCardOf($opportunity)->addresses()->where('line1', 'Via Iniettata 1')->exists())->toBeTrue();
+});
+
+it('PATCH client_address without line1 -> 422', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = opportunityWithClientCard($actor);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [
+        'client_address' => ['postal_code' => '20100'],
+    ])->assertStatus(422)->assertJsonValidationErrors('client_address.line1');
+});
+
+it('PATCH client_contacts on an opportunity whose client has no card -> 422', function () {
+    $actor = requestManagementUpdaterWith(['update']);
+    $opportunity = Opportunity::factory()->create(['registry_id' => Registry::factory()->create()->id]);
+    $opportunity->managers()->sync([$actor->id => ['position' => 2]]);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", [
+        'client_contacts' => [['type' => 'email', 'value' => 'a@example.test']],
+    ])->assertStatus(422)->assertJsonValidationErrors('client_contacts');
+});

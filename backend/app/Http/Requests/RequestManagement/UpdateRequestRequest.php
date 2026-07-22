@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\RequestManagement;
 
+use App\Http\Requests\Concerns\ValidatesRequestClientProfile;
 use App\Http\Requests\Concerns\ValidatesWorkflowStatus;
 use App\Models\Opportunity;
 use Illuminate\Contracts\Validation\Validator;
@@ -34,10 +35,15 @@ use Illuminate\Foundation\Http\FormRequest;
  * an extra time for no benefit. Its ValidationException (keyed
  * `attribute_values.<code>`) surfaces as the same 422 shape either way
  * (BaseApiController::handleControllerException).
+ *
+ * `client_contacts`/`client_address` (spec 0049 amendment) come from
+ * ValidatesRequestClientProfile: the client anagraphic block the panel edits
+ * inline, written on the Registry's PersonalData card. Same sparse rule as
+ * every other key — absent means untouched.
  */
 class UpdateRequestRequest extends FormRequest
 {
-    use ValidatesWorkflowStatus;
+    use ValidatesRequestClientProfile, ValidatesWorkflowStatus;
 
     public function authorize(): bool
     {
@@ -52,6 +58,8 @@ class UpdateRequestRequest extends FormRequest
         return [
             'opportunity_workflow_status_id' => ['sometimes', 'nullable', 'integer', 'exists:opportunity_workflow_statuses,id'],
             'attribute_values' => ['sometimes', 'array'],
+            'next_callback_at' => ['sometimes', 'nullable', 'date'],
+            ...$this->clientProfileRules(),
         ];
     }
 
@@ -62,6 +70,7 @@ class UpdateRequestRequest extends FormRequest
             $opportunity = $this->route('opportunity');
 
             $this->validateWorkflowStatus($validator, $opportunity);
+            $this->validateClientProfile($validator);
         });
     }
 }

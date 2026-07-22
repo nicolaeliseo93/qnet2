@@ -1,0 +1,76 @@
+<?php
+
+namespace App\Http\Requests\Notes;
+
+use App\DataObjects\Notes\NoteCursor;
+use App\Http\Requests\Notes\Concerns\ValidatesNotableEntity;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Foundation\Http\FormRequest;
+use InvalidArgumentException;
+
+/**
+ * Validates GET /api/notes (spec 0052 data_contract): the host entity
+ * (ValidatesNotableEntity) plus an opaque keyset cursor and a `limit`
+ * counting ROOT notes only (1..50, default 20 — D-13).
+ *
+ * Authorization is NOT handled here (it needs the resolved host record, see
+ * NoteService::listForEntity via NoteEntityRegistry).
+ */
+class IndexNoteRequest extends FormRequest
+{
+    use ValidatesNotableEntity;
+
+    private const int DEFAULT_LIMIT = 20;
+
+    private const int MAX_LIMIT = 50;
+
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    public function rules(): array
+    {
+        return array_merge($this->notableEntityRules(), [
+            'cursor' => ['sometimes', 'nullable', 'string'],
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:'.self::MAX_LIMIT],
+        ]);
+    }
+
+    /**
+     * A malformed (but present) cursor is a 422, not a silent "first page".
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $cursor = $this->query('cursor');
+
+            if ($cursor === null || $cursor === '') {
+                return;
+            }
+
+            try {
+                NoteCursor::decode($cursor);
+            } catch (InvalidArgumentException) {
+                $validator->errors()->add('cursor', 'The cursor is malformed.');
+            }
+        });
+    }
+
+    public function cursor(): ?NoteCursor
+    {
+        $cursor = $this->validated('cursor');
+
+        return $cursor === null ? null : NoteCursor::decode($cursor);
+    }
+
+    public function limit(): int
+    {
+        $limit = $this->validated('limit');
+
+        return $limit === null ? self::DEFAULT_LIMIT : (int) $limit;
+    }
+}

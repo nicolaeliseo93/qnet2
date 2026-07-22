@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Abstracts\BaseModel;
 use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasNotes;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\OpportunityFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -47,7 +48,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Opportunity extends BaseModel
 {
     /** @use HasFactory<OpportunityFactory> */
-    use HasAttachments, HasFactory, LogsModelActivity;
+    use HasAttachments, HasFactory, HasNotes, LogsModelActivity;
 
     /**
      * @return array<string, string>
@@ -60,6 +61,8 @@ class Opportunity extends BaseModel
             'estimated_value' => 'decimal:2',
             'success_probability' => 'integer',
             'attribute_values' => 'array',
+            'next_callback_at' => 'datetime',
+            'next_callback_reminded_at' => 'datetime',
         ];
     }
 

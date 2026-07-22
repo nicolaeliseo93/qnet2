@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace App\Tables;
 
-use App\Enums\ContactTypeEnum;
-use App\Models\Contact;
 use App\Models\Opportunity;
 use App\Models\User;
 use App\Tables\RequestManagement\RequestAdvancedFilterCatalog;
 use App\Tables\RequestManagement\RequestColumnCatalog;
+use App\Tables\RequestManagement\RequestRowMapper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -76,6 +74,8 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
         'product_categories' => ['relation' => 'productLines.productCategory', 'table' => 'product_categories', 'fk' => 'product_category_id'],
     ];
 
+    public function __construct(private readonly RequestRowMapper $rowMapper) {}
+
     public function domain(): string
     {
         return 'request-management';
@@ -113,7 +113,16 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
             // are read from the Registry's PersonalData card + its primary
             // contacts, all resolved from memory in mapRow (no N+1).
             'registry.personalData.contacts',
-        ]);
+        ])
+            // Per-row count for the `documents` action badge (HasAttachments),
+            // scoped to the 'documents' collection only — never other
+            // collections (mirrors OpportunitiesTableDefinition).
+            ->withCount(['attachments as documents_count' => fn (Builder $q) => $q->where('collection', 'documents')])
+            // Per-row count for the `notes` action badge (spec 0052 B4c,
+            // HasNotes): roots AND replies together (the whole discussion),
+            // soft-deleted notes excluded automatically by Note's own
+            // SoftDeletes global scope — a single aggregated query, no N+1.
+            ->withCount('notes');
 
         // D-3 scoping: only the opportunities where the actor is the GA2
         // "Operatore" (pivot position 2), unless they hold the viewAll ability.
@@ -181,121 +190,33 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Map an Opportunity to the operative row payload. `actions` is attached
-     * by the generic TableService via actionsFor().
+     * Map an Opportunity to the operative row payload (delegated to
+     * RequestRowMapper, so this definition keeps a single concern: query
+     * building). `actions` is attached by the generic TableService via
+     * actionsFor(); `documents_count`/`notes_count` ride along from
+     * baseQuery's withCount.
      *
      * @return array<string, mixed>
      */
     public function mapRow(User $actor, Model $row): array
     {
         /** @var Opportunity $row */
-        $mapped = ['id' => $row->id, 'name' => $row->name];
-
-        // Only `workflow_status` remains a related-row column, always projected
-        // WITH its color token for the working-state badge.
-        foreach (self::DERIVED_RELATIONS as $columnId => $config) {
-            $mapped[$columnId] = $this->summarizeWithColor($row->{$config['relation']});
-        }
-
-        // "Categoria servizi di riferimento": the aggregated product categories.
-        $mapped['product_categories'] = $this->summarizeNames($row->productLines->pluck('productCategory'));
-
-        // "Operatore": the Account Manager at pivot position 2 (GA2), as a
-        // person summary (id, name, inline avatar) for the shared UserCell.
-        $mapped['operator_ga2'] = $this->operatorSummary($row->managers);
-
-        // Client anagraphic columns, read from the Registry's PersonalData card.
-        $card = $row->registry?->personalData;
-        $mapped['first_name'] = $card?->first_name;
-        $mapped['last_name'] = $card?->last_name;
-        $mapped['tax_code'] = $card?->tax_code;
-        $mapped['phone'] = $this->primaryPhone($card?->contacts);
-
-        // Hidden column, drives the default "recently worked first" sort only.
-        $mapped['updated_at'] = $row->updated_at;
-
-        return $mapped;
-    }
-
-    /**
-     * The GA2 operator as a person summary (id, name, inline avatar) for the
-     * shared UserCell — the Account Manager attached at pivot `position` =
-     * Opportunity::OPERATOR_MANAGER_POSITION, or null when that slot is empty.
-     * Mirrors OpportunitiesTableDefinition::userSummary (supervisor column).
-     *
-     * @param  Collection<int, User>  $managers
-     * @return array{id: int, name: string, avatar_url: string|null}|null
-     */
-    private function operatorSummary(Collection $managers): ?array
-    {
-        $operator = $managers->first(
-            static fn (User $manager): bool => (int) $manager->pivot->position === Opportunity::OPERATOR_MANAGER_POSITION,
-        );
-
-        if ($operator === null) {
-            return null;
-        }
-
-        return ['id' => $operator->id, 'name' => $operator->name, 'avatar_url' => $operator->avatarDataUri()];
-    }
-
-    /**
-     * The client's primary phone number: the first primary contact of a
-     * telephone kind (phone or mobile) on the card, or null.
-     *
-     * @param  Collection<int, Contact>|null  $contacts
-     */
-    private function primaryPhone(?Collection $contacts): ?string
-    {
-        $phone = $contacts?->first(static fn (Contact $contact): bool => $contact->is_primary
-            && in_array($contact->type, [ContactTypeEnum::Phone, ContactTypeEnum::Mobile], true));
-
-        return $phone?->value;
-    }
-
-    /**
-     * A related row projected WITH its `color` token, so the grid renders the
-     * colored working-state/pipeline badge — generic summarize() would drop
-     * it (mirrors ProjectsTableDefinition::summarizePipelineStatus).
-     * `description` rides along so the badge can carry the status'
-     * explanation as its tooltip.
-     *
-     * @return array{id: int, name: string, color: ?string, description: ?string}|null
-     */
-    private function summarizeWithColor(?Model $related): ?array
-    {
-        if ($related === null) {
-            return null;
-        }
-
         return [
-            'id' => $related->id,
-            'name' => $related->name,
-            'color' => $related->color,
-            'description' => $related->description,
+            ...$this->rowMapper->map($row),
+            'documents_count' => (int) ($row->documents_count ?? 0),
+            'notes_count' => (int) ($row->notes_count ?? 0),
         ];
     }
 
     /**
-     * Display value for the AGGREGATED to-many `product_categories` column:
-     * the distinct related names, comma-joined — null when there is none
-     * (mirrors OpportunitiesTableDefinition::summarizeNames).
-     *
-     * @param  Collection<int, Model|null>  $related
-     */
-    private function summarizeNames(Collection $related): ?string
-    {
-        $names = $related->filter()->pluck('name')->unique()->values();
-
-        return $names->isEmpty() ? null : $names->implode(', ');
-    }
-
-    /**
-     * Only `view` ("Lavora") — gated by the module's own permission (D-2),
-     * never OpportunityPolicy: `Gate::allows('view', $row)` would resolve
-     * OpportunityPolicy (`opportunities.view`), the wrong permission for this
-     * domain. No `activity` action: the module exposes no separately-gated
-     * activity surface (see RequestColumnCatalog::actions()).
+     * `view` ("Lavora"), `notes` (spec 0052 B4b) and `documents` — both `view`
+     * and `notes` gated by the SAME `request-management.view` (D-6: reading a
+     * record's notes is inherited from the ability to open the record, no
+     * separate notes permission), never OpportunityPolicy:
+     * `Gate::allows('view', $row)` would resolve OpportunityPolicy
+     * (`opportunities.view`), the wrong permission for this domain. No
+     * `activity` action: the module exposes no separately-gated activity
+     * surface (see RequestColumnCatalog::actions()).
      *
      * @return array<int, string>
      */
@@ -305,6 +226,11 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
 
         if ($actor->can('request-management.view')) {
             $allowed[] = 'view';
+            $allowed[] = 'notes';
+        }
+
+        if ($actor->can('request-management.viewDocuments')) {
+            $allowed[] = 'documents';
         }
 
         return $allowed;

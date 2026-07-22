@@ -132,7 +132,7 @@ class OpportunityWorkflowService
      * workflow_id null, AC-005/AC-010): same custom-rows-sync/system-rows-
      * guard rules as a workflow's own set, via the same scoped writer.
      *
-     * @param  array<int, array{id: ?int, name: string, color: ?string, group: string}>  $statuses
+     * @param  array<int, array{id: ?int, name: string, description: ?string, color: ?string, group: string, requires_note: bool}>  $statuses
      * @return EloquentCollection<int, OpportunityWorkflowStatus>
      */
     public function syncDefaultStatuses(array $statuses): EloquentCollection

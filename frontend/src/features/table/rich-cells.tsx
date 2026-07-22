@@ -4,7 +4,6 @@ import { Check, X, type LucideIcon } from 'lucide-react'
 import i18n from '@/i18n'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   BADGE_BASE,
   BADGE_COLOR_CLASSES,
@@ -13,6 +12,7 @@ import {
   badgeColorClass,
 } from '@/features/table/cell-renderers'
 import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
+import { StatusDescriptionHint } from '@/features/opportunity-workflows/status-description-hint'
 import { formatDecimal } from '@/features/products/column-renderers'
 import { GeoScopeBadge } from '@/features/geo/geo-scope-badge'
 import { geoScopePlaceName, type GeoScope, type GeoScopeNames } from '@/features/geo/geo-scope'
@@ -71,8 +71,8 @@ interface StatusLike {
  * `workflow_status`) as a colored badge with a leading solid dot in the
  * token's strong shade — the enterprise status-chip look. Colorless statuses
  * fall back to the neutral badge. When the projected row carries a
- * `description` (only the working statuses do today), the badge explains
- * itself through a tooltip.
+ * `description` (only the working statuses do today), an "(i)" marker sits
+ * next to the badge and reveals it on hover/focus.
  */
 export function StatusBadgeCell({ value }: ICellRendererParams) {
   const status = value as StatusLike | null | undefined
@@ -81,28 +81,16 @@ export function StatusBadgeCell({ value }: ICellRendererParams) {
     return <EmptyCell />
   }
   const dotClass = swatchClassFor(status?.color)
-  const badge = (
-    <Badge variant="secondary" className={cn(BADGE_BASE, 'gap-1.5', badgeColorClass(status?.color))}>
-      {dotClass ? (
-        <span className={cn('size-1.5 shrink-0 rounded-full', dotClass)} aria-hidden="true" />
-      ) : null}
-      <span className="truncate">{name}</span>
-    </Badge>
-  )
-  const description = status?.description
-  if (typeof description !== 'string' || description === '') {
-    return <div className={CELL_WRAPPER}>{badge}</div>
-  }
+
   return (
-    <div className={CELL_WRAPPER}>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex cursor-default">{badge}</span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-64">{description}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+    <div className={cn(CELL_WRAPPER, 'gap-1')}>
+      <Badge variant="secondary" className={cn(BADGE_BASE, 'gap-1.5', badgeColorClass(status?.color))}>
+        {dotClass ? (
+          <span className={cn('size-1.5 shrink-0 rounded-full', dotClass)} aria-hidden="true" />
+        ) : null}
+        <span className="truncate">{name}</span>
+      </Badge>
+      <StatusDescriptionHint description={status?.description} />
     </div>
   )
 }

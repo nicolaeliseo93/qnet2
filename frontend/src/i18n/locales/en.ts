@@ -32,6 +32,7 @@ import { opportunities } from './en-opportunities'
 import { opportunityStatuses } from './en-opportunity-statuses'
 import { opportunityWorkflows } from './en-opportunity-workflows'
 import { requestManagement } from './en-request-management'
+import { notes } from './en-notes'
 import { notifications } from './en-notifications'
 import { leadImports } from './en-lead-imports'
 import { businessFunctions } from './en-business-functions'
@@ -124,6 +125,7 @@ export const en = {
     activity: 'Activity',
     convertToOpportunity: 'Convert to Opportunity',
     documents: 'Documents',
+    notes: 'Notes',
     impersonate: 'Impersonate',
   },
   table,
@@ -480,6 +482,7 @@ export const en = {
   opportunityStatuses,
   opportunityWorkflows,
   requestManagement,
+  notes,
   importRuns: { stats: moduleStats.importRuns },
   attachments,
   impersonation,

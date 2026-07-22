@@ -7,7 +7,7 @@
  */
 
 import type { ResourcePermissions } from '@/features/authorization/types'
-import type { OwnerRef } from '@/features/personal-data/types'
+import type { Address, OwnerRef } from '@/features/personal-data/types'
 
 /** Table/stats domain key of this module, shared by the table adapter. */
 export const REQUEST_MANAGEMENT_DOMAIN = 'request-management'
@@ -122,11 +122,19 @@ export interface RequestWorkPanel {
   workflow_statuses: RequestWorkflowStatusRef[]
   product_lines: RequestProductLine[]
   client_contacts: RequestContactsBlock
+  /**
+   * The client's PRIMARY address (AddressResource), the single row the
+   * anagraphic section edits inline. `null` when the client has no card or no
+   * address yet — the section then starts blank and a save creates the first.
+   */
+  client_address: Address | null
   referent_contacts: RequestContactsBlock
   /** Union, dedup by `code`, of the effective attributes of every product line. */
   applicable_attributes: ApplicableAttribute[]
   /** Current values keyed by attribute `code`; `{}` when none. */
   attribute_values: Record<string, unknown>
+  /** Next follow-up call the operator scheduled, `"Y-m-d\TH:i"` local format or null (spec 0052 D-1/D-5). */
+  next_callback_at: string | null
   context: RequestWorkContext
 }
 
@@ -138,12 +146,43 @@ export interface RequestWorkPanelWithPermissions extends RequestWorkPanel {
   permissions: ResourcePermissions
 }
 
+/** One contact row of the `client_contacts` write set (`id` present = update). */
+export interface RequestClientContactPayload {
+  id?: number
+  type: string
+  value: string
+  label: string | null
+  is_primary: boolean
+}
+
+/**
+ * The single client address row (`id` present = update that row). Carries only
+ * the fields the panel actually edits: the primary flag, site type and
+ * coordinates are preserved server-side (RequestClientProfileWriter).
+ */
+export interface RequestClientAddressPayload {
+  id?: number
+  line1: string
+  line2: string | null
+  postal_code: string | null
+  city_id: number | null
+  province_id: number | null
+  state_id: number | null
+  country_id: number | null
+}
+
 /**
  * Payload for `PATCH /api/request-management/{opportunity}` (sparse diff):
  * only the sent keys change. `attribute_values`, when sent, replaces the
  * entire map (keys not included are left untouched server-side).
+ * `client_contacts`, when sent, is AUTHORITATIVE (a removed row is deleted);
+ * `client_address` is a single create-or-update row and never deletes the
+ * client's other addresses.
  */
 export interface UpdateRequestWorkPayload {
   opportunity_workflow_status_id?: number | null
   attribute_values?: Record<string, unknown>
+  next_callback_at?: string | null
+  client_contacts?: RequestClientContactPayload[]
+  client_address?: RequestClientAddressPayload
 }

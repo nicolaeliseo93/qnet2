@@ -72,7 +72,13 @@ class RequestManagementController extends BaseApiController
             $panel = $this->service->updateWork(
                 $opportunity,
                 $user,
-                $request->safe()->only(['opportunity_workflow_status_id', 'attribute_values']),
+                [
+                    ...$request->safe()->only(['opportunity_workflow_status_id', 'attribute_values', 'next_callback_at']),
+                    // Typed DTOs (ContactInput/AddressInput), not raw arrays:
+                    // the client anagraphic block never reaches the service as
+                    // request input.
+                    ...$request->clientProfilePayload(),
+                ],
             );
 
             return $this->okWithPermissions(

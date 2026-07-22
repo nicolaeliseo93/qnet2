@@ -12,6 +12,15 @@ import type {
 export const OPPORTUNITIES_DOMAIN = 'opportunities'
 
 /**
+ * Polymorphic owner alias of an opportunity (`config('attachments.attachable_types')`),
+ * sent as `attachable_type` by the documents surfaces — singular, NOT the
+ * plural domain key above. Shared with the request-management adapter, whose
+ * rows ARE the same Opportunity records (spec 0049 D-1), so the two modules
+ * can never drift onto different aliases.
+ */
+export const OPPORTUNITY_ATTACHABLE_ALIAS = 'opportunity'
+
+/**
  * Query key of a single opportunity's detail (fresh-on-open pattern). Shared
  * by the detail/edit pages and by the post-mutation invalidation, so they can
  * never drift apart. `null` (an unparsable route param) is a key that is

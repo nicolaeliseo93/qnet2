@@ -88,16 +88,16 @@ describe('StatusBadgeCell', () => {
     expect(getByText('—')).toBeInTheDocument()
   })
 
-  it('wraps the badge in a tooltip trigger when the status carries a description', () => {
-    const { getByText } = render(
+  it('renders the description hint next to the badge when the status carries a description', () => {
+    const { getByRole } = render(
       <StatusBadgeCell {...params({ name: 'Waiting', color: 'amber', description: 'Waiting for the client' })} />,
     )
-    expect(getByText('Waiting').closest('[data-slot="tooltip-trigger"]')).not.toBeNull()
+    expect(getByRole('button', { name: 'Show the status description' })).toBeInTheDocument()
   })
 
-  it('renders no tooltip trigger when the status has no description', () => {
-    const { getByText } = render(<StatusBadgeCell {...params({ name: 'Won', color: 'blue' })} />)
-    expect(getByText('Won').closest('[data-slot="tooltip-trigger"]')).toBeNull()
+  it('renders no description hint when the status has no description', () => {
+    const { queryByRole } = render(<StatusBadgeCell {...params({ name: 'Won', color: 'blue' })} />)
+    expect(queryByRole('button')).toBeNull()
   })
 })
 

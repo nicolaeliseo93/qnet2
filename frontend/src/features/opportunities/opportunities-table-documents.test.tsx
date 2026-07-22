@@ -10,7 +10,7 @@ import type { TableActionDefinition, TableRow } from '@/features/table/types'
 
 /**
  * The "documents" row action (attachments row action): clicking it opens the
- * `OpportunityDocumentsDialog` for that row's opportunity, and closing it
+ * shared `DocumentsDialog` for that row's opportunity, and closing it
  * refreshes the grid so the `documents_count` badge stays current. The
  * generic `<TableView>` is stubbed (its own behavior is covered elsewhere);
  * `DocumentsSection` is stubbed too since its own upload/delete flow is
@@ -42,6 +42,7 @@ const deleteOpportunityMock = vi.fn()
 vi.mock('@/features/opportunities/api', () => ({
   deleteOpportunity: (...args: unknown[]) => deleteOpportunityMock(...args),
   OPPORTUNITIES_DOMAIN: 'opportunities',
+  OPPORTUNITY_ATTACHABLE_ALIAS: 'opportunity',
 }))
 
 const documentsSectionMock = vi.fn()

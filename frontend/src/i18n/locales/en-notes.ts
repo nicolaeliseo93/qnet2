@@ -1,0 +1,37 @@
+/**
+ * Notes domain (spec 0052): agnostic collaborative-notes feature with
+ * mentions, mounted by any host module via `NotesSection`. Sibling file so
+ * `en.ts` stays within the engineering size limits (see
+ * `.claude/rules/engineering.md` §6).
+ */
+
+export const notes = {
+  section: {
+    title: 'Notes',
+    description: 'Discuss the record with colleagues: use @ to mention them.',
+    loadError: "Couldn't load the notes.",
+    empty: 'No notes yet. Write the first one to start the discussion.',
+  },
+  list: {
+    loadMore: 'Load more',
+  },
+  item: {
+    edited: '(edited)',
+    replyAction: 'Reply',
+    editAction: 'Edit note',
+    deleteAction: 'Delete note',
+    deleteConfirm: 'The note will disappear from the list. Any replies stay hidden along with it.',
+  },
+  composer: {
+    placeholder: 'Write a note, use @ to mention a colleague…',
+    bodyRequired: 'Write something before sending.',
+    bodyTooLong: 'The note can contain at most {{count}} characters.',
+    genericError: "Couldn't send. Try again.",
+    send: 'Send',
+    save: 'Save',
+  },
+  mentionPicker: {
+    label: 'Mentionable users',
+    empty: 'No matching users',
+  },
+}

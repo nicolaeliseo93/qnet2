@@ -88,6 +88,7 @@ export const opportunityWorkflows = {
       name: 'Status name',
       description: 'Status description',
       descriptionPlaceholder: 'Explain when this status applies…',
+      descriptionHint: 'Show the status description',
       requiresNote: 'Requires an explanatory note',
       requiresNoteBadge: 'Note required',
       dragHandleLabel: 'Drag to reorder',

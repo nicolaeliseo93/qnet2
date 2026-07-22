@@ -1,0 +1,161 @@
+<?php
+
+use App\Models\Note;
+use App\Models\Opportunity;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
+use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Permission;
+
+// D-10/D-12: the body-token/mentions array coherence AND the mentionable-set
+// boundary are both enforced server-side, in either direction (AC-051/052).
+
+uses(RefreshDatabase::class);
+
+if (! function_exists('noteActor')) {
+    /**
+     * @param  array<int, string>  $abilities
+     */
+    function noteActor(array $abilities = []): User
+    {
+        foreach (['request-management.view', 'request-management.viewAll', 'notes.create'] as $permission) {
+            Permission::findOrCreate($permission);
+        }
+
+        $user = User::factory()->create();
+
+        foreach ($abilities as $ability) {
+            $user->givePermissionTo($ability);
+        }
+
+        return $user;
+    }
+}
+
+if (! function_exists('noteManagedOpportunity')) {
+    function noteManagedOpportunity(User $manager): Opportunity
+    {
+        $opportunity = Opportunity::factory()->create();
+        $opportunity->managers()->sync([$manager->id => ['position' => Opportunity::OPERATOR_MANAGER_POSITION]]);
+
+        return $opportunity;
+    }
+}
+
+if (! function_exists('grantMentionAccess')) {
+    /**
+     * Grants $user D-10 mentionable access to $opportunity WITHOUT the GA2
+     * manager pivot: `opportunity_user` has a UNIQUE(opportunity_id,
+     * position) constraint (only one Account Manager per position per
+     * opportunity), so a second mentionable user on the SAME opportunity
+     * that noteManagedOpportunity() already assigned must qualify via the
+     * OTHER D-10 branch instead — `request-management.viewAll`.
+     */
+    function grantMentionAccess(Opportunity $opportunity, User $user): void
+    {
+        $user->givePermissionTo(['request-management.view', 'request-management.viewAll']);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AC-052 — token/mentions coherence
+// ---------------------------------------------------------------------------
+
+it('a body token without a matching mentions[] entry -> 422 (AC-052)', function () {
+    $actor = noteActor(['request-management.view', 'notes.create']);
+    $opportunity = noteManagedOpportunity($actor);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/notes', [
+        'entity_type' => 'request-management',
+        'entity_id' => $opportunity->id,
+        'body' => 'Hey @[Tizio](user:7)',
+        'mentions' => [],
+    ])->assertStatus(422)->assertJsonValidationErrors('mentions');
+});
+
+it('a mentions[] entry without a matching body token -> 422 (AC-052)', function () {
+    $actor = noteActor(['request-management.view', 'notes.create']);
+    $opportunity = noteManagedOpportunity($actor);
+    $mentioned = User::factory()->create();
+    grantMentionAccess($opportunity, $mentioned);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/notes', [
+        'entity_type' => 'request-management',
+        'entity_id' => $opportunity->id,
+        'body' => 'Hey there, no mention here',
+        'mentions' => [$mentioned->id],
+    ])->assertStatus(422)->assertJsonValidationErrors('mentions');
+});
+
+it('matching token and mentions[] -> 201, mentions ordered by first appearance, a repeated token counts once (AC-052)', function () {
+    $actor = noteActor(['request-management.view', 'notes.create']);
+    $opportunity = noteManagedOpportunity($actor);
+    $mentioned = User::factory()->create(['name' => 'Tizio Caio']);
+    grantMentionAccess($opportunity, $mentioned);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/notes', [
+        'entity_type' => 'request-management',
+        'entity_id' => $opportunity->id,
+        'body' => "Hey @[Tizio Caio](user:{$mentioned->id}) and again @[Tizio Caio](user:{$mentioned->id})",
+        'mentions' => [$mentioned->id],
+    ])->assertCreated();
+
+    expect($response->json('data.mentions'))->toBe([['id' => $mentioned->id, 'name' => 'Tizio Caio']]);
+
+    $noteId = $response->json('data.id');
+    expect(DB::table('note_mentions')->where('note_id', $noteId)->count())->toBe(1);
+});
+
+// ---------------------------------------------------------------------------
+// AC-051 — mentionable-set enforcement, server-side, regardless of the token
+// ---------------------------------------------------------------------------
+
+it('a mention outside the mentionable set -> 422, no note created, no notification (AC-051)', function () {
+    Notification::fake();
+
+    $actor = noteActor(['request-management.view', 'notes.create']);
+    $opportunity = noteManagedOpportunity($actor);
+    $outsider = User::factory()->create(); // no request-management.view, not a manager
+    Sanctum::actingAs($actor);
+
+    $countBefore = Note::count();
+
+    $this->postJson('/api/notes', [
+        'entity_type' => 'request-management',
+        'entity_id' => $opportunity->id,
+        'body' => "Hey @[Outsider](user:{$outsider->id})",
+        'mentions' => [$outsider->id],
+    ])->assertStatus(422)->assertJsonValidationErrors('mentions');
+
+    expect(Note::count())->toBe($countBefore);
+    Notification::assertNothingSent();
+});
+
+it('an inactive or nonexistent mentioned user -> 422 (AC-051)', function () {
+    $actor = noteActor(['request-management.view', 'notes.create']);
+    $opportunity = noteManagedOpportunity($actor);
+    $inactive = User::factory()->create(['is_active' => false]);
+    grantMentionAccess($opportunity, $inactive);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/notes', [
+        'entity_type' => 'request-management',
+        'entity_id' => $opportunity->id,
+        'body' => "Hey @[Inactive](user:{$inactive->id})",
+        'mentions' => [$inactive->id],
+    ])->assertStatus(422)->assertJsonValidationErrors('mentions');
+
+    $nonexistentId = $inactive->id + 999999;
+
+    $this->postJson('/api/notes', [
+        'entity_type' => 'request-management',
+        'entity_id' => $opportunity->id,
+        'body' => "Hey @[Ghost](user:{$nonexistentId})",
+        'mentions' => [$nonexistentId],
+    ])->assertStatus(422)->assertJsonValidationErrors('mentions');
+});

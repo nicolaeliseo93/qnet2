@@ -8,6 +8,8 @@ import { toast } from 'sonner'
 import { applyServerValidationErrors } from '@/features/auth/form-errors'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
 import { opportunityDetailQueryKey } from '@/features/opportunities/api'
+import { addressToDraft } from '@/features/personal-data/drafts'
+import type { ContactDraft } from '@/features/personal-data/types'
 import { updateRequestWork } from '@/features/request-management/api'
 import { requestManagementKeys } from '@/features/request-management/query-keys'
 import { buildRequestWorkPayload } from '@/features/request-management/request-work-payload'
@@ -15,7 +17,23 @@ import {
   buildRequestWorkSchema,
   type RequestWorkFormValues,
 } from '@/features/request-management/request-work-schema'
-import type { ApplicableAttribute, RequestWorkPanelWithPermissions } from '@/features/request-management/types'
+import type {
+  ApplicableAttribute,
+  RequestContact,
+  RequestWorkPanelWithPermissions,
+} from '@/features/request-management/types'
+
+/** Maps one panel contact projection to the buffered draft shape the managers read. */
+function toContactDraft(contact: RequestContact): ContactDraft {
+  return {
+    _key: `contact-${contact.id}`,
+    id: contact.id,
+    type: contact.type,
+    value: contact.value,
+    label: contact.label,
+    is_primary: contact.is_primary,
+  }
+}
 
 /** Seeds the dynamic `attribute_values` RHF slice: every applicable code, `null` when unset. */
 function seedAttributeValues(
@@ -32,6 +50,11 @@ function seedAttributeValues(
 function buildDefaultValues(panel: RequestWorkPanelWithPermissions): RequestWorkFormValues {
   return {
     opportunity_workflow_status_id: panel.workflow_status?.id ?? null,
+    next_callback_at: panel.next_callback_at ?? null,
+    client_contacts: panel.client_contacts.items.map(toContactDraft),
+    // 0-or-1 array: the shape `AddressCreateField` reads, empty when the
+    // client has no address yet.
+    client_address: panel.client_address ? [addressToDraft(panel.client_address)] : [],
     attribute_values: seedAttributeValues(panel.applicable_attributes, panel.attribute_values),
   }
 }
@@ -59,6 +82,12 @@ export function useRequestWorkForm(panel: RequestWorkPanelWithPermissions) {
 
   const errorFields: Path<RequestWorkFormValues>[] = [
     'opportunity_workflow_status_id' as Path<RequestWorkFormValues>,
+    'next_callback_at' as Path<RequestWorkFormValues>,
+    // The client block is submitted as a whole: a per-row 422
+    // (`client_contacts.0.value`) has no matching control here, so the block
+    // root carries the message.
+    'client_contacts' as Path<RequestWorkFormValues>,
+    'client_address' as Path<RequestWorkFormValues>,
     ...panel.applicable_attributes.map(
       (attribute) => `attribute_values.${attribute.code}` as Path<RequestWorkFormValues>,
     ),

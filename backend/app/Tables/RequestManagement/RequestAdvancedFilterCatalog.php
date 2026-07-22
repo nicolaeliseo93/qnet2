@@ -94,6 +94,17 @@ final class RequestAdvancedFilterCatalog
                 'multiple' => false,
                 'target' => 'expected_close_date',
             ],
+            [
+                'name' => 'next_callback_range',
+                'label' => 'requestManagement.advancedFilters.nextCallbackRange',
+                'type' => AdvancedFilterType::DateRange,
+                'order' => 6,
+                'required' => false,
+                'visible' => true,
+                'width' => 'md',
+                'multiple' => false,
+                'target' => 'next_callback_at',
+            ],
         ];
     }
 

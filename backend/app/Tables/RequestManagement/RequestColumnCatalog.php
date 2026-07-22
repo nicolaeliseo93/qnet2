@@ -8,7 +8,7 @@ namespace App\Tables\RequestManagement;
  * Declarative column/filter/action catalogue for the `request-management`
  * domain (spec 0049): an OPERATIVE view over the same `opportunities` rows
  * (D-1, no new entity). The visible columns are the operator's worklist:
- *  - `product_categories` ("Categoria servizi di riferimento") — AGGREGATED
+ *  - `product_categories` ("Categoria prodotto") — AGGREGATED
  *    to-many via `productLines.productCategory`, filterable (set) but never
  *    sortable (no single related row to order by).
  *  - `operator_ga2` ("Operatore") — the Account Manager at pivot position 2
@@ -18,6 +18,9 @@ namespace App\Tables\RequestManagement;
  *  - `first_name`/`last_name`/`tax_code`/`phone` — the CLIENT's anagraphic
  *    fields, read from the Registry's PersonalData card (phone = its primary
  *    phone/mobile contact); display-only.
+ *  - `next_callback_at` ("Prossimo richiamo", spec 0052 D-1/D-5) — a real
+ *    `opportunities` column, sortable + date-filterable via the generic
+ *    engine, mirroring `OpportunityColumnCatalog`'s `created_at`.
  * All derived/anagraphic values are resolved by
  * RequestManagementTableDefinition::mapRow() from eager-loaded relations. A
  * hidden `updated_at` column exists solely to back the default sort.
@@ -30,13 +33,25 @@ final class RequestColumnCatalog
     public static function columns(): array
     {
         return [
-            self::aggregatedColumn('product_categories', 'requestManagement.columns.serviceCategory'),
+            self::aggregatedColumn('product_categories', 'requestManagement.columns.productCategory'),
             self::textColumn('operator_ga2', 'requestManagement.columns.operator'),
             self::derivedColumn('workflow_status', 'requestManagement.columns.workflowStatus'),
             self::textColumn('first_name', 'requestManagement.columns.firstName'),
             self::textColumn('last_name', 'requestManagement.columns.lastName'),
             self::textColumn('tax_code', 'requestManagement.columns.taxCode'),
             self::textColumn('phone', 'requestManagement.columns.phone'),
+            [
+                // Real DB column (spec 0052 D-1/D-5): the operator's planned
+                // next contact, sortable/filterable via the generic engine
+                // like OpportunityColumnCatalog's `created_at`.
+                'id' => 'next_callback_at',
+                'label' => 'requestManagement.columns.nextCallbackAt',
+                'type' => 'datetime',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'date',
+            ],
             [
                 // Hidden: not shown, but a real sortable DB column so the
                 // default "recently worked first" ordering (defaultSort)
@@ -133,13 +148,24 @@ final class RequestColumnCatalog
     }
 
     /**
-     * Only `view` ("Lavora"): no edit/delete (the CRUD boundary stays on
-     * `opportunities.*`, never request-management), no documents (out of
-     * scope, spec 0049 scope/out). No `activity` row action either: the
-     * generic activity-log framework resolves its Policy by MODEL CLASS
-     * (Opportunity), so a `request-management`-gated activity surface would
-     * have been misleading (see config/activity-log.php) — the module has no
+     * `view` ("Lavora") and `documents` — no edit/delete (the CRUD boundary
+     * stays on `opportunities.*`, never request-management). `documents`
+     * reuses the polymorphic Attachment subsystem on the same Opportunity
+     * record as the opportunities module, but is gated by this module's OWN
+     * permission (`request-management.viewDocuments`, D-2) and carries the
+     * per-row `documents_count` badge. No `activity` row action: the generic
+     * activity-log framework resolves its Policy by MODEL CLASS (Opportunity),
+     * so a `request-management`-gated activity surface would have been
+     * misleading (see config/activity-log.php) — the module has no
      * separately-gated activity endpoint (lead decision).
+     * `notes` (spec 0052 B4b) opens the collaborative-notes dialog: gated by
+     * `request-management.view`, NOT a notes permission — reading a record's
+     * notes is inherited from the ability to open the record (D-6), while
+     * writing is separately authorized server-side by `notes.create` inside
+     * the dialog itself. `count_field` (spec 0052 B4c, reversing the earlier
+     * "out of scope" call) carries `notes_count` — every note on the record,
+     * roots AND replies, soft-deleted excluded — mirroring `documents`'
+     * `documents_count` badge.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -153,6 +179,24 @@ final class RequestColumnCatalog
                 'type' => 'link',
                 'confirm' => false,
                 'permission' => 'request-management.view',
+            ],
+            [
+                'key' => 'documents',
+                'label' => 'actions.documents',
+                'icon' => 'paperclip',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'request-management.viewDocuments',
+                'count_field' => 'documents_count',
+            ],
+            [
+                'key' => 'notes',
+                'label' => 'actions.notes',
+                'icon' => 'message-square',
+                'type' => 'action',
+                'confirm' => false,
+                'permission' => 'request-management.view',
+                'count_field' => 'notes_count',
             ],
         ];
     }

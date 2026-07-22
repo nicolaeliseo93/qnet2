@@ -46,6 +46,14 @@ interface AddressCreateFieldProps {
    * forwarded verbatim from `AddressesManager`.
    */
   showSiteType?: boolean
+  /**
+   * Whether a started address must also carry a city. Default `true` (the
+   * create flow's rule: an inline address is only useful once geo-located).
+   * Callers editing an ALREADY PERSISTED address pass `false`, mirroring the
+   * backend, which keeps the city optional on update so a legacy address
+   * whose city was never captured stays saveable.
+   */
+  cityRequired?: boolean
 }
 
 /**
@@ -60,6 +68,7 @@ export function AddressCreateField({
   value,
   onChange,
   showSiteType = false,
+  cityRequired = true,
 }: AddressCreateFieldProps) {
   const { t } = useTranslation()
   const fields = value[0] ?? BLANK_ADDRESS
@@ -81,7 +90,8 @@ export function AddressCreateField({
 
   const started = isStarted(fields)
   const line1Error = started && !fields.line1 ? t('personalData.addresses.line1Required') : null
-  const cityError = started && fields.city_id == null ? t('personalData.addresses.cityRequired') : null
+  const cityError =
+    cityRequired && started && fields.city_id == null ? t('personalData.addresses.cityRequired') : null
 
   return (
     <div className="flex flex-col gap-3">

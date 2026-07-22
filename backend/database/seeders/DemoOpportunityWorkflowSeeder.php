@@ -6,6 +6,7 @@ use App\DataObjects\OpportunityWorkflows\CreateOpportunityWorkflowData;
 use App\Enums\WorkflowStatusGroup;
 use App\Models\BusinessFunction;
 use App\Models\OpportunityWorkflow;
+use App\Models\OpportunityWorkflowStatus;
 use App\Models\Source;
 use App\Services\OpportunityWorkflowService;
 use Illuminate\Database\Seeder;
@@ -42,12 +43,53 @@ class DemoOpportunityWorkflowSeeder extends Seeder
      * closed_won/closed_lost system rows are seeded by the migration and left
      * untouched). `color` is one of the badge tokens (BADGE_COLOR_TOKENS).
      *
-     * @var array<int, array{name: string, color: string, group: string}>
+     * @var array<int, array{name: string, description: string, color: string, group: string, requires_note: bool}>
      */
     private const array DEFAULT_CUSTOM_STATUSES = [
-        ['name' => 'Da lavorare', 'color' => 'slate', 'group' => 'open'],
-        ['name' => 'In lavorazione', 'color' => 'blue', 'group' => 'pending'],
-        ['name' => 'In attesa cliente', 'color' => 'amber', 'group' => 'pending'],
+        [
+            'name' => 'Da lavorare',
+            'description' => 'Richiesta presa in carico ma non ancora avviata: nessuna attivita\' svolta.',
+            'color' => 'slate',
+            'group' => 'open',
+            'requires_note' => false,
+        ],
+        [
+            'name' => 'In lavorazione',
+            'description' => 'Lavorazione avviata dall\'operatore assegnato, in corso di svolgimento.',
+            'color' => 'blue',
+            'group' => 'pending',
+            'requires_note' => false,
+        ],
+        [
+            'name' => 'In attesa cliente',
+            'description' => 'Lavorazione sospesa in attesa di documenti o risposte dal cliente.',
+            'color' => 'amber',
+            'group' => 'pending',
+            'requires_note' => true,
+        ],
+    ];
+
+    /**
+     * Descriptive seed of the three PINNED system rows, keyed by `system_key`
+     * — so the demo shows the description marker on the system statuses too,
+     * not only on the custom ones. `name` mirrors WorkflowStatusWriter's own
+     * default label (the override replaces it wholesale).
+     *
+     * @var array<string, array{name: string, description: string}>
+     */
+    private const array SYSTEM_STATUSES = [
+        'open' => [
+            'name' => 'Aperta',
+            'description' => 'Stato iniziale: la richiesta e\' aperta e attende la presa in carico.',
+        ],
+        'closed_won' => [
+            'name' => 'Chiusa positiva',
+            'description' => 'Lavorazione conclusa con esito positivo: nessuna ulteriore azione.',
+        ],
+        'closed_lost' => [
+            'name' => 'Chiusa negativa',
+            'description' => 'Lavorazione conclusa senza esito: la richiesta non prosegue.',
+        ],
     ];
 
     public function __construct(private readonly OpportunityWorkflowService $workflows) {}
@@ -72,14 +114,44 @@ class DemoOpportunityWorkflowSeeder extends Seeder
         // Step 3: the demo workflows, most-specific last so a matching
         // opportunity resolves to the two-criteria workflow over the plain one.
         $this->seedSourceWorkflow($sources, 'Website', 'Vendite Web', [
-            ['name' => 'Primo contatto', 'color' => 'indigo', 'group' => 'open'],
-            ['name' => 'Qualificazione', 'color' => 'blue', 'group' => 'pending'],
-            ['name' => 'Demo prodotto', 'color' => 'violet', 'group' => 'pending'],
+            [
+                'name' => 'Primo contatto',
+                'description' => 'Primo contatto effettuato con il richiedente, esigenza non ancora qualificata.',
+                'color' => 'indigo',
+                'group' => 'open',
+                'requires_note' => false,
+            ],
+            [
+                'name' => 'Qualificazione',
+                'description' => 'Verifica di budget, tempistiche e reale interesse prima di procedere.',
+                'color' => 'blue',
+                'group' => 'pending',
+                'requires_note' => true,
+            ],
+            [
+                'name' => 'Demo prodotto',
+                'description' => 'Demo concordata o gia\' erogata: si attende il riscontro del cliente.',
+                'color' => 'violet',
+                'group' => 'pending',
+                'requires_note' => false,
+            ],
         ]);
 
         $this->seedSourceWorkflow($sources, 'Referral', 'Segnalazioni', [
-            ['name' => 'Verifica segnalazione', 'color' => 'teal', 'group' => 'open'],
-            ['name' => 'Trattativa', 'color' => 'amber', 'group' => 'pending'],
+            [
+                'name' => 'Verifica segnalazione',
+                'description' => 'Controllo della segnalazione ricevuta e del referente che l\'ha inoltrata.',
+                'color' => 'teal',
+                'group' => 'open',
+                'requires_note' => false,
+            ],
+            [
+                'name' => 'Trattativa',
+                'description' => 'Negoziazione economica in corso sulla base dell\'offerta inviata.',
+                'color' => 'amber',
+                'group' => 'pending',
+                'requires_note' => true,
+            ],
         ]);
 
         $this->seedWebCommercialWorkflow($sources);
@@ -87,27 +159,56 @@ class DemoOpportunityWorkflowSeeder extends Seeder
 
     /**
      * The GLOBAL default set (opportunity_workflow_id null): its system rows
-     * already exist (migration), so only the custom intermediate rows are
-     * synced — full-replace, idempotent on re-run.
+     * already exist (migration) and are re-submitted unchanged but for their
+     * description; the custom intermediate rows are full-replaced. Idempotent
+     * on re-run.
      */
     private function syncDefaultSet(): void
     {
-        $this->workflows->syncDefaultStatuses(array_map(
+        $customRows = array_map(
             static fn (array $status): array => [
                 'id' => null,
                 'name' => $status['name'],
+                'description' => $status['description'],
                 'color' => $status['color'],
                 'group' => $status['group'],
+                'requires_note' => $status['requires_note'],
             ],
             self::DEFAULT_CUSTOM_STATUSES,
-        ));
+        );
+
+        $this->workflows->syncDefaultStatuses([...$this->describedDefaultSystemRows(), ...$customRows]);
+    }
+
+    /**
+     * The GLOBAL set's pinned rows re-submitted as they are persisted — only
+     * `description` is added: the writer accepts every descriptive change on a
+     * system row but rejects a `group` one, and the migration-seeded names
+     * must not be overwritten here.
+     *
+     * @return array<int, array{id: int, name: string, description: string, color: ?string, group: string, requires_note: bool}>
+     */
+    private function describedDefaultSystemRows(): array
+    {
+        return $this->workflows->defaultStatuses()
+            ->filter(static fn (OpportunityWorkflowStatus $status): bool => $status->isSystem())
+            ->map(static fn (OpportunityWorkflowStatus $status): array => [
+                'id' => $status->id,
+                'name' => $status->name,
+                'description' => self::SYSTEM_STATUSES[$status->system_key]['description'],
+                'color' => $status->color,
+                'group' => $status->group->value,
+                'requires_note' => $status->requires_note,
+            ])
+            ->values()
+            ->all();
     }
 
     /**
      * A single-criterion workflow matched on the source named $sourceName.
      *
      * @param  Collection<string, int>  $sources
-     * @param  array<int, array{name: string, color: string, group: string}>  $customStatuses
+     * @param  array<int, array{name: string, description: string, color: string, group: string, requires_note: bool}>  $customStatuses
      */
     private function seedSourceWorkflow($sources, string $sourceName, string $name, array $customStatuses): void
     {
@@ -122,6 +223,9 @@ class DemoOpportunityWorkflowSeeder extends Seeder
             isActive: true,
             criteria: [['field' => 'source_id', 'value_id' => $sourceId]],
             statuses: $this->normalizeCustomStatuses($customStatuses),
+            openStatus: self::systemStatusSeed('open'),
+            closedWonStatus: self::systemStatusSeed('closed_won'),
+            closedLostStatus: self::systemStatusSeed('closed_lost'),
         ));
     }
 
@@ -150,29 +254,62 @@ class DemoOpportunityWorkflowSeeder extends Seeder
                 ['field' => 'business_function_id', 'value_id' => $businessFunctionId],
             ],
             statuses: $this->normalizeCustomStatuses([
-                ['name' => 'Analisi esigenze', 'color' => 'blue', 'group' => 'open'],
-                ['name' => 'Offerta dedicata', 'color' => 'emerald', 'group' => 'pending'],
+                [
+                    'name' => 'Analisi esigenze',
+                    'description' => 'Raccolta dei requisiti tecnici e commerciali insieme alla funzione aziendale.',
+                    'color' => 'blue',
+                    'group' => 'open',
+                    'requires_note' => false,
+                ],
+                [
+                    'name' => 'Offerta dedicata',
+                    'description' => 'Offerta personalizzata inviata: si attende accettazione o revisione.',
+                    'color' => 'emerald',
+                    'group' => 'pending',
+                    'requires_note' => true,
+                ],
             ]),
+            openStatus: self::systemStatusSeed('open'),
+            closedWonStatus: self::systemStatusSeed('closed_won'),
+            closedLostStatus: self::systemStatusSeed('closed_lost'),
         ));
     }
 
     /**
      * Shape a demo status list to the CreateOpportunityWorkflowData custom-row
-     * contract ({name, color, group}) — the pinned open/closed_won/closed_lost
-     * rows are added by WorkflowStatusWriter, not listed here.
+     * contract ({name, description, color, group, requires_note}) — the pinned
+     * open/closed_won/closed_lost rows are added by WorkflowStatusWriter, seeded
+     * with systemStatusSeed(), not listed here.
      *
-     * @param  array<int, array{name: string, color: string, group: string}>  $customStatuses
-     * @return array<int, array{name: string, color: ?string, group: string}>
+     * @param  array<int, array{name: string, description: string, color: string, group: string, requires_note: bool}>  $customStatuses
+     * @return array<int, array{name: string, description: ?string, color: ?string, group: string, requires_note: bool}>
      */
     private function normalizeCustomStatuses(array $customStatuses): array
     {
         return array_map(
             static fn (array $status): array => [
                 'name' => $status['name'],
+                'description' => $status['description'],
                 'color' => $status['color'],
                 'group' => WorkflowStatusGroup::from($status['group'])->value,
+                'requires_note' => $status['requires_note'],
             ],
             $customStatuses,
         );
+    }
+
+    /**
+     * The descriptive seed WorkflowStatusWriter applies to a pinned row.
+     *
+     * @return array{name: string, description: string, color: ?string, requires_note: bool}
+     */
+    private static function systemStatusSeed(string $systemKey): array
+    {
+        return [
+            'name' => self::SYSTEM_STATUSES[$systemKey]['name'],
+            'description' => self::SYSTEM_STATUSES[$systemKey]['description'],
+            'color' => null,
+            'requires_note' => false,
+        ];
     }
 }

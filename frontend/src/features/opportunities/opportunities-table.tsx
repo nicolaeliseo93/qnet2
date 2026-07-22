@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { Can } from '@/features/auth/can'
 import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
+import { DocumentsDialog } from '@/features/attachments/documents-dialog'
 import { ModuleStatsPanel } from '@/features/stats/module-stats-panel'
 import { StatsToggleButton } from '@/features/stats/stats-toggle-button'
 import { useStatsPanel } from '@/features/stats/use-stats-panel'
@@ -17,8 +18,11 @@ import type { ActionIconMap } from '@/features/table/action-icon-map'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
 import { opportunityColumnRenderers } from '@/features/opportunities/column-renderers'
-import { OpportunityDocumentsDialog } from '@/features/opportunities/opportunity-documents-dialog'
-import { deleteOpportunity, OPPORTUNITIES_DOMAIN } from '@/features/opportunities/api'
+import {
+  deleteOpportunity,
+  OPPORTUNITIES_DOMAIN,
+  OPPORTUNITY_ATTACHABLE_ALIAS,
+} from '@/features/opportunities/api'
 
 /**
  * Domain icon override for the 'documents' row action (spec: attachments row
@@ -165,8 +169,9 @@ export function OpportunitiesTable() {
         }}
       />
 
-      <OpportunityDocumentsDialog
-        opportunityId={documentsRowId}
+      <DocumentsDialog
+        resource={OPPORTUNITY_ATTACHABLE_ALIAS}
+        id={documentsRowId}
         onOpenChange={handleDocumentsOpenChange}
       />
     </div>

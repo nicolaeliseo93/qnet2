@@ -1,0 +1,825 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0052 — Gestione Richieste: "Data prossimo richiamo" + Note collaborative agnostiche.
+  Due funzionalita' consegnate insieme sullo stesso modulo, ma con natura diversa:
+    PARTE A (richiamo)  = additiva e locale al modulo Gestione Richieste (spec 0049).
+    PARTE B (note)      = COMPONENTE TRASVERSALE nuovo, agnostico rispetto ai moduli,
+                          integrato in questa fase SOLO in Gestione Richieste.
+  Grounding VERIFICATO sul codice reale (esplorazione 2026-07-22), non ipotizzato.
+
+  Decisioni utente (AskUserQuestion 2026-07-22):
+    - PERMESSI NOTE: ibrido -> LETTURA ereditata dall'entita' ospite, SCRITTURA con permesso
+      dedicato `notes.create`. Vedi D-6.
+    - MUTABILITA': modifica e cancellazione consentite al SOLO autore, con tracciamento
+      (soft delete + edited_at + activity). Storico mai distrutto. Vedi D-8.
+    - THREAD: un solo livello (nota radice + risposte piatte). Vedi D-7.
+    - CAMPO RICHIAMO: datetime + colonna marcatore di promemoria gia' predisposta. Vedi D-1.
+    - MENZIONABILI (rettifica esplicita dell'utente 2026-07-22): NON tutti gli utenti, ma
+      SOLO chi ha i permessi per accedere a quel record. Vedi D-10.
+    - NOTIFICA: canale database (campanella esistente) + mail, in coda. Vedi D-11.
+-->
+<spec id="0052-callback-date-and-collaborative-notes" status="draft" owner="nicola" date="2026-07-22">
+
+  <goal>
+    Dare all'operatore di Gestione Richieste due strumenti di lavorazione: (A) pianificare il
+    prossimo contatto con il cliente tramite una data-e-ora di richiamo, modificabile in qualsiasi
+    momento, ordinabile e filtrabile nella vista operativa e gia' predisposta per i promemoria
+    automatici futuri; (B) discutere il record con i colleghi tramite un flusso di note cronologiche
+    con menzioni @utente, notifica ai menzionati e risposte in thread. Il sistema di note nasce come
+    componente AGNOSTICO agganciabile a qualsiasi entita' del gestionale, e in questa fase viene
+    esposto esclusivamente in Gestione Richieste.
+  </goal>
+
+  <context>
+    Tutti i nomi sotto sono VERIFICATI sul codice reale (esplorazione 2026-07-22).
+
+    NATURA DEL RECORD (eredita da spec 0049, D-1):
+    - Il "record di Gestione Richieste" E' un'Opportunita': `App\Models\Opportunity`, tabella
+      `opportunities`, extends `App\Models\Abstracts\BaseModel`, tratti `HasAttachments`,
+      `LogsModelActivity`, `HasFactory`. Nessuna entita' nuova per la PARTE A.
+    - `$fillable` e' dichiarato via attributo PHP `#[Fillable([...])]` (Opportunity.php:32-47).
+      `LogsModelActivity` usa `logFillable()` (Concerns/LogsModelActivity.php:22-30): una colonna
+      FUORI da `#[Fillable]` NON viene loggata automaticamente.
+    - Precedente diretto: `opportunities.attribute_values` (0049 D-4) e' fuori `#[Fillable]`, scritta
+      SOLO da `RequestManagementService::updateWork()`, e tracciata da una entry activity ESPLICITA
+      scritta nello stesso metodo (0049 D-7). La PARTE A replica esattamente questo schema.
+
+    ENDPOINT OPERATIVI ESISTENTI (routes/api/request-management.php:19-20):
+    - `GET /api/request-management/{opportunity}`  -> RequestManagementController::show
+    - `PUT|PATCH /api/request-management/{opportunity}` -> RequestManagementController::update
+    Guardie gia' in essere: `abort_unless($user->can('request-management.view'|'update'), 403)` +
+    `RequestManagementScope::assertInScope()` (scoping Gestore Account, pivot `opportunity_user`
+    con `position = Opportunity::OPERATOR_MANAGER_POSITION`, bypass con `request-management.viewAll`).
+    FormRequest esistente: `App\Http\Requests\RequestManagement\UpdateRequestRequest` (usa
+    `ValidatesWorkflowStatus`). Resource: `App\Http\Resources\RequestManagementResource`.
+
+    FRAMEWORK TABELLARE:
+    - `App\Tables\RequestManagementTableDefinition` (registrata in config/tables.php:77), colonne
+      da `App\Tables\RequestManagement\RequestColumnCatalog`, filtri avanzati da
+      `App\Tables\RequestManagement\RequestAdvancedFilterCatalog`.
+    - Allow-list ordinamento/filtri: `AbstractTableDefinition::sortableColumnIds()` (:312) e
+      `filterableColumnIds()` (:330) derivano dai flag `sortable`/`filterable` delle colonne.
+      Nessun input grezzo raggiunge ORDER BY/WHERE.
+    - `App\Services\Table\FilterApplier::applyDate()` (:288) gestisce gia' `inRange`, `greaterThan`,
+      `lessThan`, `notEqual`, default `whereDate =` per `filterType: 'date'`.
+    - Pattern colonna data/ora gia' presente: `RequestColumnCatalog` colonna `updated_at`
+      (`'type' => 'datetime'`, sortable, hidden) e `OpportunityColumnCatalog.php:95-102`
+      (`created_at`, `type: datetime` + `filterType: date`).
+    - Pattern intervallo gia' presente nel modulo: `RequestAdvancedFilterCatalog.php:86-96`
+      (`expected_close_range`, `AdvancedFilterType::DateRange`, `'target' => 'expected_close_date'`).
+    - FE: `features/table/cell-renderers.tsx:253` espone gia' `DateTimeCell`; la renderer map del
+      dominio e' `features/request-management/column-renderers.tsx:38-46`. Il filtro colonna
+      `agDateColumnFilter` e' gia' cablato per `filterType: 'date'|'datetime'`
+      (`components/data-table/column-filters.ts:54-67`).
+
+    POLIMORFISMO (vincolante per la PARTE B):
+    - Morph map GLOBALE enforced: `AppServiceProvider::boot()` -> `Relation::enforceMorphMap([...])`
+      (AppServiceProvider.php:95-128), 32 alias. Enforcement STRETTO: ogni model che compare in una
+      colonna morph DEVE essere in lista. `'opportunity' => Opportunity::class` c'e' gia'.
+    - Pattern allow-list config-driven del boundary polimorfico: `config/attachments.php:85-89`
+      (`attachable_types`), consumato da `IndexAttachmentRequest.php:30-31` /
+      `StoreAttachmentRequest.php:35-36` con `Rule::in($this->allowedAliases())` + verifica di
+      esistenza reale dell'owner in `withValidator()`. La PARTE B replica questo pattern.
+    - Precedenti morph: `attachments.attachable`, `personal_data.personable`, `contacts.contactable`,
+      `addresses.addressable`, activity log `subject`/`causer`, `notifications.notifiable`.
+
+    NOTIFICHE (esistono gia', si riusano — NIENTE infrastruttura nuova):
+    - Tabella `notifications` canonica Laravel (migrazione 2026_06_15_100000).
+    - `App\Notifications\GenericNotification` -> `via(): ['database']`, payload costruito da
+      `App\DataObjects\Notifications\NotificationData` (title, message, level, action_url):
+      QUESTA e' la shape che la campanella FE si aspetta.
+    - `App\Enums\NotificationLevelEnum` (info|success|warning|error).
+    - `App\Services\NotificationService` (list/unreadCount/markAsRead/markAllAsRead) + rotte
+      `GET notifications`, `GET notifications/unread-count`, `PATCH notifications/{n}/read`,
+      `POST notifications/read-all` (routes/api.php:441-444).
+    - Precedente di notifica MAIL: `App\Notifications\ResetPasswordNotification` (`via(): ['mail']`,
+      link SPA costruito da `config('app.frontend_url')`).
+    - Queue: `QUEUE_CONNECTION=database` (config/queue.php:16). Job `ShouldQueue` gia' in uso.
+    - AMBIENTE: `MAIL_MAILER=log` nell'`.env.example` -> in locale la mail NON parte davvero; la
+      verifica automatica usa `Notification::fake()` / `Mail::fake()`, non l'invio reale.
+
+    PERMESSI:
+    - `App\Console\Commands\SyncPermissions` fa glob su `app/Policies/*.php` e per ogni Policy
+      chiama `permissions()`; `App\Policies\Abstracts\BasePolicy::abilities()` (:86) ritorna
+      viewAny/view/create/update/delete/export/import/viewActivity. Precedente di override:
+      `RequestManagementPolicy::abilities()` = `[...parent::abilities(), 'viewAll']`.
+    - `Gate::before` (AppServiceProvider) concede tutto al ruolo `super-admin`.
+    - `App\Policies\RequestManagementPolicy` (resource 'request-management') genera gia'
+      `request-management.{viewAny,view,create,update,delete,export,import,viewActivity,viewAll}`.
+
+    LOOKUP UTENTI:
+    - Standard for-select (ADR 0011): `GET /api/users/for-select` ->
+      `UserForSelectController` + `UserForSelectRequest` (search/offset/limit/ids) ->
+      risposta PAGINATA NON-envelope `{data, total, offset, limit}` con
+      `UserForSelectResource`. FE: `features/for-select/api.ts:18` `fetchForSelect(resource, ...)`,
+      `features/for-select/use-for-select.ts:32` `useForSelect` (useInfiniteQuery),
+      `ForSelectItem {id, label, subtitle?, avatar_url?}`, `FOR_SELECT_PAGE_SIZE = 25`.
+      QUESTO endpoint e' GLOBALE (tutti gli utenti) e per D-10 NON e' utilizzabile per le menzioni:
+      serve un lookup CONTESTUALE all'entita', ma che rispetti LA STESSA shape di risposta cosi'
+      il FE riusa `useForSelect` senza codice nuovo.
+
+    FRONTEND — cosa esiste e cosa NO:
+    - Feature esistente: `frontend/src/features/request-management/` (types.ts, api.ts, query-keys.ts,
+      request-work-schema.ts, use-request-work-form.ts, request-work-payload.ts,
+      request-work-panel.tsx, request-work-context.tsx, request-workflow-status-field.tsx,
+      request-contacts-section.tsx, request-dynamic-fields.tsx, column-renderers.tsx,
+      request-management-table.tsx, request-management-screens.tsx).
+    - `RequestWorkPanelBody` (request-work-panel.tsx:92-133) e' una pila di `FormSection`
+      (components/form-section.tsx:12-29): contesto -> stato lavorazione -> contatti -> campi
+      dinamici -> errore -> footer sticky submit. Aggiungere una sezione = nuovo componente
+      `<FormSection>` inserito nella pila; se editabile, va aggiunta anche la chiave allo Zod
+      (`buildRequestWorkSchema`), ai default, al diff (`buildRequestWorkPayload`) e a `errorFields`
+      (use-request-work-form.ts:60-65).
+    - Campi data: NON esiste un date-picker riusabile. Ovunque si usa `<Input type="date">` di
+      `components/ui/input.tsx` (pattern canonico: `features/opportunities/opportunity-planning-section.tsx:54-91`).
+      Per datetime esiste gia' il controllo generico `createNativeInputFieldControl('datetime-local')`
+      (`features/custom-fields/components/native-input-field-control.tsx`, registrato in
+      `field-component-registry.tsx:34`). Nessuna dipendenza date (`date-fns`/`dayjs`) in package.json.
+    - NON ESISTE alcun componente di commenti, note, thread, timeline scrivibile o @mention.
+      NON esistono `popover` ne' `cmdk`/`command` in `components/ui/` e non sono fra le dipendenze
+      (`radix-ui`, `lucide-react`, `sonner`, `recharts`, `@dnd-kit/*`). L'autocomplete inline va
+      costruito a mano sul pattern gia' presente in `components/ui/searchable-select.tsx` (331 righe)
+      e `components/ui/async-paginated-select.tsx` (445): entrambi implementano lista filtrata +
+      navigazione da tastiera + selezione, senza librerie esterne.
+    - Esistono e si riusano: `components/ui/textarea.tsx`, `components/ui/button`, `components/ui/avatar`
+      (Avatar/AvatarFallback/AvatarGroup), `components/user-avatar.tsx:22` (`UserAvatar {name, src, size}`,
+      unica fonte per gli avatar), `components/ui/skeleton`, `components/confirm-dialog.tsx`
+      (`useConfirm`, richiede `ConfirmDialogProvider` a monte), `components/form-section.tsx`.
+    - Riferimento di feed paginato read-only gia' funzionante (pattern da imitare, NON da modificare):
+      `features/activity-log/activity-log-section.tsx` (`ActivityLogSection({resource, id})`,
+      infinite scroll + "load more", cursore keyset in `features/activity-log/api.ts:13`).
+    - i18n per-modulo: `i18n/locales/it-<slug>.ts` / `en-<slug>.ts` che esportano `const <camelCase>`,
+      importati e spread in `i18n/locales/it.ts` / `en.ts`; `en.ts` esporta il contratto
+      `TranslationResources`. Convenzione del modulo: ogni `t()` passa `{ defaultValue: '...' }`.
+
+    ENVELOPE: `BaseApiController::ok()` -> `{success, message, data}`; `okWithPermissions()` aggiunge
+    `permissions: {resource, fields, actions}`. Eccezione documentata: gli endpoint for-select
+    rispondono PAGINATI NON-envelope (ADR 0011).
+  </context>
+
+  <decisions>
+
+    <!-- ============ PARTE A — DATA PROSSIMO RICHIAMO ============ -->
+
+    <decision id="D-1">Il campo e' `opportunities.next_callback_at` DATETIME NULLABLE, con indice.
+      Data E ORA (non solo data): un promemoria senza orario non e' azionabile ("richiamare martedi'
+      alle 15"). Insieme nasce `opportunities.next_callback_reminded_at` DATETIME NULLABLE, NON
+      esposta da nessuna API e NON scritta da nessun codice in questa fase: e' la predisposizione
+      che rendera' idempotente il futuro job di promemoria senza una seconda migrazione.</decision>
+
+    <decision id="D-2">Entrambe le colonne restano FUORI da `#[Fillable]` di Opportunity (stesso
+      trattamento di `attribute_values`, 0049 D-4): non sono mass-assignable e il CRUD Opportunita'
+      non le tocca. Sono scritte SOLO da `RequestManagementService::updateWork()`. Cast: entrambe
+      `'datetime'`.</decision>
+
+    <decision id="D-3">Tracciamento: essendo fuori `#[Fillable]`, `logFillable()` non le cattura.
+      `next_callback_at` viene inclusa nella entry activity ESPLICITA che `updateWork()` gia' scrive
+      (0049 D-7), dentro `properties.attributes`/`properties.old`. Nessuna entry se il valore non
+      cambia. `next_callback_reminded_at` NON e' auditata (non e' un dato di dominio, e' un marcatore
+      tecnico).</decision>
+
+    <decision id="D-4">INVARIANTE DI COERENZA: ogni volta che `next_callback_at` cambia valore,
+      `next_callback_reminded_at` viene azzerata a NULL nello stesso salvataggio. Senza questa regola
+      il futuro job salterebbe il promemoria di una data riprogrammata. E' l'unica logica implementata
+      ora sulla colonna marcatore: nessun job, nessuno scheduler, nessuna notifica di promemoria.</decision>
+
+    <decision id="D-5">Superfici (scelta utente): SCRITTURA solo dal pannello di lavorazione, tramite
+      il `PATCH /api/request-management/{opportunity}` gia' esistente (nessun endpoint nuovo, authz e
+      scope-guard gia' in essere). LETTURA come colonna della tabella del modulo: visibile, ordinabile,
+      filtrabile (filtro colonna data) + filtro avanzato per intervallo. Nessuna modifica rapida da
+      riga, nessuna modifica dalla scheda Opportunita' (vedi scope/out).</decision>
+
+    <!-- ============ PARTE B — NOTE COLLABORATIVE AGNOSTICHE ============ -->
+
+    <decision id="D-6">AUTHZ IBRIDA (scelta utente). LETTURA ereditata dall'entita' ospite: puoi
+      leggere le note di un record se e solo se potresti aprire quel record. SCRITTURA con permesso
+      DEDICATO `notes.create` IN AND con la lettura dell'entita' (non basta il permesso: serve anche
+      l'accesso al record). Concretamente per `request-management`: lettura = `request-management.view`
+      + `RequestManagementScope::assertInScope()`; scrittura = quanto sopra + `notes.create`.
+      Il gate di lettura NON e' cablato nel codice delle note: e' dichiarato dal registro per-entita'
+      (D-9), cosi' agganciare un modulo futuro non richiede di toccare il componente.
+      `NotePolicy extends BasePolicy` con `resource(): 'notes'` e `abilities()` ridotto a `['create']`,
+      per generare SOLO `notes.create` e non 8 permessi inutilizzati. `update()`/`delete()` sono
+      override che NON consultano alcun permesso: verificano la proprieta' (D-8).</decision>
+
+    <decision id="D-7">THREAD A UN SOLO LIVELLO (scelta utente). `notes.parent_id` nullable
+      auto-referenziale. Una nota con `parent_id = null` e' una RADICE; una con `parent_id` valorizzato
+      e' una RISPOSTA. INVARIANTE: `parent_id` deve puntare a una radice; rispondere a una risposta
+      aggancia comunque la radice di quella risposta (normalizzazione lato server, non 422). Vietato
+      l'annidamento oltre il primo livello: nessun albero ricorsivo ne' in API ne' in UI.
+      INVARIANTE: la radice e la risposta devono insistere sulla STESSA entita' ospite (`notable_type`
+      + `notable_id` ereditati dalla radice, mai presi dal client).</decision>
+
+    <decision id="D-8">MUTABILITA' TRACCIATA (scelta utente). Modifica e cancellazione consentite al
+      SOLO autore (`notes.user_id === auth id`); il super-admin passa comunque per `Gate::before`,
+      comportamento di piattaforma esistente e non un'eccezione introdotta qui. La modifica valorizza
+      `edited_at`; la cancellazione e' SOFT (`deleted_at`): la riga e le sue risposte restano nel
+      database, spariscono dalla lista. Cancellare una RADICE nasconde anche le sue risposte dalla
+      lista, senza cancellarle. Le note usano `LogsModelActivity` per lo storico delle modifiche.
+      Nessuna cancellazione fisica: "storico completo" e' garantito dalla persistenza, non
+      dall'immutabilita'.</decision>
+
+    <decision id="D-9">AGNOSTICISMO — DOPPIO VOCABOLARIO, deliberato. In DATABASE il legame e' una
+      morph standard `notable_type` / `notable_id`, dove `notable_type` contiene l'ALIAS della morph
+      map globale (es. `opportunity`). SUL FILO l'API parla invece di `entity_type` / `entity_id`,
+      dove `entity_type` e' lo SLUG DI DOMINIO del modulo (es. `request-management`). La traduzione
+      slug -> {model, gate di lettura, etichetta, risolutore menzionabili} vive in un unico posto:
+      `config/notes.php` (`notable_types`) letto da `App\Notes\NoteEntityRegistry`.
+      PERCHE' due vocabolari: lo slug e' l'unita' di autorizzazione (un modulo = un set di permessi),
+      l'alias e' l'unita' di identita' (un record = una riga). Tenerli distinti significa che se un
+      domani anche il modulo `opportunities` registrasse le note, i due moduli vedrebbero LO STESSO
+      thread sullo stesso record con permessi propri — che e' il comportamento voluto.
+      Il boundary di sicurezza e' l'allow-list: uno `entity_type` non registrato produce 422, mai una
+      query su una classe arbitraria (stesso pattern di `config/attachments.php`).
+      In questa fase `notable_types` contiene UNA SOLA voce: `request-management`.</decision>
+
+    <decision id="D-10">MENZIONABILI = SOLO CHI HA ACCESSO AL RECORD (rettifica esplicita dell'utente
+      2026-07-22, che sostituisce la risposta precedente "tutti gli utenti"). L'insieme menzionabile di
+      un record e' calcolato dal risolutore dichiarato nel registro (D-9). Per `request-management`:
+      utenti `is_active = true` che (a) hanno `request-management.view` e (b) sono Gestore Account di
+      quella opportunita' OPPURE hanno `request-management.viewAll`; piu' i `super-admin`, che passano
+      comunque il gate.
+      L'insieme e' imposto SUL SERVER in scrittura: un `mentions[]` che contenga un id fuori insieme
+      -> 422, indipendentemente da cosa mostra la UI (l'UI nasconde, il backend autorizza).
+      Conseguenza voluta: nessuna notifica puo' puntare un utente verso un record che non gli compete,
+      e il contenuto della nota non raggiunge mai chi non potrebbe leggerlo aprendo il record.</decision>
+
+    <decision id="D-11">NOTIFICA: nuova `App\Notifications\NoteMentionNotification implements ShouldQueue`,
+      `via(): ['database', 'mail']`. Classe DEDICATA e non `GenericNotification` perche' trasporta dati
+      propri (note_id, entita', autore) e perche' l'aggiunta del canale mail non deve toccare i
+      call-site. Il payload `toArray()` e' costruito comunque tramite `NotificationData` (title,
+      message, level, action_url): cosi' la campanella, `NotificationResource` e il contatore non-letti
+      esistenti funzionano SENZA modifiche.
+      La coda evita che una nota con molte menzioni rallenti il salvataggio.
+      L'autore non notifica se stesso. Una menzione ripetuta dello stesso utente nella stessa nota
+      genera UNA sola notifica.
+      Poiche' per D-10 il destinatario e' per costruzione autorizzato a leggere il record, la notifica
+      PUO' trasportare un estratto del testo (troncato a 140 caratteri) senza rischio di divulgazione.
+      `action_url` = deep link SPA costruito da `config('app.frontend_url')` + il path dichiarato nel
+      registro (per `request-management`: `/request-management/{id}`).</decision>
+
+    <decision id="D-12">FORMATO DELLE MENZIONI NEL TESTO. Il corpo della nota memorizza la menzione
+      come token `@[Nome Cognome](user:12)`; l'API restituisce sia `body` grezzo sia
+      `mentions: [{id, name}]`, e il FE sostituisce il token con un chip in visualizzazione.
+      INVARIANTE verificata dal server: l'insieme degli id nei token del `body` deve coincidere
+      ESATTAMENTE con l'array `mentions` inviato -> altrimenti 422. Il client non puo' quindi
+      notificare qualcuno senza menzionarlo nel testo, ne' menzionarlo senza notificarlo.
+      TRADE-OFF ACCETTATO: con una `Textarea` semplice (nessun editor rich, nessuna nuova dipendenza)
+      il token resta visibile in fase di scrittura/modifica. L'alternativa — nome visibile + offset
+      salvati a parte — e' fragile con omonimi e non la adottiamo.</decision>
+
+    <decision id="D-13">ORDINAMENTO E PAGINAZIONE. Le RADICI sono restituite dalla piu' recente alla
+      piu' vecchia (`created_at DESC`, tie-break `id DESC`), con paginazione keyset (cursore), perche'
+      la storia di un record cresce senza limite e l'operatore vuole vedere subito l'ultima novita'.
+      Le RISPOSTE di ogni radice sono restituite INTEGRALMENTE e in ordine crescente (`created_at ASC`)
+      dentro la radice: un thread e' piccolo per costruzione (un solo livello) e spezzettarlo
+      costringerebbe a una seconda chiamata per ogni nota.</decision>
+
+    <decision id="D-14">INTEGRAZIONE IN QUESTA FASE: la feature FE `frontend/src/features/notes/`
+      espone un unico componente pubblico `<NotesSection entityType entityId />`, che non importa NULLA
+      da `features/request-management/`. L'unico punto di contatto e' l'istanza montata dentro il
+      pannello di lavorazione. Agganciare un modulo futuro = una voce in `config/notes.php` + un
+      `<NotesSection>` nella sua schermata. Nessun altro file da toccare.</decision>
+
+  </decisions>
+
+  <scope>
+    <in>
+      <!-- ===== PARTE A — BACKEND ===== -->
+      <item>Migration additiva su `opportunities`: `next_callback_at` DATETIME NULL + indice,
+        `next_callback_reminded_at` DATETIME NULL. `down()` rimuove entrambe e l'indice.</item>
+      <item>`Opportunity`: cast `next_callback_at => 'datetime'`, `next_callback_reminded_at => 'datetime'`.
+        NESSUNA delle due in `#[Fillable]`.</item>
+      <item>`UpdateRequestRequest`: regola `next_callback_at` (`sometimes|nullable|date`).
+        `RequestManagementService::updateWork()`: scrittura del campo, azzeramento di
+        `next_callback_reminded_at` al cambio (D-4), inclusione nella entry activity esplicita (D-3).
+        `RequestManagementController::update()`: aggiunta della chiave alla `safe()->only([...])`.</item>
+      <item>`RequestManagementResource`: nuova chiave `next_callback_at` (formato `Y-m-d\TH:i` o null).</item>
+      <item>`RequestColumnCatalog`: colonna `next_callback_at` (`type: datetime`, `filterType: date`,
+        visible, sortable, filterable). `RequestAdvancedFilterCatalog`: filtro `next_callback_range`
+        (`AdvancedFilterType::DateRange`, target `next_callback_at`).
+        `RequestManagementTableDefinition::mapRow()`: proiezione del campo.</item>
+
+      <!-- ===== PARTE B — BACKEND ===== -->
+      <item>Migration `notes`: id, `nullableMorphs('notable')`, `parent_id` nullable FK self
+        cascadeOnDelete, `user_id` FK users restrictOnDelete, `body` TEXT, `edited_at` DATETIME NULL,
+        timestamps, softDeletes. Indici: `[notable_type, notable_id, created_at]`, `parent_id`.</item>
+      <item>Migration `note_mentions`: id, `note_id` FK cascadeOnDelete, `user_id` FK cascadeOnDelete,
+        timestamps, UNIQUE `[note_id, user_id]`, indice `user_id` (per il futuro "menzioni per me").</item>
+      <item>`App\Models\Note` (morphTo `notable`, belongsTo `author`, belongsTo `parent`, hasMany
+        `replies`, belongsToMany `mentionedUsers` via `note_mentions`, SoftDeletes, LogsModelActivity,
+        `#[Fillable(['body'])]`). Alias `'note' => Note::class` aggiunto alla morph map globale.</item>
+      <item>`config/notes.php` -> `notable_types` (allow-list slug -> model, gate di lettura,
+        risolutore menzionabili, etichetta, path SPA). `App\Notes\NoteEntityRegistry` (resolve,
+        assertRegistered, modelFor, labelFor, deepLinkFor, authorizeRead, mentionableQuery).</item>
+      <item>`App\Notes\Mentions\MentionParser` (estrae gli id dai token `@[...](user:N)` del body) e
+        `App\Notes\Mentions\MentionableUsersResolver` per `request-management` (query D-10, N+1-free).</item>
+      <item>`NotePolicy` (resource `notes`, `abilities(): ['create']`, `update`/`delete` author-only).</item>
+      <item>`NoteController` (index, store, update, destroy) + `MentionableUserController` (lookup
+        contestuale) + FormRequest dedicati + `NoteResource` / `NoteAuthorResource` +
+        `routes/api/notes.php` + require in `routes/api.php`. `NoteService` con la logica
+        (normalizzazione parent, validazione menzioni contro l'insieme, dispatch notifiche).</item>
+      <item>`App\Notifications\NoteMentionNotification` (ShouldQueue, database + mail, payload
+        `NotificationData`, deep link da `config('app.frontend_url')`).</item>
+      <item>Test Pest: migrazioni reversibili; authz lettura/scrittura/modifica/cancellazione;
+        allow-list `entity_type`; normalizzazione thread a un livello; coerenza token/mentions;
+        insieme menzionabile (dentro/fuori, utente inattivo, viewAll, super-admin); notifica emessa
+        ai soli menzionati e non all'autore, deduplicata; soft delete che preserva le risposte;
+        `edited_at`; campo richiamo (persistenza, azzeramento marcatore, activity, sort, filtro,
+        filtro avanzato, non mass-assignable).</item>
+
+      <!-- ===== PARTE A — FRONTEND ===== -->
+      <item>`features/request-management/`: `request-callback-section.tsx` (`<Input type="datetime-local">`
+        dentro `FormSection`), chiave nello Zod + default + diff `buildRequestWorkPayload` +
+        `errorFields`, tipo `next_callback_at` in `types.ts`/`UpdateRequestWorkPayload`,
+        `DateTimeCell` registrato in `column-renderers.tsx`.</item>
+
+      <!-- ===== PARTE B — FRONTEND ===== -->
+      <item>Nuova feature AGNOSTICA `frontend/src/features/notes/`: `types.ts`, `api.ts`,
+        `query-keys.ts`, `use-notes.ts` (infinite query keyset), `use-note-mutations.ts`,
+        `use-mentionable-users.ts`, `notes-section.tsx` (componente pubblico), `note-list.tsx`,
+        `note-item.tsx` (autore, avatar, data/ora, azioni autore, risposte), `note-composer.tsx`,
+        `mention-textarea.tsx` (Textarea + autocomplete @ da tastiera, costruito sul pattern di
+        `searchable-select.tsx`, nessuna dipendenza nuova), `note-body.tsx` (token -> chip).</item>
+      <item>Montaggio in `RequestWorkPanelBody`: `<NotesSection entityType="request-management"
+        entityId={panel.id} />` come sezione della pila. Nessun import inverso.</item>
+      <item>i18n `it-notes.ts` / `en-notes.ts` (namespace `notes`) + chiavi nuove del modulo
+        `requestManagement.workPanel.callback.*` e `requestManagement.columns.nextCallbackAt`
+        (+ le chiavi `requestManagement.advancedFilters.*` del nuovo filtro).</item>
+      <item>Test Vitest: sezione richiamo (render, diff sparso, formato), `NotesSection` (elenco
+        cronologico, autore/data, risposta in thread, composer, chip menzione, azioni solo
+        all'autore, empty state, load more), `mention-textarea` (apertura su @, filtro, selezione da
+        tastiera, inserimento token), `note-body` (rendering token), a11y (triade
+        aria-invalid/aria-describedby/role=alert sugli errori del composer).</item>
+    </in>
+
+    <out>
+      <item>Qualsiasi invio reale di promemoria: nessun job, nessuno scheduler, nessun comando
+        artisan, nessuna notifica legata a `next_callback_at`. La colonna
+        `next_callback_reminded_at` nasce vuota e NON viene mai valorizzata in questa fase.</item>
+      <item>Modifica rapida della data di richiamo dalla riga di tabella e presenza del campo nella
+        scheda Opportunita' (`opportunities`): superfici escluse dalla scelta utente.</item>
+      <item>Integrazione delle note in QUALSIASI modulo diverso da Gestione Richieste. La struttura
+        e' predisposta (una voce di config), ma `config/notes.php` in questa fase registra SOLO
+        `request-management`.</item>
+      <item>Annidamento dei thread oltre il primo livello, alberi ricorsivi, "rispondi alla risposta"
+        con gerarchia visiva profonda.</item>
+      <item>Editor rich-text, markdown, allegati nelle note, emoji-reaction, modifica collaborativa
+        in tempo reale, WebSocket/broadcast (nessun canale broadcast esiste nel progetto).</item>
+      <item>Menzioni di ruoli/gruppi (`@team`), menzione di entita' non-utente.</item>
+      <item>Colonna "numero note"/"ultima nota" nella tabella, ricerca full-text sulle note,
+        export delle note, endpoint "tutte le menzioni per me".</item>
+      <item>Cancellazione fisica delle note e qualsiasi purge/retention.</item>
+      <item>Modifiche a `PATCH /api/opportunities/{id}`, ai permessi `opportunities.*`, agli endpoint
+        e alla shape delle notifiche esistenti (la campanella non cambia contratto).</item>
+      <item>Nuove dipendenze composer/npm (in particolare: nessuna libreria di date, nessun editor,
+        nessun cmdk/popover di terze parti).</item>
+      <item>File del lavoro non committato estraneo a questo scope presente sul branch.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <!-- ==================== PARTE A ==================== -->
+
+    <endpoint method="SCHEMA" path="opportunities.next_callback_at">
+      <request>
+        ALTER opportunities:
+          + next_callback_at        DATETIME NULL
+          + next_callback_reminded_at DATETIME NULL
+          + INDEX (next_callback_at)
+        down(): drop index + drop delle due colonne. Nessun'altra colonna toccata.
+      </request>
+      <response status="200">migrate + rollback verdi su SQLite; nessuna colonna in `#[Fillable]`.</response>
+      <errors>-</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/request-management/{opportunity}">
+      <request>Invariata (auth:sanctum, route model binding, scope-guard esistente).</request>
+      <response status="200">
+        data ARRICCHITO, retrocompatibile: tutte le chiavi di spec 0049 INVARIATE, piu':
+          next_callback_at: string | null      /* formato ESATTO "Y-m-d\TH:i", es. "2026-08-03T15:30".
+                                                  Scelto per entrare direttamente in
+                                                  &lt;input type="datetime-local"&gt; senza conversioni.
+                                                  Orario nel fuso applicativo config('app.timezone');
+                                                  nessuna conversione per-utente (non esiste oggi). */
+        `next_callback_reminded_at` NON e' esposta.
+      </response>
+      <errors>Invariati: 403 senza `request-management.view` o fuori scope; 404.</errors>
+    </endpoint>
+
+    <endpoint method="PATCH" path="/api/request-management/{opportunity}">
+      <request>
+        { opportunity_workflow_status_id?: number|null,   /* invariato */
+          attribute_values?: { [code: string]: unknown }, /* invariato */
+          next_callback_at?: string|null }                /* NUOVO. "Y-m-d\TH:i" oppure ISO-8601.
+                                                             null = azzera la pianificazione. */
+        Sparse: solo le chiavi inviate cambiano.
+      </request>
+      <response status="200">Identica alla GET (data + permissions), message "Updated".</response>
+      <errors>403 senza `request-management.update` o fuori scope; 404;
+        422 `next_callback_at` non parsabile come data.</errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/tables/request-management/rows">
+      <request>Contratto SSRM generico INVARIATO. Nuova colonna disponibile a sort/filtro via
+        allow-list: `next_callback_at` (`sortable: true`, `filterable: true`, `filterType: 'date'`).
+        Nuovo filtro avanzato `next_callback_range` (`date_range`, payload `{from, to}`).</request>
+      <response status="200">Ogni riga include `next_callback_at` (stringa "Y-m-d\TH:i" o null).</response>
+      <errors>403 senza `request-management.viewAny`. Un `sort`/`filter` su una colonna non in
+        allow-list e' ignorato/422 come gia' oggi: nessun input raggiunge ORDER BY/WHERE.</errors>
+    </endpoint>
+
+    <!-- ==================== PARTE B ==================== -->
+
+    <endpoint method="SCHEMA" path="notes + note_mentions">
+      <request>
+        CREATE notes:
+          id, notable_type VARCHAR NULL, notable_id BIGINT UNSIGNED NULL,
+          parent_id BIGINT UNSIGNED NULL FK notes(id) ON DELETE CASCADE,
+          user_id BIGINT UNSIGNED NOT NULL FK users(id) ON DELETE RESTRICT,
+          body TEXT NOT NULL, edited_at DATETIME NULL,
+          created_at, updated_at, deleted_at
+          INDEX (notable_type, notable_id, created_at); INDEX (parent_id)
+        CREATE note_mentions:
+          id, note_id FK notes(id) ON DELETE CASCADE, user_id FK users(id) ON DELETE CASCADE,
+          created_at, updated_at, UNIQUE (note_id, user_id), INDEX (user_id)
+        Morph map: + 'note' =&gt; Note::class.
+        down(): drop note_mentions poi notes (ordine inverso delle FK).
+      </request>
+      <response status="200">migrate + rollback verdi su SQLite.</response>
+      <errors>-</errors>
+    </endpoint>
+
+    <!-- ---- Oggetto NOTA (shape unica riusata da index/store/update) ---- -->
+    <endpoint method="SHAPE" path="Note">
+      <request>-</request>
+      <response status="200">
+        Note = {
+          id: number,
+          body: string,                       /* grezzo, con i token @[Nome Cognome](user:12) */
+          author: { id: number, name: string, avatar_url: string|null },
+          mentions: [ { id: number, name: string } ],   /* ordine = prima apparizione nel body */
+          parent_id: number|null,
+          created_at: string,                 /* ISO-8601 */
+          edited_at: string|null,             /* ISO-8601; valorizzato solo se il body e' stato modificato */
+          can: { update: boolean, delete: boolean },  /* calcolato server-side per l'utente corrente */
+          replies?: Note[]                    /* SOLO sulle radici in GET /api/notes; mai annidato oltre.
+                                                 Assente su una risposta e nelle risposte di store/update. */
+        }
+      </response>
+      <errors>-</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/notes">
+      <request>
+        Query: entity_type: string (slug registrato in config/notes.php), entity_id: number,
+               cursor?: string|null (opaco, dalla risposta precedente),
+               limit?: number (1..50, default 20 — conta le RADICI, non le risposte).
+      </request>
+      <response status="200">
+        { success: true, message: "OK",
+          data: Note[],                       /* SOLO radici, created_at DESC, ognuna con replies[] ASC completo */
+          meta: { next_cursor: string|null, has_more: boolean } }
+      </response>
+      <errors>
+        403 se l'utente non supera il gate di LETTURA dell'entita' ospite
+            (per request-management: senza `request-management.view` oppure fuori scope GA2);
+        404 se il record ospite non esiste;
+        422 se `entity_type` non e' registrato in config/notes.php (allow-list).
+      </errors>
+    </endpoint>
+
+    <endpoint method="POST" path="/api/notes">
+      <request>
+        { entity_type: string, entity_id: number,
+          body: string (1..5000),
+          parent_id?: number|null,            /* se e' l'id di una RISPOSTA, il server lo normalizza
+                                                 alla radice di quella risposta (D-7) */
+          mentions?: number[] }               /* deve coincidere ESATTAMENTE con gli id nei token del body */
+      </request>
+      <response status="201">{ success: true, message: "Created", data: Note }  /* senza replies */</response>
+      <errors>
+        403 senza `notes.create` OPPURE senza accesso in lettura al record ospite (AND, D-6);
+        404 record ospite inesistente;
+        422 entity_type non registrato | body vuoto o &gt; 5000 |
+            parent_id inesistente o appartenente a un'ALTRA entita' ospite |
+            mentions non coincidenti con i token del body (D-12) |
+            un id in mentions FUORI dall'insieme menzionabile del record (D-10) |
+            un id in mentions riferito a utente inesistente o `is_active = false`.
+      </errors>
+    </endpoint>
+
+    <endpoint method="PATCH" path="/api/notes/{note}">
+      <request>{ body: string (1..5000), mentions?: number[] }
+        `entity_type`/`entity_id`/`parent_id` NON sono modificabili (ignorati se inviati).</request>
+      <response status="200">{ success: true, message: "Updated", data: Note }
+        `edited_at` valorizzato. Le menzioni sono ri-sincronizzate: i NUOVI menzionati ricevono
+        notifica, chi era gia' menzionato NON viene rinotificato, chi e' stato rimosso perde la riga
+        in `note_mentions` (la notifica gia' inviata resta, non si cancella la storia).</response>
+      <errors>403 se non sei l'autore (super-admin passa da Gate::before) o se hai perso l'accesso al
+        record ospite; 404 nota inesistente o gia' soft-deleted; 422 come POST.</errors>
+    </endpoint>
+
+    <endpoint method="DELETE" path="/api/notes/{note}">
+      <request>Nessun body.</request>
+      <response status="200">{ success: true, message: "Deleted" }
+        SOFT delete: `deleted_at` valorizzato. Se la nota e' una RADICE, le sue risposte NON vengono
+        cancellate ma spariscono dalla lista insieme alla radice.</response>
+      <errors>403 se non sei l'autore; 404 nota inesistente o gia' cancellata.</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/notes/mentionable-users">
+      <request>
+        Query: entity_type: string, entity_id: number, search?: string (max 255),
+               offset?: number (min 0), limit?: number (1..MAX_LIMIT), ids?: number[].
+      </request>
+      <response status="200">
+        PAGINATA NON-ENVELOPE, identica al contratto for-select (ADR 0011): il controller DEVE
+        rispondere via `BaseApiController::paginatedResponse()`
+        (app/Http/Controllers/Abstract/BaseApiController.php:27-44), la cui shape REALE e':
+        { items: [ { id: number, label: string, subtitle: string|null, avatar_url: string|null } ],
+          export_link: string|null,
+          pagination: { total: number, offset: number, limit: number, total_pages: number } }
+        RETTIFICA 2026-07-22: una stesura precedente di questa spec riportava letteralmente
+        `{data, total, offset, limit}` — shape che NON esiste nel progetto. Vale quanto sopra:
+        e' cio' che ogni for-select esistente restituisce (es. UserForSelectController) ed e' cio'
+        che `PaginatedResponse<T>` (frontend/src/features/notifications/types.ts:39-43, ri-esportato
+        da features/for-select/types.ts) modella. Errore trovato dal teammate fe-notes-data in
+        implementazione e verificato sul codice reale prima della correzione.
+        L'insieme e' quello di D-10: utenti attivi che possono LEGGERE quel record. Include l'utente
+        corrente (puo' auto-menzionarsi nel testo; semplicemente non ricevera' notifica).
+      </response>
+      <errors>403 se non hai accesso in lettura al record ospite; 404 record inesistente;
+        422 entity_type non registrato.</errors>
+    </endpoint>
+
+    <endpoint method="NOTIFICATION" path="NoteMentionNotification">
+      <request>
+        Emessa in coda per OGNI utente menzionato, escluso l'autore, una sola volta per utente per
+        nota. Canali: `database` + `mail`.
+      </request>
+      <response status="200">
+        Payload database (shape NotificationData ESISTENTE, la campanella non cambia contratto):
+          { title: string,        /* i18n "Sei stato menzionato" */
+            message: string,      /* "&lt;Autore&gt; ti ha menzionato in &lt;etichetta record&gt;: &lt;estratto&gt;"
+                                     estratto = body con i token risolti in "@Nome", troncato a 140 char */
+            level: "info",
+            action_url: string }  /* config('app.frontend_url') + "/request-management/{id}" dal registro */
+        Mail: MailMessage (subject + greeting + line + action verso lo stesso action_url).
+        NOTA AMBIENTE: MAIL_MAILER=log in locale -> la verifica e' `Notification::fake()`/assert sui
+        canali, non l'invio reale.
+      </response>
+      <errors>Nessun errore utente: il fallimento di un invio non deve far fallire il salvataggio
+        della nota (dispatch in coda, dopo il commit).</errors>
+    </endpoint>
+
+    <endpoint method="GET" path="/api/notifications (esistente)">
+      <request>Invariata.</request>
+      <response status="200">Invariata. Le notifiche di menzione compaiono nella lista esistente
+        perche' rispettano la shape NotificationData. NESSUNA modifica a NotificationService,
+        NotificationResource, rotte o FE della campanella.</response>
+      <errors>Invariati.</errors>
+    </endpoint>
+
+  </data_contract>
+
+  <acceptance_criteria>
+
+    <!-- ===================== PARTE A — schema e persistenza ===================== -->
+    <criterion id="AC-001">Dato lo schema `opportunities`, dopo `migrate` esistono le colonne
+      `next_callback_at` e `next_callback_reminded_at` (DATETIME nullable) e un indice su
+      `next_callback_at`; dopo `migrate:rollback` entrambe spariscono. Nessuna delle due e' in
+      `#[Fillable]`: un `Opportunity::create([... 'next_callback_at' => ...])` NON la valorizza.
+      [Pest: Unit/Models/OpportunityCallbackTest]</criterion>
+
+    <criterion id="AC-002">Dato un utente Gestore Account con `request-management.update`, quando
+      invia `PATCH /api/request-management/{id}` con `next_callback_at: "2026-08-03T15:30"`, allora
+      risponde 200, il valore e' persistito e la GET successiva lo restituisce ESATTAMENTE come
+      `"2026-08-03T15:30"`. Inviando `null` il campo torna a null. Non inviando la chiave, il valore
+      esistente resta invariato (sparse). [Pest: RequestManagementCallbackTest]</criterion>
+
+    <criterion id="AC-003">Dato un record con `next_callback_reminded_at` valorizzata a mano, quando
+      `next_callback_at` viene cambiato via PATCH, allora `next_callback_reminded_at` torna NULL nello
+      stesso salvataggio; se il PATCH non cambia `next_callback_at` (stesso valore), il marcatore NON
+      viene azzerato. [Pest]</criterion>
+
+    <criterion id="AC-004">Dato un PATCH che modifica `next_callback_at`, allora viene scritta UNA
+      entry activity sull'Opportunita' con il campo dentro `properties.attributes` e il valore
+      precedente in `properties.old`; se il PATCH non cambia nulla, nessuna entry viene creata.
+      [Pest: RequestManagementActivityTest]</criterion>
+
+    <criterion id="AC-005">Dato `PATCH` con `next_callback_at: "non-una-data"`, allora 422 sul campo
+      e nessuna scrittura. Senza `request-management.update` -> 403; fuori scope GA2 senza
+      `viewAll` -> 403. [Pest]</criterion>
+
+    <!-- ===================== PARTE A — vista operativa ===================== -->
+    <criterion id="AC-006">`GET /api/tables/request-management/columns` espone `next_callback_at` con
+      `type: 'datetime'`, `filterType: 'date'`, `sortable: true`, `filterable: true`, `visible: true`;
+      `POST .../rows` proietta il campo su ogni riga. [Pest: RequestManagementTableTest]</criterion>
+
+    <criterion id="AC-007">Dato un ordinamento su `next_callback_at`, le righe tornano ordinate per
+      quel campo in entrambe le direzioni; dato un filtro colonna di tipo data `inRange`, tornano solo
+      le righe nell'intervallo; dato il filtro avanzato `next_callback_range` con `{from, to}`, idem.
+      Nessuna query usa `whereRaw`/`orderByRaw` su input. [Pest]</criterion>
+
+    <criterion id="AC-008">Nel pannello di lavorazione compare la sezione "Prossimo richiamo" con un
+      `<input type="datetime-local">` che mostra il valore corrente; modificandolo e salvando, il
+      payload PATCH contiene SOLO `next_callback_at` (diff sparso, nessun altro campo). Con permesso
+      di sola lettura il controllo e' disabilitato. In tabella la colonna e' resa da `DateTimeCell`.
+      [Vitest: request-callback-section.test.tsx, request-work-payload.test.ts]</criterion>
+
+    <!-- ===================== PARTE B — schema e agnosticismo ===================== -->
+    <criterion id="AC-020">Dopo `migrate` esistono `notes` (con `notable_type`/`notable_id`,
+      `parent_id`, `user_id`, `body`, `edited_at`, `deleted_at`, indici
+      `[notable_type, notable_id, created_at]` e `parent_id`) e `note_mentions` (UNIQUE
+      `[note_id, user_id]`); `migrate:rollback` le rimuove nell'ordine corretto. L'alias `note` e'
+      presente nella morph map globale. [Pest: Unit/Migrations o Feature/Notes/NoteSchemaTest]</criterion>
+
+    <criterion id="AC-021">Il model `Note` e i servizi delle note NON contengono alcun riferimento a
+      `Opportunity`, `RequestManagement*` o allo slug `request-management`: l'unico punto in cui il
+      modulo ospite compare e' `config/notes.php`. Verifica: grep sui file di
+      `app/Models/Note.php`, `app/Notes/`, `app/Http/Controllers/Notes/`,
+      `app/Http/Resources/Note*` -> zero occorrenze. [Pest: Feature/Notes/NoteAgnosticismTest]</criterion>
+
+    <criterion id="AC-022">Dato `entity_type` non presente in `config('notes.notable_types')`
+      (es. `"leads"` o `"App\\Models\\User"`), ogni endpoint note risponde 422 e NON esegue alcuna
+      query sul model indicato. [Pest]</criterion>
+
+    <!-- ===================== PARTE B — autorizzazione (ibrida, D-6) ===================== -->
+    <criterion id="AC-030">LETTURA EREDITATA: un utente Gestore Account con `request-management.view`
+      legge le note del record (200). Lo stesso utente su un record NON gestito e senza
+      `request-management.viewAll` -> 403. Un utente senza `request-management.view` -> 403.
+      Con `request-management.viewAll` -> 200 su qualsiasi record. [Pest: Feature/Notes/NoteAuthorizationTest]</criterion>
+
+    <criterion id="AC-031">SCRITTURA DEDICATA IN AND: un utente che legge il record ma NON ha
+      `notes.create` -> 403 su `POST /api/notes`. Un utente che ha `notes.create` ma NON accede al
+      record -> 403. Servono entrambi per ottenere 201. Dopo `permissions:sync` esiste il permesso
+      `notes.create` e NON esistono `notes.viewAny`/`notes.view`/`notes.update`/`notes.delete`
+      (abilities ridotte, D-6). [Pest]</criterion>
+
+    <criterion id="AC-032">MUTABILITA' AUTORE: l'autore modifica la propria nota -> 200 con
+      `edited_at` valorizzato e `body` aggiornato. Un altro utente, anche con `notes.create` e accesso
+      al record -> 403 su PATCH e su DELETE della nota altrui. Il `super-admin` passa (Gate::before).
+      [Pest]</criterion>
+
+    <criterion id="AC-033">SOFT DELETE E STORICO: `DELETE /api/notes/{id}` su una radice risponde 200,
+      valorizza `deleted_at`, e la radice sparisce dalla `GET /api/notes` INSIEME alle sue risposte;
+      in database la riga della radice e TUTTE le righe delle risposte esistono ancora
+      (`Note::withTrashed()->count()` invariato). Nessuna cancellazione fisica. [Pest]</criterion>
+
+    <!-- ===================== PARTE B — thread ===================== -->
+    <criterion id="AC-040">`GET /api/notes` restituisce SOLO radici, ordinate `created_at DESC`, ognuna
+      con `replies[]` completo in ordine `created_at ASC`; nessuna risposta compare al primo livello e
+      nessuna `replies` annidata dentro una risposta. La paginazione keyset con `limit` conta le
+      RADICI e `meta.next_cursor` permette di scorrere fino a `has_more: false` senza duplicati ne'
+      buchi. [Pest: Feature/Notes/NoteIndexTest]</criterion>
+
+    <criterion id="AC-041">NORMALIZZAZIONE A UN LIVELLO: `POST /api/notes` con `parent_id` = id di una
+      RISPOSTA salva la nota con `parent_id` = id della RADICE di quella risposta (200/201, non 422).
+      `POST` con `parent_id` di una nota appartenente a un'ALTRA entita' ospite -> 422. La nota figlia
+      eredita `notable_type`/`notable_id` dalla radice, mai dal client. [Pest]</criterion>
+
+    <!-- ===================== PARTE B — menzioni (D-10, D-12) ===================== -->
+    <criterion id="AC-050">INSIEME MENZIONABILE: `GET /api/notes/mentionable-users` per una
+      opportunita' restituisce, nella shape for-select REALE
+      `{items, export_link, pagination:{total,offset,limit,total_pages}}` prodotta da
+      `BaseApiController::paginatedResponse()`, SOLO utenti attivi
+      che possono leggere quel record: i suoi Gestori Account con `request-management.view` e gli
+      utenti con `request-management.viewAll`. NON compaiono: utenti senza `request-management.view`,
+      utenti `is_active = false`, utenti estranei al record e senza `viewAll`. Il parametro `search`
+      filtra per nome. [Pest: Feature/Notes/MentionableUsersTest]</criterion>
+
+    <criterion id="AC-051">ENFORCEMENT SERVER: `POST /api/notes` con un `mentions` contenente l'id di
+      un utente FUORI dall'insieme menzionabile -> 422 e nessuna nota creata, nessuna notifica emessa
+      — anche se il body contiene il token corrispondente. Idem per utente inesistente o inattivo.
+      [Pest]</criterion>
+
+    <criterion id="AC-052">COERENZA TOKEN/MENZIONI: body con token `@[Tizio](user:7)` ma `mentions: []`
+      -> 422; `mentions: [7]` ma nessun token nel body -> 422; token e array coincidenti -> 201 con
+      `mentions: [{id:7, name:"Tizio"}]` nella risposta. Un token ripetuto due volte per lo stesso
+      utente conta come UNA menzione (una sola riga in `note_mentions`). [Pest]</criterion>
+
+    <!-- ===================== PARTE B — notifiche (D-11) ===================== -->
+    <criterion id="AC-060">Creando una nota che menziona due utenti, viene emessa
+      `NoteMentionNotification` sui canali `database` E `mail` per ciascuno dei due, UNA sola volta a
+      testa, e NON per l'autore anche se auto-menzionato. Verifica con `Notification::fake()`.
+      [Pest: Feature/Notes/NoteMentionNotificationTest]</criterion>
+
+    <criterion id="AC-061">Il payload database della notifica rispetta la shape `NotificationData`
+      (`title`, `message`, `level`, `action_url`): compare nella `GET /api/notifications` esistente e
+      nel contatore non-letti SENZA alcuna modifica a NotificationService/NotificationResource.
+      `action_url` e' `config('app.frontend_url') + "/request-management/{id}"`. Il `message` contiene
+      il nome dell'autore, l'etichetta del record e un estratto del testo con i token risolti in
+      `@Nome`, troncato a 140 caratteri. [Pest]</criterion>
+
+    <criterion id="AC-062">MODIFICA DELLE MENZIONI: modificando una nota per aggiungere un menzionato,
+      solo il NUOVO utente riceve notifica (chi c'era gia' non viene rinotificato); rimuovendo un
+      menzionato, la riga sparisce da `note_mentions` ma la notifica gia' recapitata resta.
+      La notifica e' dispatchata in coda: `Bus`/`Notification` fake mostrano che il salvataggio
+      risponde 200 anche se il canale mail e' indisponibile. [Pest]</criterion>
+
+    <!-- ===================== PARTE B — frontend ===================== -->
+    <criterion id="AC-070">`<NotesSection entityType="request-management" entityId={id} />` montata nel
+      pannello di lavorazione rende: elenco cronologico delle radici, per ognuna autore (avatar +
+      nome), data e ora, corpo con i token resi come chip `@Nome`, e le risposte sotto la radice.
+      Empty state se non ci sono note. Pulsante "carica altre" che consuma la pagina successiva.
+      [Vitest: notes-section.test.tsx]</criterion>
+
+    <criterion id="AC-071">Il composer invia il body e l'array `mentions`; rispondendo a una nota
+      invia il `parent_id` della radice; a salvataggio riuscito la lista si aggiorna senza reload.
+      Le azioni "modifica" e "elimina" compaiono SOLO sulle note dove `can.update`/`can.delete` sono
+      true; l'eliminazione chiede conferma. [Vitest]</criterion>
+
+    <criterion id="AC-072">MENTION PICKER: digitando `@` nella textarea si apre l'elenco dei
+      menzionabili (dal lookup contestuale, NON da `users/for-select`); digitando altri caratteri
+      l'elenco si filtra; frecce su/giu' e Invio selezionano da tastiera, Esc chiude; la selezione
+      inserisce il token nel body e l'id nell'array `mentions`. L'elenco e' navigabile da tastiera e
+      il campo espone il ruolo/aria corretti. [Vitest: mention-textarea.test.tsx]</criterion>
+
+    <criterion id="AC-073">Un errore 422 del server sul composer viene mappato sul campo con la triade
+      a11y (`aria-invalid`, `aria-describedby` verso un `role="alert"`); l'errore e' leggibile e non
+      espone nomi di classi interne. [Vitest]</criterion>
+
+    <criterion id="AC-074">DISACCOPPIAMENTO FE: nessun file sotto `frontend/src/features/notes/`
+      importa da `frontend/src/features/request-management/`. Verifica: grep sull'intera cartella ->
+      zero occorrenze. Il montaggio avviene solo in `request-work-panel.tsx`.
+      [Vitest o check statico eseguito dal verifier]</criterion>
+
+    <criterion id="AC-075">i18n: le chiavi del namespace `notes` e le nuove chiavi
+      `requestManagement.workPanel.callback.*`, `requestManagement.columns.nextCallbackAt` e
+      `requestManagement.advancedFilters.*` esistono in ENTRAMBI i file it ed en (nessuna chiave
+      presente in uno e mancante nell'altro). [Vitest o check statico]</criterion>
+
+    <!-- ===================== Definition of Done ===================== -->
+    <criterion id="AC-090">Suite completa verde ED ESEGUITA: Pest full, Vitest full, `npx tsc -b`
+      pulito, `pint --test` pulito, ESLint sul diff. Nessuna regressione su request-management,
+      opportunities, opportunity-workflows, notifications, table/*. [verifier]</criterion>
+
+    <criterion id="AC-091">Nessuna nuova dipendenza in `composer.json` / `package.json` (diff dei due
+      file vuoto). Nessun file oltre 500 righe; i file oltre 300 righe sono giustificati o splittati.
+      [verifier]</criterion>
+
+  </acceptance_criteria>
+
+  <constraints>
+    <item>NESSUNA nuova dipendenza composer/npm. In particolare: nessuna libreria di date
+      (si usa `<input type="datetime-local">` + `Intl`), nessun editor rich-text, nessun
+      cmdk/popover/floating-ui — il mention picker si costruisce sul pattern gia' presente in
+      `components/ui/searchable-select.tsx`.</item>
+
+    <item>Identificatori in INGLESE: colonne `next_callback_at`, `next_callback_reminded_at`, tabelle
+      `notes` / `note_mentions`, rotte `/api/notes`, classi `Note*`, slug `request-management`.
+      Italiano SOLO nelle stringhe i18n.</item>
+
+    <item>Authz server-side su OGNI endpoint. Per le note vale la regola ibrida D-6 (lettura ereditata
+      AND scrittura `notes.create`) e l'insieme menzionabile D-10 e' imposto dal server: l'UI nasconde,
+      il backend autorizza. Mai model raw in risposta: sempre `NoteResource`/`RequestManagementResource`.
+      Mai `$request->only()` nudo: FormRequest + `safe()`.</item>
+
+    <item>Il boundary polimorfico e' un'ALLOW-LIST (`config/notes.php`), mai una classe presa
+      dall'input. Uno `entity_type` non registrato produce 422 prima di qualsiasi query — stesso
+      pattern gia' collaudato in `config/attachments.php` + `StoreAttachmentRequest::withValidator()`.</item>
+
+    <item>Zero `whereRaw`/`orderByRaw`/`groupByRaw` su input. Sort e filtri della colonna
+      `next_callback_at` passano dall'allow-list del framework tabellare, come tutte le altre colonne.</item>
+
+    <item>Nessun `throttle` su nessuno degli endpoint nuovi (decisione utente 2026-07-15: rate limiting
+      solo sugli endpoint di credenziali).</item>
+
+    <item>Query N+1-free: `GET /api/notes` fa eager load di `author`, `mentionedUsers` e `replies`
+      (con i loro autori/menzionati); il risolutore dei menzionabili non cicla sugli utenti.
+      `Model::preventLazyLoading()` e' attivo fuori produzione: un lazy load dimenticato fa fallire i test.</item>
+
+    <item>Le notifiche sono dispatchate IN CODA e DOPO il commit della nota: un canale indisponibile
+      non deve mai far fallire il salvataggio ne' lasciare una nota a meta'.</item>
+
+    <item>NON si modificano: `PATCH /api/opportunities/{id}`, i permessi `opportunities.*`,
+      `NotificationService`, `NotificationResource`, le rotte delle notifiche, la campanella FE.
+      La nuova notifica si inserisce rispettando la shape `NotificationData` esistente.</item>
+
+    <item>File GATE condivisi, da serializzare fra i microtask (mai due owner in parallelo sullo
+      stesso file): `backend/routes/api.php`, `backend/app/Providers/AppServiceProvider.php`,
+      `backend/app/Models/Opportunity.php`,
+      `backend/app/Http/Requests/RequestManagement/UpdateRequestRequest.php`,
+      `backend/app/Http/Controllers/RequestManagement/RequestManagementController.php`,
+      `backend/app/Services/RequestManagement/RequestManagementService.php`,
+      `backend/app/Http/Resources/RequestManagementResource.php`,
+      `frontend/src/features/request-management/request-work-panel.tsx`,
+      `frontend/src/features/request-management/types.ts`,
+      `frontend/src/i18n/locales/it.ts`, `frontend/src/i18n/locales/en.ts`.
+      Tutti gli altri file hanno owner disgiunto.</item>
+
+    <item>File entro 300 righe (soft) / 500 (hard): il controller delle note resta sottile e la logica
+      sta in `NoteService`; il pannello FE delle note e' splittato in lista/item/composer/mention-input/body.</item>
+
+    <item>Zero dead code, zero import orfani, nessuna emoticon nel codice o nei commenti.</item>
+
+    <item>NON toccare i file del lavoro non committato estraneo a questo scope presente sul branch
+      (vedi docs/HANDOFF.md: lavori 0047-emendamento, 0050 e 0051).</item>
+
+    <item>Definition of Done: Pest + Vitest ESEGUITI e verdi, `npx tsc -b` pulito, Pint/ESLint puliti.
+      Nessun commit e nessun cambio di branch senza ordine esplicito dell'utente (CLAUDE.md §3.6).</item>
+  </constraints>
+
+</spec>

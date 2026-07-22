@@ -2,6 +2,8 @@ import { z } from 'zod'
 import type { TFunction } from 'i18next'
 import { isEmptyCustomFieldValue } from '@/features/custom-fields/custom-fields-values'
 import type { CustomFieldValue } from '@/features/custom-fields/types'
+import { buildContactSchema } from '@/features/personal-data/contact-schema'
+import type { AddressDraft, ContactDraft } from '@/features/personal-data/types'
 import type { ApplicableAttribute } from '@/features/request-management/types'
 
 /**
@@ -76,9 +78,60 @@ function buildAttributeValuesSchema(attributes: ApplicableAttribute[], t: TFunct
  */
 type TypedAttributeValuesSchema = z.ZodType<Record<string, CustomFieldValue>, Record<string, CustomFieldValue>>
 
+/**
+ * The client's buffered contacts. Each row is validated by the SAME
+ * `buildContactSchema` the contact dialog uses (per-type value rules), so the
+ * inline quick fields, the dialog and this submit gate never drift; issues are
+ * re-pathed to `client_contacts.<index>.<field>`.
+ */
+function buildClientContactsSchema(t: TFunction) {
+  const row = buildContactSchema(t)
+
+  return z.array(z.custom<ContactDraft>()).superRefine((contacts, ctx) => {
+    contacts.forEach((contact, index) => {
+      const result = row.safeParse({
+        type: contact.type,
+        value: contact.value,
+        label: contact.label ?? '',
+        is_primary: contact.is_primary,
+      })
+      if (result.success) {
+        return
+      }
+      for (const issue of result.error.issues) {
+        ctx.addIssue({ code: 'custom', path: [index, ...issue.path], message: issue.message })
+      }
+    })
+  })
+}
+
+/**
+ * The client's single buffered address, as a 0-or-1 array (the shape
+ * `AddressCreateField` reads): empty means "nothing typed", so the field is
+ * optional. Once a row exists only `line1` is required — mirroring the
+ * backend, which keeps the city optional on update so a legacy address whose
+ * city was never captured stays saveable.
+ */
+function buildClientAddressSchema(t: TFunction) {
+  return z.array(z.custom<AddressDraft>()).superRefine((addresses, ctx) => {
+    addresses.forEach((address, index) => {
+      if (!address.line1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index, 'line1'],
+          message: t('personalData.addresses.line1Required'),
+        })
+      }
+    })
+  })
+}
+
 export function buildRequestWorkSchema(attributes: ApplicableAttribute[], t: TFunction) {
   return z.object({
     opportunity_workflow_status_id: z.number().nullable(),
+    next_callback_at: z.string().nullable(),
+    client_contacts: buildClientContactsSchema(t),
+    client_address: buildClientAddressSchema(t),
     attribute_values: buildAttributeValuesSchema(attributes, t) as unknown as TypedAttributeValuesSchema,
   })
 }

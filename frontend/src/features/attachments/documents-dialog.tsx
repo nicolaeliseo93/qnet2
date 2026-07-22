@@ -10,28 +10,31 @@ import {
 import { DocumentsSection } from '@/features/attachments/documents-section'
 import { useAbilities } from '@/features/auth/use-abilities'
 
-export interface OpportunityDocumentsDialogProps {
-  /** Opportunity id whose documents are shown; `null` closes the dialog. */
-  opportunityId: number | null
+export interface DocumentsDialogProps {
+  /**
+   * Polymorphic owner alias sent as `attachable_type` (e.g. `'opportunity'`,
+   * per `config('attachments.attachable_types')`) — NOT the plural
+   * table-registry domain key.
+   */
+  resource: string
+  /** Owner id whose documents are shown; `null` closes the dialog. */
+  id: number | null
   onOpenChange: (open: boolean) => void
 }
 
 /**
- * Row-action Dialog opened from the opportunities table's "documents" action:
- * mounts the shared `DocumentsSection` for a single opportunity, mirroring
- * `ResourceActivityDialog`'s row-action-Dialog shape. `resource` uses the
- * polymorphic singular alias (`'opportunity'`), not the plural table-registry
- * domain key.
+ * Row-action Dialog mounting the shared `DocumentsSection` for a single
+ * polymorphic owner, mirroring `ResourceActivityDialog`'s row-action-Dialog
+ * shape. Shared by every module whose table exposes a `documents` row action
+ * (opportunities, request-management): the module adapter owns only the open
+ * state and the grid refresh, never a dialog of its own.
  */
-export function OpportunityDocumentsDialog({
-  opportunityId,
-  onOpenChange,
-}: OpportunityDocumentsDialogProps) {
+export function DocumentsDialog({ resource, id, onOpenChange }: DocumentsDialogProps) {
   const { t } = useTranslation()
   const { can } = useAbilities()
 
   return (
-    <Dialog open={opportunityId !== null} onOpenChange={onOpenChange}>
+    <Dialog open={id !== null} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
         <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-muted/40 px-5 py-4 text-left">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -42,11 +45,11 @@ export function OpportunityDocumentsDialog({
             <DialogDescription className="text-xs">{t('attachments.dialogSubtitle')}</DialogDescription>
           </div>
         </DialogHeader>
-        {opportunityId !== null ? (
+        {id !== null ? (
           <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
             <DocumentsSection
-              resource="opportunity"
-              id={opportunityId}
+              resource={resource}
+              id={id}
               canUpload={can('attachments.create')}
               canDelete={can('attachments.delete')}
             />
