@@ -28,13 +28,40 @@ namespace App\Tables\RequestManagement;
 final class RequestColumnCatalog
 {
     /**
+     * Upper bound for an inline-edited client anagraphic value — the width of
+     * the `personal_data`/`contacts` string columns it lands in, so the 422
+     * arrives before the database complains.
+     */
+    private const int CLIENT_FIELD_MAX_LENGTH = 255;
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public static function columns(): array
     {
         return [
+            // Deliberately NOT editable (spec 0055, user decision): writing it
+            // would mean creating/deleting `opportunity_product_lines` rows,
+            // which is a work-panel concern, not a cell one.
             self::aggregatedColumn('product_categories', 'requestManagement.columns.productCategory'),
-            self::textColumn('operator_ga2', 'requestManagement.columns.operator'),
+            [
+                // Inline cell-editing (spec 0055, D-6): the same relation
+                // column LeadColumnCatalog already declares for its operator —
+                // an async `/for-select` picker over `users`, whose value is
+                // the GA2 pivot row (`operator_id`), never a column on
+                // `opportunities`. Nullable: clearing the cell un-assigns the
+                // request (updateWork's applyOperator detaches).
+                'id' => 'operator_ga2',
+                'label' => 'requestManagement.columns.operator',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => false,
+                'filterable' => false,
+                'editable' => true,
+                'editableField' => 'operator_id',
+                'relation' => ['resource' => 'users'],
+                'nullable' => true,
+            ],
             [
                 // Inline cell-editing (spec 0054, D-4/D-5/D-6): the DISPLAYED
                 // id ('workflow_status') differs from the WRITTEN field
@@ -58,13 +85,18 @@ final class RequestColumnCatalog
                 'filterable' => true,
                 'filterType' => 'set',
                 'editable' => true,
+                // Spec 0055, D-1/D-3: a SELECT over the options optionsFor()
+                // resolves, not the text editor the `type` would imply — and
+                // it is `editor`, not `editableField`, that tells the
+                // validator this cell's value is an id.
+                'editor' => 'select',
                 'editableField' => 'opportunity_workflow_status_id',
                 'notable' => true,
             ],
-            self::textColumn('first_name', 'requestManagement.columns.firstName', searchable: true),
-            self::textColumn('last_name', 'requestManagement.columns.lastName', searchable: true),
-            self::textColumn('tax_code', 'requestManagement.columns.taxCode', searchable: true),
-            self::textColumn('phone', 'requestManagement.columns.phone', searchable: true),
+            self::clientColumn('first_name', 'requestManagement.columns.firstName', 'client_first_name'),
+            self::clientColumn('last_name', 'requestManagement.columns.lastName', 'client_last_name'),
+            self::clientColumn('tax_code', 'requestManagement.columns.taxCode', 'client_tax_code'),
+            self::clientColumn('phone', 'requestManagement.columns.phone', 'client_phone'),
             [
                 // Real DB column (spec 0052 D-1/D-5): the operator's planned
                 // next contact, sortable/filterable via the generic engine
@@ -83,6 +115,10 @@ final class RequestColumnCatalog
                 'filterable' => true,
                 'filterType' => 'date',
                 'editable' => true,
+                // Spec 0055, D-4: a real date/time picker instead of the raw
+                // `Y-m-d\TH:i` string the generic `datetime` editor used to
+                // hand over.
+                'editor' => 'datetime',
                 'nullable' => true,
             ],
             [
@@ -163,6 +199,32 @@ final class RequestColumnCatalog
             'sortable' => false,
             'filterable' => false,
             'searchable' => $searchable,
+        ];
+    }
+
+    /**
+     * A CLIENT anagraphic column (spec 0055, D-7/D-8): displayed from the
+     * Registry's PersonalData card by RequestRowMapper, written back through
+     * RequestManagementService::updateWork() under its OWN field-permission
+     * key (`client_*`) — four separate keys, so the role_field_permissions
+     * matrix can open the phone without opening the tax code (user decision).
+     *
+     * `nullable` is true for all four on purpose: whether a value is MANDATORY
+     * is not a property of the column but of the resolved field
+     * (FieldPermission::$required, enforced by TableCellUpdateService step
+     * 4.5). Declaring it here would freeze in the catalogue a rule the
+     * matrix is supposed to own per role.
+     *
+     * @return array<string, mixed>
+     */
+    private static function clientColumn(string $id, string $label, string $editableField): array
+    {
+        return [
+            ...self::textColumn($id, $label, searchable: true),
+            'editable' => true,
+            'editableField' => $editableField,
+            'nullable' => true,
+            'rules' => ['max:'.self::CLIENT_FIELD_MAX_LENGTH],
         ];
     }
 

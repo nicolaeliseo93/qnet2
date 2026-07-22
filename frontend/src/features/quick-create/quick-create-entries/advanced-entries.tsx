@@ -4,6 +4,7 @@ import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-si
 import { PROJECTS_FOR_SELECT_RESOURCE } from '@/features/projects/for-select-api'
 import { ROLES_FOR_SELECT_RESOURCE } from '@/features/roles/for-select-api'
 import { useTableConfig } from '@/features/table/use-table-config'
+import { scalarColumnOptions } from '@/features/table/column-options'
 import type { TableConfig } from '@/features/table/types'
 
 /**
@@ -67,8 +68,7 @@ function resolveRolePermissionOptions(config: TableConfig): string[] {
   if (filter?.options && filter.options.length > 0) {
     return filter.options
   }
-  const column = config.columns.find((entry) => entry.id === 'permissions')
-  return column?.options ?? []
+  return scalarColumnOptions(config.columns.find((entry) => entry.id === 'permissions'))
 }
 
 const roles: QuickCreateEntry = {

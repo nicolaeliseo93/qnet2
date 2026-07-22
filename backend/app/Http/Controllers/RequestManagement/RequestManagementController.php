@@ -75,6 +75,10 @@ class RequestManagementController extends BaseApiController
                 [
                     ...$request->safe()->only([
                         'opportunity_workflow_status_id',
+                        // Spec 0054 D-5: the note that makes the advance to a
+                        // `requires_note` status legal — dropped here means
+                        // updateWork() sees none and rejects every such advance.
+                        'note',
                         'attribute_values',
                         'next_callback_at',
                         'products_of_interest',

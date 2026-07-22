@@ -83,3 +83,27 @@ describe('UserStackCell', () => {
     expect(screen.getByText('—')).toBeInTheDocument()
   })
 })
+
+describe('UserCell on an editable cell (spec 0055 follow-up)', () => {
+  /** ICellRendererParams stub carrying AG Grid's own per-cell editability decision. */
+  function editableParams(value: unknown, editable: boolean) {
+    return {
+      value,
+      node: {},
+      column: { isCellEditable: () => editable },
+    } as unknown as Parameters<typeof UserCell>[0]
+  }
+
+  it('drops the profile button so the click can start the cell editor', () => {
+    renderWithOpener(<UserCell {...editableParams(ADA, true)} />)
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByText(ADA.name)).toBeInTheDocument()
+  })
+
+  it('keeps the profile button on a NON-editable cell (no regression)', () => {
+    renderWithOpener(<UserCell {...editableParams(ADA, false)} />)
+
+    expect(screen.getByRole('button')).toBeInTheDocument()
+  })
+})

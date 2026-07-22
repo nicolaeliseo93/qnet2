@@ -121,7 +121,7 @@ final class RequestManagementService
      * submitted keys change) and returns the SAME work-panel shape as
      * loadWorkPanel(), post-save.
      *
-     * @param  array{opportunity_workflow_status_id?: int|null, note?: string|null, attribute_values?: array<string, mixed>, next_callback_at?: string|null, products_of_interest?: array<int, int>, source_id?: int|null, reporter_id?: int|null, operator_id?: int|null, client_identity?: CreatePersonalData, client_contacts?: array<int, ContactInput>, client_address?: AddressInput}  $data
+     * @param  array{opportunity_workflow_status_id?: int|null, note?: string|null, attribute_values?: array<string, mixed>, next_callback_at?: string|null, products_of_interest?: array<int, int>, source_id?: int|null, reporter_id?: int|null, operator_id?: int|null, client_identity?: CreatePersonalData, client_contacts?: array<int, ContactInput>, client_address?: AddressInput, client_first_name?: string|null, client_last_name?: string|null, client_tax_code?: string|null, client_phone?: string|null}  $data
      * @return array{opportunity: Opportunity, applicable_attributes: Collection<int, ApplicableAttribute>, workflow_statuses: Collection<int, OpportunityWorkflowStatus>}
      */
     public function updateWork(Opportunity $opportunity, User $actor, array $data): array
@@ -188,10 +188,13 @@ final class RequestManagementService
                 $this->applyProductsOfInterest($opportunity, (array) $data['products_of_interest'], $changed, $old);
             }
 
-            // Step 5: client anagraphic block (spec 0049 amendment) — identity,
+            // Step 5: client anagraphic (spec 0049 amendment; spec 0055 D-7 for
+            // the inline channel's four sparse single-field keys) — identity,
             // contacts and address land on the Registry's PersonalData card,
-            // not on the opportunity, so they are written outside the model save.
-            $this->applyClientProfile($opportunity, $data);
+            // not on the opportunity, so they are written outside the model
+            // save. The writer reports its single-field changes into
+            // $changed/$old so Step 6 audits them (D-9).
+            $this->clientProfileWriter->applyTo($opportunity, $data, $changed, $old);
 
             // Step 6: explicit activity entry (see class docblock).
             $this->logOperationalChange($opportunity, $actor, $changed, $old);
@@ -268,32 +271,6 @@ final class RequestManagementService
 
         $old['operator_id'] = $current;
         $changed['operator_id'] = $next;
-    }
-
-    /**
-     * Delegates the submitted client anagraphic keys to the dedicated writer,
-     * then drops the loaded `registry` chain so the panel rebuilt right after
-     * re-reads the just-written card/contacts/addresses instead of the stale
-     * relation loaded before the save.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private function applyClientProfile(Opportunity $opportunity, array $data): void
-    {
-        $submitted = array_intersect_key($data, array_flip(['client_identity', 'client_contacts', 'client_address']));
-
-        if ($submitted === []) {
-            return;
-        }
-
-        $this->clientProfileWriter->write(
-            $opportunity,
-            $data['client_identity'] ?? null,
-            $data['client_contacts'] ?? null,
-            $data['client_address'] ?? null,
-        );
-
-        $opportunity->unsetRelation('registry');
     }
 
     /**

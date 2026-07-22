@@ -38,12 +38,33 @@ function toUser(value: unknown): UserSummary | null {
 /**
  * A single-user column cell: an avatar + name, both a hover-card trigger and the
  * clickable surface that opens the user's detail Sheet. Em dash when empty.
+ *
+ * On an EDITABLE cell (spec 0055 follow-up) the profile button is dropped: its
+ * `onClick` swallowed the click that AG Grid needs to start editing, so an
+ * inline-editable person column could never be edited — the profile Sheet
+ * opened instead. Both affordances cannot own the same single click (0053
+ * D-9), and on an editable cell editing wins; the profile stays one click away
+ * from the row's own actions. Read through AG Grid's own
+ * `Column.isCellEditable(node)`, so this follows the real per-cell decision
+ * (column allow-list AND row flag) instead of second-guessing it.
  */
-export function UserCell({ value }: ICellRendererParams) {
+export function UserCell({ value, column, node }: ICellRendererParams) {
   const user = toUser(value)
   if (!user) {
     return <EmptyCell align="left" />
   }
+
+  const editable = node !== undefined && column?.isCellEditable?.(node) === true
+
+  if (editable) {
+    return (
+      <div className="flex h-full items-center gap-2 overflow-hidden">
+        <UserAvatar name={user.name} src={user.avatar_url ?? null} className={cn(CELL_AVATAR_CLASS, 'shrink-0')} />
+        <span className="truncate">{user.name}</span>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full items-center overflow-hidden">
       <UserProfileHoverCard user={user} triggerClassName="rounded-md">

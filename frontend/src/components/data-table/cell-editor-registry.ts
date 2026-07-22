@@ -12,11 +12,14 @@ import type { ComponentType } from 'react'
 import type { CustomCellEditorProps } from 'ag-grid-react'
 import type { RichCellEditorValuesCallbackParams } from 'ag-grid-community'
 import { enumLabelOf } from '@/features/config/enum-label'
+import { DateTimeCellEditor } from '@/components/data-table/datetime-cell-editor'
 import { RelationCellEditor } from '@/components/data-table/relation-cell-editor'
+import { SelectCellEditor } from '@/components/data-table/select-cell-editor'
+import { scalarColumnOptions, selectColumnOptions } from '@/features/table/column-options'
 import type { ColumnType, TableColumn, TableRow } from '@/features/table/types'
 
-/** The lookup key: a column's declared `editor` when present, else its `type` (spec 0054 D-1). */
-export type CellEditorKind = ColumnType | 'relation'
+/** The lookup key: a column's declared `editor` when present, else its `type` (spec 0054 D-1, 0055 D-1). */
+export type CellEditorKind = ColumnType | 'relation' | 'select'
 
 /** cellEditor (a built-in name, or a custom React component) + optional per-column params, resolved once per colDef. */
 export interface CellEditorSpec {
@@ -48,7 +51,7 @@ function formatOptionLabel(column: TableColumn, value: unknown): string {
  * operator from picking something it would reject.
  */
 function resolveRowScopedOptions(column: TableColumn, row: TableRow | undefined): string[] {
-  const catalog = column.options ?? []
+  const catalog = scalarColumnOptions(column)
   const rowOptions = row?.[`${column.id}_options`]
   if (!Array.isArray(rowOptions)) {
     return catalog
@@ -70,14 +73,29 @@ function richSelectParams(column: TableColumn, multiSelect: boolean): Record<str
 export const CELL_EDITOR_REGISTRY: Record<CellEditorKind, CellEditorSpec> = {
   text: { cellEditor: 'agTextCellEditor' },
   number: { cellEditor: 'agNumberCellEditor' },
-  // AG Grid ships no datetime-local editor; the raw string is edited as plain
-  // text and re-validated server-side (D-6) rather than inventing a custom
-  // widget for this generic engine.
-  datetime: { cellEditor: 'agTextCellEditor' },
+  // AG Grid ships no datetime-local editor (spec 0055 D-4): this repo's own
+  // popup picker, wired on the generic `datetime` kind so every domain gets
+  // it instead of retyping the raw `YYYY-MM-DDTHH:mm` string.
+  datetime: {
+    cellEditor: DateTimeCellEditor as ComponentType<CustomCellEditorProps>,
+    cellEditorPopup: true,
+  },
   boolean: { cellEditor: 'agCheckboxCellEditor' },
   enum: { cellEditor: 'agRichSelectCellEditor', cellEditorParams: (column) => richSelectParams(column, false) },
   badge: { cellEditor: 'agRichSelectCellEditor', cellEditorParams: (column) => richSelectParams(column, false) },
   tags: { cellEditor: 'agRichSelectCellEditor', cellEditorParams: (column) => richSelectParams(column, true) },
+  // Spec 0055 D-2: a dropdown over the column's OWN backend-resolved options
+  // (objects carrying `value`/`label`/`requires_note`), narrowed per row by
+  // the editor itself. Distinct from `enum`/`badge`, whose options are plain
+  // scalars rendered by AG Grid's built-in rich select.
+  select: {
+    cellEditor: SelectCellEditor as ComponentType<CustomCellEditorProps>,
+    cellEditorParams: (column) => ({
+      columnId: column.id,
+      options: selectColumnOptions(column),
+    }),
+    cellEditorPopup: true,
+  },
   relation: {
     // AG Grid itself types `ColDef.cellEditor` as `any` (the shape differs by
     // wrapper/framework); this cast is the same interop boundary, confined to

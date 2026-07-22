@@ -91,14 +91,6 @@ interface AsyncPaginatedSelectProps {
    * Changing it starts a fresh paginated query.
    */
   params?: Record<string, string | number>
-  /**
-   * Mounts the popup already open (e.g. a single-click cell editor that wants
-   * to skip the extra click to reveal the dropdown). Matches the `defaultOpen`
-   * convention already used for uncontrolled Radix-backed components in this
-   * codebase (see `FormSection`, `CustomFieldsSection`). Defaults to `false`,
-   * so existing callers keep mounting closed exactly as before.
-   */
-  defaultOpen?: boolean
 }
 
 /**
@@ -130,9 +122,8 @@ export function AsyncPaginatedSelect({
   'aria-invalid': ariaInvalid,
   action,
   params,
-  defaultOpen = false,
 }: AsyncPaginatedSelectProps) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
   const debouncedSearch = useDebouncedValue(search.trim())

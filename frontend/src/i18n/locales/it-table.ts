@@ -84,6 +84,15 @@ export const table = {
     clear: 'Rimuovi',
     trigger: 'Scegli un valore',
     retry: 'Riprova',
+    loadMore: 'Carica altri',
+  },
+  selectEditor: {
+    list: 'Scegli un valore',
+    empty: 'Nessun valore disponibile per questa riga.',
+  },
+  dateTimeEditor: {
+    label: 'Data e ora',
+    clear: 'Svuota',
   },
   noteDialog: {
     title: 'Aggiungi una nota',

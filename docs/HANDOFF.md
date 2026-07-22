@@ -2,6 +2,210 @@
 
 > Injected at session start. Update at every green state.
 
+## BUGFIX — NOTA OBBLIGATORIA RIFIUTATA DAL PANNELLO GESTIONE RICHIESTE (2026-07-22) — GREEN
+
+Sintomo utente: nel form del pannello, selezionando uno stato di lavorazione con `requires_note`
+e compilando la nota, la PATCH tornava 422 "A note is required when moving to this working status."
+Root cause: la regola D-5 (spec 0054) vive in `RequestManagementService::updateWork()` e legge
+`$data['note']`, ma il canale PANNELLO perdeva la chiave DUE volte — `UpdateRequestRequest::rules()`
+non dichiarava `note` (quindi `validated()`/`safe()` la scartava) e il controller non la elencava in
+`safe()->only([...])`. Il canale inline non era affetto: legge `request()->input('note')` diretto.
+Fix: regola `'note' => ['sometimes','nullable','string','max:5000']` (stesso bound di
+`StoreNoteRequest::body`) + `'note'` aggiunto alla `only()` del controller.
+Perche' era sfuggito: D-5 era coperto SOLO sul canale inline
+(`RequestManagementWorkflowStatusInlineEditTest`). Ora esiste
+`tests/Feature/RequestManagement/RequestManagementWorkPanelNoteTest.php` (4 test, verificato
+fallente prima del fix). Suite `tests/Feature/RequestManagement` 143 passed, Pint pulito.
+
+## SPEC 0055 — EDITOR INLINE DEDICATI PER GESTIONE RICHIESTE (2026-07-22) — GREEN
+
+Spec: `docs/specs/0055-request-management-inline-editors.xml`. Estende 0053/0054, NON le riapre.
+Suite backend 3424 passed / 11 rossi PRE-ESISTENTI (invariati: 10 navigation node +
+`AbstractMigrationSourcePreviewTest`). Vitest 2084+ passed / 3 rossi PRE-ESISTENTI
+(`cell-renderers.test.tsx`, i18n ContactsCell). `tsc --noEmit` pulito, ESLint pulito sui file
+toccati, Pint pulito sui file toccati (restano fuori scope e gia' rossi `PipelineStatusTest`,
+`CompanySiteUpdateTest`). Diff dipendenze VUOTO. NIENTE COMMIT: in attesa di via libera (§3.6).
+
+PERCHE' L'INLINE ERA ROTTO (diagnosi, non impressione): `workflow_status` era dichiarata
+`type: 'text'` + `editable` SENZA editor, quindi il registry FE le assegnava `agTextCellEditor`
+su un valore che e' un OGGETTO `{id,name,color}` -> si editava "[object Object]" e si PATCHava una
+stringa dove il server vuole un id. E `resolveRequiresNote` cercava `requires_note` in
+`column.badges`, mentre il backend lo espone in `options`: il dialog nota NON scattava mai
+sull'inline (la regola server-side di 0054 restava l'unica difesa, come 422 a posteriori).
+
+COLONNE EDITABILI ORA su request-management (6): `workflow_status` (select + nota),
+`next_callback_at` (picker), `operator_ga2` (relazione `users`, scrive `operator_id`),
+`first_name`/`last_name`/`tax_code`/`phone` (testo, scrivono `client_*`).
+`product_categories` RESTA NON EDITABILE — decisione utente esplicita, non una dimenticanza:
+scriverla significherebbe creare/cancellare `opportunity_product_lines`, cosa da pannello.
+
+FOLLOW-UP 2 (segnalazione utente "quando clicco non succede nulla") — RIPRODOTTO NEL BROWSER e
+corretto. Lezione: 0053/0054 erano stati dichiarati verdi su test unitari/feature soltanto, e
+l'editor di relazione NON aveva MAI funzionato in una griglia vera. I test isolati lo nascondevano.
+Verifica ora fatta guidando l'app reale (Playwright su Vite 5173 + backend Herd, login demo@app.com,
+Gestione Richieste): tutte e 6 le colonne provate a mano, PATCH 200 osservati, inclusa la nota
+obbligatoria (`{"column":"workflow_status","value":8,"note":"..."}`).
+
+DUE DIFETTI DISTINTI, entrambi misurati e corretti:
+- (a) `RelationCellEditor` componeva `AsyncPaginatedSelect`, cioe' un Popover Radix, DENTRO il popup
+  editor di AG Grid. Il Popover fa portal su `document.body` -> con
+  `stopEditingWhenCellsLoseFocus: true` la griglia vedeva il focus uscire dalla cella e distruggeva
+  l'editor mentre si apriva (MutationObserver: popup ADDED -> popper ADDED -> entrambi REMOVED).
+  Sintomo: "clicco e non succede nulla". Portarlo dentro `.ag-popup-editor` risolveva il focus ma
+  la lista si staccava dalla cella (posizionamento fixed risolto sulla posizione statica).
+  SOLUZIONE: l'editor ora rende ricerca + lista DIRETTAMENTE nel popup della griglia, riusando lo
+  stesso hook `useForSelect` (nessun secondo layer flottante annidato dentro il primo). Stessa forma
+  del `SelectCellEditor`, che infatti non ha mai avuto nessuno dei due bug.
+  NON reintrodurre un Popover/Dropdown Radix dentro un cell editor di AG Grid.
+  Conseguenza: la prop `defaultOpen` di `AsyncPaginatedSelect` (aggiunta da 0054 solo per questo
+  caso) e' rimasta senza consumatori ed e' stata RIMOSSA insieme al suo test.
+- (b) `UserCell` monta un `<button>` (trigger hover-card) che apre la scheda utente: si mangiava il
+  click che serve ad AG Grid per entrare in modifica, quindi su una cella persona con valore si
+  apriva il profilo invece dell'editor. Ora su cella EDITABILE il bottone non viene reso (letto da
+  `Column.isCellEditable(node)`, la decisione vera di AG Grid). Due affordance non possono possedere
+  lo stesso singolo click: sulla cella editabile vince la modifica.
+Entrambi valgono anche per le colonne relazione di leads, che avevano lo stesso difetto.
+
+FOLLOW-UP 1 (segnalazione utente "operatore continua a non funzionare") — RIPRODOTTO e corretto:
+la colonna relazione veniva annunciata `editable: true` anche a chi NON puo' leggere la risorsa
+target. Per un operatore senza `users.viewAny`: `GET /api/users/for-select` -> 403 (tendina vuota/in
+errore) e qualunque salvataggio -> 422. Violava D-2 di 0053 in faccia. `editableColumnIds()` ora
+richiede anche `{relation.resource}.viewAny`: senza, la colonna esce READ-ONLY invece che finta
+editabile. Regola del MOTORE -> vale anche per le 5 colonne relazione di leads.
+ATTENZIONE: questo rende la cella onesta, NON abilita l'operatore. Perche' possa riassegnare serve
+`users.viewAny` sul suo ruolo (stessa condizione del select "Operatore" nel pannello Lavora, che usa
+lo stesso endpoint: se l'inline non funziona per un ruolo, non funziona nemmeno il pannello).
+Alternativa non implementata, se non si vuole concedere `users.viewAny`: un for-select dedicato
+agli operatori assegnabili, gated da `request-management.update`.
+
+INVARIANTI NUOVE — non rimuoverle:
+- D-1: `editor` e' ora una chiave dichiarativa del catalogo (`select`/`datetime`/`relation`),
+  non piu' solo un effetto collaterale di `relation`. L'editor e' una scelta di DOMINIO: lo stato
+  di lavorazione e' una select anche se il suo `type` di rendering resta `text`.
+- D-3: in `CellValueValidator` il ramo "il valore e' un id" (regola `integer`) e' agganciato a
+  `editor === 'select'`, NON piu' alla presenza di `editableField`. `editableField` rimappa solo la
+  chiave di permesso/scrittura (0054 D-1) e una colonna TESTUALE puo' usarlo: `first_name` ->
+  `client_first_name`. Se qualcuno rimette la condizione sul vecchio predicato, le quattro colonne
+  anagrafiche iniziano a rifiutare le stringhe con un errore `integer` incomprensibile.
+- D-7: l'anagrafica cliente si scrive SPARSA, una cella per volta, mai con i blocchi del pannello.
+  Il telefono NON passa da `ContactService::sync()` (autoritativo sull'intero set: cancellerebbe
+  tutti gli altri contatti di un cliente che l'inline non ha mai caricato) ma da un update in place
+  del contatto primario phone/mobile, con create se assente e DELETE se svuotato. L'identita'
+  ricostruisce il DTO dai valori correnti della card sostituendo il solo campo toccato, cosi'
+  `registries.name` viene riderivato come dal pannello e nessun campo non toccato viene azzerato.
+  Cliente senza card anagrafica -> 422 esplicito, mai una create silenziosa (non sappiamo se
+  individual o company).
+- D-8: quattro chiavi di permesso separate (`client_first_name`, `client_last_name`,
+  `client_tax_code`, `client_phone`) in `RequestManagementAuthorization` — decisione utente: la
+  matrice deve poter aprire il telefono e non il codice fiscale. Le colonne dichiarano
+  `nullable: true` di proposito: l'obbligatorieta' NON e' una proprieta' della colonna ma del campo
+  risolto (`FieldPermission::$required`, gia' applicato da `TableCellUpdateService` step 4.5).
+- D-9: le scritture anagrafiche non toccano `opportunities`, quindi il log automatico del model non
+  le vedrebbe: `RequestClientProfileWriter::applyTo()` riporta i cambi in `$changed`/`$old` e lo
+  Step 6 di `updateWork()` li audita. Un campo scritto senza traccia e' un bug.
+
+FRONTEND: due editor nuovi, entrambi in popup e generici (`SelectCellEditor`,
+`DateTimeCellEditor` registrati sul `CELL_EDITOR_REGISTRY`, quindi la voce `datetime` migliora per
+OGNI dominio, non solo qui). `TableColumn.options` e' ora `string[] | SelectOption[]`: le colonne
+enum/badge continuano a emettere scalari, un `editor: 'select'` emette oggetti
+`{value,label,requires_note}` — il FE renderizza `label` e invia `value`, non sa cosa siano.
+Le due forme si leggono SOLO tramite `features/table/column-options.ts`
+(`scalarColumnOptions`/`selectColumnOptions`): i consumatori che assumevano `string[]` (catalogo
+permessi di `roles`, quick-create) passano da li'. La forma sbagliata da lista vuota, mai una riga
+mezza renderizzata. NOTA: `tsc -b` (hook Stop) copre file che `tsc --noEmit` da solo non compilava
+— e' lui che ha intercettato i due consumatori.
+`SelectCellEditor` riusa la convenzione per riga `<columnId>_options` di 0054 e non committa se
+si ri-sceglie il valore corrente (il valore di cella e' un oggetto: un `{id,name}` nuovo non
+sarebbe mai `=== oldValue` e il guard no-op dell'hook lascerebbe passare un PATCH inutile).
+
+DEVIAZIONE DALLA SPEC, messa a verbale: D-3 prevedeva anche `Rule::in(<opzioni risolte>)` per un
+`select`. Non implementata: il validatore riceve la dichiarazione GREZZA della colonna (le opzioni
+nascono da `optionsFor()` in `resolveConfig()`), servirebbe allargare il contratto `TableDefinition`
+su 26 domini per ottenere un controllo domain-wide PIU' DEBOLE di quello per-riga gia' autorevole in
+`updateWork()`. Due copie della stessa regola divergono.
+
+DA SAPERE (pre-esistente, fuori scope, confermato ancora vero): `UpdateRequestRequest` non usa
+`EnforcesFieldPermissions` -> sul pannello Lavora la matrice per-campo non ha effetto, quindi
+l'inline edit e' PIU' restrittivo del pannello. Le nuove chiavi `client_*` valgono oggi solo per
+l'inline.
+
+## SPEC 0054 — INLINE SU COLONNE DI RELAZIONE + NOTA OBBLIGATORIA (2026-07-22) — GREEN
+
+Spec: `docs/specs/0054-inline-relation-editing.xml`. Estende 0053, NON la riapre.
+Verifier indipendente: VERDE con riserve documentate (sotto). Suite backend 3407 passed / 11 rossi
+PRE-ESISTENTI (10 navigation node + `AbstractMigrationSourcePreviewTest`). Vitest 2067 passed /
+3 rossi PRE-ESISTENTI (`cell-renderers.test.tsx`, i18n ContactsCell). `tsc` pulito. Pint pulito sui
+44 file toccati. Diff dipendenze VUOTO.
+NOTA COMMIT: anche questo lavoro e' finito in un commit di una sessione concorrente
+(`d226052 feat(opportunity): add products of interest...`), come 0053 era finita in `606b4bf`.
+La history NON riflette ne' 0053 ne' 0054.
+
+COLONNE ACCESE ORA
+- leads: registry, campaign, operational_site, source, operator (relazioni, editor `/for-select`).
+  ESCLUSE `lead_status` (badge derivato da operatore+stato opportunita', NON scrivibile) e `created_at`.
+- request-management: `workflow_status` (Stato di lavorazione) + `next_callback_at`.
+- opportunities/campaigns/projects: invariate da 0053.
+
+D-1 — DISALLINEAMENTO COLONNA/CAMPO: la colonna mostra `operator`, il campo scritto e' `operator_id`.
+Si dichiara ESPLICITAMENTE `editableField` + `relation.resource` sulla colonna. Nessuna inferenza dal
+suffisso `_id`, nessuna mappa di traduzione implicita. La regola D-3 di 0053 si applica su
+`editableField` quando presente, altrimenti sull'id colonna; entrambi i rami restano fail-safe.
+
+INVARIANTI NUOVE — non rimuoverle:
+- D-2: per una colonna relazione NON basta `exists:`. Il valore deve essere raggiungibile
+  dall'attore: `RelationValueScopeChecker` riusa la query `forSelect()` del Service (mai una query
+  propria) E verifica `{resource}.viewAny` PRIMA di interrogarla. Senza quel gate, un attore privo
+  di permesso sulla risorsa target potrebbe assegnarla via inline-edit aggirando il controllo che
+  l'endpoint reale applica. NON rimuoverlo credendolo ridondante.
+- D-5: `requires_note` NON era applicato da NESSUNA PARTE prima di questa spec (verificato con grep
+  su tutto `app/` e `tests/`): era un flag decorativo. La regola nasce qui, per decisione utente, e
+  vive in UN SOLO punto — `RequestManagementService::updateWork()` — che e' il choke point
+  attraversato SIA dal pannello SIA dall'inline edit. Non duplicarla altrove: due copie divergono.
+  Regola: stato target con `requires_note` E stato che CAMBIA -> nota obbligatoria (vuota o di soli
+  spazi -> 422). Stato invariato -> nessuna nota (non e' un avanzamento). Nota creata PRIMA del
+  save dentro la transazione gia' esistente -> se la nota fallisce lo stato non cambia.
+- D-8 (requisito utente): i campi `required` restano editabili inline ma NON salvabili vuoti.
+  Regola del MOTORE derivata da `FieldPermission::$required`, non dichiarata per colonna: vale
+  gratis per ogni colonna futura. Vince sul `nullable` della colonna quando i due confliggono.
+  Vale anche per un campo reso required SOLO da una riga `role_field_permissions`.
+- D-9 (requisito utente): PARITA' CON LA FORM. Nessun campo editabile inline puo' essere
+  non-editabile nel form. Presidiato da `InlineEditFormParityGuardTest`, che invia i campi agli
+  endpoint REALI dei form e fallisce ELENCANDO le violazioni.
+- AC-026/027: il set di stati validi e' PER-RIGA (spec 0047 risolve il workflow per criteri), non
+  per-dominio. `POST /rows` porta `workflow_status_options` (soli id) per riga; `GET /columns`
+  continua a portare il catalogo intero con `requires_note` per voce (serve a decidere se aprire il
+  dialog). Costo O(1) e non O(n) grazie alla memoizzazione SULL'ISTANZA di
+  `OpportunityWorkflowResolver`. La memoizzazione e' istanza-scoped e il resolver NON e' singleton:
+  se un domani si introduce Octane o worker persistenti, VA RIVISTA (rischio di stato condiviso
+  fra richieste).
+
+FRONTEND: editor `relation` = voce nuova del `CELL_EDITOR_REGISTRY`, popup dichiarato via
+`cellEditorPopup: true` sulla colDef (l'API funzionale di AG Grid NON ha `isPopup()`).
+`AsyncPaginatedSelect` ha ora una prop `defaultOpen` (additiva, default `false`, retrocompatibile
+verificata su 901 test di consumatori) usata dall'editor di cella per aprirsi al PRIMO click:
+l'utente aveva scelto il single-click, due click lo tradivano.
+Il valore di cella di una colonna relazione e' `{id, name}`, NON l'id nudo: `useTableCellEdit`
+estrae `.id` prima del PATCH.
+Il filtro per riga usa la convenzione `<column_id>_options` letta da `params.data`: chiave
+costruita a runtime, difesa da `Array.isArray()` con fallback al catalogo intero. Guidata dai
+metadata, mai da un `if (column.id === ...)`.
+
+RISERVE DEL VERIFIER (non bloccanti, da sapere):
+1. AC-006 provato in senso DEBOLE: nessuna delle 5 risorse relazione ha oggi scoping per-riga,
+   quindi "id inesistente" e "id fuori portata" collassano sullo stesso meccanismo. Se una di esse
+   diventa multi-tenant/scoped, serve un test che eserciti davvero il caso.
+2. `updateCell()` legge `note` da `request()->input('note')`: dipendenza ambientale implicita, dovuta
+   al contratto `updateCell()` congelato da 0053 che non prevede parametri extra. Stesso pattern gia'
+   usato da `Auth::user()` in `baseQuery()`. Da tenere presente se si aggiungono altre colonne `notable`.
+3. Convenzione `<column_id>_options`: una colonna futura chiamata letteralmente `x_options`
+   collidere col pattern. Remoto, ma da ricordare nel prossimo dominio con set per-riga.
+
+SCOPERTA COLLATERALE (pre-esistente, FUORI SCOPE, non toccata): `UpdateRequestRequest` NON usa
+`EnforcesFieldPermissions`. Il pannello Gestione Richieste NON applica i permessi per-campo: la
+matrice `role_field_permissions` su quel modulo oggi non ha alcun effetto. L'inline edit li verifica
+per conto proprio, quindi e' PIU' restrittivo del pannello. Se la matrice viene usata per limitare i
+ruoli, su quel modulo non sta proteggendo nulla. Merita un intervento dedicato.
+
 ## ATTRIBUZIONE SUL PANNELLO GESTIONE RICHIESTE (2026-07-22) — GREEN, NON COMMITTATO
 
 Direttiva utente: nella pagina dedicata di Gestione Richieste servono FONTE, SEGNALATORE e

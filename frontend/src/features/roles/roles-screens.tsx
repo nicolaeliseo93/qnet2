@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { useTableConfig } from '@/features/table/use-table-config'
+import { scalarColumnOptions } from '@/features/table/column-options'
 import type { TableConfig } from '@/features/table/types'
 import { fetchRole } from '@/features/roles/api'
 import { RoleForm } from '@/features/roles/role-form'
@@ -74,8 +75,7 @@ function resolvePermissionOptions(config: TableConfig): string[] {
     return filter.options
   }
 
-  const column = config.columns.find((entry) => entry.id === 'permissions')
-  return column?.options ?? []
+  return scalarColumnOptions(config.columns.find((entry) => entry.id === 'permissions'))
 }
 
 interface EditRoleLoaderProps {

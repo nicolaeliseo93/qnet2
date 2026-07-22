@@ -22,15 +22,24 @@ use Illuminate\Validation\ValidationException;
  * `type: 'text'` for display/sort/filter, so the plain type-derived `string`
  * rule would wrongly reject the submitted integer id).
  *
- * A column declaring `editableField` WITHOUT `relation` (spec 0054, D-1 —
- * e.g. request-management's `workflow_status`, whose real field is
- * `opportunity_workflow_status_id` but is not `/for-select`-backed) takes
- * the SAME "value is an id" path minus the for-select scope check: its own
- * domain membership rule (e.g. AC-011's resolved-workflow set) lives in the
- * definition's `updateCell()` override, not here.
+ * A `editor: 'select'` column (spec 0055, D-3 — e.g. request-management's
+ * `workflow_status`, whose real field is `opportunity_workflow_status_id` but
+ * is not `/for-select`-backed) takes the SAME "value is an id" path minus the
+ * for-select scope check: its own domain membership rule (e.g. 0054 AC-011's
+ * resolved-workflow set) lives in the definition's `updateCell()` override,
+ * not here.
+ *
+ * That branch keys on `editor`, NOT on the mere presence of `editableField`
+ * (spec 0055, D-3): `editableField` only remaps the permission/write key
+ * (0054, D-1), and a TEXT column may legitimately use it — e.g.
+ * `first_name` -> `client_first_name`, whose value is a string and would be
+ * wrongly rejected by an `integer` rule.
  */
 final class CellValueValidator
 {
+    /** The `editor` kind whose submitted value is a related row's id, not a value of the display `type`. */
+    private const string SELECT_EDITOR = 'select';
+
     public function __construct(private readonly RelationValueScopeChecker $relationScope) {}
 
     /**
@@ -44,7 +53,7 @@ final class CellValueValidator
             return $this->validateRelationValue($column, $value, $actor);
         }
 
-        if (isset($column['editableField'])) {
+        if (($column['editor'] ?? null) === self::SELECT_EDITOR) {
             return $this->validateIdValue($column, $value);
         }
 
@@ -96,10 +105,14 @@ final class CellValueValidator
     }
 
     /**
-     * A non-relation `editableField` column's value is still an id, not a
-     * value of the display `type` — structural check only (integer, or null
-     * when `nullable`); the domain-specific membership rule is the
-     * definition's own responsibility (updateCell()).
+     * A non-relation `select` column's value is still an id, not a value of
+     * the display `type` — structural check only (integer, or null when
+     * `nullable`); the domain-specific membership rule is the definition's
+     * own responsibility (updateCell()). Deliberately NOT an `in:` rule over
+     * the column's resolved options: those come from `optionsFor()` (absent
+     * from the raw declaration this validator receives), and the AUTHORITATIVE
+     * check is per-ROW anyway — a domain-wide catalogue check would be
+     * strictly weaker and a second, divergable copy of it.
      *
      * @param  array<string, mixed>  $column
      *

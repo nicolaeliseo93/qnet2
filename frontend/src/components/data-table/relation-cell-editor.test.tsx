@@ -58,14 +58,15 @@ beforeEach(() => {
 })
 
 describe('RelationCellEditor', () => {
-  it('mounts with the searchable dropdown already open, fed by the declared /for-select resource — no second click (AC-017/D-9)', async () => {
+  // The editor renders its search + list DIRECTLY in AG Grid's popup (spec 0055
+  // follow-up): the previous assertions described the Radix combobox trigger it
+  // used to nest inside the cell, which is exactly what broke editing in a real
+  // grid — see the component docblock.
+  it('renders the searchable list immediately, fed by the declared /for-select resource — no second click (AC-017/D-9)', async () => {
     fetchForSelectMock.mockResolvedValue(page([{ id: 1, label: 'Mario Rossi' }, { id: 2, label: 'Luigi Bianchi' }]))
     renderEditor()
 
-    expect(screen.getByRole('combobox', { name: i18n.t('table.relationEditor.trigger') })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    )
+    expect(screen.getByRole('listbox', { name: i18n.t('table.relationEditor.trigger') })).toBeInTheDocument()
     expect(
       screen.getByRole('textbox', { name: i18n.t('table.relationEditor.searchPlaceholder') }),
     ).toBeInTheDocument()
@@ -91,23 +92,32 @@ describe('RelationCellEditor', () => {
     expect(props.stopEditing).toHaveBeenCalledTimes(1)
   })
 
-  it('commits null and stops editing when the current selection is cleared', () => {
-    fetchForSelectMock.mockResolvedValue(page([]))
+  it('commits null and stops editing when the current selection is cleared', async () => {
+    fetchForSelectMock.mockResolvedValue(page([{ id: 5, label: 'Mario Rossi' }]))
     const props = renderEditor({ value: { id: 5, name: 'Mario Rossi' } })
 
-    fireEvent.click(screen.getByRole('button', { name: `Clear Mario Rossi` }))
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('table.relationEditor.clear') }))
 
     expect(props.onValueChange).toHaveBeenCalledWith(null)
     expect(props.stopEditing).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the row\'s already-known {id, name} label immediately, even before the list fetch resolves', () => {
-    // Never resolves: proves the trigger label comes from `selectedItem`
-    // hydration, not from waiting on the list query.
-    fetchForSelectMock.mockReturnValue(new Promise(() => {}))
+  it('hydrates the current value through the query so it is offered even outside the searched window', async () => {
+    fetchForSelectMock.mockResolvedValue(page([{ id: 5, label: 'Mario Rossi' }]))
     renderEditor({ value: { id: 5, name: 'Mario Rossi' } })
 
-    expect(screen.getByText('Mario Rossi')).toBeInTheDocument()
+    await waitFor(() => expect(fetchForSelectMock).toHaveBeenCalledWith('users', expect.objectContaining({ ids: [5] })))
+    expect(await screen.findByRole('option', { name: 'Mario Rossi' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('does not commit when the CURRENT value is re-picked (no pointless PATCH)', async () => {
+    fetchForSelectMock.mockResolvedValue(page([{ id: 5, label: 'Mario Rossi' }]))
+    const props = renderEditor({ value: { id: 5, name: 'Mario Rossi' } })
+
+    fireEvent.click(await screen.findByRole('option', { name: 'Mario Rossi' }))
+
+    expect(props.onValueChange).not.toHaveBeenCalled()
+    expect(props.stopEditing).toHaveBeenCalledTimes(1)
   })
 
   it('never commits or stops editing on its own on Escape — the component wires no handler for it, leaving AG Grid\'s own cancel path untouched', () => {

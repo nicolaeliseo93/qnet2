@@ -350,12 +350,4 @@ describe('AsyncPaginatedSelect', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
 
-  it('mounts already open when defaultOpen is set, for single-click cell editors', () => {
-    useForSelectMock.mockReturnValue(
-      queryState({ data: pagesOf([{ id: 1, label: 'Jane Doe' }]) }),
-    )
-    renderSelect({ defaultOpen: true })
-    expect(screen.getByRole('listbox')).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: /Jane Doe/ })).toBeInTheDocument()
-  })
 })

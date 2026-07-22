@@ -42,14 +42,36 @@ function resolveCellPatchValue(value: unknown): string | number | boolean | null
 
 /**
  * Whether the column's newly-picked value requires an accompanying note
- * (spec 0054 D-5): driven entirely by the column's own `badges` metadata
- * (`requires_note`), never by column id — a relation value never matches
- * (its `badges` is always absent), so this is a no-op for every column but a
- * badge/enum one that actually declares the flag on an option.
+ * (spec 0054 D-5): driven entirely by the column's own metadata, never by
+ * column id.
+ *
+ * The flag is read from the backend-resolved `options` of an `editor:
+ * 'select'` column (spec 0055 D-5 — where request-management's working
+ * statuses actually carry it) and, as a fallback, from a badge column's
+ * `badges`. The value compared is the PATCH value (an id for a select/relation
+ * column, the scalar itself otherwise), so both shapes match on the same
+ * comparison. The rule is enforced server-side regardless: this only lets the
+ * grid ask before committing instead of surfacing a 422 afterwards.
  */
-function resolveRequiresNote(columns: TableColumn[], columnId: string, value: unknown): boolean {
+function resolveRequiresNote(columns: TableColumn[], columnId: string, patchValue: unknown): boolean {
   const column = columns.find((candidate) => candidate.id === columnId)
-  return column?.badges?.some((badge) => badge.value === value && badge.requires_note === true) ?? false
+
+  if (column === undefined) {
+    return false
+  }
+
+  const optionRequiresNote = (column.options ?? []).some(
+    (option) =>
+      typeof option === 'object' &&
+      option !== null &&
+      String(option.value) === String(patchValue) &&
+      option.requires_note === true,
+  )
+
+  return (
+    optionRequiresNote ||
+    (column.badges?.some((badge) => badge.value === patchValue && badge.requires_note === true) ?? false)
+  )
 }
 
 /** A cell edit awaiting its note before it can PATCH (spec 0054 D-5). */
@@ -117,7 +139,7 @@ export function useTableCellEdit(domain: string, columns: TableColumn[]) {
       const revertedData: TableRow = { ...event.data, [columnId]: event.oldValue }
       const patchValue = resolveCellPatchValue(event.newValue)
 
-      if (resolveRequiresNote(columns, columnId, event.newValue)) {
+      if (resolveRequiresNote(columns, columnId, patchValue)) {
         setPendingNote({ event, patchValue, revertedData })
         return
       }

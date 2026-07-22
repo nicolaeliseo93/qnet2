@@ -61,6 +61,17 @@ class RequestManagementAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('source_id', 'select'),
             new FieldDefinition('reporter_id', 'select'),
             new FieldDefinition('operator_id', 'select'),
+            // Client anagraphic block (spec 0055, D-8, user decision): FOUR
+            // separate keys rather than one `client_identity`, so the
+            // role_field_permissions matrix can make the phone editable
+            // without the tax code. None of them is a column on
+            // `opportunities`: they address the client Registry's
+            // PersonalData card (and its primary phone contact), written by
+            // RequestClientProfileWriter through updateWork().
+            new FieldDefinition('client_first_name', 'text'),
+            new FieldDefinition('client_last_name', 'text'),
+            new FieldDefinition('client_tax_code', 'text'),
+            new FieldDefinition('client_phone', 'text'),
         ];
     }
 
@@ -87,6 +98,10 @@ class RequestManagementAuthorization extends AbstractResourceAuthorization
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'reporter_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'operator_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'client_first_name' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'client_last_name' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'client_tax_code' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'client_phone' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];
     }
 

@@ -4,8 +4,10 @@ import {
   resolveCellEditorSpec,
   type CellEditorKind,
 } from '@/components/data-table/cell-editor-registry'
+import { DateTimeCellEditor } from '@/components/data-table/datetime-cell-editor'
 import { RelationCellEditor } from '@/components/data-table/relation-cell-editor'
-import type { ColumnType, EnumBadge, TableColumn, TableRow } from '@/features/table/types'
+import { SelectCellEditor } from '@/components/data-table/select-cell-editor'
+import type { ColumnType, EnumBadge, SelectOption, TableColumn, TableRow } from '@/features/table/types'
 
 /** A `RichCellEditorValuesCallback` param stub: only `data` (the editing row) is read. */
 function valuesParams(data: TableRow | undefined) {
@@ -43,11 +45,41 @@ describe('resolveCellEditorSpec', () => {
     expect(resolveCellEditorSpec('future_type' as ColumnType)).toBeUndefined()
   })
 
-  it('maps text/number/boolean/datetime to their plain built-in editors', () => {
+  it('maps text/number/boolean to their plain built-in editors', () => {
     expect(resolveCellEditorSpec('text')?.cellEditor).toBe('agTextCellEditor')
     expect(resolveCellEditorSpec('number')?.cellEditor).toBe('agNumberCellEditor')
     expect(resolveCellEditorSpec('boolean')?.cellEditor).toBe('agCheckboxCellEditor')
-    expect(resolveCellEditorSpec('datetime')?.cellEditor).toBe('agTextCellEditor')
+  })
+
+  // Requirement CHANGED by spec 0055 D-4: `datetime` used to resolve to
+  // `agTextCellEditor` (retyping the raw wire string by hand); it now resolves
+  // to this repo's own popup picker, on the generic kind so every domain gets it.
+  it('maps datetime to the popup date/time picker (spec 0055 D-4)', () => {
+    const spec = resolveCellEditorSpec('datetime')
+    expect(spec?.cellEditor).toBe(DateTimeCellEditor)
+    expect(spec?.cellEditorPopup).toBe(true)
+  })
+
+  it('maps select to the popup listbox, fed by the column options and its id', () => {
+    const options: SelectOption[] = [
+      { value: 1, label: 'Da contattare', requires_note: false },
+      { value: 2, label: 'Chiusa', requires_note: true },
+    ]
+    const spec = resolveCellEditorSpec('select')
+    expect(spec?.cellEditor).toBe(SelectCellEditor)
+    expect(spec?.cellEditorPopup).toBe(true)
+    expect(spec?.cellEditorParams?.(stubColumn({ id: 'workflow_status', type: 'text', options }))).toEqual({
+      columnId: 'workflow_status',
+      options,
+    })
+  })
+
+  it('drops scalar options from a select column instead of coercing them', () => {
+    const spec = resolveCellEditorSpec('select')
+    const params = spec?.cellEditorParams?.(
+      stubColumn({ id: 'workflow_status', type: 'text', options: ['open', 'closed'] }),
+    ) as { options: SelectOption[] }
+    expect(params.options).toEqual([])
   })
 
   it('maps enum/badge to a single-select rich editor sourced from column.options', () => {

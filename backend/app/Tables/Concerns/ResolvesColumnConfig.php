@@ -129,8 +129,18 @@ trait ResolvesColumnConfig
             $resolved['enumKey'] = $enumKey;
         }
 
+        // Spec 0055, D-1: `editor` is a first-class catalogue key — the editor
+        // is a DOMAIN choice (a working-state is a select even though its
+        // rendering `type` is `text`), not a consequence of the rendering
+        // type. A declared `relation` still implies `editor: 'relation'`, so
+        // every spec 0054 column stays byte-identical without declaring it.
+        $editor = $column['editor'] ?? (isset($column['relation']) ? 'relation' : null);
+
+        if ($editor !== null) {
+            $resolved['editor'] = $editor;
+        }
+
         if (isset($column['relation'])) {
-            $resolved['editor'] = 'relation';
             $resolved['relation'] = ['resource' => $column['relation']['resource']];
         }
 

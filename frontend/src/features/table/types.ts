@@ -15,6 +15,19 @@ import type {
 export type ColumnType = 'text' | 'number' | 'datetime' | 'enum' | 'tags' | 'badge' | 'boolean'
 
 /**
+ * One entry of a backend-resolved option list for an `editor: 'select'` column
+ * (spec 0055 D-2). `value` is what the PATCH submits (an id for a relation-like
+ * column such as the working status), `label` what the operator reads, and
+ * `requires_note` whether picking it must be accompanied by a note — the server
+ * enforces that rule regardless (0054 D-5), this only lets the grid ask first.
+ */
+export interface SelectOption {
+  value: string | number
+  label: string
+  requires_note?: boolean
+}
+
+/**
  * Per-value badge metadata for a `badge` column, supplied by the backend from a
  * domain enum (EnumMeta). The frontend maps a row value to its entry to render
  * the label/color/icon — it never knows the domain enum itself.
@@ -101,12 +114,13 @@ export interface TableColumn {
    */
   editable?: boolean
   /**
-   * Overrides the `type`-driven cell editor lookup with a relation picker fed
-   * by `/for-select` (spec 0054 D-7). Present only alongside `relation` on a
-   * column that also declares `editable`; every other editable column keeps
+   * Overrides the `type`-driven cell editor lookup (spec 0054 D-7, extended by
+   * 0055 D-1): `relation` is a `/for-select`-fed picker, `select` a dropdown
+   * over the column's own backend-resolved `options`, `datetime` a date+time
+   * picker. Declared per column by the backend; a column without it keeps
    * resolving its editor from `type`, unchanged.
    */
-  editor?: 'relation'
+  editor?: 'relation' | 'select' | 'datetime'
   /** The `/for-select` resource backing a `relation` editor (spec 0054 D-1). */
   relation?: { resource: string }
   /**
@@ -116,8 +130,15 @@ export interface TableColumn {
    * filter, never a Set tab. Absent or `true` behaves as supported (0005).
    */
   hasFilterValues?: boolean
-  /** Allowed values for enum/tags/badge columns (may be resolved dynamically). */
-  options?: string[]
+  /**
+   * Allowed values for enum/tags/badge columns (may be resolved dynamically),
+   * OR — for an `editor: 'select'` column (spec 0055 D-2) — the backend's own
+   * resolved option objects, whose `value` is the id the PATCH submits and
+   * whose `requires_note` tells the grid when to ask for a note before
+   * committing. The frontend never knows what the options MEAN: it renders
+   * `label` and sends `value`.
+   */
+  options?: string[] | SelectOption[]
   /**
    * Per-value badge metadata for a `badge` column. Present only when the backend
    * declares the column as a badge; drives label/color/icon rendering.

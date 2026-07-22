@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0055 — Editor inline dedicati per Gestione Richieste.
+  Grounding VERIFICATO sul codice reale (esplorazione 2026-07-22), non ipotizzato.
+  Estende 0053 (motore) e 0054 (relazioni + nota obbligatoria); NON le riapre.
+
+  Decisioni utente (AskUserQuestion 2026-07-22):
+    - "Categoria prodotto" (product_categories): RESTA NON EDITABILE. Il multiselect chiesto nel
+      brief iniziale e' stato ritirato dall'utente stesso ("non editabile" / "rimani non editabile"),
+      quindi nessuna scrittura sulle opportunity_product_lines entra in questo giro e l'invariante
+      di parita' D-9 di 0054 non viene toccata.
+    - Anagrafica cliente: QUATTRO chiavi di permesso separate (client_first_name, client_last_name,
+      client_tax_code, client_phone), non una chiave unica: la matrice role_field_permissions deve
+      poter rendere editabile il telefono e non il codice fiscale.
+-->
+<spec id="0055-request-management-inline-editors" status="draft" owner="nicola" date="2026-07-22">
+
+  <goal>
+    Rendere davvero usabile la modifica inline sulla tabella `request-management`: ogni colonna
+    editabile ottiene l'editor giusto per il proprio dominio (select con option list dal server,
+    picker relazione, picker data/ora), la nota obbligatoria scatta davvero quando lo stato di
+    lavorazione la richiede, i permessi di update, i permessi per-campo e l'obbligatorieta' dei
+    campi required valgono su TUTTE le colonne accese. Tutto guidato dai metadata del backend:
+    nessun `if (column.id === ...)` nel frontend, nessuna lista di opzioni cablata lato client.
+  </goal>
+
+  <context>
+    Tutti i nomi sotto sono VERIFICATI sul codice reale (esplorazione 2026-07-22).
+
+    STATO ATTUALE — perche' "non funziona bene" (diagnosi, non impressione):
+    - `workflow_status` (RequestColumnCatalog.php:47-70) e' dichiarata `'type' => 'text'` +
+      `'editable' => true` + `'editableField' => 'opportunity_workflow_status_id'` + `'notable' => true`,
+      MA senza alcuna chiave `relation`/`editor`. Il frontend risolve l'editor da `type`
+      (column-defaults.tsx:116 `column.editor ?? column.type`) e ottiene `agTextCellEditor`
+      (cell-editor-registry.ts:72). Il valore di cella e' pero' l'oggetto
+      `{id, name, color, description}` proiettato da RequestRowMapper::summarizeWithColor: l'operatore
+      apre un editor di TESTO su un oggetto e il PATCH manda una stringa dove il server pretende un id.
+    - La nota obbligatoria NON scatta mai sull'inline: `resolveRequiresNote`
+      (use-table-cell-edit.tsx:53) cerca il flag in `column.badges[].requires_note`, ma il backend lo
+      espone in `options` (WritesInlineEditableCells::optionsFor restituisce
+      `{value, label, requires_note}`), e `workflow_status` non ha `badges`. La regola server-side
+      (RequestManagementService::updateWork, 0054 D-5) resta l'unica difesa e si manifesta come 422
+      dopo il fatto, invece che come dialog prima.
+    - `next_callback_at` (`'type' => 'datetime'`) risolve anch'essa `agTextCellEditor`
+      (cell-editor-registry.ts:77): si edita a mano la stringa grezza `Y-m-d\TH:i`.
+    - `operator_ga2`, `first_name`, `last_name`, `tax_code`, `phone` non sono editabili affatto
+      (nessuna chiave `editable` nel catalogo).
+    - Il tipo frontend dichiara `options?: string[]` (types.ts:120) mentre optionsFor emette oggetti:
+      il contratto delle opzioni e' gia' oggi disallineato, ma nessun consumatore lo esercita perche'
+      nessun editor legge le options di questa colonna.
+
+    MOTORE GIA' ESISTENTE — da riusare, mai duplicare:
+    - `TableCellUpdateService` e' la catena di guardie unica: riga da baseQuery (404 fuori scope) ->
+      `authorizeUpdate` per-riga -> allow-list colonna (422) -> `note` accettata solo su colonna
+      `notable` (422) -> permesso per-campo da role_field_permissions (403) -> **required non
+      vuoto** (422, `FieldPermission::$required`, gia' implementato, Step 4.5) -> validazione ->
+      `updateCell()`. I requisiti "permessi di update", "permessi per il singolo campo" e "i campi
+      required non possono restare vuoti" sono quindi gia' PROPRIETA' DEL MOTORE: questa spec non li
+      reimplementa, li ESTENDE alle colonne nuove e li copre con test dedicati.
+    - Editor `relation` (0054): `AsyncPaginatedSelect` in popup su `/for-select`, gia' usato dalla
+      colonna `operator` di `leads` — l'"Operatore" di questo modulo e' esattamente lo stesso caso.
+    - Choke point di scrittura: `RequestManagementService::updateWork()`, attraversato SIA dal
+      pannello Lavora SIA dall'inline (WritesInlineEditableCells::updateCell). Regola 0054 D-5 e
+      invarianti 0052 (marker reminder) vivono li' dentro e non vanno duplicate.
+    - `RequestClientProfileWriter` scrive gia' l'anagrafica cliente sulla PersonalData del Registry
+      (identita' via PersonalDataService::upsertFor + riderivazione di `registries.name`; contatti via
+      ContactService::sync).
+
+    TRAPPOLA VERIFICATA (vincola il design, D-3): `CellValueValidator::validate()` prende il ramo
+    "il valore e' un id" (regola `integer`) per QUALUNQUE colonna che dichiari `editableField`
+    (:47-49). Va bene per `workflow_status`, sarebbe sbagliato per `first_name` -> `client_first_name`,
+    dove `editableField` serve solo a rimappare la chiave di permesso e il valore resta una stringa.
+
+    PARITA' CON LA FORM (0054 D-9): `request-management` e' deliberatamente ESCLUSA da
+    `InlineEditFormParityGuardTest` perche' entrambi i canali passano dallo stesso
+    `updateWork()` — la parita' e' vera per costruzione. Questa spec mantiene quella proprieta':
+    ogni colonna nuova scrive attraverso `updateWork()`, mai con un `$row->update()` proprio.
+
+    FUORI SCOPE ESPLICITO: `product_categories` resta in sola lettura (decisione utente). Nessuna
+    scrittura su `opportunity_product_lines` entra in questo giro.
+  </context>
+
+  <decisions>
+    <d id="D-1" title="`editor` diventa una chiave dichiarativa di prima classe">
+      Oggi `withOptionalColumnExtras()` (ResolvesColumnConfig) emette `editor: 'relation'` SOLO come
+      effetto collaterale della presenza di `relation`. Diventa una chiave del catalogo:
+      `'editor' => 'select'|'datetime'|'relation'`, emessa quando dichiarata; la derivazione da
+      `relation` resta come default retrocompatibile. Nessuna colonna esistente cambia byte.
+      Motivo: l'editor e' una scelta di DOMINIO (lo stato di lavorazione e' una select anche se il
+      suo `type` di rendering e' `text`), non una conseguenza del tipo di rendering. Resta una
+      proprieta' STRUTTURALE, mai sovrascrivibile dalle preferenze utente (ADR-0004).
+    </d>
+
+    <d id="D-2" title="Editor `select`: option list dal server, mai dal client">
+      Un editor `select` prende le voci da `optionsFor()` (gia' emesse in `column.options`) nella
+      forma `{value, label, requires_note?}`. Il frontend non conosce nessun catalogo: non sa cosa sia
+      uno stato di lavorazione, sa solo renderizzare `label` e inviare `value`. Il filtro PER RIGA
+      resta quello di 0054 (`<column_id>_options` letto da `params.data`, con `Array.isArray` come
+      difesa e fallback al catalogo intero). Il tipo `TableColumn.options` si allarga a
+      `string[] | SelectOption[]`: le colonne enum/badge esistenti continuano a emettere scalari e
+      restano invariate.
+    </d>
+
+    <d id="D-3" title="Il ramo 'valore = id' si attiva su `editor`, non su `editableField`">
+      `CellValueValidator` smette di dedurre "questo valore e' un id" dalla presenza di
+      `editableField` (che e' solo una rimappatura di chiave, D-1 di 0054) e lo deduce da
+      `editor === 'select'` (o da `relation`, invariato). Cosi' una colonna testuale con chiave
+      di permesso diversa dall'id colonna (`first_name` -> `client_first_name`) valida come stringa,
+      mentre `workflow_status` continua a validare come intero.
+      La membership PER RIGA (set risolto da OpportunityWorkflowResolver, 0054 AC-011) NON si sposta:
+      resta in `updateWork()`, unico punto autorevole.
+
+      EMENDAMENTO IN IMPLEMENTAZIONE: la spec prevedeva anche un `Rule::in(<opzioni risolte>)` sul
+      valore di un `select`. NON e' stato implementato, per una ragione emersa scrivendo il codice:
+      il validatore riceve la dichiarazione GREZZA della colonna, dove le opzioni non ci sono ancora
+      (nascono da `optionsFor()`, risolto in `resolveConfig()`), e passargliele avrebbe richiesto di
+      allargare il contratto `TableDefinition` su tutti i 26 domini. Il controllo sarebbe stato
+      comunque una copia PIU' DEBOLE di quello autorevole (domain-wide invece che per-riga) e una
+      seconda regola destinata a divergere. Il 422 resta quello di `updateWork()`.
+    </d>
+
+    <d id="D-4" title="Editor `datetime`: un componente vero, generico per tutto il framework">
+      `next_callback_at` non prende un editor ad hoc per questo modulo: la voce `datetime` del
+      `CELL_EDITOR_REGISTRY` smette di puntare a `agTextCellEditor` e punta a un
+      `DateTimeCellEditor` in popup, che riusa l'input `datetime-local` gia' impiegato dal pannello
+      (`request-callback-section.tsx`) e committa la stessa stringa `Y-m-d\TH:i` che il backend gia'
+      accetta e riproietta (RequestRowMapper). Il cambio e' nel motore, quindi vale per ogni colonna
+      `datetime` di ogni dominio: e' il posto giusto perche' il difetto non e' di questo modulo.
+      Nessuna dipendenza nuova.
+    </d>
+
+    <d id="D-5" title="La nota obbligatoria si legge dalle options, con fallback ai badge">
+      `resolveRequiresNote` legge `requires_note` dalla voce di `options` selezionata; il ramo
+      `badges` resta come fallback per le colonne badge che lo usassero in futuro. Il dialog
+      esistente (`CellNoteDialog`, 0054) non cambia: conferma -> un solo PATCH `{column, value, note}`;
+      annulla -> revert locale, nessuna richiesta. La regola resta comunque applicata server-side in
+      `updateWork()` (0054 D-5): il dialog e' UX, non sicurezza.
+    </d>
+
+    <d id="D-6" title="Operatore: nessun meccanismo nuovo, la stessa colonna relazione di leads">
+      `operator_ga2` diventa `'editable' => true` + `'editableField' => 'operator_id'` +
+      `'relation' => ['resource' => 'users']`, esattamente come la colonna `operator` di
+      `LeadsTableDefinition`. Ne eredita gratis: editor async paginato, `RelationValueScopeChecker`
+      (che verifica `users.viewAny` PRIMA di interrogare la query `forSelect()`, invariante 0054 D-2)
+      e l'unwrap di `{id, name}` -> id in `useTableCellEdit`. Il valore di cella e'
+      `{id, name, avatar_url}`: l'unwrap esistente legge `.id` e funziona senza modifiche.
+      La scrittura passa da `updateWork()` (Step 3-bis, `applyOperator`), che aggiorna la riga pivot
+      `opportunity_user` a `position = OPERATOR_MANAGER_POSITION` — mai una `sync()` cieca.
+    </d>
+
+    <d id="D-7" title="Anagrafica cliente: scrittura SPARSA, mai un sync distruttivo">
+      Le 4 colonne anagrafiche scrivono sulla PersonalData del Registry attraverso `updateWork()`,
+      con quattro chiavi sparse nuove (`client_first_name`, `client_last_name`, `client_tax_code`,
+      `client_phone`). Due semantiche diverse e deliberate:
+       - identita': `RequestClientProfileWriter` ricostruisce il DTO `CreatePersonalData` dai valori
+         CORRENTI della card sostituendo il solo campo toccato, poi riusa `writeIdentity()` — cosi'
+         la riderivazione di `registries.name` (un cliente rinominato qui e' rinominato ovunque)
+         avviene identica al pannello, e nessun altro campo della card viene azzerato.
+       - telefono: NON si usa `ContactService::sync()` (che e' autoritativo sull'intero set e
+         cancellerebbe gli altri contatti del cliente, che l'inline non ha mai caricato). Si aggiorna
+         il contatto primario di tipo phone/mobile con `ContactService::update()`; se non esiste, si
+         crea con `createFor()` come primario di tipo `phone`. Il tipo di un contatto esistente non
+         viene mai riscritto.
+      Il cliente senza card anagrafica resta un 422 esplicito, come gia' fa `writeIdentity()`.
+    </d>
+
+    <d id="D-8" title="Quattro chiavi di permesso separate (decisione utente)">
+      `RequestManagementAuthorization::fields()` guadagna `client_first_name`, `client_last_name`,
+      `client_tax_code`, `client_phone` (tipo `text`), con le corrispondenti voci di
+      `fieldPermissionCeiling()` (editabili se l'attore puo' scrivere, altrimenti read-only), come le
+      chiavi operative esistenti. Da quel momento la matrice `role_field_permissions` puo' governarle
+      una per una — incluso renderne una `required`, che il motore (Step 4.5) trasforma
+      automaticamente nel rifiuto del salvataggio a vuoto, senza una riga di codice per colonna.
+    </d>
+
+    <d id="D-9" title="Audit anche fuori dal ciclo Eloquent dell'opportunita'">
+      Le scritture anagrafiche non toccano `opportunities`, quindi non passano dal log automatico del
+      model (0053 D-8 impone comunque la traccia). `updateWork()` estende il proprio blocco
+      `logOperationalChange()` (Step 6, che gia' esiste per i campi fuori `$fillable`) alle quattro
+      chiavi anagrafiche, con la stessa forma `attributes`/`old`. Un campo scritto senza traccia e'
+      un bug, non una svista accettabile.
+    </d>
+
+    <d id="D-10" title="Nessun ampliamento di superficie oltre le colonne dichiarate">
+      Restano in sola lettura: `product_categories` (decisione utente), `updated_at` (nascosta) e
+      ogni colonna non elencata nel contratto. Il default del motore (0053 D-1) resta opt-in
+      esplicito: nessuna colonna diventa editabile per inferenza.
+    </d>
+  </decisions>
+
+  <contract>
+    <!-- CONGELATO PRIMA DEL DISPATCH. Backend e frontend implementano contro questo. -->
+
+    <item name="Dichiarazione colonna — chiave nuova (backend)">
+      'editor' => 'select' | 'datetime' | 'relation'   // opzionale; default: 'relation' se e' presente
+                                                       // `relation`, altrimenti nessun editor dichiarato
+                                                       // e l'editor si risolve dal `type` (invariato).
+    </item>
+
+    <item name="GET /api/tables/{domain}/columns — delta">
+      `editor` viene emesso quando dichiarato (oltre al caso `relation` gia' esistente).
+      `options` per una colonna `editor: 'select'` e' una lista di oggetti:
+        [{ "value": 12, "label": "Da contattare", "requires_note": false }, ...]
+      Ogni altra colonna resta byte-identica.
+    </item>
+
+    <item name="POST /api/tables/request-management/rows — invariato">
+      Nessuna chiave nuova. `workflow_status_options` (0054) resta la lista di id validi PER QUELLA
+      RIGA e continua a filtrare le voci della select.
+    </item>
+
+    <item name="PATCH /api/tables/request-management/rows/{row} — invariato nella forma">
+      { "column": "<id colonna>", "value": <scalare|null>, "note": "<solo su colonna notable>" }
+      Colonne accettate da questa spec, con la chiave di permesso su cui sono valutate:
+        workflow_status   -> opportunity_workflow_status_id   (value: int, note ammessa)
+        operator_ga2      -> operator_id                      (value: int|null)
+        next_callback_at  -> next_callback_at                 (value: "Y-m-dTH:i"|null)
+        first_name        -> client_first_name                (value: string)
+        last_name         -> client_last_name                 (value: string)
+        tax_code          -> client_tax_code                  (value: string|null)
+        phone             -> client_phone                     (value: string|null)
+      Risposta: la riga intera ri-mappata, come 0053 D-9. Codici: 404 riga fuori scope, 403 permesso
+      di riga o di campo, 422 colonna non editabile / valore invalido / nota mancante / campo
+      required lasciato vuoto.
+    </item>
+
+    <item name="Tipi frontend (delta types.ts)">
+      interface SelectOption { value: string | number; label: string; requires_note?: boolean }
+      TableColumn.options?: string[] | SelectOption[]
+      TableColumn.editor?: 'relation' | 'select' | 'datetime'
+    </item>
+  </contract>
+
+  <acceptance_criteria>
+    <ac id="AC-001">GET /columns su `request-management` emette `editor: 'select'` e `options` con
+      `requires_note` per `workflow_status`; `editor: 'relation'` + `relation.resource: 'users'` per
+      `operator_ga2`; `editor: 'datetime'` per `next_callback_at`; nessun `editor` per le 4
+      anagrafiche (editor risolto dal `type`).</ac>
+    <ac id="AC-002">`product_categories` emette `editable: false` per qualunque attore.</ac>
+    <ac id="AC-003">Un attore senza `request-management.update` vede `editable: false` su tutte le
+      colonne e riceve 403 dal PATCH su ognuna.</ac>
+    <ac id="AC-004">Una riga `role_field_permissions` che nega `editable` su `client_tax_code` rende
+      `tax_code` non editabile lasciando editabili le altre tre anagrafiche (granularita' D-8).</ac>
+    <ac id="AC-005">Una riga `role_field_permissions` che marca `required` una qualunque delle
+      colonne accese fa fallire con 422 il PATCH di `null` o di una stringa di soli spazi, e
+      l'edit precedente resta persistito.</ac>
+    <ac id="AC-006">PATCH di `workflow_status` verso uno stato con `requires_note` senza `note` -> 422
+      e lo stato NON cambia; con `note` -> 200, stato cambiato e nota creata nella stessa
+      transazione.</ac>
+    <ac id="AC-007">PATCH di `workflow_status` con un id fuori dal set risolto per QUELLA riga -> 422
+      (invariante 0054 AC-011, non spostata).</ac>
+    <ac id="AC-008">PATCH di `operator_ga2` riassegna la riga pivot a position OPERATOR_MANAGER_POSITION
+      e la risposta riproietta il nuovo operatore; un id utente fuori dalla portata dell'attore -> 422.</ac>
+    <ac id="AC-009">PATCH di `first_name` aggiorna la card e NON azzera `last_name`/`tax_code`;
+      `registries.name` viene riderivato.</ac>
+    <ac id="AC-010">PATCH di `phone` aggiorna il contatto primario telefonico esistente senza
+      cancellare gli altri contatti della card; se non esiste, ne crea uno primario di tipo `phone`.</ac>
+    <ac id="AC-011">Ogni PATCH andato a buon fine produce una entry di activity leggibile da
+      GET /api/activity-log/request-management/{id}, incluse le quattro anagrafiche (D-9).</ac>
+    <ac id="AC-012">Una colonna con `editableField` ma senza `editor: 'select'`/`relation` valida il
+      valore come stringa e non come intero (regressione D-3).</ac>
+    <ac id="AC-013">Frontend: un click su `workflow_status` apre la select con le sole voci ammesse
+      per quella riga; scegliendo una voce con `requires_note` compare il dialog nota e il PATCH parte
+      solo alla conferma; annullando, la cella torna al valore precedente senza alcuna richiesta.</ac>
+    <ac id="AC-014">Frontend: `next_callback_at` apre un picker data/ora, non un campo di testo
+      grezzo; svuotarlo invia `null`.</ac>
+    <ac id="AC-015">Frontend: nessun componente della griglia contiene un riferimento a un id di
+      colonna di questo dominio (tutto guidato dai metadata).</ac>
+    <ac id="AC-016">Suite backend e Vitest verdi (salvo i rossi PRE-ESISTENTI gia' a verbale in
+      HANDOFF), `tsc --noEmit` pulito, Pint pulito sui file toccati, diff dipendenze VUOTO.</ac>
+  </acceptance_criteria>
+
+  <microtasks>
+    <task id="T1" lane="backend" depends="">
+      `editor` come chiave dichiarativa in `ResolvesColumnConfig::withOptionalColumnExtras()`
+      (default retrocompatibile da `relation`). Test: colonne esistenti invariate.
+    </task>
+    <task id="T2" lane="backend" depends="T1">
+      `CellValueValidator`: ramo id agganciato a `editor === 'select'`/`relation` invece che a
+      `editableField` (D-3) + `Rule::in` sui valori risolti per un `select`. Test di regressione
+      su `workflow_status` (intero) e sul caso stringa con `editableField` (AC-012).
+    </task>
+    <task id="T3" lane="backend" depends="">
+      `RequestManagementAuthorization`: 4 FieldDefinition + 4 voci di ceiling (D-8). Test AC-004.
+    </task>
+    <task id="T4" lane="backend" depends="T3">
+      `RequestClientProfileWriter`: scrittura sparsa di un singolo campo identita' e upsert del
+      telefono primario (D-7). Test AC-009/AC-010, incluso il caso "card assente -> 422".
+    </task>
+    <task id="T5" lane="backend" depends="T4">
+      `RequestManagementService::updateWork()`: accetta le 4 chiavi sparse anagrafiche e le include
+      in `logOperationalChange()` (D-9). Test AC-011.
+    </task>
+    <task id="T6" lane="backend" depends="T1,T5">
+      `RequestColumnCatalog` + `WritesInlineEditableCells`: dichiarazione delle 6 colonne accese e
+      mappatura columnId -> chiave di payload di `updateWork()`. Test AC-001/002/003/006/007/008.
+    </task>
+    <task id="T7" lane="frontend" depends="">
+      Tipi (`SelectOption`, `options` allargato, `editor` esteso) + `SelectCellEditor` in popup
+      guidato dalle options del server, con filtro per riga `<column_id>_options`. Test componente.
+    </task>
+    <task id="T8" lane="frontend" depends="">
+      `DateTimeCellEditor` in popup (D-4) e sostituzione della voce `datetime` del registry.
+      Test componente + regressione sugli altri domini con colonne datetime.
+    </task>
+    <task id="T9" lane="frontend" depends="T7">
+      `resolveRequiresNote` letto dalle options con fallback ai badge (D-5). Test AC-013.
+    </task>
+    <task id="T10" lane="verifier" depends="T6,T8,T9">
+      Cancello indipendente: esecuzione reale di Pest + Vitest + `tsc --noEmit` + Pint, riproduzione
+      degli AC, diff dipendenze. Nessun commit senza via libera esplicito (CLAUDE.md §3.6).
+    </task>
+  </microtasks>
+
+</spec>

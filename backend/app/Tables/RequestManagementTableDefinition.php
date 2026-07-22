@@ -126,11 +126,11 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
      * AbstractTableDefinition fail-safe default would resolve
      * `Gate::allows('update', $row)` → OpportunityPolicy → `opportunities.update`,
      * the WRONG permission for this domain. `baseQuery()`'s own D-3 scoping
-     * already keeps an out-of-scope row a 404 before this is ever reached; no
-     * column is declared editable for this domain in this round (D-3(b): its
-     * catalogue's writable fields are a relation FK and a custom JSON bag,
-     * both excluded — see spec 0053 handoff notes), so this exists for
-     * forward-compatibility with the day a column IS declared editable here.
+     * already keeps an out-of-scope row a 404 before this is ever reached.
+     * Six columns are editable here today (spec 0054: `workflow_status` and
+     * `next_callback_at`; spec 0055: `operator_ga2` plus the four client
+     * anagraphic fields), each gated per FIELD on top of this by the
+     * role_field_permissions matrix.
      */
     public function authorizeUpdate(User $actor, Model $row): bool
     {

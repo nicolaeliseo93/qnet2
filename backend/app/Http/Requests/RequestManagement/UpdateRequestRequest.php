@@ -59,6 +59,12 @@ class UpdateRequestRequest extends FormRequest
     {
         return [
             'opportunity_workflow_status_id' => ['sometimes', 'nullable', 'integer', 'exists:opportunity_workflow_statuses,id'],
+            // Spec 0054 D-5: the note that accompanies an advance to a
+            // `requires_note` working status. Without a rule here it would be
+            // stripped by validated()/safe() and updateWork() would reject
+            // every such advance as note-less, even with the note filled in.
+            // Same bound as StoreNoteRequest's `body`: it becomes one.
+            'note' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'attribute_values' => ['sometimes', 'array'],
             'next_callback_at' => ['sometimes', 'nullable', 'date'],
             // "Prodotti di interesse" (user directive 2026-07-22): the whole

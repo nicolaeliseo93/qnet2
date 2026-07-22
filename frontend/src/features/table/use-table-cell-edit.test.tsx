@@ -270,4 +270,67 @@ describe('useTableCellEdit', () => {
       expect(toastErrorMock).toHaveBeenCalledWith('A note is required for this status.')
     })
   })
+  describe('requires_note from backend options (spec 0055 D-5)', () => {
+    /** A `select` column whose option 3 requires a note — the request-management shape. */
+    function selectStatusColumn(): TableColumn {
+      return {
+        id: 'workflow_status',
+        label: 'Status',
+        type: 'text',
+        visible: true,
+        width: null,
+        order: 0,
+        sortable: true,
+        filterable: true,
+        editor: 'select',
+        options: [
+          { value: 1, label: 'Da contattare', requires_note: false },
+          { value: 3, label: 'Chiusa', requires_note: true },
+        ],
+      }
+    }
+
+    it('holds the PATCH back when the picked OPTION requires a note, matching on the unwrapped id', () => {
+      const { result } = renderHook(
+        () => useTableCellEdit('request-management', [selectStatusColumn()]),
+        { wrapper: wrapper() },
+      )
+      const data = row({ workflow_status: { id: 1, name: 'Da contattare' } })
+      const event = cellValueChangedEvent({
+        colId: 'workflow_status',
+        data,
+        oldValue: { id: 1, name: 'Da contattare' },
+        newValue: { id: 3, name: 'Chiusa' },
+      })
+
+      act(() => result.current.handleCellValueChanged(event))
+
+      expect(updateTableCellMock).not.toHaveBeenCalled()
+      expect(result.current.noteDialogSlot).not.toBeNull()
+    })
+
+    it('PATCHes straight away when the picked option does NOT require a note', async () => {
+      updateTableCellMock.mockResolvedValue(row())
+      const { result } = renderHook(
+        () => useTableCellEdit('request-management', [selectStatusColumn()]),
+        { wrapper: wrapper() },
+      )
+      const event = cellValueChangedEvent({
+        colId: 'workflow_status',
+        data: row({ workflow_status: { id: 3, name: 'Chiusa' } }),
+        oldValue: { id: 3, name: 'Chiusa' },
+        newValue: { id: 1, name: 'Da contattare' },
+      })
+
+      act(() => result.current.handleCellValueChanged(event))
+
+      await waitFor(() =>
+        expect(updateTableCellMock).toHaveBeenCalledWith('request-management', 7, {
+          column: 'workflow_status',
+          value: 1,
+        }),
+      )
+      expect(result.current.noteDialogSlot).toBeNull()
+    })
+  })
 })
