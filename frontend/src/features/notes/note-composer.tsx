@@ -15,6 +15,9 @@ import type { Note } from '@/features/notes/types'
 /** Mirrors the server-side `body: string (1..5000)` rule (D-12/data_contract). */
 const BODY_MAX_LENGTH = 5000
 
+/** Below this many characters left the hint gives way to a countdown. */
+const CHARACTER_COUNTER_THRESHOLD = 500
+
 function buildNoteComposerSchema(t: TFunction) {
   return z.object({
     body: z
@@ -109,6 +112,7 @@ export function NoteComposer({
   })
 
   const bodyValue = useWatch({ control: form.control, name: 'body' })
+  const remainingCharacters = BODY_MAX_LENGTH - bodyValue.length
 
   return (
     <Form {...form}>
@@ -139,7 +143,17 @@ export function NoteComposer({
             </FormItem>
           )}
         />
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <p className="mr-auto text-[11px] text-muted-foreground">
+            {remainingCharacters <= CHARACTER_COUNTER_THRESHOLD
+              ? t('notes.composer.charactersLeft', {
+                  defaultValue: '{{count}} caratteri rimasti',
+                  count: remainingCharacters,
+                })
+              : t('notes.composer.hint', {
+                  defaultValue: 'Digita @ per menzionare un collega',
+                })}
+          </p>
           {onCancel ? (
             <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={pending}>
               {t('common.cancel')}

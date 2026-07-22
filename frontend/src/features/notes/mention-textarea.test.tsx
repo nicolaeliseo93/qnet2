@@ -139,6 +139,46 @@ describe('MentionTextarea', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
 
+  it('Tab inserts the highlighted option — the first one when the user has not moved', () => {
+    render(<Harness />)
+
+    fireEvent.change(field(), { target: { value: '@' } })
+    fireEvent.keyDown(field(), { key: 'Tab' })
+
+    expect(field()).toHaveValue('@[Alice Verdi](user:12) ')
+    expect(screen.getByText('Mentions: [12]')).toBeInTheDocument()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('Tab after ArrowDown inserts the highlighted candidate, not the first one', () => {
+    render(<Harness />)
+
+    fireEvent.change(field(), { target: { value: '@' } })
+    fireEvent.keyDown(field(), { key: 'ArrowDown' })
+    fireEvent.keyDown(field(), { key: 'Tab' })
+
+    expect(field()).toHaveValue('@[Bob Neri](user:7) ')
+  })
+
+  it('Tab moves focus as usual when the picker is closed', () => {
+    render(<Harness />)
+
+    fireEvent.change(field(), { target: { value: 'plain text' } })
+    fireEvent.keyDown(field(), { key: 'Tab' })
+
+    expect(field()).toHaveValue('plain text')
+  })
+
+  it('CRITICAL: clicking an option inserts it — the mousedown fires before the field blurs', () => {
+    render(<Harness />)
+
+    fireEvent.change(field(), { target: { value: '@' } })
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Carla Blu/ }))
+
+    expect(field()).toHaveValue('@[Carla Blu](user:9) ')
+    expect(screen.getByText('Mentions: [9]')).toBeInTheDocument()
+  })
+
   it('selecting via ArrowDown then Enter inserts the second candidate', () => {
     render(<Harness />)
 

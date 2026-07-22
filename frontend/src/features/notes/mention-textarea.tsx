@@ -173,8 +173,24 @@ export function MentionTextarea({
     closePicker()
   }
 
+  /** Inserts the currently highlighted candidate (the first one until the user moves). */
+  function confirmActiveOption() {
+    if (!activeOption) {
+      return
+    }
+    selectOption(activeOption)
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (!open || options.length === 0) {
+      return
+    }
+    // Tab confirms the highlighted candidate exactly like Enter (the first one
+    // by default): with the picker open it completes the mention instead of
+    // moving focus, the editor-style behaviour expected from an autocomplete.
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault()
+      confirmActiveOption()
       return
     }
     switch (event.key) {
@@ -186,16 +202,8 @@ export function MentionTextarea({
         event.preventDefault()
         setActiveIndex((index) => (index - 1 + options.length) % options.length)
         break
-      case 'Enter':
-        event.preventDefault()
-        selectOption(options[activeIndex] as ForSelectItem)
-        break
       case 'Escape':
         event.preventDefault()
-        closePicker()
-        break
-      case 'Tab':
-        // Never trap Tab: close the picker but let focus move on as usual.
         closePicker()
         break
       default:
@@ -206,7 +214,17 @@ export function MentionTextarea({
   const optionId = (userId: number) => `${listboxId}-option-${userId}`
 
   return (
-    <div className="relative">
+    <div
+      className={cn(
+        // Neutral throughout: the focus state only deepens the same grey border
+        // instead of switching to the primary blue, so the field, the picker and
+        // the note bubbles read as one light surface family.
+        'relative rounded-lg border border-muted-foreground/20 bg-white px-2 py-1.5 shadow-xs transition-colors dark:bg-muted/40',
+        'focus-within:border-muted-foreground/35 focus-within:ring-2 focus-within:ring-muted-foreground/10',
+        ariaInvalid && 'border-destructive/50 focus-within:ring-destructive/10',
+        disabled && 'opacity-70',
+      )}
+    >
       <Textarea
         ref={textareaRef}
         id={id}
@@ -219,6 +237,8 @@ export function MentionTextarea({
         disabled={disabled}
         rows={rows}
         autoFocus={autoFocus}
+        // The wrapper above owns the border and the focus ring, so the field blends into it.
+        className="resize-none border-0 bg-transparent px-1 py-0.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
         role="combobox"
@@ -234,38 +254,56 @@ export function MentionTextarea({
           id={listboxId}
           role="listbox"
           aria-label={t('notes.mentionPicker.label', { defaultValue: 'Mentionable users' })}
-          className="absolute top-full left-0 z-50 mt-1 max-h-48 w-full min-w-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          className="absolute top-full left-0 z-50 mt-1.5 w-full min-w-56 overflow-hidden rounded-lg border border-muted-foreground/20 bg-white text-popover-foreground shadow-xl dark:bg-muted/40"
         >
-          {isPending ? (
-            <MentionOptionsSkeleton />
-          ) : options.length === 0 ? (
-            <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-              {t('notes.mentionPicker.empty', { defaultValue: 'No matching users' })}
-            </p>
-          ) : (
-            options.map((item, index) => (
-              <div
-                key={item.id}
-                id={optionId(item.id)}
-                role="option"
-                aria-selected={index === activeIndex}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => selectOption(item)}
-                className={cn(
-                  'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-xs',
-                  index === activeIndex && 'bg-accent',
-                )}
-              >
-                <UserAvatar name={item.label} src={item.avatar_url} size="sm" className="text-[10px]" />
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate">{item.label}</span>
-                  {item.subtitle ? (
-                    <span className="truncate text-[10px] text-muted-foreground">{item.subtitle}</span>
-                  ) : null}
-                </span>
-              </div>
-            ))
-          )}
+          <div className="flex items-center justify-between gap-2 border-b border-muted-foreground/15 bg-muted/50 px-2 py-1">
+            <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+              {t('notes.mentionPicker.title', { defaultValue: 'Mention a colleague' })}
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              {t('notes.mentionPicker.hint', { defaultValue: 'Tab or Enter to insert' })}
+            </span>
+          </div>
+          <div className="max-h-56 overflow-y-auto p-1">
+            {isPending ? (
+              <MentionOptionsSkeleton />
+            ) : options.length === 0 ? (
+              <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                {t('notes.mentionPicker.empty', { defaultValue: 'No matching users' })}
+              </p>
+            ) : (
+              options.map((item, index) => (
+                <div
+                  key={item.id}
+                  id={optionId(item.id)}
+                  role="option"
+                  aria-selected={index === activeIndex}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  // `mousedown` (not `click`): the textarea's own `onBlur` closes the
+                  // picker, which would unmount the option before a `click` ever
+                  // lands. Preventing the default also keeps focus in the field.
+                  onMouseDown={(event) => {
+                    event.preventDefault()
+                    selectOption(item)
+                  }}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+                    index === activeIndex
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-muted',
+                  )}
+                >
+                  <UserAvatar name={item.label} src={item.avatar_url} size="sm" className="text-[10px]" />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium">{item.label}</span>
+                    {item.subtitle ? (
+                      <span className="truncate text-[10px] text-muted-foreground">{item.subtitle}</span>
+                    ) : null}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       ) : null}
     </div>

@@ -4,6 +4,7 @@ import { Loader2, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useConfirm } from '@/components/confirm-dialog-context'
 import { UserAvatar } from '@/components/user-avatar'
+import { cn } from '@/lib/utils'
 import { NoteBody } from '@/features/notes/note-body'
 import { NoteComposer } from '@/features/notes/note-composer'
 import { useDeleteNote } from '@/features/notes/use-note-mutations'
@@ -63,22 +64,38 @@ export function NoteItem({ note, entityType, entityId, isRoot, isReplying, onTog
   }
 
   return (
-    <div className="flex gap-2">
-      <UserAvatar name={note.author.name} src={note.author.avatar_url} size="sm" />
+    <div className="group/note flex gap-2.5">
+      <UserAvatar
+        name={note.author.name}
+        src={note.author.avatar_url}
+        size="sm"
+        className="mt-0.5 shrink-0 ring-2 ring-background"
+      />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-sm font-medium text-foreground">{note.author.name}</span>
-          <span className="text-xs text-muted-foreground">
-            {formatDateTime(note.created_at, i18n.language)}
-          </span>
-          {note.edited_at ? (
-            <span className="text-xs text-muted-foreground">
-              {t('notes.item.edited', { defaultValue: '(modificato)' })}
+        <div
+          className={cn(
+            // White bubbles (dark mode: a lighter surface than the card behind them),
+            // so a note always reads as a raised sheet over the section background.
+            'rounded-lg rounded-tl-sm border px-3 py-2 transition-colors',
+            isRoot
+              ? 'border-muted-foreground/15 bg-white shadow-xs group-hover/note:border-muted-foreground/25 dark:bg-muted/50'
+              : 'border-muted-foreground/10 bg-white/80 dark:bg-muted/30',
+          )}
+        >
+          <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="text-sm font-semibold text-foreground">{note.author.name}</span>
+            <span className="text-[11px] text-muted-foreground">
+              {formatDateTime(note.created_at, i18n.language)}
             </span>
-          ) : null}
+            {note.edited_at ? (
+              <span className="rounded-sm bg-muted px-1 py-px text-[10px] text-muted-foreground">
+                {t('notes.item.edited', { defaultValue: '(modificato)' })}
+              </span>
+            ) : null}
+          </div>
+          <NoteBody body={note.body} />
         </div>
-        <NoteBody body={note.body} />
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 opacity-60 transition-opacity focus-within:opacity-100 group-hover/note:opacity-100">
           {isRoot && onToggleReply ? (
             <Button type="button" variant="ghost" size="xs" onClick={onToggleReply}>
               {isReplying ? t('common.cancel') : t('notes.item.replyAction', { defaultValue: 'Rispondi' })}

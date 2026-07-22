@@ -14,6 +14,8 @@ export const notes = {
   },
   list: {
     loadMore: 'Carica altre',
+    replyCount_one: '{{count}} risposta',
+    replyCount_other: '{{count}} risposte',
   },
   item: {
     edited: '(modificato)',
@@ -29,9 +31,14 @@ export const notes = {
     genericError: 'Invio non riuscito. Riprova.',
     send: 'Invia',
     save: 'Salva',
+    hint: 'Digita @ per menzionare un collega',
+    charactersLeft_one: '{{count}} carattere rimasto',
+    charactersLeft_other: '{{count}} caratteri rimasti',
   },
   mentionPicker: {
     label: 'Utenti selezionabili',
+    title: 'Menziona un collega',
+    hint: 'Tab o Invio per inserire',
     empty: 'Nessun utente corrispondente',
   },
 }

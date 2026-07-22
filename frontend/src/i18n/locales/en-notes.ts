@@ -14,6 +14,8 @@ export const notes = {
   },
   list: {
     loadMore: 'Load more',
+    replyCount_one: '{{count}} reply',
+    replyCount_other: '{{count}} replies',
   },
   item: {
     edited: '(edited)',
@@ -29,9 +31,14 @@ export const notes = {
     genericError: "Couldn't send. Try again.",
     send: 'Send',
     save: 'Save',
+    hint: 'Type @ to mention a colleague',
+    charactersLeft_one: '{{count}} character left',
+    charactersLeft_other: '{{count}} characters left',
   },
   mentionPicker: {
     label: 'Mentionable users',
+    title: 'Mention a colleague',
+    hint: 'Tab or Enter to insert',
     empty: 'No matching users',
   },
 }

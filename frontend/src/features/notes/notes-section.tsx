@@ -49,9 +49,12 @@ export function NotesSection({ entityType, entityId, showHeader = true }: NotesS
       <NoteComposer entityType={entityType} entityId={entityId} />
 
       {isLoading ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {Array.from({ length: SKELETON_ROWS }).map((_, index) => (
-            <Skeleton key={index} className="h-14 w-full" />
+            <div key={index} className="flex gap-2.5">
+              <Skeleton className="size-8 shrink-0 rounded-full" />
+              <Skeleton className="h-14 flex-1 rounded-lg" />
+            </div>
           ))}
         </div>
       ) : isError ? (
@@ -64,9 +67,12 @@ export function NotesSection({ entityType, entityId, showHeader = true }: NotesS
           </Button>
         </div>
       ) : roots.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t('notes.section.empty', { defaultValue: 'Nessuna nota. Scrivi la prima per iniziare la discussione.' })}
-        </p>
+        <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/25 px-4 py-6 text-center">
+          <MessagesSquare className="size-5 text-muted-foreground/70" aria-hidden="true" />
+          <p className="text-xs text-muted-foreground">
+            {t('notes.section.empty', { defaultValue: 'Nessuna nota. Scrivi la prima per iniziare la discussione.' })}
+          </p>
+        </div>
       ) : (
         <NoteList
           roots={roots}

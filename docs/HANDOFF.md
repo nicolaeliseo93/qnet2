@@ -8171,3 +8171,60 @@ features/table/ mai toccato da 0042, documentati da sessioni precedenti). ESLint
 Backend 44 Pest verdi. NIENTE COMMIT (attesa via libera §3.6).
 
 - 0042 UPDATE: ModuleOpenModeForm ha ora un pulsante "Ripristina default" (RotateCcw) che riporta la preferenza a DEFAULT_MODULE_OPEN_PREFERENCES ({mode:custom,overrides:{}} = ogni modulo nativo) e la persiste in un click (persist() riusato da Salva e Ripristina). i18n settings.moduleOpenMode.reset (it/en). Test in module-open-mode-form.test.tsx. Verde: tsc 0, eslint pulito, vitest 3/3.
+
+## 0052 UPDATE — RESTYLING UI NOTE (2026-07-22) — VERDE, NON COMMITTATO
+
+Solo presentazione + interazione del picker menzioni: nessun contratto API toccato, nessuna
+modifica backend. Vale sia per il popup (`NotesDialog`) sia per il pannello in pagina, perche'
+entrambi montano gli stessi componenti di `features/notes/`.
+
+- `mention-textarea.tsx`: la card (bordo + focus-ring) e' ora del WRAPPER del componente, la
+  `Textarea` interna e' borderless. NON reintrodurre un `<div>` fra `FormControl` e
+  `MentionTextarea`: `FormControl` e' uno Slot e passa `id`/`aria-invalid`/`aria-describedby`
+  al figlio diretto — un wrapper li assorbe e rompe la triade accessibile (AC-073, test rosso
+  gia' visto in questa sessione).
+- TAB conferma il candidato evidenziato esattamente come Invio (di default il primo della lista);
+  prima chiudeva soltanto il picker. Enter/Tab gestiti con un `if` PRIMA dello `switch` (un
+  fallthrough `case` viene bloccato da eslint `no-fallthrough`).
+- Selezione col mouse: `onMouseDown` con `preventDefault()`, NON `onClick`. L'`onBlur` della
+  textarea chiude il picker e smontava l'opzione prima che il click atterrasse: era il motivo
+  per cui il mouse non selezionava. Il `preventDefault` tiene anche il focus nel campo.
+- Pannello candidati distinguibile dalla superficie del dialog: `bg-popover` + bordo
+  `border-primary/30` + `shadow-xl` + strip d'intestazione (`notes.mentionPicker.title` /
+  `.hint`); opzione attiva `bg-primary/10` + `ring-primary/25`.
+- Lista note: bolla per nota (`NoteItem` root = `bg-card`, risposta = `bg-muted/60`), azioni
+  edit/delete in fade su hover (restano nel DOM: i test le interrogano per ruolo), rail risposte
+  con contatore `notes.list.replyCount` (plurali i18next `_one`/`_other`), empty state dashed.
+- Nuove chiavi i18n (it+en): `notes.list.replyCount_*`, `notes.composer.hint`,
+  `notes.composer.charactersLeft_*`, `notes.mentionPicker.title`, `notes.mentionPicker.hint`.
+
+VERIFICA ESEGUITA: `vitest run src/features/notes src/features/request-management` = 71/71 verdi
+(4 nuovi test su Tab/mouse in `mention-textarea.test.tsx`), `tsc -b --noEmit` pulito, ESLint pulito
+su `src/features/notes`. NIENTE COMMIT (attesa via libera §3.6).
+
+- 0052 UPDATE (follow-up grafica note): le bolle sono ora BIANCHE (`bg-white`, risposte
+  `bg-white/80`) e la lista sta su un vassoio rientrato (`bg-muted/40`, in dark `bg-background/60`).
+  MOTIVO: `NotesSection` in pagina vive dentro `FormSection`, che e' `bg-card` = bianco puro; una
+  bolla `bg-card` era invisibile sullo stesso bianco. In dark il rapporto si inverte
+  (`--muted` 20% e' PIU' CHIARO di `--card` 13%), quindi la bolla usa `dark:bg-muted/50` e il
+  vassoio `dark:bg-background/60`: non scambiarli. Verde: 41/41 test note, tsc + eslint puliti.
+- 0052 UPDATE (armonizzazione cromatica note): tolto ogni blu di "chrome" dal modulo note. Il
+  campo composer non vira piu' su `border-primary/40`+`ring-primary/10` al focus ma approfondisce
+  lo stesso grigio (`border-muted-foreground/20` -> `/35`, `ring-muted-foreground/10`); pannello
+  menzioni `bg-white` + `border-muted-foreground/20` (era `border-primary/30`), strip
+  d'intestazione `bg-muted/50` con testo muted, opzione attiva `bg-accent`. Bordi di bolle,
+  vassoio e rail passati a scala `muted-foreground/*`: `--border` in light e' hsl(214 37% 96%),
+  praticamente invisibile su bianco, per questo non si usa qui. UNICO blu rimasto e' il chip
+  menzione in `note-body.tsx` (`bg-primary/10 text-primary`): e' semantico, non decorativo — non
+  neutralizzarlo. Verde: 41/41 test note, tsc + eslint puliti.
+- 0052 UPDATE (contrasto vassoio note): il contenitore della lista passa da `bg-muted/40` a
+  `bg-muted` pieno (dark: `bg-background` pieno). Direzione scelta: PIU' SCURO, perche' le bolle
+  devono restare bianche (richiesta utente precedente) e l'unico modo di aumentare lo stacco e'
+  abbassare il vassoio. Verde: 41/41 test note, tsc + eslint puliti.
+- 0052 UPDATE (vassoio note distinto dall'host): il contenitore lista usa `bg-accent`
+  (light hsl(216 18% 84%), dark `bg-card`). `bg-muted` era da scartare: e' 91% come il
+  `bg-background` del `DialogContent`, quindi dentro il popup il vassoio spariva. REGOLA: la
+  differenza si ottiene cambiando IL COMPONENTE, non le superfici ospiti — `NotesDialog` e le
+  pagine di dettaglio NON vanno ritinte (tentativo di mettere `bg-card` sul DialogContent
+  respinto dall'utente e revertito). Gerarchia attuale: host (bianco in pagina / 91% nel dialog)
+  -> vassoio 84% -> bolle bianche. Verde: 71/71 test note+request-management, tsc + eslint puliti.
