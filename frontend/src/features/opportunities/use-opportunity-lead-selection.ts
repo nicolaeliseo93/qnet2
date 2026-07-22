@@ -80,10 +80,11 @@ export interface OpportunityLeadSelectionInitial {
  * manually before picking/clearing the lead. A lead already linked to
  * another opportunity (D-2) is surfaced without ever writing to the form.
  *
- * Directive 2026-07-21: selecting a lead also appends the lead's Operator as
- * a new "Gestore Account" slot, but ONLY when it isn't already among the
- * current slots — `getValues` is read at the exact moment of selection so an
- * existing manager selection is never overwritten, and a lead without an
+ * Directive 2026-07-22: selecting a lead also appends the lead's Operator as
+ * a new "Gestore Account" slot — on an untouched form that means an empty
+ * G.A. 1 plus the Operator on G.A. 2 — but ONLY when it isn't already among
+ * the current slots: `getValues` is read at the exact moment of selection so
+ * an existing manager selection is never overwritten, and a lead without an
  * Operator simply leaves the slots untouched. The Supervisor is no longer
  * prefilled from the lead.
  */
@@ -153,14 +154,17 @@ export function useOpportunityLeadSelection(
       setValue('registry_id', defaults.values.registry_id, { shouldDirty: true })
       applyProductLines(defaults.product_lines)
 
-      // Directive 2026-07-21: append the lead's Operator as a new "Gestore
+      // Directive 2026-07-22: append the lead's Operator as a new "Gestore
       // Account" slot, but only when it isn't already among the current
       // slots — never overwrites an existing selection; a lead with no
-      // Operator (empty `manager_slots`) is a no-op.
+      // Operator (empty `manager_slots`) is a no-op. With no slot yet, an
+      // empty G.A. 1 is materialized first so the Operator lands on G.A. 2.
       let managers: RelationFieldRef[] | null = null
-      const operatorId = defaults.manager_slots[0] ?? null
+      const operatorId = defaults.manager_slots.find((id) => id !== null) ?? null
       if (operatorId !== null && !getValues('manager_slots').includes(operatorId)) {
-        setValue('manager_slots', [...getValues('manager_slots'), operatorId], { shouldDirty: true })
+        const currentSlots = getValues('manager_slots')
+        const slots = currentSlots.length === 0 ? [null] : currentSlots
+        setValue('manager_slots', [...slots, operatorId], { shouldDirty: true })
         managers = defaults.manager_refs
       }
 

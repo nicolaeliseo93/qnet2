@@ -18,4 +18,14 @@ return [
     'avatar_updated' => 'Avatar aggiornato con successo.',
     'avatar_removed' => 'Avatar rimosso con successo.',
 
+    // Impersonificazione "Login as customer" (spec 0050).
+    'impersonation_self' => 'Non puoi impersonificare te stesso.',
+    'impersonation_inactive' => 'Questo account non è attivo e non può essere impersonificato.',
+    'impersonation_nesting' => 'Stai già impersonificando un utente; termina prima la sessione corrente.',
+    'impersonation_escalation' => 'Solo un super-admin può impersonificare un super-admin.',
+    'impersonation_not_active' => 'La sessione corrente non è una sessione di impersonificazione.',
+    'impersonation_original_inactive' => 'Il tuo account non è più attivo; sei stato disconnesso dalla sessione di impersonificazione.',
+    'impersonation_started' => 'Impersonificazione avviata.',
+    'impersonation_stopped' => 'Impersonificazione terminata.',
+
 ];

@@ -252,6 +252,14 @@ class UsersTableDefinition extends AbstractTableDefinition
             $allowed[] = 'activity';
         }
 
+        // "Login as customer" impersonation (spec 0050, AC-014): gated by the
+        // same UserPolicy::impersonate the POST /users/{user}/impersonate
+        // endpoint uses (users.impersonate + no escalation on a super-admin
+        // target).
+        if (Gate::forUser($actor)->allows('impersonate', $row)) {
+            $allowed[] = 'impersonate';
+        }
+
         return $allowed;
     }
 

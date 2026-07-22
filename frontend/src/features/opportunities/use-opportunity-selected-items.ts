@@ -75,8 +75,8 @@ export function useOpportunitySelectedItems(
     if (!fromLead && !leadSelection.registry) {
       return EMPTY_SELECTED_ITEMS
     }
-    // Directive 2026-07-21: the lead's Operator hydrates the first "Gestore
-    // Account" slot's trigger label, not the Supervisor.
+    // Directive 2026-07-22: the lead's Operator hydrates its "Gestore
+    // Account" slot's trigger label (G.A. 2), not the Supervisor.
     const managerRefs = leadSelection.managers ?? fromLead?.managerRefs ?? []
     return {
       ...EMPTY_SELECTED_ITEMS,

@@ -229,9 +229,10 @@ beforeEach(() => {
           product_category: { id: 50, name: 'Consulting' },
         },
       ],
-      // Directive 2026-07-21: the lead's Operator seeds the first Gestore
-      // Account slot, absent for TEST_LEAD_NO_OPERATOR_ID. Never locked.
-      manager_slots: leadId === TEST_LEAD_NO_OPERATOR_ID ? [] : [TEST_OPERATOR_ID],
+      // Directive 2026-07-22: the lead's Operator seeds the SECOND Gestore
+      // Account slot (G.A. 1 empty), absent for TEST_LEAD_NO_OPERATOR_ID.
+      // Never locked.
+      manager_slots: leadId === TEST_LEAD_NO_OPERATOR_ID ? [] : [null, TEST_OPERATOR_ID],
       manager_refs:
         leadId === TEST_LEAD_NO_OPERATOR_ID ? [] : [{ id: TEST_OPERATOR_ID, name: 'Giulia Bianchi' }],
     }
@@ -346,7 +347,7 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     expect(createOpportunityMock).not.toHaveBeenCalled()
   })
 
-  it('appends the lead Operator as the first Gestore Account slot on selection, still editable, Supervisor left empty', async () => {
+  it('appends the lead Operator as the second Gestore Account slot on selection, G.A. 1 left empty, still editable, Supervisor left empty', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
@@ -358,12 +359,14 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
 
     await waitFor(() =>
-      expect(screen.getByTestId('value-Account manager 1')).toHaveTextContent(String(TEST_OPERATOR_ID)),
+      expect(screen.getByTestId('value-Account manager 2')).toHaveTextContent(String(TEST_OPERATOR_ID)),
     )
+    // G.A. 1 is materialized but empty.
+    expect(screen.getByTestId('value-Account manager 1')).toHaveTextContent('')
     // Precompiled, never locked: the user can still change it (unlike Registry/Source above).
-    expect(screen.getByTestId('disabled-Account manager 1')).toHaveTextContent('false')
+    expect(screen.getByTestId('disabled-Account manager 2')).toHaveTextContent('false')
     // The trigger label is hydrated too — `setValue` alone writes the id, not the name.
-    expect(screen.getByTestId('label-Account manager 1')).toHaveTextContent('Giulia Bianchi')
+    expect(screen.getByTestId('label-Account manager 2')).toHaveTextContent('Giulia Bianchi')
     // The Supervisor is no longer prefilled from the lead.
     expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('')
   })

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spec 0050 — Login as customer (impersonation degli utenti CRM).
+  Contract-first: la shape sotto e' CONGELATA prima del dispatch dei teammate.
+  Nessuna entita' nuova: si estende l'auth Sanctum a token esistente.
+-->
+<spec id="0050-user-impersonation" status="approved" owner="utente" date="2026-07-22">
+
+  <goal>
+    Un utente autorizzato ("users.impersonate") puo' impersonificare un altro utente
+    del CRM. Durante l'impersonificazione l'attore opera A TUTTI GLI EFFETTI come
+    l'utente target: legge, scrive e ha i permessi del target (nessun permesso
+    residuo dell'attore originale). Il sistema continua a sapere chi e' l'utente
+    originale: un banner in alto ("Stai operando come Pippo — Torna al tuo account")
+    e' sempre visibile e consente il rientro immediato nel proprio account.
+  </goal>
+
+  <context>
+    Nomi reali verificati nel codebase (riusare esatti, NON ipotizzare):
+      - Auth = Sanctum PERSONAL ACCESS TOKEN (Bearer in localStorage), NON session
+        stateful. AuthService::login() -> $user->createToken($deviceName)->plainTextToken;
+        DataObjects\Auth\LoginResult { user, token }. AuthController::login risponde
+        ok(['token','token_type'=>'Bearer','user'=>UserResource]).
+        logout() -> $user->currentAccessToken()->delete().
+      - Envelope: BaseApiController::ok()/fail() -> { success, message, data }.
+        okWithPermissions aggiunge `permissions`. NON esiste un helper per chiavi extra.
+      - Permessi: Spatie. BasePolicy (app/Policies/Abstracts/BasePolicy.php) mappa
+        ability -> "{resource}.{ability}"; abilities() e' late-static-bound e
+        permissions() alimenta `php artisan permissions:sync` (SyncPermissions
+        istanzia `new $policyClass` — UserPolicy non ha dipendenze di costruttore).
+        Quindi override di UserPolicy::abilities() = permesso creato in automatico.
+      - UserPolicy (app/Policies/UserPolicy.php) estende BasePolicy, resource()='users',
+        gia' override di delete() (vieta self-delete).
+      - Ruolo privilegiato: RoleAssignmentGuard::PRIVILEGED_ROLE ('super-admin'),
+        unica fonte di verita'. AbilitiesService::for() da' tutti i permessi al super-admin.
+      - UsersTableDefinition::actionsFor() ritorna ['view','edit','delete','activity']
+        filtrando per Gate::forUser($actor)->allows(...).
+      - FE: api/token-storage.ts (chiave 'auth.token'), api/client.ts (interceptor
+        Bearer + UNAUTHORIZED_EVENT), features/auth/auth-provider.tsx (AuthProvider,
+        useQuery authKeys.me, setToken, queryClient.clear() al logout),
+        features/auth/auth-context.ts (AuthContextValue), use-abilities.ts,
+        layouts/app-layout.tsx (header h-12, NavUserHeader), features/users/users-table.tsx.
+      - Activity log: spatie/laravel-activitylog, concern LogsModelActivity; precedente
+        di entry esplicita: RequestManagementService::updateWork() (spec 0049).
+
+    DECISIONI (2026-07-22, prese dal lead in autonomia, allineate a security.md):
+      D-1 Meccanismo = TOKEN DEDICATO. L'impersonificazione emette un NUOVO token
+          Sanctum intestato all'utente TARGET, marcato con la colonna nuova
+          personal_access_tokens.impersonated_by = id dell'attore originale.
+          Conseguenza voluta: ogni Policy/Gate/query gira gia' con $request->user()
+          = target -> permessi e scrittura sono quelli del target SENZA toccare
+          una sola riga di autorizzazione esistente (blast radius minimo).
+      D-2 NIENTE NESTING: se il token corrente e' gia' un token di impersonificazione,
+          un nuovo start e' rifiutato (422). Evita catene non tracciabili.
+      D-3 ESCALATION GUARD: non si impersonifica se stessi; non si impersonifica un
+          utente inattivo; non si impersonifica un super-admin se l'attore non e'
+          super-admin. Queste invarianti vivono NEL SERVICE (oltre che nella Policy)
+          perche' il Gate::before del super-admin cortocircuita la Policy.
+      D-4 STOP: emette un token NUOVO per l'utente originale e cancella il token di
+          impersonificazione. Il token originale dell'attore resta valido (non viene
+          toccato): il rientro non dipende dal client.
+      D-5 STATO PER IL BANNER = endpoint dedicato GET /auth/impersonation, NON modifica
+          di /auth/me ne' di UserResource (che e' condivisa da tutti i moduli).
+          Blast radius zero sui contratti esistenti.
+      D-6 AUDIT: entry activity esplicite su start e stop (causer = attore originale,
+          subject = utente target), description 'impersonation.started'/'impersonation.stopped'.
+  </context>
+
+  <data_contract>
+    <!-- CONGELATO. Backend e frontend implementano contro questo. -->
+
+    <migration name="2026_07_22_120000_add_impersonated_by_to_personal_access_tokens_table">
+      personal_access_tokens.impersonated_by : unsignedBigInteger NULLABLE,
+      foreign -> users.id nullOnDelete, index. Reversibile (down drop FK + colonna).
+    </migration>
+
+    <permission>users.impersonate (generato da UserPolicy::abilities() override)</permission>
+
+    <endpoint method="POST" uri="/api/users/{user}/impersonate" middleware="auth:sanctum">
+      Authz: Gate 'impersonate' su UserPolicy + invarianti D-3/D-2 nel service.
+      200 -> { success:true, message, data: { token, token_type:"Bearer", user: UserResource(target) } }
+      403 -> attore senza users.impersonate, o target super-admin con attore non super-admin
+      422 -> self-impersonation, target inattivo, token corrente gia' di impersonificazione
+    </endpoint>
+
+    <endpoint method="POST" uri="/api/auth/stop-impersonation" middleware="auth:sanctum">
+      403 -> il token corrente NON e' un token di impersonificazione
+      200 -> { success:true, message, data: { token, token_type:"Bearer", user: UserResource(original) } }
+    </endpoint>
+
+    <endpoint method="GET" uri="/api/auth/impersonation" middleware="auth:sanctum">
+      200 -> { success:true, message, data: { impersonator: { id, name, email } | null } }
+      `impersonator` = utente ORIGINALE quando il token corrente e' di impersonificazione, else null.
+    </endpoint>
+
+    <table_action>
+      UsersTableDefinition::actionsFor() aggiunge 'impersonate' quando
+      Gate::forUser($actor)->allows('impersonate', $row).
+    </table_action>
+
+    <frontend_contract>
+      features/auth/types.ts: `Impersonator { id: number; name: string; email: string }`,
+        `ImpersonationState { impersonator: Impersonator | null }`. Riuso di `LoginResult`.
+      features/auth/api.ts: impersonateUser(userId: number): Promise&lt;LoginResult&gt;,
+        stopImpersonation(): Promise&lt;LoginResult&gt;, fetchImpersonation(): Promise&lt;ImpersonationState&gt;.
+      AuthContextValue += impersonate(userId: number): Promise&lt;void&gt;,
+        stopImpersonation(): Promise&lt;void&gt;, impersonator: Impersonator | null.
+      Su start e su stop: setToken(nuovo token) + queryClient.clear() (nessun dato
+      dell'identita' precedente puo' sopravvivere in cache) + refetch me/abilities.
+    </frontend_contract>
+  </data_contract>
+
+  <acceptance_criteria>
+    <!-- Backend -->
+    <ac id="AC-001">POST /users/{user}/impersonate con permesso users.impersonate -> 200 e token valido; GET /auth/me con quel token ritorna il TARGET.</ac>
+    <ac id="AC-002">Con il token di impersonificazione, GET /auth/me/abilities ritorna le abilities del TARGET (non dell'attore).</ac>
+    <ac id="AC-003">Con il token di impersonificazione una scrittura autorizzata al target va a buon fine ed e' attribuita al target (causer/created_by = target).</ac>
+    <ac id="AC-004">Con il token di impersonificazione un'azione NON permessa al target -> 403, anche se permessa all'attore originale.</ac>
+    <ac id="AC-005">Attore senza users.impersonate -> 403.</ac>
+    <ac id="AC-006">Impersonificare se stessi -> 422.</ac>
+    <ac id="AC-007">Target con is_active = false -> 422.</ac>
+    <ac id="AC-008">Attore non super-admin che impersonifica un super-admin -> 403.</ac>
+    <ac id="AC-009">Start mentre si e' gia' in impersonificazione (no nesting) -> 422.</ac>
+    <ac id="AC-010">GET /auth/impersonation con token normale -> impersonator null; con token di impersonificazione -> dati dell'attore originale.</ac>
+    <ac id="AC-011">POST /auth/stop-impersonation con token di impersonificazione -> 200, user = originale; il token di impersonificazione e' cancellato (riutilizzarlo -> 401).</ac>
+    <ac id="AC-012">POST /auth/stop-impersonation con token normale -> 403.</ac>
+    <ac id="AC-013">Start e stop scrivono una entry activity con causer = attore originale e subject = target.</ac>
+    <ac id="AC-014">La riga della tabella users espone l'azione 'impersonate' solo quando la Policy la consente.</ac>
+    <ac id="AC-015">`php artisan permissions:sync` crea users.impersonate.</ac>
+    <!-- Frontend -->
+    <ac id="AC-020">Il banner e' visibile in cima all'app quando impersonator != null, mostra il nome dell'utente impersonificato e un'azione di rientro.</ac>
+    <ac id="AC-021">Con impersonator == null il banner non e' renderizzato.</ac>
+    <ac id="AC-022">Il click sull'azione di rientro chiama stopImpersonation, sostituisce il token e riporta l'app all'utente originale.</ac>
+    <ac id="AC-023">L'azione 'impersonate' nella tabella users avvia l'impersonificazione e la cache React Query viene svuotata (nessun dato dell'attore precedente resta).</ac>
+    <ac id="AC-024">Stringhe via i18next (it + en), nessuna stringa hardcoded. Banner compatto (text-xs, ui-design.md §2) e responsive a 375px.</ac>
+  </acceptance_criteria>
+
+</spec>

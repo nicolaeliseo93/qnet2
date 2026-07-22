@@ -2,6 +2,28 @@
 
 > Injected at session start. Update at every green state.
 
+## CONVERSIONE LEAD -> OPPORTUNITA': OPERATORE = G.A. 2 (2026-07-22) — GREEN, NON COMMITTATO
+
+Direttiva utente: convertendo un Lead in Opportunita', l'Operatore del lead diventa il
+**Gestore Account 2**; lo slot **G.A. 1 viene comunque materializzato ma vuoto** (array
+`manager_slots` gap-aware: `[null, operator_id]`, pivot `opportunity_user.position = 2`).
+Prima era G.A. 1 (`[operator_id]`, position 1). Supervisore resta vuoto (invariato).
+
+FILE: BE `Actions/Leads/ConvertLeadToOpportunity.php` (managerSlots `[null, id]`),
+`Services/Opportunities/LeadOpportunityDefaultsResolver.php` (prefill dell'endpoint
+`GET /api/leads/{lead}/opportunity-defaults`), `DataObjects/Opportunities/LeadOpportunityDefaults.php`
+(tipo `array<int, int|null>`). FE `features/opportunities/types.ts` (`manager_slots`/`managerSlots`
+ora `(number | null)[]`), `use-opportunity-lead-selection.ts` (operatore = primo id non-null dei
+defaults; se il form non ha ancora slot ne materializza uno vuoto prima di appendere l'Operatore ->
+G.A. 2; se l'utente ha gia' scelto dei G.A. l'Operatore va nel primo slot libero in coda, nessuna
+sovrascrittura), commenti in `use-opportunity-form.ts`/`use-opportunity-selected-items.ts`.
+
+TEST AGGIORNATI (requisito cambiato, dichiarato): `LeadConversionTest` AC-002 (position 2),
+`LeadOpportunityDefaultsManagerTest` (`[null, operator_id]`), `opportunity-lead-selection.test.tsx`.
+VERIFICA ESEGUITA: Pest `Opportunities+Leads+Unit` 786 test, 785 verdi — l'unico rosso
+(`AbstractMigrationSourcePreviewTest`, chiave `description` in un preview di migrazione) e' estraneo
+a questa modifica. Vitest `src/features/opportunities` 132/132; `tsc -b` pulito; Pint/ESLint puliti.
+
 ## MODULO "GESTIONE RICHIESTE" (request-management) — spec 0049 (2026-07-21) — GREEN, NON COMMITTATO
 
 Nuovo modulo `request-management`: VISTA OPERATIVA sulle stesse Opportunita' per i commerciali.

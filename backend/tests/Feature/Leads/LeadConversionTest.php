@@ -101,7 +101,7 @@ it('AC-001: creates exactly one Opportunity linked to the new lead', function ()
     expect(Opportunity::where('lead_id', $response->json('data.id'))->count())->toBe(1);
 });
 
-it('AC-002: the created Opportunity has the lead.operator as its first Gestore Account, and an empty supervisor', function () {
+it('AC-002: the created Opportunity has the lead.operator as its second Gestore Account, an empty first slot and an empty supervisor', function () {
     $actor = leadConversionActor(['create'], ['create']);
     $fixture = convertibleLeadFixture();
     Sanctum::actingAs($actor);
@@ -111,12 +111,13 @@ it('AC-002: the created Opportunity has the lead.operator as its first Gestore A
     $opportunity = Opportunity::where('lead_id', $response->json('data.id'))->firstOrFail();
     $opportunity->load('managers');
 
-    // Directive 2026-07-21: the Operator becomes the first "Gestore Account"
-    // (position 1), not the Supervisor — which stays empty.
+    // Directive 2026-07-22: the Operator becomes the second "Gestore Account"
+    // (position 2, G.A. 1 left as a persistent empty slot), not the
+    // Supervisor — which stays empty.
     expect($opportunity->supervisor_id)->toBeNull();
     expect($opportunity->managers)->toHaveCount(1);
     expect($opportunity->managers->first()->id)->toBe($fixture['operator']->id);
-    expect($opportunity->managers->first()->pivot->position)->toBe(1);
+    expect($opportunity->managers->first()->pivot->position)->toBe(2);
 });
 
 it('AC-003: the created Opportunity has registry_id/source_id derived from the lead', function () {

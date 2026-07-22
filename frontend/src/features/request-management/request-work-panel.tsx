@@ -1,0 +1,133 @@
+import { useTranslation } from 'react-i18next'
+import { Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Form } from '@/components/ui/form'
+import { useEntityDetail } from '@/hooks/use-entity-detail'
+import { ResourcePermissionsProvider, useResourcePermissions } from '@/features/authorization/permissions'
+import { fetchRequestWorkPanel } from '@/features/request-management/api'
+import { requestManagementKeys } from '@/features/request-management/query-keys'
+import { RequestContactsSection } from '@/features/request-management/request-contacts-section'
+import { RequestDynamicFields } from '@/features/request-management/request-dynamic-fields'
+import { RequestWorkContext } from '@/features/request-management/request-work-context'
+import { RequestWorkflowStatusField } from '@/features/request-management/request-workflow-status-field'
+import { useRequestWorkForm } from '@/features/request-management/use-request-work-form'
+import type { RequestWorkPanelWithPermissions } from '@/features/request-management/types'
+
+/** Props shape matches the module registry's `ModuleDetailScreenProps` (spec 0042), so this mounts as-is as the module's `DetailScreen`. */
+interface RequestWorkPanelScreenProps {
+  id: number
+}
+
+/** Loading placeholder mirroring the panel's real section layout (spec 0049, mirrors `OpportunityFormSkeleton`). */
+export function RequestWorkPanelSkeleton() {
+  return (
+    <div className="flex flex-col gap-4 p-4" aria-hidden="true">
+      {[0, 1, 2, 3].map((section) => (
+        <div key={section} className="rounded-xl border bg-card shadow-sm">
+          <div className="flex items-center gap-3 border-b px-4 py-3.5">
+            <Skeleton className="size-9 rounded-lg" />
+            <div className="flex flex-col gap-1.5">
+              <Skeleton className="h-3.5 w-40" />
+              <Skeleton className="h-3 w-56" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-4 p-4">
+            <Skeleton className="h-9 w-full" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Content-only work-panel screen (spec 0049 AC-061), the module's
+ * `DetailScreen` (spec 0042 registry): fetches the panel fresh on every mount
+ * (`useEntityDetail`, same fresh-on-open contract as every other entity
+ * card/edit form), then renders the read-only context, the contact
+ * verification blocks, the dynamic Attribute fields and the working-state
+ * control, wrapped in the actor's `ResourcePermissions` so every field's
+ * gating comes from the same server-derived source as everywhere else.
+ */
+export function RequestWorkPanelScreen({ id }: RequestWorkPanelScreenProps) {
+  const { t } = useTranslation()
+  const { data: panel, isLoading, isError, refetch } = useEntityDetail(
+    requestManagementKeys.panel(id),
+    () => fetchRequestWorkPanel(id),
+  )
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-start gap-3 p-4">
+        <p className="text-sm text-destructive" role="alert">
+          {t('requestManagement.workPanel.loadError', { defaultValue: 'Could not load the record.' })}
+        </p>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          {t('common.retry')}
+        </Button>
+      </div>
+    )
+  }
+
+  if (isLoading || !panel) {
+    return <RequestWorkPanelSkeleton />
+  }
+
+  return (
+    <ResourcePermissionsProvider permissions={panel.permissions}>
+      <RequestWorkPanelBody panel={panel} />
+    </ResourcePermissionsProvider>
+  )
+}
+
+interface RequestWorkPanelBodyProps {
+  panel: RequestWorkPanelWithPermissions
+}
+
+function RequestWorkPanelBody({ panel }: RequestWorkPanelBodyProps) {
+  const { t } = useTranslation()
+  const { canResource } = useResourcePermissions()
+  const canUpdate = canResource('update')
+  const { form, onSubmit, serverError, isSubmitting } = useRequestWorkForm(panel)
+
+  return (
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="flex flex-col gap-4 p-4" noValidate>
+          <RequestWorkContext panel={panel} />
+
+          <RequestWorkflowStatusField control={form.control} statuses={panel.workflow_statuses} />
+
+          <RequestContactsSection registry={panel.client_contacts} referent={panel.referent_contacts} />
+
+          <RequestDynamicFields control={form.control} attributes={panel.applicable_attributes} />
+
+          {serverError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm font-medium text-destructive"
+            >
+              {serverError}
+            </div>
+          )}
+
+          {canUpdate && (
+            <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+              <Button type="submit" disabled={isSubmitting || !form.formState.isDirty}>
+                {isSubmitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                {isSubmitting
+                  ? t('requestManagement.workPanel.saving', { defaultValue: 'Saving…' })
+                  : t('requestManagement.workPanel.save', { defaultValue: 'Save' })}
+              </Button>
+            </div>
+          )}
+        </form>
+      </Form>
+    </div>
+  )
+}

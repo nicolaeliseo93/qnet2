@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import { Plus } from 'lucide-react'
@@ -36,9 +37,10 @@ const USERS_DOMAIN = 'users'
  */
 export function UsersTable() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const stats = useStatsPanel(USERS_DOMAIN)
   const invalidateStats = useInvalidateModuleStats(USERS_DOMAIN)
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, impersonate } = useAuth()
 
   const tableRef = useRef<TableViewHandle>(null)
   const refreshGrid = useCallback(() => tableRef.current?.refresh(), [])
@@ -80,6 +82,18 @@ export function UsersTable() {
     [refreshGrid, t, invalidateStats],
   )
 
+  const runImpersonate = useCallback(
+    async (row: TableRow) => {
+      try {
+        await impersonate(row.id)
+        navigate('/dashboard')
+      } catch {
+        toast.error(t('impersonation.startError'))
+      }
+    },
+    [impersonate, navigate, t],
+  )
+
   const handleAction: RowActionHandler = useCallback(
     (action: TableActionDefinition, row: TableRow) => {
       switch (action.key) {
@@ -95,11 +109,14 @@ export function UsersTable() {
         case 'activity':
           setActivityRow(row)
           break
+        case 'impersonate':
+          void runImpersonate(row)
+          break
         default:
           break
       }
     },
-    [openView, openEdit, runDelete],
+    [openView, openEdit, runDelete, runImpersonate],
   )
 
   // Hide the delete action on the current user's own row (self-delete is

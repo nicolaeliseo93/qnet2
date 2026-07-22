@@ -9,9 +9,10 @@ use Laravel\Sanctum\Sanctum;
 uses(RefreshDatabase::class);
 
 /**
- * User directive 2026-07-21: `GET /api/leads/{lead}/opportunity-defaults`
- * prefills the FIRST "Gestore Account" slot (`manager_slots`/`manager_refs`)
- * from `lead->operator`, and NO LONGER the Supervisor (which stays empty).
+ * User directive 2026-07-22: `GET /api/leads/{lead}/opportunity-defaults`
+ * prefills the SECOND "Gestore Account" slot (`manager_slots`/`manager_refs`)
+ * from `lead->operator` — G.A. 1 stays an empty slot — and NO LONGER the
+ * Supervisor (which stays empty).
  * Reuses `completeLead()`/`opportunityFromLeadActor()`/
  * `nonDerivableOpportunityFks()` (globally declared, guarded with
  * `function_exists`, in OpportunityFromLeadTest.php — file-size split,
@@ -22,7 +23,7 @@ uses(RefreshDatabase::class);
 // manager_slots / manager_refs derived from the lead's Operator
 // ---------------------------------------------------------------------------
 
-it('opportunity-defaults: a lead with an operator prefills the first manager slot, never the supervisor', function () {
+it('opportunity-defaults: a lead with an operator prefills the second manager slot, leaving the first empty, never the supervisor', function () {
     $actor = opportunityFromLeadActor(['create'], ['view']);
     $lead = completeLead();
     $operator = User::factory()->create();
@@ -31,7 +32,7 @@ it('opportunity-defaults: a lead with an operator prefills the first manager slo
 
     $response = $this->getJson("/api/leads/{$lead->id}/opportunity-defaults")->assertOk();
 
-    expect($response->json('data.manager_slots'))->toBe([$operator->id]);
+    expect($response->json('data.manager_slots'))->toBe([null, $operator->id]);
     expect($response->json('data.manager_refs'))->toBe([[
         'id' => $operator->id,
         'name' => $operator->name,

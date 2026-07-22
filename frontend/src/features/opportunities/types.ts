@@ -285,12 +285,13 @@ export interface OpportunityDefaults {
    */
   product_lines: OpportunityProductLine[]
   /**
-   * User directive 2026-07-21: the lead's Operator prefills the FIRST "Gestore
-   * Account" slot (0 or 1 element — a lead has at most one Operator), never
-   * the Supervisor. Editable/removable in the form, never locked.
+   * User directive 2026-07-22: the lead's Operator prefills the SECOND "Gestore
+   * Account" slot, G.A. 1 being materialized empty — so this is either `[]` or
+   * the gap-aware `[null, operatorId]`. Editable/removable in the form, never
+   * locked.
    */
-  manager_slots: number[]
-  /** {id,name} summaries paired with `manager_slots`, for the slot's trigger-label hydration. */
+  manager_slots: (number | null)[]
+  /** {id,name} summaries of the filled slots, for the slot's trigger-label hydration. */
   manager_refs: OpportunityRelationRef[]
 }
 
@@ -306,9 +307,9 @@ export interface OpportunityFromLeadContext {
   lockedFields: string[]
   /** AC-102/103: the lead's 0/1 seed row, editable/removable, never locked. */
   productLines: OpportunityProductLine[]
-  /** Directive 2026-07-21: the lead's Operator seeding the first "Gestore Account" slot (0/1), editable/removable, never locked. */
-  managerSlots: number[]
-  /** {id,name} summaries paired with `managerSlots`, for the slot's trigger-label hydration. */
+  /** Directive 2026-07-22: `[]` or `[null, operatorId]` — an empty G.A. 1 plus the lead's Operator as G.A. 2, editable/removable, never locked. */
+  managerSlots: (number | null)[]
+  /** {id,name} summaries of the filled slots, for the slot's trigger-label hydration. */
   managerRefs: OpportunityRelationRef[]
 }
 

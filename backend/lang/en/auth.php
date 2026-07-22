@@ -23,4 +23,14 @@ return [
     'avatar_updated' => 'Avatar updated successfully.',
     'avatar_removed' => 'Avatar removed successfully.',
 
+    // "Login as customer" impersonation (spec 0050).
+    'impersonation_self' => 'You cannot impersonate yourself.',
+    'impersonation_inactive' => 'This account is inactive and cannot be impersonated.',
+    'impersonation_nesting' => 'You are already impersonating a user; stop the current session first.',
+    'impersonation_escalation' => 'Only a super-admin can impersonate a super-admin.',
+    'impersonation_not_active' => 'The current session is not an impersonation session.',
+    'impersonation_original_inactive' => 'Your account is no longer active; you have been signed out of the impersonation session.',
+    'impersonation_started' => 'Impersonation started.',
+    'impersonation_stopped' => 'Impersonation stopped.',
+
 ];

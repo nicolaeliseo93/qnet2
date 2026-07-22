@@ -6,6 +6,7 @@ import { applyLocale } from '@/i18n'
 import { fetchMe, login as loginRequest, logout as logoutRequest } from '@/features/auth/api'
 import { authKeys } from '@/features/auth/query-keys'
 import { AuthContext, type AuthContextValue } from '@/features/auth/auth-context'
+import { useImpersonationActions } from '@/features/auth/use-impersonation-actions'
 import type { LoginPayload } from '@/features/auth/types'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -52,6 +53,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient, setToken])
 
+  const { impersonator, impersonate, stopImpersonation } = useImpersonationActions({
+    token,
+    setToken,
+  })
+
   // A failed `me` fetch means the session can no longer be trusted: log out
   // and let ProtectedRoute redirect to /login. 401s are already handled by the
   // UNAUTHORIZED_EVENT below; this covers the other failures (5xx, network)
@@ -85,8 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isInitializing: Boolean(token) && meQuery.isPending,
       login,
       logout,
+      impersonator,
+      impersonate,
+      stopImpersonation,
     }),
-    [token, meQuery.data, meQuery.isPending, login, logout],
+    [token, meQuery.data, meQuery.isPending, login, logout, impersonator, impersonate, stopImpersonation],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

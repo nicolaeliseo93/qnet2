@@ -1,0 +1,46 @@
+/* eslint-disable react-refresh/only-export-components -- renderer registry module: cells are AG Grid render functions, not route/page components */
+import type { ICellRendererParams } from 'ag-grid-community'
+import { EmptyCell } from '@/features/table/cell-renderers'
+import { StatusBadgeCell } from '@/features/table/rich-cells'
+import { UserCell } from '@/features/table/user-cell'
+import type { TableRendererMap } from '@/features/table/renderer-registry'
+
+/**
+ * A plain text cell: truncates with a native tooltip on overflow and falls
+ * back to the shared em-dash EmptyCell when the value is null/empty. Reused by
+ * every display-only text column of the request-management worklist
+ * (`operator_ga2`, the client anagraphic fields, and the aggregated
+ * `product_categories` comma string).
+ */
+function TextCell({ value }: ICellRendererParams) {
+  if (value === null || value === undefined || value === '') {
+    return <EmptyCell align="left" />
+  }
+  const text = String(value)
+  return (
+    <div className="flex h-full items-center overflow-hidden">
+      <span className="truncate" title={text}>
+        {text}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Custom cell renderers keyed by the backend column `id` (spec 0049). The GA2
+ * `operator_ga2` renders as the shared `UserCell` (avatar + hover-card that
+ * opens the user's profile Sheet — same component as the opportunities
+ * `supervisor` column). The working state the operator advances
+ * (`workflow_status`) renders as a colored badge via the shared
+ * `StatusBadgeCell`; the client's PersonalData anagraphic fields and the
+ * aggregated product categories are display-only text.
+ */
+export const requestManagementColumnRenderers: TableRendererMap = {
+  product_categories: (params) => <TextCell {...params} />,
+  operator_ga2: (params) => <UserCell {...params} />,
+  workflow_status: (params) => <StatusBadgeCell {...params} />,
+  first_name: (params) => <TextCell {...params} />,
+  last_name: (params) => <TextCell {...params} />,
+  tax_code: (params) => <TextCell {...params} />,
+  phone: (params) => <TextCell {...params} />,
+}

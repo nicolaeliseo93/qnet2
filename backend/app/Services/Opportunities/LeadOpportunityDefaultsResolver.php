@@ -34,8 +34,9 @@ use Illuminate\Database\Eloquent\Model;
  * are present. User directive 2026-07-17: `operational_site_id` is REMOVED
  * from the derivable set entirely.
  *
- * User directive 2026-07-21: the lead's Operator carries `managerSlots`/
- * `managerRefs` (the FIRST "Gestore Account" prefill), NOT `supervisor_id`
+ * User directive 2026-07-21/2026-07-22: the lead's Operator carries
+ * `managerSlots`/`managerRefs` (the "Gestore Account 2" prefill, with an empty
+ * G.A. 1 slot before it), NOT `supervisor_id`
  * anymore — the Supervisor is left empty. Like the former supervisor
  * suggestion it is deliberately OUT of `DERIVED_FIELDS`/`lockedFields()`, a
  * plain editable prefill the user may freely change or clear.
@@ -93,9 +94,9 @@ final class LeadOpportunityDefaultsResolver
             'registry' => $this->summarizeByName($lead->registry),
         ];
 
-        // User directive 2026-07-21: the lead's Operator seeds the first
-        // "Gestore Account" slot (0 or 1 element — a lead has at most one
-        // Operator), never the Supervisor.
+        // User directive 2026-07-22: the lead's Operator seeds the SECOND
+        // "Gestore Account" slot — G.A. 1 is materialized empty (leading null,
+        // gap-aware) — never the Supervisor.
         $operator = $lead->operator;
         $managerRef = $this->summarizeByName($operator);
 
@@ -105,7 +106,7 @@ final class LeadOpportunityDefaultsResolver
             lockedFields: $this->lockedFields($values),
             productLines: $this->productLines($this->effectiveBusinessFunction($campaign), $this->effectiveProductCategory($campaign)),
             existingOpportunityId: $lead->opportunity?->id,
-            managerSlots: $operator === null ? [] : [$operator->id],
+            managerSlots: $operator === null ? [] : [null, $operator->id],
             managerRefs: $managerRef === null ? [] : [$managerRef],
         );
     }

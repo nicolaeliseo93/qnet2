@@ -17,10 +17,10 @@ namespace App\DataObjects\Opportunities;
  * lead/campaign's EFFECTIVE business function + product category, when BOTH
  * are present.
  *
- * User directive 2026-07-21: the lead's Operator no longer prefills the
- * Opportunity's Supervisor — it seeds the FIRST "Gestore Account" slot
- * instead (`managerSlots`/`managerRefs`), and the Supervisor stays empty.
- * A 0-or-1-element list (the lead has at most one Operator, AC-025), never
+ * User directive 2026-07-21/2026-07-22: the lead's Operator no longer prefills
+ * the Opportunity's Supervisor — it seeds the SECOND "Gestore Account" slot
+ * instead (`managerSlots`/`managerRefs`), G.A. 1 staying an empty slot, and the
+ * Supervisor stays empty. The lead has at most one Operator (AC-025), never
  * locked.
  */
 final readonly class LeadOpportunityDefaults
@@ -30,8 +30,8 @@ final readonly class LeadOpportunityDefaults
      * @param  array<string, array{id: int, name: string}|null>  $references  same keys, {id,name} summaries
      * @param  array<int, string>  $lockedFields  the subset of $values whose derivation is non-null (BR-2)
      * @param  array<int, array{business_function: array{id: int, name: string}, product_category: array{id: int, name: string}}>  $productLines  0 or 1 row, editable/removable in the form (never locked)
-     * @param  array<int, int>  $managerSlots  0 or 1 slot: the lead's Operator id, prefilling the first "Gestore Account" (never locked)
-     * @param  array<int, array{id: int, name: string}>  $managerRefs  {id,name} summaries paired with $managerSlots, for the slot's trigger-label hydration
+     * @param  array<int, int|null>  $managerSlots  empty, or the gap-aware [null, operator_id]: an empty G.A. 1 plus the lead's Operator as G.A. 2 (never locked)
+     * @param  array<int, array{id: int, name: string}>  $managerRefs  {id,name} summaries of the filled slots, for the slot's trigger-label hydration
      */
     public function __construct(
         public array $values,

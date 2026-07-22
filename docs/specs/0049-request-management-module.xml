@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0049 — Modulo "Gestione Richieste" (request-management).
+  Vista OPERATIVA sulle stesse Opportunita' per i commerciali/operatori: nessuna entita' nuova,
+  nessuna duplicazione dati. Scrive sull'Opportunita' e sui suoi dati collegati.
+  Grounding VERIFICATO sul codice reale (esplorazione 2026-07-21), non ipotizzato.
+  Decisioni utente (AskUserQuestion 2026-07-21):
+    - ACCESSO: set di permessi DEDICATO `request-management.*` (Policy propria), NON riuso di opportunities.*
+    - SCOPING: default solo le opportunita' dove l'utente e' Gestore Account (pivot opportunity_user);
+      con permesso `request-management.viewAll` -> tutte.
+    - CAMPI DINAMICI: valori salvati A LIVELLO OPPORTUNITA' (unione degli attributi EFFICACI delle
+      categorie prodotto dell'opportunita'), consultabili nella scheda Opportunita'.
+    - STATO: si avanza lo STATO DI LAVORAZIONE (workflow, spec 0047 -> opportunity_workflow_status_id).
+-->
+<spec id="0049-request-management-module" status="draft" owner="nicola" date="2026-07-21">
+
+  <goal>
+    Introdurre "Gestione Richieste": una pagina operativa per i commerciali che presenta le
+    Opportunita' come record di lavorazione. L'operatore contatta il cliente, verifica/completa i
+    contatti, raccoglie le informazioni preliminari compilando campi dinamici derivati dagli Attributi
+    della Categoria Prodotto dell'Opportunita', e avanza lo Stato di lavorazione (workflow). Tutti i
+    dati raccolti vivono SULL'Opportunita' (nessuna entita' nuova, nessuna duplicazione) e restano
+    consultabili nella scheda Opportunita'. Il modulo riusa integralmente gli standard architetturali,
+    grafici e funzionali degli altri moduli (nessun pattern nuovo): differenza SOLO funzionale.
+  </goal>
+
+  <context>
+    Tutti i nomi sotto sono VERIFICATI sul codice reale (esplorazione 2026-07-21).
+
+    NATURA DEL MODULO:
+    - NON e' una nuova tabella. Il "record di Gestione Richieste" E' un'Opportunita' (`opportunities`,
+      model `App\Models\Opportunity` extends BaseModel, tratti HasAttachments/LogsModelActivity/HasFactory).
+    - La lista e' guidata dal framework tabellare generico: nuovo domain slug `request-management` in
+      config/tables.php -> nuova `RequestManagementTableDefinition` sul model Opportunity. Nessun
+      controller/route di lista ad-hoc (ADR 0002). Export/activity via framework generico.
+    - La lavorazione (contatti + campi dinamici + avanzamento stato) passa da un endpoint DEDICATO
+      autorizzato dai permessi `request-management.*`, NON da `PATCH /api/opportunities/{id}` (che
+      richiede `opportunities.update`): l'accesso operativo e' separato dal CRUD delle Opportunita'.
+
+    DUE DIMENSIONI DI STATO SULL'OPPORTUNITA' (verificate):
+    - `opportunity_status_id` -> `OpportunityStatus` (pipeline commerciale, obbligatorio). NON e' quello
+      che avanza l'operatore: resta di sola lettura in Gestione Richieste.
+    - `opportunity_workflow_status_id` -> `OpportunityWorkflowStatus` (STATO DI LAVORAZIONE, spec 0047).
+      Risolto per criteri (Regione/Fonte/Funzione/Categoria) da `OpportunityWorkflowResolver`; il set
+      valido e' esposto in `OpportunityResource` come `workflow_statuses`. Transizioni LIBERE entro il
+      set (nessun grafo/guardia, spec 0047 linea 94). Validazione di appartenenza gia' esistente:
+      trait `App\Http\Requests\Concerns\ValidatesWorkflowStatus` (metodo `validateWorkflowStatus()`),
+      write-side `OpportunityService::resolveWorkflowStatus()`. Questo trait/logica si RIUSA.
+
+    CAMPI DINAMICI (Attributi della Categoria Prodotto):
+    - Gli "Attributi" (`App\Models\Attribute`, tabella `attributes`) sono un TEMPLATE tipizzato
+      assegnato alle Categorie Prodotto via pivot `attribute_category` (`is_required`, `sort_order`).
+      DOPO la rimozione dell'EAV (commit e5c31dc) NON hanno alcuno storage di valori per-record.
+    - Set EFFICACE di attributi di una categoria (own + ereditati dagli antenati, barriera
+      `inherits_attributes=false`): `App\Services\ProductCategories\CategoryHierarchy::effectiveAttributes()`,
+      esposto da `GET /api/product-categories/{productCategory}/effective-attributes`
+      (ProductCategoryController::effectiveAttributes) -> item {id, code, name, type, description,
+      help_text, placeholder, icon, config, relation_target, is_required, sort_order, inherited, options[]}.
+    - Un'Opportunita' ha 0..N righe prodotto: `opportunity_product_lines`
+      (`App\Models\OpportunityProductLine`, `Opportunity::productLines()` HasMany), ognuna con
+      `business_function_id` + `product_category_id`.
+    - DECISIONE UTENTE "a livello Opportunita'": l'INSIEME dei campi dinamici = UNIONE (dedup per
+      `code`) degli attributi efficaci di TUTTE le categorie prodotto dell'opportunita'; i valori si
+      salvano in UN'UNICA mappa a livello opportunita' (`opportunities.attribute_values` JSON).
+    - I type-handler `App\CustomFields\FieldTypeRegistry` / `App\CustomFields\Types\*` sono ACCOPPIATI
+      a `CustomFieldDefinition` (firme `validationRules(CustomFieldDefinition)`, `normalizeForStore(...,
+      CustomFieldDefinition)`) -> NON riusabili direttamente sugli Attributi. Serve un validatore/
+      normalizzatore di valori DEDICATO agli Attributi (vocabolario type CONDIVISO: 13 tipi text,
+      textarea, integer, decimal, boolean, enum, relation, date, datetime, time, email, url, color).
+    - FRONTEND: `frontend/src/features/custom-fields/field-component-registry.tsx`
+      (`CUSTOM_FIELD_COMPONENT_REGISTRY: Record<CustomFieldType, ComponentType<CustomFieldControlProps>>`)
+      mappa type->controllo e si RIUSA via adapter (descrittore Attributo -> CustomFieldControlProps),
+      poiche' il vocabolario dei type e' condiviso. Hook esistente per caricare gli attributi efficaci
+      di UNA categoria: `frontend/src/features/product-categories/use-effective-attributes.ts`.
+
+    CONTATTI (verifica/completamento):
+    - I contatti pendono dalla card `PersonalData` (morph owner via trait `HasContacts`), non
+      direttamente da Referent/Registry. `App\Models\Contact` (tabella `contacts`, morph `contactable`):
+      campi `type` (enum ContactTypeEnum: phone|mobile|fax|email|pec|website), `label`, `value`
+      ($hidden, riesposto da `ContactResource`), `is_primary`. `Referent` e `Registry` usano
+      `HasPersonalData` -> card -> contatti.
+    - Opportunity.referent_id/commercial_id/reporter_id -> `Referent`; opportunity.registry_id ->
+      `Registry` (il "cliente"/Anagrafica).
+    - COMPONENTE RIUSABILE ESISTENTE: `frontend/src/features/personal-data/contacts-manager.tsx`
+      (`ContactsManager`, CRUD completo con `persistence?: OwnerRef` per persistenza immediata,
+      `fieldPermission` gating). API contatti: `frontend/src/features/personal-data/api.ts`
+      (createContact/updateContact/deleteContact) autorizzate dai permessi `contacts.*`. Il modulo
+      RIUSA questi (NON reimplementa la gestione contatti): il ruolo commerciale ricevera' anche
+      `contacts.create`/`contacts.update`. La verifica/completamento contatti agisce sui contatti REALI
+      del Referent (persona di contatto) e del Registry (cliente) -> nessuna duplicazione.
+
+    WIRING MODULO (pattern verificati):
+    - Permessi derivati: `App\Console\Commands\SyncPermissions` fa glob su app/Policies/*.php e per
+      ogni `extends BasePolicy` crea `{resource}.{viewAny,view,create,update,delete,export,import,
+      viewActivity}`. BasePolicy in `app/Policies/Abstracts/BasePolicy.php`. Esempio minimale:
+      `OpportunityStatusPolicy` (resource() = 'opportunity-statuses').
+    - Registro tabelle: config/tables.php (slug->TableDefinition). Authorization/field-permissions:
+      config/authorization.php (slug->AbstractResourceAuthorization). Activity: config/activity-log.php
+      (slug->['model'=>...]). Navigazione backend-driven: config/navigation.php, gruppo esistente
+      `opportunities-group` (label navigation.opportunitiesAndCommesse) con figli opportunities,
+      opportunity-statuses, opportunity-workflows.
+    - Precedente UNICO di tabella scoped-per-utente: `App\Tables\LeadImportsTableDefinition::baseQuery()`
+      con `->where('user_id', Auth::id())` (docblock: authorizeViewAny prima, id null = zero righe,
+      mai fail-open). Si replica lo scoping su managers.
+    - FE module-registry: `frontend/src/features/modules/module-registry.ts` fa glob
+      `../*/*-screens.tsx` cercando l'export `moduleScreen: ModuleRegistryEntry` (domain, basePath,
+      defaultMode, labelKey, DetailScreen, FormScreen?, generateRoutes?). Host generici
+      module-detail-page.tsx / module-form-page.tsx; rotte deep-link da module-routes.tsx
+      (`buildModuleRoutes()`), spread in router.tsx. Open-mode per-utente: `useModuleOpener(domain)`
+      + `useModuleOpenMode(domain)` (rispettano la preferenza modale/pagina, spec 0042). Esempio
+      pagina custom + rotta a mano: opportunity-statuses.
+    - i18n: file per-modulo `it-<slug>.ts`/`en-<slug>.ts` (export const camelCase), importati e
+      inseriti come chiave top-level camelCase in `i18n/locales/it.ts`/`en.ts`; label nav sotto
+      `navigation:`; `en.ts` esporta il contratto `TranslationResources`.
+
+    ENVELOPE: `BaseApiController::ok()` -> {success, message, data}; `okWithPermissions()` aggiunge
+    `permissions: {resource, fields, actions}`.
+  </context>
+
+  <decisions>
+    <decision id="D-1">Nessuna entita' nuova. Il record e' l'Opportunita'. Domain slug `request-management`
+      (inglese), route `/request-management`, namespace i18n `requestManagement`, label it "Gestione
+      Richieste" / en "Request Management". Nav dentro il gruppo esistente `opportunities-group`.</decision>
+    <decision id="D-2">Permessi DEDICATI: `RequestManagementPolicy extends BasePolicy`
+      (resource() = 'request-management') -> genera request-management.{viewAny,view,create,update,
+      delete,export,import,viewActivity}. In USO: viewAny (aprire il modulo/tabella), view (aprire un
+      record), update (lavorare/salvare), export, viewActivity. create/delete/import esistono per
+      uniformita' BasePolicy ma NON hanno endpoint (come opportunities.import). Ability CUSTOM aggiuntiva
+      `viewAll` (abilities() = parent + 'viewAll') -> permesso `request-management.viewAll` per lo
+      scoping "vedi tutte".</decision>
+    <decision id="D-3">Scoping a due livelli (deciso dall'utente): la `baseQuery()` della TableDefinition
+      e la guardia degli endpoint show/update filtrano alle opportunita' dove `Auth::id()` e' Gestore
+      Account (`whereHas('managers', ... users.id = Auth::id())`); se l'utente ha
+      `request-management.viewAll` -> nessun filtro (tutte). Fuori scope -> 403.</decision>
+    <decision id="D-4">Campi dinamici a livello Opportunita': nuova colonna `opportunities.attribute_values`
+      JSON nullable (mappa {code: value}). NON in `#[Fillable]` di Opportunity: scritta SOLO dal
+      RequestManagementService (mai mass-assign dal CRUD opportunita'). L'insieme applicabile = unione
+      dedup-per-code degli attributi efficaci delle categorie prodotto delle righe. Validazione/
+      normalizzazione valori via nuovo `App\RequestManagement\AttributeValueValidator` +
+      `AttributeValueNormalizer` (vocabolario type condiviso; attributi con pivot is_required =>
+      required; valori per code fuori dall'insieme applicabile => 422).</decision>
+    <decision id="D-5">Avanzamento stato = `opportunity_workflow_status_id` (workflow, 0047). Riuso di
+      `ValidatesWorkflowStatus` per l'appartenenza al set risolto. `opportunity_status_id` (pipeline)
+      resta read-only nel modulo.</decision>
+    <decision id="D-6">Contatti: riuso di `ContactsManager` + endpoint contatti esistenti (permessi
+      `contacts.*`), agendo sui contatti reali di Referent (persona di contatto) e Registry (cliente).
+      NON reimplementati, NON duplicati. Il payload GET espone gli OwnerRef per la persistenza immediata.</decision>
+    <decision id="D-7">Attivita' (RETTIFICA in build 2026-07-21): le modifiche operative (workflow status +
+      attribute_values) sono scritte sull'Opportunita' e TRACCIATE con una entry activity ESPLICITA in
+      `RequestManagementService::updateWork()` (i due campi sono fuori `#[Fillable]` per D-4/D-5, quindi
+      il log automatico `logFillable()` non li cattura: si scrive `activity()->performedOn->causedBy->
+      withProperties(['attributes','old'])->log('updated')`, skip se nulla cambia). Cosi' il tracciamento
+      resta sull'Opportunita' e visibile nella sua scheda/activity (no duplicazione).
+      NESSUN endpoint activity dedicato al modulo: il framework generico `ActivityLogController` risolve
+      l'authz per CLASSE MODELLO (Opportunity), quindi `GET /api/activity-log/request-management/{id}`
+      sarebbe gated da `opportunities.viewActivity`/`opportunities.view`, NON da `request-management.*` —
+      incoerente con la decisione "permessi dedicati" e richiederebbe chirurgia sul controller condiviso.
+      Percio' NON si registra `request-management` in config/activity-log.php e la tabella NON espone
+      un'azione activity. Il write-side (entry sull'Opportunita') e' comunque verificato dai test.</decision>
+    <decision id="D-8">Consultabilita' nella scheda Opportunita': `OpportunityResource` espone
+      `attribute_values` (+ `applicable_attributes` per le label) e la detail dell'Opportunita'
+      (`opportunity-detail.tsx`) rende una sezione read-only "Informazioni raccolte". Modifica ADDITIVA
+      al modulo opportunities (nessun cambio di comportamento esistente).</decision>
+    <decision id="D-9">Apertura del record operativo: `moduleScreen` con `DetailScreen` = pannello di
+      lavorazione (editabile per chi ha update), nessun FormScreen (non si CREA una richiesta).
+      defaultMode = 'page' (pannello ricco). Rispetta la preferenza modale/pagina via `useModuleOpener`
+      (modale = Sheet col pannello; pagina = /request-management/:id). Rotte `/request-management`
+      (lista) e `/request-management/:id` dichiarate a mano; `generateRoutes:false` (niente new/edit/
+      duplicate generici).</decision>
+    <decision id="D-10">Fuori scope: stats dedicate, import, creazione/eliminazione di "richieste",
+      assegnazione operatori (nessun nuovo campo operator_id sulle opportunita'), grafo di transizioni
+      di stato. Vedi scope/out.</decision>
+  </decisions>
+
+  <scope>
+    <in>
+      <!-- BACKEND -->
+      <item>Migration: aggiunge `attribute_values` json nullable a `opportunities` (down reversibile).
+        Model Opportunity: cast `attribute_values => 'array'` (NON in Fillable).</item>
+      <item>`RequestManagementPolicy` (resource 'request-management', abilities() + 'viewAll').
+        `RequestManagementAuthorization` (AbstractResourceAuthorization, resource 'request-management',
+        campi visibili minimi) + registrazione config/authorization.php.</item>
+      <item>Servizi valori attributi: `App\RequestManagement\ApplicableAttributesResolver` (unione
+        dedup-per-code degli attributi efficaci delle categorie delle righe, batchato, N+1-free),
+        `AttributeValueValidator` (regole per type + is_required + insieme applicabile),
+        `AttributeValueNormalizer` (coercion/store per type).</item>
+      <item>Endpoint dedicati: `RequestManagementController` (show, update), `RequestManagementService`
+        (loadWorkPanel, updateWork con scope-guard), `ShowRequestRequest`/`UpdateRequestRequest`
+        (riuso ValidatesWorkflowStatus), `RequestManagementResource`, routes/api/request-management.php
+        + require in routes/api.php. Scope-guard riusabile `RequestManagementScope::assertInScope()`.</item>
+      <item>`RequestManagementTableDefinition` + `RequestManagement/RequestColumnCatalog` +
+        `RequestAdvancedFilterCatalog` (baseQuery scoped su managers/viewAll, colonne operative,
+        SOLO row action "view" gated; workflow_status filtro set via distinctValues) + config/tables.php.</item>
+      <item>Registrazioni: config/navigation.php (voce nel gruppo opportunities-group, permission
+        request-management.view). NESSUNA registrazione in config/activity-log.php (D-7).</item>
+      <item>OpportunityResource ADDITIVO: `attribute_values` + `applicable_attributes`. Nessun cambio al
+        CRUD/validazione opportunita'.</item>
+      <item>Test Pest: policy/permessi (incl. viewAll), scoping tabella (manager vs tutte),
+        show/update endpoint + authz + 403 fuori scope, avanzamento workflow status (in-set/off-set),
+        attribute_values (applicabile/non applicabile/required/type), attivita', OpportunityResource
+        additivo, migration reversibile.</item>
+      <!-- FRONTEND -->
+      <item>Feature `frontend/src/features/request-management/`: api.ts, types.ts, query-keys;
+        pannello di lavorazione (`request-work-panel.tsx`) con: contesto Opportunita' read-only,
+        blocchi contatti (ContactsManager su Referent + Registry), sezione campi dinamici
+        (`request-dynamic-fields.tsx` via adapter su CUSTOM_FIELD_COMPONENT_REGISTRY),
+        controllo Stato di lavorazione (workflow) con select entro il set risolto; hook
+        `use-request-work-form.ts`, schema/payload (sparse diff).</item>
+      <item>`request-management-table.tsx` (adapter su &lt;TableView domain="request-management"&gt;,
+        row action "Lavora" -> useModuleOpener.openView, delete assente), `column-renderers.tsx`
+        (badge stato lavorazione riusando swatchClassFor/StatusBadgeCell), pagina
+        `pages/request-management-page.tsx`, `request-management-screens.tsx` (moduleScreen,
+        generateRoutes:false), rotte in router.tsx (lista + :id), voce nav label + i18n it/en.</item>
+      <item>Opportunita' ADDITIVO: `opportunity-detail.tsx` rende sezione read-only "Informazioni
+        raccolte" dai `attribute_values`/`applicable_attributes`. Nessuna regressione suite opportunities.</item>
+      <item>Test Vitest: schema/payload lavorazione, pannello (campi dinamici renderizzati per type,
+        controllo workflow status entro il set, contatti montati), tabella (apre nel modo risolto,
+        niente delete), detail opportunita' additiva.</item>
+    </in>
+    <out>
+      <item>Qualsiasi nuova tabella/entita' "richiesta": il record E' l'Opportunita'.</item>
+      <item>Nuovo campo/assegnazione operatore sulle opportunita' (operator_id): lo scoping usa i Gestori
+        Account esistenti + permesso viewAll.</item>
+      <item>Modifiche a `PATCH /api/opportunities/{id}` o ai permessi opportunities.*: la lavorazione ha
+        endpoint e permessi propri.</item>
+      <item>Storage per-riga-prodotto / per-categoria dei valori (l'utente ha scelto "a livello
+        Opportunita'"): unica mappa opportunity-level.</item>
+      <item>Reimplementazione della gestione contatti (si riusa ContactsManager + endpoint contacts.*)
+        e del sistema Custom Fields universale (0021): i campi dinamici vengono dagli ATTRIBUTI.</item>
+      <item>Grafo/guardie di transizione tra stati di lavorazione (transizioni libere entro il set, 0047).</item>
+      <item>Stats dedicate, import, creazione/eliminazione di richieste, codice sequenziale.</item>
+      <item>File del lavoro non committato estraneo a questo scope sul branch.</item>
+    </out>
+  </scope>
+
+  <data_contract>
+
+    <!-- ==== SCHEMA (additivo) ==== -->
+    <endpoint method="SCHEMA" path="opportunities.attribute_values">
+      <request>opportunities: + `attribute_values` json NULL. Nessun'altra colonna. Reversibile (down drop).</request>
+      <response status="200">Migrazione up+down verde su SQLite e MySQL.</response>
+      <errors>-</errors>
+    </endpoint>
+
+    <!-- ==== PANNELLO DI LAVORAZIONE (show) ==== -->
+    <endpoint method="GET" path="/api/request-management/{opportunity}">
+      <request>Route model binding su {opportunity} (Opportunity). auth:sanctum.</request>
+      <response status="200">
+        { success: true, message: "OK",
+          data: {
+            id, name: string,
+            registry: { id, name } | null,
+            referent: { id, name } | null,
+            commercial: { id, name } | null,
+            opportunity_status: { id, name, color } | null,      /* read-only */
+            workflow_status: { id, name, color, system_key } | null,
+            workflow_statuses: [ { id, name, color, system_key } ],  /* set risolto (come OpportunityResource) */
+            product_lines: [ { id, business_function: {id,name}, product_category: {id,name} } ],
+            client_contacts: { owner: { type:'personal_data', id: number /* PersonalData card id del Registry */ } | null,
+                               items: [ { id, type, label: string|null, value: string, is_primary: bool } ] },
+            referent_contacts: { owner: { type:'personal_data', id: number /* PersonalData card id del Referent */ } | null,
+                                 items: [ { id, type, label, value, is_primary } ] },
+            <!-- RETTIFICA build 2026-07-21: owner e' il ref della CARD PersonalData (unico contactable
+                 valido: config/personal_data.php contactable_types = [personal_data]), NON l'entita'
+                 registry/referent. Passato tale e quale come persistence a ContactsManager. null se
+                 l'entita' non ha ancora una card (contatti in sola lettura/vuoti). -->
+
+            applicable_attributes: [ { id, code, name, type, description, help_text, placeholder,
+                                       icon, config, relation_target, is_required: bool, sort_order,
+                                       options: [ { value, label, color } ] } ],   /* unione dedup per code */
+            attribute_values: { [code: string]: unknown },       /* valori correnti; {} se nessuno */
+            context: { estimated_value: string|number|null, expected_close_date: 'Y-m-d'|null,
+                       success_probability: number|null }         /* sola lettura */
+          },
+          permissions: { resource:'request-management', fields, actions } }
+      </response>
+      <errors>403 senza `request-management.view` O fuori scope (non gestore account e senza viewAll);
+        404 opportunita' inesistente.</errors>
+    </endpoint>
+
+    <!-- ==== LAVORAZIONE (update) ==== -->
+    <endpoint method="PATCH" path="/api/request-management/{opportunity}">
+      <request>
+        { opportunity_workflow_status_id?: number|null,   /* deve appartenere al set risolto (ValidatesWorkflowStatus); null = lascia risolvere */
+          attribute_values?: { [code: string]: unknown } } /* solo code dell'insieme applicabile; valore validato per type; attributi is_required non vuoti */
+        Sparse: solo le chiavi inviate cambiano. `attribute_values` fa merge/replace dell'intera mappa
+        inviata (le chiavi non inviate restano invariate).
+      </request>
+      <response status="200">Identica alla GET (data + permissions), message "Updated".</response>
+      <errors>403 senza `request-management.update` O fuori scope; 404; 422 (workflow status fuori set /
+        code non applicabile / valore non valido per type / required mancante).</errors>
+    </endpoint>
+
+    <!-- ==== EREDITATI DAL FRAMEWORK (nessun endpoint nuovo) ==== -->
+    <endpoint method="POST" path="/api/tables/request-management/rows">
+      <request>Contratto SSRM generico. Filtri/sort da allow-list.</request>
+      <response status="200">Righe SOLO nello scope dell'utente (gestore account) salvo
+        `request-management.viewAll` (tutte). Colonne almeno: name, registry, referent,
+        product_categories (aggregata), workflow_status (badge colorato), opportunity_status (badge),
+        expected_close_date, updated_at. Row action: work (view) gated request-management.view,
+        NESSUNA azione activity (vedi D-7). Nessun edit/delete.</response>
+      <errors>403 senza `request-management.viewAny`.</errors>
+    </endpoint>
+    <endpoint method="GET|POST" path="/api/tables/request-management/{columns|values}">
+      <request>Contratto SSRM generico (catalogo colonne, distinct values).</request>
+      <response status="200">Catalogo del contratto; distinct via allow-list.</response>
+      <errors>403 senza `request-management.viewAny`.</errors>
+    </endpoint>
+    <endpoint method="POST" path="/api/exports/request-management">
+      <request>Export generico (0014): rispetta filtri/sort/scope su intero dataset scoped.</request>
+      <response status="200">ExportRun.</response>
+      <errors>403 senza `request-management.export`.</errors>
+    </endpoint>
+    <!-- RIMOSSO (build 2026-07-21, D-7): nessun endpoint activity dedicato al modulo. Le modifiche
+         operative sono tracciate come entry activity sull'Opportunita' (write-side, testato) e
+         consultabili nell'activity dell'Opportunita'. Il framework activity-log generico gata per
+         classe modello, quindi non e' registrabile con authz request-management.* senza chirurgia
+         sul controller condiviso: fuori scope. -->
+
+    <endpoint method="GET" path="/api/meta/request-management">
+      <request>Nessuno.</request>
+      <response status="200">Da RequestManagementAuthorization: campi operativi permissionabili
+        (attribute_values, opportunity_workflow_status_id) — matrice minima; nessun campo mandatory
+        restrittivo oltre il necessario.</response>
+      <errors>403 senza `request-management.viewAny`.</errors>
+    </endpoint>
+
+    <!-- ==== OPPORTUNITA' (additivo, retrocompatibile) ==== -->
+    <endpoint method="GET" path="/api/opportunities/{opportunity}">
+      <request>Invariata.</request>
+      <response status="200">data ARRICCHITO (retrocompatibile): + `attribute_values: {[code]:unknown}`
+        + `applicable_attributes: [{id,code,name,type,...,options[]}]`. Tutti gli altri campi invariati.</response>
+      <errors>Invariati.</errors>
+    </endpoint>
+
+    <!-- ==== CONTATTI (riuso endpoint esistenti, nessun nuovo endpoint) ==== -->
+    <endpoint method="POST|PATCH|DELETE" path="/api/contacts (esistenti)">
+      <request>Contratto contatti esistente (personal-data). OwnerRef dal payload GET del pannello.</request>
+      <response status="200">Invariato. Persistenza immediata via ContactsManager.</response>
+      <errors>403 senza `contacts.create`/`contacts.update`/`contacts.delete`.</errors>
+    </endpoint>
+
+  </data_contract>
+
+  <acceptance_criteria>
+
+    <!-- Schema + permessi -->
+    <criterion id="AC-001">Migration: `opportunities` acquisisce `attribute_values` json nullable; down() la rimuove; migrate:fresh + rollback verdi su SQLite. Il cast del model e' `array` e la colonna NON e' in `#[Fillable]` (non mass-assignable). [Pest: Unit/Models/OpportunityAttributeValuesTest]</criterion>
+    <criterion id="AC-002">Dopo permissions:sync esistono `request-management.{viewAny,view,create,update,delete,export,import,viewActivity}` e `request-management.viewAll`, senza righe di seeder (derivati da RequestManagementPolicy + ability custom viewAll). [Pest: RequestManagementSecurityTest]</criterion>
+
+    <!-- Scoping tabella -->
+    <criterion id="AC-010">POST tables/request-management/rows di un utente CON viewAny ma SENZA viewAll -> SOLO opportunita' dove e' Gestore Account (pivot opportunity_user); una di cui non e' manager non compare. [Pest: RequestManagementTableTest]</criterion>
+    <criterion id="AC-011">Stesso endpoint con utente che ha `request-management.viewAll` -> tutte le opportunita' (nessun filtro di scope). [Pest]</criterion>
+    <criterion id="AC-012">Senza `request-management.viewAny` -> 403 su rows/columns/values. Il catalogo espone SOLO l'azione 'view' (gated request-management.view); nessuna azione edit/delete/activity. [Pest]</criterion>
+    <criterion id="AC-013">Utente senza gestione e senza viewAll (zero opportunita' gestite) -> rows vuote (non 500, non fail-open). [Pest]</criterion>
+
+    <!-- Show / scope guard -->
+    <criterion id="AC-020">GET /api/request-management/{opportunity} come Gestore Account -> 200 con la shape del contratto (registry/referent/commercial, workflow_status + workflow_statuses, product_lines, client_contacts/referent_contacts con owner+items, applicable_attributes unione dedup-per-code, attribute_values, context read-only, permissions). [Pest: RequestManagementShowTest]</criterion>
+    <criterion id="AC-021">GET su un'opportunita' NON gestita dall'utente e senza viewAll -> 403; con viewAll -> 200. Senza `request-management.view` -> 403. [Pest]</criterion>
+    <criterion id="AC-022">`applicable_attributes` = unione (dedup per `code`) degli attributi EFFICACI (own+inherited) delle categorie prodotto di TUTTE le product_lines; opportunita' senza righe/ senza attributi -> `applicable_attributes: []`. I contatti `value` sono esposti (via ContactResource), is_primary corretto. [Pest]</criterion>
+
+    <!-- Update: workflow status -->
+    <criterion id="AC-030">PATCH con `opportunity_workflow_status_id` appartenente al set risolto -> 200, valore persistito su `opportunities.opportunity_workflow_status_id`; visibile in OpportunityResource.workflow_status. [Pest: RequestManagementUpdateTest]</criterion>
+    <criterion id="AC-031">PATCH con `opportunity_workflow_status_id` FUORI dal set risolto -> 422 (riuso ValidatesWorkflowStatus). PATCH senza il campo -> non tocca lo stato. [Pest]</criterion>
+    <criterion id="AC-032">Senza `request-management.update` -> 403; fuori scope -> 403; opportunita' inesistente -> 404. [Pest]</criterion>
+
+    <!-- Update: attribute values -->
+    <criterion id="AC-040">PATCH con `attribute_values` di soli code appartenenti all'insieme applicabile e valori validi per type -> 200; persistiti in `opportunities.attribute_values` (merge della mappa). [Pest]</criterion>
+    <criterion id="AC-041">PATCH con un code NON nell'insieme applicabile -> 422 su quel code; valore non valido per il type dell'attributo (es. testo dove serve integer, enum fuori options) -> 422. [Pest]</criterion>
+    <criterion id="AC-042">Attributo con pivot `is_required` inviato vuoto/null -> 422 required; attributo non required assente -> ok. [Pest]</criterion>
+    <criterion id="AC-043">Le modifiche operative (workflow status + attribute_values) generano una entry activity ESPLICITA sull'Opportunita' (con properties attributes/old); nessuna entry se nulla cambia. Il modulo NON espone un endpoint activity dedicato (D-7): il tracciamento vive sull'Opportunita'. [Pest: RequestManagementActivityTest / RequestManagementUpdateTest]</criterion>
+
+    <!-- Opportunita' additivo -->
+    <criterion id="AC-050">GET /api/opportunities/{opportunity} espone `attribute_values` e `applicable_attributes`; opportunita' senza valori -> `attribute_values: {}`. Nessuna regressione sugli altri campi/suite opportunities. [Pest: OpportunityShowTest]</criterion>
+
+    <!-- Frontend -->
+    <criterion id="AC-060">Tabella request-management: adapter su &lt;TableView domain="request-management"&gt;; colonne del contratto; badge stato lavorazione colorato; row action "Lavora" apre il pannello nel modo risolto (modale/pagina) via useModuleOpener; nessuna azione delete/edit inline. [Vitest: request-management-table.test.tsx]</criterion>
+    <criterion id="AC-061">Pannello di lavorazione: rende contesto Opportunita' read-only, blocchi contatti (ContactsManager su Referent e Registry con OwnerRef), sezione campi dinamici che renderizza un controllo per ogni `applicable_attributes` secondo il type (adapter su CUSTOM_FIELD_COMPONENT_REGISTRY), e il controllo Stato di lavorazione (select entro `workflow_statuses`). [Vitest: request-work-panel.test.tsx]</criterion>
+    <criterion id="AC-062">Il payload PATCH e' sparse: invia solo i campi modificati (`opportunity_workflow_status_id` e/o `attribute_values` diff); 422 server mappato sui campi con triade a11y (aria-invalid/aria-describedby/role=alert). [Vitest: request-work-payload.test.ts]</criterion>
+    <criterion id="AC-063">Selezione di uno stato di lavorazione fuori dal set risolto e' impossibile dalla UI (select limitata a `workflow_statuses`); campo dinamico enum limitato alle sue options; campo required segnalato. [Vitest]</criterion>
+    <criterion id="AC-064">Scheda Opportunita' (opportunity-detail): nuova sezione read-only "Informazioni raccolte" che elenca gli `applicable_attributes` con i rispettivi `attribute_values`; assente/empty-state se nessun valore. Suite opportunities verde. [Vitest: opportunity-detail.test.tsx]</criterion>
+    <criterion id="AC-065">Voce "Gestione Richieste" nel gruppo nav "Opportunita' e Commesse" solo con `request-management.view`; rotta /request-management gated &lt;Can permission="request-management.viewAny"&gt;; /request-management/:id raggiungibile in page mode. i18n it/en presenti (dominio + navigation). [Pest navigation + Vitest]</criterion>
+
+    <!-- Definition of Done -->
+    <criterion id="AC-070">Suite completa verde ED ESEGUITA: Pest full, Vitest full, `npx tsc -b` pulito, Pint --test, ESLint sul diff. Nessuna regressione su opportunities/opportunity-statuses/opportunity-workflows/leads. [verifier]</criterion>
+
+  </acceptance_criteria>
+
+  <constraints>
+    <item>Nessuna nuova dipendenza (composer/npm).</item>
+    <item>Identificatori in INGLESE: slug `request-management`, colonna `attribute_values`, rotte
+      `/api/request-management`, classi `RequestManagement*`. Italiano solo nelle stringhe i18n.</item>
+    <item>Authz server-side su OGNI endpoint (Policy `request-management.*` + scope-guard). L'UI nasconde,
+      il backend autorizza. Mai model raw: sempre RequestManagementResource/OpportunityResource. Mai
+      `$request->only()` nudo: FormRequest + safe()/DTO.</item>
+    <item>Zero whereRaw/orderByRaw su input: sort/filtri della tabella da allow-list (pattern colonne
+      derivate/aggregate di OpportunitiesTableDefinition). Scope su managers via whereHas, mai raw.</item>
+    <item>Nessun endpoint ad-hoc di lista/filtri/export/activity: solo framework generici
+      (tables/exports/activity-log). Nessuna modifica a opportunities.* CRUD/permessi.</item>
+    <item>Riuso senza duplicazione: ValidatesWorkflowStatus, ContactsManager + endpoint contacts.*,
+      CUSTOM_FIELD_COMPONENT_REGISTRY (via adapter), CategoryHierarchy::effectiveAttributes,
+      swatchClassFor/StatusBadgeCell, useModuleOpener/module-registry. NIENTE ricopiatura.</item>
+    <item>`attribute_values` scritta SOLO dal RequestManagementService (mai in Opportunity Fillable /
+      mai dal CRUD opportunita').</item>
+    <item>File GATE condivisi serializzati (vedi piano): backend/routes/api.php, backend/config/*.php,
+      backend/app/Models/Opportunity.php, backend/app/Http/Resources/OpportunityResource.php,
+      frontend/src/routes/router.tsx, frontend/src/i18n/locales/{it,en}.ts,
+      frontend/src/features/opportunities/opportunity-detail.tsx. Tutti gli altri owner disgiunti.</item>
+    <item>File entro 300/500 righe: catalogo colonne e filtri avanzati in file separati; pannello FE
+      splittato in sezioni (contesto/contatti/campi-dinamici/stato).</item>
+    <item>NON toccare i file del lavoro non committato estraneo a questo scope sul branch.</item>
+    <item>Definition of Done: Pest + Vitest ESEGUITI e verdi, `npx tsc -b` pulito, Pint/ESLint puliti.
+      Nessun commit/cambio branch senza ordine esplicito (CLAUDE.md §3.6).</item>
+  </constraints>
+
+</spec>

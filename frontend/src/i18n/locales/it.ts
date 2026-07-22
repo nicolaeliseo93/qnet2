@@ -29,6 +29,7 @@ import { notifications } from './it-notifications'
 import { leadImports } from './it-lead-imports'
 import { businessFunctions } from './it-business-functions'
 import { moduleStats, statsPanel } from './it-stats'
+import { impersonation } from './it-impersonation'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -116,6 +117,7 @@ export const it: TranslationResources = {
     activity: 'Attività',
     convertToOpportunity: 'Converti in Opportunità',
     documents: 'Documenti',
+    impersonate: 'Impersona',
   },
   table,
   statsPanel,
@@ -464,4 +466,5 @@ export const it: TranslationResources = {
   requestManagement,
   importRuns: { stats: moduleStats.importRuns },
   attachments,
+  impersonation,
 }

@@ -4,6 +4,7 @@ import type {
   AbilityMap,
   ChangePasswordPayload,
   ForgotPasswordPayload,
+  ImpersonationState,
   LoginPayload,
   LoginResult,
   ResetPasswordPayload,
@@ -58,5 +59,25 @@ export async function deleteMyAvatar(): Promise<User> {
 
 export async function fetchAbilities(): Promise<AbilityMap> {
   const { data } = await apiClient.get<ApiResponse<AbilityMap>>('/auth/me/abilities')
+  return data.data
+}
+
+/** Starts impersonating the target user; returns a token headed for them. */
+export async function impersonateUser(userId: number): Promise<LoginResult> {
+  const { data } = await apiClient.post<ApiResponse<LoginResult>>(
+    `/users/${userId}/impersonate`,
+  )
+  return data.data
+}
+
+/** Ends impersonation; returns a fresh token for the original actor. */
+export async function stopImpersonation(): Promise<LoginResult> {
+  const { data } = await apiClient.post<ApiResponse<LoginResult>>('/auth/stop-impersonation')
+  return data.data
+}
+
+/** The original actor's identity when the current token is an impersonation. */
+export async function fetchImpersonation(): Promise<ImpersonationState> {
+  const { data } = await apiClient.get<ApiResponse<ImpersonationState>>('/auth/impersonation')
   return data.data
 }

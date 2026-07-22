@@ -1,0 +1,204 @@
+<?php
+
+use App\Models\Opportunity;
+use App\Models\OpportunityWorkflowStatus;
+use App\Models\Registry;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Permission;
+
+uses(RefreshDatabase::class);
+
+if (! function_exists('requestManagementUserWith')) {
+    /**
+     * @param  array<int, string>  $abilities
+     */
+    function requestManagementUserWith(array $abilities): User
+    {
+        foreach (['viewAny', 'view', 'create', 'update', 'delete', 'export', 'import', 'viewActivity', 'viewAll'] as $ability) {
+            Permission::findOrCreate("request-management.{$ability}");
+        }
+
+        $user = User::factory()->create();
+
+        foreach ($abilities as $ability) {
+            $user->givePermissionTo("request-management.{$ability}");
+        }
+
+        return $user;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AC-010 — scoped to the actor's GA2 opportunities for a viewAny-but-not-viewAll
+// user (being GA1 or any other manager slot is NOT enough)
+// ---------------------------------------------------------------------------
+
+it('rows: a user with viewAny but without viewAll sees only opportunities where they are GA2 (AC-010)', function () {
+    $actor = requestManagementUserWith(['viewAny']);
+    $asOperator = Opportunity::factory()->create();
+    $asOperator->managers()->attach($actor->id, ['position' => 2]); // GA2 -> in scope
+    $asGa1 = Opportunity::factory()->create();
+    $asGa1->managers()->attach($actor->id, ['position' => 1]);      // GA1 only -> out of scope
+    $notManaged = Opportunity::factory()->create();
+
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $ids = collect($response->json('items'))->pluck('id');
+
+    expect($ids->all())->toBe([$asOperator->id])
+        ->and($ids->all())->not->toContain($asGa1->id)
+        ->and($ids->all())->not->toContain($notManaged->id);
+});
+
+// ---------------------------------------------------------------------------
+// AC-011 — viewAll sees every opportunity, no scope filter
+// ---------------------------------------------------------------------------
+
+it('rows: a user with viewAll sees every opportunity, managed or not (AC-011)', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    $managed = Opportunity::factory()->create();
+    $managed->managers()->attach($actor->id, ['position' => 1]);
+    $notManaged = Opportunity::factory()->create();
+
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $ids = collect($response->json('items'))->pluck('id');
+
+    expect($ids->all())->toContain($managed->id, $notManaged->id);
+});
+
+// ---------------------------------------------------------------------------
+// AC-012 — 403 without viewAny; no edit/delete/activity action in the
+// catalogue; view gated by request-management.view
+// ---------------------------------------------------------------------------
+
+it('403 without request-management.viewAny on rows/columns/values (AC-012)', function () {
+    $actor = requestManagementUserWith([]);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])->assertForbidden();
+    $this->getJson('/api/tables/request-management/columns')->assertForbidden();
+    $this->postJson('/api/tables/request-management/values', ['columnId' => 'workflow_status'])->assertForbidden();
+});
+
+it('the action catalogue never declares edit/delete/activity, only view (AC-012)', function () {
+    $actor = requestManagementUserWith(['viewAny', 'view', 'viewActivity']);
+    Sanctum::actingAs($actor);
+
+    $actions = $this->getJson('/api/tables/request-management/columns')
+        ->assertOk()
+        ->json('data.actions');
+
+    $keys = collect($actions)->pluck('key');
+    expect($keys->all())->toBe(['view'])
+        ->and($keys)->not->toContain('edit')
+        ->and($keys)->not->toContain('delete')
+        ->and($keys)->not->toContain('activity');
+});
+
+it('row.actions contains view only with request-management.view (AC-012)', function () {
+    $opportunity = Opportunity::factory()->create();
+
+    // viewAll makes the row visible regardless of GA2 scope; this test is about
+    // the row action being gated by request-management.view, not scoping.
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    Sanctum::actingAs($actor);
+    $items = collect($this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+    expect($items->firstWhere('id', $opportunity->id)['actions'])->toBe([]);
+
+    $actorWithView = requestManagementUserWith(['viewAny', 'viewAll', 'view']);
+    Sanctum::actingAs($actorWithView);
+    $items = collect($this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+    expect($items->firstWhere('id', $opportunity->id)['actions'])->toBe(['view']);
+});
+
+// ---------------------------------------------------------------------------
+// AC-013 — zero managed opportunities, no viewAll: empty rows, never 500
+// ---------------------------------------------------------------------------
+
+it('rows: a user managing nothing and without viewAll gets empty rows, not a 500 (AC-013)', function () {
+    $actor = requestManagementUserWith(['viewAny']);
+    Opportunity::factory()->count(3)->create();
+
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+
+    expect($response->json('items'))->toBe([]);
+});
+
+// ---------------------------------------------------------------------------
+// Row mapping: the operative columns surface with the expected shapes —
+// workflow_status color badge, the GA2 operator name, and the client's
+// anagraphic fields (nome/cognome/codice fiscale/telefono) read from the
+// Registry's PersonalData card.
+// ---------------------------------------------------------------------------
+
+it('rows: workflow_status carries color; operator_ga2 + client anagraphic columns surface', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+
+    $registry = Registry::factory()->create();
+    $card = $registry->personalData()->create([
+        'type' => 'individual',
+        'first_name' => 'Mario',
+        'last_name' => 'Rossi',
+        'tax_code' => 'RSSMRA80A01H501U',
+    ]);
+    $card->contacts()->create(['type' => 'phone', 'value' => '+39 02 1234567', 'is_primary' => true]);
+
+    $workflowStatus = OpportunityWorkflowStatus::factory()->global()->create(['name' => 'In lavorazione', 'color' => 'blue']);
+    $ga1 = User::factory()->create(['name' => 'GA Uno']);
+    $operator = User::factory()->create(['name' => 'Giulia Bianchi']);
+
+    $opportunity = Opportunity::factory()->create([
+        'registry_id' => $registry->id,
+        'opportunity_workflow_status_id' => $workflowStatus->id,
+    ]);
+    // GA1 = position 1, GA2 (the "Operatore") = position 2.
+    $opportunity->managers()->attach($ga1->id, ['position' => 1]);
+    $opportunity->managers()->attach($operator->id, ['position' => 2]);
+
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $opportunity->id);
+
+    expect($row['workflow_status'])->toMatchArray(['id' => $workflowStatus->id, 'name' => 'In lavorazione', 'color' => 'blue'])
+        ->and($row['operator_ga2'])->toMatchArray(['id' => $operator->id, 'name' => 'Giulia Bianchi'])
+        ->and($row['first_name'])->toBe('Mario')
+        ->and($row['last_name'])->toBe('Rossi')
+        ->and($row['tax_code'])->toBe('RSSMRA80A01H501U')
+        ->and($row['phone'])->toBe('+39 02 1234567');
+});
+
+// ---------------------------------------------------------------------------
+// Allow-list: an unknown sort column is rejected (no raw SQL escape hatch)
+// ---------------------------------------------------------------------------
+
+it('rows: an unknown sort column is rejected (allow-list, no raw SQL escape hatch)', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/tables/request-management/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'attribute_values', 'sort' => 'asc']],
+    ])->assertStatus(422);
+});
+
+it('rows: product_categories is not sortable (AGGREGATED to-many column)', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/tables/request-management/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'product_categories', 'sort' => 'asc']],
+    ])->assertStatus(422);
+});

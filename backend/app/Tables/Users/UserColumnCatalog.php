@@ -365,6 +365,16 @@ final class UserColumnCatalog
                 'confirm' => false,
                 'permission' => 'users.viewActivity',
             ],
+            [
+                // "Login as customer" impersonation (spec 0050): confirmed
+                // because it swaps the actor's identity for the whole session.
+                'key' => 'impersonate',
+                'label' => 'actions.impersonate',
+                'icon' => 'log-in',
+                'type' => 'action',
+                'confirm' => true,
+                'permission' => 'users.impersonate',
+            ],
         ];
     }
 }

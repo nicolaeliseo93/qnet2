@@ -5,6 +5,7 @@ use App\Http\Controllers\Addresses\AddressController;
 use App\Http\Controllers\Attachments\AttachmentController;
 use App\Http\Controllers\Attributes\AttributeController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\ImpersonationController;
 use App\Http\Controllers\Authorization\FieldCatalogueController;
 use App\Http\Controllers\BusinessFunctions\BusinessFunctionController;
 use App\Http\Controllers\BusinessFunctions\BusinessFunctionForSelectController;
@@ -82,6 +83,14 @@ Route::prefix('auth')->group(function () {
         // their own avatar; no extra permission required.
         Route::post('me/avatar', [AuthController::class, 'uploadAvatar']);
         Route::delete('me/avatar', [AuthController::class, 'deleteAvatar']);
+
+        // "Login as customer" impersonation (spec 0050): stop the current
+        // impersonation session (D-4, 403 if the current token is not one)
+        // and the banner state (D-5). Starting a session is gated per-target
+        // by UserPolicy::impersonate (see the users/{user}/impersonate route
+        // below), so it is NOT declared here.
+        Route::post('stop-impersonation', [ImpersonationController::class, 'destroy']);
+        Route::get('impersonation', [ImpersonationController::class, 'show']);
     });
 });
 
@@ -230,6 +239,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // server-side (see UserController), same as editing the user.
     Route::post('users/{user}/avatar', [UserController::class, 'uploadAvatar']);
     Route::delete('users/{user}/avatar', [UserController::class, 'deleteAvatar']);
+
+    // "Login as customer" impersonation (spec 0050): issues a NEW Sanctum
+    // token for the TARGET user (D-1). Gated by UserPolicy::impersonate
+    // (users.impersonate + no escalation on a super-admin target, 403);
+    // self/inactive/nesting are enforced service-side (422) — see
+    // ImpersonationService.
+    Route::post('users/{user}/impersonate', [ImpersonationController::class, 'store']);
 
     // Roles CRUD backing the table row-actions (view/edit/delete) + create.
     // Authorization (roles.view/create/update/delete) is enforced server-side

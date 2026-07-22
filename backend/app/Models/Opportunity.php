@@ -154,6 +154,13 @@ class Opportunity extends BaseModel
     }
 
     /**
+     * The Account Manager pivot `position` that designates the "Operatore"
+     * (GA2) — the operative owner the request-management module (spec 0049)
+     * uses both for the "my requests" scope and the "Operatore" column.
+     */
+    public const int OPERATOR_MANAGER_POSITION = 2;
+
+    /**
      * The internal users managing this opportunity ("Gestori Account", max
      * 4 — validation-layer only, see StoreOpportunityRequest), mirroring
      * Registry::managers() verbatim (spec 0040, "ranking inherited by future

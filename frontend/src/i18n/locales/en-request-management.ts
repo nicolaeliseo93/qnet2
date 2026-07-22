@@ -1,0 +1,61 @@
+/**
+ * Request Management domain (spec 0049): the "Gestione Richieste" operative
+ * view over Opportunities for commercial operators (D-1, no new entity —
+ * the record IS an Opportunity). Sibling file so `en.ts` stays within the
+ * engineering size limits (see `.claude/rules/engineering.md` §6).
+ */
+
+export const requestManagement = {
+  title: 'Request Management',
+  subtitle: 'Work opportunities: verify contacts, complete dynamic fields and advance the working status.',
+  forbidden: "You don't have permission to view Request Management.",
+  columns: {
+    serviceCategory: 'Reference service category',
+    operator: 'Operator (GA2)',
+    workflowStatus: 'Working status',
+    firstName: 'First name',
+    lastName: 'Last name',
+    taxCode: 'Tax code',
+    phone: 'Phone',
+    updatedAt: 'Updated at',
+  },
+  detail: {
+    title: 'Request details',
+    subtitle: 'Work the selected opportunity: contacts, dynamic fields and working status.',
+  },
+  form: {
+    /** `FormScreen` only exists to satisfy `ModuleRegistryEntry` (spec 0049 D-9): no create/edit route is ever generated (`generateRoutes: false`) and the table never calls `openCreate`/`openEdit`. */
+    notApplicable: 'Request Management has no create or edit form: work the record from its detail panel.',
+  },
+  workPanel: {
+    loadError: 'Could not load the record.',
+    saving: 'Saving…',
+    save: 'Save',
+    saved: 'Working data saved.',
+    genericError: 'Something went wrong. Please try again.',
+    dynamicFields: {
+      title: 'Additional information',
+      empty: 'No additional fields for this opportunity.',
+    },
+    workflowStatus: {
+      label: 'Working status',
+      placeholder: 'Select a status',
+    },
+    contacts: {
+      registryTitle: 'Registry contacts',
+      referentTitle: 'Referent contacts',
+    },
+    context: {
+      subtitle: 'Opportunity context (read-only).',
+      registry: 'Registry',
+      opportunityStatus: 'Sales status',
+      expectedCloseDate: 'Expected close date',
+      estimatedValue: 'Estimated value',
+      productLines: 'Product lines',
+    },
+    validation: {
+      enumInvalid: 'Select a valid option.',
+      required: 'This field is required.',
+    },
+  },
+}

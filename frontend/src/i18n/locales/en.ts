@@ -36,6 +36,7 @@ import { notifications } from './en-notifications'
 import { leadImports } from './en-lead-imports'
 import { businessFunctions } from './en-business-functions'
 import { moduleStats, statsPanel } from './en-stats'
+import { impersonation } from './en-impersonation'
 import {
   usersColumnsEmployment,
   usersDetailEmployment,
@@ -123,6 +124,7 @@ export const en = {
     activity: 'Activity',
     convertToOpportunity: 'Convert to Opportunity',
     documents: 'Documents',
+    impersonate: 'Impersonate',
   },
   table,
   // Strings of the generic statistics panel (spec 0026). The per-module widget
@@ -480,6 +482,7 @@ export const en = {
   requestManagement,
   importRuns: { stats: moduleStats.importRuns },
   attachments,
+  impersonation,
 }
 
 export type TranslationResources = typeof en

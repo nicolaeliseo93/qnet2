@@ -67,6 +67,18 @@ export interface LoginResult {
   user: User
 }
 
+/** The original actor's identity while a token of impersonation is active. */
+export interface Impersonator {
+  id: number
+  name: string
+  email: string
+}
+
+/** GET /auth/impersonation response payload. */
+export interface ImpersonationState {
+  impersonator: Impersonator | null
+}
+
 /**
  * Ability map returned by GET /auth/me/abilities.
  * `permissions` maps every defined permission name to whether the user has it.
