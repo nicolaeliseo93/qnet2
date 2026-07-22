@@ -108,6 +108,10 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
     mode.type === 'edit' ? mode.opportunity.product_lines : (mode.fromLead?.productLines ?? [])
   const knownProductLines = [...mountProductLines, ...leadSelection.state.derivedProductLines]
 
+  // Products of interest exist only on a loaded opportunity: a lead has none,
+  // so create mode starts with nothing to hydrate.
+  const knownProductsOfInterest = mode.type === 'edit' ? (mode.opportunity.products_of_interest ?? []) : []
+
   // BR-2: the fields derived from a linked Lead are immutable — both when
   // editing an opportunity that already has one, and while creating one
   // (deep-link or in-form select, unified by `useOpportunityLeadSelection`).
@@ -256,6 +260,7 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
             control={form.control}
             setValue={form.setValue}
             knownProductLines={knownProductLines}
+            knownProductsOfInterest={knownProductsOfInterest}
             nameAutofill={nameAutofill}
             className={sectionRevealClassName(2)}
           />

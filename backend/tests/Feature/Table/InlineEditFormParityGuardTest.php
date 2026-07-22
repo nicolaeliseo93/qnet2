@@ -101,8 +101,14 @@ it('every inline-editable field is also accepted by the real update endpoint (fo
     ];
 
     foreach ($cases as $resource => $case) {
-        Permission::findOrCreate("{$resource}.viewAny");
-        Permission::findOrCreate("{$resource}.update");
+        // Guard pinned explicitly to 'web' (config/auth.php default): once
+        // Sanctum::actingAs() runs a request, Permission::findOrCreate()'s
+        // own guard auto-detection drifts to 'sanctum' for every call AFTER
+        // the first, so a later iteration's permission would silently land
+        // on the wrong guard and never match the actor's — a real gotcha
+        // this loop (uniquely, across many actingAs() calls) exposed.
+        Permission::findOrCreate("{$resource}.viewAny", 'web');
+        Permission::findOrCreate("{$resource}.update", 'web');
 
         // No role: role_field_permissions can never restrict this actor
         // (AbstractResourceAuthorization::fieldPermissions), so the ceiling

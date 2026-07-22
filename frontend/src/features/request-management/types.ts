@@ -47,6 +47,17 @@ export interface RequestProductLine {
   product_category: RequestRelationRef
 }
 
+/**
+ * A product the operator recorded as "di interesse" for this request (user
+ * directive 2026-07-22), with its own category so the panel can show which
+ * product line it belongs to.
+ */
+export interface RequestProductOfInterest {
+  id: number
+  name: string
+  product_category: RequestRelationRef | null
+}
+
 /** A single contact channel (ContactResource), as exposed to this module. */
 export interface RequestContact {
   id: number
@@ -134,12 +145,23 @@ export interface RequestWorkPanel {
   registry: RequestRelationRef | null
   referent: RequestRelationRef | null
   commercial: RequestRelationRef | null
+  /** "Fonte" (user directive 2026-07-22): editable from the panel's attribution section. */
+  source_id: number | null
+  source: RequestRelationRef | null
+  /** "Segnalatore": a Referent, same picker as the opportunities form. */
+  reporter_id: number | null
+  reporter: RequestRelationRef | null
+  /** The GA2 "Operatore": the manager at pivot position 2, not a column of its own. */
+  operator_id: number | null
+  operator: RequestRelationRef | null
   /** Sales-pipeline status: read-only in this module. */
   opportunity_status: RequestOpportunityStatusRef | null
   workflow_status: RequestWorkflowStatusRef | null
   /** The resolved set the workflow-status select is limited to. */
   workflow_statuses: RequestWorkflowStatusRef[]
   product_lines: RequestProductLine[]
+  /** Products of interest recorded for this request; `[]` when none (user directive 2026-07-22). */
+  products_of_interest: RequestProductOfInterest[]
   /** The client's card identity, `null` when the client has no card yet. */
   client_identity: RequestClientIdentity | null
   client_contacts: RequestContactsBlock
@@ -212,6 +234,21 @@ export interface UpdateRequestWorkPayload {
   note?: string
   attribute_values?: Record<string, unknown>
   next_callback_at?: string | null
+  /**
+   * Product ids, AUTHORITATIVE when sent (`[]` clears the collection). A
+   * product outside the opportunity's product-line categories is accepted:
+   * the server then ADDS the matching business function / product category
+   * row, which is what the picker's unlock dialog warns about.
+   */
+  products_of_interest?: number[]
+  /**
+   * Attribution (user directive 2026-07-22). `operator_id` addresses the GA2
+   * pivot slot only: the other manager positions are left untouched, and
+   * `null` empties the slot.
+   */
+  source_id?: number | null
+  reporter_id?: number | null
+  operator_id?: number | null
   client_identity?: RequestClientIdentityPayload
   client_contacts?: RequestClientContactPayload[]
   client_address?: RequestClientAddressPayload

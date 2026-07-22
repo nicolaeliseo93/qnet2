@@ -16,9 +16,10 @@ interface UseForSelectOptions {
   /**
    * Extra, resource-specific query parameters (spec 0032 `dependency.param`),
    * sent on every page and included in the query key so a parent value change
-   * starts a fresh paginated query.
+   * starts a fresh paginated query. Array values are serialized as repeated
+   * `key[]=` params (Laravel convention).
    */
-  params?: Record<string, string | number>
+  params?: Record<string, string | number | number[]>
 }
 
 /**
@@ -66,7 +67,7 @@ interface UseForSelectLabelsOptions {
   /** Gates the query so it only runs when a label actually needs resolving. */
   enabled?: boolean
   /** Extra, resource-specific query parameters (spec 0032 `dependency.param`). */
-  params?: Record<string, string | number>
+  params?: Record<string, string | number | number[]>
 }
 
 /**

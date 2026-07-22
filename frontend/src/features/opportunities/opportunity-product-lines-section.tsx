@@ -1,18 +1,23 @@
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Boxes } from 'lucide-react'
-import type { Control, UseFormSetValue } from 'react-hook-form'
+import { useWatch, type Control, type UseFormSetValue } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { MetaField } from '@/features/authorization/MetaField'
+import type { ForSelectItem } from '@/features/for-select/types'
 import { OpportunityProductLinesField } from '@/features/opportunities/opportunity-product-lines-field'
+import { ProductsOfInterestField } from '@/features/products/products-of-interest-field'
 import type { OpportunityNameAutofill } from '@/features/opportunities/use-opportunity-name-autofill'
 import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
-import type { OpportunityProductLine } from '@/features/opportunities/types'
+import type { OpportunityProductLine, OpportunityProductOfInterest } from '@/features/opportunities/types'
 
 interface OpportunityProductLinesSectionProps {
   control: Control<OpportunityFormValues>
   setValue: UseFormSetValue<OpportunityFormValues>
   /** Product-line rows whose labels are already known without a fetch (edit load, from-lead prefill, in-form Lead picker). */
   knownProductLines: OpportunityProductLine[]
+  /** Products already on the loaded opportunity (edit), for badge-label hydration. */
+  knownProductsOfInterest: OpportunityProductOfInterest[]
   nameAutofill: OpportunityNameAutofill
   className?: string
 }
@@ -31,10 +36,35 @@ export function OpportunityProductLinesSection({
   control,
   setValue,
   knownProductLines,
+  knownProductsOfInterest,
   nameAutofill,
   className,
 }: OpportunityProductLinesSectionProps) {
   const { t } = useTranslation()
+
+  // The products picker is scoped by the categories currently chosen in the
+  // rows above, so editing a row immediately re-scopes it.
+  const productLines = useWatch({ control, name: 'product_lines' })
+  const selectedCategoryIds = useMemo(
+    () => [
+      ...new Set(
+        productLines
+          .map((line) => line.product_category_id)
+          .filter((id): id is number => id !== null),
+      ),
+    ],
+    [productLines],
+  )
+
+  const knownProducts = useMemo<ForSelectItem[]>(
+    () =>
+      knownProductsOfInterest.map((product) => ({
+        id: product.id,
+        label: product.name,
+        subtitle: product.product_category?.name ?? null,
+      })),
+    [knownProductsOfInterest],
+  )
 
   return (
     <FormSection
@@ -56,6 +86,26 @@ export function OpportunityProductLinesSection({
             setValue={setValue}
             knownLines={knownProductLines}
             nameAutofill={nameAutofill}
+            disabled={disabled}
+          />
+        )}
+      </MetaField>
+
+      {/* Same card as the rows above: the products of interest belong to the
+          opportunity's classification, and the picker is scoped by the very
+          categories edited right above it (user directive 2026-07-22). */}
+      <MetaField
+        control={control}
+        name="products_of_interest"
+        metaKey="products_of_interest"
+        label={t('products.ofInterest.fieldLabel')}
+      >
+        {({ field, disabled }) => (
+          <ProductsOfInterestField
+            value={field.value}
+            onChange={field.onChange}
+            categoryIds={selectedCategoryIds}
+            selectedItems={knownProducts}
             disabled={disabled}
           />
         )}

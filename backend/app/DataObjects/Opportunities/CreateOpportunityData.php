@@ -39,6 +39,7 @@ final readonly class CreateOpportunityData
     /**
      * @param  array<int, int|null>|null  $managerSlots
      * @param  array<int, array{business_function_id: int, product_category_id: int}>|null  $productLines
+     * @param  array<int, int>|null  $productsOfInterest  "prodotti di interesse" (user directive 2026-07-22): a to-many reference synced by OpportunityProductInterestWriter, never mass-assigned — out of attributes() like the two collections above
      */
     public function __construct(
         public string $name,
@@ -58,6 +59,7 @@ final readonly class CreateOpportunityData
         public ?int $successProbability,
         public ?int $stateId = null,
         public ?int $workflowStatusId = null,
+        public ?array $productsOfInterest = null,
     ) {}
 
     /**
@@ -87,7 +89,21 @@ final readonly class CreateOpportunityData
             successProbability: isset($data['success_probability']) ? (int) $data['success_probability'] : null,
             stateId: isset($data['state_id']) ? (int) $data['state_id'] : null,
             workflowStatusId: isset($data['opportunity_workflow_status_id']) ? (int) $data['opportunity_workflow_status_id'] : null,
+            productsOfInterest: array_key_exists('products_of_interest', $data) ? self::normalizeIds($data['products_of_interest']) : null,
         );
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private static function normalizeIds(mixed $ids): array
+    {
+        return array_values(array_unique(array_map(static fn ($id): int => (int) $id, (array) $ids)));
+    }
+
+    public function hasProductsOfInterest(): bool
+    {
+        return $this->productsOfInterest !== null;
     }
 
     /**

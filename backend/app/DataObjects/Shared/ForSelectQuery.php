@@ -19,11 +19,16 @@ namespace App\DataObjects\Shared;
  * - `operationalSiteId` (spec 0048): ADDITIVE, consumed ONLY by
  *   UserService::forSelect (users/for-select filtered by Sede) — same
  *   retrocompatible pattern as `businessFunctionId`.
+ * - `categoryIds` (user directive 2026-07-22): ADDITIVE, consumed ONLY by
+ *   ProductService::forSelect (products/for-select scoped to the categories
+ *   of an opportunity's product lines) — empty means no scoping, so every
+ *   other consumer is unaffected.
  */
 final readonly class ForSelectQuery
 {
     /**
      * @param  array<int, int>  $ids
+     * @param  array<int, int>  $categoryIds
      */
     public function __construct(
         public ?string $search,
@@ -32,6 +37,7 @@ final readonly class ForSelectQuery
         public array $ids,
         public ?int $businessFunctionId = null,
         public ?int $operationalSiteId = null,
+        public array $categoryIds = [],
     ) {}
 
     /**
@@ -49,6 +55,12 @@ final readonly class ForSelectQuery
             (array) ($data['ids'] ?? []),
         )));
 
+        /** @var array<int, int> $categoryIds */
+        $categoryIds = array_values(array_unique(array_map(
+            static fn ($id): int => (int) $id,
+            (array) ($data['category_ids'] ?? []),
+        )));
+
         return new self(
             search: ($search === null || $search === '') ? null : $search,
             offset: (int) ($data['offset'] ?? 0),
@@ -56,7 +68,13 @@ final readonly class ForSelectQuery
             ids: $ids,
             businessFunctionId: isset($data['business_function_id']) ? (int) $data['business_function_id'] : null,
             operationalSiteId: isset($data['operational_site_id']) ? (int) $data['operational_site_id'] : null,
+            categoryIds: $categoryIds,
         );
+    }
+
+    public function hasCategoryIds(): bool
+    {
+        return $this->categoryIds !== [];
     }
 
     public function hasSearch(): bool

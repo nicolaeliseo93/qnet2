@@ -75,6 +75,12 @@ function panel(overrides: Partial<RequestWorkPanelWithPermissions> = {}): Reques
     registry: { id: 10, name: 'Acme S.p.A.' },
     referent: { id: 20, name: 'Mario Rossi' },
     commercial: null,
+    source_id: null,
+    source: null,
+    reporter_id: null,
+    reporter: null,
+    operator_id: null,
+    operator: null,
     opportunity_status: { id: 5, name: 'New', color: 'slate' },
     workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false },
     workflow_statuses: [
@@ -82,6 +88,7 @@ function panel(overrides: Partial<RequestWorkPanelWithPermissions> = {}): Reques
       { id: 101, name: 'In progress', color: 'amber', system_key: null, description: null, requires_note: false },
     ],
     product_lines: [{ id: 1, business_function: { id: 40, name: 'Sales' }, product_category: { id: 500, name: 'Consulting' } }],
+    products_of_interest: [],
     client_identity: {
       id: 1000,
       type: 'company',

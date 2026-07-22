@@ -20,9 +20,29 @@ use Illuminate\Support\Collection;
  * resolveAndAssign(), by the Lane A configurator's delete-reassign flow.
  * Never duplicated at either call site (constraints §"unico punto usato da
  * OpportunityService... nessuna duplicazione lato frontend").
+ *
+ * Both `activeWorkflows()` (the domain-wide candidate set, spec 0047) and
+ * `statusesFor()`'s result per workflow are memoized on THIS instance (spec
+ * 0054, per-row workflow-status options on the request-management grid):
+ * resolving a whole PAGE of rows calls `resolve()`/`statusesFor()` once per
+ * row, and both queries return the SAME rows regardless of which opportunity
+ * is being resolved — repeating them per row would be a page-sized batch of
+ * redundant identical queries. Memoizing here (rather than at each call site)
+ * benefits every consumer transparently, with no change to any signature or
+ * return value.
  */
 final class OpportunityWorkflowResolver
 {
+    /**
+     * @var Collection<int, OpportunityWorkflow>|null
+     */
+    private ?Collection $activeWorkflowsCache = null;
+
+    /**
+     * @var array<int|string, Collection<int, OpportunityWorkflowStatus>>
+     */
+    private array $statusesCache = [];
+
     /**
      * The active workflow that matches $opportunity (AC-010/011/012/013/014):
      * every one of a workflow's criteria must match (AND), the workflow with
@@ -38,11 +58,8 @@ final class OpportunityWorkflowResolver
         $opportunity->loadMissing('productLines');
 
         // Step 2: every active workflow, with its criteria eager-loaded (no
-        // N+1 across the candidate set).
-        $workflows = OpportunityWorkflow::query()
-            ->where('is_active', true)
-            ->with('criteria')
-            ->get();
+        // N+1 across the candidate set) — memoized (see class docblock).
+        $workflows = $this->activeWorkflows();
 
         // Step 3: keep only the workflows whose criteria ALL match.
         $matching = $workflows->filter(
@@ -64,18 +81,38 @@ final class OpportunityWorkflowResolver
     }
 
     /**
+     * @return Collection<int, OpportunityWorkflow>
+     */
+    private function activeWorkflows(): Collection
+    {
+        return $this->activeWorkflowsCache ??= OpportunityWorkflow::query()
+            ->where('is_active', true)
+            ->with('criteria')
+            ->get();
+    }
+
+    /**
      * The ordered statuses of $workflow's own set, or the GLOBAL default set
-     * (opportunity_workflow_id null) when $workflow is null.
+     * (opportunity_workflow_id null) when $workflow is null — memoized per
+     * workflow id (see class docblock).
      *
      * @return Collection<int, OpportunityWorkflowStatus>
      */
     public function statusesFor(?OpportunityWorkflow $workflow): Collection
     {
+        $cacheKey = $workflow?->id ?? 'default';
+
+        if (isset($this->statusesCache[$cacheKey])) {
+            return $this->statusesCache[$cacheKey];
+        }
+
         $query = OpportunityWorkflowStatus::query()->orderBy('sort_order');
 
-        return $workflow === null
+        $statuses = $workflow === null
             ? $query->whereNull('opportunity_workflow_id')->get()
             : $query->where('opportunity_workflow_id', $workflow->id)->get();
+
+        return $this->statusesCache[$cacheKey] = $statuses;
     }
 
     /**

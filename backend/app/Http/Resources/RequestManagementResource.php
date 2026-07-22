@@ -53,10 +53,20 @@ class RequestManagementResource extends JsonResource
             'registry' => $this->summarizeByName($opportunity->registry),
             'referent' => $this->summarizeByName($opportunity->referent),
             'commercial' => $this->summarizeByName($opportunity->commercial),
+            // Attribution block (user directive 2026-07-22): editable from
+            // this panel, so each one ships BOTH its id (the form's value)
+            // and its `{id, name}` projection (the picker's hydration).
+            'source_id' => $opportunity->source_id,
+            'source' => $this->summarizeByName($opportunity->source),
+            'reporter_id' => $opportunity->reporter_id,
+            'reporter' => $this->summarizeByName($opportunity->reporter),
+            'operator_id' => $opportunity->operatorManager()?->id,
+            'operator' => $this->summarizeByName($opportunity->operatorManager()),
             'opportunity_status' => $this->summarizeStatus($opportunity->opportunityStatus),
             'workflow_status' => $this->summarizeWorkflowStatus($opportunity->workflowStatus),
             'workflow_statuses' => $this->summarizeWorkflowStatuses($this->resource['workflow_statuses']),
             'product_lines' => $this->summarizeProductLines($opportunity->productLines),
+            'products_of_interest' => $this->summarizeProductsOfInterest($opportunity->productsOfInterest),
             'client_identity' => $this->summarizeClientIdentity($opportunity->registry),
             'client_contacts' => $this->summarizeContacts($opportunity->registry),
             'client_address' => $this->summarizeClientAddress($opportunity->registry),
@@ -128,6 +138,27 @@ class RequestManagementResource extends JsonResource
                 'business_function' => $this->summarizeByName($line->businessFunction),
                 'product_category' => $this->summarizeByName($line->productCategory),
             ])
+            ->all();
+    }
+
+    /**
+     * "Prodotti di interesse" (user directive 2026-07-22): the products the
+     * operator recorded for this request, each with its own category so the
+     * panel can show which product line it belongs to. Same shape as
+     * OpportunityResource's, so the work panel and the opportunity card read
+     * the collection identically.
+     *
+     * @return array<int, array{id: int, name: string, product_category: array{id: int, name: string}|null}>
+     */
+    private function summarizeProductsOfInterest(iterable $products): array
+    {
+        return collect($products)
+            ->map(fn (Model $product): array => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'product_category' => $this->summarizeByName($product->category),
+            ])
+            ->values()
             ->all();
     }
 

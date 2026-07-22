@@ -2,6 +2,135 @@
 
 > Injected at session start. Update at every green state.
 
+## ATTRIBUZIONE SUL PANNELLO GESTIONE RICHIESTE (2026-07-22) — GREEN, NON COMMITTATO
+
+Direttiva utente: nella pagina dedicata di Gestione Richieste servono FONTE, SEGNALATORE e
+GA2 (l'Operatore), gli stessi che esistono su Opportunita', **modificabili** e "sempre in base
+ai permessi per campo". Non sola lettura: quindi NON sono finiti nel riepilogo laterale
+(`RequestWorkSummary`, read-only per D-5) ma in una nuova sezione editabile del form.
+
+CONTRATTO (congelato prima di implementare) — GET/PATCH `/api/request-management/{opportunity}`:
+`source_id` + `source{id,name}`, `reporter_id` + `reporter{id,name}`, `operator_id` +
+`operator{id,name}`. PATCH sparso come tutto il resto dell'endpoint: chiave assente = intoccato,
+`null` = svuota. `permissions.fields` espone i 3 nuovi campi.
+
+MAPPING REALE (verificato, non ipotizzato): fonte = `Opportunity::source()` -> `Source`;
+segnalatore = `Opportunity::reporter()` -> `Referent` (NON un User); GA2 = la riga
+`opportunity_user` a pivot `position = Opportunity::OPERATOR_MANAGER_POSITION` (2), la stessa
+usata dallo scope D-3 e dalla colonna `operator_ga2` della griglia. `operator_id` NON e' una
+colonna: nuovo `Opportunity::operatorManager()` (unico punto di lettura della regola "position 2",
+usa la relazione se gia' caricata, altrimenti query esplicita — `preventLazyLoading` safe) +
+accessor virtuale `operator_id`, necessario perche' `EnforcesFieldPermissions` legge ogni campo
+del catalogo direttamente dal model.
+
+DECISIONI DA NON PERDERE:
+- **`UpdateRequestRequest` ora usa `EnforcesFieldPermissions`** (prima NON lo faceva: era un buco,
+  i permessi per campo di questo modulo erano solo lato FE). Ora un campo non editabile per il
+  ruolo torna 422 quando il valore cambia davvero — vale anche per i 4 campi preesistenti.
+- **Ordine degli step in `updateWork()`**: l'attribuzione e' applicata PRIMA dello stato di
+  lavorazione, perche' `source_id` e' un criterio di risoluzione del workflow (spec 0047): una
+  PATCH che cambia fonte E stato deve validare lo stato sul set NUOVO (stesso ordine che
+  `ValidatesWorkflowStatus` applica gia' request-side, dove il trait supporta gia' un `source_id`
+  submitted).
+- **Se la fonte cambia e nessuno stato e' stato inviato**, si richiama `resolveAndAssign()` come fa
+  `OpportunityService::update()`: `targetStatus()` conserva lo stato corrente se appartiene ancora
+  al nuovo set, quindi e' un no-op nella maggior parte dei casi. Senza questo, cambiare fonte
+  lasciava l'opportunita' con uno stato fuori dal workflow risolto.
+- **`operator_id` non usa `sync()`**: tocca SOLO lo slot 2 (detach+attach), le altre posizioni GA
+  appartengono al form Opportunita' e devono sopravvivere a una scrittura da questo pannello. Un
+  utente gia' attaccato ad altra posizione viene SPOSTATO (una persona = una riga pivot).
+- **Conseguenza voluta**: cambiare l'operatore RIASSEGNA la richiesta — un attore senza
+  `request-management.viewAll` perde l'accesso al record alla lettura successiva (scope D-3).
+  Se si vuole impedirlo, il posto e' il ceiling di `operator_id` in `RequestManagementAuthorization`.
+- `source_id`/`reporter_id` sono fillable -> il diff finisce nell'activity log automatico
+  (`logFillable`); `operator_id` e' un pivot -> loggato esplicitamente come gli altri campi
+  operativi.
+
+FILE: BE `Opportunity.php`, `RequestManagementAuthorization.php`, `RequestManagementResource.php`,
+`RequestManagementService.php` (WORK_PANEL_RELATIONS += source/reporter; `applyAttribution()`,
+`applyOperator()`), `UpdateRequestRequest.php`, `RequestManagementController.php`, nuovo test
+`RequestManagementAttributionTest.php`. FE nuovo `request-attribution-section.tsx` (3
+`RelationSelectField` -> for-select `sources`/`referents`/`users`, montato tra la riga
+stato+richiamo e i campi dinamici), + `types.ts`, `request-work-schema.ts`,
+`use-request-work-form.ts`, `request-work-payload.ts`, i18n it/en (`workPanel.attribution.*`).
+
+FIXTURE AGGIORNATE (contratto cambiato, non test piegati): i mock di `RequestWorkPanel` nei 4
+test FE che lo costruiscono a mano ora includono le 6 nuove chiavi, altrimenti lo schema Zod
+rifiutava `undefined` e bloccava il submit.
+
+VERIFICATO: `pest tests/Feature/RequestManagement tests/Feature/Opportunities tests/Feature/Table`
+449/449 verdi (il nuovo file 11/11, 42 assertion). Suite BE completa 3407/3419: gli 11 rossi sono
+i PREESISTENTI gia' noti (10 "navigation node only shows with X.view" +
+`AbstractMigrationSourcePreviewTest`). Pint pulito. FE: `vitest src/features/request-management`
+56/56, suite completa 2066/2070 — i 4 rossi sono preesistenti e fuori changeset
+(`stat-chart.test.tsx`, `table/cell-renderers.test.tsx` "2 primary contacts", file non toccati).
+`tsc --noEmit` e ESLint puliti.
+
+## PRODOTTI DI INTERESSE SULL'OPPORTUNITA' (2026-07-22) — GREEN, NON COMMITTATO
+
+Direttiva utente: in Gestione Richieste l'operatore, dopo la telefonata, registra uno o piu'
+"prodotti di interesse"; per ora sono solo un sistema di controllo (nessuna quantita', nessun
+prezzo). Adattato anche all'Opportunita': view (scheda) + form create/update.
+
+DECISIONE UTENTE (AskUserQuestion 2026-07-22): il picker e' FILTRATO per default sulle
+categorie delle righe prodotto dell'opportunita', ma sbloccabile; lo sblocco passa da un
+POPUP che avvisa che scegliendo un prodotto di un'altra funzione aziendale/categoria, quella
+coppia SARA' AGGIUNTA alle funzioni aziendali e categorie prodotto dell'opportunita'.
+
+CONTRATTO (congelato, identico sui due canali di scrittura):
+- lettura `products_of_interest: [{id, name, product_category: {id,name}|null}]` in
+  `OpportunityResource` E `RequestManagementResource` (stessa shape, stesso nome).
+- scrittura `products_of_interest: int[]`, AUTORITATIVA quando inviata (`[]` svuota),
+  su `POST/PATCH /api/opportunities` e `PATCH /api/request-management/{id}` (sparse).
+- nuovo `GET /api/products/for-select` (ADR 0011) con `category_ids[]` opzionale;
+  `ids[]` (idratazione) BYPASSA lo scope, altrimenti un prodotto gia' scelto perderebbe
+  l'etichetta appena esce dal filtro.
+
+BACKEND: pivot `opportunity_product` (unique {opportunity_id, product_id}, cascade
+sull'opportunita', restrict sul prodotto) + `Opportunity::productsOfInterest()`. La REGOLA
+del cross-category vive in UN SOLO posto — `App\Services\Opportunities\OpportunityProductInterestWriter`
+— usato sia da `OpportunityService` (create/update) sia da `RequestManagementService`
+(step 4 di `updateWork`), cosi' i due canali non possono divergere: se la categoria del
+prodotto non e' coperta da una riga, la riga viene creata con la business function EFFETTIVA
+della categoria (`CategoryHierarchy::effectiveBusinessFunction`); se quella categoria non ha
+business function -> 422 su `products_of_interest` (non esiste riga valida da creare).
+Il cambio e' loggato esplicitamente in activity (la relazione non e' fillable, quindi il
+dirty-diff automatico di Spatie non la vedrebbe), incluse le righe aggiunte
+(`product_lines_added`) che altrimenti sarebbero un effetto collaterale invisibile.
+`products_of_interest` registrato nei cataloghi `OpportunitiesAuthorization` e
+`RequestManagementAuthorization` (non mandatory): il diff generico di
+`EnforcesFieldPermissions` legge la relazione per nome senza mapping ad-hoc.
+
+`routes/api.php` era a 502 righe (hook `code-guard` blocca a 500): il blocco Products e' stato
+estratto in `routes/api/products.php` (stesso pattern degli altri split). `products/for-select`
+DEVE restare sopra `products/{product}` o il wildcard vince.
+
+FRONTEND: un solo componente condiviso — `features/products/products-of-interest-field.tsx`
+(AsyncPaginatedMultiSelect + `useConfirm()` per il popup di sblocco) — montato sia nel work
+panel (`request-products-of-interest.tsx`, subito dopo le informazioni preliminari) sia nella
+sezione "Funzioni aziendali e categorie prodotto" del form Opportunita' (dove lo scope segue
+in tempo reale le categorie scelte via `useWatch`). Scheda Opportunita': lista read-only.
+Quando e' bloccato SENZA categorie il select e' DISABILITATO: filtrare per un set vuoto
+mostrerebbe tutto il catalogo, cioe' l'opposto di quello che il lucchetto promette.
+`ForSelectParams.params` allargato a `number[]` (serve `category_ids[]`; axios ha gia'
+`paramsSerializer: {indexes: true}`).
+
+ATTENZIONE PER CHI TOCCA I TEST: il picker usa `useConfirm()`, che LANCIA fuori dal
+`ConfirmDialogProvider`. Ogni test che renderizza il form Opportunita' o il work panel deve
+avvolgere in `ConfirmDialogProvider` (4 wrapper aggiornati in `features/opportunities`).
+
+VERIFICATO: backend `pest tests/Feature/{RequestManagement,Opportunities,Products}` 295/296
+(l'unico rosso, `ProductSecurityTest` navigation, e' PREESISTENTE e non tocca questo lavoro);
+suite completa 3394/3408 con 11 rossi preesistenti (10 navigation + 1 migration preview).
+Frontend `vitest run` 2064/2067 (i 3 rossi `table/cell-renderers.test.tsx` sono i preesistenti
+gia' annotati sotto), `tsc -b` 0 errori, `eslint src` nessun errore nuovo (restano i 2
+`no-unused-vars` preesistenti in `registry-form-metadata.test.tsx`).
+NOTA: `OpportunityMetaTest` aggiornato di proposito (14 -> 15 campi del catalogo): il
+requisito e' cambiato, il campo e' stato aggiunto deliberatamente.
+
+DA FARE (fuori scope di questa direttiva): i prodotti di interesse non hanno ancora colonna
+in tabella ne' uso a valle ("saranno usati poi", parole dell'utente).
+
 ## SEARCH GLOBALE SU GESTIONE RICHIESTE (2026-07-22) — GREEN, NON COMMITTATO
 
 La tabella `request-management` era l'unica senza il quick-search globale (spec 0009):

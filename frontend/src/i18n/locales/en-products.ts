@@ -152,6 +152,33 @@ export const products = {
   title: 'Products',
   subtitle: 'Browse, filter and manage your products.',
   forbidden: "You don't have permission to view products.",
+  /**
+   * "Products of interest" (user directive 2026-07-22): the picker shared by
+   * the opportunity form and the request-management work panel.
+   */
+  ofInterest: {
+    sectionTitle: 'Products of interest',
+    sectionDescription: 'The products the client is interested in for this request.',
+    fieldLabel: 'Products of interest',
+    placeholder: 'Select one or more products',
+    searchPlaceholder: 'Search products…',
+    empty: 'No products found.',
+    remove: 'Remove product',
+    hintScoped: "Only products of this opportunity's categories.",
+    hintUnlocked:
+      'Whole catalogue: a product from another category will add its business function / category row.',
+    hintNoCategories:
+      'Add a business function with its product category first, or unlock the whole catalogue.',
+    unlock: 'Show all products',
+    relock: "Limit to the opportunity's categories",
+    unlockDialog: {
+      title: 'Show the whole product catalogue?',
+      description:
+        "Picking a product from another business function and product category adds that pair to this opportunity's business functions and product categories.",
+      confirm: 'Show all products',
+    },
+  },
+  empty: 'No product selected.',
   columns: {
     name: 'Name',
     description: 'Description',

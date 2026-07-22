@@ -100,6 +100,16 @@ export interface OpportunityProductLine {
   product_category: OpportunityRelationRef
 }
 
+/**
+ * A product recorded as "di interesse" (user directive 2026-07-22), with its
+ * own category — identical shape to the request-management projection.
+ */
+export interface OpportunityProductOfInterest {
+  id: number
+  name: string
+  product_category: OpportunityRelationRef | null
+}
+
 /** A product-line row as sent to the server (create/update payload, AC-099). */
 export interface OpportunityProductLineInput {
   business_function_id: number
@@ -148,6 +158,14 @@ export interface OpportunityDetail {
   workflow_statuses?: OpportunityWorkflowStatusRef[]
   /** Amendment rev.3: replaces the former single `product_category`/`business_function` pair (AC-101). */
   product_lines: OpportunityProductLine[]
+  /**
+   * "Prodotti di interesse" (user directive 2026-07-22): the products
+   * recorded for this opportunity, collected in Gestione Richieste and shown
+   * here read-only + editable in the form. Optional for the same
+   * fixture-compatibility reason as `state`/`workflow_status` — treat a
+   * missing key the same as `[]`.
+   */
+  products_of_interest?: OpportunityProductOfInterest[]
   lead_id: number | null
   lead: OpportunityLeadRef | null
   /** Filled manager ids as ordered "G.A. n" cards (name + position), mirrors registries. */
@@ -228,6 +246,13 @@ export interface CreateOpportunityPayload {
    * builder only includes it when the row SET actually changed.
    */
   product_lines: OpportunityProductLineInput[]
+  /**
+   * "Prodotti di interesse" (user directive 2026-07-22): product ids,
+   * AUTHORITATIVE when sent. A product outside the submitted
+   * `product_lines` categories is accepted: the server ADDS the matching
+   * row, which is what the picker's unlock dialog warns about.
+   */
+  products_of_interest?: number[]
 }
 
 /**

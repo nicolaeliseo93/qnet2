@@ -46,6 +46,21 @@ class RequestManagementAuthorization extends AbstractResourceAuthorization
             // D-2); this catalogue entry only closes a gap in the per-field
             // permission system, it grants nothing new.
             new FieldDefinition('next_callback_at', 'date'),
+            // "Prodotti di interesse" (user directive 2026-07-22): written by
+            // RequestManagementService::updateWork() through
+            // OpportunityProductInterestWriter; this entry only closes the
+            // per-field permission gap, it grants nothing new.
+            new FieldDefinition('products_of_interest', 'multiselect'),
+            // Attribution block (user directive 2026-07-22): "Fonte",
+            // "Segnalatore" and the GA2 "Operatore" — the same three
+            // dimensions the opportunities form owns, made editable from the
+            // work panel too. `operator_id` is NOT a column: it addresses the
+            // `opportunity_user` pivot row at position
+            // Opportunity::OPERATOR_MANAGER_POSITION (see
+            // Opportunity::operatorManager()).
+            new FieldDefinition('source_id', 'select'),
+            new FieldDefinition('reporter_id', 'select'),
+            new FieldDefinition('operator_id', 'select'),
         ];
     }
 
@@ -68,6 +83,10 @@ class RequestManagementAuthorization extends AbstractResourceAuthorization
             'opportunity_workflow_status_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'attribute_values' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'next_callback_at' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'products_of_interest' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'reporter_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'operator_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];
     }
 

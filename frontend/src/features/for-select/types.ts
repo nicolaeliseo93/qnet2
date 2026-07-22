@@ -47,7 +47,9 @@ export interface ForSelectParams {
    * Extra, resource-specific query parameters (spec 0032 `dependency.param`):
    * a parent filter's value forwarded to a dependent field's for-select
    * request (e.g. `{ project_id: 12 }` to scope a campaign picker). Omitted
-   * for plain for-selects with no dependency.
+   * for plain for-selects with no dependency. An array value is serialized
+   * as repeated `key[]=` params (Laravel convention) — e.g.
+   * `{ category_ids: [3, 7] }` scoping the products picker.
    */
-  params?: Record<string, string | number>
+  params?: Record<string, string | number | number[]>
 }

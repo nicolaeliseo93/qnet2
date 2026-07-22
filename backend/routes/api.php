@@ -26,7 +26,6 @@ use App\Http\Controllers\OperationalSites\OperationalSiteController;
 use App\Http\Controllers\OperationalSites\OperationalSiteForSelectController;
 use App\Http\Controllers\PersonalData\PersonalDataController;
 use App\Http\Controllers\ProductCategories\ProductCategoryController;
-use App\Http\Controllers\Products\ProductController;
 use App\Http\Controllers\Referents\ReferentController;
 use App\Http\Controllers\Referents\ReferentDuplicateCheckController;
 use App\Http\Controllers\Referents\ReferentForSelectController;
@@ -402,14 +401,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::match(['put', 'patch'], 'product-categories/{productCategory}', [ProductCategoryController::class, 'update']);
     Route::delete('product-categories/{productCategory}', [ProductCategoryController::class, 'destroy']);
 
-    // Products CRUD (spec 0017): generic fields + category-driven dynamic
-    // attribute values (EAV, see ProductService). Authorization
-    // (products.view/create/update/delete) is enforced server-side in
-    // ProductController via ProductPolicy on every endpoint.
-    Route::get('products/{product}', [ProductController::class, 'show']);
-    Route::post('products', [ProductController::class, 'store']);
-    Route::match(['put', 'patch'], 'products/{product}', [ProductController::class, 'update']);
-    Route::delete('products/{product}', [ProductController::class, 'destroy']);
+    // Products CRUD + for-select (spec 0017): routes/api/products.php
+    // (file-size split, engineering.md §6), required for the same context.
+    require __DIR__.'/api/products.php';
 
     // Company sites CRUD + logo/set-default (spec 0020). Authorization
     // (company-sites.view/create/update/delete) is enforced server-side in

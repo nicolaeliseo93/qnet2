@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\RequestManagement;
 
+use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Http\Requests\Concerns\ValidatesRequestClientProfile;
 use App\Http\Requests\Concerns\ValidatesWorkflowStatus;
 use App\Models\Opportunity;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -43,7 +45,7 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class UpdateRequestRequest extends FormRequest
 {
-    use ValidatesRequestClientProfile, ValidatesWorkflowStatus;
+    use EnforcesFieldPermissions, ValidatesRequestClientProfile, ValidatesWorkflowStatus;
 
     public function authorize(): bool
     {
@@ -59,8 +61,32 @@ class UpdateRequestRequest extends FormRequest
             'opportunity_workflow_status_id' => ['sometimes', 'nullable', 'integer', 'exists:opportunity_workflow_statuses,id'],
             'attribute_values' => ['sometimes', 'array'],
             'next_callback_at' => ['sometimes', 'nullable', 'date'],
+            // "Prodotti di interesse" (user directive 2026-07-22): the whole
+            // collection is replaced when submitted (`[]` clears it). A
+            // product outside the opportunity's product-line categories is
+            // ACCEPTED on purpose — OpportunityProductInterestWriter adds the
+            // matching product line, which is exactly what the panel warns
+            // about before unlocking the picker.
+            'products_of_interest' => ['sometimes', 'array'],
+            'products_of_interest.*' => ['integer', 'exists:products,id'],
+            // Attribution (user directive 2026-07-22): "Fonte",
+            // "Segnalatore" and the GA2 "Operatore". Sparse like every other
+            // key — absent means untouched, `null` clears the value.
+            'source_id' => ['sometimes', 'nullable', 'integer', 'exists:sources,id'],
+            'reporter_id' => ['sometimes', 'nullable', 'integer', 'exists:referents,id'],
+            'operator_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
             ...$this->clientProfileRules(),
         ];
+    }
+
+    protected function authorizationResource(): string
+    {
+        return 'request-management';
+    }
+
+    protected function authorizationModel(): ?Model
+    {
+        return $this->route('opportunity');
     }
 
     public function withValidator(Validator $validator): void
@@ -71,6 +97,11 @@ class UpdateRequestRequest extends FormRequest
 
             $this->validateWorkflowStatus($validator, $opportunity);
             $this->validateClientProfile($validator);
+            // Write-path counterpart of the `permissions` block (spec 0004/
+            // 0008): a field the actor's role may not edit is rejected 422
+            // when its value actually CHANGES, so the panel's per-field
+            // gating is not frontend-only.
+            $this->enforceFieldPermissions($validator);
         });
     }
 }

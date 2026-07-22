@@ -10,6 +10,7 @@ use App\Models\Lead;
 use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
+use App\Services\Opportunities\OpportunityProductInterestWriter;
 use App\Services\Opportunities\OpportunityWorkflowResolver;
 use App\Services\Statuses\SystemStatusGuard;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +46,7 @@ class OpportunityService
         'opportunityStatus',
         'productLines.businessFunction',
         'productLines.productCategory',
+        'productsOfInterest.category',
         'managers',
         'lead.registry',
         'lead.operationalSite.addresses.city',
@@ -62,6 +64,7 @@ class OpportunityService
         private readonly LeadOpportunityDefaultsResolver $defaultsResolver,
         private readonly SystemStatusGuard $systemStatusGuard,
         private readonly OpportunityWorkflowResolver $workflowResolver,
+        private readonly OpportunityProductInterestWriter $productInterestWriter,
     ) {}
 
     public function loadDetail(Opportunity $opportunity): Opportunity
@@ -99,6 +102,15 @@ class OpportunityService
                 $this->syncProductLines($opportunity, $data->productLines);
             }
 
+            // "Prodotti di interesse" (user directive 2026-07-22): synced
+            // AFTER the product lines, so a product from a category the
+            // submission did not cover adds its own row on top of them
+            // (OpportunityProductInterestWriter owns that rule) and the
+            // workflow resolution below already sees the final set.
+            if ($data->hasProductsOfInterest()) {
+                $this->productInterestWriter->sync($opportunity, $data->productsOfInterest);
+            }
+
             // spec 0047 (AC-015/017): an explicit, already-validated override
             // wins; otherwise the resolver derives the 'open' row of the
             // resolved set — product lines are already synced above, so
@@ -132,6 +144,11 @@ class OpportunityService
 
             if ($data->hasProductLines()) {
                 $this->syncProductLines($opportunity, $data->productLines);
+            }
+
+            // See create(): same ordering, same writer, same rule.
+            if ($data->hasProductsOfInterest()) {
+                $this->productInterestWriter->sync($opportunity, $data->productsOfInterest);
             }
 
             // spec 0047 (AC-016/017): re-resolve after any change to the

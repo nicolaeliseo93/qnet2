@@ -23,6 +23,10 @@ function values(overrides: Record<string, unknown> = {}) {
     client_identity: null,
     client_contacts: [],
     client_address: [],
+    products_of_interest: [],
+    source_id: null,
+    reporter_id: null,
+    operator_id: null,
     attribute_values: {},
     ...overrides,
   }

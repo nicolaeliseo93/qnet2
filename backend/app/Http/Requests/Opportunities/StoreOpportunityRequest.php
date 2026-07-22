@@ -85,6 +85,14 @@ class StoreOpportunityRequest extends FormRequest
             // (AC-015/017); its set-membership is checked in withValidator.
             'state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
             'opportunity_workflow_status_id' => ['nullable', 'integer', Rule::exists('opportunity_workflow_statuses', 'id')],
+            // "Prodotti di interesse" (user directive 2026-07-22): the whole
+            // collection is replaced when submitted (`[]` clears it). A product
+            // outside the opportunity's product-line categories is ACCEPTED on
+            // purpose — OpportunityProductInterestWriter adds the matching row
+            // to `product_lines`, which is what the form warns about before
+            // unlocking the picker.
+            'products_of_interest' => ['sometimes', 'array'],
+            'products_of_interest.*' => ['integer', Rule::exists('products', 'id')],
         ], $this->managerSlotsRules(), $this->productLinesRules(required: true));
     }
 

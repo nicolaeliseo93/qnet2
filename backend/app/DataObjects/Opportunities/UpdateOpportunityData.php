@@ -40,6 +40,7 @@ final readonly class UpdateOpportunityData
     /**
      * @param  array<int, int|null>|null  $managerSlots
      * @param  array<int, array{business_function_id: int, product_category_id: int}>|null  $productLines
+     * @param  array<int, int>|null  $productsOfInterest  "prodotti di interesse" (user directive 2026-07-22): same null-means-untouched convention as the two collections above, synced by OpportunityProductInterestWriter
      */
     public function __construct(
         public ?string $name = null,
@@ -72,6 +73,7 @@ final readonly class UpdateOpportunityData
         public bool $stateIdSubmitted = false,
         public ?int $workflowStatusId = null,
         public bool $workflowStatusIdSubmitted = false,
+        public ?array $productsOfInterest = null,
     ) {}
 
     /**
@@ -114,7 +116,21 @@ final readonly class UpdateOpportunityData
             stateIdSubmitted: array_key_exists('state_id', $data),
             workflowStatusId: self::nullableInt($data, 'opportunity_workflow_status_id'),
             workflowStatusIdSubmitted: array_key_exists('opportunity_workflow_status_id', $data),
+            productsOfInterest: array_key_exists('products_of_interest', $data) ? self::normalizeIds($data['products_of_interest']) : null,
         );
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private static function normalizeIds(mixed $ids): array
+    {
+        return array_values(array_unique(array_map(static fn ($id): int => (int) $id, (array) $ids)));
+    }
+
+    public function hasProductsOfInterest(): bool
+    {
+        return $this->productsOfInterest !== null;
     }
 
     public function hasManagerSlots(): bool

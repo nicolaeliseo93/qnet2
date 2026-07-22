@@ -89,6 +89,11 @@ function baseFields(t: TFunction) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('opportunities.form.productLines.rowIncomplete') })
         }
       }),
+    // "Prodotti di interesse" (user directive 2026-07-22): a plain id set.
+    // Cross-category picks are LEGAL (the server adds the matching product
+    // line, after the picker's unlock dialog), so there is nothing to
+    // cross-validate against `product_lines` here.
+    products_of_interest: z.array(z.number()),
     // Ordered, gap-aware "G.A. n" manager slots: index+1 = G.A. number, `null`
     // = an intentionally empty slot. At most MAX_MANAGERS filled.
     manager_slots: z

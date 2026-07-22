@@ -10,9 +10,10 @@
  */
 import type { ComponentType } from 'react'
 import type { CustomCellEditorProps } from 'ag-grid-react'
+import type { RichCellEditorValuesCallbackParams } from 'ag-grid-community'
 import { enumLabelOf } from '@/features/config/enum-label'
 import { RelationCellEditor } from '@/components/data-table/relation-cell-editor'
-import type { ColumnType, TableColumn } from '@/features/table/types'
+import type { ColumnType, TableColumn, TableRow } from '@/features/table/types'
 
 /** The lookup key: a column's declared `editor` when present, else its `type` (spec 0054 D-1). */
 export type CellEditorKind = ColumnType | 'relation'
@@ -34,10 +35,33 @@ function formatOptionLabel(column: TableColumn, value: unknown): string {
   return column.badges?.find((badge) => badge.value === raw)?.label ?? raw
 }
 
-/** `agRichSelectCellEditor` params shared by enum/badge/tags: the column's own option list. */
+/**
+ * Row-scoped allow-list for a badge/enum column (spec 0054 follow-up,
+ * AC-026/027): when the editing row carries `<column.id>_options` (an array
+ * of values valid for THAT row only — e.g. `workflow_status_options` on
+ * `request-management`, since the valid working-state set is resolved per
+ * opportunity, spec 0047), the rich-select editor offers just those instead
+ * of the column's full catalog. Driven entirely by the row's own shape, never
+ * by column id: a row without the field (every other domain, and every other
+ * badge/enum column today) keeps offering the full catalog, unchanged. The
+ * server's 422 stays the actual safety net regardless — this only keeps the
+ * operator from picking something it would reject.
+ */
+function resolveRowScopedOptions(column: TableColumn, row: TableRow | undefined): string[] {
+  const catalog = column.options ?? []
+  const rowOptions = row?.[`${column.id}_options`]
+  if (!Array.isArray(rowOptions)) {
+    return catalog
+  }
+  const allowed = new Set(rowOptions.map(String))
+  return catalog.filter((option) => allowed.has(option))
+}
+
+/** `agRichSelectCellEditor` params shared by enum/badge/tags: the column's own option list, row-scoped when the row provides one. */
 function richSelectParams(column: TableColumn, multiSelect: boolean): Record<string, unknown> {
   return {
-    values: column.options ?? [],
+    values: (params: RichCellEditorValuesCallbackParams<TableRow, string>) =>
+      resolveRowScopedOptions(column, params.data),
     multiSelect,
     formatValue: (value: unknown) => formatOptionLabel(column, value),
   }

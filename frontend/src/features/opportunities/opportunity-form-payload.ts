@@ -45,6 +45,7 @@ export function buildCreatePayload(
     // unlike the `locked.has(...)`-gated fields below.
     state_id: values.state_id,
     product_lines: completeProductLines(values.product_lines),
+    products_of_interest: values.products_of_interest,
     manager_slots: values.manager_slots,
     start_date: values.start_date,
     expected_close_date: values.expected_close_date,
@@ -126,6 +127,13 @@ export function buildUpdatePayload(
   if (!sameProductLines(currentProductLines, originalProductLines)) {
     payload.product_lines = currentProductLines
   }
+  // "Prodotti di interesse" (user directive 2026-07-22): an authoritative
+  // replace server-side, so diff it as an unordered SET — the picker's order
+  // carries no meaning.
+  const originalProducts = (original.products_of_interest ?? []).map((product) => product.id)
+  if (!sameIdSet(values.products_of_interest, originalProducts)) {
+    payload.products_of_interest = values.products_of_interest
+  }
   // Manager slots are ORDER- and GAP-sensitive (a slot's G.A. position is
   // meaningful), so compare positionally, not as an unordered set.
   if (!sameSlots(values.manager_slots, managerSlotsFromRefs(original.managers))) {
@@ -170,6 +178,15 @@ function productLineKey(line: OpportunityProductLineInput): string {
 }
 
 /** Order-independent, duplicate-safe comparison of two product-line collections. */
+/** Unordered set comparison of two id collections (products of interest). */
+function sameIdSet(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  const setB = new Set(b)
+  return a.every((id) => setB.has(id))
+}
+
 function sameProductLines(a: OpportunityProductLineInput[], b: OpportunityProductLineInput[]): boolean {
   if (a.length !== b.length) {
     return false

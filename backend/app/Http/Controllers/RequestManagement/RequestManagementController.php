@@ -73,7 +73,15 @@ class RequestManagementController extends BaseApiController
                 $opportunity,
                 $user,
                 [
-                    ...$request->safe()->only(['opportunity_workflow_status_id', 'attribute_values', 'next_callback_at']),
+                    ...$request->safe()->only([
+                        'opportunity_workflow_status_id',
+                        'attribute_values',
+                        'next_callback_at',
+                        'products_of_interest',
+                        'source_id',
+                        'reporter_id',
+                        'operator_id',
+                    ]),
                     // Typed DTOs (ContactInput/AddressInput), not raw arrays:
                     // the client anagraphic block never reaches the service as
                     // request input.

@@ -6,9 +6,11 @@ import { useEntityDetail } from '@/hooks/use-entity-detail'
 import { ResourcePermissionsProvider, useResourcePermissions } from '@/features/authorization/permissions'
 import { fetchRequestWorkPanel } from '@/features/request-management/api'
 import { requestManagementKeys } from '@/features/request-management/query-keys'
+import { RequestAttributionSection } from '@/features/request-management/request-attribution-section'
 import { RequestCallbackSection } from '@/features/request-management/request-callback-section'
 import { RequestClientSection } from '@/features/request-management/request-client-section'
 import { RequestDynamicFields } from '@/features/request-management/request-dynamic-fields'
+import { RequestProductsOfInterest } from '@/features/request-management/request-products-of-interest'
 import { RequestWorkCollaboration } from '@/features/request-management/request-work-collaboration'
 import { RequestWorkHeader } from '@/features/request-management/request-work-header'
 import { RequestWorkSummary } from '@/features/request-management/request-work-summary'
@@ -153,7 +155,26 @@ function RequestWorkPanelBody({ panel }: RequestWorkPanelBodyProps) {
                 <RequestCallbackSection control={form.control} />
               </div>
 
+              {/* Provenance and ownership of the request (user directive
+                  2026-07-22), right after the two levers acted on at every
+                  touch and before the request's own content. */}
+              <RequestAttributionSection
+                control={form.control}
+                source={panel.source}
+                reporter={panel.reporter}
+                operator={panel.operator}
+              />
+
               <RequestDynamicFields control={form.control} attributes={panel.applicable_attributes} />
+
+              {/* Right after the preliminary information: the products of
+                  interest are collected in the same phone call (user directive
+                  2026-07-22). */}
+              <RequestProductsOfInterest
+                control={form.control}
+                productLines={panel.product_lines}
+                products={panel.products_of_interest}
+              />
 
               <RequestClientSection control={form.control} />
             </form>

@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18n from '@/i18n'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { OpportunityForm } from '@/features/opportunities/opportunity-form'
 import type { OpportunityDetailWithPermissions } from '@/features/opportunities/types'
 import type { ResourceMeta } from '@/features/authorization/types'
@@ -127,11 +128,14 @@ vi.mock('@/features/opportunities/opportunity-defaults-api', async () => {
 const EMPTY_PAGE = { items: [], pagination: { offset: 0, limit: 25, total: 0 }, export_link: null }
 
 /** The "Go to the opportunity" CTA (AC-087) renders a `<Link>`: needs a router context. */
+/** The products-of-interest picker opens the shared confirm dialog, so its provider is required. */
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
-      <MemoryRouter>{children}</MemoryRouter>
+      <ConfirmDialogProvider>
+        <MemoryRouter>{children}</MemoryRouter>
+      </ConfirmDialogProvider>
     </QueryClientProvider>
   )
 }

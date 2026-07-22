@@ -8,6 +8,7 @@ use App\Enums\ContactTypeEnum;
 use App\Models\Contact;
 use App\Models\Opportunity;
 use App\Models\User;
+use App\Services\Opportunities\OpportunityWorkflowResolver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
@@ -19,10 +20,19 @@ use Illuminate\Support\Collection;
  * single concern (query building: scoping, filters, sorts, distinct values)
  * and the per-row presentation lives here. Every value is resolved from
  * relations already loaded by the definition's baseQuery — this mapper never
- * queries.
+ * queries, EXCEPT `workflow_status_options` (spec 0054, D-9 follow-up): the
+ * valid-status set is resolved PER OPPORTUNITY (spec 0047 criteria), so
+ * `GET /columns`'s domain-wide `options` alone cannot tell the frontend which
+ * of them apply to THIS row — `$workflowResolver` is injected once per
+ * request and MEMOIZES its own domain-wide queries (activeWorkflows()/
+ * statusesFor()), so resolving a whole page of N rows costs at most 1 query
+ * for the candidate workflows plus one per DISTINCT resolved workflow
+ * encountered on the page — never N.
  */
 final class RequestRowMapper
 {
+    public function __construct(private readonly OpportunityWorkflowResolver $workflowResolver) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -34,6 +44,12 @@ final class RequestRowMapper
             // The only related-row column, always projected WITH its color
             // token for the working-state badge.
             'workflow_status' => $this->summarizeWithColor($row->workflowStatus),
+            // The ids this SPECIFIC opportunity may move to (spec 0047's
+            // resolved workflow), so the cell editor can filter the domain-wide
+            // `options` from GET /columns down to what is actually valid here
+            // — the 422 in TableCellUpdateService/RequestManagementService
+            // stays the security net, this is the UX improvement on top of it.
+            'workflow_status_options' => $this->allowedWorkflowStatusIds($row),
             // "Categoria prodotto": aggregated product categories.
             'product_categories' => $this->summarizeNames($row->productLines->pluck('productCategory')),
             // "Operatore": the Account Manager at pivot position 2 (GA2).
@@ -45,6 +61,16 @@ final class RequestRowMapper
             // Hidden column, drives the default "recently worked first" sort only.
             'updated_at' => $row->updated_at,
         ];
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function allowedWorkflowStatusIds(Opportunity $row): array
+    {
+        $workflow = $this->workflowResolver->resolve($row);
+
+        return $this->workflowResolver->statusesFor($workflow)->pluck('id')->all();
     }
 
     /**

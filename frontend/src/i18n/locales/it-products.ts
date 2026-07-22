@@ -152,6 +152,33 @@ export const products = {
   title: 'Prodotti',
   subtitle: 'Sfoglia, filtra e gestisci i tuoi prodotti.',
   forbidden: 'Non hai i permessi per visualizzare i prodotti.',
+  /**
+   * "Prodotti di interesse" (direttiva utente 2026-07-22): il picker condiviso
+   * tra il form Opportunità e il pannello di Gestione Richieste.
+   */
+  ofInterest: {
+    sectionTitle: 'Prodotti di interesse',
+    sectionDescription: 'I prodotti che interessano al cliente per questa richiesta.',
+    fieldLabel: 'Prodotti di interesse',
+    placeholder: 'Seleziona uno o più prodotti',
+    searchPlaceholder: 'Cerca prodotti…',
+    empty: 'Nessun prodotto trovato.',
+    remove: 'Rimuovi prodotto',
+    hintScoped: 'Solo i prodotti delle categorie di questa opportunità.',
+    hintUnlocked:
+      "Catalogo completo: un prodotto di un'altra categoria aggiungerà la relativa riga funzione/categoria.",
+    hintNoCategories:
+      'Aggiungi prima una funzione aziendale con la sua categoria prodotto, oppure sblocca il catalogo completo.',
+    unlock: 'Mostra tutti i prodotti',
+    relock: "Limita alle categorie dell'opportunità",
+    unlockDialog: {
+      title: 'Mostrare tutto il catalogo prodotti?',
+      description:
+        "Scegliendo un prodotto di un'altra funzione aziendale e categoria prodotto, quella coppia sarà aggiunta alle funzioni aziendali e categorie prodotto di questa opportunità.",
+      confirm: 'Mostra tutti i prodotti',
+    },
+  },
+  empty: 'Nessun prodotto selezionato.',
   columns: {
     name: 'Nome',
     description: 'Descrizione',

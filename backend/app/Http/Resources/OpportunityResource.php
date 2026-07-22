@@ -77,6 +77,7 @@ class OpportunityResource extends JsonResource
             'workflow_status' => $this->summarizeWorkflowStatus($this->workflowStatus),
             'workflow_statuses' => $this->resolveWorkflowStatuses(),
             'product_lines' => $this->summarizeProductLines($this->productLines),
+            'products_of_interest' => $this->summarizeProductsOfInterest($this->productsOfInterest),
             'lead_id' => $this->lead_id,
             'lead' => $this->summarizeLead($this->lead),
             'managers' => $this->summarizeManagers($this->managers),
@@ -130,6 +131,25 @@ class OpportunityResource extends JsonResource
                 'business_function' => $this->summarizeByName($line->businessFunction),
                 'product_category' => $this->summarizeByName($line->productCategory),
             ])
+            ->all();
+    }
+
+    /**
+     * "Prodotti di interesse" (user directive 2026-07-22): identical shape to
+     * RequestManagementResource's, so the opportunity card and the work panel
+     * read the collection the same way.
+     *
+     * @return array<int, array{id: int, name: string, product_category: array{id: int, name: string}|null}>
+     */
+    private function summarizeProductsOfInterest(iterable $products): array
+    {
+        return collect($products)
+            ->map(fn (Model $product): array => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'product_category' => $this->summarizeByName($product->category),
+            ])
+            ->values()
             ->all();
     }
 

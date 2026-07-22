@@ -4,8 +4,11 @@ namespace App\Services;
 
 use App\DataObjects\Products\CreateProductData;
 use App\DataObjects\Products\UpdateProductData;
+use App\DataObjects\Shared\ForSelectQuery;
+use App\DataObjects\Shared\ForSelectResult;
 use App\Models\Product;
 use App\Services\ProductCategories\CategoryHierarchy;
+use Illuminate\Support\Collection;
 
 /**
  * Business logic for the `products` resource (spec 0017): create/update
@@ -81,5 +84,82 @@ class ProductService
     public function delete(Product $product): void
     {
         $product->delete();
+    }
+
+    /**
+     * Minimal, searchable, paginated product list for the for-select standard
+     * (ADR 0011), mirroring VatRateService::forSelect. `category_ids` (user
+     * directive 2026-07-22) scopes the page to the products of those exact
+     * categories — how the "prodotti di interesse" picker stays aligned with
+     * the opportunity's product lines; absent, the whole catalogue is
+     * searchable (the picker's explicit "unlock").
+     *
+     * The category is projected as `meta.category` so the operator can tell
+     * two same-named products apart, and so the unlocked picker shows what a
+     * cross-category pick would add to the opportunity's product lines.
+     */
+    public function forSelect(ForSelectQuery $query): ForSelectResult
+    {
+        $base = Product::query()->select(['id', 'name', 'category_id']);
+
+        if ($query->hasSearch()) {
+            $base->where('name', 'like', '%'.$query->search.'%');
+        }
+
+        if ($query->hasCategoryIds()) {
+            $base->whereIn('category_id', $query->categoryIds);
+        }
+
+        $total = (clone $base)->count();
+
+        /** @var Collection<int, Product> $page */
+        $page = $base->orderBy('name')
+            ->orderBy('id')
+            ->offset($query->offset)
+            ->limit($query->limit)
+            ->get();
+
+        $items = $this->appendHydratedIds($page, $query);
+        $items->load('category:id,name');
+
+        return new ForSelectResult(
+            items: $items,
+            total: $total,
+            offset: $query->offset,
+            limit: $query->limit,
+        );
+    }
+
+    /**
+     * Append the explicitly-requested `ids[]` (edit-mode hydration) that are
+     * not already on the page, deduplicated. They bypass BOTH the search and
+     * the category scope — a product already selected must keep its label
+     * even once it falls outside the current filter. Total is unaffected.
+     *
+     * @param  Collection<int, Product>  $page
+     * @return Collection<int, Product>
+     */
+    private function appendHydratedIds(Collection $page, ForSelectQuery $query): Collection
+    {
+        if (! $query->hasIds()) {
+            return $page;
+        }
+
+        $presentIds = $page->pluck('id')->all();
+        $missingIds = array_values(array_diff($query->ids, $presentIds));
+
+        if ($missingIds === []) {
+            return $page;
+        }
+
+        /** @var Collection<int, Product> $hydrated */
+        $hydrated = Product::query()
+            ->select(['id', 'name', 'category_id'])
+            ->whereIn('id', $missingIds)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+
+        return $page->concat($hydrated);
     }
 }

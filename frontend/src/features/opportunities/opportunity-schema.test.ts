@@ -29,6 +29,7 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     // product_lines is mandatory (>=1 row, user directive 2026-07-17): the base
     // happy-path carries one valid row; the empty-collection case overrides it.
     product_lines: [{ business_function_id: 1, product_category_id: 11 }],
+    products_of_interest: [],
     manager_slots: [],
     start_date: null,
     expected_close_date: null,

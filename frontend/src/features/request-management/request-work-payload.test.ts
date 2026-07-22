@@ -12,6 +12,12 @@ function panel(overrides: Partial<RequestWorkPanel> = {}): RequestWorkPanel {
     registry: { id: 10, name: 'Acme S.p.A.' },
     referent: { id: 20, name: 'Mario Rossi' },
     commercial: null,
+    source_id: null,
+    source: null,
+    reporter_id: null,
+    reporter: null,
+    operator_id: null,
+    operator: null,
     opportunity_status: { id: 5, name: 'New', color: 'slate' },
     workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false },
     workflow_statuses: [
@@ -19,6 +25,7 @@ function panel(overrides: Partial<RequestWorkPanel> = {}): RequestWorkPanel {
       { id: 101, name: 'In progress', color: 'amber', system_key: null, description: null, requires_note: false },
     ],
     product_lines: [],
+    products_of_interest: [],
     client_identity: null,
     client_contacts: { owner: { type: 'personal_data', id: 10 }, items: [] },
     client_address: null,
@@ -70,10 +77,74 @@ function formValues(overrides: Partial<RequestWorkFormValues> = {}): RequestWork
     client_identity: null,
     client_contacts: [],
     client_address: [],
+    products_of_interest: [],
+    source_id: null,
+    reporter_id: null,
+    operator_id: null,
     attribute_values: { notes: 'existing note', budget: 1000 },
     ...overrides,
   }
 }
+
+describe('buildRequestWorkPayload — attribution (user directive 2026-07-22)', () => {
+  it('sends only the attribution id that changed', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ source_id: 4 }),
+      panel({ source_id: null, reporter_id: 9, operator_id: 3 }),
+    )
+
+    expect(payload).toEqual({ source_id: 4, reporter_id: null, operator_id: null })
+  })
+
+  it('omits every attribution key when none was touched', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ source_id: 4, reporter_id: 9, operator_id: 3 }),
+      panel({ source_id: 4, reporter_id: 9, operator_id: 3 }),
+    )
+
+    expect(payload).toEqual({})
+  })
+
+  it('sends an explicit null when an attribution field is cleared', () => {
+    const payload = buildRequestWorkPayload(formValues(), panel({ operator_id: 3 }))
+
+    expect(payload).toEqual({ operator_id: null })
+  })
+})
+
+describe('buildRequestWorkPayload — products of interest (user directive 2026-07-22)', () => {
+  it('sends the whole id set when the selection changed', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ products_of_interest: [3, 7] }),
+      panel({ products_of_interest: [{ id: 3, name: 'Fibra', product_category: { id: 1, name: 'Connettivita' } }] }),
+    )
+
+    expect(payload.products_of_interest).toEqual([3, 7])
+  })
+
+  it('sends [] when the operator cleared the collection', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ products_of_interest: [] }),
+      panel({ products_of_interest: [{ id: 3, name: 'Fibra', product_category: null }] }),
+    )
+
+    expect(payload.products_of_interest).toEqual([])
+  })
+
+  it('omits the key when the SET is unchanged, whatever the order', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ products_of_interest: [7, 3] }),
+      panel({
+        products_of_interest: [
+          { id: 3, name: 'Fibra', product_category: null },
+          { id: 7, name: 'Mobile', product_category: null },
+        ],
+      }),
+    )
+
+    expect(payload).not.toHaveProperty('products_of_interest')
+  })
+})
 
 describe('buildRequestWorkPayload (spec 0049 AC-062)', () => {
   it('returns an empty payload when nothing changed', () => {

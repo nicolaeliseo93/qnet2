@@ -16,6 +16,7 @@ use App\RequestManagement\ApplicableAttributesResolver;
 use App\RequestManagement\AttributeValueNormalizer;
 use App\RequestManagement\AttributeValueValidator;
 use App\Services\Notes\NoteService;
+use App\Services\Opportunities\OpportunityProductInterestWriter;
 use App\Services\Opportunities\OpportunityWorkflowResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
@@ -79,10 +80,15 @@ final class RequestManagementService
         'registry.personalData.addresses.country',
         'referent.personalData.contacts',
         'commercial',
+        // Attribution block (user directive 2026-07-22): "Fonte" and
+        // "Segnalatore"; the GA2 "Operatore" rides on `managers` below.
+        'source',
+        'reporter',
         'opportunityStatus',
         'workflowStatus',
         'productLines.businessFunction',
         'productLines.productCategory',
+        'productsOfInterest.category',
         'managers',
     ];
 
@@ -91,6 +97,7 @@ final class RequestManagementService
         private readonly AttributeValueValidator $attributeValueValidator,
         private readonly AttributeValueNormalizer $attributeValueNormalizer,
         private readonly OpportunityWorkflowResolver $workflowResolver,
+        private readonly OpportunityProductInterestWriter $productInterestWriter,
         private readonly RequestClientProfileWriter $clientProfileWriter,
         private readonly NoteService $noteService,
     ) {}
@@ -114,7 +121,7 @@ final class RequestManagementService
      * submitted keys change) and returns the SAME work-panel shape as
      * loadWorkPanel(), post-save.
      *
-     * @param  array{opportunity_workflow_status_id?: int|null, note?: string|null, attribute_values?: array<string, mixed>, next_callback_at?: string|null, client_identity?: CreatePersonalData, client_contacts?: array<int, ContactInput>, client_address?: AddressInput}  $data
+     * @param  array{opportunity_workflow_status_id?: int|null, note?: string|null, attribute_values?: array<string, mixed>, next_callback_at?: string|null, products_of_interest?: array<int, int>, source_id?: int|null, reporter_id?: int|null, operator_id?: int|null, client_identity?: CreatePersonalData, client_contacts?: array<int, ContactInput>, client_address?: AddressInput}  $data
      * @return array{opportunity: Opportunity, applicable_attributes: Collection<int, ApplicableAttribute>, workflow_statuses: Collection<int, OpportunityWorkflowStatus>}
      */
     public function updateWork(Opportunity $opportunity, User $actor, array $data): array
@@ -122,6 +129,14 @@ final class RequestManagementService
         return DB::transaction(function () use ($opportunity, $actor, $data): array {
             $changed = [];
             $old = [];
+
+            // Step 0: attribution (user directive 2026-07-22) — applied
+            // BEFORE the working-state step on purpose: `source_id` is one of
+            // the criteria OpportunityWorkflowResolver resolves a workflow
+            // from (spec 0047), so a PATCH that changes fonte AND status in
+            // one shot must validate the status against the NEW set (the same
+            // ordering ValidatesWorkflowStatus already applies request-side).
+            $sourceChanged = $this->applyAttribution($opportunity, $data);
 
             // Step 1: working-state advance — set-membership (AC-011) and the
             // mandatory-note rule (spec 0054, D-5) both enforced HERE, the one
@@ -148,16 +163,111 @@ final class RequestManagementService
 
             $opportunity->save();
 
-            // Step 4: client anagraphic block (spec 0049 amendment) — identity,
+            // Step 3-bis: the GA2 "Operatore" — a pivot row, so it is written
+            // after the model save like every other reference collection.
+            if (array_key_exists('operator_id', $data)) {
+                $this->applyOperator($opportunity, $data['operator_id'], $changed, $old);
+            }
+
+            // Step 3-ter: a changed fonte can move the opportunity onto a
+            // different workflow (spec 0047). With no explicit status
+            // submitted the resolver re-derives it exactly as
+            // OpportunityService::update() does — targetStatus() keeps the
+            // current row when it still belongs to the new set, so this is a
+            // no-op whenever the two workflows share the status.
+            if ($sourceChanged && ($data['opportunity_workflow_status_id'] ?? null) === null) {
+                $this->workflowResolver->resolveAndAssign($opportunity);
+            }
+
+            // Step 4: "prodotti di interesse" (user directive 2026-07-22) —
+            // a to-many reference, written after the model save like every
+            // other collection. Adding a product outside the opportunity's
+            // categories also adds its product line (the writer owns that
+            // rule for both write channels).
+            if (array_key_exists('products_of_interest', $data)) {
+                $this->applyProductsOfInterest($opportunity, (array) $data['products_of_interest'], $changed, $old);
+            }
+
+            // Step 5: client anagraphic block (spec 0049 amendment) — identity,
             // contacts and address land on the Registry's PersonalData card,
             // not on the opportunity, so they are written outside the model save.
             $this->applyClientProfile($opportunity, $data);
 
-            // Step 5: explicit activity entry (see class docblock).
+            // Step 6: explicit activity entry (see class docblock).
             $this->logOperationalChange($opportunity, $actor, $changed, $old);
 
             return $this->loadWorkPanel($opportunity);
         });
+    }
+
+    /**
+     * The attribution scalars (user directive 2026-07-22): "Fonte"
+     * (`source_id`) and "Segnalatore" (`reporter_id`). Both ARE in
+     * Opportunity::$fillable, so — unlike the operative fields of this panel —
+     * they are mass-assigned here and their change is picked up by the
+     * automatic activity log (LogsModelActivity::logFillable()); no explicit
+     * entry is added for them, which would double-log the same diff.
+     *
+     * @param  array<string, mixed>  $data
+     * @return bool whether `source_id` actually changed — the workflow
+     *              resolution criterion the caller re-runs on (spec 0047)
+     */
+    private function applyAttribution(Opportunity $opportunity, array $data): bool
+    {
+        $submitted = array_intersect_key($data, array_flip(['source_id', 'reporter_id']));
+
+        if ($submitted === []) {
+            return false;
+        }
+
+        $previousSourceId = $opportunity->source_id;
+        $opportunity->fill($submitted);
+
+        return $opportunity->source_id !== $previousSourceId;
+    }
+
+    /**
+     * The GA2 "Operatore" (user directive 2026-07-22): the single
+     * `opportunity_user` row at pivot position
+     * Opportunity::OPERATOR_MANAGER_POSITION. Only THAT slot is touched — the
+     * other manager positions belong to the opportunities form and must
+     * survive a write from this panel, so `sync()` (which detaches everything
+     * absent from its map) is deliberately not used here.
+     *
+     * A user already attached at another position is MOVED to the operator
+     * slot rather than duplicated: the pivot's identity is (opportunity,
+     * user), one person cannot hold two slots.
+     *
+     * The pivot is not a fillable attribute, so — like every other operative
+     * field of this panel — the change is logged explicitly by the caller.
+     *
+     * @param  array<string, mixed>  $changed
+     * @param  array<string, mixed>  $old
+     */
+    private function applyOperator(Opportunity $opportunity, mixed $value, array &$changed, array &$old): void
+    {
+        $current = $opportunity->operatorManager()?->id;
+        $next = $value === null ? null : (int) $value;
+
+        if ($current === $next) {
+            return;
+        }
+
+        if ($current !== null) {
+            $opportunity->managers()->detach($current);
+        }
+
+        if ($next !== null) {
+            // detach-then-attach also covers the "was GA1, becomes GA2" move:
+            // the person keeps exactly one row, now at the operator position.
+            $opportunity->managers()->detach($next);
+            $opportunity->managers()->attach($next, ['position' => Opportunity::OPERATOR_MANAGER_POSITION]);
+        }
+
+        $opportunity->unsetRelation('managers');
+
+        $old['operator_id'] = $current;
+        $changed['operator_id'] = $next;
     }
 
     /**
@@ -184,6 +294,38 @@ final class RequestManagementService
         );
 
         $opportunity->unsetRelation('registry');
+    }
+
+    /**
+     * "Prodotti di interesse" (user directive 2026-07-22): an authoritative
+     * replace of the whole collection. Like every other operative field here
+     * it is NOT mass-assignable (it is a relation), so the change is logged
+     * explicitly — including the product lines the writer had to add for a
+     * cross-category pick, which would otherwise be an invisible side effect.
+     *
+     * @param  array<int, int>  $submitted
+     * @param  array<string, mixed>  $changed
+     * @param  array<string, mixed>  $old
+     *
+     * @throws ValidationException
+     */
+    private function applyProductsOfInterest(Opportunity $opportunity, array $submitted, array &$changed, array &$old): void
+    {
+        $current = $opportunity->productsOfInterest()->pluck('products.id')->map(intval(...))->sort()->values()->all();
+        $next = collect($submitted)->map(intval(...))->unique()->sort()->values()->all();
+
+        if ($current === $next) {
+            return;
+        }
+
+        $addedLines = $this->productInterestWriter->sync($opportunity, $next);
+
+        $old['products_of_interest'] = $current;
+        $changed['products_of_interest'] = $next;
+
+        if ($addedLines !== []) {
+            $changed['product_lines_added'] = $addedLines;
+        }
     }
 
     /**

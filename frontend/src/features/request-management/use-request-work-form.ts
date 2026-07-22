@@ -86,6 +86,10 @@ function buildDefaultValues(panel: RequestWorkPanelWithPermissions): RequestWork
     // client has no address yet.
     client_address: panel.client_address ? [addressToDraft(panel.client_address)] : [],
     attribute_values: seedAttributeValues(panel.applicable_attributes, panel.attribute_values),
+    products_of_interest: panel.products_of_interest.map((product) => product.id),
+    source_id: panel.source_id,
+    reporter_id: panel.reporter_id,
+    operator_id: panel.operator_id,
   }
 }
 
@@ -119,6 +123,10 @@ export function useRequestWorkForm(panel: RequestWorkPanelWithPermissions) {
     // root carries the message.
     'client_contacts' as Path<RequestWorkFormValues>,
     'client_address' as Path<RequestWorkFormValues>,
+    'products_of_interest' as Path<RequestWorkFormValues>,
+    'source_id' as Path<RequestWorkFormValues>,
+    'reporter_id' as Path<RequestWorkFormValues>,
+    'operator_id' as Path<RequestWorkFormValues>,
     ...panel.applicable_attributes.map(
       (attribute) => `attribute_values.${attribute.code}` as Path<RequestWorkFormValues>,
     ),

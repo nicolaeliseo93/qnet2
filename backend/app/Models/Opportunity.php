@@ -8,6 +8,7 @@ use App\Models\Concerns\HasNotes;
 use App\Models\Concerns\LogsModelActivity;
 use Database\Factories\OpportunityFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -147,6 +148,21 @@ class Opportunity extends BaseModel
     }
 
     /**
+     * The products the operator recorded as "di interesse" for this request
+     * (user directive 2026-07-22): a plain reference collection, no pivot
+     * payload — for now it only answers "which products is this request
+     * about". Written exclusively by OpportunityProductInterestWriter, which
+     * also guarantees every selected product's category is covered by a
+     * `productLines()` row.
+     *
+     * @return BelongsToMany<Product, $this>
+     */
+    public function productsOfInterest(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'opportunity_product')->orderBy('products.name');
+    }
+
+    /**
      * The lead this opportunity was generated from, if any (BR-1/D-2:
      * nullable, unique — read-only server-side derivation lock, see
      * OpportunityService/LeadOpportunityDefaultsResolver).
@@ -174,5 +190,37 @@ class Opportunity extends BaseModel
         return $this->belongsToMany(User::class, 'opportunity_user')
             ->withPivot('position')
             ->orderByPivot('position');
+    }
+
+    /**
+     * The GA2 "Operatore" — the manager at pivot position
+     * OPERATOR_MANAGER_POSITION — resolved from the already-loaded collection
+     * when available, otherwise with an EXPLICIT query (never a lazy-loaded
+     * relation access, so Model::preventLazyLoading() stays satisfied on a
+     * bare route-bound model). The one place the "position 2 = operator" rule
+     * is expressed for reads; RequestRowMapper's own copy stays as-is because
+     * it projects the grid's avatar bag from an eager-loaded page.
+     */
+    public function operatorManager(): ?User
+    {
+        if ($this->relationLoaded('managers')) {
+            return $this->managers->first(
+                static fn (User $manager): bool => (int) $manager->pivot->position === self::OPERATOR_MANAGER_POSITION,
+            );
+        }
+
+        return $this->managers()->wherePivot('position', self::OPERATOR_MANAGER_POSITION)->first();
+    }
+
+    /**
+     * `operator_id`: the GA2 operator's user id as a virtual attribute. It is
+     * NOT a column — the value lives on the `opportunity_user` pivot — but the
+     * request-management panel writes it as a single field, so the generic
+     * field-permission diff (EnforcesFieldPermissions reads every catalogue
+     * field off the model) needs it readable by that name.
+     */
+    protected function operatorId(): Attribute
+    {
+        return Attribute::get(fn (): ?int => $this->operatorManager()?->id);
     }
 }

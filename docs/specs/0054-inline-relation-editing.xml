@@ -138,6 +138,29 @@
       pannello) rende comodo il gesto, non lo autorizza.
       `note` e' accettato SOLO dove previsto; inviarlo altrove e' 422 (evita che diventi un canale
       di scrittura laterale su domini che non lo contemplano).
+
+      CORREZIONE SUCCESSIVA sul contratto `options` (la spec originale era imprecisa, segnalato dal
+      backend, corretto qui): "la colonna Stato di lavorazione emette le sue options comprensive di
+      requires_note per opzione" presupponeva UN set di opzioni valido per l'intera griglia, ma
+      `GET /columns` e' per-dominio mentre il set valido e' risolto PER OPPORTUNITY (criteri spec
+      0047: righe diverse possono risolvere workflow diversi). Le due parti del contratto restano
+      entrambe vere ma SEPARATE:
+      - `GET /columns`: `options` sulla colonna `workflow_status` resta il CATALOGO INTERO (ogni
+        stato di ogni workflow + il set globale) con `requires_note` per voce — usato dal frontend
+        per sapere, DATO un id, se richiede la nota.
+      - `POST /rows`: ogni riga porta in piu' `workflow_status_options` (array di soli id, spec 0054
+        follow-up), il set EFFETTIVAMENTE valido per QUELLA opportunity (stesso identico calcolo di
+        AC-011) — la tendina lo usa per filtrare le scelte, cosi' l'operatore non vede piu' uno stato
+        che poi verrebbe rifiutato con 422. Il 422 resta comunque la rete di sicurezza server-side,
+        mai l'unico controllo.
+      Costo verificato (non assunto): valutato il rischio N+1 prima di implementare. Il resolver
+      (`App\Services\Opportunities\OpportunityWorkflowResolver`) fa GIA' una query "tutti i workflow
+      attivi" domain-wide (mai per-riga) e una query per lo status-set di UN workflow — entrambe
+      ORA memoizzate sull'istanza (mai a livello di riga): una pagina di N righe costa 1 query per i
+      workflow candidati + 1 query per ogni workflow DISTINCT effettivamente risolto sulla pagina
+      (tipicamente 1-2), MAI N. Verificato con test che confrontano il conteggio query fra una pagina
+      piccola e una piu' grande (deve restare IDENTICO, non un limite assoluto fragile) — vedi
+      `tests/Feature/RequestManagement/RequestManagementWorkflowStatusOptionsPerRowTest.php`.
     </d>
 
     <d id="D-6" title="Colonne accese in questo giro">
@@ -156,6 +179,47 @@
       (terzo registry OCP del progetto), implementata come cell editor AG Grid custom in popup che
       incapsula `AsyncPaginatedSelect` su `/for-select`. Nessun ramo `if (colonna === 'operator')`
       sparso: il comportamento e' guidato dai metadata della colonna, come per ogni altro tipo.
+    </d>
+
+    <d id="D-8" title="Campo mandatory: editabile ma mai vuoto (decisione utente)">
+      I campi `mandatory` (FieldPermission::$required, risolto da AbstractResourceAuthorization::
+      fieldPermissions()) RESTANO editabili inline — non si spengono — ma il motore rifiuta un
+      salvataggio vuoto. La regola e' DERIVATA dai metadata di permesso gia' esistenti, mai
+      dichiarata colonna per colonna: se il campo risolto per (attore, riga, colonna) e' `required`,
+      allora `value: null`, stringa vuota o stringa di soli spazi -> 422, indipendentemente dal
+      `nullable` dichiarato sulla colonna (0053, D-6). Vale per QUALSIASI campo required, presente
+      o futuro — e' una regola del motore (TableCellUpdateService), non un'aggiunta per-colonna.
+      Conflitto `nullable` (colonna) vs `required` (campo): vince il piu' restrittivo, cioe'
+      `required` forza il rifiuto anche se la colonna dichiara `nullable: true`. Implementato in
+      `App\Services\TableCellUpdateService::update()` (step 4.5, subito dopo la risoluzione del
+      `FieldPermission`, prima della validazione derivata dal tipo).
+    </d>
+
+    <d id="D-9" title="Parita' con la form: l'inline edit non apre scorciatoie (decisione utente)">
+      Garanzia richiesta: un campo NON editabile nella form di scrittura dedicata (Store/Update
+      Request del modulo) non deve MAI risultare editabile via inline edit. Per costruzione questo
+      e' vero per ogni campo che la form gia' verifica SOLO tramite `EnforcesFieldPermissions`
+      (stesso choke point, `AbstractResourceAuthorization::fieldPermissions()`, che l'inline edit
+      legge in `TableCellUpdateService::assertFieldEditable()`). Il rischio e' un campo bloccato
+      dalla form con una logica DIVERSA da `fieldPermissions()` (un `prohibited` condizionale, un
+      lock legato allo stato del record) che l'inline edit non conosce e quindi permetterebbe.
+      Verificato con audit puntuale (non assunto) sulle FormRequest dei 5 domini toccati da 0053/
+      0054 (Update{Opportunity,Campaign,Project,Lead}Request + UpdateRequestRequest): nessuna delle
+      colonne accese in questo giro e' soggetta a un lock server-side ulteriore rispetto a
+      `fieldPermissions()`. Test di guardia (stile AC-012/013 di 0053): esercita l'endpoint REALE di
+      scrittura per ogni dominio con un attore dal ceiling pieno (nessun ruolo, quindi nessuna riga
+      `role_field_permissions` puo' restringere), inviando in un colpo solo tutti i campi accesi per
+      quel dominio — un 200 conferma la parita', un 422 elenca esattamente quali campi divergono
+      (mai un assert opaco). Bounded ai 4 domini "a form propria" (opportunities/campaigns/projects/
+      leads); `request-management` e' escluso dal test perche' entrambi i canali (pannello e inline)
+      passano GIA' dallo stesso `RequestManagementService::updateWork()` (spec 0054, D-4/D-5) — la
+      parita' e' vera per costruzione, verificata dai test dedicati di quella colonna.
+      SCOPERTA COLLATERALE (segnalata, non risolta qui: fuori dall'ownership di questa spec):
+      `UpdateRequestRequest` non usa affatto `EnforcesFieldPermissions` — il pannello e' oggi PIU'
+      permissivo dell'inline edit su `opportunity_workflow_status_id`/`next_callback_at`/
+      `attribute_values` (l'inline edit resta comunque corretto, verifica sempre `fieldPermissions()`
+      per conto proprio), non il contrario: nessun buco di sicurezza per l'inline edit, ma una
+      incoerenza pre-esistente del pannello da valutare a parte.
     </d>
   </decisions>
 
@@ -176,7 +240,17 @@
       "relation": { "resource": string }. Nessun'altra chiave cambia. Le colonne gia' editabili da
       0053 restano byte-identiche (nessun `editor` emesso = editor derivato dal `type`, come oggi).
       La colonna Stato di lavorazione emette le sue `options` COMPRENSIVE di `requires_note` per
-      opzione, cosi' la UI sa quando aprire il dialog.
+      opzione — il CATALOGO INTERO (ogni workflow + il set globale), non il set risolto per una
+      singola opportunity: `GET /columns` e' per-dominio, non per-riga (vedi D-5, correzione
+      successiva, e il delta di `POST /rows` sotto per il set EFFETTIVO per-riga).
+    </item>
+
+    <item name="POST /api/tables/{domain}/rows — delta (request-management, follow-up D-5)">
+      Ogni riga di `request-management` guadagna `"workflow_status_options": [id, id, ...]` — il
+      set di stati EFFETTIVAMENTE valido per QUELLA opportunity (stesso calcolo di AC-011), cosi' la
+      tendina filtra le scelte invece di offrire uno stato che poi il PATCH rifiuterebbe con 422.
+      Costo query O(1) rispetto al numero di righe (memoizzato in
+      `OpportunityWorkflowResolver`), mai O(n) — vedi D-5.
     </item>
 
     <item name="PATCH /api/tables/{domain}/rows/{row} — delta">
@@ -198,13 +272,15 @@
       Chiavi `editableField`/`relation` nel catalogo colonne + risoluzione permesso campo su
       `editableField`. Validazione esistenza/scope del valore. Editor di relazione frontend.
       Dialog nota + enforcement server. `FieldDefinition` per `next_callback_at`.
-      Accensione colonne di D-6. Test Pest e Vitest. Audit (ereditato da 0053).
+      Accensione colonne di D-6. Enforcement `required` non-vuoto sul motore generico (D-8, decisione
+      utente successiva: i campi mandatory restano editabili ma non salvabili vuoti). Guardia di
+      parita' con la form (D-9). Test Pest e Vitest. Audit (ereditato da 0053).
     </in>
     <out>
       `attribute_values`. `lead_status` e ogni altra colonna derivata non scrivibile.
       Relazioni multiple (many-to-many). Creazione al volo di un record dalla tendina
-      (quick-create). Modifica del meccanismo `mandatory` di 0053 (decisione ancora aperta,
-      non si tocca qui). Nessuna dipendenza nuova.
+      (quick-create). Spegnimento dei campi mandatory (deciso il contrario, D-8: restano editabili,
+      solo non salvabili vuoti). Nessuna dipendenza nuova.
     </out>
   </scope>
 
@@ -231,6 +307,15 @@
     <ac id="AC-020">Il dialog nota e' accessibile: focus trap del componente Dialog non disabilitato, campo con label, errore annunciato, chiusura con Esc.</ac>
     <ac id="AC-021">`vendor/bin/pest` verde sul perimetro; `npx vitest run` verde sul perimetro; `tsc --noEmit` pulito; Pint pulito sui file toccati.</ac>
     <ac id="AC-022">Diff di `composer.json` e `package.json` VUOTO.</ac>
+
+    <!-- D-8 / D-9 — decisioni utente successive -->
+    <ac id="AC-023">Un campo `required` (FieldPermission) rifiuta `value: null`, `""` e `"   "` -> 422, nessuna scrittura; un valore genuino -> 200. Vale anche quando la colonna dichiara `nullable: true` (il `required` del campo vince).</ac>
+    <ac id="AC-024">La regola AC-023 e' derivata da `fieldPermissions()`, non da una dichiarazione per-colonna: un campo reso `required` SOLO dalla matrice `role_field_permissions` (nessuna dichiarazione mandatory nel ceiling) la eredita comunque per quell'attore.</ac>
+    <ac id="AC-025">Test di guardia (stile AC-012/013): per ogni dominio "a form propria" fra quelli accesi da 0053/0054, un attore dal ceiling pieno che invia in un colpo solo tutti i campi inline-editable di quel dominio all'endpoint REALE di scrittura riceve 200 — nessuna divergenza fra "editabile inline" e "editabile in form". Il test elenca i domini/campi in divergenza, mai un assert opaco.</ac>
+
+    <!-- D-5, correzione successiva sul contratto `options` -->
+    <ac id="AC-026">Ogni riga di `POST /tables/request-management/rows` porta `workflow_status_options`: gli id effettivamente validi per QUELLA opportunity (stesso calcolo di AC-011), cosi' la tendina puo' filtrare le scelte — il 422 resta la rete di sicurezza, non l'esperienza normale.</ac>
+    <ac id="AC-027">Il costo di AC-026 e' O(1) rispetto al numero di righe di pagina, mai O(n): verificato confrontando il conteggio delle query di risoluzione workflow (`opportunity_workflows`/`opportunity_workflow_statuses`) fra una pagina piccola e una pagina piu' grande con lo stesso mix di workflow risolti — i due conteggi devono essere IDENTICI, non semplicemente "sotto una soglia".</ac>
   </criteria>
 
 </spec>

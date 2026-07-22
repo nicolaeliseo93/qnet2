@@ -183,6 +183,15 @@ export function buildRequestWorkSchema(
       client_identity: buildClientIdentitySchema(t),
       client_contacts: buildClientContactsSchema(t),
       client_address: buildClientAddressSchema(t),
+      // "Prodotti di interesse" (user directive 2026-07-22): a plain id set —
+      // membership rules (existence, category coverage) are server-side only,
+      // there is nothing meaningful to mirror client-side.
+      products_of_interest: z.array(z.number()),
+      // Attribution (user directive 2026-07-22): plain nullable relation ids
+      // — existence is a server-side rule, there is nothing to mirror here.
+      source_id: z.number().nullable(),
+      reporter_id: z.number().nullable(),
+      operator_id: z.number().nullable(),
       attribute_values: buildAttributeValuesSchema(attributes, t) as unknown as TypedAttributeValuesSchema,
     })
     .superRefine((values, ctx) => {

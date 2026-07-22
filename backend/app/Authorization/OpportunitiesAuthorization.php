@@ -52,6 +52,9 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('source_id', 'select'),
             new FieldDefinition('opportunity_status_id', 'select', mandatory: true),
             new FieldDefinition('product_lines', 'multiselect', mandatory: true),
+            // "Prodotti di interesse" (user directive 2026-07-22): a plain
+            // to-many reference, never mandatory — an opportunity may carry none.
+            new FieldDefinition('products_of_interest', 'multiselect'),
             new FieldDefinition('manager_slots', 'multiselect'),
             new FieldDefinition('start_date', 'date'),
             new FieldDefinition('estimated_value', 'number'),
@@ -85,6 +88,7 @@ class OpportunitiesAuthorization extends AbstractResourceAuthorization
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'opportunity_status_id' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'product_lines' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
+            'products_of_interest' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'manager_slots' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'start_date' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'estimated_value' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),

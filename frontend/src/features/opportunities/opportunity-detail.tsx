@@ -26,11 +26,13 @@ import type {
   ApplicableAttributeSummary,
   OpportunityDetailWithPermissions as OpportunityDetailData,
   OpportunityProductLine,
+  OpportunityProductOfInterest,
 } from '@/features/opportunities/types'
 
 /** Stable empty defaults (spec 0049 D-8): a missing key on older fixtures reads the same as `[]`/`{}`. */
 const EMPTY_APPLICABLE_ATTRIBUTES: ApplicableAttributeSummary[] = []
 const EMPTY_ATTRIBUTE_VALUES: Record<string, unknown> = {}
+const EMPTY_PRODUCTS_OF_INTEREST: OpportunityProductOfInterest[] = []
 
 interface OpportunityDetailViewProps {
   opportunity: OpportunityDetailData
@@ -47,6 +49,29 @@ function ProductLinesList({ lines }: { lines: OpportunityProductLine[] }) {
         <li key={line.id}>
           <span className="font-medium">{line.business_function.name}</span>
           <span className="text-muted-foreground"> — {line.product_category.name}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * Read-only list of the opportunity's "prodotti di interesse" (user directive
+ * 2026-07-22), each with the category it belongs to — the same pairing the
+ * picker shows while selecting them.
+ */
+function ProductsOfInterestList({ products }: { products: OpportunityProductOfInterest[] }) {
+  if (products.length === 0) {
+    return <DetailEmpty />
+  }
+  return (
+    <ul className="flex flex-col gap-1">
+      {products.map((product) => (
+        <li key={product.id}>
+          <span className="font-medium">{product.name}</span>
+          {product.product_category ? (
+            <span className="text-muted-foreground"> — {product.product_category.name}</span>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -247,6 +272,9 @@ export function OpportunityDetailView({ opportunity }: OpportunityDetailViewProp
           </DetailField>
           <DetailField label={t('opportunities.form.sections.productLines.title')} full>
             <ProductLinesList lines={opportunity.product_lines} />
+          </DetailField>
+          <DetailField label={t('products.ofInterest.sectionTitle')} full>
+            <ProductsOfInterestList products={opportunity.products_of_interest ?? EMPTY_PRODUCTS_OF_INTEREST} />
           </DetailField>
         </DetailGrid>
       </DetailSection>

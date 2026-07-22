@@ -245,6 +245,18 @@ export interface TableRow {
    * (`resolveEditableColumnProps` reads it as `row.editable === true`).
    */
   editable?: boolean
+  /**
+   * Row-scoped options convention (spec 0054 follow-up, AC-026/027): a row
+   * MAY carry `<columnId>_options` (e.g. `workflow_status_options`) — the
+   * subset of that badge/enum column's catalog valid for THIS row, when the
+   * valid set depends on row-level criteria (e.g. the working-state set
+   * resolved per opportunity, spec 0047). Read generically off the index
+   * signature below by `resolveRowScopedOptions`
+   * (`components/data-table/cell-editor-registry.ts`) — no column declares
+   * this as a named property here, since the key itself is per-column.
+   * Absent for every column that has no row-scoped set: the editor then
+   * offers the column's full catalog, unchanged.
+   */
   [key: string]: unknown
 }
 

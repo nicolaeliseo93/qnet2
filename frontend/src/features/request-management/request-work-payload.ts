@@ -149,6 +149,30 @@ export function buildRequestWorkPayload(
     payload.client_contacts = contacts
   }
 
+  // "Prodotti di interesse" (user directive 2026-07-22): an authoritative
+  // replace, so it is sent only when the SET actually changed — order is not
+  // part of its identity.
+  const currentProducts = [...values.products_of_interest].sort((a, b) => a - b)
+  const originalProducts = panel.products_of_interest.map((product) => product.id).sort((a, b) => a - b)
+  if (clientBlockChanged(currentProducts, originalProducts)) {
+    payload.products_of_interest = values.products_of_interest
+  }
+
+  // Attribution (user directive 2026-07-22): each id is sent on its own, only
+  // when it changed — the endpoint is sparse per key, so an untouched picker
+  // never reaches the server.
+  if (values.source_id !== panel.source_id) {
+    payload.source_id = values.source_id
+  }
+
+  if (values.reporter_id !== panel.reporter_id) {
+    payload.reporter_id = values.reporter_id
+  }
+
+  if (values.operator_id !== panel.operator_id) {
+    payload.operator_id = values.operator_id
+  }
+
   // Sent only when a row exists: clearing every field of the inline address
   // leaves the persisted one untouched — this panel has no delete affordance
   // for it, and the write path never deletes an address.

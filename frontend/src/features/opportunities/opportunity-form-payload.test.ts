@@ -21,6 +21,7 @@ function values(overrides: Partial<OpportunityFormValues> = {}): OpportunityForm
     state_id: null,
     opportunity_workflow_status_id: null,
     product_lines: [],
+    products_of_interest: [],
     manager_slots: [],
     start_date: null,
     expected_close_date: null,
@@ -85,6 +86,7 @@ describe('buildCreatePayload', () => {
       source_id: null,
       state_id: null,
       product_lines: [],
+      products_of_interest: [],
       manager_slots: [],
       start_date: null,
       expected_close_date: null,
@@ -268,6 +270,34 @@ describe('buildUpdatePayload', () => {
         original({ opportunity_workflow_status_id: 11 }),
       )
       expect(payload).toEqual({ opportunity_workflow_status_id: 12 })
+    })
+  })
+
+  describe('products_of_interest (unordered set diff, user directive 2026-07-22)', () => {
+    it('omits the key when the set is unchanged, even reordered', () => {
+      const payload = buildUpdatePayload(
+        values({ products_of_interest: [7, 3] }),
+        original({
+          products_of_interest: [
+            { id: 3, name: 'Fibra', product_category: { id: 11, name: 'Connettivita' } },
+            { id: 7, name: 'Mobile', product_category: null },
+          ],
+        }),
+      )
+      expect(payload).toEqual({})
+    })
+
+    it('includes the whole set when a product was added or removed', () => {
+      expect(
+        buildUpdatePayload(values({ products_of_interest: [3, 7] }), original({ products_of_interest: [] })),
+      ).toEqual({ products_of_interest: [3, 7] })
+
+      expect(
+        buildUpdatePayload(
+          values({ products_of_interest: [] }),
+          original({ products_of_interest: [{ id: 3, name: 'Fibra', product_category: null }] }),
+        ),
+      ).toEqual({ products_of_interest: [] })
     })
   })
 
