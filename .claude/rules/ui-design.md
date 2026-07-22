@@ -11,6 +11,25 @@ I componenti in `components/ui/` sono l'**unica** base di stile. Le schermate li
 - Icone: `lucide`. Toast: `sonner`. Tema dark: `next-themes` + CSS variables (non colori hard-coded).
 - Prima di creare un componente, verifica se esiste già in `components/ui/`. Qualsiasi elemento usato in 2+ schermate → estrai con props/slot.
 
+## 1-bis. Scala di superfici (vincolante)
+
+Ogni superficie viene da un token di `index.css`, mai da un colore hard-coded o da un grigio Tailwind (`bg-slate-100`, `bg-white`, `#fff`).
+
+**Superficie contenitore** (scala monotona, si sale di un rung per volta):
+
+| Rung | Token | Uso | L light → dark |
+|---|---|---|---|
+| 1 | `bg-background` | pagina/body e contenitori a piena pagina (incluso `SheetContent`, `DialogContent`: mini-pagine che ospitano card, separate dallo scrim) | 81 → 4 |
+| 2 | `bg-surface` | superficie intermedia: pannello contenitore che ospita card (es. work panel), toolbar, header di dialog | 90 → 16 |
+| 3 | `bg-card` / `bg-popover` | componente in rilievo (card, dropdown, tooltip) | 100 → 23 |
+| 4 | `border-border` / `border-input` / `border-field-border` | hairline, percettibile su tutte e tre le superfici | 73 → 38 |
+
+**L'ampiezza del gradino si misura in rapporto di contrasto, non in punti di lightness.** Due superfici ampie adiacenti sotto ~1.2:1 non si distinguono; **soglia vincolante: ogni coppia adiacente della scala ≥ 1.25:1** (`background`/`surface` e `surface`/`card`). I punti di lightness ingannano ai due estremi: in light 91→95→100 valeva 1.10/1.12, in dark 8→11→14 valeva 1.07/1.08 — cioè tre piani indistinguibili. I valori attuali misurano **1.26 / 1.27** in light e **1.29 / 1.26** in dark. Chi tocca la scala ricalcola i rapporti, non guarda a occhio.
+
+**Tinta** (`bg-muted`, `bg-accent` e le loro diluizioni `bg-muted/40`): NON è un rung. È un velo applicato *sopra* la superficie che la ospita — hover/zebra di riga, hover del `Button` `outline`, skeleton, blocchi sfumati dentro una card — e sta **oltre l'estremo** della scala, mai in mezzo a due rung (light `--muted` 79 e `--accent` 76, sotto il body; dark `--muted` 31, sopra la card). Con body e card distanti solo 1.61:1 in light, una tinta parcheggiata "in mezzo" coinciderebbe con `--surface`: per questo è un token separato, e per questo si sposta insieme alla scala. Le griglie AG Grid rimescolano `--border` e `--muted` verso la propria superficie (`color-mix`, vedi `data-table-theme.ts`): reticolo e hover restano derivati dal token, mai hard-coded.
+
+Regole: **un componente non può avere la stessa superficie del contenitore su cui poggia** (card su card, pannello `bg-background` dentro una pagina `bg-background`): sali di un rung. `bg-muted` non si usa come superficie di un contenitore a piena area. Un token hairline (`bg-border`) non si usa come riempimento di zona. Se una superficie sembra invisibile, si corregge la scala in `index.css`, non con una patch locale sulla schermata. Ogni cambio di superficie richiede la riverifica del contrasto testo (AA 4.5:1 normale, 3:1 large/UI): la scala attuale ha costretto `--foreground` a 26 e `--muted-foreground` a 34 in light (73 in dark) per tenere AA sulla tinta.
+
 ## 2. Sizing scale (default compatti)
 
 > **Preferenza cliente (vincolante).** Il committente di questo progetto **preferisce

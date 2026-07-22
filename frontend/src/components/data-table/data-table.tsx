@@ -240,9 +240,10 @@ export function DataTable({
   const { factor } = useUiScale()
   const theme = useMemo(() => buildDataTableTheme(factor), [factor])
 
-  // Owns the PATCH -> setData/revert cycle for inline cell edits (spec 0053):
+  // Owns the PATCH -> setData/revert cycle for inline cell edits (spec 0053),
+  // including the note dialog for a `requires_note` value (spec 0054 D-5):
   // domain-agnostic, so it lives here rather than in a per-domain adapter.
-  const { handleCellValueChanged } = useTableCellEdit(domain)
+  const { handleCellValueChanged, noteDialogSlot } = useTableCellEdit(domain, columns)
 
   // AG Grid's own UI strings (filter menus, set filter, column panel, context
   // menu, pagination, "Loading…"/"No Rows To Show") come from the official
@@ -483,6 +484,7 @@ export function DataTable({
         onSelectionChanged={enableSelection ? handleSelectionChanged : undefined}
         {...gridOptions}
       />
+      {noteDialogSlot}
     </div>
   )
 }

@@ -1,0 +1,103 @@
+import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Info } from 'lucide-react'
+import { FormSection } from '@/components/form-section'
+import { Badge } from '@/components/ui/badge'
+import { formatDecimal } from '@/features/products/column-renderers'
+import type { RequestWorkPanel } from '@/features/request-management/types'
+
+const EMPTY_VALUE = '—'
+
+/** Formats a `Y-m-d` date for display, `null` when missing/unparsable. */
+function formatDate(value: string | null): string | null {
+  if (!value) {
+    return null
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString()
+}
+
+/** One `label / value` row of the summary list. */
+function SummaryRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 py-2">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="truncate text-sm font-medium text-foreground">{children}</dd>
+    </div>
+  )
+}
+
+/**
+ * Read-only commercial context of the record (spec 0049), rendered as the side
+ * column of the work panel. Never renders an edit control: the sales
+ * dimensions stay the CRUD opportunities form's job (D-5).
+ */
+export function RequestWorkSummary({ panel }: { panel: RequestWorkPanel }) {
+  const { t } = useTranslation()
+  const expectedCloseDate = formatDate(panel.context.expected_close_date)
+  const estimatedValue = formatDecimal(panel.context.estimated_value)
+  const successProbability = panel.context.success_probability
+
+  return (
+    <FormSection
+      icon={Info}
+      title={t('requestManagement.workPanel.summary.title', { defaultValue: 'Request summary' })}
+      description={t('requestManagement.workPanel.summary.description', {
+        defaultValue: 'Read-only commercial context.',
+      })}
+      className="min-w-0"
+    >
+      <dl className="min-w-0 divide-y divide-border/60">
+        <SummaryRow label={t('requestManagement.workPanel.summary.registry', { defaultValue: 'Client' })}>
+          {panel.registry?.name ?? EMPTY_VALUE}
+        </SummaryRow>
+        <SummaryRow label={t('requestManagement.workPanel.summary.referent', { defaultValue: 'Contact' })}>
+          {panel.referent?.name ?? EMPTY_VALUE}
+        </SummaryRow>
+        <SummaryRow label={t('requestManagement.workPanel.summary.commercial', { defaultValue: 'Sales rep' })}>
+          {panel.commercial?.name ?? EMPTY_VALUE}
+        </SummaryRow>
+        <SummaryRow
+          label={t('requestManagement.workPanel.summary.expectedCloseDate', {
+            defaultValue: 'Expected close date',
+          })}
+        >
+          {expectedCloseDate ?? EMPTY_VALUE}
+        </SummaryRow>
+        <SummaryRow
+          label={t('requestManagement.workPanel.summary.estimatedValue', { defaultValue: 'Estimated value' })}
+        >
+          {estimatedValue || EMPTY_VALUE}
+        </SummaryRow>
+        <SummaryRow
+          label={t('requestManagement.workPanel.summary.successProbability', {
+            defaultValue: 'Success probability',
+          })}
+        >
+          {successProbability === null ? EMPTY_VALUE : `${successProbability}%`}
+        </SummaryRow>
+
+        <div className="flex min-w-0 flex-col gap-1.5 py-2">
+          <dt className="text-xs text-muted-foreground">
+            {t('requestManagement.workPanel.summary.productLines', { defaultValue: 'Product lines' })}
+          </dt>
+          <dd className="flex min-w-0 flex-wrap gap-1">
+            {panel.product_lines.length === 0 ? (
+              <span className="text-sm font-medium text-foreground">
+                {t('common.none', { defaultValue: 'None' })}
+              </span>
+            ) : (
+              panel.product_lines.map((line) => (
+                <Badge key={line.id} variant="outline" className="h-5 min-h-5 max-w-full text-xs">
+                  <span className="truncate">
+                    {`${line.business_function.name} — ${line.product_category.name}`}
+                  </span>
+                </Badge>
+              ))
+            )}
+          </dd>
+        </div>
+      </dl>
+    </FormSection>
+  )
+}

@@ -42,10 +42,20 @@ export function buildDataTableTheme(factor: number) {
       cellHorizontalPadding: Math.round(BASE_CELL_HORIZONTAL_PADDING * factor),
       backgroundColor: 'var(--card)',
       foregroundColor: 'var(--card-foreground)',
-      borderColor: 'var(--border)',
+      // Softened hairline: the shared `--border` is tuned to edge cards and
+      // panels, and repeating it on every cell of a 28px-row grid would draw a
+      // spreadsheet. Mixing it back toward the grid's own surface keeps the
+      // separators readable without turning the table into a mesh, and still
+      // tracks the token (and dark mode) instead of hard-coding a colour. The
+      // share is 40% (was 55%) because the hairline itself was darkened when
+      // the surface ladder widened: the mesh keeps the same 1.3:1 weight.
+      borderColor: 'color-mix(in srgb, var(--border) 40%, var(--card))',
       headerBackgroundColor: 'var(--card)',
       headerTextColor: 'var(--muted-foreground)',
-      rowHoverColor: 'var(--muted)',
+      // Same reasoning for the hover wash: `--muted` sits beyond the end of the
+      // ladder to be felt on any host, which on a dense grid would read as a
+      // selected row. Mixed back toward the grid surface it stays a hover.
+      rowHoverColor: 'color-mix(in srgb, var(--muted) 65%, var(--card))',
       // The grid is fused into the toolbar block (spec 0009): the outer card owns
       // the border and radius, so the grid drops its own wrapper border to read as
       // one continuous surface with the header above it.

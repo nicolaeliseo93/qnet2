@@ -209,6 +209,7 @@ export interface RequestClientAddressPayload {
  */
 export interface UpdateRequestWorkPayload {
   opportunity_workflow_status_id?: number | null
+  note?: string
   attribute_values?: Record<string, unknown>
   next_callback_at?: string | null
   client_identity?: RequestClientIdentityPayload

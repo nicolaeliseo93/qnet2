@@ -5,7 +5,7 @@ import type { CustomFieldValue } from '@/features/custom-fields/types'
 import { buildContactSchema } from '@/features/personal-data/contact-schema'
 import { buildPersonalDataSchema } from '@/features/personal-data/personal-data-schema'
 import type { AddressDraft, ContactDraft, PersonalDataDraft } from '@/features/personal-data/types'
-import type { ApplicableAttribute } from '@/features/request-management/types'
+import type { ApplicableAttribute, RequestWorkflowStatusRef } from '@/features/request-management/types'
 
 /**
  * Client-side schema for the work panel's editable surface (spec 0049
@@ -162,15 +162,43 @@ function buildClientIdentitySchema(t: TFunction) {
   })
 }
 
-export function buildRequestWorkSchema(attributes: ApplicableAttribute[], t: TFunction) {
-  return z.object({
-    opportunity_workflow_status_id: z.number().nullable(),
-    next_callback_at: z.string().nullable(),
-    client_identity: buildClientIdentitySchema(t),
-    client_contacts: buildClientContactsSchema(t),
-    client_address: buildClientAddressSchema(t),
-    attribute_values: buildAttributeValuesSchema(attributes, t) as unknown as TypedAttributeValuesSchema,
-  })
+/**
+ * Server-side rule (spec 0054 D-5, `RequestManagementService::updateWork()`):
+ * a note is mandatory when the working status CHANGES to one flagged
+ * `requires_note`. Mirrored here so the panel never round-trips to the
+ * server just to learn its own selection needs a note — the server stays
+ * authoritative (this check is anticipatory, not a replacement).
+ */
+export function buildRequestWorkSchema(
+  attributes: ApplicableAttribute[],
+  statuses: RequestWorkflowStatusRef[],
+  originalStatusId: number | null,
+  t: TFunction,
+) {
+  return z
+    .object({
+      opportunity_workflow_status_id: z.number().nullable(),
+      next_callback_at: z.string().nullable(),
+      note: z.string(),
+      client_identity: buildClientIdentitySchema(t),
+      client_contacts: buildClientContactsSchema(t),
+      client_address: buildClientAddressSchema(t),
+      attribute_values: buildAttributeValuesSchema(attributes, t) as unknown as TypedAttributeValuesSchema,
+    })
+    .superRefine((values, ctx) => {
+      const statusChanged = values.opportunity_workflow_status_id !== originalStatusId
+      const targetStatus = statuses.find((status) => status.id === values.opportunity_workflow_status_id)
+
+      if (statusChanged && targetStatus?.requires_note && values.note.trim() === '') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['note'],
+          message: t('requestManagement.workPanel.validation.noteRequired', {
+            defaultValue: 'A note is required to move to this status.',
+          }),
+        })
+      }
+    })
 }
 
 export type RequestWorkFormValues = z.infer<ReturnType<typeof buildRequestWorkSchema>>

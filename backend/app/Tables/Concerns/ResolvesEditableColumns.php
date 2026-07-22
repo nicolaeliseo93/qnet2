@@ -56,12 +56,16 @@ trait ResolvesEditableColumns
 
         foreach ($this->columnsWithDefaultId() as $column) {
             $id = $column['id'];
+            // Spec 0054, D-1: a RELATION column's field-permission key is
+            // `editableField` (the DB column actually written), not the
+            // display column id — falls back to $id for every 0053 column.
+            $fieldKey = $column['editableField'] ?? $id;
 
-            if (($column['editable'] ?? false) !== true || ! in_array($id, $fieldKeys, true)) {
+            if (($column['editable'] ?? false) !== true || ! in_array($fieldKey, $fieldKeys, true)) {
                 continue; // declaration missing, or D-3(b): unknown field key.
             }
 
-            if ($permissions[$id]->editable ?? false) {
+            if ($permissions[$fieldKey]->editable ?? false) {
                 $ids[] = $id;
             }
         }

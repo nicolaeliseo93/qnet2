@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { Workflow } from 'lucide-react'
+import { useFormState, useWatch } from 'react-hook-form'
 import type { Control } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
-import { FormControl } from '@/components/ui/form'
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { MetaField } from '@/features/authorization/MetaField'
 import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
 import { RequiresNoteBadge } from '@/features/opportunity-workflows/requires-note-badge'
@@ -59,10 +61,19 @@ function SelectedStatus({ status }: { status: RequestWorkflowStatusRef }) {
  */
 export function RequestWorkflowStatusField({ control, statuses }: RequestWorkflowStatusFieldProps) {
   const { t } = useTranslation()
+  const selectedStatusId = useWatch({ control, name: 'opportunity_workflow_status_id' })
+  // RHF's own dirty tracking against the loaded `defaultValues` (spec 0054
+  // D-5): "changed" means differing from what the panel loaded, exactly the
+  // server's definition — no separate "original status" prop to thread
+  // through from the caller.
+  const { dirtyFields } = useFormState({ control, name: 'opportunity_workflow_status_id' })
 
   if (statuses.length === 0) {
     return null
   }
+
+  const selected = statuses.find((status) => status.id === selectedStatusId) ?? null
+  const noteRequired = Boolean(dirtyFields.opportunity_workflow_status_id) && Boolean(selected?.requires_note)
 
   return (
     <FormSection
@@ -78,48 +89,69 @@ export function RequestWorkflowStatusField({ control, statuses }: RequestWorkflo
         metaKey="opportunity_workflow_status_id"
         label={t('requestManagement.workPanel.workflowStatus.label', { defaultValue: 'Working status' })}
       >
-        {({ field, disabled }) => {
-          const selected = statuses.find((status) => status.id === field.value) ?? null
+        {({ field, disabled }) => (
+          <div className="flex flex-col gap-1.5">
+            <Select
+              value={field.value !== null ? String(field.value) : undefined}
+              onValueChange={(next) => field.onChange(Number(next))}
+              disabled={disabled}
+            >
+              <FormControl>
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue
+                    placeholder={t('requestManagement.workPanel.workflowStatus.placeholder', {
+                      defaultValue: 'Select a status',
+                    })}
+                  >
+                    {selected ? <SelectedStatus status={selected} /> : null}
+                  </SelectValue>
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {statuses.map((status) => (
+                  <SelectItem key={status.id} value={String(status.id)}>
+                    <WorkflowStatusOption
+                      name={status.name}
+                      description={status.description}
+                      color={status.color}
+                      requiresNote={status.requires_note}
+                    />
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          return (
-            <div className="flex flex-col gap-1.5">
-              <Select
-                value={field.value !== null ? String(field.value) : undefined}
-                onValueChange={(next) => field.onChange(Number(next))}
-                disabled={disabled}
-              >
-                <FormControl>
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue
-                      placeholder={t('requestManagement.workPanel.workflowStatus.placeholder', {
-                        defaultValue: 'Select a status',
-                      })}
-                    >
-                      {selected ? <SelectedStatus status={selected} /> : null}
-                    </SelectValue>
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {statuses.map((status) => (
-                    <SelectItem key={status.id} value={String(status.id)}>
-                      <WorkflowStatusOption
-                        name={status.name}
-                        description={status.description}
-                        color={status.color}
-                        requiresNote={status.requires_note}
-                      />
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {selected?.description ? (
-                <p className="text-xs text-muted-foreground">{selected.description}</p>
-              ) : null}
-            </div>
-          )
-        }}
+            {selected?.description ? (
+              <p className="text-xs text-muted-foreground">{selected.description}</p>
+            ) : null}
+          </div>
+        )}
       </MetaField>
+
+      {noteRequired ? (
+        <FormField
+          control={control}
+          name="note"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel required>
+                {t('requestManagement.workPanel.workflowStatus.noteLabel', { defaultValue: 'Note' })}
+              </FormLabel>
+              <FormControl>
+                <Textarea
+                  {...field}
+                  rows={2}
+                  className="text-sm"
+                  placeholder={t('requestManagement.workPanel.workflowStatus.notePlaceholder', {
+                    defaultValue: 'Explain the reason for this change…',
+                  })}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      ) : null}
     </FormSection>
   )
 }

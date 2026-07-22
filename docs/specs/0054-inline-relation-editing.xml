@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0054 — Modifica inline delle colonne di RELAZIONE + nota obbligatoria sul cambio stato.
+  Estende la spec 0053 (motore inline generico): stesso endpoint, stessa guard chain, stesse
+  invarianti di sicurezza. Qui si aggiunge SOLO il tipo di colonna che 0053 aveva escluso (D-10).
+  Grounding VERIFICATO sul codice reale (esplorazione 2026-07-22).
+  Decisioni utente (AskUserQuestion 2026-07-22):
+    - requires_note: la griglia APRE UN DIALOG per raccogliere la nota e salva stato + nota insieme.
+    - leads: accese tutte e 5 le colonne relazione (registry, campaign, operational_site, source, operator).
+  Motivazione: dopo 0053 i moduli `leads` e `request-management` erano rimasti a ZERO colonne
+  editabili, perche' le loro colonne di griglia sono relazioni. Senza questa spec l'inline edit non
+  porta alcun valore proprio sui due moduli piu' operativi.
+-->
+<spec id="0054-inline-relation-editing" status="draft" owner="nicola" date="2026-07-22">
+
+  <goal>
+    Rendere modificabili inline anche le colonne di RELAZIONE, con un editor a tendina alimentato
+    dagli endpoint `/for-select` gia' esistenti, e sbloccare cosi' i moduli Leads e Gestione
+    Richieste. Il cambio dello Stato di lavorazione verso uno stato con `requires_note` raccoglie
+    la nota obbligatoria da un dialog, senza costringere l'operatore ad aprire la scheda.
+    Tutto il resto (endpoint, guard chain, permessi, audit) e' EREDITATO da 0053 senza modifiche.
+  </goal>
+
+  <context>
+    EREDITA INTEGRALMENTE dalla spec 0053 (`docs/specs/0053-inline-cell-editing.xml`), che e' GREEN
+    e verificata: endpoint `PATCH /api/tables/{domain}/rows/{row}`, contratto `TableDefinition`
+    (`editableColumnIds`/`authorizeUpdate`/`updateCell`, default nel trait
+    `app/Tables/Concerns/ResolvesEditableColumns.php`), guard chain e i suoi codici di errore,
+    opt-in esplicito per colonna, `editable` come proprieta' strutturale, audit automatico.
+    NON riaprire nessuna di quelle decisioni. Le invarianti di sicurezza di 0053 (riga sempre da
+    `baseQuery()`, id colonna mai in query, D-3 fail-safe, nessun throttle) restano vincolanti.
+
+    PERCHE' LEADS E REQUEST-MANAGEMENT ERANO VUOTI (verificato):
+    - `app/Tables/Leads/LeadColumnCatalog.php`: le colonne di griglia sono 5 colonne DERIVATE
+      (nome della riga correlata) — `registry`, `campaign`, `operational_site`, `source`,
+      `operator` — piu' `lead_status` e `created_at`. Nessuna colonna scalare propria.
+    - `lead_status` e' un badge di ciclo di vita DERIVATO da operatore e stato opportunita'
+      (documentato nel docblock del catalogo): NON e' un campo scrivibile e NON va acceso.
+    - `created_at` non e' modificabile.
+    - `request-management`: le chiavi scrivibili nel catalogo authorization sono
+      `opportunity_workflow_status_id` (relazione) e `attribute_values` (JSON dinamico).
+      In griglia esiste anche `next_callback_at`, colonna DB REALE (spec 0052) gia' scrivibile da
+      `RequestManagementService::updateWork()`, ma NON dichiarata in `RequestManagementAuthorization`:
+      per questo la regola D-3 di 0053 la escludeva. Va aggiunta al catalogo campi (vedi D-4).
+
+    DISALLINEAMENTO ID COLONNA / CHIAVE CAMPO (il nodo di questa spec):
+    la colonna si chiama `operator` (mostra il nome), il campo scrivibile e' `operator_id`. La
+    regola D-3 di 0053 pretendeva id colonna === chiave campo, e per questo escludeva le relazioni.
+    Qui il disallineamento si risolve con una DICHIARAZIONE ESPLICITA sulla colonna (D-1), non con
+    una mappa di traduzione implicita ne' con un'inferenza per suffisso `_id`.
+
+    NOTA OBBLIGATORIA SUL CAMBIO STATO (verificato):
+    `App\Models\OpportunityWorkflowStatus` ha il campo booleano `requires_note`
+    (`#[Fillable([... 'requires_note'])]`, cast `'requires_note' => 'bool'`), gia' esposto al
+    frontend da `RequestManagementResource` (nella lista `workflow_statuses`, chiave per chiave:
+    id, name, description, color, system_key, requires_note) e da `OpportunityResource`.
+    IMPORTANTE: il percorso di lavorazione esistente (pannello di lavorazione, spec 0049/0052 —
+    `UpdateRequestRequest`, `RequestManagementService::updateWork()`, trait
+    `ValidatesWorkflowStatus`) implementa GIA' una semantica per questo flag. Chi implementa DEVE
+    leggerla e RIUSARLA identica: e' vietato inventare qui una seconda regola di "nota obbligatoria"
+    divergente da quella del pannello. Se le due dovessero divergere, si ferma e si segnala.
+
+    PER-SELECT GIA' ESISTENTE (da riusare, niente di nuovo):
+    - Backend: endpoint `GET /{resource}/for-select`, risposta
+      `{items, export_link, pagination:{...}}` (shape reale di `BaseApiController::paginatedResponse()`).
+    - Frontend: `features/for-select/` (`fetchForSelect(resource, {search, ids, offset, limit})`,
+      `ForSelectItem {id, label, subtitle, meta}`), componenti `ui/async-paginated-select.tsx` e
+      `components/form/relation-select-field.tsx` (`RelationFieldRef = {id, name}`).
+  </context>
+
+  <decisions>
+    <d id="D-1" title="La colonna dichiara il campo scrivibile e la risorsa target">
+      Una colonna di relazione diventa editabile dichiarando, oltre a `editable`, due chiavi nuove:
+      `'editableField' => 'operator_id'` (la colonna DB realmente scritta E la chiave usata per il
+      permesso per-campo) e `'relation' => ['resource' => 'users']` (la risorsa `/for-select` che
+      alimenta la tendina). Nessuna inferenza automatica dal suffisso `_id`: l'accoppiamento
+      colonna-visualizzata / campo-scritto e' esplicito, verificabile e testabile.
+      La regola D-3 di 0053 si applica invariata, ma sulla chiave `editableField` quando presente,
+      altrimenti sull'id colonna. Restano fail-safe entrambi i rami: risorsa non registrata in
+      `config/authorization.php` o chiave campo assente dal catalogo `fields()` -> non editabile.
+    </d>
+
+    <d id="D-2" title="Validazione: esistenza reale + scope, non solo `exists`">
+      Il valore e' un id intero (o null se la FK e' nullable e la colonna dichiara `nullable`).
+      Validazione `exists:<tabella>,id` DERIVATA dalla risorsa dichiarata, mai hardcoded.
+      In piu': se la risorsa target ha una nozione di visibilita' per l'attore, il valore deve
+      essere fra quelli che l'attore potrebbe davvero selezionare — l'allow-list e' la stessa
+      query di `/for-select`. Un id valido ma fuori dalla portata dell'attore e' 422, non 200:
+      altrimenti l'inline edit diventerebbe un canale per collegare record altrimenti invisibili.
+    </d>
+
+    <d id="D-3" title="Il valore sul filo e' l'id; la risposta riporta la riga intera">
+      Il PATCH invia `{column: 'operator', value: 42}` — `column` resta l'ID COLONNA (coerente con
+      0053, e' la colonna della griglia), il server traduce in `editableField`. La risposta e' la
+      riga intera ri-mappata, quindi il grid riceve gia' l'etichetta aggiornata (`operator` = nome)
+      senza doverla ricostruire lato client e senza refetch.
+    </d>
+
+    <d id="D-4" title="`next_callback_at` entra nel catalogo permessi di request-management">
+      Si aggiunge la `FieldDefinition` mancante per `next_callback_at` in
+      `RequestManagementAuthorization` (con il relativo ceiling), perche' oggi il campo e' scrivibile
+      dal pannello ma invisibile al sistema di permessi per-campo. E' una lacuna del catalogo, non
+      una concessione nuova: senza, la regola D-3 di 0053 lo tiene giustamente spento.
+      La scrittura passa da `RequestManagementService::updateWork()` (override `updateCell`), MAI da
+      un `$row->update()` diretto: l'invariante D-4 della spec 0052 (`next_callback_reminded_at`
+      torna NULL quando `next_callback_at` CAMBIA, e solo allora) vive li' dentro e non va aggirata.
+    </d>
+
+    <d id="D-5" title="Nota obbligatoria: regola NUOVA, attivata in UN SOLO punto per entrambi i canali">
+      SCOPERTA IN CORSO D'OPERA (verificata con grep su tutto `backend/app` e `backend/tests`):
+      `requires_note` OGGI NON E' APPLICATO DA NESSUNA PARTE. Il campo esiste sul model
+      (`#[Fillable]`, cast bool) ed e' esposto in lettura dalle Resource, ma nessun punto del
+      codice lo consuma: ne' `UpdateRequestRequest`, ne' `ValidatesWorkflowStatus` (che controlla
+      SOLO l'appartenenza al set di workflow), ne' `RequestManagementService::updateWork()`.
+      Gli unici altri hit sono il CRUD DEGLI STATI, dove il flag si IMPOSTA. E' quindi un
+      interruttore scollegato, e la spec 0054 non puo' "riusare" una regola che non esiste.
+
+      DECISIONE UTENTE (AskUserQuestion 2026-07-22): la regola si ATTIVA ORA, e vale per TUTTI i
+      canali di scrittura, non solo per la griglia. Implementata in UN SOLO punto:
+      `RequestManagementService::updateWork()`, che e' il choke point attraversato SIA dal pannello
+      di lavorazione SIA dall'inline edit (che ci arriva via override di `updateCell`, D-4).
+      Un solo punto = i due canali NON POSSONO divergere. Non e' "una seconda regola": e' LA regola,
+      messa dove entrambi i percorsi passano per forza.
+
+      REGOLA: se lo stato di destinazione ha `requires_note = true` e il valore dello stato CAMBIA,
+      la nota e' obbligatoria; assente o vuota -> 422. Se lo stato non cambia, nessuna nota e'
+      richiesta (un PATCH che rimanda lo stesso stato non e' un avanzamento).
+      La nota si crea con il meccanismo esistente delle note collaborative (spec 0052), nella STESSA
+      TRANSAZIONE del cambio stato: se la nota fallisce, lo stato non cambia (AC-010).
+
+      CONSEGUENZA ACCETTATA E DA GESTIRE NELLO STESSO GIRO: il pannello di lavorazione oggi non
+      invia alcuna nota, quindi appena la regola e' attiva i suoi cambi di stato verso uno stato
+      con `requires_note` fallirebbero. Il pannello VA AGGIORNATO nello stesso giro per raccogliere
+      la nota quando lo stato selezionato la richiede. Backend e pannello vanno consegnati insieme:
+      rilasciare solo il backend e' una regressione per gli operatori.
+
+      L'enforcement resta SERVER-SIDE e non negoziabile: la UI (dialog in griglia, campo nel
+      pannello) rende comodo il gesto, non lo autorizza.
+      `note` e' accettato SOLO dove previsto; inviarlo altrove e' 422 (evita che diventi un canale
+      di scrittura laterale su domini che non lo contemplano).
+    </d>
+
+    <d id="D-6" title="Colonne accese in questo giro">
+      - leads: `registry`, `campaign`, `operational_site`, `source`, `operator` (decisione utente:
+        tutte e cinque). ESCLUSE `lead_status` (badge derivato, non scrivibile) e `created_at`.
+      - request-management: Stato di lavorazione (`opportunity_workflow_status_id`) e
+        `next_callback_at`.
+      - Gli altri domini gia' accesi da 0053 restano invariati: nessuna colonna di relazione viene
+        accesa altrove in questo giro, per tenere il blast radius stretto.
+      - `attribute_values` (JSON dinamico di request-management) resta FUORI: non e' una colonna di
+        griglia e non e' un tipo scalare. Va affrontato a se', se servira'.
+    </d>
+
+    <d id="D-7" title="Editor di relazione: un tipo nuovo nel registry, non un caso speciale">
+      Lato frontend si aggiunge la voce `relation` al `CELL_EDITOR_REGISTRY` introdotto da 0053
+      (terzo registry OCP del progetto), implementata come cell editor AG Grid custom in popup che
+      incapsula `AsyncPaginatedSelect` su `/for-select`. Nessun ramo `if (colonna === 'operator')`
+      sparso: il comportamento e' guidato dai metadata della colonna, come per ogni altro tipo.
+    </d>
+  </decisions>
+
+  <contract>
+    <item name="Dichiarazione colonna di relazione (catalogo, backend)">
+      [
+        'id' => 'operator', 'label' => '...', 'type' => 'text',
+        'visible' => true, 'sortable' => true, 'filterable' => true, 'filterType' => 'set',
+        'editable' => true,
+        'editableField' => 'operator_id',            // colonna DB scritta + chiave permesso campo
+        'relation' => ['resource' => 'users'],       // risorsa /for-select che alimenta la tendina
+        'nullable' => true,                          // se la FK ammette null
+      ]
+    </item>
+
+    <item name="GET /api/tables/{domain}/columns — delta">
+      Le colonne di relazione editabili emettono in piu': "editor": "relation" e
+      "relation": { "resource": string }. Nessun'altra chiave cambia. Le colonne gia' editabili da
+      0053 restano byte-identiche (nessun `editor` emesso = editor derivato dal `type`, come oggi).
+      La colonna Stato di lavorazione emette le sue `options` COMPRENSIVE di `requires_note` per
+      opzione, cosi' la UI sa quando aprire il dialog.
+    </item>
+
+    <item name="PATCH /api/tables/{domain}/rows/{row} — delta">
+      Request: { "column": string, "value": string|number|boolean|null, "note"?: string }
+      `note` accettato SOLO dove la colonna lo prevede; altrove -> 422.
+      Risposte 200/403/404/422 invariate rispetto a 0053 (stessa guard chain, stesso envelope).
+      Nuovo caso 422: stato con `requires_note` e nota assente/vuota.
+    </item>
+
+    <item name="Frontend — tipi">
+      TableColumn: + editor?: 'relation'; + relation?: { resource: string }
+      Nuovo cell editor di relazione registrato in CELL_EDITOR_REGISTRY sotto la chiave `relation`.
+      `useTableCellEdit` accetta un `note` opzionale nel payload.
+    </item>
+  </contract>
+
+  <scope>
+    <in>
+      Chiavi `editableField`/`relation` nel catalogo colonne + risoluzione permesso campo su
+      `editableField`. Validazione esistenza/scope del valore. Editor di relazione frontend.
+      Dialog nota + enforcement server. `FieldDefinition` per `next_callback_at`.
+      Accensione colonne di D-6. Test Pest e Vitest. Audit (ereditato da 0053).
+    </in>
+    <out>
+      `attribute_values`. `lead_status` e ogni altra colonna derivata non scrivibile.
+      Relazioni multiple (many-to-many). Creazione al volo di un record dalla tendina
+      (quick-create). Modifica del meccanismo `mandatory` di 0053 (decisione ancora aperta,
+      non si tocca qui). Nessuna dipendenza nuova.
+    </out>
+  </scope>
+
+  <criteria>
+    <ac id="AC-001">Su `leads`, un attore autorizzato modifica inline `operator` scegliendo dalla tendina: 200, `operator_id` aggiornato in DB, risposta con la riga intera e l'etichetta nuova gia' risolta.</ac>
+    <ac id="AC-002">Stessa cosa per `registry`, `campaign`, `operational_site`, `source`: tutte e cinque accese e funzionanti.</ac>
+    <ac id="AC-003">`lead_status` e `created_at` NON sono editabili: PATCH -> 422.</ac>
+    <ac id="AC-004">Permesso per-campo risolto su `editableField`: con `role_field_permissions.editable = false` su `operator_id`, la colonna `operator` esce con `editable: false` nel config e il PATCH -> 403.</ac>
+    <ac id="AC-005">Valore inesistente (id che non esiste) -> 422, nessuna scrittura.</ac>
+    <ac id="AC-006">Valore esistente ma FUORI dalla portata dell'attore (non comparirebbe nel suo `/for-select`) -> 422, nessuna scrittura (D-2).</ac>
+    <ac id="AC-007">`value: null` su FK nullable -> 200 con NULL persistito; su FK non nullable -> 422.</ac>
+    <ac id="AC-008">Su `request-management`, cambio dello Stato di lavorazione verso uno stato SENZA `requires_note`: 200, nessuna nota creata.</ac>
+    <ac id="AC-009">Verso uno stato CON `requires_note` e `note` assente o stringa vuota: 422, stato NON cambiato, nessuna nota creata.</ac>
+    <ac id="AC-010">Verso uno stato CON `requires_note` e `note` valorizzata: 200, stato cambiato E nota creata con lo stesso meccanismo del pannello di lavorazione (stessa entita', stesso autore, stessi permessi). Le due scritture sono atomiche: se la nota fallisce, lo stato non cambia.</ac>
+    <ac id="AC-011">Stato non appartenente al set valido per quell'opportunita' (workflow risolto per criteri, spec 0047) -> 422, riusando la validazione esistente e non una nuova.</ac>
+    <ac id="AC-012">`note` inviato su una colonna che non lo prevede (es. `operator` su leads) -> 422.</ac>
+    <ac id="AC-013">`next_callback_at` modificabile inline su request-management: 200, e l'invariante 0052 D-4 e' rispettata — `next_callback_reminded_at` torna NULL quando il valore CAMBIA, e NON viene azzerato se il valore inviato e' identico a quello presente.</ac>
+    <ac id="AC-014">La scrittura di `next_callback_at` e dello stato passa da `RequestManagementService::updateWork()`, non da un `update()` diretto (verificabile dagli effetti: activity log e invariante di cui sopra).</ac>
+    <ac id="AC-015">Scope per-riga invariato: un operatore non gestore e senza `viewAll` riceve 404 sul PATCH di un record fuori scope, anche per le colonne nuove.</ac>
+    <ac id="AC-016">I test di guardia AC-012/AC-013 di 0053 continuano a passare, estesi per accettare `editableField`: ogni colonna editabile ha una chiave campo reale nel catalogo authorization e una colonna DB reale scrivibile.</ac>
+    <ac id="AC-017">Frontend: una colonna con `editor: 'relation'` apre una tendina con ricerca e paginazione alimentata da `/for-select` della risorsa dichiarata; la selezione invia l'id.</ac>
+    <ac id="AC-018">Frontend: scegliendo uno stato con `requires_note` si apre il dialog della nota; confermando parte UNA sola richiesta con `{column, value, note}`; annullando il dialog la cella torna al valore precedente e non parte nessuna richiesta.</ac>
+    <ac id="AC-019">Frontend: 422 dal server (inclusa la nota mancante) produce revert della cella e toast col messaggio del server, come da 0053.</ac>
+    <ac id="AC-020">Il dialog nota e' accessibile: focus trap del componente Dialog non disabilitato, campo con label, errore annunciato, chiusura con Esc.</ac>
+    <ac id="AC-021">`vendor/bin/pest` verde sul perimetro; `npx vitest run` verde sul perimetro; `tsc --noEmit` pulito; Pint pulito sui file toccati.</ac>
+    <ac id="AC-022">Diff di `composer.json` e `package.json` VUOTO.</ac>
+  </criteria>
+
+</spec>

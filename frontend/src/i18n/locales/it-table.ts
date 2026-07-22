@@ -76,6 +76,23 @@ export const table = {
   bulkDeletePartial:
     '{{deleted}} righe eliminate, {{failed}} non eliminabili.',
   bulkDeleteError: 'Impossibile eliminare le righe selezionate. Riprova.',
+  relationEditor: {
+    placeholder: 'Seleziona…',
+    searchPlaceholder: 'Cerca…',
+    empty: 'Nessun risultato.',
+    error: 'Impossibile caricare le opzioni.',
+    clear: 'Rimuovi',
+    trigger: 'Scegli un valore',
+    retry: 'Riprova',
+  },
+  noteDialog: {
+    title: 'Aggiungi una nota',
+    description: 'Questo stato richiede una nota esplicativa prima di poter essere salvato.',
+    label: 'Nota',
+    required: 'La nota è obbligatoria.',
+    cancel: 'Annulla',
+    confirm: 'Salva',
+  },
   advancedFilters: {
     toggle: 'Filtri avanzati',
     activeCount_one: '{{count}} filtro attivo',

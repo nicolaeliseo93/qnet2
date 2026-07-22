@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  * so the security-critical SSRM engine lives in exactly one place and every
  * domain inherits it identically.
  *
- * @phpstan-type ColumnDefinition array{id: string, label: string, type: string, visible: bool, sortable: bool, filterable: bool, filterType?: string|null, hasFilterValues?: bool, options?: array<int, scalar>|null, badges?: array<int, array<string, mixed>>|null, permission?: string|null, editable?: bool, nullable?: bool, rules?: array<int, mixed>}
+ * @phpstan-type ColumnDefinition array{id: string, label: string, type: string, visible: bool, sortable: bool, filterable: bool, filterType?: string|null, hasFilterValues?: bool, options?: array<int, scalar>|null, badges?: array<int, array<string, mixed>>|null, permission?: string|null, editable?: bool, nullable?: bool, rules?: array<int, mixed>, editableField?: string, relation?: array{resource: string}}
  * @phpstan-type FilterDefinition array{columnId: string, type: string, options?: array<int, scalar>|null, optionsResolver?: callable}
  * @phpstan-type ActionDefinition array{key: string, label: string, icon: string, type: string, confirm: bool, permission?: string|null}
  */
@@ -283,7 +283,10 @@ interface TableDefinition
      * (`role_field_permissions`, via AuthorizationRegistry) all allow it.
      * Fail-safe (D-3): a resource unregistered in config/authorization.php,
      * or a column id with no matching field key in that resource's
-     * catalogue, is never editable — regardless of the declaration.
+     * catalogue, is never editable — regardless of the declaration. For a
+     * RELATION column (spec 0054, D-1: `'editableField' => 'operator_id'`),
+     * that field-key check resolves against `editableField` instead of the
+     * (display) column id — both branches stay fail-safe.
      *
      * Drives the per-column `editable` flag resolveConfig() emits in GET
      * /columns (D-2) — a UI HINT only. The PATCH endpoint never trusts this

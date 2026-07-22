@@ -14,13 +14,12 @@ const buttonVariants = cva(
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
         // Filled rather than transparent: an outline button laid directly on the
         // page body would otherwise take the body's own background and read as
-        // "missing". Rest and hover both stay on the SAME side of the body —
-        // lighter than it in light mode, lighter than it in dark mode too — so
-        // the button never crosses the body's tone as it did when hover fell to
-        // `accent` (84%, below the body's 91%). Hover lifts one step further:
-        // body 91 -> 96 -> 100 in light, body 11 -> 28 -> 33 in dark.
+        // "missing". It carries the raised surface (`--card`) plus the hairline,
+        // so it stands off the body in both themes; hover moves one rung down
+        // the surface scale to `--muted`, which is off the card either way
+        // (88 under the white card in light, 20 over the 14 card in dark).
         outline:
-          "border bg-border shadow-xs hover:bg-card hover:text-accent-foreground dark:border-input dark:hover:bg-field-border",
+          "border bg-card shadow-xs hover:bg-muted hover:text-accent-foreground",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:

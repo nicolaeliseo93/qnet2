@@ -216,6 +216,7 @@ class TableController extends BaseApiController
                 $row,
                 $request->validated('column'),
                 $request->validated('value'),
+                $request->validated('note'),
             );
 
             return $this->ok(new TableRowResource($updated), 'Row updated');

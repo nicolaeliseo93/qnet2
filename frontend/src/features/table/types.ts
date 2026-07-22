@@ -28,6 +28,12 @@ export interface EnumBadge {
   icon: string | null
   is_default?: boolean
   hidden_on_form?: boolean
+  /**
+   * Whether picking this option requires an accompanying note (spec 0054
+   * D-5), e.g. a workflow status that demands an explanation. Absent/`false`
+   * for every option that commits without one.
+   */
+  requires_note?: boolean
 }
 
 /** AG Grid filter type advertised per column in the config catalog. */
@@ -94,6 +100,15 @@ export interface TableColumn {
    * `false`.
    */
   editable?: boolean
+  /**
+   * Overrides the `type`-driven cell editor lookup with a relation picker fed
+   * by `/for-select` (spec 0054 D-7). Present only alongside `relation` on a
+   * column that also declares `editable`; every other editable column keeps
+   * resolving its editor from `type`, unchanged.
+   */
+  editor?: 'relation'
+  /** The `/for-select` resource backing a `relation` editor (spec 0054 D-1). */
+  relation?: { resource: string }
   /**
    * Whether the column supports a Set Filter value list (POST /values). `false`
    * for computed/derived columns without a queryable value list (e.g. a

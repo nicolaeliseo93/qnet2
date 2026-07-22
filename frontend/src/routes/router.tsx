@@ -5,7 +5,6 @@ import { ProtectedRoute } from '@/routes/protected-route'
 import { AppLayout } from '@/layouts/app-layout'
 import { MigrationRouteGuard } from '@/features/migrations/migration-route-guard'
 import { buildModuleRoutes } from '@/features/modules/module-routes'
-import ModuleDetailPage from '@/features/modules/module-detail-page'
 
 const LoginPage = lazy(() => import('@/pages/login-page'))
 const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password-page'))
@@ -42,6 +41,7 @@ const OpportunitiesPage = lazy(() => import('@/pages/opportunities-page'))
 const OpportunityStatusesPage = lazy(() => import('@/pages/opportunity-statuses-page'))
 const OpportunityWorkflowsPage = lazy(() => import('@/pages/opportunity-workflows-page'))
 const RequestManagementPage = lazy(() => import('@/pages/request-management-page'))
+const RequestManagementDetailPage = lazy(() => import('@/pages/request-management-detail-page'))
 const LeadImportPage = lazy(() => import('@/pages/lead-import-page'))
 const LeadImportHistoryPage = lazy(() => import('@/pages/lead-import-history-page'))
 const LeadImportDetailPage = lazy(() => import('@/pages/lead-import-detail-page'))
@@ -215,7 +215,7 @@ export const router = createBrowserRouter([
           // hand instead, same as every module not (yet) in the registry.
           {
             path: 'request-management/:id',
-            element: <ModuleDetailPage domain="request-management" />,
+            element: <RequestManagementDetailPage />,
           },
           // Deep-link routes (`new`/`:id`/`:id/edit`) of every registered
           // module — projects/campaigns/leads/opportunities in Wave 0 — are

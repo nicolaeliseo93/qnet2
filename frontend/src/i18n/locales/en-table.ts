@@ -76,6 +76,23 @@ export const table = {
   bulkDeletePartial:
     '{{deleted}} rows deleted, {{failed}} could not be deleted.',
   bulkDeleteError: 'Unable to delete the selected rows. Please try again.',
+  relationEditor: {
+    placeholder: 'Select…',
+    searchPlaceholder: 'Search…',
+    empty: 'No results.',
+    error: 'Unable to load the options.',
+    clear: 'Clear',
+    trigger: 'Pick a value',
+    retry: 'Retry',
+  },
+  noteDialog: {
+    title: 'Add a note',
+    description: 'This status requires an explanatory note before it can be saved.',
+    label: 'Note',
+    required: 'A note is required.',
+    cancel: 'Cancel',
+    confirm: 'Save',
+  },
   advancedFilters: {
     toggle: 'Advanced filters',
     activeCount_one: '{{count}} active filter',

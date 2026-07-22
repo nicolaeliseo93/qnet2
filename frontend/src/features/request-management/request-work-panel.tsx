@@ -1,22 +1,19 @@
 import { useTranslation } from 'react-i18next'
-import { History, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Form } from '@/components/ui/form'
-import { FormSection } from '@/components/form-section'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
-import { ActivityLogSection } from '@/features/activity-log/activity-log-section'
 import { ResourcePermissionsProvider, useResourcePermissions } from '@/features/authorization/permissions'
-import { NotesSection } from '@/features/notes/notes-section'
 import { fetchRequestWorkPanel } from '@/features/request-management/api'
 import { requestManagementKeys } from '@/features/request-management/query-keys'
 import { RequestCallbackSection } from '@/features/request-management/request-callback-section'
 import { RequestClientSection } from '@/features/request-management/request-client-section'
 import { RequestDynamicFields } from '@/features/request-management/request-dynamic-fields'
-import { RequestWorkContext } from '@/features/request-management/request-work-context'
+import { RequestWorkCollaboration } from '@/features/request-management/request-work-collaboration'
+import { RequestWorkHeader } from '@/features/request-management/request-work-header'
+import { RequestWorkSummary } from '@/features/request-management/request-work-summary'
 import { RequestWorkflowStatusField } from '@/features/request-management/request-workflow-status-field'
 import { useRequestWorkForm } from '@/features/request-management/use-request-work-form'
-import { REQUEST_MANAGEMENT_DOMAIN } from '@/features/request-management/types'
 import type { RequestWorkPanelWithPermissions } from '@/features/request-management/types'
 
 /**
@@ -28,33 +25,47 @@ import type { RequestWorkPanelWithPermissions } from '@/features/request-managem
  */
 const REQUEST_WORK_FORM_ID = 'request-work-form'
 
+/**
+ * The panel is mounted both in its dedicated page and in a Sheet, so the
+ * two-column split must react to the CONTAINER width, not the viewport:
+ * `@container` + `@4xl:` (56rem) instead of `lg:`/`xl:`. Below that width the
+ * whole panel collapses to a single column.
+ */
+const PANEL_GRID_CLASS = 'grid items-start gap-4 p-4 @4xl:grid-cols-[minmax(0,1fr)_20rem]'
+
+/** Clears the sticky header (`py-3` around a badge row) so the side column never scrolls under it. */
+const SIDE_COLUMN_CLASS = 'min-w-0 @4xl:sticky @4xl:top-16 @4xl:order-2'
+
 /** Props shape matches the module registry's `ModuleDetailScreenProps` (spec 0042), so this mounts as-is as the module's `DetailScreen`. */
 interface RequestWorkPanelScreenProps {
   id: number
 }
 
-/** Loading placeholder mirroring the panel's real section layout (spec 0049, mirrors `OpportunityFormSkeleton`). */
+/** Loading placeholder mirroring the panel's real layout: identity bar + two-column body. */
 export function RequestWorkPanelSkeleton() {
   return (
-    <div className="flex flex-col gap-4 p-4" aria-hidden="true">
-      {[0, 1, 2, 3].map((section) => (
-        <div key={section} className="rounded-xl border bg-card shadow-sm">
-          <div className="flex items-center gap-3 border-b px-4 py-3.5">
-            <Skeleton className="size-9 rounded-lg" />
-            <div className="flex flex-col gap-1.5">
+    <div className="@container flex flex-1 flex-col bg-surface" aria-hidden="true">
+      <div className="flex items-center gap-3 border-b bg-card px-4 py-3">
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="ml-auto h-8 w-20" />
+      </div>
+      <div className={PANEL_GRID_CLASS}>
+        <div className="flex min-w-0 flex-col gap-4 @4xl:order-1">
+          {[0, 1, 2].map((section) => (
+            <div key={section} className="rounded-xl border bg-card p-4 shadow-sm">
               <Skeleton className="h-3.5 w-40" />
-              <Skeleton className="h-3 w-56" />
+              <Skeleton className="mt-4 h-9 w-full" />
             </div>
-          </div>
-          <div className="flex flex-col gap-4 p-4">
-            <Skeleton className="h-9 w-full" />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-            </div>
+          ))}
+        </div>
+        <div className={SIDE_COLUMN_CLASS}>
+          <div className="rounded-xl border bg-card p-4 shadow-sm">
+            <Skeleton className="h-3.5 w-32" />
+            <Skeleton className="mt-4 h-24 w-full" />
           </div>
         </div>
-      ))}
+      </div>
     </div>
   )
 }
@@ -104,75 +115,65 @@ interface RequestWorkPanelBodyProps {
 }
 
 function RequestWorkPanelBody({ panel }: RequestWorkPanelBodyProps) {
-  const { t } = useTranslation()
   const { canAction, canResource } = useResourcePermissions()
   const canUpdate = canResource('update')
   const canViewActivity = canAction('view_activity')
   const { form, onSubmit, serverError, isSubmitting } = useRequestWorkForm(panel)
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="flex flex-col gap-4 p-4">
-        <Form {...form}>
-          {/* `display: contents`: this native `<form>` only scopes the HTML submit
-              boundary, it must not become an extra flex box in the stack below. */}
-          {/* Section order = the operator's data-entry order: who the client
-              is (anagrafica), what the request needs (dynamic fields), how the
-              work is tracked (callback + working state). The read-only
-              commercial context sits above as a compact header. */}
-          <form id={REQUEST_WORK_FORM_ID} onSubmit={onSubmit} className="contents" noValidate>
-            <RequestWorkContext panel={panel} />
+    <div className="@container flex flex-1 flex-col overflow-y-auto bg-surface">
+      <RequestWorkHeader
+        panel={panel}
+        canUpdate={canUpdate}
+        formId={REQUEST_WORK_FORM_ID}
+        isSubmitting={isSubmitting}
+        isDirty={form.formState.isDirty}
+      />
 
-            <RequestClientSection control={form.control} />
+      <div className={PANEL_GRID_CLASS}>
+        {/* Read-only commercial context: first in the DOM so a narrow container
+            reads it before the form, reordered to the right on two columns. */}
+        <aside className={SIDE_COLUMN_CLASS}>
+          <RequestWorkSummary panel={panel} />
+        </aside>
 
-            <RequestDynamicFields control={form.control} attributes={panel.applicable_attributes} />
+        {/* Its own `@container`: the sections below split on the width of THIS
+            column, not of the whole panel. */}
+        <div className="@container flex min-w-0 flex-col gap-4 @4xl:order-1">
+          <Form {...form}>
+            {/* `display: contents`: this native `<form>` only scopes the HTML submit
+                boundary, it must not become an extra flex box in the stack below. */}
+            {/* Section order = the operator's working order: the working state and
+                the next callback first (the levers acted on at every touch), then
+                what the request needs (dynamic fields), then the client's data. */}
+            <form id={REQUEST_WORK_FORM_ID} onSubmit={onSubmit} className="contents" noValidate>
+              <div className="grid min-w-0 items-start gap-4 @2xl:grid-cols-2">
+                <RequestWorkflowStatusField control={form.control} statuses={panel.workflow_statuses} />
 
-            <RequestCallbackSection control={form.control} />
+                <RequestCallbackSection control={form.control} />
+              </div>
 
-            <RequestWorkflowStatusField control={form.control} statuses={panel.workflow_statuses} />
-          </form>
-        </Form>
+              <RequestDynamicFields control={form.control} attributes={panel.applicable_attributes} />
 
-        {/* Own authorization (spec 0052 D-6): shown to any actor who can read the
-            record, independent of `canUpdate`. Its composer has its own native
-            `<form>`, so it cannot nest inside the one above (see REQUEST_WORK_FORM_ID). */}
-        <NotesSection entityType={REQUEST_MANAGEMENT_DOMAIN} entityId={panel.id} />
+              <RequestClientSection control={form.control} />
+            </form>
+          </Form>
 
-        {/* Read-only history of everything the panel writes — the request's own
-            operative changes, the notes, the uploaded documents and the client
-            anagraphic block — gated by the server-derived `view_activity`
-            action, collapsed by default so it never pushes the work above it
-            out of view. */}
-        {canViewActivity && (
-          <FormSection
-            icon={History}
-            title={t('activityLog.title')}
-            collapsible
-            defaultOpen={false}
-          >
-            <ActivityLogSection resource={REQUEST_MANAGEMENT_DOMAIN} id={panel.id} />
-          </FormSection>
-        )}
+          {serverError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm font-medium text-destructive"
+            >
+              {serverError}
+            </div>
+          )}
 
-        {serverError && (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm font-medium text-destructive"
-          >
-            {serverError}
-          </div>
-        )}
-
-        {canUpdate && (
-          <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <Button type="submit" form={REQUEST_WORK_FORM_ID} disabled={isSubmitting || !form.formState.isDirty}>
-              {isSubmitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-              {isSubmitting
-                ? t('requestManagement.workPanel.saving', { defaultValue: 'Saving…' })
-                : t('requestManagement.workPanel.save', { defaultValue: 'Save' })}
-            </Button>
-          </div>
-        )}
+          {/* Notes/documents/history: own authorization (spec 0052 D-6), shown to
+              any actor who can read the record. The notes composer has its own
+              native `<form>`, so it cannot nest inside the one above (see
+              REQUEST_WORK_FORM_ID). */}
+          <RequestWorkCollaboration panel={panel} canViewActivity={canViewActivity} />
+        </div>
       </div>
     </div>
   )

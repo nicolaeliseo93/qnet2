@@ -44,6 +44,22 @@ vi.mock('@/features/personal-data/contact-form', () => ({
   ),
 }))
 
+// The panel now hosts the collaboration card, which reads the actor's client
+// abilities to gate its Documents tab: stub them, this suite has no AuthProvider.
+vi.mock('@/features/auth/use-abilities', () => ({
+  useAbilities: () => ({ can: () => true, hasRole: () => false, roles: [], isLoading: false }),
+}))
+
+// Stubs the timeline (its own behavior has its own suite) so the history tab can
+// be opened without the activity-log query.
+const activityLogSectionMock = vi.fn()
+vi.mock('@/features/activity-log/activity-log-section', () => ({
+  ActivityLogSection: (props: { resource: string; id: number }) => {
+    activityLogSectionMock(props)
+    return <div>{`activity-log:${props.resource}:${props.id}`}</div>
+  },
+}))
+
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const FULL_PERMISSIONS = {
@@ -148,6 +164,7 @@ beforeEach(() => {
   createContactMock.mockReset()
   updateContactMock.mockReset()
   deleteContactMock.mockReset()
+  activityLogSectionMock.mockReset()
 })
 
 describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
@@ -361,8 +378,8 @@ describe('RequestWorkPanelScreen — bounded controls (spec 0049 AC-063)', () =>
       expect(screen.getByRole('textbox', { name: 'Notes' })).toBeInTheDocument(),
     )
 
-    // The collaborative notes section renders its own "Notes" heading, so the
-    // bare text query is ambiguous: keep the one that is a field label.
+    // The collaboration card renders its own "Notes" tab, so the bare text
+    // query is ambiguous: keep the one that is a field label.
     const label = screen
       .getAllByText('Notes')
       .map((node) => node.closest('label'))
@@ -373,20 +390,29 @@ describe('RequestWorkPanelScreen — bounded controls (spec 0049 AC-063)', () =>
   })
 })
 
-describe('RequestWorkPanelScreen — activity log section (spec 0049 D-7 amended)', () => {
-  it('mounts the collapsed activity section when the actor holds view_activity', async () => {
+describe('RequestWorkPanelScreen — activity log tab (spec 0049 D-7 amended)', () => {
+  it('offers the history tab when the actor holds view_activity, mounting the timeline only once selected', async () => {
     fetchRequestWorkPanelMock.mockResolvedValue(
       panel({ permissions: { ...FULL_PERMISSIONS, actions: { view_activity: true } } }),
     )
 
     renderPanel()
 
-    const header = await screen.findByRole('button', { name: /Activity log/ })
-    // Collapsed by default: the timeline itself is not mounted until asked for.
-    expect(header).toHaveAttribute('aria-expanded', 'false')
+    const tab = await screen.findByRole('tab', { name: 'History' })
+    // Notes is the default surface: the timeline is not mounted until asked for.
+    expect(tab).toHaveAttribute('aria-selected', 'false')
+    expect(activityLogSectionMock).not.toHaveBeenCalled()
+
+    // Radix `TabsTrigger` activates on `mouseDown`, not `click`.
+    fireEvent.mouseDown(tab)
+
+    expect(await screen.findByText('activity-log:request-management:1')).toBeInTheDocument()
+    expect(activityLogSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ resource: 'request-management', id: 1 }),
+    )
   })
 
-  it('hides the activity section when the action is denied', async () => {
+  it('hides the history tab when the action is denied', async () => {
     fetchRequestWorkPanelMock.mockResolvedValue(
       panel({ permissions: { ...FULL_PERMISSIONS, actions: { view_activity: false } } }),
     )
@@ -394,6 +420,6 @@ describe('RequestWorkPanelScreen — activity log section (spec 0049 D-7 amended
     renderPanel()
 
     await waitFor(() => expect(screen.getByText('Enterprise deal')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: /Activity log/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument()
   })
 })

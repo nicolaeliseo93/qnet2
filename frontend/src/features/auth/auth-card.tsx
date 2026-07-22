@@ -17,7 +17,7 @@ interface AuthCardProps {
 /** Centered card shell shared by the public authentication screens. */
 export function AuthCard({ title, description, children }: AuthCardProps) {
   return (
-    <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
+    <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <div className="flex w-full max-w-sm flex-col gap-4">
         <AppBreadcrumbs />
         <Card>

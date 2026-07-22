@@ -1,18 +1,28 @@
 /**
- * Per-`ColumnType` inline cell editor (spec 0053): the seam mapping a backend
- * column type to the AG Grid Enterprise editor it commits through. Same OCP
- * pattern as `CUSTOM_FIELD_COMPONENT_REGISTRY` and
- * `ADVANCED_FILTER_FIELD_REGISTRY` — adding a new `ColumnType` means one new
- * entry here, nothing else. Every editor listed ships with `AllEnterpriseModule`
- * (already registered, `ag-grid-setup.ts`): no new dependency.
+ * Per-`ColumnType` inline cell editor (spec 0053), extended with a `relation`
+ * kind orthogonal to `type` (spec 0054 D-7): the seam mapping a backend
+ * column to the AG Grid editor it commits through. Same OCP pattern as
+ * `CUSTOM_FIELD_COMPONENT_REGISTRY` and `ADVANCED_FILTER_FIELD_REGISTRY` —
+ * adding a new kind means one new entry here, nothing else. Every built-in
+ * editor listed ships with `AllEnterpriseModule` (already registered,
+ * `ag-grid-setup.ts`); `relation` is this repo's own component — no new
+ * dependency either way.
  */
+import type { ComponentType } from 'react'
+import type { CustomCellEditorProps } from 'ag-grid-react'
 import { enumLabelOf } from '@/features/config/enum-label'
+import { RelationCellEditor } from '@/components/data-table/relation-cell-editor'
 import type { ColumnType, TableColumn } from '@/features/table/types'
 
-/** cellEditor name + optional per-column params, resolved once per colDef. */
+/** The lookup key: a column's declared `editor` when present, else its `type` (spec 0054 D-1). */
+export type CellEditorKind = ColumnType | 'relation'
+
+/** cellEditor (a built-in name, or a custom React component) + optional per-column params, resolved once per colDef. */
 export interface CellEditorSpec {
-  cellEditor: string
+  cellEditor: string | ComponentType<CustomCellEditorProps>
   cellEditorParams?: (column: TableColumn) => Record<string, unknown>
+  /** Renders the editor in AG Grid's popup layer instead of clipped to the cell (spec 0054 D-7). */
+  cellEditorPopup?: boolean
 }
 
 /** Localizes an enum/badge/tags option value the same way `BadgeCell` does. */
@@ -33,7 +43,7 @@ function richSelectParams(column: TableColumn, multiSelect: boolean): Record<str
   }
 }
 
-export const CELL_EDITOR_REGISTRY: Record<ColumnType, CellEditorSpec> = {
+export const CELL_EDITOR_REGISTRY: Record<CellEditorKind, CellEditorSpec> = {
   text: { cellEditor: 'agTextCellEditor' },
   number: { cellEditor: 'agNumberCellEditor' },
   // AG Grid ships no datetime-local editor; the raw string is edited as plain
@@ -44,15 +54,24 @@ export const CELL_EDITOR_REGISTRY: Record<ColumnType, CellEditorSpec> = {
   enum: { cellEditor: 'agRichSelectCellEditor', cellEditorParams: (column) => richSelectParams(column, false) },
   badge: { cellEditor: 'agRichSelectCellEditor', cellEditorParams: (column) => richSelectParams(column, false) },
   tags: { cellEditor: 'agRichSelectCellEditor', cellEditorParams: (column) => richSelectParams(column, true) },
+  relation: {
+    // AG Grid itself types `ColDef.cellEditor` as `any` (the shape differs by
+    // wrapper/framework); this cast is the same interop boundary, confined to
+    // this one registration. The component's extra `resource` prop arrives
+    // dynamically via `cellEditorParams` below.
+    cellEditor: RelationCellEditor as ComponentType<CustomCellEditorProps>,
+    cellEditorParams: (column) => ({ resource: column.relation?.resource ?? '' }),
+    cellEditorPopup: true,
+  },
 }
 
 /**
- * Defensive lookup (AC-023): `column.type` arrives as backend JSON, not a
- * compile-time-checked union, so a type the frontend does not (yet) know
+ * Defensive lookup (AC-023): the resolved kind arrives from backend JSON, not
+ * a compile-time-checked union, so a kind the frontend does not (yet) know
  * about must resolve to "no editor" instead of indexing past the registry.
  */
-export function resolveCellEditorSpec(type: ColumnType): CellEditorSpec | undefined {
-  return Object.prototype.hasOwnProperty.call(CELL_EDITOR_REGISTRY, type)
-    ? CELL_EDITOR_REGISTRY[type]
+export function resolveCellEditorSpec(kind: CellEditorKind): CellEditorSpec | undefined {
+  return Object.prototype.hasOwnProperty.call(CELL_EDITOR_REGISTRY, kind)
+    ? CELL_EDITOR_REGISTRY[kind]
     : undefined
 }

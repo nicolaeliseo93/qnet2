@@ -1,0 +1,99 @@
+import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { CalendarClock, Loader2 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { WorkflowStatusSwatch } from '@/features/request-management/request-workflow-status-field'
+import type { RequestWorkPanel } from '@/features/request-management/types'
+
+interface RequestWorkHeaderProps {
+  panel: RequestWorkPanel
+  canUpdate: boolean
+  /** id of the RHF `<form>` the Save button attaches to via the HTML `form=` attribute. */
+  formId: string
+  isSubmitting: boolean
+  isDirty: boolean
+}
+
+/** Formats the `Y-m-d\TH:i` callback for display, `null` when missing/unparsable. */
+function formatDateTime(value: string | null): string | null {
+  if (!value) {
+    return null
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleString()
+}
+
+/** A compact status pill: micro-label + swatch + name, so state never reads from color alone. */
+function StatusBadge({ label, color, children }: { label: string; color: string | null; children: ReactNode }) {
+  return (
+    <Badge variant="secondary" className="h-5 min-h-5 max-w-full gap-1.5">
+      <span className="text-muted-foreground">{label}</span>
+      <WorkflowStatusSwatch color={color} />
+      <span className="truncate">{children}</span>
+    </Badge>
+  )
+}
+
+/**
+ * Identity bar of the work panel: who the record is, its two statuses and the
+ * scheduled callback on the left, the page's ONLY save action on the right.
+ * Sticky so the primary action stays reachable while the operator scrolls the
+ * long editable form below; the button submits the form by id, keeping this
+ * component free of any form state.
+ */
+export function RequestWorkHeader({ panel, canUpdate, formId, isSubmitting, isDirty }: RequestWorkHeaderProps) {
+  const { t } = useTranslation()
+  const nextCallback = formatDateTime(panel.next_callback_at)
+
+  return (
+    <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+        <h1 className="min-w-0 max-w-full truncate text-base font-semibold">{panel.name}</h1>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{panel.id}</span>
+
+        {panel.opportunity_status && (
+          <StatusBadge
+            label={t('requestManagement.workPanel.header.salesStatus', { defaultValue: 'Sales' })}
+            color={panel.opportunity_status.color}
+          >
+            {panel.opportunity_status.name}
+          </StatusBadge>
+        )}
+        {panel.workflow_status && (
+          <StatusBadge
+            label={t('requestManagement.workPanel.header.workingStatus', { defaultValue: 'Working' })}
+            color={panel.workflow_status.color}
+          >
+            {panel.workflow_status.name}
+          </StatusBadge>
+        )}
+        {nextCallback && (
+          <Badge variant="outline" className="h-5 min-h-5 max-w-full gap-1.5">
+            <CalendarClock className="size-3" aria-hidden="true" />
+            <span className="text-muted-foreground">
+              {t('requestManagement.workPanel.header.nextCallback', { defaultValue: 'Next callback' })}
+            </span>
+            <span className="truncate">{nextCallback}</span>
+          </Badge>
+        )}
+      </div>
+
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {isDirty && (
+          <span className="text-xs text-muted-foreground">
+            {t('requestManagement.workPanel.header.unsavedChanges', { defaultValue: 'Unsaved changes' })}
+          </span>
+        )}
+        {canUpdate && (
+          <Button type="submit" form={formId} disabled={isSubmitting || !isDirty}>
+            {isSubmitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {isSubmitting
+              ? t('requestManagement.workPanel.saving')
+              : t('requestManagement.workPanel.save')}
+          </Button>
+        )}
+      </div>
+    </header>
+  )
+}

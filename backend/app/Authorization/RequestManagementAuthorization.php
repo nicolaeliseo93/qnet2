@@ -13,11 +13,12 @@ use Illuminate\Database\Eloquent\Model;
  * The module has no dedicated model (it operates on Opportunity, D-1): the
  * abstract's contract only needs a resource key + field/action catalogue, no
  * Eloquent class, so this mirrors the smallest existing authorizations
- * (VatRatesAuthorization) with the two operative fields the work panel
- * writes (D-4/D-5) — visible+editable when the actor may write, else
- * read-only. Neither field is mandatory-restrictive (spec 0049, meta
- * endpoint contract): the panel never blocks on a missing value here, the
- * dedicated 422 rules live in AttributeValueValidator/ValidatesWorkflowStatus.
+ * (VatRatesAuthorization) with the operative fields the work panel writes
+ * (D-4/D-5, `next_callback_at` added by spec 0054 D-4) — visible+editable
+ * when the actor may write, else read-only. None of the 3 is
+ * mandatory-restrictive (spec 0049, meta endpoint contract): the panel never
+ * blocks on a missing value here, the dedicated 422 rules live in
+ * AttributeValueValidator/ValidatesWorkflowStatus.
  */
 class RequestManagementAuthorization extends AbstractResourceAuthorization
 {
@@ -39,6 +40,12 @@ class RequestManagementAuthorization extends AbstractResourceAuthorization
         return [
             new FieldDefinition('opportunity_workflow_status_id', 'select'),
             new FieldDefinition('attribute_values', 'custom'),
+            // Spec 0054, D-4: written exclusively by
+            // RequestManagementService::updateWork() (never mass-assigned —
+            // Opportunity::$fillable deliberately excludes it, spec 0052
+            // D-2); this catalogue entry only closes a gap in the per-field
+            // permission system, it grants nothing new.
+            new FieldDefinition('next_callback_at', 'date'),
         ];
     }
 
@@ -60,6 +67,7 @@ class RequestManagementAuthorization extends AbstractResourceAuthorization
         return [
             'opportunity_workflow_status_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'attribute_values' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'next_callback_at' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
         ];
     }
 

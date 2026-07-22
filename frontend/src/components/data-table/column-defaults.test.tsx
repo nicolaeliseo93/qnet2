@@ -8,6 +8,7 @@ import {
   resolveEditableColumnProps,
   type CellRenderer,
 } from '@/components/data-table/column-defaults'
+import { RelationCellEditor } from '@/components/data-table/relation-cell-editor'
 import type { ColumnType, EnumBadge, TableColumn, TableRow } from '@/features/table/types'
 
 /** Minimal TableColumn stub; only the fields under test matter. */
@@ -167,5 +168,31 @@ describe('resolveEditableColumnProps (spec 0053)', () => {
     expect(editableFn(editableParams({ id: 1, actions: [], editable: false }))).toBe(false)
     expect(editableFn(editableParams({ id: 1, actions: [] }))).toBe(false)
     expect(editableFn(editableParams(undefined))).toBe(false)
+  })
+})
+
+describe('resolveEditableColumnProps — relation columns (spec 0054 D-7)', () => {
+  it('dispatches to the relation editor when `editor: "relation"` is declared, overriding `type`', () => {
+    const column = stubColumn({
+      id: 'operator',
+      type: 'text',
+      editable: true,
+      editor: 'relation',
+      relation: { resource: 'users' },
+    })
+    const props = resolveEditableColumnProps(column)
+    expect(props.cellEditor).toBe(RelationCellEditor)
+    expect(props.cellEditorPopup).toBe(true)
+    expect(props.cellEditorParams).toEqual({ resource: 'users' })
+  })
+
+  it('stays read-only when `editor: "relation"` is declared without its target resource (malformed metadata)', () => {
+    const column = stubColumn({ id: 'operator', type: 'text', editable: true, editor: 'relation' })
+    expect(resolveEditableColumnProps(column)).toEqual({ editable: false })
+  })
+
+  it('a plain scalar column (no `editor`) is unaffected and still resolves from `type`', () => {
+    const column = stubColumn({ id: 'name', type: 'text', editable: true })
+    expect(resolveEditableColumnProps(column).cellEditor).toBe('agTextCellEditor')
   })
 })

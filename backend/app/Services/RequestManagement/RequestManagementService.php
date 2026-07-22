@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\RequestManagement;
 
+use App\DataObjects\Notes\CreateNoteData;
 use App\DataObjects\PersonalData\CreatePersonalData;
 use App\DataObjects\Users\AddressInput;
 use App\DataObjects\Users\ContactInput;
@@ -14,7 +15,9 @@ use App\RequestManagement\ApplicableAttribute;
 use App\RequestManagement\ApplicableAttributesResolver;
 use App\RequestManagement\AttributeValueNormalizer;
 use App\RequestManagement\AttributeValueValidator;
+use App\Services\Notes\NoteService;
 use App\Services\Opportunities\OpportunityWorkflowResolver;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -43,9 +46,22 @@ use Illuminate\Validation\ValidationException;
  * automatic log would have produced, so GET /api/activity-log/request-
  * management/{id} (reading the Opportunity's own activity rows, D-7) still
  * sees the operative change (AC-043).
+ *
+ * Spec 0054, D-5: this is the ONE choke point for the working-status
+ * advance, reached BOTH by the work panel (UpdateRequestRequest) and by the
+ * inline-edit engine (RequestManagementTableDefinition::updateCell()) — a
+ * status requiring a note (`requires_note`) enforces it HERE, so the two
+ * write channels can never diverge on the rule.
  */
 final class RequestManagementService
 {
+    /**
+     * The `notes.notable_types` slug this module registers itself under
+     * (config/notes.php) — the same entity a status-change note attaches to
+     * as the collaborative-notes dialog would (spec 0052/0054 D-5).
+     */
+    private const string NOTE_ENTITY_TYPE = 'request-management';
+
     /**
      * Relations the work panel needs, eager-loaded in one shot (N+1-free):
      * contacts hang off each side's PersonalData card (HasPersonalData ->
@@ -76,6 +92,7 @@ final class RequestManagementService
         private readonly AttributeValueNormalizer $attributeValueNormalizer,
         private readonly OpportunityWorkflowResolver $workflowResolver,
         private readonly RequestClientProfileWriter $clientProfileWriter,
+        private readonly NoteService $noteService,
     ) {}
 
     /**
@@ -97,7 +114,7 @@ final class RequestManagementService
      * submitted keys change) and returns the SAME work-panel shape as
      * loadWorkPanel(), post-save.
      *
-     * @param  array{opportunity_workflow_status_id?: int|null, attribute_values?: array<string, mixed>, next_callback_at?: string|null, client_identity?: CreatePersonalData, client_contacts?: array<int, ContactInput>, client_address?: AddressInput}  $data
+     * @param  array{opportunity_workflow_status_id?: int|null, note?: string|null, attribute_values?: array<string, mixed>, next_callback_at?: string|null, client_identity?: CreatePersonalData, client_contacts?: array<int, ContactInput>, client_address?: AddressInput}  $data
      * @return array{opportunity: Opportunity, applicable_attributes: Collection<int, ApplicableAttribute>, workflow_statuses: Collection<int, OpportunityWorkflowStatus>}
      */
     public function updateWork(Opportunity $opportunity, User $actor, array $data): array
@@ -106,10 +123,11 @@ final class RequestManagementService
             $changed = [];
             $old = [];
 
-            // Step 1: working-state advance — membership in the resolved set
-            // already enforced request-side (ValidatesWorkflowStatus).
+            // Step 1: working-state advance — set-membership (AC-011) and the
+            // mandatory-note rule (spec 0054, D-5) both enforced HERE, the one
+            // choke point both write channels pass through.
             if (array_key_exists('opportunity_workflow_status_id', $data) && $data['opportunity_workflow_status_id'] !== null) {
-                $this->applyWorkflowStatus($opportunity, (int) $data['opportunity_workflow_status_id'], $changed, $old);
+                $this->applyWorkflowStatus($opportunity, (int) $data['opportunity_workflow_status_id'], $actor, $data['note'] ?? null, $changed, $old);
             }
 
             // Step 2: dynamic field values — validate against the CURRENT
@@ -171,18 +189,69 @@ final class RequestManagementService
     /**
      * @param  array<string, mixed>  $changed
      * @param  array<string, mixed>  $old
+     *
+     * @throws ValidationException the target status is outside the resolved workflow (AC-011), or it `requires_note` and none was given (spec 0054, D-5)
+     * @throws AuthorizationException the actor cannot create the note (D-5)
      */
-    private function applyWorkflowStatus(Opportunity $opportunity, int $newStatusId, array &$changed, array &$old): void
+    private function applyWorkflowStatus(Opportunity $opportunity, int $newStatusId, User $actor, ?string $note, array &$changed, array &$old): void
     {
         $currentStatusId = $opportunity->opportunity_workflow_status_id;
 
         if ($currentStatusId === $newStatusId) {
-            return;
+            return; // resending the current status is not an advance (mirrors D-4's callback-instant comparison): no note requirement either.
+        }
+
+        // AC-011: the same resolved-workflow membership ValidatesWorkflowStatus
+        // already enforces for the panel channel — re-checked here so the
+        // inline-edit channel (which never goes through that FormRequest)
+        // gets the identical guarantee, never a second/different rule.
+        $allowedIds = $this->workflowResolver->statusesFor($this->workflowResolver->resolve($opportunity))->pluck('id');
+
+        if (! $allowedIds->contains($newStatusId)) {
+            throw ValidationException::withMessages([
+                'opportunity_workflow_status_id' => ["The selected working status does not belong to the opportunity's resolved workflow."],
+            ]);
+        }
+
+        // Spec 0054, D-5: a genuine advance to a `requires_note` status
+        // demands one; the note itself is created via the SAME collaborative-
+        // notes mechanism the dialog uses (spec 0052), inside THIS
+        // transaction, so a note failure rolls back the status change too
+        // (AC-010).
+        $targetStatus = OpportunityWorkflowStatus::query()->findOrFail($newStatusId);
+
+        if ($targetStatus->requires_note) {
+            $this->createStatusChangeNote($opportunity, $actor, $note);
         }
 
         $old['opportunity_workflow_status_id'] = $currentStatusId;
         $opportunity->opportunity_workflow_status_id = $newStatusId;
         $changed['opportunity_workflow_status_id'] = $newStatusId;
+    }
+
+    /**
+     * @throws ValidationException $note is missing/blank (AC-009)
+     * @throws AuthorizationException the actor lacks `notes.create` (mirrors NoteController::store())
+     */
+    private function createStatusChangeNote(Opportunity $opportunity, User $actor, ?string $note): void
+    {
+        if ($note === null || trim($note) === '') {
+            throw ValidationException::withMessages([
+                'note' => ['A note is required when moving to this working status.'],
+            ]);
+        }
+
+        if (! $actor->can('notes.create')) {
+            throw new AuthorizationException;
+        }
+
+        $this->noteService->create($actor, new CreateNoteData(
+            entityType: self::NOTE_ENTITY_TYPE,
+            entityId: $opportunity->getKey(),
+            body: $note,
+            parentId: null,
+            mentionIds: [],
+        ));
     }
 
     /**

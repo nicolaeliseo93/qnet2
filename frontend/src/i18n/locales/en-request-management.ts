@@ -51,6 +51,8 @@ export const requestManagement = {
       sectionDescription: 'Advance the working state of the request.',
       label: 'Working status',
       placeholder: 'Select a status',
+      noteLabel: 'Note',
+      notePlaceholder: 'Explain the reason for this change…',
     },
     callback: {
       title: 'Next callback',
@@ -66,17 +68,32 @@ export const requestManagement = {
       addressGroup: 'Address',
       addressEmpty: 'Not set',
     },
-    context: {
-      subtitle: 'Opportunity context (read-only).',
-      registry: 'Registry',
-      opportunityStatus: 'Sales status',
+    header: {
+      unsavedChanges: 'Unsaved changes',
+      salesStatus: 'Sales',
+      workingStatus: 'Working',
+      nextCallback: 'Next callback',
+    },
+    summary: {
+      title: 'Request summary',
+      description: 'Read-only commercial context.',
+      registry: 'Client',
+      referent: 'Contact',
+      commercial: 'Sales rep',
       expectedCloseDate: 'Expected close date',
       estimatedValue: 'Estimated value',
+      successProbability: 'Success probability',
       productLines: 'Product lines',
+    },
+    collaboration: {
+      notesTab: 'Notes',
+      documentsTab: 'Documents',
+      activityTab: 'History',
     },
     validation: {
       enumInvalid: 'Select a valid option.',
       required: 'This field is required.',
+      noteRequired: 'A note is required to move to this status.',
     },
   },
 }

@@ -66,6 +66,7 @@ function formValues(overrides: Partial<RequestWorkFormValues> = {}): RequestWork
   return {
     opportunity_workflow_status_id: 100,
     next_callback_at: null,
+    note: '',
     client_identity: null,
     client_contacts: [],
     client_address: [],
@@ -159,6 +160,47 @@ describe('buildRequestWorkPayload (spec 0049 AC-062)', () => {
     const payload = buildRequestWorkPayload(
       formValues(),
       panel({ attribute_values: { notes: 'existing note', budget: 1000, extra: undefined } }),
+    )
+    expect(payload).toEqual({})
+  })
+})
+
+describe('buildRequestWorkPayload — note on a requires_note status change (spec 0054 D-5)', () => {
+  const requiresNotePanel = panel({
+    workflow_statuses: [
+      { id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false },
+      { id: 101, name: 'In progress', color: 'amber', system_key: null, description: null, requires_note: true },
+    ],
+  })
+
+  it('sends the note alongside the status when the target status requires one', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ opportunity_workflow_status_id: 101, note: 'Client confirmed by phone.' }),
+      requiresNotePanel,
+    )
+    expect(payload).toEqual({ opportunity_workflow_status_id: 101, note: 'Client confirmed by phone.' })
+  })
+
+  it('omits the note when the target status does not require one', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ opportunity_workflow_status_id: 100, note: 'Ignored, status is unchanged anyway.' }),
+      requiresNotePanel,
+    )
+    expect(payload).toEqual({})
+  })
+
+  it('omits a blank note even when the target status requires one', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ opportunity_workflow_status_id: 101, note: '   ' }),
+      requiresNotePanel,
+    )
+    expect(payload).toEqual({ opportunity_workflow_status_id: 101 })
+  })
+
+  it('never sends the note when the status did not change', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ opportunity_workflow_status_id: 100, note: 'Stray text left in the field.' }),
+      requiresNotePanel,
     )
     expect(payload).toEqual({})
   })

@@ -77,6 +77,9 @@ function buildDefaultValues(panel: RequestWorkPanelWithPermissions): RequestWork
   return {
     opportunity_workflow_status_id: panel.workflow_status?.id ?? null,
     next_callback_at: panel.next_callback_at ?? null,
+    // The note (spec 0054 D-5) is transient: never loaded from the panel,
+    // always reset to blank after a save.
+    note: '',
     client_identity: panel.client_identity ? toIdentityDraft(panel.client_identity) : null,
     client_contacts: panel.client_contacts.items.map(toContactDraft),
     // 0-or-1 array: the shape `AddressCreateField` reads, empty when the
@@ -99,8 +102,8 @@ export function useRequestWorkForm(panel: RequestWorkPanelWithPermissions) {
   const [serverError, setServerError] = useState<string | null>(null)
 
   const schema = useMemo(
-    () => buildRequestWorkSchema(panel.applicable_attributes, t),
-    [panel.applicable_attributes, t],
+    () => buildRequestWorkSchema(panel.applicable_attributes, panel.workflow_statuses, panel.workflow_status?.id ?? null, t),
+    [panel.applicable_attributes, panel.workflow_statuses, panel.workflow_status, t],
   )
 
   const defaultValues = useMemo(() => buildDefaultValues(panel), [panel])
@@ -110,6 +113,7 @@ export function useRequestWorkForm(panel: RequestWorkPanelWithPermissions) {
   const errorFields: Path<RequestWorkFormValues>[] = [
     'opportunity_workflow_status_id' as Path<RequestWorkFormValues>,
     'next_callback_at' as Path<RequestWorkFormValues>,
+    'note' as Path<RequestWorkFormValues>,
     // The client block is submitted as a whole: a per-row 422
     // (`client_contacts.0.value`) has no matching control here, so the block
     // root carries the message.

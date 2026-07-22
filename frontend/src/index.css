@@ -5,35 +5,79 @@
 
 :root {
   --radius: 0.625rem;
-  /* The page is deliberately a few steps darker than the white card: with the
-     hairline border reduced to #F2F5F9 it is this contrast, not the border,
-     that makes a card read as a raised surface. */
-  --background: hsl(218 16% 91%);
-  --foreground: hsl(216 28% 31%);
+  /* SURFACE SCALE (single source of truth, mirrored in .dark below).
+     Two distinct jobs, two distinct tokens — conflating them is what made a
+     panel disappear into the page:
+       CONTAINER SURFACES are a monotone ladder from the backmost to the
+       frontmost plane. A component must never repeat the surface of the
+       container it sits on; it goes exactly one rung up.
+         1. --background        page/body, the backmost surface
+         2. --surface           intermediate: container panels that host cards
+                                (work panel, toolbars, dialog headers)
+         3. --card / --popover  raised component, the frontmost surface
+         4. --border/--input/--field-border  hairline, darker (light) / lighter
+                                (dark) than all three surfaces, so an edge is
+                                visible wherever it is drawn.
+       TINT is --muted: a wash applied ON TOP of whichever surface hosts it
+       (row hover/zebra, outline-button hover, subtle blocks inside a card).
+       It must move AWAY from its host, i.e. it sits BEYOND the far end of the
+       ladder, so it can never be mistaken for a rung: on a light theme below
+       the body, on dark above the card. That is why it is a separate token
+       from --surface.
+     Step size is set by contrast ratio, not by lightness points: two large
+     adjacent surfaces below ~1.2:1 are not reliably told apart, so every
+     adjacent pair here is kept >= 1.25:1. Lightness points are misleading at
+     both ends of the scale (91 -> 95 -> 100 measured only 1.10 / 1.12).
+     Light container ladder: background 81 -> surface 90 -> card 100
+       (1.26 : 1.27), hairline 73; tint --muted 79 (below the body on purpose).
+     Dark  container ladder: background  4 -> surface 16 -> card  23
+       (1.29 : 1.26), hairline 38; tint --muted 31 (above the card on purpose). */
+  --background: hsl(218 16% 81%);
+  /* Ink darkened with the body: --muted-foreground has to reach AA on the
+     darker page and tint, so the primary ink moves down with it to keep the
+     two levels of text hierarchy apart (26 vs 34, plus the chroma gap). */
+  --foreground: hsl(216 28% 26%);
+  /* Rung 2: 1.26:1 over the body and 1.27:1 under the card, so a container
+     panel reads as its own plane on the page and still lets the cards it hosts
+     lift off it. Text keeps AA here: 8.4:1 fg, 6.0:1 muted-foreground. */
+  --surface: hsl(217 20% 90%);
   --card: hsl(0 0% 100%);
-  --card-foreground: hsl(216 28% 31%);
+  --card-foreground: hsl(216 28% 26%);
   --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(216 28% 31%);
+  --popover-foreground: hsl(216 28% 26%);
   /* Brand primary: #1F3654 */
   --primary: hsl(214 46% 22.5%);
   --primary-foreground: hsl(0 0% 100%);
   --secondary: hsl(0 0% 100%);
   --secondary-foreground: hsl(218 31% 27%);
-  --muted: hsl(215 20% 91%);
-  --muted-foreground: hsl(216 14% 45%);
-  --accent: hsl(216 18% 84%);
+  /* TINT (not a rung): below the body, so a wash reads on the card (1.69:1) and
+     on the panel (1.33:1) without ever passing for a rung. The gap between the
+     body (81) and the card (100) is only 1.61:1 in total, so a tint parked
+     inside it would collide with --surface — hence "beyond the end", not
+     "between". Must stay clearly off-white for `bg-muted/40` to survive. */
+  --muted: hsl(215 18% 79%);
+  /* Kept at >= 4.5:1 on the darkest host it labels, the muted tint (4.54:1),
+     which also carries it on the page (4.78:1). */
+  --muted-foreground: hsl(216 16% 34%);
+  /* Hover/skeleton wash, one notch under the tint. Moved down with the body:
+     at 84 it was within 1.05:1 of the new page and a ghost hover would have
+     vanished on it. */
+  --accent: hsl(216 18% 76%);
   --accent-foreground: hsl(218 31% 27%);
   --destructive: hsl(0 84.2% 60.2%);
-  /* Shared hairline (#F2F5F9): card edges, form-field edges and AG Grid
-     cell/header separators all read it, so the whole app draws its structure
-     with one line colour. */
-  --border: hsl(214 37% 96%);
-  --input: hsl(214 37% 96%);
-  /* Fillable-field surface: a tint of the hairline hue, one step darker than it.
-     Since the hairline is nearly invisible on the white card, the fill is what
-     makes a field readable as editable — the border only edges it. */
+  /* Rung 4: darker than card (100), surface (90), body (81) and the muted tint
+     (79) alike, so a card edge is visible against the page (1.25:1) and a panel
+     edge against the surface. One line colour for card edges and grid
+     separators — grids soften it back toward their own surface (see
+     components/data-table/data-table-theme.ts). */
+  --border: hsl(214 20% 73%);
+  --input: hsl(214 20% 73%);
+  /* Fillable-field surface: a tint of the hairline hue, kept light enough to
+     read as editable on the white card. */
   --field: hsl(214 30% 94%);
-  --field-border: hsl(214 37% 96%);
+  /* One step softer than --border: a field is edged, not boxed. Darkened with
+     the hairline family so it stays below the body. */
+  --field-border: hsl(214 20% 80%);
   --ring: hsl(214 55% 50%);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -53,27 +97,39 @@
 }
 
 .dark {
-  --background: hsl(224 26% 11%);
+  /* Same scale as :root (see the comment there), inverted: here the raised
+     surfaces are the lighter ones. Contrast compresses hard at the bottom of
+     the luminance curve, so the steps are nominally much wider than in light
+     mode to buy the same separation: 8 -> 11 -> 14 measured 1.07 / 1.08, while
+     4 -> 16 -> 23 measures 1.29 / 1.26. */
+  --background: hsl(224 26% 4%);
   --foreground: hsl(214 20% 92%);
-  --card: hsl(224 24% 13%);
+  /* Rung 2: 1.29:1 over the body and 1.26:1 under the card. AA holds: 12.8:1
+     fg, 7.8:1 muted-foreground. */
+  --surface: hsl(224 24% 16%);
+  --card: hsl(224 22% 23%);
   --card-foreground: hsl(214 20% 92%);
-  --popover: hsl(224 24% 13%);
+  --popover: hsl(224 22% 23%);
   --popover-foreground: hsl(214 20% 92%);
   /* Brand primary lightened for dark surfaces: same hue/saturation as #1F3654 */
   --primary: hsl(214 46% 64%);
   --primary-foreground: hsl(214 35% 14%);
   --secondary: hsl(0 0% 100%);
   --secondary-foreground: hsl(214 35% 14%);
-  --muted: hsl(223 18% 20%);
-  --muted-foreground: hsl(214 12% 70%);
+  /* TINT (not a rung): above the card, so a hover/zebra wash is felt on the
+     card (1.36:1) and on the panel (1.71:1). Lifted with the whole ladder. */
+  --muted: hsl(223 18% 31%);
+  /* Lifted from 70% to keep >= 4.5:1 on the lifted tint (4.55:1). */
+  --muted-foreground: hsl(214 12% 73%);
   --accent: hsl(220 14% 44%);
   --accent-foreground: hsl(0 0% 98%);
   --destructive: hsl(0 62.8% 30.6%);
-  --border: hsl(223 18% 28%);
-  --input: hsl(223 18% 28%);
+  /* Rung 4: lighter than body (4), surface (16), card (23) and tint (31) alike. */
+  --border: hsl(223 18% 38%);
+  --input: hsl(223 18% 38%);
   /* In dark mode a "white field" reads as a surface lighter than the card. */
-  --field: hsl(224 20% 18%);
-  --field-border: hsl(223 16% 33%);
+  --field: hsl(224 20% 28%);
+  --field-border: hsl(223 16% 43%);
   --ring: hsl(214 60% 70%);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -97,6 +153,7 @@
   --radius-xl: calc(var(--radius) + 4px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);

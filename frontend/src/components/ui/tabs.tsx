@@ -24,10 +24,10 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        // Not `bg-muted`: that token is the same lightness as `--background`
-        // (91%), so the strip vanished on the page body. `--field` is the app's
-        // designated one-step-above-the-body surface and reads in both themes.
-        "inline-flex h-auto w-full flex-wrap items-center justify-start gap-1 rounded-md bg-field p-1 text-muted-foreground",
+        // `--muted` is the scale's intermediate surface, which is exactly what a
+        // tab strip is: it now sits off both the page body and the card, so the
+        // strip reads on either host and the active `--card` chip lifts out of it.
+        "inline-flex h-auto w-full flex-wrap items-center justify-start gap-1 rounded-md bg-muted p-1 text-muted-foreground",
         className
       )}
       {...props}

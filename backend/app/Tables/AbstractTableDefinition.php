@@ -6,6 +6,7 @@ use App\Enums\AdvancedFilterType;
 use App\Models\User;
 use App\Services\Table\AdvancedFilterApplier;
 use App\Tables\Concerns\InjectsDefaultIdColumn;
+use App\Tables\Concerns\ResolvesColumnConfig;
 use App\Tables\Concerns\ResolvesEditableColumns;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,7 @@ use Illuminate\Support\Facades\Gate;
 abstract class AbstractTableDefinition implements TableDefinition
 {
     use InjectsDefaultIdColumn;
+    use ResolvesColumnConfig;
     use ResolvesEditableColumns;
 
     public function resource(): string
@@ -46,46 +48,6 @@ abstract class AbstractTableDefinition implements TableDefinition
     public function authorizeViewAny(User $actor): bool
     {
         return Gate::forUser($actor)->allows('viewAny', $this->modelClass());
-    }
-
-    /**
-     * Dynamic options for a column/filter id (e.g. `roles` resolved per actor).
-     * Concrete definitions override for columns whose options are not static.
-     * Return null to keep the statically-declared `options` (if any).
-     *
-     * @return array<int, scalar>|null
-     */
-    protected function optionsFor(string $columnId, User $actor): ?array
-    {
-        return null;
-    }
-
-    /**
-     * Per-value badge metadata for a `badge` column (label/color/icon resolved
-     * from a domain enum via App\Enums\Concerns\HasMeta::options()). Each entry
-     * is an EnumMeta::toArray() shape. Return null to omit the `badges` key.
-     *
-     * The frontend renders the badge purely from this metadata, so it never has
-     * to know the domain enum: values, labels, colors and icons all come from
-     * the backend.
-     *
-     * @return array<int, array<string, mixed>>|null
-     */
-    protected function badgesFor(string $columnId, User $actor): ?array
-    {
-        return null;
-    }
-
-    /**
-     * The snake_case domain-enum key (config/config.php → form_enums) a `badge`
-     * column maps to, e.g. `user_type` → `personal_data_type`. The frontend uses
-     * it to localize the badge label from its own i18n resources
-     * (`enums.<enumKey>.<value>`) instead of the backend-supplied label. Return
-     * null to omit the `enumKey` key (and keep the backend label authoritative).
-     */
-    protected function enumKeyFor(string $columnId, User $actor): ?string
-    {
-        return null;
     }
 
     /**
@@ -124,83 +86,6 @@ abstract class AbstractTableDefinition implements TableDefinition
             'advancedFilters' => $this->resolveAdvancedFilters(),
             'appliedAdvancedFilters' => null,
         ];
-    }
-
-    /**
-     * Resolve a single column declaration into its client-facing shape.
-     *
-     * Presentation properties (visible/width/order) come from the layout and are
-     * user-overridable (ADR-0004); structural/security properties (sortable/
-     * filterable/filterType/hasFilterValues) come straight from the declaration
-     * and are never user-overridable. `filterType` drives the frontend filter
-     * widget (a set filter can sit on a text/badge-rendered column, e.g. the geo
-     * columns), so it is part of the public contract. `hasFilterValues` (spec
-     * 0004/0005) tells the frontend whether the column's Set Filter can
-     * enumerate a discrete value list at all — false for COMPUTED columns with
-     * no discrete list (a formatted address string, an aggregate count), which
-     * also have no real DB column to `SELECT DISTINCT` on. `badges` is emitted
-     * only for `badge` columns, keeping every other column byte-identical to
-     * before.
-     *
-     * @param  array<string, mixed>  $column
-     * @param  array<string, array{visible: bool, width: int|null, order: int}>  $layout
-     * @param  array<int, string>  $editableIds
-     * @return array<string, mixed>
-     */
-    private function resolveColumn(array $column, User $actor, array $layout, array $editableIds): array
-    {
-        $resolved = [
-            'id' => $column['id'],
-            'label' => $column['label'],
-            'type' => $column['type'],
-            // Presentation properties a user may override (ADR-0004).
-            'visible' => $layout[$column['id']]['visible'],
-            'width' => $layout[$column['id']]['width'],
-            'order' => $layout[$column['id']]['order'],
-            // Structural / security properties — NEVER user-overridable.
-            'sortable' => $column['sortable'],
-            'filterable' => $column['filterable'],
-            'filterType' => $column['filterType'] ?? null,
-            'hasFilterValues' => $this->hasFilterValues($column),
-            // Inline cell-editing (spec 0053, D-2): already reduced for the
-            // actor — a UI hint, never the authority (the PATCH endpoint
-            // re-derives its own guards against the real row).
-            'editable' => in_array($column['id'], $editableIds, true),
-            'options' => $this->optionsFor($column['id'], $actor)
-                ?? ($column['options'] ?? null),
-        ];
-
-        $badges = $this->badgesFor($column['id'], $actor);
-
-        if ($badges !== null) {
-            $resolved['badges'] = $badges;
-        }
-
-        $enumKey = $this->enumKeyFor($column['id'], $actor);
-
-        if ($enumKey !== null) {
-            $resolved['enumKey'] = $enumKey;
-        }
-
-        return $resolved;
-    }
-
-    /**
-     * Whether the Set Filter (spec 0004/0005) can enumerate a discrete value
-     * list for this column. Explicit `hasFilterValues` in the raw declaration
-     * wins (COMPUTED columns with no discrete list — e.g. a formatted address
-     * string, an aggregate count — declare it `false`); otherwise defaults to
-     * true whenever the column is filterable with a declared filterType.
-     *
-     * @param  array<string, mixed>  $column
-     */
-    private function hasFilterValues(array $column): bool
-    {
-        if (array_key_exists('hasFilterValues', $column)) {
-            return (bool) $column['hasFilterValues'];
-        }
-
-        return ($column['filterable'] ?? false) === true && ($column['filterType'] ?? null) !== null;
     }
 
     /**
@@ -493,5 +378,7 @@ abstract class AbstractTableDefinition implements TableDefinition
     }
 
     // editableColumnIds()/authorizeUpdate()/updateCell() defaults (spec 0053)
-    // live in ResolvesEditableColumns (file-size budget, engineering.md §6).
+    // live in ResolvesEditableColumns; optionsFor()/badgesFor()/enumKeyFor()/
+    // resolveColumn() live in ResolvesColumnConfig (file-size budget,
+    // engineering.md §6).
 }

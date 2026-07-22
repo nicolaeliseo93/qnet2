@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { CELL_EDITOR_REGISTRY, resolveCellEditorSpec } from '@/components/data-table/cell-editor-registry'
+import {
+  CELL_EDITOR_REGISTRY,
+  resolveCellEditorSpec,
+  type CellEditorKind,
+} from '@/components/data-table/cell-editor-registry'
+import { RelationCellEditor } from '@/components/data-table/relation-cell-editor'
 import type { ColumnType, EnumBadge, TableColumn } from '@/features/table/types'
 
 /** Minimal TableColumn stub; only the fields the registry reads matter. */
@@ -71,8 +76,28 @@ describe('resolveCellEditorSpec', () => {
   })
 
   it('every registry entry is reachable through the defensive lookup', () => {
-    for (const type of Object.keys(CELL_EDITOR_REGISTRY) as ColumnType[]) {
-      expect(resolveCellEditorSpec(type)).toBe(CELL_EDITOR_REGISTRY[type])
+    for (const kind of Object.keys(CELL_EDITOR_REGISTRY) as CellEditorKind[]) {
+      expect(resolveCellEditorSpec(kind)).toBe(CELL_EDITOR_REGISTRY[kind])
     }
+  })
+
+  describe('relation kind (spec 0054 D-7)', () => {
+    it('maps to the custom RelationCellEditor component, rendered as a popup', () => {
+      const spec = resolveCellEditorSpec('relation')
+      expect(spec?.cellEditor).toBe(RelationCellEditor)
+      expect(spec?.cellEditorPopup).toBe(true)
+    })
+
+    it('forwards the column\'s declared for-select resource as cellEditorParams (D-1)', () => {
+      const column = stubColumn({ id: 'operator', type: 'text', relation: { resource: 'users' } })
+      const params = resolveCellEditorSpec('relation')?.cellEditorParams?.(column)
+      expect(params).toEqual({ resource: 'users' })
+    })
+
+    it('falls back to an empty resource string when the column carries none (defensive)', () => {
+      const column = stubColumn({ id: 'operator', type: 'text' })
+      const params = resolveCellEditorSpec('relation')?.cellEditorParams?.(column)
+      expect(params).toEqual({ resource: '' })
+    })
   })
 })

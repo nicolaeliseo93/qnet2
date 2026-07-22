@@ -6,7 +6,10 @@ namespace App\Tables;
 
 use App\Models\Opportunity;
 use App\Models\User;
+use App\Services\RequestManagement\RequestManagementService;
+use App\Tables\RequestManagement\Concerns\WritesInlineEditableCells;
 use App\Tables\RequestManagement\RequestAdvancedFilterCatalog;
+use App\Tables\RequestManagement\RequestClientSearch;
 use App\Tables\RequestManagement\RequestColumnCatalog;
 use App\Tables\RequestManagement\RequestRowMapper;
 use Illuminate\Database\Eloquent\Builder;
@@ -37,6 +40,8 @@ use Illuminate\Support\Facades\DB;
  */
 class RequestManagementTableDefinition extends AbstractTableDefinition
 {
+    use WritesInlineEditableCells;
+
     /**
      * Maximum number of names honoured in a derived-column set filter. Caps
      * the WHERE IN cardinality (defence in depth); excess values ignored.
@@ -74,7 +79,24 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
         'product_categories' => ['relation' => 'productLines.productCategory', 'table' => 'product_categories', 'fk' => 'product_category_id'],
     ];
 
-    public function __construct(private readonly RequestRowMapper $rowMapper) {}
+    public function __construct(
+        private readonly RequestRowMapper $rowMapper,
+        private readonly RequestManagementService $service,
+        private readonly RequestClientSearch $clientSearch,
+    ) {}
+
+    /**
+     * Global quick-search (spec 0009) over the client's anagraphic columns:
+     * all DERIVED (no real `opportunities` column), hence delegated to
+     * RequestClientSearch. Any other searchable column would fall through to
+     * the generic engine (none today).
+     *
+     * @param  Builder<Opportunity>  $query
+     */
+    public function applyDerivedSearch(Builder $query, string $columnId, string $pattern): bool
+    {
+        return $this->clientSearch->apply($query, $columnId, $pattern);
+    }
 
     public function domain(): string
     {
@@ -114,6 +136,9 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
     {
         return $actor->can('request-management.update');
     }
+
+    // updateCell()/optionsFor() (spec 0054, D-4/D-5) live in
+    // WritesInlineEditableCells (file-size budget, engineering.md §6).
 
     /**
      * @return Builder<Opportunity>

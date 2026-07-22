@@ -27,10 +27,10 @@ export function NoteList({ roots, entityType, entityId, hasNextPage, isFetchingN
   const [replyingRootId, setReplyingRootId] = useState<number | null>(null)
 
   return (
-    // Recessed thread surface. `bg-accent` (84% light) rather than `bg-muted`:
-    // muted is the same 91% grey as the dialog surface hosting this list, so the
-    // tray vanished inside the popup. Accent stays clearly darker than both hosts
-    // (white `FormSection` in page, grey dialog) and than the white bubbles.
+    // Recessed thread surface. `bg-accent` (84% light) rather than `bg-muted`
+    // (88%): the tray must sink below BOTH hosts — the white `FormSection` in
+    // page and the `--background` dialog (91%) — and below the white bubbles,
+    // and muted sits too close to the dialog surface to do that.
     <div className="flex flex-col gap-3 rounded-lg border border-muted-foreground/15 bg-accent p-2.5 dark:bg-card">
       {roots.map((root) => (
         <div key={root.id} className="flex flex-col gap-2">

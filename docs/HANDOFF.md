@@ -2,6 +2,237 @@
 
 > Injected at session start. Update at every green state.
 
+## SEARCH GLOBALE SU GESTIONE RICHIESTE (2026-07-22) — GREEN, NON COMMITTATO
+
+La tabella `request-management` era l'unica senza il quick-search globale (spec 0009):
+nessuna colonna del suo catalogo era flaggata `'searchable' => true`, quindi
+`searchable: []` nel config e il frontend (generico) nascondeva il campo. Fix SOLO backend,
+zero righe di frontend: `TableView` mostra la search e costruisce il placeholder dai label
+delle colonne appena l'allow-list e' non vuota.
+
+Allow-list scelta: le 4 colonne anagrafiche del cliente — `first_name`, `last_name`,
+`tax_code`, `phone` — cioe' quello con cui un operatore cerca una richiesta. Sono tutte
+DERIVATE (nessuna colonna reale su `opportunities`: RequestRowMapper le legge dalla
+PersonalData card del Registry e dal contatto telefonico primario), quindi l'`orWhere`
+generico avrebbe puntato a colonne inesistenti. Delegate al hook
+`TableDefinition::applyDerivedSearch()` (stesso precedente di `city`/`street` su
+operational-sites) tramite il nuovo collaboratore
+`app/Tables/RequestManagement/RequestClientSearch.php`: `orWhereHas('registry.personalData')`
+per i 3 campi della card, `orWhereHas('registry.personalData.contacts')` con
+`is_primary` + type in (phone, mobile) per il telefono — cioe' ESATTAMENTE il valore che la
+colonna mostra. Il collaboratore separato serve anche al budget di file:
+`RequestManagementTableDefinition` era a 453 righe (hard limit 500).
+
+File toccati: `RequestManagement/RequestColumnCatalog.php` (`textColumn()` prende un
+parametro `searchable`, default false; le 4 anagrafiche lo passano true),
+`RequestManagementTableDefinition.php` (inietta `RequestClientSearch`, override
+`applyDerivedSearch()`), nuovo `RequestManagement/RequestClientSearch.php`, nuovo test
+`tests/Feature/RequestManagement/RequestManagementTableSearchTest.php`.
+
+INVARIANTI VERIFICATE dai test: la search AND-combina con lo scope D-3 (un utente con solo
+`viewAny` non vede la richiesta altrui nemmeno cercandola), termine vuoto = no-op, termine
+>100 char = 422 (regola condivisa di `TableRowsRequest`), il config espone
+`searchable = ['first_name','last_name','tax_code','phone']`.
+
+VERIFICATO: `pest tests/Feature/RequestManagement tests/Feature/Table` 297/297 verdi
+(28 assertion nuove sul solo file di search, 8/8). Pint pulito. Suite completa
+3369/3381: gli 11 rossi sono PREESISTENTI e fuori changeset (10 test "navigation node only
+shows with X.view" + `AbstractMigrationSourcePreviewTest`, riprodotti anche in isolamento).
+NB: la suite completa con Xdebug attivo va in segfault in questo ambiente — girarla con
+`XDEBUG_MODE=off`.
+
+## SCALA DI SUPERFICI GLOBALE (2026-07-22) — GREEN, NON COMMITTATO
+
+Richiesta utente: "body e componenti hanno lo stesso colore, sistemare una volta per tutte
+in modo GLOBALE". Risolto sui design token di `frontend/src/index.css`, non con patch locali.
+
+CAUSE REALI (misurate, non stimate): light `--muted` (91%) era IDENTICO a `--background`
+(91%) -> ogni superficie `bg-muted*` invisibile sul body; light `--border` (96%) era PIU'
+CHIARA del body (91%) -> i bordi delle card svanivano contro la pagina; dark `--background`
+(11%) vs `--card` (13%) -> 2 punti di stacco, stesso colore a occhio.
+
+CORREZIONE (stessa giornata, dopo screenshot utente): la prima versione della scala NON era
+monotona e il rung 2 era sovraccarico. `--muted` faceva DUE lavori in conflitto: superficie
+contenitore (deve stare TRA body e card) e tinta di hover/zebra (deve andare nella direzione
+OPPOSTA al body). Light 91 -> 88 -> 100 (muted piu' scuro del body), dark 8 -> 20 -> 14
+(muted piu' chiaro della card): in nessuno dei due temi era il gradino intermedio. Per
+questo il frame del pannello era finito su `bg-background`, cioe' la stessa superficie del
+body. RISOLTO separando i ruoli con un token NUOVO `--surface` (esposto come
+`--color-surface` in `@theme inline` -> utility `bg-surface`): light 95, dark 11. Ladder ora
+monotona (light 91 -> 95 -> 100, dark 8 -> 11 -> 14, min 3 punti per gradino). `--muted`
+resta SOLO tinta e non e' un rung: non usarlo come sfondo di un contenitore.
+
+SECONDA CORREZIONE (stesso giorno, dopo nuovo feedback "sembrano ancora simili"): la scala
+era strutturalmente giusta ma i gradini erano PERCETTIVAMENTE PIATTI (light 1.10/1.12, dark
+1.07/1.08 di rapporto tra superfici adiacenti, sotto la soglia ~1.2:1 oltre la quale due
+superfici grandi non si distinguono). LEZIONE DA NON PERDERE: il passo della scala si misura
+in RAPPORTO DI CONTRASTO, non in punti di lightness (i punti mentono ai due estremi della
+curva). Target vincolante ora scritto in `ui-design.md` §1-bis: ogni coppia adiacente
+>= 1.25:1. Valori risultanti: light body 81 -> surface 90 -> card 100 (1.26/1.27), dark
+body 4 -> surface 16 -> card 23 (1.29/1.26). Le TINTE si sono dovute spostare con la scala
+(`--muted` light 88 -> 79, `--accent` 84 -> 76, dark muted 20 -> 31) perche' ai vecchi valori
+finivano a coincidere con una superficie — che e' esattamente il bug di partenza. Hairline
+light 82 -> 73 (a 82 sarebbe stata piu' chiara del nuovo body). `--foreground` 31 -> 26 e
+`--muted-foreground` 40 -> 34 sono FORZATI dall'AA sulla nuova tinta: le due celle piu'
+strette sono muted-foreground su muted (4.54 light / 4.55 dark), non scurire ulteriormente
+la tinta senza rifare i conti. AG Grid: `borderColor` mix 55% -> 40% e `rowHoverColor` ora
+`color-mix(--muted 65%, --card)`, altrimenti con i token piu' marcati il reticolo e l'hover
+diventavano da foglio di calcolo.
+
+SEGNALATI E NON TOCCATI (fuori scope, per il prossimo owner): `components/form-tab-strip.tsx`
+usa `hover:bg-background/60` (il token della PAGINA come riempimento di hover: sorgente
+sbagliata, va `bg-muted`/`bg-accent`); `features/notes/{note-item,mention-textarea,
+mention-picker-panel}.tsx` hard-codano `bg-white` — oggi coincide con `--card` ma e' fuori
+dal sistema di token e driftera'.
+
+SCALA A 4 GRADINI ora documentata in testa a `:root` e vincolante in `.claude/rules/
+ui-design.md` §1-bis: 1) `--background` pagina, 2) `--muted` superficie intermedia
+(toolbar, header dialog, pannelli, hover/zebra), 3) `--card`/`--popover` componente in
+rilievo, 4) `--border`/`--input`/`--field-border` hairline percettibile su tutte e tre.
+Light: 91 -> 88 -> 100, hairline 82. Dark: 8 -> 20 -> 14, hairline 28.
+REGOLA: un componente non puo' avere la stessa superficie del contenitore su cui poggia; se
+una superficie sembra invisibile si corregge la scala in `index.css`, MAI con una patch di
+schermata.
+
+`--muted-foreground` light portata da 45% a 40%: sul nuovo muted 88% il valore precedente
+dava 4.06:1, sotto AA. Ora 4.56:1. Tutte le coppie testo/superficie verificate >= 4.5:1.
+
+RICADUTE SISTEMATE nello stesso passaggio (erano workaround nati dalla hairline quasi
+invisibile): `Button` variante `outline` usava `bg-border` come RIEMPIMENTO -> ora
+`bg-card` + hairline, hover `bg-muted`; `TabsList` usava `bg-field` "perche' muted e'
+uguale al background" -> ora `bg-muted`; la action bar di `advanced-filter-panel` usava
+`bg-border` come fascia -> ora `bg-muted`.
+
+AG GRID LEGGE I TOKEN (`components/data-table/data-table-theme.ts` e
+`features/imports/wizard/review-grid.tsx` passano `var(--card)`, `var(--border)`, ecc. a
+`themeQuartz.withParams`). Con `rowBorder`+`columnBorder`+`headerColumnBorder` attivi su
+righe da 28px, la hairline a 82% disegnava un reticolo da foglio di calcolo: il solo
+`borderColor` dei due temi griglia e' ora `color-mix(in srgb, var(--border) 55%,
+var(--card))` — resta derivato dal token (segue il dark mode), nessun colore hard-coded.
+
+NON toccati di proposito: `--primary`, i `--sidebar-*`, `--secondary` (chip bianco anche in
+dark, scelta esistente). Segnalati e non toccati: `Dialog`/`AlertDialog` su `bg-background`
+(mai adiacenti al body, c'e' l'overlay) e `auth-card.tsx` su `bg-muted/40` a piena pagina
+(semanticamente sarebbe `bg-background`).
+
+VERIFICATO: `vitest run` completa 2009/2012, `tsc -b` 0 errori, `eslint src` nessun problema
+nuovo. I 3 test rossi (`features/table/cell-renderers.test.tsx`, attesa EN contro
+`defaultLocale='it'`) e i 2 error `no-unused-vars` sono PREESISTENTI e fuori changeset.
+
+## REDESIGN PAGINA GESTIONE RICHIESTE (2026-07-22) — GREEN, NON COMMITTATO
+
+Refactoring SOLO GRAFICO/STRUTTURALE di `/request-management/:id`. Dati, API, permessi,
+payload e logica di business INVARIATI: nessun file toccato tra `api.ts`, `types.ts`,
+`use-request-work-form.ts`, `request-work-payload.ts`, `request-work-schema.ts`, e zero
+modifiche backend.
+
+NUOVA STRUTTURA del pannello (`request-work-panel.tsx`): barra identita' sticky
+(`request-work-header.tsx`: nome, `#id`, badge stato commerciale + stato lavorazione +
+prossimo richiamo, e l'UNICO bottone Save della pagina, agganciato al `<form>` via
+`form={REQUEST_WORK_FORM_ID}`) sopra una griglia a due colonne. Colonna principale, in
+ordine: stato lavorazione + prossimo richiamo affiancati, campi dinamici, anagrafica
+cliente, poi la card a tab Note/Documenti/Storico (`request-work-collaboration.tsx`).
+Colonna laterale: `request-work-summary.tsx` (contesto commerciale read-only, sostituisce
+il cancellato `request-work-context.tsx`).
+
+VINCOLO DA NON PERDERE — UN SOLO BOTTONE SAVE: la vecchia barra sticky in fondo e' stata
+rimossa. Reintrodurne una seconda rompe `getByRole('button', { name: 'Save' })` nei test.
+
+VINCOLO DA NON PERDERE — CONTAINER QUERY, NON BREAKPOINT: il pannello e' montato sia nella
+pagina dedicata sia in uno Sheet (open-mode `modal`, `useModuleOpener`), quindi il layout
+reagisce alla larghezza del CONTENITORE (`@container` + `@2xl:`/`@4xl:`), mai a `lg:`/`xl:`.
+La colonna principale e' a sua volta `@container` cosi' la riga stato+callback splitta sulla
+propria larghezza. Verificato nel CSS emesso da `vite build` (`container-type:inline-size`).
+
+GUSCIO DI PAGINA DEDICATO: `pages/request-management-detail-page.tsx` (nuovo) sostituisce
+`ModuleDetailPage` sulla sola rotta `request-management/:id` (`routes/router.tsx`).
+Motivo: il guscio generico avvolgeva tutto in `bg-card` (annullando il contrasto
+sfondo/card, ora `bg-muted/30` sul pannello) e mostrava un bottone "Modifica" verso
+`/request-management/:id/edit`, rotta INESISTENTE per questo modulo (`generateRoutes:
+false`, spec 0049 D-9/D-10). `ModuleDetailPage` resta invariato per tutti gli altri moduli
+via `features/modules/module-routes.tsx`.
+
+DOCUMENTI IN PAGINA: la tab Documenti monta `DocumentsSection` sullo stesso owner
+polimorfico della row-action (`OPPORTUNITY_ATTACHABLE_ALIAS`), gate client
+`request-management.viewDocuments` + `attachments.create`/`delete`. Nessun permesso nuovo,
+nessun endpoint nuovo. Lo storico e' gated dal solito `view_activity` server-derived.
+
+i18n: rimosso il blocco morto `workPanel.context`, aggiunti `workPanel.header.*`,
+`workPanel.summary.*`, `workPanel.collaboration.*` (parita' EN/IT verificata, 60 chiavi).
+
+VERIFICATO (verifier indipendente): `vitest run src/features/request-management
+src/features/modules` 59/59, `tsc -b` 0 errori, `eslint` pulito sui file toccati, diff
+`package.json`/`package-lock.json` VUOTO. Suite completa 2009/2012: i 3 rossi sono
+PREESISTENTI e fuori changeset (`features/table/cell-renderers.test.tsx:159,164,174`,
+attesa EN contro `defaultLocale='it'`), come i 2 error ESLint `no-unused-vars` su
+`referent-form-metadata.test.tsx:232` / `registry-form-metadata.test.tsx:266`.
+
+## SPEC 0053 — MODIFICA INLINE PER-CELLA (2026-07-22) — GREEN
+
+Spec: `docs/specs/0053-inline-cell-editing.xml` (contratto congelato prima del dispatch).
+Verifier indipendente: VERDE sui 25 AC. Perimetro Table 185/185 test, 1162 assertion.
+Pint e `tsc` puliti sui file toccati. Diff `composer.json`/`package.json` VUOTO.
+NOTA COMMIT: il lavoro e' finito dentro `606b4bf`, il cui messaggio parla di mention badges —
+committato da una sessione concorrente, NON dal team 0053. La history non riflette la feature.
+
+MOTORE GENERICO, non per-modulo. `PATCH /api/tables/{domain}/rows/{row}` body `{column, value}`,
+risposta = RIGA INTERA ri-mappata (stessa shape di `POST rows`), cosi' il grid fa `setData` senza
+`refreshServerSide` (che butterebbe scroll e selezione ad ogni cella toccata).
+Contratto `TableDefinition` + 3 metodi: `editableColumnIds()`, `authorizeUpdate()`, `updateCell()`.
+I default vivono nel trait `app/Tables/Concerns/ResolvesEditableColumns.php` (NON in
+`AbstractTableDefinition`, che sforava le 500 righe dell'hook `code-guard`).
+ATTENZIONE: aggiungere metodi al contratto OBBLIGA la delega in
+`app/Tables/CustomFields/DelegatesUnaugmentedTableMethods.php`, altrimenti
+`CustomFieldAwareTableDefinition` non implementa piu' l'interfaccia. Le colonne `custom.*` sono
+sempre `editable: false` (`CustomFieldColumnBuilder.php:89`).
+
+INVARIANTI DI SICUREZZA — non rimuoverle:
+- D-5: la riga si risolve SEMPRE da `$definition->baseQuery()->findOrFail()`, MAI da `Model::find`
+  ne' da route model binding. `baseQuery()` porta gli scope di visibilita': risolvere altrove
+  riapre un IDOR cross-tenant su tutti i 26 domini in un colpo solo. Fuori scope -> 404, non 403.
+- ORDINE della guard chain in `TableCellUpdateService::update()`: riga (404) -> `authorizeUpdate`
+  per-riga (403) -> allow-list strutturale colonna (422) -> permesso per-campo DB (403) ->
+  validazione valore (422) -> scrittura. L'ordine tiene 403 e 422 distinguibili: collassarli
+  rende AC-003 e AC-005/006 indistinguibili dal client.
+- D-3 FAIL-SAFE: risorsa non in `config/authorization.php` -> nessuna sua colonna editabile;
+  chiave campo assente dal catalogo `fields()` -> colonna non editabile. Il fallback permissivo
+  del frontend (`FALLBACK_FIELD_PERMISSION`) vale solo per le form e NON ha equivalente server.
+- D-2: `editable` e' proprieta' STRUTTURALE, accanto a sortable/filterable. Mai user-overridable
+  dalle preferenze, altrimenti un utente si renderebbe editabile una colonna salvando un layout.
+- L'id colonna dall'input non raggiunge MAI una query: confronto `===` contro l'array PHP di
+  `columns()`. Niente `whereRaw`/interpolazione. Testato con `DROP TABLE opportunities;--` -> 422.
+- Nessun `throttle` sull'endpoint (decisione utente 2026-07-15). Non reintrodurlo.
+
+COLONNE ACCESE (opt-in esplicito, D-1: una colonna nuova nasce READONLY finche' non la si dichiara)
+- opportunities: name, estimated_value, success_probability, start_date, expected_close_date
+- campaigns / projects: name, start_date, end_date, total_budget, target_lead
+- leads e request-management: ZERO. Le loro colonne di griglia sono tutte derivate o relazioni
+  `*_id`, escluse da D-10; i campi scrivibili di leads (`notes`, `extra_fields`) non sono nemmeno
+  colonne della griglia. Per dare valore a questi due moduli serve l'EDITOR DI RELAZIONE via
+  `/for-select` — e' il naturale passo successivo (spec 0054), non una rifinitura.
+- `code` di campaigns/projects resta spento: e' create-only (fuori da `#[Fillable]`, spec 0025 BR-1).
+
+BYPASS `mandatory` — DECISIONE DI PRODOTTO APERTA, non un bug:
+`AbstractResourceAuthorization::fieldPermissions()` (righe 85-87) NON interseca mai i campi
+`mandatory` con `role_field_permissions` (design spec 0008: altrimenti un ruolo non potrebbe
+creare la risorsa). Conseguenza: `name` (3 domini) e `start_date` (campaigns/projects) sono
+modificabili da chiunque abbia `{resource}.update`, matrice per-ruolo ignorata — ora anche da
+griglia a singolo click, non piu' solo dalla form. Comportamento IDENTICO alla form classica,
+quindi nessuna regressione, ma il canale e' nuovo. Per questo AC-003/AC-008 sono deliberatamente
+retarget-ati su `estimated_value` (non mandatory), come gia' fa `FieldPermissionMergeTest`.
+
+FRONTEND: `editable` nel colDef e' una FUNZIONE (`params.data?.editable === true`), rivalutata
+per-riga: cella editabile <=> colonna editabile AND riga editabile. Registry
+`CELL_EDITOR_REGISTRY` per ColumnType (terzo registry OCP del progetto); un type senza voce rende
+la colonna readonly invece di crashare. `datetime` usa `agTextCellEditor`: AG Grid non ha editor
+datetime-local nativo (i suoi editor di data sono solo-data) — limite noto, validazione lato server.
+`TableColumn.editable`/`TableRow.editable` sono OPZIONALI di proposito: renderli obbligatori
+avrebbe imposto di toccare ~25 file di test di altri domini. `undefined` -> readonly (fail-safe).
+
+ROSSI PRE-ESISTENTI, non causati da 0053 (verificati risalendo ai commit): 11 test backend
+(10 "Navigation nodes" + `AbstractMigrationSourcePreviewTest`) e 3 frontend in
+`cell-renderers.test.tsx` (mismatch lingua i18n su ContactsCell, dal commit `4bce5d1`).
+
 ## ACTIVITY LOG DI GESTIONE RICHIESTE (2026-07-22) — GREEN, NON COMMITTATO
 
 Richiesta utente: in Gestione Richieste mancava lo storico delle modifiche, della scrittura note

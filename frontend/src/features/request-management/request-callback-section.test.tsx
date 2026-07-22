@@ -31,6 +31,12 @@ vi.mock('@/features/personal-data/api', () => ({
   deleteContact: (...args: unknown[]) => deleteContactMock(...args),
 }))
 
+// The panel now hosts the collaboration card, which reads the actor's client
+// abilities to gate its Documents tab: stub them, this suite has no AuthProvider.
+vi.mock('@/features/auth/use-abilities', () => ({
+  useAbilities: () => ({ can: () => true, hasRole: () => false, roles: [], isLoading: false }),
+}))
+
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const FULL_PERMISSIONS = {

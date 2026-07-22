@@ -51,6 +51,8 @@ export const requestManagement = {
       sectionDescription: 'Fai avanzare lo stato di lavorazione della richiesta.',
       label: 'Stato di lavorazione',
       placeholder: 'Seleziona uno stato',
+      noteLabel: 'Nota',
+      notePlaceholder: 'Spiega il motivo di questo cambio…',
     },
     callback: {
       title: 'Prossimo richiamo',
@@ -66,17 +68,32 @@ export const requestManagement = {
       addressGroup: 'Indirizzo',
       addressEmpty: 'Non inserito',
     },
-    context: {
-      subtitle: "Contesto dell'opportunità (sola lettura).",
-      registry: 'Anagrafica',
-      opportunityStatus: 'Stato commerciale',
-      expectedCloseDate: 'Data chiusura prevista',
+    header: {
+      unsavedChanges: 'Modifiche non salvate',
+      salesStatus: 'Commerciale',
+      workingStatus: 'Lavorazione',
+      nextCallback: 'Prossimo richiamo',
+    },
+    summary: {
+      title: 'Riepilogo richiesta',
+      description: 'Contesto commerciale in sola lettura.',
+      registry: 'Cliente',
+      referent: 'Referente',
+      commercial: 'Commerciale',
+      expectedCloseDate: 'Chiusura prevista',
       estimatedValue: 'Valore stimato',
-      productLines: 'Righe prodotto',
+      successProbability: 'Probabilità di successo',
+      productLines: 'Linee di prodotto',
+    },
+    collaboration: {
+      notesTab: 'Note',
+      documentsTab: 'Documenti',
+      activityTab: 'Storico',
     },
     validation: {
       enumInvalid: 'Seleziona un valore valido.',
       required: 'Questo campo è obbligatorio.',
+      noteRequired: 'È obbligatoria una nota per passare a questo stato.',
     },
   },
 }

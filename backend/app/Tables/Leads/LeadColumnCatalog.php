@@ -27,11 +27,15 @@ final class LeadColumnCatalog
     public static function columns(): array
     {
         return [
-            self::derivedColumn('registry', 'leads.columns.registry'),
-            self::derivedColumn('campaign', 'leads.columns.campaign'),
-            self::derivedColumn('operational_site', 'leads.columns.operationalSite'),
-            self::derivedColumn('source', 'leads.columns.source'),
-            self::derivedColumn('operator', 'leads.columns.operator'),
+            // Inline cell-editing (spec 0054, D-1/D-6): all 5 relation
+            // columns are editable via a `/for-select`-fed dropdown.
+            // `registry`/`campaign` mirror their FK's NOT NULL constraint
+            // (never nullable inline); the other 3 accept null.
+            self::derivedColumn('registry', 'leads.columns.registry', 'registry_id', 'registries'),
+            self::derivedColumn('campaign', 'leads.columns.campaign', 'campaign_id', 'campaigns'),
+            self::derivedColumn('operational_site', 'leads.columns.operationalSite', 'operational_site_id', 'operational-sites', nullable: true),
+            self::derivedColumn('source', 'leads.columns.source', 'source_id', 'sources', nullable: true),
+            self::derivedColumn('operator', 'leads.columns.operator', 'operator_id', 'users', nullable: true),
             [
                 'id' => 'lead_status',
                 'label' => 'leads.columns.leadStatus',
@@ -58,12 +62,16 @@ final class LeadColumnCatalog
      * A DERIVED (related-row-name) column declaration: filterable via the
      * `set` widget and sortable (every one of the 5 relational columns here
      * has a correlated-subquery sort, unlike Campaigns' asymmetric choice).
+     * Optionally editable inline (spec 0054, D-1): declaring
+     * `$editableField`/`$relationResource` opts the column into the
+     * relation cell-editor, writing `$editableField` (the real FK column)
+     * instead of this column's own (derived, non-writable) id.
      *
      * @return array<string, mixed>
      */
-    private static function derivedColumn(string $id, string $label): array
+    private static function derivedColumn(string $id, string $label, ?string $editableField = null, ?string $relationResource = null, bool $nullable = false): array
     {
-        return [
+        $column = [
             'id' => $id,
             'label' => $label,
             'type' => 'text',
@@ -72,6 +80,15 @@ final class LeadColumnCatalog
             'filterable' => true,
             'filterType' => 'set',
         ];
+
+        if ($editableField !== null && $relationResource !== null) {
+            $column['editable'] = true;
+            $column['editableField'] = $editableField;
+            $column['relation'] = ['resource' => $relationResource];
+            $column['nullable'] = $nullable;
+        }
+
+        return $column;
     }
 
     /**

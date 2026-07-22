@@ -11,7 +11,7 @@
  */
 import type { ColDef, EditableCallbackParams, ICellRendererParams } from 'ag-grid-community'
 import appI18n from '@/i18n'
-import { resolveCellEditorSpec } from '@/components/data-table/cell-editor-registry'
+import { resolveCellEditorSpec, type CellEditorKind } from '@/components/data-table/cell-editor-registry'
 import { formatBooleanFilterValue } from '@/components/data-table/column-filters'
 import { BadgeCell } from '@/features/table/cell-renderers'
 import type { TableColumn, TableRow } from '@/features/table/types'
@@ -94,19 +94,27 @@ export function resolveCellRenderer(
 }
 
 /**
- * Editable-related ColDef props for a column (spec 0053): read-only unless the
- * backend declared the column `editable` AND its `type` has a registered cell
- * editor (AC-023 — an unregistered type stays read-only rather than crashing).
- * The returned callback only re-checks the PER-ROW flag (`row.editable`, D-4):
+ * Editable-related ColDef props for a column (spec 0053, extended by 0054
+ * D-7): read-only unless the backend declared the column `editable` AND its
+ * editor kind — `column.editor` when present (a `relation` picker overriding
+ * the type-driven lookup), else `column.type` — has a registered cell editor
+ * (AC-023 — an unregistered kind stays read-only rather than crashing). A
+ * column declaring `editor: 'relation'` without its `relation.resource`
+ * target is malformed metadata and, defensively, also stays read-only. The
+ * returned callback only re-checks the PER-ROW flag (`row.editable`, D-4):
  * the column-level gate is already resolved here, once, at colDef build time.
  */
 export function resolveEditableColumnProps(
   column: TableColumn,
-): Pick<ColDef<TableRow>, 'editable' | 'cellEditor' | 'cellEditorParams'> {
+): Pick<ColDef<TableRow>, 'editable' | 'cellEditor' | 'cellEditorParams' | 'cellEditorPopup'> {
   if (!column.editable) {
     return { editable: false }
   }
-  const spec = resolveCellEditorSpec(column.type)
+  if (column.editor === 'relation' && !column.relation?.resource) {
+    return { editable: false }
+  }
+  const kind: CellEditorKind = column.editor ?? column.type
+  const spec = resolveCellEditorSpec(kind)
   if (!spec) {
     return { editable: false }
   }
@@ -114,5 +122,6 @@ export function resolveEditableColumnProps(
     editable: (params: EditableCallbackParams<TableRow>) => params.data?.editable === true,
     cellEditor: spec.cellEditor,
     cellEditorParams: spec.cellEditorParams?.(column),
+    cellEditorPopup: spec.cellEditorPopup,
   }
 }

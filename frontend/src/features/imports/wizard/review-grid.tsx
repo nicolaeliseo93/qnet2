@@ -46,10 +46,13 @@ const reviewGridTheme = themeQuartz.withParams({
   cellHorizontalPadding: 10,
   backgroundColor: 'var(--card)',
   foregroundColor: 'var(--card-foreground)',
-  borderColor: 'var(--border)',
+  // Softened like `components/data-table/data-table-theme.ts`: the shared
+  // hairline is sized for card edges, not for one line per cell, and the tint
+  // sits beyond the end of the surface ladder to be felt on any host.
+  borderColor: 'color-mix(in srgb, var(--border) 40%, var(--card))',
   headerBackgroundColor: 'var(--card)',
   headerTextColor: 'var(--muted-foreground)',
-  rowHoverColor: 'var(--muted)',
+  rowHoverColor: 'color-mix(in srgb, var(--muted) 65%, var(--card))',
   wrapperBorderRadius: 6,
 })
 

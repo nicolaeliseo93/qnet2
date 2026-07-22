@@ -101,7 +101,10 @@ function clientBlockChanged(current: unknown, original: unknown): boolean {
 /**
  * Builds the sparse PATCH payload (AC-062): only `opportunity_workflow_status_id`
  * and/or `attribute_values` are included, each only when it actually changed
- * from the loaded `panel`.
+ * from the loaded `panel`. `note` rides along ONLY when the working status
+ * both changed and its target is flagged `requires_note` (spec 0054 D-5) —
+ * the server rejects the note on every other write, so it is never sent
+ * speculatively.
  */
 export function buildRequestWorkPayload(
   values: RequestWorkFormValues,
@@ -112,6 +115,14 @@ export function buildRequestWorkPayload(
   const originalWorkflowStatusId = panel.workflow_status?.id ?? null
   if (values.opportunity_workflow_status_id !== originalWorkflowStatusId) {
     payload.opportunity_workflow_status_id = values.opportunity_workflow_status_id
+
+    const targetStatus = panel.workflow_statuses.find(
+      (status) => status.id === values.opportunity_workflow_status_id,
+    )
+    const note = values.note.trim()
+    if (targetStatus?.requires_note && note !== '') {
+      payload.note = note
+    }
   }
 
   if (values.next_callback_at !== (panel.next_callback_at ?? null)) {

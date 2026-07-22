@@ -99,13 +99,12 @@ export function AdvancedFilterPanel({ descriptors, filters }: AdvancedFilterPane
         })}
       </div>
 
-      {/* Action bar sits just off the white panel: `--border` is the lightest
-          tone in the scale (96% against the card's 100%), so the zone separates
-          without reading as a grey band — the top hairline carries most of the
-          split. Dark uses `--field` (18% over the card's 13%) as the equivalent
-          smallest step, since the direction inverts between themes. Solid, never
-          an alpha: a tint would recomposite against the panel. */}
-      <div className="flex items-center justify-end gap-2 border-t border-border bg-border px-3 py-2 dark:bg-field">
+      {/* Action bar sits one rung off the white panel on `--muted`, the scale's
+          intermediate surface — the hairline above it carries the split, the
+          tone only backs it. Not `bg-border`: the hairline is now a line colour,
+          too dark to flood a whole zone with. Solid, never an alpha: a tint
+          would recomposite against the panel. */}
+      <div className="flex items-center justify-end gap-2 border-t border-border bg-muted px-3 py-2">
         <Button
           type="button"
           variant="ghost"

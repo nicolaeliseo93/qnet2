@@ -35,15 +35,46 @@ final class RequestColumnCatalog
         return [
             self::aggregatedColumn('product_categories', 'requestManagement.columns.productCategory'),
             self::textColumn('operator_ga2', 'requestManagement.columns.operator'),
-            self::derivedColumn('workflow_status', 'requestManagement.columns.workflowStatus'),
-            self::textColumn('first_name', 'requestManagement.columns.firstName'),
-            self::textColumn('last_name', 'requestManagement.columns.lastName'),
-            self::textColumn('tax_code', 'requestManagement.columns.taxCode'),
-            self::textColumn('phone', 'requestManagement.columns.phone'),
+            [
+                // Inline cell-editing (spec 0054, D-4/D-5/D-6): the DISPLAYED
+                // id ('workflow_status') differs from the WRITTEN field
+                // ('opportunity_workflow_status_id', the only key present in
+                // RequestManagementAuthorization), hence `editableField`. The
+                // write goes through RequestManagementTableDefinition's
+                // updateCell() override into
+                // RequestManagementService::updateWork(), the single choke
+                // point that enforces set-membership (AC-011) AND the
+                // mandatory-note rule for a `requires_note` target status
+                // (D-5) — never a plain `$row->update()`. `notable: true`
+                // is this engine's ONLY column allowing a `note` in the PATCH
+                // payload (D-5/AC-012). Not nullable: updateWork() has no
+                // "clear the status" semantics, so `value: null` 422s rather
+                // than silently no-op-ing.
+                'id' => 'workflow_status',
+                'label' => 'requestManagement.columns.workflowStatus',
+                'type' => 'text',
+                'visible' => true,
+                'sortable' => true,
+                'filterable' => true,
+                'filterType' => 'set',
+                'editable' => true,
+                'editableField' => 'opportunity_workflow_status_id',
+                'notable' => true,
+            ],
+            self::textColumn('first_name', 'requestManagement.columns.firstName', searchable: true),
+            self::textColumn('last_name', 'requestManagement.columns.lastName', searchable: true),
+            self::textColumn('tax_code', 'requestManagement.columns.taxCode', searchable: true),
+            self::textColumn('phone', 'requestManagement.columns.phone', searchable: true),
             [
                 // Real DB column (spec 0052 D-1/D-5): the operator's planned
                 // next contact, sortable/filterable via the generic engine
-                // like OpportunityColumnCatalog's `created_at`.
+                // like OpportunityColumnCatalog's `created_at`. Inline
+                // cell-editing (spec 0054, D-4): NOT in Opportunity::$fillable
+                // (mass-assignment guard), so RequestManagementTableDefinition
+                // overrides updateCell() to write it through
+                // RequestManagementService::updateWork() — never a plain
+                // `$row->update()` (spec 0052 D-4's reminder-marker invariant
+                // lives there).
                 'id' => 'next_callback_at',
                 'label' => 'requestManagement.columns.nextCallbackAt',
                 'type' => 'datetime',
@@ -51,6 +82,8 @@ final class RequestColumnCatalog
                 'sortable' => true,
                 'filterable' => true,
                 'filterType' => 'date',
+                'editable' => true,
+                'nullable' => true,
             ],
             [
                 // Hidden: not shown, but a real sortable DB column so the
@@ -113,9 +146,14 @@ final class RequestColumnCatalog
      * operator name): neither sortable nor filterable. The value is computed
      * from the eager-loaded relations by RequestManagementTableDefinition::mapRow().
      *
+     * `searchable` (spec 0009) opts the column into the global quick-search:
+     * since it is DERIVED, the term is applied by RequestClientSearch through
+     * `applyDerivedSearch()`, never as a plain LIKE on a non-existent
+     * `opportunities` column.
+     *
      * @return array<string, mixed>
      */
-    private static function textColumn(string $id, string $label): array
+    private static function textColumn(string $id, string $label, bool $searchable = false): array
     {
         return [
             'id' => $id,
@@ -124,6 +162,7 @@ final class RequestColumnCatalog
             'visible' => true,
             'sortable' => false,
             'filterable' => false,
+            'searchable' => $searchable,
         ];
     }
 
