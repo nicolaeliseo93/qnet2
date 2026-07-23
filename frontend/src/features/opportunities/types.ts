@@ -34,6 +34,19 @@ export interface OpportunityLeadRef {
 }
 
 /**
+ * Spec 0056: the linked operational site's identity, as exposed by
+ * `OpportunityResource.operational_site`. `operational_sites` has no `name`
+ * column: the identity is a server-composed "{line1} - {city}" label (mirrors
+ * `ProjectOperationalSiteRef`). Kept LOCAL rather than imported from
+ * `features/projects` to keep the two modules decoupled (same reasoning as
+ * `ApplicableAttributeSummary` above).
+ */
+export interface OpportunityOperationalSiteRef {
+  id: number
+  label: string
+}
+
+/**
  * A resolved working-state row (spec 0047): the NEW "stato di lavorazione"
  * dimension, distinct from `opportunity_status` (sales pipeline). `system_key`
  * is `'open'|'closed_won'|'closed_lost'|null` (a pinned system row vs a custom
@@ -139,6 +152,14 @@ export interface OpportunityDetail {
   source_id: number | null
   source: OpportunityRelationRef | null
   /**
+   * Spec 0056: the operational site, facoltativa, never lead-derived (no BR-1
+   * inheritance, no `locked_fields` entry). Optional for the same
+   * fixture-compatibility reason as `state`/`workflow_status` below — treat a
+   * missing key the same as `null`.
+   */
+  operational_site_id?: number | null
+  operational_site?: OpportunityOperationalSiteRef | null
+  /**
    * Spec 0047 (D1, AC-003): the Regione, ereditata dal lead alla conversione
    * ma sempre editabile (mai BR-2-locked). Optional so every pre-existing
    * `OpportunityDetail` fixture across this feature's test suites keeps
@@ -231,6 +252,8 @@ export interface CreateOpportunityPayload {
   reporter_id?: number | null
   supervisor_id: number
   source_id?: number | null
+  /** Spec 0056: facoltativa, never BR-2-locked (no server-side inheritance from another entity). */
+  operational_site_id?: number | null
   /** Spec 0047 (D1): the Regione, freely settable on a standalone create; never locked, even from a lead. */
   state_id?: number | null
   lead_id?: number | null

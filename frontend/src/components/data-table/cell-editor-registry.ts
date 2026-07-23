@@ -16,6 +16,7 @@ import { DateTimeCellEditor } from '@/components/data-table/datetime-cell-editor
 import { RelationCellEditor } from '@/components/data-table/relation-cell-editor'
 import { SelectCellEditor } from '@/components/data-table/select-cell-editor'
 import { scalarColumnOptions, selectColumnOptions } from '@/features/table/column-options'
+import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import type { ColumnType, TableColumn, TableRow } from '@/features/table/types'
 
 /** The lookup key: a column's declared `editor` when present, else its `type` (spec 0054 D-1, 0055 D-1). */
@@ -102,7 +103,13 @@ export const CELL_EDITOR_REGISTRY: Record<CellEditorKind, CellEditorSpec> = {
     // this one registration. The component's extra `resource` prop arrives
     // dynamically via `cellEditorParams` below.
     cellEditor: RelationCellEditor as ComponentType<CustomCellEditorProps>,
-    cellEditorParams: (column) => ({ resource: column.relation?.resource ?? '' }),
+    cellEditorParams: (column) => {
+      const resource = column.relation?.resource ?? ''
+      // Same opt-in the form selects make at their call site: only the people
+      // resource shows avatars, and it shows one for EVERY option (initials
+      // when the user has no image).
+      return { resource, showAvatar: resource === USERS_FOR_SELECT_RESOURCE }
+    },
     cellEditorPopup: true,
   },
 }

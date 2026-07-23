@@ -53,6 +53,9 @@ function baseFields(t: TFunction) {
     reporter_id: z.number().nullable(),
     supervisor_id: z.number().nullable(),
     source_id: z.number().nullable(),
+    // Spec 0056: facoltativa, never a submit-blocking requirement — no
+    // server-side inheritance from another entity (a plain editable FK).
+    operational_site_id: z.number().nullable(),
     // Spec 0047 (D1, AC-026): the Regione, freely settable on a standalone
     // opportunity (forced read-only in the UI when lead-linked, see
     // `OpportunityFormBody`). Never a submit-blocking requirement.

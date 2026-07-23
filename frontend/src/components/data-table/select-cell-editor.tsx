@@ -3,8 +3,11 @@
  * a listbox over the column's OWN backend-resolved options, narrowed to the
  * ones valid for the edited row.
  *
- * It knows nothing about what the options mean — it renders `label` and
- * commits `value`, exactly as the backend supplied them. Two conventions,
+ * It knows nothing about what the options mean — it renders `label`, the
+ * `color` dot and the `requires_note` marker, and commits `value`, exactly as
+ * the backend supplied them (the note marker is the same `RequiresNoteBadge`
+ * the work panel's picker shows, so the two never drift; the note itself stays
+ * enforced server-side, 0054 D-5). Two conventions,
  * both introduced by earlier specs and reused verbatim here:
  *  - row-scoped options (`<columnId>_options`, 0054 AC-026/027): when the row
  *    carries the array, only those values are offered; a row without it keeps
@@ -23,13 +26,21 @@ import { useEffect, useRef } from 'react'
 import type { CustomCellEditorProps } from 'ag-grid-react'
 import { useTranslation } from 'react-i18next'
 import { Check } from 'lucide-react'
+import { swatchClassFor } from '@/features/custom-fields/badge-color-tokens'
+import { RequiresNoteBadge } from '@/features/opportunity-workflows/requires-note-badge'
 import { cn } from '@/lib/utils'
 import type { SelectOption, TableRow } from '@/features/table/types'
 
-/** A select column's cell value: the picked option projected as the shared related-row shape, or `null`. */
+/**
+ * A select column's cell value: the picked option projected as the shared
+ * related-row shape, or `null`. `color` rides along so the badge renderer keeps
+ * painting the right dot between the optimistic commit and the server's
+ * re-mapped row (`StatusBadgeCell` reads it off the cell value).
+ */
 export interface SelectCellValue {
   id: string | number
   name: string
+  color?: string | null
 }
 
 /** Extra `cellEditorParams` for this editor: the options resolved for the column, and its id (for the row-scoped narrowing). */
@@ -79,7 +90,7 @@ export function SelectCellEditor(
       return
     }
 
-    onValueChange({ id: option.value, name: option.label })
+    onValueChange({ id: option.value, name: option.label, color: option.color ?? null })
     stopEditing()
   }
 
@@ -89,13 +100,14 @@ export function SelectCellEditor(
       role="listbox"
       tabIndex={-1}
       aria-label={t('table.selectEditor.list')}
-      className="max-h-64 w-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow-md outline-none"
+      className="max-h-64 w-64 overflow-auto rounded-md border border-border bg-popover p-1 shadow-md outline-none"
     >
       {available.length === 0 ? (
         <p className="px-2.5 py-1 text-xs text-muted-foreground">{t('table.selectEditor.empty')}</p>
       ) : null}
       {available.map((option) => {
         const selected = value != null && String(value.id) === String(option.value)
+        const swatchClass = swatchClassFor(option.color)
         return (
           <button
             key={String(option.value)}
@@ -110,7 +122,11 @@ export function SelectCellEditor(
             )}
           >
             <Check className={cn('size-3.5 shrink-0', selected ? 'opacity-100' : 'opacity-0')} aria-hidden="true" />
+            {swatchClass !== undefined ? (
+              <span className={cn('size-2.5 shrink-0 rounded-full border', swatchClass)} aria-hidden="true" />
+            ) : null}
             <span className="truncate">{option.label}</span>
+            {option.requires_note === true ? <RequiresNoteBadge /> : null}
           </button>
         )
       })}

@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0056 — Sede operativa (OperationalSite) sull'Opportunita' e in Gestione Richieste.
+  Grounding VERIFICATO sul codice reale (esplorazione 2026-07-23), non ipotizzato.
+
+  Decisioni utente (AskUserQuestion 2026-07-23):
+    - La "sede" e' `operational_sites` (spec 0011), NON `company_sites` (spec 0020).
+    - FK NULLABLE (facoltativa): nessun backfill, nessuna rottura di factory/seeder esistenti.
+    - La direttiva 2026-07-17 che rimosse company_id/company_site_id/operational_site_id dalle
+      opportunita' e' SUPERATA limitatamente a `operational_site_id`. `company_id` e
+      `company_site_id` RESTANO rimossi e questa spec non li riapre.
+    - In Gestione Richieste la sede e' MODIFICABILE dal pannello "Lavora" (non sola lettura).
+    - Colonna di griglia sia su Opportunita' sia su Gestione Richieste.
+    - La colonna e' ORDINABILE e FILTRABILE (non display-only): richiede la classe colonna
+      dedicata, perche' la label composta non e' una colonna SQL.
+-->
+<spec id="0056-opportunity-operational-site" status="draft" owner="nicola" date="2026-07-23">
+
+  <goal>
+    L'Opportunita' possiede una Sede operativa facoltativa, impostabile dal form, visibile e
+    ordinabile/filtrabile in griglia. Lo stesso campo e' leggibile e MODIFICABILE dal pannello
+    "Lavora" di Gestione Richieste e visibile nella sua griglia, con gli stessi permessi per-campo
+    e la stessa catena di guardie gia' in uso — nessun endpoint nuovo, nessun componente nuovo.
+  </goal>
+
+  <context>
+    Tutti i nomi sotto sono VERIFICATI sul codice reale (esplorazione 2026-07-23).
+
+    NATURA DELL'ENTITA' (vincolo che guida tutto il resto). `operational_sites` ha come sole
+    colonne `id`, `old_id`, `alias`, timestamps: la sede NON ha un nome proprio. La sede E' il suo
+    indirizzo, che vive nella tabella polimorfica `addresses` (trait HasAddresses), esattamente una
+    riga con `is_primary = true`. La label mostrata e' COMPOSTA server-side come "{line1} - {city}"
+    (solo `line1` se la citta' manca) — OperationalSiteForSelectResource::composeLabel():42-51.
+    Conseguenze non negoziabili:
+      (a) la shape del riferimento e' `{id, label}`, NON `{id, name}` come le altre relazioni;
+      (b) il meccanismo generico DERIVED_RELATIONS non e' utilizzabile: filtra con
+          whereIn('name', ...) e ordina con una subquery select('name')
+          (OpportunitiesTableDefinition.php:299-301, :341-346, :379-389) su una colonna `name`
+          che non esiste -> SQL INVALIDO. Va usata una classe colonna dedicata;
+      (c) sort/filter/distinct passano SEMPRE per `line1` dell'indirizzo primario, mai per la
+          label composta (che non e' una colonna SQL e non e' indicizzabile).
+
+    PRECEDENTE DA RISPECCHIARE. La stessa identica aggiunta e' gia' stata fatta il 2026-07-21 su
+    `projects` e `campaigns` (migrazione 2026_07_21_010000_..., HANDOFF righe 1568-1622), con il
+    layering completo documentato. Questa spec e' un mirror di quel lavoro, non un progetto nuovo.
+    Due trabocchetti gia' pagati allora e da non ripagare:
+      - ArgumentCountError sui DTO a parametri posizionali misti (dimenticare il campo in
+        fromValidated() mentre lo si aggiunge al costruttore);
+      - colonna che rende "[object Object]" in griglia per mancanza del cell renderer: la sede non
+        ha `name`, quindi senza RelationCell il valore oggetto viene stringificato.
+
+    GESTIONE RICHIESTE NON EREDITA IL CAMPO (scoperta dell'esplorazione, non assunzione).
+    RequestManagementTableDefinition::modelClass() ritorna Opportunity::class, ma il modulo ha una
+    catena di lettura SEPARATA: WORK_PANEL_RELATIONS proprie
+    (RequestManagementService.php:73-93), un RequestManagementResource dichiaratamente
+    "independent from OpportunityResource" (:14-22) e un RequestRowMapper dedicato che non
+    interroga mai il DB (:39-64). Aggiungere il campo all'Opportunity NON lo fa comparire in
+    Gestione Richieste: e' un secondo blocco di lavoro esplicito.
+
+    MOTORE GIA' ESISTENTE — da riusare, mai duplicare:
+      - endpoint `GET /api/operational-sites/for-select` (routes/api.php:311), gia' esistente:
+        NESSUN endpoint nuovo va creato;
+      - `RelationSelectField` (components/form/relation-select-field.tsx), gia' usato per la sede in
+        projects/campaigns/leads/business-functions/users: NESSUN componente nuovo va creato;
+      - `RelationCell` (features/table/rich-cells.tsx:47-60): relationLabel() (:35-39) fa gia'
+        `relation?.name ?? relation?.label`, quindi gestisce nativamente il caso senza `name`;
+      - la catena di guardie per-campo (FieldDefinition + FieldPermission +
+        enforceFieldPermissions) e' proprieta' del motore: questa spec la ESTENDE al campo nuovo,
+        non la reimplementa.
+  </context>
+
+  <contract>
+    <!-- CONGELATO. Backend e frontend lavorano contro questa shape; se cambia, si aggiorna qui. -->
+
+    <database>
+      Nuova migrazione `add_operational_site_id_to_opportunities_table` (MAI editare la
+      2026_07_16_140000 gia' committata, ne' la 2026_07_17_180000 che rimosse le vecchie colonne).
+      Forma, mirror di 2026_07_21_010000:
+        $table->foreignId('operational_site_id')->nullable()->after('source_id')
+              ->constrained('operational_sites')->nullOnDelete();
+        $table->index('operational_site_id');
+      down(): dropForeign -> dropIndex -> dropColumn, in quest'ordine.
+
+      NOTA `after('source_id')`: il precedente usa after('city_id'), colonna che su `opportunities`
+      NON esiste. `source_id` e' la FK adiacente per significato (contesto/classificazione).
+
+      DEVIAZIONE DICHIARATA — nullOnDelete. Tutte le altre FK di `opportunities` sono
+      restrictOnDelete (BR-3, con guardia app-layer abort(409) e OpportunityRelationDeleteGuardTest).
+      Quelle FK sono pero' obbligatorie; questa e' facoltativa, e restrictOnDelete impedirebbe di
+      cancellare una Sede per un campo opzionale. Si segue il precedente piu' recente
+      (projects/campaigns): perdere la Sede referenziata AZZERA il campo, non blocca la
+      cancellazione ne' cancella l'Opportunita'. Da coprire con test esplicito (nessun 409).
+    </database>
+
+    <api>
+      OpportunityResource e RequestManagementResource emettono entrambi la coppia:
+        "operational_site_id": number|null,
+        "operational_site": { "id": number, "label": string } | null
+      La `label` e' composta SERVER-SIDE ("{line1} - {city}"). Il frontend non la ricompone mai.
+      NON usare summarizeByName(): la sede non ha `name`.
+
+      Scrittura, tre canali, stessa regola di validazione:
+        - POST   /api/opportunities            -> ['nullable','integer', Rule::exists('operational_sites','id')]
+        - PATCH  /api/opportunities/{id}       -> ['sometimes','nullable','integer', Rule::exists(...)]
+        - PATCH  (pannello Gestione Richieste) -> ['sometimes','nullable','integer', Rule::exists(...)]
+      Il valore null e' legittimo e significa "nessuna sede" (il campo deve poter essere AZZERATO:
+      da cui la coppia `operationalSiteIdSubmitted` sul DTO di update).
+
+      Nessun endpoint nuovo: la tendina consuma `GET /api/operational-sites/for-select` esistente.
+    </api>
+
+    <authorization>
+      Campo editabile NON-mandatory in OpportunitiesAuthorization e RequestManagementAuthorization:
+      FieldDefinition('operational_site_id', 'select') + riga nella mappa FieldPermission
+      ($mayWrite ? visibleEditable() : visibleReadonly()) — mai visibleEditable(required: true).
+
+      INVARIANTE EREDITATA DAL MOTORE (ResolvesEditableColumns::mayPickRelationValue():93-98):
+      una colonna relazione e' editabile solo se l'attore ha ANCHE `operational-sites.viewAny`.
+      Chi ha `opportunities.update` (o `request-management.update`) ma non quel permesso vedra' la
+      colonna READ-ONLY invece che finta-editabile, e il suo for-select risponderebbe 403.
+      Comportamento VOLUTO e da coprire con test: non e' un difetto da "correggere" allentando il gate.
+    </authorization>
+
+    <shared-label-helper>
+      AUDIT 2026-07-23 (verificato a mano, non riportato da terzi). La composizione della label
+      "{line1} - {city}" e' oggi duplicata BYTE-IDENTICA in almeno 10 punti, senza alcun helper
+      condiviso:
+        OperationalSiteForSelectResource:42 (composeLabel)
+        LeadResource:83 + :95 (summarizeOperationalSite + composeSiteLabel)
+        ProjectResource:97 / ProjectForSelectResource:101
+        CampaignResource:146 / CampaignForSelectResource:43
+        ProjectsTableDefinition:214 / CampaignsTableDefinition:232 (variante inline, stessa logica)
+        Leads/LeadOperationalSiteColumn:139
+        BusinessFunctions/BusinessFunctionOperationalSitesColumn:105
+      Anche `escapeLike()` e' duplicato tra le ultime due. HANDOFF:1592 documenta la scelta di
+      "replicare, non estrarre" motivandola con "NESSUN helper condiviso esisteva" — motivazione
+      valida allora, ma la ripetizione e' ormai REALE e non ipotetica (engineering.md §3 DRY).
+
+      RETTIFICA (audit approfondito, stessa data): le implementazioni sono 14, non 10. Le ulteriori
+      sono UserForSelectResource:65, ImportRunRowResource:59, EmploymentResource:86,
+      UserEmploymentColumns:354. Le ultime tre sono VARIANTI DIVERGENTI: sull'indirizzo mancante
+      ritornano rispettivamente `$site->alias`, nessuna guardia, e `null` invece di `''`.
+
+      DECISIONE: si estrae UN helper condiviso per la composizione della label, e il codice NUOVO
+      (Opportunity + Gestione Richieste, che sarebbero le copie 15 e 16) lo consuma.
+
+      DIFETTO LATENTE DA NON PROPAGARE (scoperto dall'audit, non ipotizzato). Le 11 copie del gruppo
+      principale leggono `$site->addresses->first()`, NON filtrato su `is_primary`, mentre tutto il
+      percorso filter/sort/distinct match su `where('is_primary', true)`
+      (LeadOperationalSiteColumn:65,82,111,135). Su un sito con piu' indirizzi in cui il primo non e'
+      il primary, la label MOSTRATA e la chiave di FILTRO/ORDINAMENTO divergono. Rendendo la colonna
+      filtrabile su due griglie in piu', il difetto diventerebbe visibile.
+      Per questo il nuovo helper usa `primaryAddress` (Models/OperationalSite.php:49, che ha gia' il
+      fallback corretto) e ritorna `''` sull'indirizzo mancante, coerente col contratto gia' asserito
+      dai test esistenti. Le copie vecchie NON vengono corrette qui: fuori scope, segnalate in HANDOFF.
+
+      VINCOLO DI BLAST RADIUS, non negoziabile: le 10 copie ESISTENTI NON vengono rifattorizzate in
+      questo giro. Non sono nello scope chiesto dall'utente e toccarle significherebbe rimettere
+      mano a leads/projects/campaigns/business-functions con rischio di regressione su moduli che
+      oggi funzionano. Restano come follow-up segnalato in HANDOFF. Il saldo di questa spec e'
+      quindi: ZERO nuove copie aggiunte, non "duplicazione eliminata".
+    </shared-label-helper>
+
+    <shared-column-class>
+      COLLOCAZIONE (rettifica dall'audit): NON serve inventare un namespace ne' un Concern nuovo.
+      `app/Tables/Shared/` ESISTE ed e' esattamente questo pattern, con due precedenti in produzione:
+      `Shared/PrimaryContactColumn.php` (colonna computed su relazione, condivisa tra `users` e
+      `referents`, parametrizzata su owner table + morph class nei soli due metodi che cambiano —
+      il suo docblock motiva la condivisione con "so the two columns can never drift") e
+      `Shared/BusinessFunctionColumn.php` (condivisa tra `products` e `product-categories`).
+      La nuova classe e' quindi `app/Tables/Shared/OperationalSiteColumn.php`, modellata su
+      PrimaryContactColumn. Nessuno dei 4 Concern esistenti in `app/Tables/Concerns/` copre il caso.
+
+      Implementazioni attuali della logica sede-come-colonna: 3 (Leads/LeadOperationalSiteColumn,
+      BusinessFunctions/BusinessFunctionOperationalSitesColumn — il cui docblock:14 AMMETTE gia' in
+      chiaro di rispecchiare la prima —, Users/UserEmploymentColumns:183+:228). Copiarne una quarta
+      e una quinta porterebbe a 5; la classe condivisa lascia UNA duplicazione residua, il massimo
+      accettato. Duplicati minori a corredo: `MAX_FILTER_VALUES = 200` in 4 copie ed `escapeLike()`
+      privata replicata in ognuna.
+
+      La logica sort/filter/distinct su `line1` esiste gia' in
+      backend/app/Tables/Leads/LeadOperationalSiteColumn.php, ma e' tipizzata su Lead
+      (summarize(Lead $row), namespace App\Tables\Leads). Con opportunita' + richieste
+      diventerebbero TRE copie: la ripetizione e' REALE (non ipotetica), quindi si estrae una
+      classe condivisa generica, parametrica sul nome della relazione, consumata da Opportunita' e
+      Gestione Richieste.
+
+      VINCOLO DI BLAST RADIUS: `leads` NON viene migrato alla classe condivisa in questo giro
+      (fuori scope, modulo non richiesto dall'utente). Resta come follow-up segnalato in HANDOFF.
+      Si accetta quindi UNA duplicazione residua temporanea (leads), non due nuove.
+
+      La classe condivisa conserva le proprieta' gia' verificate dell'originale: valori del set
+      filter cappati a MAX_FILTER_VALUES = 200 (difesa in profondita' sulla cardinalita' del
+      WHERE IN), LIKE con escape sui metacaratteri, parametri sempre bound — MAI whereRaw/
+      orderByRaw su input (backend.md §8: sink SQLi).
+    </shared-column-class>
+
+    <frontend>
+      Shape del ref = `{id, label}`. Il tipo esistente OpportunityRelationRef e' `{id, name}` e NON
+      va riusato per la sede: serve la conversione `{id,label}` -> `{id,name}` nel punto in cui si
+      idrata il selected di RelationSelectField (use-opportunity-selected-items.ts), esattamente
+      come fa il form dei progetti.
+
+      Il campo va nella sezione CLASSIFICAZIONE del form opportunita'
+      (opportunity-classification-section.tsx, dove sta gia' source_id): e' contesto/classificazione,
+      non una persona (team-section) ne' una data/importo (planning-section).
+
+      In Gestione Richieste il campo va nel blocco ATTRIBUTION
+      (request-attribution-section.tsx), accanto a Fonte/Segnalatore/Operatore, che e' il precedente
+      esatto di campo relazione editabile dal pannello.
+
+      Cell renderer in ENTRAMBE le griglie:
+        operational_site: (params) => <RelationCell {...params} icon={MapPin} />
+      identico a leads/column-renderers.tsx:21 e projects/column-renderers.tsx:35.
+      Senza questa riga la cella rende "[object Object]" (bug reale del 2026-07-21).
+
+      i18n: chiavi in it/en per form (label, placeholder di ricerca) e colonna. Nessuna stringa
+      hardcoded nel template.
+    </frontend>
+  </contract>
+
+  <acceptance-criteria>
+    <ac id="AC-001">Creando un'opportunita' con `operational_site_id` valido, il valore e' persistito e riletto.</ac>
+    <ac id="AC-002">Creando un'opportunita' SENZA sede, la creazione riesce e il campo e' null (facoltativo).</ac>
+    <ac id="AC-003">PATCH con `operational_site_id` valido aggiorna il campo.</ac>
+    <ac id="AC-004">PATCH con `operational_site_id: null` AZZERA il campo (non lo lascia invariato).</ac>
+    <ac id="AC-005">POST/PATCH con id inesistente -> 422.</ac>
+    <ac id="AC-006">OpportunityResource espone `operational_site_id` e `operational_site: {id,label}` con label "{line1} - {city}".</ac>
+    <ac id="AC-007">Sede senza citta' -> label = solo `line1`. Opportunita' senza sede -> `operational_site: null`.</ac>
+    <ac id="AC-008">Cancellando una Sede referenziata da un'opportunita': nessun 409, l'opportunita' sopravvive con il campo azzerato (nullOnDelete).</ac>
+    <ac id="AC-009">La colonna `operational_site` compare nella griglia opportunita' e ORDINA per `line1` dell'indirizzo primario.</ac>
+    <ac id="AC-010">La colonna filtra (set filter e advanced filter) per `line1`, con parametri bound e nessun SQL raw.</ac>
+    <ac id="AC-011">Il pannello "Lavora" di Gestione Richieste espone la sede e ne consente la modifica; il valore persiste.</ac>
+    <ac id="AC-012">La colonna compare anche nella griglia Gestione Richieste, ordinabile/filtrabile allo stesso modo.</ac>
+    <ac id="AC-013">Un attore con `opportunities.update` ma SENZA `operational-sites.viewAny` riceve la colonna READ-ONLY (non finta-editabile).</ac>
+    <ac id="AC-014">Un ruolo il cui field-permission su `operational_site_id` e' readonly riceve 422/403 se tenta di cambiarlo.</ac>
+    <ac id="AC-015">In entrambe le griglie la cella mostra la label composta, MAI "[object Object]".</ac>
+    <ac id="AC-016">Nessuna stringa hardcoded: chiavi i18n presenti in it e en.</ac>
+  </acceptance-criteria>
+
+  <out-of-scope>
+    - `company_id` / `company_site_id`: restano rimossi (direttiva 2026-07-17 confermata su questi due).
+    - Migrazione di `leads` alla classe colonna condivisa: follow-up, non questo giro.
+    - Inline-edit della sede nella griglia (WritesInlineEditableCells oggi ammette il solo
+      WORKFLOW_STATUS_FIELD): la modifica avviene da form e da pannello "Lavora", non in cella.
+    - Qualsiasi ereditarieta'/prefill server-side della sede da un'altra entita': il campo e' una FK
+      normale, editabile, senza forcing (stessa scelta di projects/campaigns).
+  </out-of-scope>
+
+</spec>

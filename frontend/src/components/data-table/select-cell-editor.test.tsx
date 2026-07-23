@@ -18,10 +18,13 @@ import type { SelectOption, TableRow } from '@/features/table/types'
  */
 
 const OPTIONS: SelectOption[] = [
-  { value: 1, label: 'Da contattare', requires_note: false },
-  { value: 2, label: 'In lavorazione', requires_note: false },
-  { value: 3, label: 'Chiusa', requires_note: true },
+  { value: 1, label: 'Da contattare', color: 'blue', requires_note: false },
+  { value: 2, label: 'In lavorazione', color: 'amber', requires_note: false },
+  { value: 3, label: 'Chiusa', color: null, requires_note: true },
 ]
+
+/** The note marker's own text, so the option lookups stay label-only. */
+const REQUIRES_NOTE_LABEL = () => i18n.t('opportunityWorkflows.form.statuses.requiresNoteBadge')
 
 function renderEditor(
   props: Partial<CustomCellEditorProps<TableRow, SelectCellValue | null> & SelectCellEditorParams> = {},
@@ -50,15 +53,15 @@ describe('SelectCellEditor', () => {
     renderEditor()
 
     expect(screen.getAllByRole('option')).toHaveLength(3)
-    expect(screen.getByRole('option', { name: 'Chiusa' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Chiusa/ })).toBeInTheDocument()
   })
 
-  it('commits the pick as {id, name} and closes the editor, on a single click', () => {
+  it('commits the pick as {id, name, color} and closes the editor, on a single click', () => {
     const props = renderEditor()
 
     fireEvent.click(screen.getByRole('option', { name: 'In lavorazione' }))
 
-    expect(props.onValueChange).toHaveBeenCalledWith({ id: 2, name: 'In lavorazione' })
+    expect(props.onValueChange).toHaveBeenCalledWith({ id: 2, name: 'In lavorazione', color: 'amber' })
     expect(props.stopEditing).toHaveBeenCalledTimes(1)
   })
 
@@ -67,7 +70,7 @@ describe('SelectCellEditor', () => {
 
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Da contattare',
-      'Chiusa',
+      `Chiusa${REQUIRES_NOTE_LABEL()}`,
     ])
   })
 
@@ -81,8 +84,25 @@ describe('SelectCellEditor', () => {
   it('marks the current value as selected', () => {
     renderEditor({ value: { id: 3, name: 'Chiusa' } })
 
-    expect(screen.getByRole('option', { name: 'Chiusa' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('option', { name: /Chiusa/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('option', { name: 'Da contattare' })).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('paints each option with the color dot the backend sent, and none when it sent no color', () => {
+    renderEditor()
+
+    const dots = screen.getAllByRole('option').map((option) => option.querySelector('.rounded-full'))
+
+    expect(dots[0]).toHaveClass('bg-blue-500')
+    expect(dots[1]).toHaveClass('bg-amber-500')
+    expect(dots[2]).toBeNull()
+  })
+
+  it('marks only the options that require a note, so the operator knows before picking', () => {
+    renderEditor()
+
+    expect(screen.getAllByText(REQUIRES_NOTE_LABEL())).toHaveLength(1)
+    expect(screen.getByRole('option', { name: /Chiusa/ })).toHaveTextContent(REQUIRES_NOTE_LABEL())
   })
 
   it('states the empty case instead of rendering a blank popup', () => {

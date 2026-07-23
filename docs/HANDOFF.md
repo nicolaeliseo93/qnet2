@@ -2,6 +2,28 @@
 
 > Injected at session start. Update at every green state.
 
+## SELECT INLINE "STATO LAVORAZIONE": PALLINO COLORE + MARCATORE NOTA (2026-07-23) — GREEN, NON COMMITTATO
+
+Richiesta utente: nell'editor inline della colonna `workflow_status` (Gestione Richieste) servono i
+pallini colorati e l'indicazione se lo stato richiede una nota.
+Mancava il DATO, non solo il rendering: `WritesInlineEditableCells::optionsFor()` emetteva solo
+`{value, label, requires_note}` — nessun `color`. Ora emette anche `color` (stesso TOKEN di palette
+che `swatchClassFor`/`BADGE_COLOR_CLASSES` gia' mappano, mai un hex).
+Frontend: `SelectOption` guadagna `color?: string | null`; `SelectCellEditor` rende il pallino e,
+per le opzioni `requires_note`, riusa `RequiresNoteBadge` (la stessa marcatura del picker del
+pannello Lavora — non una seconda grafica per lo stesso flag); popup allargato a `w-64` per farci
+stare label + badge. `SelectCellValue` porta anche `color`, cosi' `StatusBadgeCell` non perde il
+colore nella finestra fra commit ottimistico e riga rimappata dal server.
+NON toccata la regola della nota obbligatoria: `resolveRequiresNote` leggeva gia' `options`.
+Verificato: Pest `tests/Feature/RequestManagement` 143 passed; Vitest su
+`components/data-table` + `features/table` + `features/request-management` 312 passed / 3 rossi
+PRE-ESISTENTI (i18n ContactsCell in `cell-renderers.test.tsx`); `tsc --noEmit` pulito; ESLint pulito
+sui file toccati; Pint pulito sui file toccati.
+Sistemata anche un'asserzione stantia lasciata dal lavoro `showAvatar` non committato
+(`column-defaults.test.tsx` si aspettava ancora `cellEditorParams` senza `showAvatar`): era rossa in
+working tree, il comportamento nuovo e' quello voluto e il suo gemello in
+`cell-editor-registry.test.ts` era gia' aggiornato.
+
 ## BUGFIX — NOTA OBBLIGATORIA RIFIUTATA DAL PANNELLO GESTIONE RICHIESTE (2026-07-22) — GREEN
 
 Sintomo utente: nel form del pannello, selezionando uno stato di lavorazione con `requires_note`

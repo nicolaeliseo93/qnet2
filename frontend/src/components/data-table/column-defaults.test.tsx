@@ -183,7 +183,7 @@ describe('resolveEditableColumnProps — relation columns (spec 0054 D-7)', () =
     const props = resolveEditableColumnProps(column)
     expect(props.cellEditor).toBe(RelationCellEditor)
     expect(props.cellEditorPopup).toBe(true)
-    expect(props.cellEditorParams).toEqual({ resource: 'users' })
+    expect(props.cellEditorParams).toEqual({ resource: 'users', showAvatar: true })
   })
 
   it('stays read-only when `editor: "relation"` is declared without its target resource (malformed metadata)', () => {

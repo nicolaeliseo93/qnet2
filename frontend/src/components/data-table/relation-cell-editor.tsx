@@ -45,6 +45,14 @@ export interface RelationCellValue {
 /** Extra `cellEditorParams` for this editor (spec 0054 D-1): which `/for-select` resource feeds the list. */
 export interface RelationCellEditorParams {
   resource: string
+  /**
+   * Prefix each option with its `UserAvatar` — image when the item carries one,
+   * the label's initials otherwise. Opt-in per resource, exactly like
+   * `AsyncPaginatedSelect`'s prop of the same name: presence of `avatar_url`
+   * cannot stand in for it, since the for-select envelope strips null optionals
+   * (`ForSelectResource::toArray`), which is precisely the no-image case.
+   */
+  showAvatar?: boolean
 }
 
 /** Debounce before a typed term reaches the server, matching AsyncPaginatedSelect. */
@@ -54,7 +62,7 @@ export function RelationCellEditor(
   props: CustomCellEditorProps<TableRow, RelationCellValue | null> & RelationCellEditorParams,
 ) {
   const { t } = useTranslation()
-  const { value, onValueChange, stopEditing, resource } = props
+  const { value, onValueChange, stopEditing, resource, showAvatar = false } = props
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -145,7 +153,7 @@ export function RelationCellEditor(
                     className={cn('size-3.5 shrink-0', selected ? 'opacity-100' : 'opacity-0')}
                     aria-hidden="true"
                   />
-                  {item.avatar_url !== undefined && item.avatar_url !== null ? (
+                  {showAvatar ? (
                     <UserAvatar name={item.label} src={item.avatar_url} className="size-5 shrink-0 text-[10px]" />
                   ) : null}
                   <span className="truncate">{item.label}</span>

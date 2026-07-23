@@ -69,9 +69,10 @@ if (! function_exists('globalWorkflowStatus')) {
     }
 }
 
-it('GET /api/tables/request-management/columns: workflow_status emits options with requires_note per entry', function () {
+it('GET /api/tables/request-management/columns: workflow_status emits options with requires_note and color per entry', function () {
     $actor = workflowInlineEditActor(['viewAny', 'view', 'update']);
     $required = globalWorkflowStatus(true);
+    $required->update(['color' => 'violet']);
     Sanctum::actingAs($actor);
 
     $columns = collect($this->getJson('/api/tables/request-management/columns')->assertOk()->json('data.columns'))
@@ -79,7 +80,8 @@ it('GET /api/tables/request-management/columns: workflow_status emits options wi
 
     $option = collect($columns['workflow_status']['options'])->firstWhere('value', $required->id);
     expect($option)->not->toBeNull()
-        ->and($option['requires_note'])->toBeTrue();
+        ->and($option['requires_note'])->toBeTrue()
+        ->and($option['color'])->toBe('violet');
 });
 
 // ---------------------------------------------------------------------------

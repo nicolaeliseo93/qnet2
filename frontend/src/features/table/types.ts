@@ -20,10 +20,14 @@ export type ColumnType = 'text' | 'number' | 'datetime' | 'enum' | 'tags' | 'bad
  * column such as the working status), `label` what the operator reads, and
  * `requires_note` whether picking it must be accompanied by a note — the server
  * enforces that rule regardless (0054 D-5), this only lets the grid ask first.
+ * `color` is the same badge color TOKEN the cell renderer already maps
+ * (`swatchClassFor`), so the editor marks an option with the very dot its cell
+ * shows once committed; absent when the domain has no color for the option.
  */
 export interface SelectOption {
   value: string | number
   label: string
+  color?: string | null
   requires_note?: boolean
 }
 

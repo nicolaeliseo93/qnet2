@@ -189,13 +189,19 @@ describe('resolveCellEditorSpec', () => {
     it('forwards the column\'s declared for-select resource as cellEditorParams (D-1)', () => {
       const column = stubColumn({ id: 'operator', type: 'text', relation: { resource: 'users' } })
       const params = resolveCellEditorSpec('relation')?.cellEditorParams?.(column)
-      expect(params).toEqual({ resource: 'users' })
+      expect(params).toEqual({ resource: 'users', showAvatar: true })
+    })
+
+    it('turns avatars off for a non-people resource', () => {
+      const column = stubColumn({ id: 'registry', type: 'text', relation: { resource: 'registries' } })
+      const params = resolveCellEditorSpec('relation')?.cellEditorParams?.(column)
+      expect(params).toEqual({ resource: 'registries', showAvatar: false })
     })
 
     it('falls back to an empty resource string when the column carries none (defensive)', () => {
       const column = stubColumn({ id: 'operator', type: 'text' })
       const params = resolveCellEditorSpec('relation')?.cellEditorParams?.(column)
-      expect(params).toEqual({ resource: '' })
+      expect(params).toEqual({ resource: '', showAvatar: false })
     })
   })
 })

@@ -40,6 +40,7 @@ const SERVER_ERROR_FIELDS = [
   'reporter_id',
   'supervisor_id',
   'source_id',
+  'operational_site_id',
   'state_id',
   'opportunity_workflow_status_id',
   'product_lines',
@@ -107,6 +108,7 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
         reporter_id: opportunity.reporter_id,
         supervisor_id: opportunity.supervisor_id,
         source_id: opportunity.source_id,
+        operational_site_id: opportunity.operational_site_id ?? null,
         state_id: opportunity.state_id ?? null,
         opportunity_workflow_status_id: opportunity.opportunity_workflow_status_id ?? null,
         product_lines: opportunity.product_lines.map((line) => ({
@@ -132,6 +134,7 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
       reporter_id: null,
       supervisor_id: null,
       source_id: null,
+      operational_site_id: null,
       state_id: null,
       opportunity_workflow_status_id: null,
       product_lines: [],

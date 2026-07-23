@@ -110,13 +110,13 @@ it('AC-001: every activated column advertises its own editor', function () {
     }
 });
 
-it('AC-001: workflow_status options carry requires_note per entry', function () {
+it('AC-001: workflow_status options carry requires_note and color per entry', function () {
     Sanctum::actingAs(inlineEditorsActor(['viewAny', 'update']));
 
     $options = inlineEditorsColumns()['workflow_status']['options'];
 
     expect($options)->toBeArray()->not->toBeEmpty()
-        ->and($options[0])->toHaveKeys(['value', 'label', 'requires_note']);
+        ->and($options[0])->toHaveKeys(['value', 'label', 'color', 'requires_note']);
 });
 
 it('AC-002: product_categories stays read-only', function () {

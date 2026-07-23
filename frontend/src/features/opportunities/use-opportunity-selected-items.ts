@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { RelationFieldRef } from '@/components/form/relation-select-field'
+import { toRelationFieldRef } from '@/components/form/relation-field-ref'
 import type { ForSelectItem } from '@/features/for-select/types'
 import type { OpportunityFormMode } from '@/features/opportunities/types'
 import type { OpportunityLeadSelectionState } from '@/features/opportunities/use-opportunity-lead-selection'
@@ -13,6 +14,8 @@ export interface OpportunitySelectedItems {
   commercial: RelationFieldRef | null
   reporter: RelationFieldRef | null
   source: RelationFieldRef | null
+  /** Spec 0056: the operational site's `{id,label}` ref, converted to `{id,name}` (edit mode only, never lead-derived). */
+  operationalSite: RelationFieldRef | null
   /** Spec 0047 (D1): the Regione's hydrated ref, edit mode only (never known before a create-from-lead is saved). */
   state: RelationFieldRef | null
   supervisor: RelationFieldRef | null
@@ -26,6 +29,7 @@ const EMPTY_SELECTED_ITEMS: OpportunitySelectedItems = {
   commercial: null,
   reporter: null,
   source: null,
+  operationalSite: null,
   state: null,
   supervisor: null,
   managers: [],
@@ -66,6 +70,7 @@ export function useOpportunitySelectedItems(
         commercial: opportunity.commercial,
         reporter: opportunity.reporter,
         source: opportunity.source,
+        operationalSite: toRelationFieldRef(opportunity.operational_site ?? null),
         state: opportunity.state ?? null,
         supervisor: opportunity.supervisor,
         managers: opportunity.managers.map((manager) => ({ id: manager.id, label: manager.name })),

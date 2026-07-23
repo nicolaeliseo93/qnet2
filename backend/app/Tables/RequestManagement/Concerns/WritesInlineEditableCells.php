@@ -69,7 +69,9 @@ trait WritesInlineEditableCells
      * statuses, not just the one resolved for a specific opportunity — GET
      * /columns is domain-wide, not per-row), each carrying `requires_note` so
      * the grid's cell editor knows when to open the note dialog (spec 0054,
-     * contract). The AUTHORITATIVE per-row membership check (AC-011) stays
+     * contract) and `color` so the same editor marks the option with the very
+     * dot the badge cell and the work panel's picker already show for that
+     * status. The AUTHORITATIVE per-row membership check (AC-011) stays
      * in RequestManagementService::updateWork() regardless of what this list
      * shows.
      *
@@ -83,10 +85,11 @@ trait WritesInlineEditableCells
 
         return OpportunityWorkflowStatus::query()
             ->orderBy('sort_order')
-            ->get(['id', 'name', 'requires_note'])
+            ->get(['id', 'name', 'color', 'requires_note'])
             ->map(static fn (OpportunityWorkflowStatus $status): array => [
                 'value' => $status->id,
                 'label' => $status->name,
+                'color' => $status->color,
                 'requires_note' => $status->requires_note,
             ])
             ->all();

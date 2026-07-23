@@ -75,6 +75,21 @@ describe('RelationCellEditor', () => {
     expect(screen.getByRole('option', { name: 'Luigi Bianchi' })).toBeInTheDocument()
   })
 
+  it('shows the initials avatar with `showAvatar`, even for an option the envelope sent without `avatar_url`', async () => {
+    fetchForSelectMock.mockResolvedValue(page([{ id: 1, label: 'Mario Rossi' }]))
+    renderEditor({ showAvatar: true } as Partial<CustomCellEditorProps<TableRow, RelationCellValue | null>>)
+
+    expect(await screen.findByText('MR')).toBeInTheDocument()
+  })
+
+  it('shows no avatar without `showAvatar` (non-people resources)', async () => {
+    fetchForSelectMock.mockResolvedValue(page([{ id: 1, label: 'Mario Rossi', avatar_url: null }]))
+    renderEditor()
+
+    expect(await screen.findByRole('option', { name: 'Mario Rossi' })).toBeInTheDocument()
+    expect(screen.queryByText('MR')).not.toBeInTheDocument()
+  })
+
   it('sends focus to the search field on mount (native `autoFocus`, no click needed)', () => {
     fetchForSelectMock.mockResolvedValue(page([]))
     renderEditor()
