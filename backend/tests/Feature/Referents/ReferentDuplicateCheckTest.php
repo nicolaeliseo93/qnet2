@@ -105,12 +105,12 @@ it('AC-003: matches an existing referent by case/whitespace-insensitive tax_code
 it('AC-004: a referent matching on multiple criteria appears once with cumulative matched_on', function () {
     $actor = referentDuplicateCheckUserWith(['create']);
     $referent = Referent::factory()->create();
-    $card = PersonalData::factory()->individual()->for($referent, 'personable')->create(['tax_code' => 'AAABBB11C22D333E']);
+    $card = PersonalData::factory()->individual()->for($referent, 'personable')->create(['tax_code' => 'LVLDAA80A01H501V']);
     Contact::factory()->email()->for($card, 'contactable')->create(['value' => 'dup@example.com']);
     Sanctum::actingAs($actor);
 
     $response = $this->postJson('/api/referents/duplicate-check', [
-        'tax_code' => 'aaabbb11c22d333e',
+        'tax_code' => 'lvldaa80a01h501v',
         'contacts' => [['type' => 'email', 'value' => 'DUP@example.com']],
     ])->assertOk();
 

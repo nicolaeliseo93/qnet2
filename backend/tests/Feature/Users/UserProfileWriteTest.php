@@ -30,7 +30,7 @@ function fullProfilePayload(array $overrides = []): array
         'type' => 'individual',
         'first_name' => 'Ada',
         'last_name' => 'Lovelace',
-        'tax_code' => 'LVLADA90A01H501Z',
+        'tax_code' => 'LVLDAA90A01H501X',
         'birth_date' => '1990-01-01',
         'contacts' => [
             ['type' => 'email', 'value' => 'ada@example.com', 'label' => 'Work', 'is_primary' => true],

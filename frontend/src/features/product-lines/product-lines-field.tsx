@@ -1,55 +1,45 @@
 import { useTranslation } from 'react-i18next'
 import { Boxes, Plus, Trash2 } from 'lucide-react'
-import type { UseFormSetValue } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { AsyncPaginatedSelect } from '@/components/ui/async-paginated-select'
 import { BUSINESS_FUNCTIONS_FOR_SELECT_RESOURCE } from '@/features/business-functions/for-select-api'
 import { PRODUCT_CATEGORIES_FOR_SELECT_RESOURCE } from '@/features/product-categories/for-select-api'
-import {
-  useOpportunityProductLines,
-  type OpportunityProductLineRow,
-} from '@/features/opportunities/use-opportunity-product-lines'
-import type { OpportunityNameAutofill } from '@/features/opportunities/use-opportunity-name-autofill'
-import type { OpportunityProductLine } from '@/features/opportunities/types'
-import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
+import { useProductLinesField } from '@/features/product-lines/use-product-lines-field'
+import type { ProductLine, ProductLineRow } from '@/features/product-lines/types'
 
-interface OpportunityProductLinesFieldProps {
-  /** The `product_lines` RHF field, as handed down by `MetaField`'s render prop (mirrors `ManagerSlotsField`). */
-  value: OpportunityProductLineRow[]
-  onChange: (next: OpportunityProductLineRow[]) => void
-  setValue: UseFormSetValue<OpportunityFormValues>
-  /** Rows whose labels are already known without a fetch (edit load, from-lead prefill, in-form Lead picker). */
-  knownLines: OpportunityProductLine[]
-  nameAutofill: OpportunityNameAutofill
+export type { ProductLine, ProductLineRow }
+
+/** Stable empty default: avoids a fresh array reference (and reference-equality churn) on every render (engineering.md §10). */
+const EMPTY_KNOWN_LINES: ProductLine[] = []
+
+interface ProductLinesFieldProps {
+  value: ProductLineRow[]
+  onChange: (rows: ProductLineRow[]) => void
+  /** Rows whose labels are already known without a fetch (edit load, from-lead prefill, in-form pickers). */
+  knownLines?: ProductLine[]
   disabled?: boolean
 }
 
 /**
- * The opportunity's business-function + product-category rows (spec 0040
- * amendment rev.3, AC-106/107), styled and interacted with exactly like
- * `ManagerSlotsField`: "Add" appends an empty row (full-width dashed
- * button), each row edits its pair IN PLACE (numbered chip, two selects,
- * a trailing remove button), the category select is scoped to the row's
- * own function and disabled until it is chosen. All non-render logic
- * (label resolution, the name auto-fill) lives in `useOpportunityProductLines`
- * — this component only renders it.
+ * The business-function + product-category row editor (spec 0057, frozen
+ * contract): shared by the opportunity form and the request-management
+ * create form (originally `OpportunityProductLinesField`, spec 0040
+ * amendment rev.3 AC-106/107). Styled/interacted like `ManagerSlotsField`:
+ * "Add" appends an empty row (full-width dashed button), each row edits its
+ * pair IN PLACE (numbered chip, two selects, a trailing remove button), the
+ * category select is scoped to the row's own function and disabled until it
+ * is chosen. All non-render logic (label resolution) lives in
+ * `useProductLinesField` — this component only renders it.
  */
-export function OpportunityProductLinesField({
-  value,
-  onChange,
-  setValue,
-  knownLines,
-  nameAutofill,
-  disabled = false,
-}: OpportunityProductLinesFieldProps) {
+export function ProductLinesField({ value, onChange, knownLines = EMPTY_KNOWN_LINES, disabled = false }: ProductLinesFieldProps) {
   const { t } = useTranslation()
   const { addRow, removeRow, setRowBusinessFunction, setRowProductCategory, businessFunctionLabel, productCategoryLabel } =
-    useOpportunityProductLines({ value, onChange, setValue, knownLines, nameAutofill })
+    useProductLinesField({ value, onChange, knownLines })
 
   const selectLabels = {
-    placeholder: t('opportunities.form.selectPlaceholder'),
-    empty: t('opportunities.form.selectEmpty'),
-    error: t('opportunities.form.selectError'),
+    placeholder: t('productLines.selectPlaceholder'),
+    empty: t('productLines.selectEmpty'),
+    error: t('productLines.selectError'),
     clearLabel: t('common.clear'),
     retry: t('common.retry'),
   }
@@ -72,7 +62,7 @@ export function OpportunityProductLinesField({
             <li key={index} className="flex items-center gap-2">
               <span
                 className="flex w-9 shrink-0 items-center gap-1 text-xs font-semibold text-muted-foreground"
-                title={t('opportunities.form.productLines.rowLabel', { n: index + 1 })}
+                title={t('productLines.rowLabel', { n: index + 1 })}
               >
                 <Boxes aria-hidden="true" className="size-3.5" />
                 {index + 1}
@@ -88,8 +78,8 @@ export function OpportunityProductLinesField({
                     disabled={disabled}
                     labels={{
                       ...selectLabels,
-                      searchPlaceholder: t('opportunities.form.businessFunctionSearch'),
-                      triggerLabel: t('opportunities.form.productLines.businessFunction', { n: index + 1 }),
+                      searchPlaceholder: t('productLines.businessFunctionSearch'),
+                      triggerLabel: t('productLines.businessFunction', { n: index + 1 }),
                     }}
                   />
                 </div>
@@ -104,8 +94,8 @@ export function OpportunityProductLinesField({
                     params={row.business_function_id !== null ? { business_function_id: row.business_function_id } : undefined}
                     labels={{
                       ...selectLabels,
-                      searchPlaceholder: t('opportunities.form.productCategorySearch'),
-                      triggerLabel: t('opportunities.form.productLines.category', { n: index + 1 }),
+                      searchPlaceholder: t('productLines.productCategorySearch'),
+                      triggerLabel: t('productLines.category', { n: index + 1 }),
                     }}
                   />
                 </div>
@@ -116,7 +106,7 @@ export function OpportunityProductLinesField({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={t('opportunities.form.productLines.remove')}
+                  aria-label={t('productLines.remove')}
                   disabled={disabled}
                   onClick={() => removeRow(index)}
                 >
@@ -137,10 +127,10 @@ export function OpportunityProductLinesField({
         className="w-full justify-center border-dashed text-muted-foreground hover:border-solid hover:text-foreground"
       >
         <Plus aria-hidden="true" className="size-3.5" />
-        {t('opportunities.form.productLines.add')}
+        {t('productLines.add')}
       </Button>
 
-      <p className="text-xs text-muted-foreground">{t('opportunities.form.productLines.hint')}</p>
+      <p className="text-xs text-muted-foreground">{t('productLines.hint')}</p>
     </div>
   )
 }

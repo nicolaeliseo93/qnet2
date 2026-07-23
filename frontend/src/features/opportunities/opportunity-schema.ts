@@ -9,9 +9,6 @@ import type { TFunction } from 'i18next'
  * remains nullable when editing an existing one.
  */
 
-/** Backend `name` column limit (`max:255`). */
-export const NAME_MAX_LENGTH = 255
-
 /** Backend limit on FILLED manager slots (`max:4`, `ValidatesManagerSlots`, mirrors registries). */
 const MAX_MANAGERS = 4
 
@@ -39,12 +36,8 @@ function requiredRelationId(message: string) {
 /** Shared fields common to create and edit. */
 function baseFields(t: TFunction) {
   return {
-    name: z
-      .string()
-      .trim()
-      .min(1, t('opportunities.form.nameRequired'))
-      .max(NAME_MAX_LENGTH, t('opportunities.form.nameMax')),
-    // D-4: registry_id is the other required field (name is above).
+    // D-4/D-5 (spec 0057): registry_id is the required identity field — the
+    // name is no longer a form input, it is derived server-side as `OPP_{id}`.
     registry_id: requiredRelationId(t('opportunities.form.registryRequired')),
     // Spec 0043 D-3: the opportunity status is a mandatory FK, mirrors registry_id.
     opportunity_status_id: requiredRelationId(t('opportunities.form.opportunityStatusRequired')),
@@ -82,21 +75,22 @@ function baseFields(t: TFunction) {
       )
       .superRefine((rows, ctx) => {
         if (rows.length === 0) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('opportunities.form.productLines.required') })
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('productLines.required') })
           return
         }
         const hasIncompleteRow = rows.some(
           (row) => row.business_function_id === null || row.product_category_id === null,
         )
         if (hasIncompleteRow) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('opportunities.form.productLines.rowIncomplete') })
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('productLines.rowIncomplete') })
         }
       }),
-    // "Prodotti di interesse" (user directive 2026-07-22): a plain id set.
+    // "Prodotti di interesse": a plain id set, MANDATORY since the user
+    // directive 2026-07-23 (at least one product, mirroring `product_lines`).
     // Cross-category picks are LEGAL (the server adds the matching product
-    // line, after the picker's unlock dialog), so there is nothing to
+    // line, after the picker's unlock dialog), so there is nothing else to
     // cross-validate against `product_lines` here.
-    products_of_interest: z.array(z.number()),
+    products_of_interest: z.array(z.number()).min(1, t('products.ofInterest.required')),
     // Ordered, gap-aware "G.A. n" manager slots: index+1 = G.A. number, `null`
     // = an intentionally empty slot. At most MAX_MANAGERS filled.
     manager_slots: z

@@ -169,6 +169,7 @@ export const products = {
       'Whole catalogue: a product from another category will add its business function / category row.',
     hintNoCategories:
       'Add a business function with its product category first, or unlock the whole catalogue.',
+    required: 'Select at least one product of interest.',
     unlock: 'Show all products',
     relock: "Limit to the opportunity's categories",
     unlockDialog: {

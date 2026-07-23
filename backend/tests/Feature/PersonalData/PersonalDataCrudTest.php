@@ -86,7 +86,7 @@ it('create: 201 attaches a card to its polymorphic owner', function () {
         'type' => PersonalDataTypeEnum::Individual->value,
         'first_name' => 'Ada',
         'last_name' => 'Lovelace',
-        'tax_code' => 'LVLADA80A01H501U',
+        'tax_code' => 'LVLDAA80A01H501V',
     ])
         ->assertCreated()
         ->assertJsonPath('data.full_name', 'Ada Lovelace')
@@ -98,6 +98,38 @@ it('create: 201 attaches a card to its polymorphic owner', function () {
         'personable_id' => $owner->id,
         'first_name' => 'Ada',
     ]);
+});
+
+it('create: 422 when the tax code does not match the submitted names', function () {
+    $actor = userWithPersonalDataAbilities(['create']);
+    $owner = User::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/personal-data', [
+        'personable_type' => 'user',
+        'personable_id' => $owner->id,
+        'type' => PersonalDataTypeEnum::Individual->value,
+        'first_name' => 'Ada',
+        'last_name' => 'Byron',
+        // A valid code, but Lovelace's — not Byron's.
+        'tax_code' => 'LVLDAA80A01H501V',
+    ])->assertStatus(422)->assertJsonValidationErrors('tax_code');
+
+    $this->assertDatabaseCount('personal_data', 0);
+});
+
+it('create: 422 when the VAT number control digit is wrong', function () {
+    $actor = userWithPersonalDataAbilities(['create']);
+    $owner = User::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/personal-data', [
+        'personable_type' => 'user',
+        'personable_id' => $owner->id,
+        'type' => PersonalDataTypeEnum::Company->value,
+        'company_name' => 'Acme SpA',
+        'vat_number' => '00743110158',
+    ])->assertStatus(422)->assertJsonValidationErrors('vat_number');
 });
 
 it('create: 403 without personal_data.create', function () {

@@ -67,7 +67,8 @@ it('update: PATCH partial (only personal_data.contacts) full-replaces contacts, 
     ])->assertOk()->assertJsonPath('data.notes', 'Keep me');
 
     $this->assertDatabaseMissing('contacts', ['id' => $oldContact->id]);
-    expect($card->contacts()->where('value', '+39 06 1234567')->exists())->toBeTrue();
+    // Stored canonical (user directive 2026-07-23): a phone keeps only its digits.
+    expect($card->contacts()->where('value', '+39061234567')->exists())->toBeTrue();
 });
 
 it('update: PATCH {referent_type_id: null} removes the type', function () {

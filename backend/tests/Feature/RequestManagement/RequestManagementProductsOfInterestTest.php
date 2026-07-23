@@ -78,7 +78,10 @@ it('PATCH products_of_interest persists the collection and exposes it back', fun
     ]);
 });
 
-it('PATCH products_of_interest is authoritative: a removed product is detached, [] clears the collection', function () {
+// Requirement CHANGED (user directive 2026-07-23): the collection is still an
+// authoritative replace, but it is now MANDATORY — `[]` is rejected instead of
+// clearing it, exactly like on the opportunities form.
+it('PATCH products_of_interest is authoritative: a removed product is detached, [] is rejected', function () {
     $actor = productInterestActor();
     $opportunity = productInterestOpportunity($actor);
     $category = productInterestCategory();
@@ -98,9 +101,9 @@ it('PATCH products_of_interest is authoritative: a removed product is detached, 
 
     $this->patchJson("/api/request-management/{$opportunity->id}", [
         'products_of_interest' => [],
-    ])->assertOk()->assertJsonCount(0, 'data.products_of_interest');
+    ])->assertStatus(422)->assertJsonValidationErrors('products_of_interest');
 
-    expect($opportunity->fresh()->productsOfInterest)->toHaveCount(0);
+    expect($opportunity->fresh()->productsOfInterest)->toHaveCount(1);
 });
 
 it('PATCH without products_of_interest leaves the collection untouched (sparse payload)', function () {

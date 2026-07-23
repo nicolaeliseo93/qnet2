@@ -2,8 +2,8 @@
 
 use App\Models\Campaign;
 use App\Models\Concerns\LogsModelActivity;
-use App\Models\Project;
 use App\Models\PipelineStatus;
+use App\Models\Project;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;

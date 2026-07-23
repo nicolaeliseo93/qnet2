@@ -169,6 +169,7 @@ export const products = {
       "Catalogo completo: un prodotto di un'altra categoria aggiungerà la relativa riga funzione/categoria.",
     hintNoCategories:
       'Aggiungi prima una funzione aziendale con la sua categoria prodotto, oppure sblocca il catalogo completo.',
+    required: 'Seleziona almeno un prodotto di interesse.',
     unlock: 'Mostra tutti i prodotti',
     relock: "Limita alle categorie dell'opportunità",
     unlockDialog: {

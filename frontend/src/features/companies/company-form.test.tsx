@@ -71,7 +71,7 @@ function company(
   return {
     id: 7,
     denomination: 'Acme Srl',
-    vat_number: 'IT12345678901',
+    vat_number: 'IT12345678903',
     address: {
       id: 3,
       line1: '221B Baker Street',
@@ -128,7 +128,7 @@ describe('CompanyForm — create/edit', () => {
       target: { value: 'Acme Srl' },
     })
     fireEvent.change(screen.getByLabelText(/^VAT number/), {
-      target: { value: 'IT12345678901' },
+      target: { value: 'IT12345678903' },
     })
     fireEvent.change(screen.getByLabelText(/^Address$/), {
       target: { value: '221B Baker Street' },
@@ -140,7 +140,7 @@ describe('CompanyForm — create/edit', () => {
 
     const payload = createCompanyMock.mock.calls[0][0]
     expect(payload.denomination).toBe('Acme Srl')
-    expect(payload.vat_number).toBe('IT12345678901')
+    expect(payload.vat_number).toBe('IT12345678903')
     expect(payload.address).toEqual({
       line1: '221B Baker Street',
       line2: null,
@@ -200,7 +200,7 @@ describe('CompanyForm — create/edit', () => {
     )
 
     expect(screen.getByLabelText(/^Denomination/)).toHaveValue('Acme Srl')
-    expect(screen.getByLabelText(/^VAT number/)).toHaveValue('IT12345678901')
+    expect(screen.getByLabelText(/^VAT number/)).toHaveValue('IT12345678903')
     expect(screen.getByLabelText(/^Address$/)).toHaveValue('221B Baker Street')
     expect(screen.getByLabelText(/^Postal code/)).toHaveValue('20100')
   })

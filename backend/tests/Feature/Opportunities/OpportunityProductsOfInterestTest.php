@@ -106,19 +106,37 @@ it('create: a product outside the submitted product_lines adds its own row (user
     expect($response->json('data.product_lines'))->toHaveCount(2);
 });
 
-it('create: omitting products_of_interest leaves the collection empty (optional field)', function () {
+// Requirement CHANGED (user directive 2026-07-23): products_of_interest used
+// to be optional — it is now mandatory on create, and never clearable.
+it('create: omitting products_of_interest -> 422, no opportunity created (mandatory since 2026-07-23)', function () {
     $actor = productsOfInterestActor(['create']);
     $category = productsOfInterestCategory();
     Sanctum::actingAs($actor);
 
-    $response = $this->postJson('/api/opportunities', array_merge(productsOfInterestMandatoryFks(), [
+    $this->postJson('/api/opportunities', array_merge(productsOfInterestMandatoryFks(), [
         'name' => 'No products of interest',
         'product_lines' => [
             ['business_function_id' => $category->business_function_id, 'product_category_id' => $category->id],
         ],
-    ]))->assertCreated();
+    ]))->assertStatus(422)->assertJsonValidationErrors('products_of_interest');
 
-    expect($response->json('data.products_of_interest'))->toBe([]);
+    expect(Opportunity::count())->toBe(0);
+});
+
+it('create: products_of_interest: [] -> 422 (never clearable)', function () {
+    $actor = productsOfInterestActor(['create']);
+    $category = productsOfInterestCategory();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/opportunities', array_merge(productsOfInterestMandatoryFks(), [
+        'name' => 'Empty products of interest',
+        'product_lines' => [
+            ['business_function_id' => $category->business_function_id, 'product_category_id' => $category->id],
+        ],
+        'products_of_interest' => [],
+    ]))->assertStatus(422)->assertJsonValidationErrors('products_of_interest');
+
+    expect(Opportunity::count())->toBe(0);
 });
 
 it('update: products_of_interest is an authoritative replace; omitting it leaves the collection untouched', function () {

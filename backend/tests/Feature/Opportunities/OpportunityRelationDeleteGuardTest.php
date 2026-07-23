@@ -25,6 +25,12 @@ use Spatie\Permission\Models\Permission;
  * `company_id`/`company_site_id`/`operational_site_id`) are REMOVED entirely
  * — those 3 entities no longer have any Opportunity-driven delete
  * restriction (OperationalSite keeps its own leads-driven guard, untouched).
+ *
+ * Spec 0056 (2026-07-23) REINTRODUCES `operational_site_id` alone, but with a
+ * DIFFERENT FK behaviour than the rest of this file's restrictOnDelete guards
+ * (AC-008): `nullOnDelete`, a deliberate deviation covered below — deleting a
+ * referenced Sede operativa never 409s, the Opportunity survives with the
+ * field cleared.
  */
 uses(RefreshDatabase::class);
 
@@ -206,6 +212,24 @@ it('an unreferenced operational site still deletes cleanly (AC-025)', function (
     Sanctum::actingAs($actor);
 
     $this->deleteJson("/api/operational-sites/{$site->id}")->assertNoContent();
+});
+
+// ---------------------------------------------------------------------------
+// AC-008 (spec 0056) — nullOnDelete deviation: deleting a Sede operativa
+// referenced by an opportunity NEVER 409s; the opportunity survives, field
+// cleared
+// ---------------------------------------------------------------------------
+
+it('deleting an operational site referenced by an opportunity: no 409, the opportunity survives with the field cleared (AC-008)', function () {
+    $actor = grantDeleteAbility('operational-sites');
+    $site = OperationalSite::factory()->withAddress()->create();
+    $opportunity = Opportunity::factory()->create(['operational_site_id' => $site->id]);
+    Sanctum::actingAs($actor);
+
+    $this->deleteJson("/api/operational-sites/{$site->id}")->assertNoContent();
+
+    $this->assertDatabaseMissing('operational_sites', ['id' => $site->id]);
+    $this->assertDatabaseHas('opportunities', ['id' => $opportunity->id, 'operational_site_id' => null]);
 });
 
 it('an unreferenced business function still deletes cleanly (AC-025)', function () {

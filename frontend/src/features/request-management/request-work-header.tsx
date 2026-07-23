@@ -49,7 +49,9 @@ export function RequestWorkHeader({ panel, canUpdate, formId, isSubmitting, isDi
   return (
     <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-        <h1 className="min-w-0 max-w-full truncate text-base font-semibold">{panel.name}</h1>
+        <h1 className="min-w-0 max-w-full truncate text-base font-semibold">
+          {t('requestManagement.workPanel.header.title', { defaultValue: 'Preliminary information' })}
+        </h1>
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{panel.id}</span>
 
         {panel.opportunity_status && (

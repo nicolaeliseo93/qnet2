@@ -4,6 +4,7 @@ import {
   asCustomFieldsField,
   type CustomFieldsSchema,
 } from '@/features/custom-fields/build-custom-fields-schema'
+import { isValidVatNumber } from '@/lib/fiscal/vat-number'
 
 /**
  * Zod schemas for the company create/edit form, built as factories so
@@ -83,7 +84,16 @@ function baseFields(t: TFunction) {
       .string()
       .min(1, t('companies.form.denominationRequired'))
       .max(DENOMINATION_MAX_LENGTH, t('companies.form.denominationMax')),
-    vat_number: z.string().max(VAT_NUMBER_MAX_LENGTH).optional(),
+    // Optional, but once filled it must be a real partita IVA (control digit),
+    // mirroring the backend `VatNumber` rule.
+    vat_number: z
+      .string()
+      .max(VAT_NUMBER_MAX_LENGTH)
+      .optional()
+      .refine(
+        (value) => !value?.trim() || isValidVatNumber(value),
+        { message: t('companies.form.vatNumberInvalid') },
+      ),
     address: addressSchema(t),
   }
 }

@@ -20,7 +20,7 @@ function renderCell(colId: string) {
 }
 
 describe('SkeletonLoadingCell', () => {
-  it('renders a narrow (w-12) bar for the right-pinned actions column', () => {
+  it('renders a narrow (w-12) bar for the left-pinned actions column', () => {
     const skeleton = renderCell(ACTIONS_COLUMN_ID)
     expect(skeleton).toHaveClass('w-12')
     expect(skeleton).toHaveClass('h-4')

@@ -125,15 +125,16 @@ it('PATCH client_identity writes the card and re-derives the client display name
         'client_identity' => [
             'type' => 'company',
             'company_name' => 'Nuova Ragione Sociale S.r.l.',
-            'tax_code' => '09876543210',
-            'vat_number' => 'IT09876543210',
+            'tax_code' => '09876543217',
+            'vat_number' => 'IT09876543217',
             'sdi_code' => 'ABCDEFG',
         ],
-    ])->assertOk()->assertJsonPath('data.client_identity.vat_number', 'IT09876543210');
+        // Stored canonical (user directive 2026-07-23): the optional IT prefix is dropped.
+    ])->assertOk()->assertJsonPath('data.client_identity.vat_number', '09876543217');
 
     $card = clientCardOf($opportunity->fresh());
     expect($card->company_name)->toBe('Nuova Ragione Sociale S.r.l.');
-    expect($card->tax_code)->toBe('09876543210');
+    expect($card->tax_code)->toBe('09876543217');
     // `registries.name` is denormalized from the card: it must follow the write.
     expect($opportunity->fresh()->registry->name)->toBe('Nuova Ragione Sociale S.r.l.');
 });

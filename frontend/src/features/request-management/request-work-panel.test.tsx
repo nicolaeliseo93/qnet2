@@ -81,6 +81,8 @@ function panel(overrides: Partial<RequestWorkPanelWithPermissions> = {}): Reques
     reporter: null,
     operator_id: null,
     operator: null,
+    operational_site_id: null,
+    operational_site: null,
     opportunity_status: { id: 5, name: 'New', color: 'slate' },
     workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false },
     workflow_statuses: [
@@ -88,7 +90,8 @@ function panel(overrides: Partial<RequestWorkPanelWithPermissions> = {}): Reques
       { id: 101, name: 'In progress', color: 'amber', system_key: null, description: null, requires_note: false },
     ],
     product_lines: [{ id: 1, business_function: { id: 40, name: 'Sales' }, product_category: { id: 500, name: 'Consulting' } }],
-    products_of_interest: [],
+    // Mandatory since the user directive 2026-07-23: the panel starts with one.
+    products_of_interest: [{ id: 700, name: 'Fibra 1000', product_category: { id: 500, name: 'Consulting' } }],
     client_identity: {
       id: 1000,
       type: 'company',
@@ -96,7 +99,7 @@ function panel(overrides: Partial<RequestWorkPanelWithPermissions> = {}): Reques
       last_name: null,
       company_name: 'Acme S.p.A.',
       tax_code: null,
-      vat_number: 'IT01234567890',
+      vat_number: 'IT01234567897',
       sdi_code: null,
       birth_date: null,
       gender: null,
@@ -180,7 +183,7 @@ describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
 
     renderPanel()
 
-    await waitFor(() => expect(screen.getByText('Enterprise deal')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Preliminary information' })).toBeInTheDocument())
 
     // Read-only context, now a compact header strip.
     expect(screen.getByText('Acme S.p.A.')).toBeInTheDocument()
@@ -193,11 +196,9 @@ describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
     expect(screen.getByLabelText('Phone')).toHaveValue('')
     expect(screen.getByLabelText('PEC')).toBeInTheDocument()
     expect(screen.getByLabelText('Fax')).toBeInTheDocument()
-    // ...and so is the address, once its collapsed group is opened: closed it
-    // recaps its value in one row instead of a full field grid.
-    expect(screen.getByRole('button', { name: /Address/ })).toHaveTextContent('Not set')
-    fireEvent.click(screen.getByRole('button', { name: /Address/ }))
-    expect(await screen.findByLabelText('Address')).toHaveValue('')
+    // ...and so is the address: its group is always expanded, no toggle to open.
+    expect(screen.queryByRole('button', { name: /^Address$/ })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Address')).toHaveValue('')
 
     // One control per applicable attribute, by type.
     expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveValue('Some notes')
@@ -205,6 +206,9 @@ describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
 
     // Workflow status select, limited to the resolved set.
     expect(screen.getByRole('combobox', { name: 'Working status' })).toHaveTextContent('Open')
+
+    // Spec 0056: the operational site is exposed and editable from the attribution section.
+    expect(screen.getByRole('combobox', { name: 'Operational site' })).toBeInTheDocument()
   })
 
   it('sends a contact typed in the inline field with the single save, no per-field persistence', async () => {
@@ -236,11 +240,10 @@ describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
 
     renderPanel()
 
-    // The address group is collapsed by default: open it before typing.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Address/ })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /Address/ }))
+    // The address group is always expanded: type straight into it.
+    await waitFor(() => expect(screen.getByLabelText('Address')).toBeInTheDocument())
 
-    fireEvent.change(await screen.findByLabelText('Address'), { target: { value: 'Via Roma 1' } })
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'Via Roma 1' } })
     fireEvent.change(screen.getByLabelText('Postal code'), { target: { value: '20100' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -258,10 +261,10 @@ describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
 
     // The identity block is prefilled from the client's card, right in the
     // anagraphic section — not behind the Registries module.
-    await waitFor(() => expect(screen.getByLabelText('VAT number')).toHaveValue('IT01234567890'))
+    await waitFor(() => expect(screen.getByLabelText('VAT number')).toHaveValue('IT01234567897'))
     expect(screen.getByLabelText(/Company name/)).toHaveValue('Acme S.p.A.')
 
-    fireEvent.change(screen.getByLabelText('Tax code'), { target: { value: '01234567890' } })
+    fireEvent.change(screen.getByLabelText('Tax code'), { target: { value: '01234567897' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(updateRequestWorkMock).toHaveBeenCalledTimes(1))
@@ -273,8 +276,8 @@ describe('RequestWorkPanelScreen (spec 0049 AC-061)', () => {
         first_name: null,
         last_name: null,
         company_name: 'Acme S.p.A.',
-        tax_code: '01234567890',
-        vat_number: 'IT01234567890',
+        tax_code: '01234567897',
+        vat_number: 'IT01234567897',
         sdi_code: null,
         birth_date: null,
         gender: null,
@@ -426,7 +429,7 @@ describe('RequestWorkPanelScreen — activity log tab (spec 0049 D-7 amended)', 
 
     renderPanel()
 
-    await waitFor(() => expect(screen.getByText('Enterprise deal')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Preliminary information' })).toBeInTheDocument())
     expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument()
   })
 })

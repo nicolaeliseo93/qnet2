@@ -9,6 +9,8 @@ use App\Models\Contact;
 use App\Models\Opportunity;
 use App\Models\User;
 use App\Services\Opportunities\OpportunityWorkflowResolver;
+use App\Support\OperationalSiteLabel;
+use App\Tables\Shared\ProductsOfInterestColumn;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
@@ -52,8 +54,15 @@ final class RequestRowMapper
             'workflow_status_options' => $this->allowedWorkflowStatusIds($row),
             // "Categoria prodotto": aggregated product categories.
             'product_categories' => $this->summarizeNames($row->productLines->pluck('productCategory')),
+            // "Prodotti di interesse" (user directive 2026-07-23): the same
+            // projection the opportunities grid emits — the selected `{id,
+            // name}` refs plus the category ids the inline editor scopes to.
+            ...ProductsOfInterestColumn::project($row),
             // "Operatore": the Account Manager at pivot position 2 (GA2).
             'operator_ga2' => $this->operatorSummary($row->managers),
+            // Spec 0056: the Sede operativa — the site has no own name, so
+            // its label is composed server-side from its primary address.
+            'operational_site' => OperationalSiteLabel::summarize($row->operationalSite),
             ...$this->clientAnagraphics($row),
             // "Prossimo richiamo" (spec 0052 D-1/D-5), same wire format as
             // RequestManagementResource so FE date parsing stays identical.

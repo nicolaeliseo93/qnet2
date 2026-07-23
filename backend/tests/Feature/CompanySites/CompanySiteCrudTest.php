@@ -146,7 +146,7 @@ it('create: 201 + persists the site with card, address and banks (preferred bank
     $this->postJson('/api/company-sites', [
         'name' => 'Sede Sud',
         'personal_data' => companySiteCompanyProfile([
-            'vat_number' => 'IT12345678901',
+            'vat_number' => 'IT12345678903',
             'addresses' => [['line1' => 'Via Napoli 5', 'city_id' => $city->id]],
             'contacts' => [['type' => 'email', 'value' => 'sud@acme.test', 'is_primary' => true]],
         ]),
@@ -154,7 +154,8 @@ it('create: 201 + persists the site with card, address and banks (preferred bank
     ])->assertCreated()
         ->assertJsonPath('data.name', 'Sede Sud')
         ->assertJsonPath('data.personal_data.company_name', 'Acme SpA')
-        ->assertJsonPath('data.personal_data.vat_number', 'IT12345678901')
+        // Stored canonical (user directive 2026-07-23): the optional IT prefix is dropped.
+        ->assertJsonPath('data.personal_data.vat_number', '12345678903')
         ->assertJsonPath('data.personal_data.addresses.0.line1', 'Via Napoli 5')
         ->assertJsonPath('data.personal_data.contacts.0.value', 'sud@acme.test')
         ->assertJsonPath('data.banks.0.name', 'Banca Uno')

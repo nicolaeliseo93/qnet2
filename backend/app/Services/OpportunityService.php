@@ -43,6 +43,9 @@ class OpportunityService
         'reporter',
         'supervisor',
         'source',
+        // Spec 0056: the site has no own name, its label is composed
+        // server-side from its primary address' `line1`+city.
+        'operationalSite.addresses.city',
         'opportunityStatus',
         'productLines.businessFunction',
         'productLines.productCategory',
@@ -77,7 +80,8 @@ class OpportunityService
      * derivable attributes are overwritten with LeadOpportunityDefaultsResolver's
      * values (StoreOpportunityRequest already rejected a conflicting
      * submission as `prohibited`, so this only ever fills in fields the
-     * client left absent).
+     * client left absent). `name` (spec 0057, D-5) is derived as `OPP_{id}`
+     * right after the insert — never a client input.
      */
     public function create(CreateOpportunityData $data): Opportunity
     {
@@ -92,7 +96,15 @@ class OpportunityService
                 $attributes['opportunity_status_id'] = $this->systemStatusGuard->resolveNewStatusId(OpportunityStatus::class);
             }
 
+            // `opportunities.name` is NOT NULL but the authoritative value
+            // (spec 0057, D-5: `OPP_{id}`) depends on the row's own id — seed
+            // only a non-null placeholder here to satisfy the constraint at
+            // INSERT, mirroring RegistryService::create's own placeholder.
+            $attributes['name'] = '';
+
             $opportunity = Opportunity::create($attributes);
+
+            $opportunity->forceFill(['name' => 'OPP_'.$opportunity->id])->save();
 
             if ($data->hasManagerSlots()) {
                 $opportunity->managers()->sync($this->managerSyncMap($data->managerSlots));

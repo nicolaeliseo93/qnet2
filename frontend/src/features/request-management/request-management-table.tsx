@@ -1,15 +1,29 @@
-import { useCallback, useRef, useState } from 'react'
-import { MessageSquare, Paperclip } from 'lucide-react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useMutation } from '@tanstack/react-query'
+import axios from 'axios'
+import { MessageSquare, Paperclip, Plus, UserCog } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { ResourceActivityDialog } from '@/features/activity-log/resource-activity-dialog'
 import { DocumentsDialog } from '@/features/attachments/documents-dialog'
+import { Can } from '@/features/auth/can'
+import { useAbilities } from '@/features/auth/use-abilities'
+import {
+  AssignOperatorsDialog,
+  type AssignOperatorsDialogInput,
+  type AssignOperatorsDialogSite,
+} from '@/features/leads/assign-operators-dialog'
 import { useModuleOpener } from '@/features/modules/use-module-opener'
 import { NotesDialog } from '@/features/notes/notes-dialog'
 import { TableView, type TableViewHandle } from '@/features/table/table-view'
 import type { ActionIconMap } from '@/features/table/action-icon-map'
 import type { RowActionHandler } from '@/features/table/row-actions'
+import type { BulkAction, TableSelection } from '@/features/table/use-bulk-actions-slot'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
 import { OPPORTUNITY_ATTACHABLE_ALIAS } from '@/features/opportunities/api'
+import { assignRequestOperators, deleteRequest } from '@/features/request-management/api'
 import { requestManagementColumnRenderers } from '@/features/request-management/column-renderers'
 import { REQUEST_MANAGEMENT_DOMAIN } from '@/features/request-management/types'
 
@@ -22,6 +36,22 @@ import { REQUEST_MANAGEMENT_DOMAIN } from '@/features/request-management/types'
 const REQUEST_MANAGEMENT_ACTION_ICONS: ActionIconMap = {
   paperclip: Paperclip,
   'message-square': MessageSquare,
+}
+
+/**
+ * The Sede to precompile in the "Assegna operatori" popup: present only when
+ * every selected row's `operational_site` (the `{id, label}` shape the
+ * definition projects onto the grid row, or null) shares one non-null id —
+ * the same rule the Lead table applies.
+ */
+function resolveSharedOperationalSite(rows: TableRow[]): AssignOperatorsDialogSite | null {
+  const [first, ...rest] = rows.map(
+    (row) => row.operational_site as AssignOperatorsDialogSite | null,
+  )
+  if (!first) {
+    return null
+  }
+  return rest.every((site) => site?.id === first.id) ? first : null
 }
 
 /**
@@ -41,16 +71,52 @@ const REQUEST_MANAGEMENT_ACTION_ICONS: ActionIconMap = {
  * in the catalog, so the shared inline limit pushes it into the three-dots
  * overflow — opens `ResourceActivityDialog` on this module's OWN activity
  * resource key (`request-management`, gated server-side by
- * `request-management.viewActivity` + the GA2 scope). No create/edit/delete
- * affordance — CRUD stays on `opportunities.*`, never this permission set.
+ * `request-management.viewActivity` + the GA2 scope).
+ *
+ * Selection (user directive 2026-07-23): this module owns TWO bulk flows, as
+ * the Lead table does — the generic "elimina selezionati" (switched on by the
+ * `delete` action being in the catalog) and the shared "Assegna operatori"
+ * popup. Both are gated by this module's OWN permissions; the checkbox column
+ * exists BECAUSE of them, the generic table never shows it without a reachable
+ * bulk action. Create (spec 0057) is its own affordance, gated by this
+ * module's OWN `request-management.create` — the rest of the CRUD (update)
+ * still stays on the work panel, never `opportunities.*`.
  */
 export function RequestManagementTable() {
-  const { openView, sheet } = useModuleOpener(REQUEST_MANAGEMENT_DOMAIN)
+  const { t } = useTranslation()
+  const { can } = useAbilities()
 
   const tableRef = useRef<TableViewHandle>(null)
+  const refreshGrid = useCallback(() => tableRef.current?.refresh(), [])
+  const { openCreate, openView, sheet } = useModuleOpener(REQUEST_MANAGEMENT_DOMAIN, {
+    onSaved: refreshGrid,
+  })
+
   const [documentsRowId, setDocumentsRowId] = useState<number | null>(null)
   const [notesRowId, setNotesRowId] = useState<number | null>(null)
   const [activityRow, setActivityRow] = useState<TableRow | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+
+  const runDelete = useCallback(
+    async (row: TableRow) => {
+      setDeletingId(row.id)
+      try {
+        await deleteRequest(row.id)
+        toast.success(t('requestManagement.delete.success'))
+        refreshGrid()
+      } catch (error) {
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined
+        toast.error(
+          status === 403
+            ? t('requestManagement.delete.forbidden')
+            : t('requestManagement.delete.error'),
+        )
+      } finally {
+        setDeletingId(null)
+      }
+    },
+    [refreshGrid, t],
+  )
 
   const handleAction: RowActionHandler = useCallback(
     (action: TableActionDefinition, row: TableRow) => {
@@ -64,6 +130,9 @@ export function RequestManagementTable() {
         case 'notes':
           setNotesRowId(row.id)
           break
+        case 'delete':
+          void runDelete(row)
+          break
         case 'activity':
           setActivityRow(row)
           break
@@ -71,26 +140,100 @@ export function RequestManagementTable() {
           break
       }
     },
-    [openView],
+    [openView, runDelete],
+  )
+
+  const isBusy = useCallback((row: TableRow) => row.id === deletingId, [deletingId])
+
+  // Bulk operator assignment: the shared popup collects Sede + mode +
+  // operator; this adapter owns the selection, the mutation and its feedback.
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [assignIds, setAssignIds] = useState<number[]>([])
+  const [assignDefaultSite, setAssignDefaultSite] = useState<AssignOperatorsDialogSite | null>(null)
+  const canAssignOperators = can('request-management.update')
+
+  const assignMutation = useMutation({
+    mutationFn: assignRequestOperators,
+    onSuccess: (result) => {
+      toast.success(t('requestManagement.assign.success', { count: result.assigned }))
+      refreshGrid()
+      tableRef.current?.clearSelection()
+    },
+  })
+
+  const handleAssign = useCallback(
+    async (input: AssignOperatorsDialogInput) => {
+      try {
+        await assignMutation.mutateAsync({ request_ids: assignIds, ...input })
+      } catch (error) {
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined
+        toast.error(
+          status === 422 && input.mode === 'balanced'
+            ? t('requestManagement.assign.errors.noOperators')
+            : t('requestManagement.assign.errors.generic'),
+        )
+        throw error
+      }
+    },
+    [assignMutation, assignIds, t],
+  )
+
+  const openAssignDialog = useCallback((selection: TableSelection) => {
+    setAssignIds(selection.ids)
+    setAssignDefaultSite(resolveSharedOperationalSite(selection.rows))
+    setAssignOpen(true)
+  }, [])
+
+  // Surfaced inside the generic table's single "Actions" dropdown, alongside
+  // the built-in "elimina selezionati". `undefined` when the actor cannot
+  // update, so the menu never offers an unreachable action.
+  const getBulkActions = canAssignOperators
+    ? (selection: TableSelection): BulkAction[] => [
+        {
+          key: 'assign-operators',
+          label: t('requestManagement.assign.tableButton'),
+          icon: UserCog,
+          onSelect: () => openAssignDialog(selection),
+        },
+      ]
+    : undefined
+
+  // The two entity-specific sentences of the shared popup, which otherwise
+  // names leads.
+  const assignCopy = useMemo(
+    () => ({
+      description: t('requestManagement.assign.description', { count: assignIds.length }),
+      modeHints: {
+        balanced: t('requestManagement.assign.actions.balancedHint'),
+        single: t('requestManagement.assign.actions.singleHint'),
+      },
+    }),
+    [t, assignIds.length],
   )
 
   // Documents are edited from inside the dialog (upload/delete); refresh the
   // grid on close so the row's `documents_count` badge reflects the change.
-  const handleDocumentsOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      setDocumentsRowId(null)
-      tableRef.current?.refresh()
-    }
-  }, [])
+  const handleDocumentsOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        setDocumentsRowId(null)
+        refreshGrid()
+      }
+    },
+    [refreshGrid],
+  )
 
   // Notes are added/deleted from inside the dialog; refresh the grid on close
   // so the row's `notes_count` badge reflects the change (mirrors documents).
-  const handleNotesOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      setNotesRowId(null)
-      tableRef.current?.refresh()
-    }
-  }, [])
+  const handleNotesOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        setNotesRowId(null)
+        refreshGrid()
+      }
+    },
+    [refreshGrid],
+  )
 
   // The activity log is read-only: no refresh needed on close, only the row
   // whose timeline is shown is cleared.
@@ -102,17 +245,37 @@ export function RequestManagementTable() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <PageHeader />
+      <PageHeader
+        actions={
+          <Can permission="request-management.create">
+            <Button onClick={openCreate}>
+              <Plus aria-hidden="true" />
+              {t('requestManagement.form.newRequest')}
+            </Button>
+          </Can>
+        }
+      />
 
       <TableView
         ref={tableRef}
         domain={REQUEST_MANAGEMENT_DOMAIN}
         renderers={requestManagementColumnRenderers}
         onAction={handleAction}
+        isBusy={isBusy}
         iconMap={REQUEST_MANAGEMENT_ACTION_ICONS}
+        getBulkActions={getBulkActions}
       />
 
       {sheet}
+
+      <AssignOperatorsDialog
+        open={assignOpen}
+        onOpenChange={setAssignOpen}
+        selectionCount={assignIds.length}
+        defaultSite={assignDefaultSite}
+        copy={assignCopy}
+        onAssign={handleAssign}
+      />
 
       <DocumentsDialog
         resource={OPPORTUNITY_ATTACHABLE_ALIAS}

@@ -3,6 +3,8 @@ import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
+import { formatOnBlur } from '@/lib/formatting/format-on-blur'
+import { formatIdentityField } from '@/lib/formatting/input-format'
 import {
   Form,
   FormControl,
@@ -210,6 +212,9 @@ export function PersonalDataCardForm({
                         disabled={companyNameGate.disabled}
                         readOnly={companyNameGate.readOnly}
                         {...field}
+                        onBlur={formatOnBlur(field, (value) =>
+                          formatIdentityField('company_name', value),
+                        )}
                       />
                     </FormControl>
                     <FormMessage />
@@ -234,6 +239,9 @@ export function PersonalDataCardForm({
                             disabled={firstNameGate.disabled}
                             readOnly={firstNameGate.readOnly}
                             {...field}
+                            onBlur={formatOnBlur(field, (value) =>
+                              formatIdentityField('first_name', value),
+                            )}
                           />
                         </FormControl>
                         <FormMessage />
@@ -256,6 +264,9 @@ export function PersonalDataCardForm({
                             disabled={lastNameGate.disabled}
                             readOnly={lastNameGate.readOnly}
                             {...field}
+                            onBlur={formatOnBlur(field, (value) =>
+                              formatIdentityField('last_name', value),
+                            )}
                           />
                         </FormControl>
                         <FormMessage />
@@ -283,6 +294,9 @@ export function PersonalDataCardForm({
                         disabled={taxCodeGate.disabled}
                         readOnly={taxCodeGate.readOnly}
                         {...field}
+                        onBlur={formatOnBlur(field, (value) =>
+                          formatIdentityField('tax_code', value, isCompany),
+                        )}
                       />
                     </FormControl>
                     <FormMessage />
@@ -305,6 +319,9 @@ export function PersonalDataCardForm({
                         disabled={vatNumberGate.disabled}
                         readOnly={vatNumberGate.readOnly}
                         {...field}
+                        onBlur={formatOnBlur(field, (value) =>
+                          formatIdentityField('vat_number', value),
+                        )}
                       />
                     </FormControl>
                     <FormMessage />
@@ -330,6 +347,9 @@ export function PersonalDataCardForm({
                     disabled={sdiCodeGate.disabled}
                     readOnly={sdiCodeGate.readOnly}
                     {...field}
+                    onBlur={formatOnBlur(field, (value) =>
+                      formatIdentityField('sdi_code', value),
+                    )}
                   />
                 </FormControl>
                 <FormMessage />

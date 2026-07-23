@@ -95,7 +95,7 @@ function company(
   return {
     id: 7,
     denomination: 'Acme Srl',
-    vat_number: 'IT12345678901',
+    vat_number: 'IT12345678903',
     address: null,
     created_at: null,
     permissions: permissionsWithNotes(),

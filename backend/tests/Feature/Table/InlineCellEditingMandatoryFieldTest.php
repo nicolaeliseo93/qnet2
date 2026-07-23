@@ -1,6 +1,10 @@
 <?php
 
+use App\Models\BusinessFunction;
 use App\Models\Opportunity;
+use App\Models\OpportunityProductLine;
+use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,56 +26,62 @@ if (! function_exists('mandatoryFieldActor')) {
         foreach (['viewAny', 'update'] as $ability) {
             Permission::findOrCreate("opportunities.{$ability}");
         }
+        Permission::findOrCreate('products.viewAny');
 
         $user = User::factory()->create();
-        $user->givePermissionTo(['opportunities.viewAny', 'opportunities.update']);
+        $user->givePermissionTo(['opportunities.viewAny', 'opportunities.update', 'products.viewAny']);
 
         return $user;
     }
 }
 
 // ---------------------------------------------------------------------------
-// `name` — mandatory in the CEILING itself (OpportunitiesAuthorization),
-// already declared non-nullable in the catalog: both agree.
+// `products_of_interest` — mandatory in the CEILING itself
+// (OpportunitiesAuthorization), and the empty-collection case is already
+// blank at the DB level too: both agree. Spec 0057, D-5 removed `name` (the
+// former example here) entirely — it is no longer editable at all, so it can
+// no longer stand for "a mandatory, editable field".
 // ---------------------------------------------------------------------------
 
-it('a mandatory field rejects an empty string -> 422, no write', function () {
+it('a mandatory field rejects an empty collection -> 422, no write', function () {
     $actor = mandatoryFieldActor();
-    $opportunity = Opportunity::factory()->create(['name' => 'Kept name']);
+    $category = ProductCategory::factory()->create(['business_function_id' => BusinessFunction::factory()->create()->id]);
+    $opportunity = Opportunity::factory()->create();
+    OpportunityProductLine::factory()->create([
+        'opportunity_id' => $opportunity->id,
+        'business_function_id' => $category->business_function_id,
+        'product_category_id' => $category->id,
+    ]);
+    $product = Product::factory()->create(['category_id' => $category->id]);
+    $opportunity->productsOfInterest()->sync([$product->id]);
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/tables/opportunities/rows/{$opportunity->id}", [
-        'column' => 'name',
-        'value' => '',
+        'column' => 'products_of_interest',
+        'value' => [],
     ])->assertStatus(422);
 
-    expect($opportunity->fresh()->name)->toBe('Kept name');
-});
-
-it('a mandatory field rejects a whitespace-only string -> 422, no write', function () {
-    $actor = mandatoryFieldActor();
-    $opportunity = Opportunity::factory()->create(['name' => 'Kept name']);
-    Sanctum::actingAs($actor);
-
-    $this->patchJson("/api/tables/opportunities/rows/{$opportunity->id}", [
-        'column' => 'name',
-        'value' => '   ',
-    ])->assertStatus(422);
-
-    expect($opportunity->fresh()->name)->toBe('Kept name');
+    expect($opportunity->fresh()->productsOfInterest)->toHaveCount(1);
 });
 
 it('a mandatory field accepts a genuine value -> 200, persisted', function () {
     $actor = mandatoryFieldActor();
-    $opportunity = Opportunity::factory()->create(['name' => 'Before']);
+    $category = ProductCategory::factory()->create(['business_function_id' => BusinessFunction::factory()->create()->id]);
+    $opportunity = Opportunity::factory()->create();
+    OpportunityProductLine::factory()->create([
+        'opportunity_id' => $opportunity->id,
+        'business_function_id' => $category->business_function_id,
+        'product_category_id' => $category->id,
+    ]);
+    $product = Product::factory()->create(['category_id' => $category->id]);
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/tables/opportunities/rows/{$opportunity->id}", [
-        'column' => 'name',
-        'value' => 'After',
+        'column' => 'products_of_interest',
+        'value' => [$product->id],
     ])->assertOk();
 
-    expect($opportunity->fresh()->name)->toBe('After');
+    expect($opportunity->fresh()->productsOfInterest->pluck('id')->all())->toBe([$product->id]);
 });
 
 // ---------------------------------------------------------------------------

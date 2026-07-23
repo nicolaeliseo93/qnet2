@@ -26,6 +26,8 @@ function opportunity(
     supervisor: { id: 90, name: 'Paolo Blu' },
     source_id: 100,
     source: { id: 100, name: 'Web' },
+    operational_site_id: 8,
+    operational_site: { id: 8, label: 'Warehouse A - Milan' },
     product_lines: [
       {
         id: 500,
@@ -73,6 +75,7 @@ describe('OpportunityDetailView — read-only (AC-077)', () => {
     expect(screen.getByText('Giulia Neri')).toBeInTheDocument()
     expect(screen.getByText('Paolo Blu')).toBeInTheDocument()
     expect(screen.getByText('Web')).toBeInTheDocument()
+    expect(screen.getByText('Warehouse A - Milan')).toBeInTheDocument()
     expect(screen.getByText(/Consulting/)).toBeInTheDocument()
     expect(screen.getByText('Anna Bianchi')).toBeInTheDocument()
     expect(screen.getByText('Marco Gialli')).toBeInTheDocument()
@@ -101,6 +104,8 @@ describe('OpportunityDetailView — read-only (AC-077)', () => {
           supervisor: null,
           source_id: null,
           source: null,
+          operational_site_id: null,
+          operational_site: null,
           product_lines: [],
           managers: [],
           start_date: null,

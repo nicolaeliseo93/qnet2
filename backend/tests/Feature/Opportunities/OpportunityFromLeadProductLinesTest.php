@@ -3,6 +3,7 @@
 use App\Models\BusinessFunction;
 use App\Models\Campaign;
 use App\Models\Lead;
+use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -100,6 +101,9 @@ it('create with lead_id: the client-submitted product_lines (matching the defaul
         'product_lines' => [
             ['business_function_id' => $lead->campaign->business_function_id, 'product_category_id' => $lead->campaign->product_category_id],
         ],
+        // Mandatory since 2026-07-23; from the submitted category, so it adds
+        // no product line of its own.
+        'products_of_interest' => [Product::factory()->create(['category_id' => $lead->campaign->product_category_id])->id],
     ]))->assertCreated();
 
     $opportunityId = $response->json('data.id');

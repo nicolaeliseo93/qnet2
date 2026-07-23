@@ -4,6 +4,7 @@ namespace App\Http\Requests\PersonalData;
 
 use App\DataObjects\PersonalData\CreateContact;
 use App\Enums\ContactTypeEnum;
+use App\Http\Requests\Concerns\FormatsPersonalDataInput;
 use App\Http\Requests\Concerns\ResolvesOwner;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -21,12 +22,23 @@ use Illuminate\Validation\Rule;
  */
 class StoreContactRequest extends FormRequest
 {
-    use ResolvesOwner;
+    use FormatsPersonalDataInput, ResolvesOwner;
 
     public function authorize(): bool
     {
         // Authorization handled in the controller via the ContactPolicy.
         return true;
+    }
+
+    /**
+     * Canonicalize the typed `value` for its channel before the per-type rules
+     * run (user directive 2026-07-23) — a phone typed `333 12 34 567` and one
+     * typed `333-1234567` must be stored identically. Inherited by
+     * UpdateContactRequest.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->formatContactInput();
     }
 
     /**

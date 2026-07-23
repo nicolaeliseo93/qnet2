@@ -99,8 +99,9 @@ export function resolveCellRenderer(
  * editor kind — `column.editor` when present (a `relation` picker overriding
  * the type-driven lookup), else `column.type` — has a registered cell editor
  * (AC-023 — an unregistered kind stays read-only rather than crashing). A
- * column declaring `editor: 'relation'` without its `relation.resource`
- * target is malformed metadata and, defensively, also stays read-only. The
+ * column declaring `editor: 'relation'`/`'multiselect'` without its
+ * `relation.resource` target is malformed metadata and, defensively, also
+ * stays read-only. The
  * returned callback only re-checks the PER-ROW flag (`row.editable`, D-4):
  * the column-level gate is already resolved here, once, at colDef build time.
  */
@@ -110,7 +111,7 @@ export function resolveEditableColumnProps(
   if (!column.editable) {
     return { editable: false }
   }
-  if (column.editor === 'relation' && !column.relation?.resource) {
+  if ((column.editor === 'relation' || column.editor === 'multiselect') && !column.relation?.resource) {
     return { editable: false }
   }
   const kind: CellEditorKind = column.editor ?? column.type

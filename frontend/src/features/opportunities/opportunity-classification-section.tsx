@@ -4,6 +4,7 @@ import type { Control } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { RelationSelectField } from '@/components/form/relation-select-field'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
+import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import { OPPORTUNITY_STATUSES_FOR_SELECT_RESOURCE } from '@/features/opportunity-statuses/for-select-api'
 import { STATES_FOR_SELECT_RESOURCE } from '@/features/geo/state-for-select-api'
 import { OpportunityWorkflowStatusField } from '@/features/opportunities/opportunity-workflow-status-field'
@@ -72,6 +73,17 @@ export function OpportunityClassificationSection({
           searchPlaceholder={t('opportunities.form.sourceSearch')}
           selected={selectedItems.source}
           forceDisabled={lockedFields.has('source_id')}
+          {...selectLabels}
+        />
+
+        <RelationSelectField
+          control={control}
+          name="operational_site_id"
+          metaKey="operational_site_id"
+          label={t('opportunities.form.operationalSite')}
+          resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('opportunities.form.operationalSiteSearch')}
+          selected={selectedItems.operationalSite}
           {...selectLabels}
         />
 

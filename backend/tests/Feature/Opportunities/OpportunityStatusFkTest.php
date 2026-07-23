@@ -3,6 +3,7 @@
 use App\Models\BusinessFunction;
 use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
+use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Registry;
 use App\Models\User;
@@ -43,7 +44,7 @@ if (! function_exists('opportunityStatusFkUserWith')) {
 
 if (! function_exists('opportunityStatusFkPayload')) {
     /**
-     * @return array{registry_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{registry_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>, products_of_interest: array<int, int>}
      */
     function opportunityStatusFkPayload(): array
     {
@@ -56,6 +57,10 @@ if (! function_exists('opportunityStatusFkPayload')) {
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],
+            // User directive 2026-07-23: products_of_interest is mandatory too;
+            // the product belongs to the row's OWN category, so this payload
+            // never triggers a cross-category product-line addition.
+            'products_of_interest' => [Product::factory()->create(['category_id' => $category->id])->id],
         ];
     }
 }

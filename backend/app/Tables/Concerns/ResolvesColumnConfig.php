@@ -142,6 +142,19 @@ trait ResolvesColumnConfig
 
         if (isset($column['relation'])) {
             $resolved['relation'] = ['resource' => $column['relation']['resource']];
+
+            // ROW-SCOPED picker params: `['<for-select param>' => '<column
+            // id>']` — the editor reads that column's value off the row being
+            // edited and sends it as a `/for-select` param, so the dropdown
+            // offers only the values valid FOR THAT ROW (e.g. the users of
+            // the row's own operational site). Emitted verbatim; a row whose
+            // scope column is empty simply sends no param (unfiltered list),
+            // exactly like the form pickers. This is a UI narrowing only —
+            // the write path still re-validates through
+            // RelationValueScopeChecker, which is unaware of it by design.
+            if (isset($column['relation']['scope'])) {
+                $resolved['relation']['scope'] = $column['relation']['scope'];
+            }
         }
 
         return $resolved;

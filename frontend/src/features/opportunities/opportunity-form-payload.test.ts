@@ -7,7 +7,6 @@ import type { OpportunityFormValues } from '@/features/opportunities/use-opportu
 
 function values(overrides: Partial<OpportunityFormValues> = {}): OpportunityFormValues {
   return {
-    name: 'Enterprise deal',
     registry_id: 1,
     // Spec 0043 D-3: mandatory FK, mirrors registry_id.
     opportunity_status_id: 5,
@@ -16,6 +15,8 @@ function values(overrides: Partial<OpportunityFormValues> = {}): OpportunityForm
     reporter_id: null,
     supervisor_id: null,
     source_id: null,
+    // Spec 0056: never submit-blocking; the payload-diff tests below cover it independently.
+    operational_site_id: null,
     // Spec 0047: never submit-blocking; the payload-diff tests below cover
     // each independently.
     state_id: null,
@@ -54,6 +55,8 @@ function original(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail
     supervisor: null,
     source_id: null,
     source: null,
+    operational_site_id: null,
+    operational_site: null,
     state_id: null,
     opportunity_workflow_status_id: null,
     product_lines: [],
@@ -76,7 +79,6 @@ describe('buildCreatePayload', () => {
     const payload = buildCreatePayload(createValues())
 
     expect(payload).toEqual({
-      name: 'Enterprise deal',
       registry_id: 1,
       opportunity_status_id: 5,
       referent_id: null,
@@ -84,6 +86,7 @@ describe('buildCreatePayload', () => {
       reporter_id: null,
       supervisor_id: 9,
       source_id: null,
+      operational_site_id: null,
       state_id: null,
       product_lines: [],
       products_of_interest: [],
@@ -93,6 +96,16 @@ describe('buildCreatePayload', () => {
       estimated_value: null,
       success_probability: 0,
     })
+  })
+
+  /** Spec 0056: facoltativa, never lead-derived — always sent as-is, even from a lead. */
+  it('sends operational_site_id unconditionally, even when creating from a lead', () => {
+    const payload = buildCreatePayload(
+      createValues({ operational_site_id: 8 }),
+      { leadId: 9, lockedFields: ['registry_id', 'source_id'] },
+    )
+
+    expect(payload.operational_site_id).toBe(8)
   })
 
   /** Spec 0047 (D1): never BR-2-locked — always sent as-is, even from a lead. */
@@ -123,10 +136,9 @@ describe('buildCreatePayload', () => {
     ])
   })
 
-  it('trims the name and includes every set relation/estimate', () => {
+  it('includes every set relation/estimate', () => {
     const payload = buildCreatePayload(
       createValues({
-        name: '  Enterprise deal  ',
         referent_id: 10,
         manager_slots: [20, null, 21],
         start_date: '2026-01-01',
@@ -135,7 +147,6 @@ describe('buildCreatePayload', () => {
       }),
     )
 
-    expect(payload.name).toBe('Enterprise deal')
     expect(payload.referent_id).toBe(10)
     expect(payload.manager_slots).toEqual([20, null, 21])
     expect(payload.start_date).toBe('2026-01-01')
@@ -185,12 +196,6 @@ describe('buildCreatePayload', () => {
 describe('buildUpdatePayload', () => {
   it('omits every field when nothing changed', () => {
     expect(buildUpdatePayload(values(), original())).toEqual({})
-  })
-
-  it('includes only the changed name', () => {
-    expect(buildUpdatePayload(values({ name: 'Renamed deal' }), original())).toEqual({
-      name: 'Renamed deal',
-    })
   })
 
   it('includes only the changed registry_id', () => {
@@ -250,6 +255,27 @@ describe('buildUpdatePayload', () => {
       original({ success_probability: 40 }),
     )
     expect(payload).toEqual({ success_probability: 80 })
+  })
+
+  /** Spec 0056 (AC-003/004): diffs independently; the null-clear is transmitted, not omitted. */
+  describe('operational_site_id (spec 0056)', () => {
+    it('includes operational_site_id when changed', () => {
+      const payload = buildUpdatePayload(values({ operational_site_id: 8 }), original({ operational_site_id: null }))
+      expect(payload).toEqual({ operational_site_id: 8 })
+    })
+
+    it('omits operational_site_id when unchanged', () => {
+      const payload = buildUpdatePayload(values({ operational_site_id: 8 }), original({ operational_site_id: 8 }))
+      expect(payload).toEqual({})
+    })
+
+    it('sends an explicit null when the operational site is cleared (AC-004)', () => {
+      const payload = buildUpdatePayload(
+        values({ operational_site_id: null }),
+        original({ operational_site_id: 8, operational_site: { id: 8, label: 'Warehouse A - Milan' } }),
+      )
+      expect(payload).toEqual({ operational_site_id: null })
+    })
   })
 
   /** Spec 0047 (D1, AC-016/017): both diff independently, like every other field. */

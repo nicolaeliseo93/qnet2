@@ -29,6 +29,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * `opportunity_status_id` (spec 0043, D-3): the mandatory working-state FK,
  * NOT NULL at schema level, defaulted server-side to the system 'new' status
  * when omitted (see OpportunityService).
+ *
+ * Spec 0056 (2026-07-23) SUPERSEDES the 2026-07-17 removal limitedly to
+ * `operational_site_id`: reintroduced as a plain, optional FK (nullOnDelete —
+ * a deliberate deviation from this model's other restrictOnDelete relations,
+ * BR-3, since this one is optional). `company_id`/`company_site_id` stay
+ * removed.
  */
 #[Fillable([
     'name',
@@ -38,6 +44,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'reporter_id',
     'supervisor_id',
     'source_id',
+    'operational_site_id',
     'lead_id',
     'opportunity_status_id',
     'state_id',
@@ -103,6 +110,18 @@ class Opportunity extends BaseModel
     public function source(): BelongsTo
     {
         return $this->belongsTo(Source::class);
+    }
+
+    /**
+     * The Sede operativa (spec 0056): a plain, optional FK, editable from the
+     * form and from the Gestione Richieste "Lavora" panel, with no server-side
+     * derivation/lock (unlike `lead`/BR-1's fields). `nullOnDelete`: losing
+     * the referenced site clears the field rather than blocking the site's
+     * deletion.
+     */
+    public function operationalSite(): BelongsTo
+    {
+        return $this->belongsTo(OperationalSite::class);
     }
 
     /**

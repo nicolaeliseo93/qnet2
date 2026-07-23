@@ -59,6 +59,33 @@ export function RelationCell({ value, icon: Icon }: ICellRendererParams & { icon
   )
 }
 
+/**
+ * A to-many relation cell: the array of `{id, name}` refs a pivot column
+ * projects (user directive 2026-07-23, "prodotti di interesse"), rendered as
+ * the comma-joined names, truncated with a native tooltip. Shared by every
+ * domain exposing such a column, so the grid keeps showing the names between
+ * an inline commit and the server's re-mapped row.
+ */
+export function RefNamesCell({ value }: ICellRendererParams) {
+  const names = Array.isArray(value)
+    ? value.map((entry) => relationLabel(entry)).filter((name): name is string => name !== null)
+    : []
+
+  if (names.length === 0) {
+    return <EmptyCell align="left" />
+  }
+
+  const label = names.join(', ')
+
+  return (
+    <div className="flex h-full items-center overflow-hidden">
+      <span className="truncate" title={label}>
+        {label}
+      </span>
+    </div>
+  )
+}
+
 /** A status relation `{name, color}`, optionally carrying its `description` (working statuses, spec 0047). */
 interface StatusLike {
   name?: string | null

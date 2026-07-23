@@ -36,3 +36,82 @@ describe('personal-data schema (per-type requirements)', () => {
     ).toBe(false)
   })
 })
+
+describe('personal-data schema (fiscal identifiers)', () => {
+  const individual = {
+    type: 'individual' as const,
+    first_name: 'Mario',
+    last_name: 'Rossi',
+  }
+
+  it('accepts a tax code consistent with the whole card', () => {
+    expect(
+      schema.safeParse({
+        ...individual,
+        birth_date: '1980-01-01',
+        gender: 'male',
+        tax_code: 'RSSMRA80A01H501U',
+      }).success,
+    ).toBe(true)
+  })
+
+  it('rejects a tax code whose control character is wrong', () => {
+    const result = schema.safeParse({ ...individual, tax_code: 'RSSMRA80A01H501W' })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0].message).toBe('personalData.form.taxCodeInvalid')
+  })
+
+  it.each([
+    [
+      'last name',
+      { ...individual, last_name: 'Bianchi' },
+      'personalData.form.taxCodeLastNameMismatch',
+    ],
+    [
+      'first name',
+      { ...individual, first_name: 'Luigi' },
+      'personalData.form.taxCodeFirstNameMismatch',
+    ],
+    [
+      'birth date',
+      { ...individual, birth_date: '1980-02-01' },
+      'personalData.form.taxCodeBirthDateMismatch',
+    ],
+    [
+      'gender',
+      { ...individual, gender: 'female' as const },
+      'personalData.form.taxCodeGenderMismatch',
+    ],
+  ])('rejects a tax code that does not match the %s', (_label, values, message) => {
+    const result = schema.safeParse({ ...values, tax_code: 'RSSMRA80A01H501U' })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0].message).toBe(message)
+  })
+
+  it('requires the 11-digit numeric code on a company card', () => {
+    const company = { type: 'company' as const, company_name: 'Acme SpA' }
+
+    expect(schema.safeParse({ ...company, tax_code: '00743110157' }).success).toBe(true)
+
+    const result = schema.safeParse({ ...company, tax_code: 'RSSMRA80A01H501U' })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0].message).toBe(
+      'personalData.form.companyTaxCodeInvalid',
+    )
+  })
+
+  it('rejects an invalid VAT number and accepts a blank one', () => {
+    expect(schema.safeParse({ ...individual, vat_number: '' }).success).toBe(true)
+    expect(schema.safeParse({ ...individual, vat_number: '00743110157' }).success).toBe(
+      true,
+    )
+
+    const result = schema.safeParse({ ...individual, vat_number: '00743110158' })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0].message).toBe('personalData.form.vatNumberInvalid')
+  })
+})

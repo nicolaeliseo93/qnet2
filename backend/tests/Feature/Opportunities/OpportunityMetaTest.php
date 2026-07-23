@@ -29,9 +29,9 @@ if (! function_exists('opportunityMetaUserWith')) {
 }
 
 const OPPORTUNITY_FIELD_KEYS = [
-    'name', 'registry_id',
+    'registry_id',
     'referent_id', 'commercial_id', 'reporter_id', 'supervisor_id',
-    'source_id', 'opportunity_status_id', 'product_lines', 'products_of_interest', 'manager_slots', 'start_date',
+    'source_id', 'operational_site_id', 'opportunity_status_id', 'product_lines', 'products_of_interest', 'manager_slots', 'start_date',
     'estimated_value', 'expected_close_date', 'success_probability',
 ];
 
@@ -39,9 +39,12 @@ const OPPORTUNITY_FIELD_KEYS = [
 // AC-031 — GET /api/meta/opportunities: the 15 fields (amendment rev.3:
 // business_function_id/product_category_id merged into product_lines; user
 // directive 2026-07-17: company_id/company_site_id/operational_site_id
-// REMOVED entirely; spec 0043, D-3: opportunity_status_id ADDED, mandatory;
-// user directive 2026-07-22: products_of_interest ADDED, optional),
-// lead_id absent
+// REMOVED entirely — but spec 0056, 2026-07-23, REINSTATES operational_site_id
+// alone, as an optional FK: company_id/company_site_id stay removed;
+// spec 0043, D-3: opportunity_status_id ADDED, mandatory;
+// user directive 2026-07-22: products_of_interest ADDED, optional;
+// spec 0057, D-5: name REMOVED entirely — no longer permissionable, it is
+// derived server-side, never a client input), lead_id absent
 // ---------------------------------------------------------------------------
 
 it('403 without opportunities.viewAny', function () {
@@ -63,6 +66,8 @@ it('200: field catalogue has the 15 contract fields, in order, lead_id absent (A
     expect($keys)->toBe(OPPORTUNITY_FIELD_KEYS)
         ->and($keys)->toHaveCount(15);
     expect($keys)->not->toContain('lead_id');
+    // Spec 0057, D-5: name is structural/immutable, not even readonly-visible.
+    expect($keys)->not->toContain('name');
 
     foreach ($response->json('permissions.fields') as $field) {
         expect($field)->toHaveKeys(['visible', 'hidden', 'editable', 'readonly', 'required', 'disabled']);
@@ -75,8 +80,6 @@ it('200: create-context permissions.fields are editable when the actor may creat
 
     $this->getJson('/api/meta/opportunities')
         ->assertOk()
-        ->assertJsonPath('permissions.fields.name.editable', true)
-        ->assertJsonPath('permissions.fields.name.required', true)
         ->assertJsonPath('permissions.fields.registry_id.required', true)
         ->assertJsonPath('permissions.fields.product_lines.required', true)
         ->assertJsonPath('permissions.fields.estimated_value.required', false);
@@ -114,8 +117,36 @@ it('permissions.fields are readonly when the actor may not create', function () 
 
     $this->getJson('/api/meta/opportunities')
         ->assertOk()
-        ->assertJsonPath('permissions.fields.name.editable', false)
-        ->assertJsonPath('permissions.fields.name.readonly', true);
+        ->assertJsonPath('permissions.fields.registry_id.editable', false)
+        ->assertJsonPath('permissions.fields.registry_id.readonly', true);
+});
+
+// ---------------------------------------------------------------------------
+// AC-013 (spec 0056) — operational_site_id's ceiling ALSO requires
+// operational-sites.viewAny: an actor with opportunities.update but WITHOUT
+// it gets the field READ-ONLY, never finta-editabile.
+// ---------------------------------------------------------------------------
+
+it('permissions.fields.operational_site_id is editable when the actor may create AND holds operational-sites.viewAny (AC-013)', function () {
+    $actor = opportunityMetaUserWith(['viewAny', 'create']);
+    Permission::findOrCreate('operational-sites.viewAny');
+    $actor->givePermissionTo('operational-sites.viewAny');
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/meta/opportunities')
+        ->assertOk()
+        ->assertJsonPath('permissions.fields.operational_site_id.editable', true)
+        ->assertJsonPath('permissions.fields.operational_site_id.required', false);
+});
+
+it('permissions.fields.operational_site_id is READ-ONLY for an actor with opportunities.create but WITHOUT operational-sites.viewAny (AC-013)', function () {
+    $actor = opportunityMetaUserWith(['viewAny', 'create']);
+    Sanctum::actingAs($actor);
+
+    $this->getJson('/api/meta/opportunities')
+        ->assertOk()
+        ->assertJsonPath('permissions.fields.operational_site_id.editable', false)
+        ->assertJsonPath('permissions.fields.operational_site_id.readonly', true);
 });
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,16 @@ import type { Attachment } from '@/features/attachments/types'
 const EMPTY_DOCUMENTS: Attachment[] = []
 
 /**
+ * Outcome of a multi-file upload: the API takes one file per request, so a
+ * batch can succeed partially. The caller reports the failed names instead of
+ * losing the files that did upload.
+ */
+export interface UploadBatchResult {
+  uploaded: number
+  failed: string[]
+}
+
+/**
  * Self-fetching document list for a polymorphic owner (`resource`/`id`),
  * scoped to a single `collection`. Upload and delete invalidate the same
  * list query key on success, so the grid stays in sync without any manual
@@ -26,8 +36,24 @@ export function useAttachments(resource: string, id: number, collection: string)
     queryFn: () => listAttachments(resource, id, collection),
   })
 
-  const uploadMutation = useMutation<Attachment, AxiosError, File>({
-    mutationFn: (file) => uploadAttachment({ resource, id, collection, file }),
+  const uploadMutation = useMutation<UploadBatchResult, AxiosError, File[]>({
+    mutationFn: async (files) => {
+      const failed: string[] = []
+      let uploaded = 0
+
+      // Sequential on purpose: the endpoint takes one file per request, and a
+      // burst of parallel multipart bodies is what trips server upload limits.
+      for (const file of files) {
+        try {
+          await uploadAttachment({ resource, id, collection, file })
+          uploaded += 1
+        } catch {
+          failed.push(file.name)
+        }
+      }
+
+      return { uploaded, failed }
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey })
     },

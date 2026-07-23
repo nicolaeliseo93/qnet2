@@ -248,6 +248,9 @@ export function OpportunityDetailView({ opportunity }: OpportunityDetailViewProp
           <DetailField label={t('opportunities.form.source')}>
             {opportunity.source?.name ?? <DetailEmpty />}
           </DetailField>
+          <DetailField label={t('opportunities.form.operationalSite')}>
+            {opportunity.operational_site?.label ?? <DetailEmpty />}
+          </DetailField>
           <DetailField label={t('opportunities.form.state')}>
             {opportunity.state?.name ?? <DetailEmpty />}
           </DetailField>

@@ -40,10 +40,11 @@ it('creates the opportunities table with the expected columns', function () {
     expect(Schema::hasColumn('opportunities', 'product_category_id'))->toBeFalse();
 
     // User directive 2026-07-17: company_id/company_site_id/operational_site_id
-    // are DROPPED entirely.
+    // are DROPPED entirely. Spec 0056 (2026-07-23) then REINSTATES
+    // `operational_site_id` alone, as an optional FK; the other two stay dropped.
     expect(Schema::hasColumn('opportunities', 'company_id'))->toBeFalse();
     expect(Schema::hasColumn('opportunities', 'company_site_id'))->toBeFalse();
-    expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeTrue();
 
     expect(Schema::hasTable('opportunity_user'))->toBeTrue();
     expect(Schema::hasColumns('opportunity_user', ['id', 'opportunity_id', 'user_id', 'position']))->toBeTrue();
@@ -142,13 +143,18 @@ it('opportunity_product_lines: unique(opportunity_id, business_function_id, prod
 // migration reversibility (AC-003)
 // ---------------------------------------------------------------------------
 
-it('down() reverses the 4 opportunities migrations in LIFO order, up() recreates them all', function () {
+it('down() reverses the 5 opportunities migrations in LIFO order, up() recreates them all', function () {
     $pivotMigration = require database_path('migrations/2026_07_16_140100_create_opportunity_user_table.php');
     $productLinesMigration = require database_path('migrations/2026_07_17_150000_create_opportunity_product_lines_table.php');
     $tableMigration = require database_path('migrations/2026_07_16_140000_create_opportunities_table.php');
     $dropCompanySiteMigration = require database_path('migrations/2026_07_17_180000_drop_company_and_site_columns_from_opportunities_table.php');
+    $operationalSiteMigration = require database_path('migrations/2026_07_23_100000_add_operational_site_id_to_opportunities_table.php');
 
-    // LIFO: the LAST migration to run (the column drop) is the FIRST reversed.
+    // LIFO: the LAST migration to run (spec 0056's operational_site_id) is the
+    // FIRST reversed. Order matters beyond tidiness here: the 2026-07-17 drop's
+    // own down() RE-ADDS `operational_site_id`, so reversing it while spec 0056's
+    // column is still in place collides on a duplicate column.
+    $operationalSiteMigration->down();
     $dropCompanySiteMigration->down();
     $pivotMigration->down();
     $productLinesMigration->down();
@@ -162,17 +168,24 @@ it('down() reverses the 4 opportunities migrations in LIFO order, up() recreates
     $productLinesMigration->up();
     $pivotMigration->up();
     $dropCompanySiteMigration->up();
+    $operationalSiteMigration->up();
 
     expect(Schema::hasTable('opportunities'))->toBeTrue();
     expect(Schema::hasTable('opportunity_product_lines'))->toBeTrue();
     expect(Schema::hasTable('opportunity_user'))->toBeTrue();
     expect(Schema::hasColumn('opportunities', 'company_id'))->toBeFalse();
     expect(Schema::hasColumn('opportunities', 'company_site_id'))->toBeFalse();
-    expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeFalse();
+    expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeTrue();
 });
 
 it('drop-company-and-site-columns migration is reversible standalone: down() then up()', function () {
     $migration = require database_path('migrations/2026_07_17_180000_drop_company_and_site_columns_from_opportunities_table.php');
+    $operationalSiteMigration = require database_path('migrations/2026_07_23_100000_add_operational_site_id_to_opportunities_table.php');
+
+    // Spec 0056 re-added `operational_site_id` in a LATER migration, and this
+    // one's down() re-adds that very column: the newer migration has to be
+    // reversed first or the two collide on a duplicate column.
+    $operationalSiteMigration->down();
 
     $migration->down();
 
@@ -185,6 +198,10 @@ it('drop-company-and-site-columns migration is reversible standalone: down() the
     expect(Schema::hasColumn('opportunities', 'company_id'))->toBeFalse();
     expect(Schema::hasColumn('opportunities', 'company_site_id'))->toBeFalse();
     expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeFalse();
+
+    $operationalSiteMigration->up();
+
+    expect(Schema::hasColumn('opportunities', 'operational_site_id'))->toBeTrue();
 });
 
 it('opportunity_product_lines is reversible standalone: down() then up() (AC-097)', function () {

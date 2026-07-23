@@ -11,11 +11,13 @@ use App\Tables\RequestManagement\Concerns\WritesInlineEditableCells;
 use App\Tables\RequestManagement\RequestAdvancedFilterCatalog;
 use App\Tables\RequestManagement\RequestClientSearch;
 use App\Tables\RequestManagement\RequestColumnCatalog;
+use App\Tables\RequestManagement\RequestRelationColumns;
 use App\Tables\RequestManagement\RequestRowMapper;
+use App\Tables\Shared\OperationalSiteColumn;
+use App\Tables\Shared\ProductsOfInterestColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Table definition for the `request-management` domain (spec 0049): the
@@ -37,6 +39,12 @@ use Illuminate\Support\Facades\DB;
  *    mirroring LeadImportsTableDefinition's `Auth::id()` scoping precedent
  *    (authorizeViewAny runs first; a null id simply matches no rows via
  *    `whereHas`, never fail-open).
+ *
+ * `workflow_status`/`product_categories` are delegated to
+ * RequestRelationColumns (file-size split, engineering.md §6). Spec 0056:
+ * `operational_site` (the Sede operativa) has no relation-by-name equivalent
+ * (the site has no own name) — delegated instead to the shared
+ * App\Tables\Shared\OperationalSiteColumn.
  */
 class RequestManagementTableDefinition extends AbstractTableDefinition
 {
@@ -56,33 +64,16 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
      */
     private const string WORKFLOW_STATUS_ADVANCED_FILTER = 'workflow_status';
 
-    /**
-     * Simple (single-hop) relation-name derived columns: relation accessor,
-     * related table and owning FK column, keyed by the derived column id —
-     * mirrors OpportunitiesTableDefinition::DERIVED_RELATIONS, restricted to
-     * the 4 columns this operative list exposes.
-     *
-     * @var array<string, array{relation: string, table: string, fk: string}>
-     */
-    private const array DERIVED_RELATIONS = [
-        'workflow_status' => ['relation' => 'workflowStatus', 'table' => 'opportunity_workflow_statuses', 'fk' => 'opportunity_workflow_status_id'],
-    ];
+    private const string OPERATIONAL_SITE_COLUMN = 'operational_site';
 
-    /**
-     * The single AGGREGATED (to-many, via `productLines`) derived column:
-     * filterable but never sortable (amendment rev.3 pattern, no single
-     * related row to order by).
-     *
-     * @var array<string, array{relation: string, table: string, fk: string}>
-     */
-    private const array AGGREGATED_RELATIONS = [
-        'product_categories' => ['relation' => 'productLines.productCategory', 'table' => 'product_categories', 'fk' => 'product_category_id'],
-    ];
+    private const string OPERATIONAL_SITE_RELATION = 'operationalSite';
 
     public function __construct(
         private readonly RequestRowMapper $rowMapper,
         private readonly RequestManagementService $service,
         private readonly RequestClientSearch $clientSearch,
+        private readonly OperationalSiteColumn $operationalSiteColumn,
+        private readonly RequestRelationColumns $relationColumns,
     ) {}
 
     /**
@@ -137,6 +128,19 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
         return $actor->can('request-management.update');
     }
 
+    /**
+     * Same deviation as authorizeViewAny()/authorizeUpdate(), for the bulk
+     * delete (user directive 2026-07-23): the default would resolve
+     * OpportunityPolicy → `opportunities.delete`, a permission of a DIFFERENT
+     * module. `baseQuery()`'s D-3 scoping already excluded every row the actor
+     * does not manage before this is reached, so a scoped-out id is reported
+     * `not_found`, never deleted.
+     */
+    public function authorizeDelete(User $actor, Model $row): bool
+    {
+        return $actor->can('request-management.delete');
+    }
+
     // updateCell()/optionsFor() (spec 0054, D-4/D-5) live in
     // WritesInlineEditableCells (file-size budget, engineering.md §6).
 
@@ -147,6 +151,9 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
     {
         $query = Opportunity::query()->with([
             'workflowStatus', 'productLines.productCategory',
+            // User directive 2026-07-23: the "Prodotti di interesse" column's
+            // own `{id, name}` refs (cell + multiselect editor selection).
+            'productsOfInterest',
             // `managers.avatar` so the "Operatore" (GA2) column can project the
             // inline avatar for the shared UserCell without a per-row query.
             'managers.avatar',
@@ -154,6 +161,9 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
             // are read from the Registry's PersonalData card + its primary
             // contacts, all resolved from memory in mapRow (no N+1).
             'registry.personalData.contacts',
+            // Spec 0056: operationalSite's address+city for the composed
+            // label (site has no own name).
+            'operationalSite.addresses.city',
         ])
             // Per-row count for the `documents` action badge (HasAttachments),
             // scoped to the 'documents' collection only — never other
@@ -250,7 +260,9 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * `view` ("Lavora"), `notes` (spec 0052 B4b), `documents` and `activity` —
+     * `view` ("Lavora"), `notes` (spec 0052 B4b), `documents`, `delete` (user
+     * directive 2026-07-23, gated by this module's OWN
+     * `request-management.delete` — see authorizeDelete()) and `activity` —
      * `view` and `notes` gated by the SAME `request-management.view` (D-6:
      * reading a record's notes is inherited from the ability to open the
      * record, no separate notes permission), never OpportunityPolicy:
@@ -275,6 +287,10 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
             $allowed[] = 'documents';
         }
 
+        if ($actor->can('request-management.delete')) {
+            $allowed[] = 'delete';
+        }
+
         if ($actor->can('request-management.viewActivity')) {
             $allowed[] = 'activity';
         }
@@ -283,11 +299,9 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Handle the 4 simple-relation set filters AND the `product_categories`
-     * AGGREGATED (to-many) set filter, both via `whereHas` on the related
-     * row's name (allow-listed columns only, never orderByRaw/whereRaw on raw
-     * input — backend.md §8). Every real column falls through to the generic
-     * engine.
+     * `operational_site` (spec 0056) is delegated to the shared
+     * OperationalSiteColumn (bound `line1` match); every other derived
+     * column falls through to RequestRelationColumns' name-based `whereHas`.
      *
      * @param  Builder<Opportunity>  $query
      * @param  array<string, mixed>  $columnConfig
@@ -295,28 +309,30 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
      */
     public function applyDerivedFilter(Builder $query, string $columnId, array $columnConfig, array $filter): bool
     {
-        $config = self::DERIVED_RELATIONS[$columnId] ?? self::AGGREGATED_RELATIONS[$columnId] ?? null;
+        if ($columnId === self::OPERATIONAL_SITE_COLUMN) {
+            $this->operationalSiteColumn->applyFilter($query, self::OPERATIONAL_SITE_RELATION, $this->filterValues($filter));
 
-        if ($config === null) {
-            return false;
+            return true;
         }
 
-        $values = $this->filterValues($filter);
+        if ($columnId === ProductsOfInterestColumn::COLUMN_ID) {
+            ProductsOfInterestColumn::applyFilter($query, $this->filterValues($filter));
 
-        if ($values !== []) {
-            $this->applyNameWhereHas($query, $config['relation'], $values);
+            return true;
         }
 
-        return true;
+        return $this->relationColumns->applyFilter($query, $columnId, $filter);
     }
 
     /**
      * `workflow_status`'s advanced filter (RequestAdvancedFilterCatalog) is a
      * SET filter matched by the related row's `name` (see the constant's
      * docblock) — the generic default (a plain `whereHas`-by-id for `type:
-     * relation`/`async_search`) cannot express it. Every other advanced
-     * filter declared in the catalog is a standard relation-by-id or real
-     * column, handled by the generic default.
+     * relation`/`async_search`) cannot express it. `operational_site` (spec
+     * 0056) has no relation-by-id equivalent either (the site has no own
+     * name) — delegated to the shared OperationalSiteColumn. Every other
+     * advanced filter declared in the catalog is a standard relation-by-id or
+     * real column, handled by the generic default.
      *
      * @param  Builder<Opportunity>  $query
      * @param  array<string, mixed>  $descriptor
@@ -330,28 +346,21 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
             )), 0, self::MAX_FILTER_VALUES);
 
             if ($values !== []) {
-                $this->applyNameWhereHas($query, 'workflowStatus', $values);
+                $this->relationColumns->applyNameWhereHas($query, 'workflowStatus', $values);
+            }
+
+            return true;
+        }
+
+        if ($name === self::OPERATIONAL_SITE_COLUMN) {
+            if (is_string($value) && $value !== '') {
+                $this->operationalSiteColumn->applyAdvancedFilter($query, self::OPERATIONAL_SITE_RELATION, $value);
             }
 
             return true;
         }
 
         return parent::applyAdvancedFilter($query, $name, $descriptor, $value);
-    }
-
-    /**
-     * `whereHas` on a relation's own `name`, bound and never raw — shared by
-     * the `workflow_status` derived-column set filter (applyDerivedFilter)
-     * and its advanced-filter twin (applyAdvancedFilter above).
-     *
-     * @param  Builder<Opportunity>  $query
-     * @param  array<int, string>  $values
-     */
-    private function applyNameWhereHas(Builder $query, string $relation, array $values): void
-    {
-        $query->whereHas($relation, static function (Builder $relatedQuery) use ($values): void {
-            $relatedQuery->whereIn('name', $values);
-        });
     }
 
     /**
@@ -362,47 +371,36 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
     {
         $values = $filter['values'] ?? null;
 
-        if (! is_array($values)) {
-            return [];
-        }
-
-        return array_slice(array_values(array_filter(
+        return is_array($values) ? array_values(array_filter(
             $values,
             static fn ($value): bool => is_string($value) && $value !== '',
-        )), 0, self::MAX_FILTER_VALUES);
+        )) : [];
     }
 
     /**
-     * ORDER BY the related row's name via a correlated subquery for every one
-     * of the 4 simple-relation derived columns. `product_categories` (the
-     * AGGREGATED to-many column) is NOT sortable (falls through, returns
-     * false — no single related row to order by).
+     * `operational_site` (spec 0056) is delegated to the shared
+     * OperationalSiteColumn; `workflow_status` falls through to
+     * RequestRelationColumns' correlated subquery sort. `product_categories`
+     * (AGGREGATED to-many) is NOT sortable (no single related row to order
+     * by).
      *
      * @param  Builder<Opportunity>  $query
      */
     public function applyDerivedSort(Builder $query, string $columnId, string $direction): bool
     {
-        $config = self::DERIVED_RELATIONS[$columnId] ?? null;
+        if ($columnId === self::OPERATIONAL_SITE_COLUMN) {
+            $this->operationalSiteColumn->applySort($query, 'opportunities', 'operational_site_id', $direction);
 
-        if ($config === null) {
-            return false;
+            return true;
         }
 
-        $subquery = DB::table($config['table'])
-            ->select('name')
-            ->whereColumn("{$config['table']}.id", "opportunities.{$config['fk']}")
-            ->limit(1);
-
-        $query->orderBy($subquery, $direction);
-
-        return true;
+        return $this->relationColumns->applySort($query, $columnId, $direction);
     }
 
     /**
-     * Excel-like distinct values (spec 0004/0005): the related row's name for
-     * each of the 4 simple-relation derived columns, plus
-     * `product_categories` via a join through `opportunity_product_lines` —
-     * scoped to the rows matching $query.
+     * Excel-like distinct values (spec 0004/0005). `operational_site` (spec
+     * 0056) is delegated to the shared OperationalSiteColumn; every other
+     * derived column falls through to RequestRelationColumns.
      *
      * @param  Builder<Opportunity>  $query
      * @param  array<string, mixed>  $columnConfig
@@ -410,59 +408,14 @@ class RequestManagementTableDefinition extends AbstractTableDefinition
      */
     public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
     {
-        if (array_key_exists($columnId, self::AGGREGATED_RELATIONS)) {
-            return $this->distinctAggregatedValues(self::AGGREGATED_RELATIONS[$columnId], $search, $query, $limit);
+        if ($columnId === self::OPERATIONAL_SITE_COLUMN) {
+            return $this->operationalSiteColumn->distinctValues($query, 'operational_site_id', $search, $limit);
         }
 
-        $config = self::DERIVED_RELATIONS[$columnId] ?? null;
-
-        if ($config === null) {
-            return null;
+        if ($columnId === ProductsOfInterestColumn::COLUMN_ID) {
+            return ProductsOfInterestColumn::distinctValues($query, $search, $limit);
         }
 
-        $relatedIds = (clone $query)->whereNotNull($config['fk'])->select($config['fk']);
-
-        return DB::table($config['table'])
-            ->whereIn('id', $relatedIds)
-            ->when($search !== null && $search !== '', function ($builder) use ($search): void {
-                $builder->where('name', 'like', '%'.$this->escapeLike($search).'%');
-            })
-            ->distinct()
-            ->orderBy('name')
-            ->limit($limit)
-            ->pluck('name')
-            ->map(static fn (mixed $name): string => (string) $name)
-            ->all();
-    }
-
-    /**
-     * @param  array{relation: string, table: string, fk: string}  $config
-     * @param  Builder<Opportunity>  $query
-     * @return array<int, string>
-     */
-    private function distinctAggregatedValues(array $config, ?string $search, Builder $query, int $limit): array
-    {
-        $opportunityIds = (clone $query)->select('id');
-
-        return DB::table('opportunity_product_lines')
-            ->join($config['table'], "{$config['table']}.id", '=', "opportunity_product_lines.{$config['fk']}")
-            ->whereIn('opportunity_product_lines.opportunity_id', $opportunityIds)
-            ->when($search !== null && $search !== '', function ($builder) use ($config, $search): void {
-                $builder->where("{$config['table']}.name", 'like', '%'.$this->escapeLike($search).'%');
-            })
-            ->distinct()
-            ->orderBy("{$config['table']}.name")
-            ->limit($limit)
-            ->pluck("{$config['table']}.name")
-            ->map(static fn (mixed $name): string => (string) $name)
-            ->all();
-    }
-
-    /**
-     * Escape LIKE wildcards in user input so they are treated literally.
-     */
-    private function escapeLike(string $value): string
-    {
-        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+        return $this->relationColumns->distinctValues($columnId, $search, $query, $limit);
     }
 }

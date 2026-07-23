@@ -21,10 +21,16 @@ namespace App\DataObjects\Opportunities;
  * enforcement is needed here.
  *
  * Amendment rev.3: `businessFunctionId`/`productCategoryId` are REPLACED by
- * `productLines`. User directive 2026-07-17: `companyId`/`companySiteId`/
- * `operationalSiteId` are REMOVED entirely. `opportunityStatusId` (spec
- * 0043, D-3) follows the same `*Submitted` convention — legitimately never
- * null once submitted (UpdateOpportunityRequest rejects a null value).
+ * `productLines`. User directive 2026-07-17: `companyId`/`companySiteId`
+ * are REMOVED entirely. `opportunityStatusId` (spec 0043, D-3) follows the
+ * same `*Submitted` convention — legitimately never null once submitted
+ * (UpdateOpportunityRequest rejects a null value).
+ *
+ * Spec 0056: `operationalSiteId` is reintroduced as a plain, optional scalar,
+ * following the SAME `*Submitted` convention as every other unlocked FK
+ * (`sourceId`, etc.) — the pair is what lets a PATCH AZZERARE the field
+ * (AC-004), appended at the very end of the constructor for the same
+ * ArgumentCountError reason as CreateOpportunityData.
  *
  * Spec 0047: `stateId` (Regione, D1) follows the same `*Submitted`
  * convention as every other plain scalar. `workflowStatusId` is the
@@ -34,6 +40,9 @@ namespace App\DataObjects\Opportunities;
  * both mean "let OpportunityWorkflowResolver decide" — it is NEVER part of
  * submittedAttributes() (never mass-assigned, always written by the
  * resolver).
+ *
+ * Spec 0057, D-5: `name` is REMOVED entirely — it is immutable server-side
+ * (derived once at create as `OPP_{id}`), never part of a PATCH payload.
  */
 final readonly class UpdateOpportunityData
 {
@@ -43,8 +52,6 @@ final readonly class UpdateOpportunityData
      * @param  array<int, int>|null  $productsOfInterest  "prodotti di interesse" (user directive 2026-07-22): same null-means-untouched convention as the two collections above, synced by OpportunityProductInterestWriter
      */
     public function __construct(
-        public ?string $name = null,
-        public bool $nameSubmitted = false,
         public ?int $registryId = null,
         public bool $registryIdSubmitted = false,
         public ?int $referentId = null,
@@ -74,6 +81,8 @@ final readonly class UpdateOpportunityData
         public ?int $workflowStatusId = null,
         public bool $workflowStatusIdSubmitted = false,
         public ?array $productsOfInterest = null,
+        public ?int $operationalSiteId = null,
+        public bool $operationalSiteIdSubmitted = false,
     ) {}
 
     /**
@@ -84,8 +93,6 @@ final readonly class UpdateOpportunityData
     public static function fromValidated(array $data): self
     {
         return new self(
-            name: array_key_exists('name', $data) ? (string) $data['name'] : null,
-            nameSubmitted: array_key_exists('name', $data),
             registryId: self::nullableInt($data, 'registry_id'),
             registryIdSubmitted: array_key_exists('registry_id', $data),
             referentId: self::nullableInt($data, 'referent_id'),
@@ -117,6 +124,8 @@ final readonly class UpdateOpportunityData
             workflowStatusId: self::nullableInt($data, 'opportunity_workflow_status_id'),
             workflowStatusIdSubmitted: array_key_exists('opportunity_workflow_status_id', $data),
             productsOfInterest: array_key_exists('products_of_interest', $data) ? self::normalizeIds($data['products_of_interest']) : null,
+            operationalSiteId: self::nullableInt($data, 'operational_site_id'),
+            operationalSiteIdSubmitted: array_key_exists('operational_site_id', $data),
         );
     }
 
@@ -168,10 +177,6 @@ final readonly class UpdateOpportunityData
     {
         $attributes = [];
 
-        if ($this->nameSubmitted) {
-            $attributes['name'] = $this->name;
-        }
-
         if ($this->registryIdSubmitted) {
             $attributes['registry_id'] = $this->registryId;
         }
@@ -194,6 +199,10 @@ final readonly class UpdateOpportunityData
 
         if ($this->sourceIdSubmitted) {
             $attributes['source_id'] = $this->sourceId;
+        }
+
+        if ($this->operationalSiteIdSubmitted) {
+            $attributes['operational_site_id'] = $this->operationalSiteId;
         }
 
         if ($this->opportunityStatusIdSubmitted) {

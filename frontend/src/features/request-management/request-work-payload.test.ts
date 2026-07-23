@@ -18,6 +18,8 @@ function panel(overrides: Partial<RequestWorkPanel> = {}): RequestWorkPanel {
     reporter: null,
     operator_id: null,
     operator: null,
+    operational_site_id: null,
+    operational_site: null,
     opportunity_status: { id: 5, name: 'New', color: 'slate' },
     workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false },
     workflow_statuses: [
@@ -81,6 +83,7 @@ function formValues(overrides: Partial<RequestWorkFormValues> = {}): RequestWork
     source_id: null,
     reporter_id: null,
     operator_id: null,
+    operational_site_id: null,
     attribute_values: { notes: 'existing note', budget: 1000 },
     ...overrides,
   }
@@ -109,6 +112,22 @@ describe('buildRequestWorkPayload — attribution (user directive 2026-07-22)', 
     const payload = buildRequestWorkPayload(formValues(), panel({ operator_id: 3 }))
 
     expect(payload).toEqual({ operator_id: null })
+  })
+
+  /** Spec 0056: the operational site is a fourth attribution field, diffed the same way. */
+  it('sends operational_site_id when changed', () => {
+    const payload = buildRequestWorkPayload(
+      formValues({ operational_site_id: 8 }),
+      panel({ operational_site_id: null }),
+    )
+
+    expect(payload).toEqual({ operational_site_id: 8 })
+  })
+
+  it('sends an explicit null when the operational site is cleared', () => {
+    const payload = buildRequestWorkPayload(formValues(), panel({ operational_site_id: 8 }))
+
+    expect(payload).toEqual({ operational_site_id: null })
   })
 })
 

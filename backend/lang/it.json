@@ -23,5 +23,12 @@
     "Info": "Info",
     "Success": "Successo",
     "Warning": "Avviso",
-    "Error": "Errore"
+    "Error": "Errore",
+    "The tax code is not valid.": "Il codice fiscale non è valido.",
+    "The tax code of a company must be 11 digits with a valid control digit.": "Il codice fiscale di un ente deve essere di 11 cifre con codice di controllo valido.",
+    "The tax code does not match the last name.": "Il codice fiscale non corrisponde al cognome.",
+    "The tax code does not match the first name.": "Il codice fiscale non corrisponde al nome.",
+    "The tax code does not match the birth date.": "Il codice fiscale non corrisponde alla data di nascita.",
+    "The tax code does not match the gender.": "Il codice fiscale non corrisponde al sesso.",
+    "The VAT number is not valid.": "La partita IVA non è valida."
 }

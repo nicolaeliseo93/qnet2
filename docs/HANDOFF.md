@@ -2,6 +2,502 @@
 
 > Injected at session start. Update at every green state.
 
+## FORM DI CREAZIONE GESTIONE RICHIESTE + NOME OPPORTUNITA' DERIVATO (2026-07-23) — GREEN, NON COMMITTATO
+
+Spec CONGELATA E APPROVATA: `docs/specs/0057-request-management-create-form.xml`. Decisioni utente
+(AskUserQuestion 2026-07-23): anagrafica = scegli esistente OPPURE crea nuova; SOLO anagrafica +
+product lines (niente stato/prodotti di interesse/nome); nome opportunita' auto-generato `OPP_{id}`
+SIA nel form richieste SIA nel form opportunita'; apertura form secondo `module_open_preferences`.
+
+CONTESTO CHE NON SI DEDUCE DAL CODICE: "gestione richieste" E' il model `Opportunity` — il modulo
+aveva solo show/update/delete, nessuna POST. `RequestClientProfileWriter` NON e' utilizzabile in
+creazione: il suo `resolveCard()` fa 422 se il Registry non ha gia' una PersonalData, e' un writer di
+UPDATE. Il percorso di creazione anagrafica passa da `RegistryService::create()` (che gia' fa il
+placeholder `name=''` + derivazione via `RegistryProfileWriter`). Il permesso
+`request-management.create` esisteva GIA' nel catalogo (derivato da `BasePolicy`, seminato da
+`SyncPermissions`): nessuna migrazione, nessun seeder.
+
+BACKEND (nuovi): `CreateRequestData`, `StoreRequestRequest`, `RequestCreationService` (classe
+SEPARATA da `RequestManagementService` per SRP + soglie di righe), `RequestManagementController::store`,
+rotta `POST request-management` dichiarata PRIMA delle wildcard `{opportunity}`. Riusa VERBATIM
+`ValidatesRequestClientProfile` e `ValidatesProductLines`.
+TRAPPOLA TROVATA E CORRETTA — NON REINTRODURLA: l'XOR `registry_id` vs `client_*` NON si scrive con
+`Rule::requiredIf` + `sometimes`, perche' `sometimes` salta la regola quando la chiave e' del tutto
+assente e il requiredIf non scatta MAI (il ramo "nessuna anagrafica" passava). Si calcolano
+`required`/`prohibited` a priori.
+
+NOME OPPORTUNITA' (D-5): derivato `OPP_{id}` in `OpportunityService::create` (seed `''` + forceFill
+dopo l'insert, stessa transazione). Regola `name` rimossa da Store/UpdateOpportunityRequest, campo
+rimosso da Create/UpdateOpportunityData (era il PRIMO parametro posizionale), `name` tolto dal
+catalogo `OpportunitiesAuthorization` (16 -> 15 campi), `ConvertLeadToOpportunity::composeName()`
+CANCELLATO. `OpportunityFactory` NON toccata di proposito: bypassa il service, il suo nome fake resta
+una fixture arbitraria (forzare `OPP_{id}` li' avrebbe rotto decine di test). Nessun backfill dei nomi
+storici (fuori scope dichiarato).
+EFFETTO A CATENA: `opportunities.name` era `editable: true` in `OpportunityColumnCatalog`; tolto dal
+catalogo permessi, `InlineCellEditingGuardTest` falliva correttamente -> ora `editable: false`.
+
+FRONTEND: nuovo componente CONDIVISO `frontend/src/features/product-lines/` (`ProductLinesField`,
+`useProductLinesField`, types) con firma congelata `{value, onChange, knownLines?, disabled?}`,
+consumato SIA da opportunita' SIA da richieste. Le sue stringhe stanno nel namespace i18n top-level
+`productLines.*` (deliberato: non accoppiare il modulo richieste a `opportunities.form.*`).
+CANCELLATI: `use-opportunity-name-autofill.ts`, `opportunity-product-line-name.ts`,
+`use-opportunity-product-lines.ts`, `opportunity-product-lines-field.tsx`.
+Nuovi in request-management: `request-create-schema.ts`, `request-create-payload.ts`,
+`use-request-create-form.ts`, `request-create-client-section.tsx`, `request-create-form.tsx`.
+`generateRoutes: false` RIMOSSO da `request-management-screens.tsx`; la rotta di dettaglio manuale
+resta dichiarata PRIMA dello spread `...buildModuleRoutes()` — react-router v7 rompe la parita' di
+score fra path statici identici sull'ordine di dichiarazione, quindi la pagina custom vince e la voce
+generica resta inerte. Errori 422 anagrafica: due BANNER riepilogativi, non inline, perche'
+`PersonalDataCardForm`/`ContactsManager`/`AddressCreateField`/`ProductLinesField` non espongono un
+canale di errore per-campo.
+
+VERIFICATO ESEGUENDO (verifier indipendente + rerun): AC-001..AC-016 tutti verdi con test reali, non
+per ispezione. Pest intera 3611/3624; Vitest intero 2219/2222 (i 3 rossi di `cell-renderers.test.tsx`
+sono PRE-ESISTENTI, confermati via `git stash`); `tsc --noEmit` pulito; Pint ed ESLint puliti.
+`--filter=InlineCellEditing` 24/24, `--filter=Table` 657/658 (1 skip pre-esistente).
+
+DUE COSE APERTE, NESSUNA DELLA FEATURE 0057:
+1. `CustomFieldWritePipelineTest` (PATCH partial merge) e' ROSSO ed e' una REGRESSIONE VERA, NON
+   pre-esistente (confermato via git stash): la causa e' il lavoro non committato sulla validazione
+   CODICE FISCALE/PARTITA IVA (`UpdateCompanyRequest` applica ora `new VatNumber` a `vat_number`) e la
+   fixture `'vat_number' => 'IT999'` a `tests/Feature/CustomFields/CustomFieldWritePipelineTest.php:311`
+   non e' piu' valida. Appartiene a QUEL lavoro, non a 0057. Fix da una riga, non ancora fatto.
+2. Non verificati: resa visiva reale a 375/768/1024px e E2E su browser (solo Vitest/RTL).
+   Difetto PREESISTENTE segnalato e non corretto: `frontend/src/features/modules/module-form-page.tsx`
+   costruisce il prefisso i18n dal dominio kebab-case (`request-management.form.createTitle`) mentre le
+   chiavi sono in camelCase (`requestManagement`) -> in modalita' PAGINA il titolo mostra la chiave
+   grezza. Sistemico (colpisce anche business-functions, company-sites), ma `request-management` ha
+   `defaultMode: page`, quindi si vede con le impostazioni di default.
+
+## FORMATTAZIONE CANONICA DEI VALORI DIGITATI (2026-07-23) — GREEN, NON COMMITTATO
+
+Richiesta utente: "formattazione numero di telefono e codice fiscale, nome e cognome in modo
+coerente... anche se vengono inseriti numeri con spazi o altro, formattato sempre allo stesso modo".
+Scelte confermate dall'utente: TELEFONO = solo cifre, NESSUN prefisso assunto (`333 12 34 567` ->
+`3331234567`, `+39-333-1234567` -> `+393331234567`; il `00` iniziale collassa su `+`, deciso da me e
+dichiarato); NOME/COGNOME = Title Case con eccezione apostrofo (`d'angelo` -> `D'Angelo`, `de luca`
+-> `De Luca`); NESSUN backfill dei dati storici (solo scritture da ora in poi).
+
+ALGORITMO: `App\Support\InputFormat` (gemello FE `src/lib/formatting/input-format.ts`, STESSI casi di
+test). Metodi: `phone`, `personName` (mb_convert_case NON alza la lettera dopo l'apostrofo: serve il
+`preg_replace_callback` che c'e'), `plainText` (company_name: solo spazi, il case e' significativo),
+`taxCode`/`vatNumber` (delegano ai normalize dei twin fiscali), `sdiCode`, `contactValue` (dispatch
+sul canale), `identityField` (mappa CAMPO -> formattatore, unica fonte per write path e guard) +
+`IDENTITY_FIELDS`. DISTINTO da `ContactValueNormalizer`, che normalizza solo per CONFRONTARE duplicati
+e non tocca cio' che si persiste — non fonderli.
+
+AGGANCI BE (tutti in `prepareForValidation`, PRIMA delle rule: la rule TaxCode deve vedere la stessa
+stringa che si salva): trait `FormatsPersonalDataInput` usato da `ValidatesUserProfile`
+(`personal_data`, 8 request) e `ValidatesRequestClientProfile` (`client_identity`/`client_contacts`),
+`StorePersonalDataRequest` (root, ereditato da Update), `StoreContactRequest` (ereditato da Update),
+`Store/UpdateCompanyRequest` (solo `vat_number`). ATTENZIONE: il `prepareForValidation` sta SUI TRAIT
+— una request che ne definisca uno proprio lo sovrascriverebbe in silenzio.
+
+INLINE EDITING: nuova chiave di colonna `format` (`person_name`/`phone`/`tax_code`/`vat_number`)
+applicata da `CellValueValidator::format()` prima delle rule; dichiarata su
+`RequestColumnCatalog::clientColumn()` per first_name/last_name/tax_code/phone. Non viene emessa al FE
+(`ResolvesColumnConfig` e' una allow-list).
+
+CONSEGUENZA NON OVVIA (risolta): `EnforcesFieldPermissions` decide il 422 "campo non editabile"
+confrontando inviato vs persistito. Col valore inviato ora canonico e le righe storiche in formato
+vecchio, un campo BLOCCATO faceva 422 su un semplice re-invio identico (`+39 333 0000000` vs
+`+393330000000`), bloccando modifiche non correlate nella stessa form. Fix: `canonicalize()` mette
+anche il lato PERSISTITO nella stessa forma prima del confronto (attenzione: li' `type` del contatto
+arriva come ENUM castato, non come stringa).
+
+FE: formattazione onBlur (non durante la digitazione: rovinerebbe il caret) via
+`src/lib/formatting/format-on-blur.ts`, cablata su `personal-data-card-form` (6 campi),
+`contact-form`, `contacts-create-fields`, `company-form-body` (vat). Il pannello Lavora richieste
+eredita tutto perche' riusa `PersonalDataCardForm` + `ContactsManager`.
+
+TEST MODIFICATI (requisito CAMBIATO, nessun assert indebolito): attese `IT...` -> senza prefisso in
+CompanyCrudTest/CompanySiteCrudTest/RequestManagementClientProfileTest; telefono `+39 06 1234567` ->
+`+39061234567` in ReferentUpdateDeleteTest. Inoltre le fixture con codice fiscale FINTO
+(`AAABBB11C22D333E`/`ZZZYYY99X88W777V`) in PersonalDataFieldEnforcementTest,
+FieldPermissionEnforcementTest e ReferentDuplicateCheckTest sono state sostituite con codici VALIDI
+coerenti con Ada Lovelace (`LVLDAA80A01H501V` / `LVLDAA85A01H501A`): erano gia' ROSSE prima di questo
+lavoro, residuo della validazione fiscale della sessione precedente.
+
+Verificato ESEGUENDO: Pest 455 test sui moduli toccati (Unit/Support, PersonalData, RequestManagement,
+Authorization, Companies) + 80 Referents, tutti verdi tranne i navigation-node PRE-ESISTENTI
+(companies/company-sites/referent-types/referents — verificati identici con `git stash push -- app/`).
+Nuovi: 31 test unit InputFormat, 8 feature PersonalDataFormattingTest, 5 feature
+RequestManagementInlineFormattingTest. Vitest INTERO 2218 test, 2215 verdi (i 3 rossi sono i
+PRE-ESISTENTI di `cell-renderers.test.tsx`); nuovi 39 unit + 5 component + 1 su ContactForm.
+`tsc --noEmit` pulito, ESLint pulito sui file toccati, Pint pulito. NIENTE COMMIT: in attesa di via
+libera (§3.6).
+
+APERTO: i dati storici restano nel formato in cui furono salvati (scelta utente). Si uniformano solo
+quando la riga viene ri-salvata. Se in futuro si vuole uniformare tutto, serve un comando artisan di
+backfill che riusi `InputFormat`.
+
+## VALIDAZIONE CODICE FISCALE / PARTITA IVA (2026-07-23) — GREEN, NON COMMITTATO
+
+Richiesta utente: "un controllo sul codice fiscale e/o partita iva in base alle info che si sono
+inserite". Scelte confermate dall'utente: checksum + COERENZA con i dati anagrafici; BLOCCA (422),
+non warning; ambito = card anagrafica + Aziende + editing inline in tabella.
+
+ALGORITMI (puri, senza dipendenze nuove), gemelli BE/FE che vanno tenuti allineati:
+`App\Support\Fiscal\ItalianTaxCode` (pattern + carattere di controllo, de-omocodifica, decodifica
+data di nascita/sesso), `TaxCodeNameEncoder` (triple cognome/nome), `ItalianVatNumber` (11 cifre +
+cifra di controllo Luhn, prefisso IT tollerato, tutti-zeri rifiutato). FE: `src/lib/fiscal/
+tax-code.ts` e `vat-number.ts` con gli STESSI casi di test.
+
+REGOLE BE: `App\Rules\TaxCode` (DataAwareRule, costruttore = PREFISSO delle chiavi fratelli) e
+`App\Rules\VatNumber`. Il tipo di card decide la forma: `company` -> 11 cifre; `individual` -> 16
+caratteri PIU' la coerenza con cognome/nome/data di nascita/sesso PRESENTI nel payload (un payload
+sparso che porta solo il codice resta valido: si controlla solo cio' che c'e'). L'anno si confronta
+modulo 100 (il codice non porta il secolo).
+
+VINCOLO DICHIARATO ALL'UTENTE: nell'editing inline `CellValueValidator` riceve SOLO il valore della
+cella, quindi la coerenza anagrafica li' e' impossibile. Quando `type` manca dal payload la rule
+accetta ENTRAMBE le forme (16 caratteri o 11 cifre) invece di indovinare "individual", che
+rifiuterebbe ogni ente. Gli agganci: `StorePersonalDataRequest`, `ValidatesUserProfile`
+(prefisso `personal_data.` — copre referenti/anagrafiche/utenti/sedi/profilo), `ValidatesRequest
+ClientProfile` (`client_identity.`), `Store/UpdateCompanyRequest` (solo `vat_number`),
+`RequestColumnCatalog::clientColumn()` che ora accetta `rules` extra (inline `tax_code`). `rules`
+NON viene emesso al frontend (`ResolvesColumnConfig` e' una allow-list), quindi l'oggetto Rule li'
+dentro e' sicuro.
+
+FE: `buildPersonalDataSchema` (un solo punto: lo usano registries/referents/users/company-sites/
+profile/pannello Lavora richieste) + `company-schema`. Nuove chiavi i18n `personalData.form.taxCode*`
+/`vatNumberInvalid` e `companies.form.vatNumberInvalid` (it/en) + 7 stringhe in `lang/it.json`.
+
+TEST MODIFICATI (requisito CAMBIATO: prima nessun controllo di formato): le fixture con codici finti
+sono state sostituite con codici VALIDI — non e' stato indebolito nessun assert. BE:
+PersonalDataCrudTest ('LVLADA80A01H501U' -> 'LVLDAA80A01H501V', consistente con Ada Lovelace),
+UserProfileWriteTest + ProfileSelfServiceTest ('LVLDAA90A01H501X'), CompanyCrudTest/CompanySecurity
+Test/CompanySiteCrudTest (partite IVA con cifra di controllo valida), RequestManagementClientProfile
+Test ('09876543217'). FE: le stesse sostituzioni in company-form*.test.tsx e request-work-panel.
+test.tsx.
+
+Verificato ESEGUENDO: Pest tests/Unit + Feature (PersonalData, Companies, Referents, Registries,
+CompanySites, Users, RequestManagement, Auth, Leads, Imports, Opportunities) 1785 test, 1781 verdi —
+i 4 rossi sono PRE-ESISTENTI (3 navigation-node + AbstractMigrationSourcePreviewTest), verificati
+identici sull'albero pulito con `git stash`. Nuovi: 39 test unit (algoritmi + rule), 3 feature
+sull'inline editing, 2 sul POST /api/personal-data. Vitest INTERO 2173 test, 2170 verdi (i 3 rossi
+sono i PRE-ESISTENTI di `cell-renderers.test.tsx`). `tsc --noEmit` pulito, ESLint pulito sui file
+toccati, Pint pulito. NIENTE COMMIT: in attesa di via libera (§3.6).
+
+## CHECKBOX + BULK IN GESTIONE RICHIESTE (2026-07-23) — GREEN, NON COMMITTATO
+
+Richiesta utente: "tabella gestione richieste non ha i checkbox come in altre tabelle" -> alla domanda
+su cosa debba fare la selezione: "eliminazione massiva e per assegnazione, come in lead".
+
+CAUSA della mancanza (non era un bug di stile): la colonna checkbox e' generica e si accende SOLO se
+esiste un'azione bulk raggiungibile — `use-bulk-actions-slot.ts:155`,
+`enableSelection = canBulkDelete || Boolean(getBulkActions)`. `request-management` non aveva ne'
+l'azione `delete` in catalogo ne' `getBulkActions`. Quindi la feature richiesta NON e' "mostra i
+checkbox": sono le due azioni bulk, i checkbox ne sono la conseguenza.
+
+CONSEGUENZA DICHIARATA ALL'UTENTE (accettata): "Elimina" qui cancella l'Opportunity stessa — richiesta
+e opportunita' sono lo stesso record (D-1). Supera D-10 della spec 0049 ("nessun CRUD su questo
+modulo") per direttiva esplicita.
+
+MODIFICA AL CONTRATTO GENERICO (tocca ogni dominio tabellare): nuovo hook
+`TableDefinition::authorizeDelete()` (default in `AbstractTableDefinition`:
+`Gate::allows('delete', $row)`), usato da `TableBulkDeleteService` al posto del Gate hard-coded.
+Senza, `request-management` sarebbe stato gated da `opportunities.delete` — il permesso di un ALTRO
+modulo (violazione D-2). ATTENZIONE: `CustomFieldAwareTableDefinition` implementa l'interfaccia via
+`DelegatesUnaugmentedTableMethods` e va aggiornato a ogni metodo nuovo del contratto, altrimenti
+fatal a caricamento classe (e' successo: i test morivano SENZA output, exit 1 e zero byte — se
+succede di nuovo, sospetta un metodo non implementato nel decoratore, non un SIGSEGV d'ambiente).
+
+BACKEND. Catalogo: `delete` (type danger, confirm) in `RequestColumnCatalog::actions()` +
+`actionsFor()`, gated `request-management.delete` (permesso gia' esistente via BasePolicy, nessuna
+migrazione/seed). `RequestManagementTableDefinition::authorizeDelete()` -> `request-management.delete`.
+Nuove rotte in `routes/api/request-management.php`: `DELETE request-management/{opportunity}` e
+`POST request-management/assign-operators` (dichiarata PRIMA della wildcard). Nuovi:
+`AssignRequestOperatorsRequest` (riusa l'enum `LeadAssignmentMode`, stesso contratto a due modi — NON
+duplicato, rinominarlo avrebbe toccato leads/imports fuori scope), `RequestAssignmentService`,
+`RequestOperatorWriter` (estratto da `RequestManagementService::applyOperator`, ora delega: una sola
+implementazione della regola dello slot GA2 per pannello e bulk).
+
+DUE REGOLE NON EREDITATE DAI LEAD, deliberate: (1) lo scope D-3 filtra gli id — una richiesta che
+l'attore non gestisce viene SALTATA in silenzio (`assigned` riporta quanto scritto davvero), non e'
+un errore; (2) il carico di `mode=balanced` conta le RICHIESTE gia' tenute come GA2, non i lead —
+pesare il carico di un altro modulo distribuirebbe sul segnale sbagliato. Di `LeadOperatorDistributor`
+si riusano solo `operatorIdsForSite`/`distribute`/puro.
+
+FRONTEND. `request-management-table.tsx`: row action `delete` (confirm dal framework + toast +
+refresh), `getBulkActions` con "Assegna operatori" gated `request-management.update`.
+`AssignOperatorsDialog` e' rimasto condiviso ma la sua copy nominava i "lead": aggiunta prop
+OPZIONALE `copy {description, modeHints}` (default = testi lead invariati, leads/imports non
+cambiano). Nuove chiavi `requestManagement.delete.*` e `requestManagement.assign.*` (it/en).
+
+TEST MODIFICATI (requisito cambiato, dichiarato): in `RequestManagementTableTest` il test
+"never declares edit/delete" e' stato RINOMINATO — assertion invariata, resta valida perche' l'attore
+non ha `request-management.delete`; il caso permesso e' nel file nuovo. In
+`request-management-table.test.tsx` il test "ignores non-view action keys" e' stato SPLITTATO: `edit`
+resta ignorato, `delete` ora esegue il flusso (2 test nuovi: delete + apertura popup bulk).
+
+Verificato ESEGUENDO: Pest `RequestManagementBulkActionsTest` 15/15 NUOVO; RequestManagement+Tables
+183/183; Tables+Leads+Opportunities 236/236; Imports+Exports+Authorization+Policies 286/286;
+CustomFields+Registries+Roles+Users 322/323 — l'unico rosso e' il navigation-node PRE-ESISTENTE
+(`CustomFieldAdminSecurityTest`, nodo `custom-fields`), estraneo a questo lavoro. Vitest
+request-management+leads+table+data-table 455/458 (i 3 rossi sono i PRE-ESISTENTI di
+`cell-renderers.test.tsx`, i18n ContactsCell), imports 170/170. `tsc --noEmit` pulito, ESLint pulito
+sui file toccati, Pint pulito. NIENTE COMMIT: in attesa di via libera (§3.6).
+
+## PRODOTTI DI INTERESSE: OBBLIGATORIO + COLONNA INLINE (2026-07-23) — GREEN, NON COMMITTATO
+
+Richiesta utente: "Prodotto di interesse e' obbligatorio come campo, lo voglio anche come colonna in
+tabella, con la stessa gestione del form (mostra tutti i prodotti o limita) direttamente dal popup,
+alert compreso". Scelte confermate dall'utente: obbligo OVUNQUE (form opportunita' + pannello Lavora
++ cella inline), colonna in ENTRAMBE le tabelle (Opportunita' + Gestione Richieste).
+
+OBBLIGATORIETA' (requisito CAMBIATO: prima era opzionale). BE: `FieldDefinition('products_of_interest',
+mandatory: true)` + `FieldPermission::visibleEditable(required: true)` in `OpportunitiesAuthorization`
+e `RequestManagementAuthorization`; `required|array|min:1` in `StoreOpportunityRequest`,
+`sometimes|array|min:1` in `UpdateOpportunityRequest`/`UpdateRequestRequest` (sparse: assente = non
+toccato, MAI svuotabile). `TableCellUpdateService::isBlank()` ora considera vuoto anche `[]`, per cui
+lo step 4.5 (mandatory) blocca lo svuotamento inline di QUALSIASI multiselect obbligatoria. FE:
+`z.array(z.number()).min(1)` in `opportunity-schema` e `request-work-schema`, messaggio
+`products.ofInterest.required`.
+
+COLONNA `products_of_interest`. Dichiarazione UNICA condivisa in `App\Tables\Shared\
+ProductsOfInterestColumn` (come `OperationalSiteColumn`): declaration/project/applyFilter/
+distinctValues statici. Colonna pivot (`opportunity_product`): set-filtrabile per nome prodotto, NON
+ordinabile, `editable` con `editor: 'multiselect'` e `relation: {resource: products, scope:
+{category_ids: product_category_ids}}`. La riga espone `products_of_interest` come `[{id,name}]` +
+`product_category_ids` (la chiave che il popup legge per lo scope). Write: opportunita' ->
+`OpportunitiesTableDefinition::updateCell()` che chiama `OpportunityProductInterestWriter::sync`;
+gestione richieste -> `updateWork()` come ogni altra cella. `CellValueValidator` ha un nuovo ramo
+`multiselect` (lista di interi, ogni id ricontrollato da `RelationValueScopeChecker`, a cui e' stato
+aggiunto il resource `products`) valutato PRIMA del ramo `relation`.
+
+FE: nuovo `MultiSelectCellEditor` (+ `multi-select-scope.ts`) registrato sul kind `multiselect`.
+ATTENZIONE architetturale: l'alert di sblocco e' INLINE nel popup, NON `useConfirm` — un dialog
+portalato fuori dall'editor farebbe scattare `stopEditingWhenCellsLoseFocus` e chiuderebbe la cella
+(stessa trappola documentata in `relation-cell-editor.tsx`). Il toggle NON chiude il popup: il commit
+avviene alla chiusura. `useTableCellEdit` gestisce ora valori array (unwrap element-wise a ids +
+confronto per insieme di id, perche' l'array e' un riferimento nuovo a ogni toggle). Cella renderizzata
+dal nuovo `RefNamesCell` condiviso (`features/table/rich-cells.tsx`).
+
+TEST MODIFICATI (requisito cambiato, dichiarato): tutte le fixture di create opportunita' ora portano
+un prodotto della PROPRIA categoria (altrimenti il writer aggiungerebbe una product line e i conteggi
+salterebbero); `OpportunityProductsOfInterestTest` "omitting -> collezione vuota" diventa "-> 422";
+`RequestManagementProductsOfInterestTest` "[] svuota" diventa "[] -> 422".
+
+Verificato ESEGUENDO: Pest `Opportunities` 145/145, `RequestManagement` 162/162, `Table` 234/234
+(incluso il nuovo `tests/Feature/Table/ProductsOfInterestInlineEditTest.php`, 18 casi su entrambi i
+domini), `Leads` 85/85, `OpportunityWorkflows` 65/65, `Imports` 169/169, `Authorization` 78/78,
+`Exports` 31/31, `tests/Unit` (tutte le sottodir tranne `Unit/Migrations`, che va in SIGSEGV in questo
+ambiente anche isolata — pre-esistente, non tocca nulla di questo lavoro). Vitest data-table/table/
+opportunities/request-management/products 514/521: i 7 rossi sono PRE-ESISTENTI (3 `ContactsCell` i18n
+gia' noti + 4 `request-management-table.test.tsx`, il cui mock non esporta `assignRequestOperators`,
+export di un'altra modifica non committata). `tsc --noEmit` pulito, ESLint pulito, Pint pulito.
+NIENTE COMMIT: in attesa di via libera (§3.6).
+
+## COLONNA AZIONI A SINISTRA (2026-07-23) — GREEN, NON COMMITTATO
+
+Richiesta utente: "colonna azioni a sinistra di default per tutto il progetto". La colonna azioni
+e' UNICA e sintetica, creata in `components/data-table/data-table.tsx` (`ACTIONS_COLUMN_ID`), quindi
+il cambio vale per ogni dominio tabellare senza toccare le singole schermate.
+
+Modifiche (un solo file di prod): `mapped.push` -> `mapped.unshift` e `pinned: 'right'` -> `'left'`;
+aggiunto `selectionColumnDef: { pinned: 'left' }` in `gridOptions`. Quest'ultimo NON e' cosmetico:
+la colonna checkbox di AG Grid nasce `pinned: null` con `lockPosition: 'left'`, quindi con le azioni
+pinnate a sinistra sarebbe finita alla LORO DESTRA, nella sezione scrollabile. Pinnandola resta prima
+(il `lockPosition` la ordina davanti alle azioni dentro la sezione pinned-left).
+Commenti "right-pinned/trailing/right-most" aggiornati; una descrizione di test rinominata.
+
+Nessun impatto sulla persistenza layout: `toColumnPreferences` filtra gia' le colonne sintetiche
+(`__actions`, `ag-Grid-SelectionColumn`) e reindicizza `order` dopo il filtro.
+
+Verificato ESEGUENDO: Vitest `src/components/data-table`+`src/features/table` 261/264 (i 3 rossi sono
+i PRE-ESISTENTI di `cell-renderers.test.tsx`, i18n ContactsCell). `tsc --noEmit` pulito, ESLint pulito
+sui file toccati. NIENTE COMMIT: in attesa di via libera (§3.6).
+
+## UPLOAD MULTIPLO DOCUMENTI (2026-07-23) — GREEN, NON COMMITTATO
+
+Richiesta utente: abilitare l'upload di piu' file, in opportunita' e in gestione richieste.
+L'upload e' UN SOLO componente condiviso, `DocumentsSection`, montato da: `opportunity-detail`,
+`request-work-collaboration` e il row-action `DocumentsDialog` di entrambe le tabelle. La modifica
+sta li' e copre automaticamente tutte e quattro le superfici.
+
+CONTRATTO API INVARIATO: `POST /api/attachments` resta a UN file per richiesta. Il batch e' lato
+client: `useAttachments().upload` accetta ora `File[]` e li carica SEQUENZIALMENTE (una raffica di
+multipart paralleli e' cio' che fa scattare i limiti di upload lato server), restituendo
+`UploadBatchResult {uploaded, failed[]}` invece di lanciare al primo errore — un file rifiutato
+(size/MIME) non fa perdere quelli gia' caricati. `onSuccess` invalida la lista una volta sola a fine
+batch. La sezione mostra i nomi falliti via `attachments.errors.uploadSome` (plurale `_one`/`_other`).
+
+File toccati (FE only): `use-attachments.ts`, `documents-section.tsx` (input `multiple`,
+`handleFile` -> `handleFiles(FileList)` su input e drop), `en-attachments.ts`/`it-attachments.ts`
+(hint dropzone/empty al plurale + nuova chiave `errors.uploadSome`), `documents-section.test.tsx`.
+ATTENZIONE test: il label della dropzone e' cambiato ("Drop one or more files here or click to
+browse"), nel test e' ora la costante `DROPZONE_LABEL`.
+
+FUORI SCOPE (deliberato, restano a file singolo): avatar utente, logo company-site, wizard di import.
+
+Verificato ESEGUENDO: Vitest `src/features/attachments` + i due `*-table-documents.test.tsx`
+15/15 (2 test nuovi: selezione multipla, batch parziale). `tsc --noEmit` pulito, ESLint pulito sui
+file toccati. NIENTE COMMIT: in attesa di via libera (§3.6).
+
+## SEDE OPERATIVA EREDITATA NELLA CONVERSIONE LEAD -> OPPORTUNITA' (2026-07-23) — GREEN, NON COMMITTATO
+
+Richiesta utente: "quando si converte un lead in opportunita', l'opportunita' deve ereditare la sede
+operativa". Estende 0056 (che aveva portato il campo sull'Opportunity) collegandolo alla conversione.
+
+DECISIONE: la sede e' un DEFAULT SEMPLICE, deliberatamente FUORI da `DERIVED_FIELDS`/`lockedFields()`
+(come `state_id`) — la conversione la precompila, l'utente resta libero di cambiarla o svuotarla.
+La direttiva 2026-07-17 ("operational_site_id rimosso dal set derivabile") e' superata SOLO in questo
+senso: NON rientra nel lock BR-2. `OpportunityService::applyLeadDefaults()` sovrascrive solo i
+lockedFields, quindi il valore inviato dal form vince sempre.
+
+DUE SUPERFICI, entrambe coperte:
+1. Conversione contestuale (`convert_to_opportunity: true` su POST /api/leads) — `ConvertLeadToOpportunity`
+   passa ora `operationalSiteId: $defaults->values['operational_site_id']`.
+2. Form "crea opportunita' da lead" (deep-link `?lead_id=N` e picker Lead in-form) — il prefill arriva
+   da `GET /leads/{lead}/opportunity-defaults`.
+
+File toccati. BE: `LeadOpportunityDefaultsResolver` (nuovo `operational_site_id` in `values`, nuovo
+`operational_site` in `references` via `OperationalSiteLabel::summarize` — la sede NON ha `name`, il
+ref e' `{id,label}` non `{id,name}` — piu' eager-load `operationalSite.addresses.city`),
+`LeadOpportunityDefaults` (docblock), `ConvertLeadToOpportunity`. Il controller passa values/references
+verbatim: nessuna modifica. FE: `types.ts` (`OpportunityDefaultValues.operational_site_id`,
+`OpportunityDefaultReferences.operational_site`), `use-opportunity-lead-selection` (setValue al pick,
+reset a null sul clear come gli altri campi seed, nuovo `state.operationalSite` per l'etichetta del
+trigger), `use-opportunity-selected-items` (stessa precedenza di `registry`: pick in-form > deep-link).
+Il deep-link eredita gia' via lo spread `...mode.fromLead.values` in `use-opportunity-form`.
+
+TEST MODIFICATO (requisito cambiato, dichiarato): in `OpportunityFromLeadTest` l'asserzione
+`values` non ha chiave `operational_site_id` e' stata RIMOSSA e sostituita da 2 test positivi
+(default non lockato + label composta; lead senza sede -> null).
+
+Verificato ESEGUENDO: Pest `tests/Feature/Opportunities`+`tests/Feature/Leads` 229/229,
+`tests/Feature/Imports`+`tests/Feature/RequestManagement` 331/331. Vitest `src/features/opportunities`
+142/142 (2 test nuovi). `tsc --noEmit` pulito, ESLint pulito sui file toccati, Pint pulito.
+NIENTE COMMIT: in attesa di via libera (§3.6).
+
+## OPERATORI FILTRATI PER SEDE IN GESTIONE RICHIESTE (2026-07-23) — GREEN, NON COMMITTATO
+
+Richiesta utente: "come fatto con lead", la lista degli operatori selezionabili deve dipendere dalla
+Sede operativa scelta, sia nel form (pannello "Lavora") sia in tabella. Estende 0056 (che aveva gia'
+portato colonna + campo Sede), NON la riapre. Decisioni utente (AskUserQuestion 2026-07-23):
+colonna Sede EDITABILE inline; sede assente -> lista operatori NON filtrata (come nei lead);
+replicati entrambi i comportamenti reciproci del form Lead.
+
+MECCANISMO NUOVO (generico, non request-management-specifico): una colonna relazione puo' dichiarare
+`'relation' => ['resource' => ..., 'scope' => ['<param for-select>' => '<column id>']]`.
+`ResolvesColumnConfig::withOptionalColumnExtras()` lo emette verbatim; il FE lo passa NON risolto
+(`cell-editor-registry`, che vede solo la colonna) e lo risolve dentro `RelationCellEditor`, l'unico
+punto che ha la RIGA (`props.data`) — `resolveScopeParams()` accetta sia `{id,...}` sia un id nudo,
+e una riga senza valore manda ZERO param (lista piena, mai un filtro spazzatura). E' un restringimento
+di UI soltanto: la scrittura resta validata da `RelationValueScopeChecker`, che lo ignora per design.
+
+COSA E' STATO ATTIVATO: `operational_site` diventa editabile inline (relation su `operational-sites`,
+nullable) e `operator_ga2` dichiara `scope: {operational_site_id: 'operational_site'}`.
+Nel pannello: `RequestAttributionSection` ora riceve `form` (non piu' solo `control`) perche' il link
+Sede<->Operatore scrive l'altro campo via `setValue`; Sede spostata PRIMA dell'Operatore (e' lei che
+scopa la lista) + hint "solo gli operatori della sede selezionata".
+
+ATTENZIONE (non e' un difetto, e' il perimetro deciso): cambiare la Sede IN GRIGLIA non azzera
+l'operatore della riga — l'azzeramento automatico e' comportamento del FORM (come nei lead), non della
+cella. In griglia l'operatore resta finche' non lo si cambia; l'editor pero' offrira' gia' solo gli
+operatori della nuova sede. Se serve anche in cella, e' un lavoro esplicito lato `updateWork`.
+
+Il gate per-campo risponde 403 (non 422) a chi non ha `operational-sites.viewAny`: il ceiling risolve
+il campo read-only allo step 4, prima della validazione del valore. Coperto da test.
+
+Verificato ESEGUENDO: Pest `RequestManagementOperationalSiteInlineEditTest` 8/8 nuovo;
+RequestManagement+Leads+Opportunities+Authorization+OperationalSites+Campaigns+Projects 667/668 e
+Registries+Users+Referents+Products+Imports 481/483 — i 3 rossi sono i navigation-node PRE-ESISTENTI
+gia' documentati sotto. Vitest: 42/42 sui file nuovi/toccati, 438/441 sull'area (i 3 rossi sono i
+PRE-ESISTENTI di `cell-renderers.test.tsx`, i18n ContactsCell). `tsc --noEmit` pulito, ESLint pulito
+sui file toccati, Pint pulito sui file toccati. NIENTE COMMIT: in attesa di via libera (§3.6).
+Nota ambiente: `php artisan test tests/Feature` in blocco unico va in SIGSEGV (crash, non fallimenti);
+eseguire per directory.
+
+## SPEC 0056 — SEDE OPERATIVA SU OPPORTUNITA' E GESTIONE RICHIESTE (2026-07-23) — GREEN, NON COMMITTATO
+
+Spec: `docs/specs/0056-opportunity-operational-site.xml`. Richiesta utente: "aggiungere sede in
+opportunita', di conseguenza anche in gestione richieste".
+
+DECISIONI UTENTE (AskUserQuestion 2026-07-23): la sede e' `operational_sites` (spec 0011), NON
+`company_sites`; FK NULLABLE; in Gestione Richieste MODIFICABILE dal pannello "Lavora" (non sola
+lettura); colonna in ENTRAMBE le griglie; ORDINABILE e FILTRABILE (non display-only).
+
+LA DIRETTIVA 2026-07-17 E' SUPERATA SOLO PER `operational_site_id`. `company_id` e
+`company_site_id` RESTANO rimossi e questa spec non li riapre. Migrazione NUOVA
+`2026_07_23_100000_add_operational_site_id_to_opportunities_table.php` (mai editata la
+2026_07_17_180000 gia' committata): `nullable` + `after('source_id')` + `nullOnDelete` + index.
+`nullOnDelete` e' una DEVIAZIONE DICHIARATA dal `restrictOnDelete` delle altre FK del modulo
+(BR-3), motivata dal fatto che questa e' facoltativa: restrictOnDelete impedirebbe di cancellare
+una Sede per un campo opzionale. Coperta da AC-008 (nessun 409).
+
+GESTIONE RICHIESTE NON EREDITA IL CAMPO (verificato, non assunto): e' una vista su `Opportunity`
+ma ha catena di lettura SEPARATA — `WORK_PANEL_RELATIONS` proprie, `RequestManagementResource`
+dichiaratamente "independent from OpportunityResource", `RequestRowMapper` dedicato. Aggiungere un
+campo all'Opportunity NON lo fa comparire li': serve lavoro esplicito su 8 file.
+
+NON USARE `DERIVED_RELATIONS` PER LA SEDE: quel meccanismo filtra `whereIn('name', ...)`, ordina
+con subquery `select('name')` e ricava i distinct da `name` — colonna che `operational_sites` NON
+HA (ha solo id/old_id/alias/timestamps: la sede E' il suo indirizzo). Produrrebbe SQL invalido.
+
+ANTI-DUPLICAZIONE (l'utente ha chiesto esplicitamente di verificarla). Audit 2026-07-23:
+la composizione della label "{line1} - {city}" esisteva gia' in 14 implementazioni SENZA alcun
+helper condiviso; la logica colonna sort/filter/distinct in 3; `escapeLike()` in 4; `EmptyCell`
+(FE) in 5; ~36 wrapper `for-select` per-feature con ZERO usi. Questo giro aggiunge ZERO nuove
+copie: creati `app/Support/OperationalSiteLabel.php` e `app/Tables/Shared/OperationalSiteColumn.php`
+(quest'ultima nel namespace che gia' ospitava il pattern — `Shared/PrimaryContactColumn`,
+`Shared/BusinessFunctionColumn`). Le copie ESISTENTI non sono state rifattorizzate: fuori scope.
+DUPLICAZIONE RESIDUA ACCETTATA: `Leads/LeadOperationalSiteColumn` non migrata alla classe condivisa
+(follow-up: ctor `LeadsTableDefinition:64` + 4 call-site + cancellazione file).
+
+DIFETTO LATENTE NON PROPAGATO: le 11 copie principali della label leggono `$site->addresses->first()`,
+NON filtrato su `is_primary`, mentre filter/sort/distinct match su `where('is_primary', true)` — su
+una sede multi-indirizzo label mostrata e chiave di ordinamento DIVERGONO. Il nuovo
+`OperationalSiteLabel::summarize()` usa `primaryAddress` e nasce corretto. Le 14 copie restano
+sbagliate: debito noto.
+
+## BUG SISTEMICO TROVATO E PARZIALMENTE CORRETTO — `LIKE` SENZA CLAUSOLA `ESCAPE` (2026-07-23)
+
+Trovato scrivendo i test di escaping di AC-010, verificato con PDO grezzo (non ipotizzato).
+`escapeLike()` neutralizza `%`/`_` col BACKSLASH, ma NESSUNA query aggiunge mai `ESCAPE '\'` —
+in tutto il codebase non esisteva una sola occorrenza della clausola. Su MySQL (prod) funziona
+per caso, perche' li' il backslash e' escape di default nel LIKE; su SQLite (dev/test, CLAUDE.md §0)
+il backslash NON ha significato speciale senza clausola esplicita, quindi il pattern escapato
+smette di matchare ANCHE la riga corretta. Prova: `'Via 100% Sconto'` cercata con `'100%'` ->
+0 righe senza ESCAPE, 1 riga con ESCAPE.
+NON e' SQL injection (il valore resta bound, mai concatenato): e' un UNDER-match silenzioso.
+
+CORRETTO QUI (nostro codice nuovo): `app/Tables/Shared/OperationalSiteColumn.php` — costante
+`LIKE_ESCAPE_CLAUSE = "ESCAPE '\\'"` applicata in `applyAdvancedFilter()` e `distinctValues()`.
+Il frammento raw non contiene input utente (solo colonna statica + clausola), il needle resta
+bound. Copertura: `tests/Feature/Table/OperationalSiteColumnEscapingTest.php` (12 test) — prova il
+match LETTERALE, non solo l'assenza di errore.
+
+NON CORRETTO, FUORI SCOPE, DA DECIDERE: lo STESSO difetto e' in
+`app/Services/Table/FilterApplier.php:314-317` (`escapeLike` + `applyLike:225-231`) e
+`app/Services/Table/AdvancedFilterApplier.php:158-173`, usati da OGNI filtro testuale
+"contains/startsWith/endsWith" di OGNI dominio dell'app. Finche' non si aggiunge la clausola li',
+qualsiasi valore contenente letteralmente `%` o `_` (indirizzi, ragioni sociali "al 50%", email
+con underscore) resta introvabile via ricerca testuale su SQLite. Nessun test esistente lo
+copriva: prima di questi 12, nessun test usava un needle con metacaratteri reali.
+
+## SEDE <-> OPERATORE NEL PANNELLO LAVORA (2026-07-23) — confermato dall'utente
+
+Estensione oltre la spec 0056, CONFERMATA dall'utente come voluta: in
+`request-attribution-section.tsx` la lista operatori e' scopata per Sede, scegliere prima
+l'operatore auto-compila la sua Sede da `meta`, e un cambio REALE di Sede azzera l'operatore ormai
+fuori scope. Mirror di `lead-form-body.tsx` (spec 0048 AC-060..062). Chiave i18n nuova:
+`operatorFilteredBySite`.
+
+## VERIFICA (green reale, eseguita 2026-07-23)
+
+BE suite completa: 3490 test, 3478 passati, 15044 assertions. Gli 11 rossi sono i PREESISTENTI
+noti (10 navigation-node + `AbstractMigrationSourcePreviewTest`), invariati e non toccati.
+FE: 23 file, 198 test verdi, `tsc --noEmit` EXIT 0, ESLint pulito. Pint pulito su tutti i file
+toccati. Diff dipendenze VUOTO.
+
+ATTENZIONE STORIA GIT: il commit `83516db` ("feat(select-cell-editor)", di un'ALTRA sessione
+concorrente) ha inglobato anche `docs/specs/0056-...xml` e 4 file frontend di questo lavoro
+(`opportunities/types.ts`, `opportunity-schema.ts`, `use-opportunity-form.ts`,
+`use-opportunity-selected-items.ts`). Nulla e' perso, ma due feature non correlate stanno nello
+stesso commit sotto un messaggio che ne descrive una sola. History NON riscritta (§3.6).
+
 ## SELECT INLINE "STATO LAVORAZIONE": PALLINO COLORE + MARCATORE NOTA (2026-07-23) — GREEN, NON COMMITTATO
 
 Richiesta utente: nell'editor inline della colonna `workflow_status` (Gestione Richieste) servono i

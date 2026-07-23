@@ -2,6 +2,8 @@
 
 namespace App\Tables\Opportunities;
 
+use App\Tables\Shared\ProductsOfInterestColumn;
+
 /**
  * Declarative column/filter/action catalogue for the `opportunities` domain
  * (spec 0040). Extracted out of OpportunitiesTableDefinition (file-size
@@ -16,6 +18,27 @@ namespace App\Tables\Opportunities;
  * `product_category`/`business_function` are AGGREGATED to-many columns
  * (via `productLines`) — filterable (`set`, `whereHas`) but NOT sortable (no
  * single related row to order by).
+ *
+ * User directive 2026-07-23: `products_of_interest` is a PIVOT
+ * (belongsToMany) to-many column — filterable (`set`, `whereHas`), NOT
+ * sortable, and inline-editable through the shared `multiselect` editor; its
+ * whole declaration lives in App\Tables\Shared\ProductsOfInterestColumn,
+ * shared with the request-management catalogue.
+ *
+ * Spec 0056: `operational_site` is a SPECIALLY-derived column (the site has
+ * no own name — sort/filter/distinct pass through its primary address
+ * `line1`, delegated to the shared App\Tables\Shared\OperationalSiteColumn,
+ * never the generic name-based DERIVED_RELATIONS mechanism) — sortable AND
+ * filterable (set), but deliberately NOT declared `editable` (out of scope:
+ * the field is edited from the form, never inline in the grid).
+ *
+ * Spec 0057, D-5: `name` is now DERIVED server-side (`OPP_{id}`), never a
+ * client input anywhere — NOT declared `editable` here either (the row stays
+ * sortable/filterable/searchable, matching "resta visibile in sola lettura in
+ * tabella"), and carries no matching field key in OpportunitiesAuthorization
+ * (InlineCellEditingGuardTest AC-012 requires every editable column to have
+ * one; a structurally-immutable, non-editable column has none, like
+ * `operational_site` above).
  */
 final class OpportunityColumnCatalog
 {
@@ -34,11 +57,9 @@ final class OpportunityColumnCatalog
                 'filterable' => true,
                 'filterType' => 'text',
                 'searchable' => true,
-                // Inline cell-editing (spec 0053): real column, in
-                // Opportunity::$fillable, matches the mandatory `name` field
-                // key in OpportunitiesAuthorization.
-                'editable' => true,
-                'rules' => ['max:255'],
+                // Spec 0057, D-5: NOT editable — the value is derived
+                // server-side (`OPP_{id}`), never a client input.
+                'editable' => false,
             ],
             self::derivedColumn('registry', 'opportunities.columns.registry'),
             self::derivedColumn('referent', 'opportunities.columns.referent'),
@@ -57,9 +78,11 @@ final class OpportunityColumnCatalog
                 'filterType' => 'set',
             ],
             self::derivedColumn('source', 'opportunities.columns.source'),
+            self::derivedColumn('operational_site', 'opportunities.columns.operationalSite'),
             self::derivedColumn('opportunity_status', 'opportunities.columns.opportunityStatus'),
             self::aggregatedColumn('product_category', 'opportunities.columns.productCategory'),
             self::aggregatedColumn('business_function', 'opportunities.columns.businessFunction'),
+            ProductsOfInterestColumn::declaration('opportunities.columns.productsOfInterest'),
             [
                 'id' => 'estimated_value',
                 'label' => 'opportunities.columns.estimatedValue',

@@ -84,6 +84,9 @@ final class RequestManagementService
         // "Segnalatore"; the GA2 "Operatore" rides on `managers` below.
         'source',
         'reporter',
+        // Spec 0056: the Sede operativa, also in the attribution block — the
+        // site has no own name, its label composed from the primary address.
+        'operationalSite.addresses.city',
         'opportunityStatus',
         'workflowStatus',
         'productLines.businessFunction',
@@ -100,6 +103,7 @@ final class RequestManagementService
         private readonly OpportunityProductInterestWriter $productInterestWriter,
         private readonly RequestClientProfileWriter $clientProfileWriter,
         private readonly NoteService $noteService,
+        private readonly RequestOperatorWriter $operatorWriter,
     ) {}
 
     /**
@@ -204,8 +208,9 @@ final class RequestManagementService
     }
 
     /**
-     * The attribution scalars (user directive 2026-07-22): "Fonte"
-     * (`source_id`) and "Segnalatore" (`reporter_id`). Both ARE in
+     * The attribution scalars: "Fonte" (`source_id`) and "Segnalatore"
+     * (`reporter_id`), user directive 2026-07-22; "Sede operativa"
+     * (`operational_site_id`), spec 0056. All three ARE in
      * Opportunity::$fillable, so — unlike the operative fields of this panel —
      * they are mass-assigned here and their change is picked up by the
      * automatic activity log (LogsModelActivity::logFillable()); no explicit
@@ -217,7 +222,7 @@ final class RequestManagementService
      */
     private function applyAttribution(Opportunity $opportunity, array $data): bool
     {
-        $submitted = array_intersect_key($data, array_flip(['source_id', 'reporter_id']));
+        $submitted = array_intersect_key($data, array_flip(['source_id', 'reporter_id', 'operational_site_id']));
 
         if ($submitted === []) {
             return false;
@@ -230,16 +235,9 @@ final class RequestManagementService
     }
 
     /**
-     * The GA2 "Operatore" (user directive 2026-07-22): the single
-     * `opportunity_user` row at pivot position
-     * Opportunity::OPERATOR_MANAGER_POSITION. Only THAT slot is touched — the
-     * other manager positions belong to the opportunities form and must
-     * survive a write from this panel, so `sync()` (which detaches everything
-     * absent from its map) is deliberately not used here.
-     *
-     * A user already attached at another position is MOVED to the operator
-     * slot rather than duplicated: the pivot's identity is (opportunity,
-     * user), one person cannot hold two slots.
+     * The GA2 "Operatore" (user directive 2026-07-22): delegated to
+     * RequestOperatorWriter, the ONE implementation of the operator-slot rule
+     * shared with the bulk assignment (RequestAssignmentService).
      *
      * The pivot is not a fillable attribute, so — like every other operative
      * field of this panel — the change is logged explicitly by the caller.
@@ -249,28 +247,7 @@ final class RequestManagementService
      */
     private function applyOperator(Opportunity $opportunity, mixed $value, array &$changed, array &$old): void
     {
-        $current = $opportunity->operatorManager()?->id;
-        $next = $value === null ? null : (int) $value;
-
-        if ($current === $next) {
-            return;
-        }
-
-        if ($current !== null) {
-            $opportunity->managers()->detach($current);
-        }
-
-        if ($next !== null) {
-            // detach-then-attach also covers the "was GA1, becomes GA2" move:
-            // the person keeps exactly one row, now at the operator position.
-            $opportunity->managers()->detach($next);
-            $opportunity->managers()->attach($next, ['position' => Opportunity::OPERATOR_MANAGER_POSITION]);
-        }
-
-        $opportunity->unsetRelation('managers');
-
-        $old['operator_id'] = $current;
-        $changed['operator_id'] = $next;
+        $this->operatorWriter->apply($opportunity, $value === null ? null : (int) $value, $changed, $old);
     }
 
     /**

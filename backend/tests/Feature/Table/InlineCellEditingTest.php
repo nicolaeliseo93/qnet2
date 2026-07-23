@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Campaign;
 use App\Models\Opportunity;
 use App\Models\Role;
 use App\Models\Sector;
@@ -11,10 +12,11 @@ use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
 
 // PATCH /api/tables/{domain}/rows/{row} — generic inline cell-editing engine
-// (spec 0053). Exercised mainly on `opportunities` (5 editable scalar
-// columns: name/estimated_value/success_probability/start_date/
-// expected_close_date); `request-management` covers the domain-scoped 404
-// (AC-009); `sectors` covers a domain with zero editable columns (AC-016).
+// (spec 0053). Exercised mainly on `opportunities` (4 editable scalar
+// columns: estimated_value/success_probability/start_date/
+// expected_close_date — spec 0057, D-5 removed `name`, now server-derived and
+// non-editable); `request-management` covers the domain-scoped 404 (AC-009);
+// `sectors` covers a domain with zero editable columns (AC-016).
 
 uses(RefreshDatabase::class);
 
@@ -77,21 +79,21 @@ if (! function_exists('inlineEditActorWithRole')) {
 
 it('AC-001: PATCH a declared-editable column -> 200, persisted, full re-mapped row', function () {
     $actor = inlineEditActor('opportunities', ['viewAny', 'update']);
-    $opportunity = Opportunity::factory()->create(['name' => 'Original name']);
+    $opportunity = Opportunity::factory()->create(['estimated_value' => 100]);
     Sanctum::actingAs($actor);
 
     $response = $this->patchJson("/api/tables/opportunities/rows/{$opportunity->id}", [
-        'column' => 'name',
-        'value' => 'Updated name',
+        'column' => 'estimated_value',
+        'value' => 200,
     ])->assertOk();
 
     $response->assertJsonPath('success', true)
         ->assertJsonPath('data.id', $opportunity->id)
-        ->assertJsonPath('data.name', 'Updated name')
+        ->assertJsonPath('data.estimated_value', '200.00')
         ->assertJsonPath('data.editable', true);
 
     expect($response->json('data.actions'))->toBeArray();
-    expect($opportunity->fresh()->name)->toBe('Updated name');
+    expect((float) $opportunity->fresh()->estimated_value)->toBe(200.0);
 });
 
 // ---------------------------------------------------------------------------
@@ -287,17 +289,24 @@ it('AC-010: a value outside the column\'s own extra rules (success_probability o
 // AC-011 — null handling
 // ---------------------------------------------------------------------------
 
+// Spec 0057, D-5 removed `opportunities.name` (this test's former example): it
+// is server-derived and no longer editable at all, so it can no longer stand
+// for "a non-nullable, editable column" — no other opportunities scalar is
+// both. `campaigns.name` (CampaignColumnCatalog) is the same shape elsewhere
+// in the generic engine: real, NOT NULL column, `editable: true`, no
+// `nullable` key — the engine itself is domain-agnostic, so this AC does not
+// need to run on opportunities specifically.
 it('AC-011: value:null on a non-nullable column -> 422', function () {
-    $actor = inlineEditActor('opportunities', ['viewAny', 'update']);
-    $opportunity = Opportunity::factory()->create(['name' => 'Kept']);
+    $actor = inlineEditActor('campaigns', ['viewAny', 'update']);
+    $campaign = Campaign::factory()->create(['name' => 'Kept']);
     Sanctum::actingAs($actor);
 
-    $this->patchJson("/api/tables/opportunities/rows/{$opportunity->id}", [
+    $this->patchJson("/api/tables/campaigns/rows/{$campaign->id}", [
         'column' => 'name',
         'value' => null,
     ])->assertStatus(422);
 
-    expect($opportunity->fresh()->name)->toBe('Kept');
+    expect($campaign->fresh()->name)->toBe('Kept');
 });
 
 it('AC-011: value:null on a nullable column -> 200, NULL persisted', function () {
@@ -322,16 +331,16 @@ it('AC-014: saving preferences with an `editable` key does not change the resolv
     Sanctum::actingAs($actor);
 
     $before = collect($this->getJson('/api/tables/opportunities/columns')->assertOk()->json('data.columns'))
-        ->keyBy('id')['name']['editable'];
+        ->keyBy('id')['estimated_value']['editable'];
 
     $this->postJson('/api/tables/opportunities/preferences', [
         'columns' => [
-            ['id' => 'name', 'visible' => true, 'width' => 200, 'order' => 1, 'editable' => false],
+            ['id' => 'estimated_value', 'visible' => true, 'width' => 200, 'order' => 1, 'editable' => false],
         ],
     ])->assertOk();
 
     $after = collect($this->getJson('/api/tables/opportunities/columns')->assertOk()->json('data.columns'))
-        ->keyBy('id')['name']['editable'];
+        ->keyBy('id')['estimated_value']['editable'];
 
     expect($before)->toBeTrue()->and($after)->toBe($before);
 });
@@ -342,12 +351,12 @@ it('AC-014: saving preferences with an `editable` key does not change the resolv
 
 it('AC-015: a successful PATCH writes an activity-log entry for the changed field', function () {
     $actor = inlineEditActor('opportunities', ['viewAny', 'update']);
-    $opportunity = Opportunity::factory()->create(['name' => 'Before audit']);
+    $opportunity = Opportunity::factory()->create(['estimated_value' => 100]);
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/tables/opportunities/rows/{$opportunity->id}", [
-        'column' => 'name',
-        'value' => 'After audit',
+        'column' => 'estimated_value',
+        'value' => 200,
     ])->assertOk();
 
     $activity = Activity::query()
@@ -359,7 +368,7 @@ it('AC-015: a successful PATCH writes an activity-log entry for the changed fiel
 
     expect($activity)->not->toBeNull();
     expect($activity->causer_id)->toBe($actor->id);
-    expect($activity->properties->get('attributes'))->toHaveKey('name', 'After audit');
+    expect($activity->properties->get('attributes'))->toHaveKey('estimated_value', '200.00');
 });
 
 // ---------------------------------------------------------------------------

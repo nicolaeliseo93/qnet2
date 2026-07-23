@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
+import { formatContactValue } from '@/lib/formatting/input-format'
 import { buildContactSchema } from '@/features/personal-data/contact-schema'
 import { nextDraftKey } from '@/features/personal-data/drafts'
 import {
@@ -95,6 +96,7 @@ export function ContactsCreateFields({ value, onChange }: ContactsCreateFieldsPr
               autoComplete="off"
               value={draft?.value ?? ''}
               onChange={(event) => handleChange(type, event.target.value)}
+              onBlur={(event) => handleChange(type, formatContactValue(type, event.target.value))}
               aria-invalid={error !== null}
               aria-describedby={error ? errorId : undefined}
             />

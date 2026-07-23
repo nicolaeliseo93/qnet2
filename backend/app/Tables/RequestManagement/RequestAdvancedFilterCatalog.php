@@ -26,6 +26,12 @@ use App\Models\OpportunityWorkflowStatus;
  * RequestManagementTableDefinition::distinctValues()); the server-side apply
  * is overridden in RequestManagementTableDefinition::applyAdvancedFilter() to
  * `whereHas('workflowStatus', whereIn('name', ...))`, never id-based.
+ *
+ * `operational_site` (spec 0056, AC-012: "ordinabile/filtrabile allo stesso
+ * modo" as the opportunities grid) mirrors OpportunityAdvancedFilterCatalog's
+ * own entry: no relation-by-id equivalent (the site has no own name), a
+ * `text` search delegated to the shared OperationalSiteColumn via
+ * RequestManagementTableDefinition::applyAdvancedFilter().
  */
 final class RequestAdvancedFilterCatalog
 {
@@ -84,10 +90,24 @@ final class RequestAdvancedFilterCatalog
                 'target' => 'opportunityStatus',
             ],
             [
+                'name' => 'operational_site',
+                'label' => 'requestManagement.advancedFilters.operationalSite',
+                'type' => AdvancedFilterType::Text,
+                'order' => 5,
+                'required' => false,
+                'visible' => true,
+                'width' => 'md',
+                'multiple' => false,
+                // Internal only: no real column/relation-by-id (the site has
+                // no own name) — the domain override searches the site's
+                // primary address line1.
+                'target' => 'operational_site',
+            ],
+            [
                 'name' => 'expected_close_range',
                 'label' => 'requestManagement.advancedFilters.expectedCloseRange',
                 'type' => AdvancedFilterType::DateRange,
-                'order' => 5,
+                'order' => 6,
                 'required' => false,
                 'visible' => true,
                 'width' => 'md',
@@ -98,7 +118,7 @@ final class RequestAdvancedFilterCatalog
                 'name' => 'next_callback_range',
                 'label' => 'requestManagement.advancedFilters.nextCallbackRange',
                 'type' => AdvancedFilterType::DateRange,
-                'order' => 6,
+                'order' => 7,
                 'required' => false,
                 'visible' => true,
                 'width' => 'md',

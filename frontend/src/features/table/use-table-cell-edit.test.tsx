@@ -171,6 +171,67 @@ describe('useTableCellEdit', () => {
     expect(updateTableCellMock).not.toHaveBeenCalled()
   })
 
+  // User directive 2026-07-23: a multiselect column's value is the whole
+  // collection, so it unwraps element-wise and compares by id set (the editor
+  // rebuilds the array on every toggle — identity would never match).
+  it('unwraps a multiselect column value to its id collection before PATCHing', async () => {
+    const updatedRow = row({ products_of_interest: [{ id: 9, name: 'Fibra' }] })
+    updateTableCellMock.mockResolvedValue(updatedRow)
+
+    const { result } = renderHook(() => useTableCellEdit('opportunities', []), { wrapper: wrapper() })
+    const event = cellValueChangedEvent({
+      colId: 'products_of_interest',
+      data: row({ products_of_interest: [{ id: 3, name: 'ADSL' }] }),
+      oldValue: [{ id: 3, name: 'ADSL' }],
+      newValue: [{ id: 9, name: 'Fibra' }],
+    })
+
+    act(() => result.current.handleCellValueChanged(event))
+
+    await waitFor(() =>
+      expect(updateTableCellMock).toHaveBeenCalledWith('opportunities', 7, {
+        column: 'products_of_interest',
+        value: [9],
+      }),
+    )
+    await waitFor(() => expect(event.node.setData).toHaveBeenCalledWith(updatedRow))
+  })
+
+  it('does nothing for a multiselect whose selection is unchanged, despite a new array reference', () => {
+    const { result } = renderHook(() => useTableCellEdit('opportunities', []), { wrapper: wrapper() })
+    const event = cellValueChangedEvent({
+      colId: 'products_of_interest',
+      data: row({ products_of_interest: [{ id: 3, name: 'ADSL' }] }),
+      oldValue: [{ id: 3, name: 'ADSL' }],
+      newValue: [{ id: 3, name: 'ADSL' }],
+    })
+
+    act(() => result.current.handleCellValueChanged(event))
+
+    expect(updateTableCellMock).not.toHaveBeenCalled()
+  })
+
+  it('PATCHes an emptied multiselect as [] (the server owns the mandatory rule)', async () => {
+    updateTableCellMock.mockResolvedValue(row({ products_of_interest: [] }))
+
+    const { result } = renderHook(() => useTableCellEdit('opportunities', []), { wrapper: wrapper() })
+    const event = cellValueChangedEvent({
+      colId: 'products_of_interest',
+      data: row({ products_of_interest: [{ id: 3, name: 'ADSL' }] }),
+      oldValue: [{ id: 3, name: 'ADSL' }],
+      newValue: [],
+    })
+
+    act(() => result.current.handleCellValueChanged(event))
+
+    await waitFor(() =>
+      expect(updateTableCellMock).toHaveBeenCalledWith('opportunities', 7, {
+        column: 'products_of_interest',
+        value: [],
+      }),
+    )
+  })
+
   describe('requires_note dialog (spec 0054 D-5)', () => {
     it('holds back the PATCH and opens the note dialog for a value that requires one', () => {
       const { result } = renderHook(

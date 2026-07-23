@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components -- renderer registry module: cells are AG Grid render functions, not route/page components */
 import type { ICellRendererParams } from 'ag-grid-community'
+import { MapPin } from 'lucide-react'
 import { DateTimeCell, EmptyCell } from '@/features/table/cell-renderers'
-import { StatusBadgeCell } from '@/features/table/rich-cells'
+import { RefNamesCell, RelationCell, StatusBadgeCell } from '@/features/table/rich-cells'
 import { UserCell } from '@/features/table/user-cell'
 import type { TableRendererMap } from '@/features/table/renderer-registry'
 
@@ -30,15 +31,18 @@ function TextCell({ value }: ICellRendererParams) {
  * Custom cell renderers keyed by the backend column `id` (spec 0049). The GA2
  * `operator_ga2` renders as the shared `UserCell` (avatar + hover-card that
  * opens the user's profile Sheet — same component as the opportunities
- * `supervisor` column). The working state the operator advances
- * (`workflow_status`) renders as a colored badge via the shared
- * `StatusBadgeCell`; the client's PersonalData anagraphic fields and the
- * aggregated product categories are display-only text. `next_callback_at`
+ * `supervisor` column). `operational_site` (spec 0056) has no `name`, only the
+ * server-composed `label`, which `RelationCell` reads. The working state the
+ * operator advances (`workflow_status`) renders as a colored badge via the
+ * shared `StatusBadgeCell`; the client's PersonalData anagraphic fields and
+ * the aggregated product categories are display-only text. `next_callback_at`
  * (spec 0052) reuses the shared `DateTimeCell`.
  */
 export const requestManagementColumnRenderers: TableRendererMap = {
   product_categories: (params) => <TextCell {...params} />,
+  products_of_interest: (params) => <RefNamesCell {...params} />,
   operator_ga2: (params) => <UserCell {...params} />,
+  operational_site: (params) => <RelationCell {...params} icon={MapPin} />,
   workflow_status: (params) => <StatusBadgeCell {...params} />,
   first_name: (params) => <TextCell {...params} />,
   last_name: (params) => <TextCell {...params} />,

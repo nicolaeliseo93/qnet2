@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Table;
 
 use App\Models\User;
+use App\Support\InputFormat;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -40,6 +41,18 @@ final class CellValueValidator
     /** The `editor` kind whose submitted value is a related row's id, not a value of the display `type`. */
     private const string SELECT_EDITOR = 'select';
 
+    /** The `editor` kind whose submitted value is a LIST of related row ids (user directive 2026-07-23). */
+    private const string MULTISELECT_EDITOR = 'multiselect';
+
+    /** The `format` names a column may declare, each mapping to an InputFormat canonicalizer. */
+    private const string FORMAT_PERSON_NAME = 'person_name';
+
+    private const string FORMAT_PHONE = 'phone';
+
+    private const string FORMAT_TAX_CODE = 'tax_code';
+
+    private const string FORMAT_VAT_NUMBER = 'vat_number';
+
     public function __construct(private readonly RelationValueScopeChecker $relationScope) {}
 
     /**
@@ -49,6 +62,13 @@ final class CellValueValidator
      */
     public function validate(array $column, mixed $value, User $actor): mixed
     {
+        // Checked BEFORE the relation branch: a multiselect column declares
+        // `relation` too (it is what names the resource whose ids it holds),
+        // but its value is a LIST, which the single-id branch would reject.
+        if (($column['editor'] ?? null) === self::MULTISELECT_EDITOR) {
+            return $this->validateIdListValue($column, $value, $actor);
+        }
+
         if (isset($column['relation'])) {
             return $this->validateRelationValue($column, $value, $actor);
         }
@@ -59,6 +79,10 @@ final class CellValueValidator
 
         $nullable = ($column['nullable'] ?? false) === true;
 
+        // Before the rules, never after: a `tax_code` typed lowercase must be
+        // uppercased so the TaxCode rule checks the SAME string that is stored.
+        $value = $this->format($column, $value);
+
         $rules = [
             $nullable ? 'nullable' : 'required',
             ...$this->typeRules($column),
@@ -68,6 +92,34 @@ final class CellValueValidator
         Validator::make(['value' => $value], ['value' => $rules])->validate();
 
         return $value;
+    }
+
+    /**
+     * Applies the column's declared canonical format (user directive
+     * 2026-07-23), so an inline edit stores a value in the exact same shape
+     * the card form does — `App\Support\InputFormat` is the single source of
+     * truth for both.
+     *
+     * Declaration-driven like `rules`: a column without `format` is untouched,
+     * and an unknown format name is ignored rather than guessed.
+     *
+     * @param  array<string, mixed>  $column
+     */
+    private function format(array $column, mixed $value): mixed
+    {
+        $format = $column['format'] ?? null;
+
+        if (! is_string($value) || ! is_string($format)) {
+            return $value;
+        }
+
+        return match ($format) {
+            self::FORMAT_PERSON_NAME => InputFormat::personName($value),
+            self::FORMAT_PHONE => InputFormat::phone($value),
+            self::FORMAT_TAX_CODE => InputFormat::taxCode($value),
+            self::FORMAT_VAT_NUMBER => InputFormat::vatNumber($value),
+            default => $value,
+        };
     }
 
     /**
@@ -128,6 +180,48 @@ final class CellValueValidator
         )->validate();
 
         return $value === null ? null : (int) $value;
+    }
+
+    /**
+     * A MULTISELECT column's value is the whole related-id collection (a
+     * full-replace sync, user directive 2026-07-23): every id must be one the
+     * actor could pick from the declared resource's own `/for-select` query,
+     * the same guard validateRelationValue() applies to a single id. An empty
+     * list is structurally valid here — whether it is ACCEPTED is the
+     * mandatory-field rule (TableCellUpdateService step 4.5), never this
+     * column's own declaration.
+     *
+     * @param  array<string, mixed>  $column
+     * @return array<int, int>
+     *
+     * @throws ValidationException
+     */
+    private function validateIdListValue(array $column, mixed $value, User $actor): array
+    {
+        Validator::make(
+            ['value' => $value],
+            ['value' => ['present', 'array'], 'value.*' => ['integer']],
+        )->validate();
+
+        /** @var array<int, mixed> $value */
+        $ids = array_values(array_unique(array_map(static fn (mixed $id): int => (int) $id, $value)));
+        $resource = $column['relation']['resource'] ?? null;
+
+        if (! is_string($resource)) {
+            throw ValidationException::withMessages([
+                'value' => ['The selected value does not exist or is not available.'],
+            ]);
+        }
+
+        foreach ($ids as $id) {
+            if (! $this->relationScope->inScope($resource, $id, $actor)) {
+                throw ValidationException::withMessages([
+                    'value' => ['The selected value does not exist or is not available.'],
+                ]);
+            }
+        }
+
+        return $ids;
     }
 
     /**

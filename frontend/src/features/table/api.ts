@@ -69,7 +69,8 @@ export async function resetTablePreferences(domain: string): Promise<void> {
 /** Body accepted by `PATCH /tables/{domain}/rows/{row}` (spec 0053, `note` added by spec 0054 D-5). */
 export interface UpdateTableCellPayload {
   column: string
-  value: string | number | boolean | null
+  /** A scalar, or — for a `multiselect` column — the whole id collection that replaces the current one. */
+  value: string | number | boolean | null | number[]
   /** Only for columns whose picked value requires one (e.g. a workflow status); omitted otherwise. */
   note?: string
 }

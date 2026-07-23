@@ -53,16 +53,56 @@ export interface RelationCellEditorParams {
    * (`ForSelectResource::toArray`), which is precisely the no-image case.
    */
   showAvatar?: boolean
+  /**
+   * Row-scoped narrowing of the option list (user directive 2026-07-23):
+   * `/for-select` param name -> id of the column supplying its value on the
+   * EDITED row (`TableColumn.relation.scope`). Absent, or a row whose scope
+   * column is empty, leaves the list unfiltered.
+   */
+  scope?: Record<string, string>
 }
 
 /** Debounce before a typed term reaches the server, matching AsyncPaginatedSelect. */
 const SEARCH_DEBOUNCE_MS = 300
 
+/**
+ * Resolves `scope` against the row being edited. A scope column holds either a
+ * relation projection (`{id, name|label}` — how every derived relation column
+ * is mapped server-side) or a bare id; anything else contributes no param, so
+ * a row missing the value degrades to the unfiltered list rather than sending
+ * a junk filter.
+ */
+function resolveScopeParams(
+  scope: Record<string, string> | undefined,
+  row: TableRow | undefined,
+): Record<string, number> | undefined {
+  if (!scope || !row) {
+    return undefined
+  }
+
+  const params: Record<string, number> = {}
+
+  for (const [param, columnId] of Object.entries(scope)) {
+    const cell = row[columnId]
+    const id =
+      typeof cell === 'number'
+        ? cell
+        : typeof (cell as { id?: unknown } | null)?.id === 'number'
+          ? (cell as { id: number }).id
+          : null
+    if (id !== null) {
+      params[param] = id
+    }
+  }
+
+  return Object.keys(params).length > 0 ? params : undefined
+}
+
 export function RelationCellEditor(
   props: CustomCellEditorProps<TableRow, RelationCellValue | null> & RelationCellEditorParams,
 ) {
   const { t } = useTranslation()
-  const { value, onValueChange, stopEditing, resource, showAvatar = false } = props
+  const { value, onValueChange, stopEditing, resource, showAvatar = false, scope, data } = props
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -73,13 +113,22 @@ export function RelationCellEditor(
     inputRef.current?.focus()
   }, [])
 
-  const { data, isPending, isError, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useForSelect({
+  const {
+    data: pages,
+    isPending,
+    isError,
+    refetch,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useForSelect({
     resource,
     search: debouncedSearch,
     ids: value ? [value.id] : undefined,
+    params: resolveScopeParams(scope, data),
   })
 
-  const options = data?.pages.flatMap((page) => page.items) ?? []
+  const options = pages?.pages.flatMap((page) => page.items) ?? []
 
   const pick = (item: ForSelectItem | null) => {
     // Re-picking the current value must not commit: the cell value is an

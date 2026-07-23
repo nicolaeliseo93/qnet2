@@ -16,8 +16,8 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Validates the payload for POST /api/opportunities (spec 0040). `name` is
- * always required (D-4); `registry_id` is required UNLESS `lead_id` derives
+ * Validates the payload for POST /api/opportunities (spec 0040).
+ * `registry_id` is required UNLESS `lead_id` derives
  * it (BR-1). The 2 BR-1-derivable fields (source_id/registry_id) become
  * `prohibited` when `lead_id` derives a non-null value for them —
  * LeadOpportunityDefaultsResolver is the single source of truth for which
@@ -35,11 +35,16 @@ use Illuminate\Validation\Rule;
  * by `product_lines` (ValidatesProductLines) — no longer BR-1-derivable/
  * lockable scalars. User directive 2026-07-17: `product_lines` is REQUIRED
  * (at least one {business_function_id, product_category_id} row) to create;
- * `company_id`/`company_site_id`/`operational_site_id` are REMOVED entirely.
+ * `company_id`/`company_site_id` are REMOVED entirely. Spec 0056: unlike
+ * those two, `operational_site_id` is reintroduced as a plain, optional FK —
+ * never BR-1-derivable/locked, no forcing from any other entity.
  * `opportunity_status_id` (spec 0043, D-3) is REQUIRED. `supervisor_id` is
  * NULLABLE (directive 2026-07-21, relaxing spec 0044): it derives from the
  * lead's Operatore, which may be empty, so an opportunity created from a lead
  * without one carries no supervisor — the DB column has always been nullable.
+ *
+ * Spec 0057, D-5: `name` is REMOVED entirely — no longer a client input.
+ * OpportunityService derives it as `OPP_{id}` after the insert.
  */
 class StoreOpportunityRequest extends FormRequest
 {
@@ -66,13 +71,14 @@ class StoreOpportunityRequest extends FormRequest
         $locked = $this->leadDefaults()?->lockedFields ?? [];
 
         return array_merge([
-            'name' => ['required', 'string', 'max:255'],
             'registry_id' => $this->derivableRule($locked, 'registry_id', required: true, table: 'registries'),
             'referent_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'commercial_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'reporter_id' => ['nullable', 'integer', Rule::exists('referents', 'id')],
             'supervisor_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'source_id' => $this->derivableRule($locked, 'source_id', required: false, table: 'sources'),
+            // Spec 0056: a plain, optional relation — never derivable/locked.
+            'operational_site_id' => ['nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'opportunity_status_id' => ['required', 'integer', Rule::exists('opportunity_statuses', 'id')],
             'lead_id' => ['nullable', 'integer', Rule::exists('leads', 'id'), Rule::unique('opportunities', 'lead_id')],
             'start_date' => ['nullable', 'date'],
@@ -85,13 +91,14 @@ class StoreOpportunityRequest extends FormRequest
             // (AC-015/017); its set-membership is checked in withValidator.
             'state_id' => ['nullable', 'integer', Rule::exists('states', 'id')],
             'opportunity_workflow_status_id' => ['nullable', 'integer', Rule::exists('opportunity_workflow_statuses', 'id')],
-            // "Prodotti di interesse" (user directive 2026-07-22): the whole
-            // collection is replaced when submitted (`[]` clears it). A product
+            // "Prodotti di interesse": MANDATORY (user directive 2026-07-23),
+            // mirroring `product_lines` — at least one product to create, and
+            // the whole collection is replaced when submitted. A product
             // outside the opportunity's product-line categories is ACCEPTED on
             // purpose — OpportunityProductInterestWriter adds the matching row
             // to `product_lines`, which is what the form warns about before
             // unlocking the picker.
-            'products_of_interest' => ['sometimes', 'array'],
+            'products_of_interest' => ['required', 'array', 'min:1'],
             'products_of_interest.*' => ['integer', Rule::exists('products', 'id')],
         ], $this->managerSlotsRules(), $this->productLinesRules(required: true));
     }

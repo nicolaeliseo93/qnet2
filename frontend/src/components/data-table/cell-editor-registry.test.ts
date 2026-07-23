@@ -5,6 +5,7 @@ import {
   type CellEditorKind,
 } from '@/components/data-table/cell-editor-registry'
 import { DateTimeCellEditor } from '@/components/data-table/datetime-cell-editor'
+import { MultiSelectCellEditor } from '@/components/data-table/multi-select-cell-editor'
 import { RelationCellEditor } from '@/components/data-table/relation-cell-editor'
 import { SelectCellEditor } from '@/components/data-table/select-cell-editor'
 import type { ColumnType, EnumBadge, SelectOption, TableColumn, TableRow } from '@/features/table/types'
@@ -202,6 +203,40 @@ describe('resolveCellEditorSpec', () => {
       const column = stubColumn({ id: 'operator', type: 'text' })
       const params = resolveCellEditorSpec('relation')?.cellEditorParams?.(column)
       expect(params).toEqual({ resource: '', showAvatar: false })
+    })
+
+    // User directive 2026-07-23: the to-many twin — same `relation` metadata,
+    // its own popup editor, no avatar opt-in (the resource is never people).
+    it('resolves a `multiselect` column to the popup multi-select editor with its resource and scope', () => {
+      const column = stubColumn({
+        id: 'products_of_interest',
+        type: 'text',
+        relation: { resource: 'products', scope: { category_ids: 'product_category_ids' } },
+      })
+      const spec = resolveCellEditorSpec('multiselect')
+
+      expect(spec?.cellEditor).toBe(MultiSelectCellEditor)
+      expect(spec?.cellEditorPopup).toBe(true)
+      expect(spec?.cellEditorParams?.(column)).toEqual({
+        resource: 'products',
+        scope: { category_ids: 'product_category_ids' },
+      })
+    })
+
+    // Forwarded UNRESOLVED on purpose: it names the column to read, and only
+    // the editor holds the row (user directive 2026-07-23).
+    it('forwards the row-scoped `scope` map when the column declares one', () => {
+      const column = stubColumn({
+        id: 'operator_ga2',
+        type: 'text',
+        relation: { resource: 'users', scope: { operational_site_id: 'operational_site' } },
+      })
+      const params = resolveCellEditorSpec('relation')?.cellEditorParams?.(column)
+      expect(params).toEqual({
+        resource: 'users',
+        showAvatar: true,
+        scope: { operational_site_id: 'operational_site' },
+      })
     })
   })
 })

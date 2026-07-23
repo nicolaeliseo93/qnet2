@@ -31,6 +31,7 @@ class OpportunityFactory extends Factory
             'reporter_id' => null,
             'supervisor_id' => null,
             'source_id' => null,
+            'operational_site_id' => null,
             'lead_id' => null,
             'start_date' => fake()->optional()->date(),
             'estimated_value' => fake()->optional()->randomFloat(2, 500, 50000),

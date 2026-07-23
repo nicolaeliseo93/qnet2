@@ -4,6 +4,7 @@ use App\Jobs\GenerateExportJob;
 use App\Models\Attachment;
 use App\Models\BusinessFunction;
 use App\Models\ExportRun;
+use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\ProductCategory;
 use App\Models\Referent;
@@ -59,10 +60,12 @@ it('GET /api/tables/opportunities/columns: 200 with the declared columns, 403 wi
     $ids = collect($data['columns'])->pluck('id')->all();
     // requirement changed (spec 0043, D-3): `opportunity_status` is a new
     // relation-derived column, right after `source`. `managers` (opportunity_user
-    // pivot, avatar stack) sits next to `supervisor`.
+    // pivot, avatar stack) sits next to `supervisor`. Requirement changed (user
+    // directive 2026-07-23): `products_of_interest` follows the two aggregated
+    // classification columns.
     expect($ids)->toBe([
-        'id', 'name', 'registry', 'referent', 'commercial', 'supervisor', 'managers', 'source', 'opportunity_status',
-        'product_category', 'business_function', 'estimated_value', 'success_probability', 'start_date',
+        'id', 'name', 'registry', 'referent', 'commercial', 'supervisor', 'managers', 'source', 'operational_site', 'opportunity_status',
+        'product_category', 'business_function', 'products_of_interest', 'estimated_value', 'success_probability', 'start_date',
         'expected_close_date', 'created_at',
     ]);
 
@@ -126,6 +129,80 @@ it('rows: sorting by referent orders opportunities by the related referent name 
 
     $ids = collect($response->json('items'))->pluck('id');
     expect($ids->all())->toBe([$opportunityAlpha->id, $opportunityZulu->id]);
+});
+
+// ---------------------------------------------------------------------------
+// AC-009/010 (spec 0056) — operational_site sorts/filters (set + advanced)
+// by the site's PRIMARY address line1, never the composed label
+// ---------------------------------------------------------------------------
+
+it('rows: sorting by operational_site orders opportunities by the site\'s primary address line1 (AC-009)', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    $siteA = OperationalSite::factory()->create();
+    $siteA->addresses()->create(['line1' => 'Alpha Street', 'is_primary' => true]);
+    $siteB = OperationalSite::factory()->create();
+    $siteB->addresses()->create(['line1' => 'Zulu Street', 'is_primary' => true]);
+    $opportunityZulu = Opportunity::factory()->create(['operational_site_id' => $siteB->id]);
+    $opportunityAlpha = Opportunity::factory()->create(['operational_site_id' => $siteA->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/opportunities/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'operational_site', 'sort' => 'asc']],
+    ])->assertOk();
+
+    $ids = collect($response->json('items'))->pluck('id');
+    expect($ids->all())->toBe([$opportunityAlpha->id, $opportunityZulu->id]);
+});
+
+it('rows: a set filter on operational_site matches the site\'s primary address line1, bound (AC-010)', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    $site = OperationalSite::factory()->create();
+    $site->addresses()->create(['line1' => 'Via Roma 1', 'is_primary' => true]);
+    $matching = Opportunity::factory()->create(['operational_site_id' => $site->id]);
+    Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/opportunities/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['operational_site' => ['filterType' => 'set', 'values' => ['Via Roma 1']]],
+    ])->assertOk();
+
+    expect(collect($response->json('items'))->pluck('id')->all())->toBe([$matching->id]);
+});
+
+it('rows: the operational_site advanced (text) filter matches a substring of the primary address line1 (AC-010)', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    $site = OperationalSite::factory()->create();
+    $site->addresses()->create(['line1' => 'Corso Milano 10', 'is_primary' => true]);
+    $matching = Opportunity::factory()->create(['operational_site_id' => $site->id]);
+    Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/opportunities/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'advancedFilters' => ['operational_site' => 'Milano'],
+    ])->assertOk();
+
+    expect(collect($response->json('items'))->pluck('id')->all())->toBe([$matching->id]);
+});
+
+it('rows: operational_site is the composed "{line1} - {city}" label (AC-006/015), no "[object Object]"', function () {
+    $actor = opportunityTableUserWith(['viewAny']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    $site->addresses()->first()->update(['line1' => 'Via Roma 1']);
+    $opportunity = Opportunity::factory()->create(['operational_site_id' => $site->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/opportunities/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $opportunity->id);
+
+    expect($row['operational_site'])->toBeArray()
+        ->and($row['operational_site']['id'])->toBe($site->id)
+        ->and($row['operational_site']['label'])->toStartWith('Via Roma 1 - ');
 });
 
 it('rows: an unknown sort column is rejected (allow-list, no raw SQL escape hatch)', function () {

@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPEC 0057 — Form di creazione per Gestione Richieste (+ nome opportunita' auto-generato).
+  Grounding VERIFICATO sul codice reale (esplorazione 2026-07-23), non ipotizzato.
+  Estende 0049 (modulo request-management) e 0040 (opportunita'); riusa 0023 (categoria/funzione).
+
+  Decisioni utente (AskUserQuestion 2026-07-23):
+    - Anagrafica: SELETTORE di anagrafica esistente OPPURE creazione di una nuova dai campi compilati.
+    - Campi: SOLO anagrafica + product lines. Nessun picker prodotti di interesse, nessuno stato,
+      nessun campo nome.
+    - Nome opportunita': GENERATO AUTOMATICAMENTE come "OPP_" . id, sia per le richieste sia per il
+      form opportunita' esistente. Il campo nome sparisce dall'input utente.
+    - Apertura del form: secondo le impostazioni utente (module_open_preferences), quindi DEVE
+      funzionare sia in sheet sia in pagina.
+-->
+<spec id="0057-request-management-create-form" status="approved" owner="nicola" date="2026-07-23">
+
+  <goal>
+    Dare al modulo `request-management` un percorso di creazione oggi inesistente: un form gated da
+    `request-management.create` che raccoglie l'anagrafica cliente (le stesse tre card della view:
+    identita', contatti, indirizzo) e le product lines (funzione aziendale + categoria prodotto,
+    riusando il campo del form opportunita'), e crea la Opportunity corrispondente. In parallelo, il
+    nome dell'opportunita' smette di essere un input utente e diventa un valore derivato `OPP_{id}`.
+  </goal>
+
+  <context>
+    Nomi VERIFICATI sul codice reale (esplorazione 2026-07-23).
+
+    - "Gestione richieste" E' il model `App\Models\Opportunity`. Il modulo espone oggi solo
+      show/update/delete (`backend/routes/api/request-management.php:22-25`): non esiste POST.
+    - L'anagrafica in update passa da `RequestClientProfileWriter` (`applyTo()`), che pero' in
+      `resolveCard()` va in 422 se il Registry non ha gia' una PersonalData: NON e' un percorso di
+      creazione. La creazione di Registry+PersonalData ha gia' il suo punto unico:
+      `RegistryService::create(User $actor, CreateRegistryData $data, ?ProfileData $profile)`, che
+      inserisce `name = ''` come placeholder e lascia derivare il nome a `RegistryProfileWriter::write`.
+      E' il precedente da copiare, non da reinventare.
+    - Funzione aziendale + categoria prodotto vivono sulla tabella pivot `opportunity_product_lines`
+      (mai su `opportunities`). La validazione condivisa esiste gia':
+      `App\Http\Requests\Concerns\ValidatesProductLines` (`productLinesRules(bool $required)` +
+      `validateProductLines()`, che verifica no-duplicati e coerenza categoria/funzione via
+      `CategoryHierarchy::effectiveBusinessFunction`). Va riusata VERBATIM, non duplicata.
+    - `opportunities.name` e' `string(191) NOT NULL, indexed, NON unique`
+      (`2026_07_16_140000_create_opportunities_table.php:32`).
+    - Il permesso `request-management.create` ESISTE GIA' nel catalogo (derivato da `BasePolicy::abilities()`
+      e seminato da `SyncPermissions`): nessuna migrazione, nessun seeder nuovo.
+    - `useModuleOpener` gia' risolve sheet-vs-pagina da `users.module_open_preferences`; le rotte
+      `/new`, `/:id/edit`, `/:id/duplicate` sono generate da `buildModuleRoutes()` per ogni modulo con
+      `generateRoutes !== false`. `request-management-screens.tsx:50` ha oggi `generateRoutes: false`
+      e un `FormScreen` placeholder.
+  </context>
+
+  <decisions>
+    <d id="D-1">
+      La creazione richiesta scrive sullo stesso model `Opportunity` e sulla stessa pivot
+      `opportunity_product_lines` della creazione opportunita'. Nessun model nuovo, nessuna tabella nuova.
+    </d>
+    <d id="D-2">
+      Anagrafica: `registry_id` e i blocchi `client_*` sono MUTUAMENTE ESCLUSIVI e uno dei due e'
+      obbligatorio. Con `registry_id` si aggancia un Registry esistente e i blocchi `client_*` sono
+      rifiutati (422); senza, `client_identity` e' obbligatorio e crea Registry + PersonalData
+      (+ contatti e indirizzo se presenti). Regola esplicita: la creazione richiesta non modifica mai
+      l'anagrafica di un Registry esistente — quella resta competenza del pannello di lavorazione.
+    </d>
+    <d id="D-3">
+      `product_lines` e' obbligatorio (min 1 riga completa), con le stesse regole del form opportunita'
+      (`ValidatesProductLines::productLinesRules(required: true)`).
+    </d>
+    <d id="D-4">
+      Nessun altro campo nel form. `opportunity_status_id` resta risolto da
+      `SystemStatusGuard::resolveNewStatusId` (comportamento gia' presente in `OpportunityService::create`
+      quando lo stato e' null); `products_of_interest` NON e' richiesto in creazione richiesta e si
+      compila nel pannello "Lavora richieste".
+    </d>
+    <d id="D-5">
+      Il nome dell'opportunita' e' DERIVATO: `OPP_{id}`. Poiche' dipende dall'id, si genera dopo
+      l'insert, dentro la stessa transazione di `OpportunityService::create` (placeholder `''` come fa
+      `RegistryService::create`). Conseguenze accettate dall'utente:
+      il campo `name` sparisce dal form opportunita'; l'autofill del nome da categoria prodotto
+      (`use-opportunity-name-autofill.ts`, `opportunity-product-line-name.ts`,
+      `ConvertLeadToOpportunity::composeName()`) viene CANCELLATO, non disattivato.
+      `name` resta visibile in sola lettura in tabella/dettaglio. Nessun backfill delle righe esistenti
+      (fuori scope: i nomi storici restano quelli).
+    </d>
+    <d id="D-6">
+      L'apertura segue `module_open_preferences`: si rimuove `generateRoutes: false` da
+      `request-management-screens.tsx` e si ridichiara nel router la rotta di dettaglio manuale in modo
+      che non confligga (vedi router.tsx:212-216). Il modulo deve funzionare in entrambe le modalita'.
+    </d>
+    <d id="D-7">
+      Il form NON introduce campi di edit: e' create-only. In modalita' edit/duplicate il FormScreen di
+      request-management continua a rispondere "non applicabile" (il pannello di lavorazione resta
+      l'unico percorso di modifica).
+    </d>
+  </decisions>
+
+  <contract name="POST /api/request-management" frozen="true">
+    <auth>`request-management.create` (abort_unless nel controller, come le altre action del modulo).</auth>
+    <request><![CDATA[
+{
+  // --- anagrafica: esattamente uno dei due rami (D-2) ---
+  "registry_id": 12,                    // integer|exists:registries,id — ramo "esistente"
+
+  // ramo "nuova": richiesto quando registry_id e' assente
+  "client_identity": {
+    "type": "individual|company",       // required_without:registry_id, enum PersonalDataTypeEnum
+    "first_name": "Mario",              // required_if type=individual, nullable, string, max:255
+    "last_name": "Rossi",               // required_if type=individual, nullable, string, max:255
+    "company_name": null,               // required_if type=company, nullable, string, max:255
+    "tax_code": "RSSMRA80A01H501U",     // nullable, string, max:32, rule TaxCode('client_identity.')
+    "vat_number": null,                 // nullable, string, max:32, rule VatNumber
+    "sdi_code": null,                   // nullable, string, max:32
+    "birth_date": "1980-01-01",         // nullable, date, before:today
+    "gender": "male"                    // nullable, enum GenderEnum
+  },
+  "client_contacts": [                  // sometimes, array
+    { "type": "phone", "value": "3331234567", "label": null, "is_primary": true }
+  ],
+  "client_address": {                   // sometimes, nullable, array
+    "line1": "Via Roma 1",              // required se il blocco e' presente, string, max:255
+    "line2": null, "postal_code": null,
+    "city_id": null, "province_id": null, "state_id": null, "country_id": null
+  },
+
+  // --- product lines (D-3) ---
+  "product_lines": [
+    { "business_function_id": 3, "product_category_id": 41 }
+  ]
+}
+    ]]></request>
+    <response status="201"><![CDATA[
+{ "success": true, "message": "...", "data": <RequestManagementResource> }
+    ]]></response>
+    <errors>
+      403 senza `request-management.create`.
+      422 se: nessun ramo anagrafica; entrambi i rami insieme; product_lines assente/vuoto/riga
+      incompleta/coppie duplicate/categoria non coerente con la funzione; violazioni TaxCode/VatNumber.
+    </errors>
+    <notes>
+      Le regole anagrafica sono le STESSE gia' definite in `ValidatesRequestClientProfile`
+      (`clientIdentityRules()` + `clientProfileRules()`): il nuovo FormRequest riusa quel trait, non
+      riscrive le regole. Cambia solo l'obbligatorieta' di `client_identity` (required_without registry_id).
+    </notes>
+  </contract>
+
+  <contract name="Componente FE ProductLinesField (generalizzazione)" frozen="true">
+    <![CDATA[
+`OpportunityProductLinesField` va reso riusabile fuori dal modulo opportunita'. Dopo D-5 le sue due
+dipendenze specifiche (setValue tipizzato su OpportunityFormValues e nameAutofill) SPARISCONO insieme
+all'autofill, quindi la generalizzazione e' quasi gratuita.
+
+Contratto congelato del componente condiviso:
+
+  // frontend/src/features/product-lines/product-lines-field.tsx
+  type ProductLineRow = { business_function_id: number | null; product_category_id: number | null }
+
+  interface ProductLinesFieldProps {
+    value: ProductLineRow[]
+    onChange: (rows: ProductLineRow[]) => void
+    knownLines?: ProductLine[]      // hydration delle label in edit; opzionale
+    disabled?: boolean
+  }
+
+Comportamento invariato: riga = chip numerato + AsyncPaginatedSelect funzione aziendale +
+AsyncPaginatedSelect categoria (scoped con params {business_function_id}, disabilitato finche' la
+funzione non e' scelta) + bottone rimuovi; footer con bottone "Aggiungi" dashed. Cambiare funzione
+azzera la categoria della riga.
+Il modulo opportunita' e il modulo richieste consumano ENTRAMBI questo componente. Lo schema Zod della
+riga resta identico (`business_function_id`/`product_category_id` nullable + superRefine che pretende
+almeno una riga e ogni riga completa).
+    ]]>
+  </contract>
+
+  <acceptance>
+    <ac id="AC-001">POST /api/request-management senza il permesso `request-management.create` -> 403, nessuna riga creata.</ac>
+    <ac id="AC-002">POST con `registry_id` valido + product_lines valide -> 201; l'Opportunity e' agganciata a quel Registry; l'anagrafica del Registry NON viene modificata.</ac>
+    <ac id="AC-003">POST con `client_identity` (individual) + contatti + indirizzo -> 201; esistono un nuovo Registry, la sua PersonalData, i contatti e l'indirizzo; `registries.name` e' derivato da RegistryProfileWriter.</ac>
+    <ac id="AC-004">POST con `registry_id` E `client_identity` insieme -> 422.</ac>
+    <ac id="AC-005">POST senza nessuno dei due rami anagrafica -> 422.</ac>
+    <ac id="AC-006">POST senza `product_lines`, o con riga incompleta, o con categoria non appartenente alla funzione aziendale scelta -> 422, nessuna riga creata.</ac>
+    <ac id="AC-007">Dopo una creazione riuscita, `opportunities.name` vale esattamente `OPP_<id>` dell'opportunita' creata.</ac>
+    <ac id="AC-008">Anche la creazione da form opportunita' (`POST /api/opportunities`) produce `name = OPP_<id>`; il payload NON accetta piu' `name` in create.</ac>
+    <ac id="AC-009">La conversione lead -> opportunita' produce `name = OPP_<id>` (non piu' il nome composto dalle categorie).</ac>
+    <ac id="AC-010">La risposta 201 e' un `RequestManagementResource` completo (stessa shape della GET di dettaglio).</ac>
+    <ac id="AC-011">FE: il bottone "Nuova richiesta" compare nell'header della tabella richieste solo con `request-management.create` (`<Can>`), e apre il form in sheet o in pagina secondo `module_open_preferences`.</ac>
+    <ac id="AC-012">FE: il form mostra il selettore di anagrafica esistente; selezionandone una, le card di identita'/contatti/indirizzo si nascondono (o si disabilitano) e il payload porta solo `registry_id`.</ac>
+    <ac id="AC-013">FE: senza anagrafica selezionata, le tre card anagrafica sono compilabili e la submit invia i blocchi `client_*`; la validazione Zod replica le regole server (identita' obbligatoria, campi per tipo).</ac>
+    <ac id="AC-014">FE: la sezione product lines usa il componente condiviso, la categoria resta disabilitata finche' non si sceglie la funzione, e cambiare funzione azzera la categoria.</ac>
+    <ac id="AC-015">FE: il campo "nome" non esiste piu' nel form opportunita'; nessun residuo di autofill del nome (file cancellati, nessun import orfano).</ac>
+    <ac id="AC-016">FE: 422 dal server viene mappato sui campi del form (`applyServerValidationErrors`), inclusi i path annidati `client_identity.*` e `product_lines.*`.</ac>
+  </acceptance>
+
+  <out-of-scope>
+    Backfill dei nomi delle opportunita' esistenti. Modifica dell'anagrafica di un Registry esistente
+    dal form di creazione. Edit/duplicate di una richiesta. Prodotti di interesse, stato, referente,
+    commerciale, fonte in creazione (restano nel pannello di lavorazione).
+  </out-of-scope>
+
+</spec>

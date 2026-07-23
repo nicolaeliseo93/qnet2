@@ -124,6 +124,9 @@ function editOpportunity(
         product_category: { id: 500, name: 'Consulting' },
       },
     ],
+    // Mandatory since the user directive 2026-07-23: without one the form
+    // never submits, so every fixture that saves carries a product.
+    products_of_interest: [{ id: 700, name: 'Fibra 1000', product_category: { id: 500, name: 'Consulting' } }],
     lead_id: null,
     lead: null,
     managers: [],

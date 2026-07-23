@@ -49,16 +49,25 @@ export function DocumentsSection({
   const [isDragging, setIsDragging] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const handleFile = (file: File | undefined) => {
-    if (!file) {
+  const handleFiles = (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? [])
+    if (files.length === 0) {
       return
     }
     setActionError(null)
-    upload(file).catch(() => setActionError(t('attachments.errors.upload')))
+    upload(files)
+      .then(({ failed }) => {
+        if (failed.length > 0) {
+          setActionError(
+            t('attachments.errors.uploadSome', { count: failed.length, names: failed.join(', ') }),
+          )
+        }
+      })
+      .catch(() => setActionError(t('attachments.errors.upload')))
   }
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    handleFile(event.target.files?.[0])
+    handleFiles(event.target.files)
     // Reset so re-selecting the same file still fires a change event.
     event.target.value = ''
   }
@@ -66,7 +75,7 @@ export function DocumentsSection({
   const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
     event.preventDefault()
     setIsDragging(false)
-    handleFile(event.dataTransfer.files?.[0])
+    handleFiles(event.dataTransfer.files)
   }
 
   const handleDelete = async (attachment: Attachment) => {
@@ -109,6 +118,7 @@ export function DocumentsSection({
         >
           <input
             type="file"
+            multiple
             className="sr-only"
             aria-label={t('attachments.dropzoneHint')}
             onChange={handleInputChange}

@@ -4,6 +4,8 @@ import { useWatch } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { formatOnBlur } from '@/lib/formatting/format-on-blur'
+import { formatVatNumber } from '@/lib/formatting/input-format'
 import { Form, FormControl } from '@/components/ui/form'
 import { GeoSelect, type GeoValue } from '@/features/geo/geo-select'
 import { MetaField } from '@/features/authorization/MetaField'
@@ -88,7 +90,13 @@ export function CompanyFormBody({ mode, onSuccess, onCancel }: CompanyFormBodyPr
               >
                 {({ field, disabled, readOnly }) => (
                   <FormControl>
-                    <Input autoComplete="off" disabled={disabled} readOnly={readOnly} {...field} />
+                    <Input
+                      autoComplete="off"
+                      disabled={disabled}
+                      readOnly={readOnly}
+                      {...field}
+                      onBlur={formatOnBlur(field, formatVatNumber)}
+                    />
                   </FormControl>
                 )}
               </MetaField>

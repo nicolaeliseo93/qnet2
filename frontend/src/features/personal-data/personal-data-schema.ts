@@ -1,5 +1,15 @@
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
+import {
+  encodeName,
+  encodeSurname,
+  isFemaleTaxCode,
+  isValidTaxCode,
+  taxCodeBirthDate,
+  taxCodeNameTriple,
+  taxCodeSurnameTriple,
+} from '@/lib/fiscal/tax-code'
+import { isValidVatNumber } from '@/lib/fiscal/vat-number'
 
 /**
  * Zod schema for the personal-data card form, built as a factory so validation
@@ -56,7 +66,113 @@ export function buildPersonalDataSchema(t: TFunction) {
           message: t('personalData.form.birthDateFuture'),
         })
       }
+
+      addFiscalIssues(values, ctx, t)
     })
+}
+
+/** The card fields the fiscal identifiers are checked against. */
+interface FiscalFields {
+  type: 'individual' | 'company'
+  first_name?: string
+  last_name?: string
+  tax_code?: string
+  vat_number?: string
+  birth_date?: string
+  gender?: 'male' | 'female'
+}
+
+/**
+ * Mirrors the backend `TaxCode`/`VatNumber` rules: an individual carries the
+ * sixteen-character personal code, a legal entity the eleven-digit numeric
+ * one, and an individual's code must also be CONSISTENT with the anagraphic
+ * fields of the same card. A blank identifier is always accepted — both stay
+ * optional.
+ */
+function addFiscalIssues(
+  values: FiscalFields,
+  ctx: z.RefinementCtx,
+  t: TFunction,
+): void {
+  const taxCode = values.tax_code?.trim()
+
+  if (taxCode) {
+    if (values.type === 'company') {
+      if (!isValidVatNumber(taxCode)) {
+        addTaxCodeIssue(ctx, t('personalData.form.companyTaxCodeInvalid'))
+      }
+    } else if (!isValidTaxCode(taxCode)) {
+      addTaxCodeIssue(ctx, t('personalData.form.taxCodeInvalid'))
+    } else {
+      addTaxCodeMismatchIssue(taxCode, values, ctx, t)
+    }
+  }
+
+  const vatNumber = values.vat_number?.trim()
+
+  if (vatNumber && !isValidVatNumber(vatNumber)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['vat_number'],
+      message: t('personalData.form.vatNumberInvalid'),
+    })
+  }
+}
+
+/** Reports the FIRST anagraphic field the code diverges from, so the message names it. */
+function addTaxCodeMismatchIssue(
+  taxCode: string,
+  values: FiscalFields,
+  ctx: z.RefinementCtx,
+  t: TFunction,
+): void {
+  if (
+    values.last_name &&
+    encodeSurname(values.last_name) !== taxCodeSurnameTriple(taxCode)
+  ) {
+    addTaxCodeIssue(ctx, t('personalData.form.taxCodeLastNameMismatch'))
+
+    return
+  }
+
+  if (
+    values.first_name &&
+    encodeName(values.first_name) !== taxCodeNameTriple(taxCode)
+  ) {
+    addTaxCodeIssue(ctx, t('personalData.form.taxCodeFirstNameMismatch'))
+
+    return
+  }
+
+  if (values.birth_date && !birthDateMatches(taxCode, values.birth_date)) {
+    addTaxCodeIssue(ctx, t('personalData.form.taxCodeBirthDateMismatch'))
+
+    return
+  }
+
+  if (values.gender) {
+    const encoded = isFemaleTaxCode(taxCode) ? 'female' : 'male'
+
+    if (encoded !== values.gender) {
+      addTaxCodeIssue(ctx, t('personalData.form.taxCodeGenderMismatch'))
+    }
+  }
+}
+
+/** The code carries no century, so the year is compared modulo 100. */
+function birthDateMatches(taxCode: string, birthDate: string): boolean {
+  const encoded = taxCodeBirthDate(taxCode)
+  const [year, month, day] = birthDate.split('-').map(Number)
+
+  if (encoded === null || Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+    return false
+  }
+
+  return year % 100 === encoded.year && month === encoded.month && day === encoded.day
+}
+
+function addTaxCodeIssue(ctx: z.RefinementCtx, message: string): void {
+  ctx.addIssue({ code: 'custom', path: ['tax_code'], message })
 }
 
 /** Midnight today, so a `birth_date` equal to today is rejected (before:today). */

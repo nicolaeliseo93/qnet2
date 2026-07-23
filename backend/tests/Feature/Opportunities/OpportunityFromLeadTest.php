@@ -6,11 +6,13 @@ use App\Models\Lead;
 use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
+use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Referent;
 use App\Models\Registry;
 use App\Models\Source;
 use App\Models\User;
+use App\Support\OperationalSiteLabel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Permission;
@@ -30,7 +32,7 @@ if (! function_exists('nonDerivableOpportunityFks')) {
      * stays a plain mandatory field even for a from-lead create. The
      * supervisor is likewise mandatory only on create.
      *
-     * @return array{opportunity_status_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{opportunity_status_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>, products_of_interest: array<int, int>}
      */
     function nonDerivableOpportunityFks(): array
     {
@@ -43,6 +45,10 @@ if (! function_exists('nonDerivableOpportunityFks')) {
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],
+            // User directive 2026-07-23: products_of_interest is mandatory too;
+            // the product belongs to the row's OWN category, so this payload
+            // never triggers a cross-category product-line addition.
+            'products_of_interest' => [Product::factory()->create(['category_id' => $category->id])->id],
         ];
     }
 }
@@ -130,12 +136,46 @@ it('opportunity-defaults: a complete lead locks both derivable fields (AC-060, A
     expect($response->json('data.values.source_id'))->toBe($lead->source_id);
     expect($response->json('data.values'))->not->toHaveKey('business_function_id');
     expect($response->json('data.values'))->not->toHaveKey('product_category_id');
-    expect($response->json('data.values'))->not->toHaveKey('operational_site_id');
     expect($response->json('data.locked_fields'))->toEqualCanonicalizing([
         'source_id', 'registry_id',
     ]);
     expect($response->json('data.locked_fields'))->not->toContain('referent_id');
     expect($response->json('data.references.registry.id'))->toBe($lead->registry_id);
+});
+
+// ---------------------------------------------------------------------------
+// User directive 2026-07-23 — the Sede operativa is inherited on conversion.
+// It is a PLAIN default: present in `values`/`references`, never in
+// `locked_fields` (supersedes the 2026-07-17 "removed from the derivable set"
+// directive only in that sense).
+// ---------------------------------------------------------------------------
+
+it('opportunity-defaults: exposes the lead operational site as an unlocked default with its composed label', function () {
+    $actor = opportunityFromLeadActor(['create'], ['view']);
+    $lead = completeLead();
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/leads/{$lead->id}/opportunity-defaults")->assertOk();
+
+    $site = $lead->operationalSite()->with('addresses.city')->firstOrFail();
+
+    expect($response->json('data.values.operational_site_id'))->toBe($lead->operational_site_id);
+    expect($response->json('data.locked_fields'))->not->toContain('operational_site_id');
+    expect($response->json('data.references.operational_site.id'))->toBe($lead->operational_site_id);
+    expect($response->json('data.references.operational_site.label'))
+        ->toBe(OperationalSiteLabel::compose($site->primaryAddress));
+});
+
+it('opportunity-defaults: a lead without a site derives a null operational site', function () {
+    $actor = opportunityFromLeadActor(['create'], ['view']);
+    $lead = completeLead();
+    $lead->update(['operational_site_id' => null]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->getJson("/api/leads/{$lead->id}/opportunity-defaults")->assertOk();
+
+    expect($response->json('data.values.operational_site_id'))->toBeNull();
+    expect($response->json('data.references.operational_site'))->toBeNull();
 });
 
 // AC-102/AC-103 product_lines derivation coverage lives in
@@ -342,10 +382,12 @@ it('LeadResource exposes opportunity {id,name}|null (AC-065)', function () {
 
     $this->getJson("/api/leads/{$lead->id}")->assertOk()->assertJsonPath('data.opportunity', null);
 
-    $created = $this->postJson('/api/opportunities', array_merge(['name' => 'Linked deal', 'lead_id' => $lead->id], nonDerivableOpportunityFks()))
+    $created = $this->postJson('/api/opportunities', array_merge(['lead_id' => $lead->id], nonDerivableOpportunityFks()))
         ->assertCreated();
+    $opportunityId = $created->json('data.id');
 
+    // Spec 0057, D-5: name is derived (OPP_{id}), never a client input.
     $this->getJson("/api/leads/{$lead->id}")
         ->assertOk()
-        ->assertJsonPath('data.opportunity', ['id' => $created->json('data.id'), 'name' => 'Linked deal']);
+        ->assertJsonPath('data.opportunity', ['id' => $opportunityId, 'name' => 'OPP_'.$opportunityId]);
 });

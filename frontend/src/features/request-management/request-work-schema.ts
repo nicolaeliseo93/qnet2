@@ -183,15 +183,18 @@ export function buildRequestWorkSchema(
       client_identity: buildClientIdentitySchema(t),
       client_contacts: buildClientContactsSchema(t),
       client_address: buildClientAddressSchema(t),
-      // "Prodotti di interesse" (user directive 2026-07-22): a plain id set —
-      // membership rules (existence, category coverage) are server-side only,
-      // there is nothing meaningful to mirror client-side.
-      products_of_interest: z.array(z.number()),
+      // "Prodotti di interesse": a plain id set, MANDATORY since the user
+      // directive 2026-07-23 (same rule as the opportunities form — the two
+      // channels write the same collection). The other membership rules
+      // (existence, category coverage) stay server-side only.
+      products_of_interest: z.array(z.number()).min(1, t('products.ofInterest.required')),
       // Attribution (user directive 2026-07-22): plain nullable relation ids
       // — existence is a server-side rule, there is nothing to mirror here.
       source_id: z.number().nullable(),
       reporter_id: z.number().nullable(),
       operator_id: z.number().nullable(),
+      // Spec 0056: facoltativa, same attribution shape.
+      operational_site_id: z.number().nullable(),
       attribute_values: buildAttributeValuesSchema(attributes, t) as unknown as TypedAttributeValuesSchema,
     })
     .superRefine((values, ctx) => {

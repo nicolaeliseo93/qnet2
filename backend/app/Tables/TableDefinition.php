@@ -277,6 +277,18 @@ interface TableDefinition
     public function deleteModel(Model $model): void;
 
     /**
+     * Per-row authorization for the bulk-delete path, the exact counterpart
+     * of authorizeUpdate() for the destructive action. Default
+     * (AbstractTableDefinition): `Gate::forUser($actor)->allows('delete', $row)`,
+     * the fail-safe pattern every domain inherits. Override when the domain's
+     * delete ability is NOT governed by modelClass()'s own Policy (e.g.
+     * RequestManagementTableDefinition, whose model is Opportunity but whose
+     * permission prefix is its own `request-management.*`) — without the
+     * override such a domain would be gated by a FOREIGN permission.
+     */
+    public function authorizeDelete(User $actor, Model $row): bool;
+
+    /**
      * Column ids where inline cell-editing (spec 0053) is allowed for
      * $actor: declared `'editable' => true` in the catalogue AND
      * `{resource}.update` AND the per-field DB permission

@@ -6,7 +6,10 @@ namespace App\Http\Requests\Concerns;
 
 use App\Authorization\AuthorizationRegistry;
 use App\Authorization\FieldPermission;
+use App\Enums\ContactTypeEnum;
+use App\Enums\PersonalDataTypeEnum;
 use App\Models\User;
+use App\Support\InputFormat;
 use BackedEnum;
 use DateTimeInterface;
 use Illuminate\Contracts\Validation\Validator;
@@ -39,6 +42,9 @@ use Illuminate\Support\Str;
  */
 trait EnforcesFieldPermissions
 {
+    /** The owned child section whose rows carry a channel-formatted `value`. */
+    private const string CONTACTS_FIELD = 'contacts';
+
     /**
      * The `{resource}` key registered in config/authorization.php.
      */
@@ -91,10 +97,64 @@ trait EnforcesFieldPermissions
      */
     private function fieldValueChanged(string $field, ?Model $model): bool
     {
-        $current = $this->currentFieldValue($model, $field);
+        $current = $this->canonicalize($field, $this->currentFieldValue($model, $field));
         $submitted = $this->projectSubmittedValue($this->input($field), $current);
 
         return $this->normalize($submitted) !== $this->normalize($current);
+    }
+
+    /**
+     * Puts the PERSISTED value in the same canonical shape the write path gives
+     * the submitted one (see FormatsPersonalDataInput, user directive
+     * 2026-07-23) before the two are compared.
+     *
+     * Without this the guard would read a mere re-spelling as a change: a row
+     * stored as `+39 333 0000000` before the rule existed, resubmitted
+     * untouched by the shared form, now arrives as `+393330000000` — and a
+     * LOCKED field would 422, blocking edits to unrelated parts of the same
+     * form. The comparison must answer "did the actor change this value", not
+     * "was it typed the way we store it today".
+     */
+    private function canonicalize(string $field, mixed $current): mixed
+    {
+        $leaf = Str::afterLast($field, '.');
+
+        if ($leaf === self::CONTACTS_FIELD && is_array($current)) {
+            return array_map($this->canonicalizeContactRow(...), $current);
+        }
+
+        if (! is_string($current)) {
+            return $current;
+        }
+
+        // The card's type decides the shape of `tax_code`; it is read from the
+        // SUBMITTED payload at the same path, exactly like the write path does.
+        $isCompany = $this->input(Str::beforeLast($field, '.').'.type') === PersonalDataTypeEnum::Company->value;
+
+        return InputFormat::identityField($leaf, $current, $isCompany);
+    }
+
+    /**
+     * @param  mixed  $row  a projected contact row (see readNestedPath()'s section branch)
+     */
+    private function canonicalizeContactRow(mixed $row): mixed
+    {
+        if (! is_array($row) || ! isset($row['value']) || ! is_string($row['value'])) {
+            return $row;
+        }
+
+        // The persisted side reads the model's CAST attribute, so the type
+        // arrives as the enum itself, not as its raw value.
+        $rawType = $row['type'] ?? null;
+        $type = $rawType instanceof ContactTypeEnum
+            ? $rawType
+            : ContactTypeEnum::tryFrom(is_string($rawType) ? $rawType : '');
+
+        if ($type !== null) {
+            $row['value'] = InputFormat::contactValue($type, $row['value']);
+        }
+
+        return $row;
     }
 
     /**

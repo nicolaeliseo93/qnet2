@@ -132,6 +132,32 @@ it('AC-003: the created Opportunity has registry_id/source_id derived from the l
     expect($opportunity->source_id)->toBe($fixture['source']->id);
 });
 
+// User directive 2026-07-23: the converted Opportunity inherits the lead's
+// Sede operativa (plain default, never locked).
+it('the created Opportunity inherits the lead operational site', function () {
+    $actor = leadConversionActor(['create'], ['create']);
+    $fixture = convertibleLeadFixture();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/leads', $fixture['payload'])->assertCreated();
+
+    $opportunity = Opportunity::where('lead_id', $response->json('data.id'))->firstOrFail();
+    expect($opportunity->operational_site_id)->toBe($fixture['site']->id);
+});
+
+it('the created Opportunity has a null operational site when the lead has none', function () {
+    $actor = leadConversionActor(['create'], ['create']);
+    $fixture = convertibleLeadFixture();
+    $payload = $fixture['payload'];
+    unset($payload['operational_site_id']);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/leads', $payload)->assertCreated();
+
+    $opportunity = Opportunity::where('lead_id', $response->json('data.id'))->firstOrFail();
+    expect($opportunity->operational_site_id)->toBeNull();
+});
+
 it('AC-004: the created Opportunity has exactly one product line matching the derived pair', function () {
     $actor = leadConversionActor(['create'], ['create']);
     $fixture = convertibleLeadFixture();
@@ -147,7 +173,9 @@ it('AC-004: the created Opportunity has exactly one product line matching the de
     expect($opportunity->productLines->first()->product_category_id)->toBe($fixture['productCategory']->id);
 });
 
-it('AC-005: the created Opportunity name equals the derived product category name', function () {
+// Spec 0057, D-5: the name is no longer composed from the derived product
+// category — it is always `OPP_{id}`, regardless of what the conversion derives.
+it('AC-005: the created Opportunity name is derived as OPP_{id}', function () {
     $actor = leadConversionActor(['create'], ['create']);
     $fixture = convertibleLeadFixture();
     Sanctum::actingAs($actor);
@@ -155,7 +183,7 @@ it('AC-005: the created Opportunity name equals the derived product category nam
     $response = $this->postJson('/api/leads', $fixture['payload'])->assertCreated();
 
     $opportunity = Opportunity::where('lead_id', $response->json('data.id'))->firstOrFail();
-    expect($opportunity->name)->toBe($fixture['productCategory']->name);
+    expect($opportunity->name)->toBe('OPP_'.$opportunity->id);
 });
 
 it('AC-006: the created Opportunity has the system "new" opportunity_status_id', function () {
@@ -178,8 +206,11 @@ it('AC-007: the response exposes data.opportunity {id,name} and lead_status conv
 
     $response = $this->postJson('/api/leads', $fixture['payload'])->assertCreated();
 
-    expect($response->json('data.opportunity.id'))->not->toBeNull();
-    expect($response->json('data.opportunity.name'))->toBe($fixture['productCategory']->name);
+    $opportunityId = $response->json('data.opportunity.id');
+    expect($opportunityId)->not->toBeNull();
+    // Spec 0057, D-5: the name is derived as OPP_{id}, not composed from the
+    // lead's derived product category.
+    expect($response->json('data.opportunity.name'))->toBe('OPP_'.$opportunityId);
     $response->assertJsonPath('data.lead_status', 'converted_to_opportunity');
 });
 

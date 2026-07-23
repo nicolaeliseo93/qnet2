@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { formatOnBlur } from '@/lib/formatting/format-on-blur'
+import { formatContactValue } from '@/lib/formatting/input-format'
 import {
   Form,
   FormControl,
@@ -112,7 +114,13 @@ export function ContactForm({ contact, onSubmit, onCancel, submitting = false }:
             <FormItem>
               <FormLabel required>{t('personalData.contacts.value')}</FormLabel>
               <FormControl>
-                <Input autoComplete="off" {...field} />
+                <Input
+                  autoComplete="off"
+                  {...field}
+                  onBlur={formatOnBlur(field, (value) =>
+                    formatContactValue(form.getValues('type'), value),
+                  )}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

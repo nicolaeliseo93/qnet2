@@ -23,14 +23,36 @@ function values(overrides: Record<string, unknown> = {}) {
     client_identity: null,
     client_contacts: [],
     client_address: [],
-    products_of_interest: [],
+    // Mandatory since the user directive 2026-07-23 (>=1 product).
+    products_of_interest: [7],
     source_id: null,
     reporter_id: null,
     operator_id: null,
+    operational_site_id: null,
     attribute_values: {},
     ...overrides,
   }
 }
+
+// User directive 2026-07-23: the panel writes the same collection as the
+// opportunities form, so it carries the same mandatory rule.
+describe('buildRequestWorkSchema — products of interest', () => {
+  it('rejects an empty collection', () => {
+    const schema = buildRequestWorkSchema([], STATUSES, 100, i18n.t)
+    const result = schema.safeParse(values({ products_of_interest: [] }))
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'products_of_interest')).toBe(true)
+    }
+  })
+
+  it('accepts one or more products', () => {
+    const schema = buildRequestWorkSchema([], STATUSES, 100, i18n.t)
+
+    expect(schema.safeParse(values({ products_of_interest: [7] })).success).toBe(true)
+  })
+})
 
 describe('buildRequestWorkSchema — note requirement (spec 0054 D-5)', () => {
   it('requires a non-blank note when moving to a status flagged requires_note', () => {

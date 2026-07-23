@@ -377,6 +377,16 @@ abstract class AbstractTableDefinition implements TableDefinition
         $model->delete();
     }
 
+    /**
+     * Default: the model's own Policy governs the destructive action, same
+     * fail-safe pattern as authorizeViewAny()/authorizeUpdate() (no Policy
+     * registered → false, never fail-open).
+     */
+    public function authorizeDelete(User $actor, Model $row): bool
+    {
+        return Gate::forUser($actor)->allows('delete', $row);
+    }
+
     // editableColumnIds()/authorizeUpdate()/updateCell() defaults (spec 0053)
     // live in ResolvesEditableColumns; optionsFor()/badgesFor()/enumKeyFor()/
     // resolveColumn() live in ResolvesColumnConfig (file-size budget,

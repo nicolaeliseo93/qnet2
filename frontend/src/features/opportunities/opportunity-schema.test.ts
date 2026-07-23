@@ -13,7 +13,6 @@ import {
 
 function baseValues(overrides: Record<string, unknown> = {}) {
   return {
-    name: 'Enterprise deal',
     registry_id: 1,
     // Spec 0043 D-3: opportunity_status_id is mandatory, mirrors registry_id.
     opportunity_status_id: 5,
@@ -22,6 +21,8 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     reporter_id: null,
     supervisor_id: 9,
     source_id: null,
+    // Spec 0056: facoltativa, never submit-blocking.
+    operational_site_id: null,
     // Spec 0047: Regione (never submit-blocking) and the working-state
     // manual override (edit-only in the UI, but shared by both schemas).
     state_id: null,
@@ -29,7 +30,9 @@ function baseValues(overrides: Record<string, unknown> = {}) {
     // product_lines is mandatory (>=1 row, user directive 2026-07-17): the base
     // happy-path carries one valid row; the empty-collection case overrides it.
     product_lines: [{ business_function_id: 1, product_category_id: 11 }],
-    products_of_interest: [],
+    // products_of_interest is mandatory too (>=1 product, user directive
+    // 2026-07-23): the base happy-path carries one; the empty case overrides it.
+    products_of_interest: [7],
     manager_slots: [],
     start_date: null,
     expected_close_date: null,
@@ -49,15 +52,6 @@ describe('buildCreateOpportunitySchema', () => {
     const schema = buildCreateOpportunitySchema(i18n.t)
     const result = schema.safeParse(baseValues())
     expect(result.success).toBe(true)
-  })
-
-  it('rejects a missing name', () => {
-    const schema = buildCreateOpportunitySchema(i18n.t)
-    const result = schema.safeParse(baseValues({ name: '' }))
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.issues.some((issue) => issue.path.join('.') === 'name')).toBe(true)
-    }
   })
 
   it('rejects a missing registry_id', () => {
@@ -104,6 +98,29 @@ describe('buildCreateOpportunitySchema', () => {
    * Each id is individually nullable, but a `superRefine` requires BOTH
    * non-null per row before submit.
    */
+  // User directive 2026-07-23: mandatory exactly like `product_lines`.
+  describe('products_of_interest', () => {
+    it('rejects an empty collection', () => {
+      const schema = buildCreateOpportunitySchema(i18n.t)
+      const result = schema.safeParse(baseValues({ products_of_interest: [] }))
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues.some((issue) => issue.path.join('.') === 'products_of_interest')).toBe(true)
+      }
+    })
+
+    it('rejects an empty collection on update too (never clearable)', () => {
+      const schema = buildUpdateOpportunitySchema(i18n.t)
+      const result = schema.safeParse(baseValues({ products_of_interest: [] }))
+      expect(result.success).toBe(false)
+    })
+
+    it('accepts one or more products', () => {
+      const schema = buildCreateOpportunitySchema(i18n.t)
+      expect(schema.safeParse(baseValues({ products_of_interest: [7, 9] })).success).toBe(true)
+    })
+  })
+
   describe('product_lines (amendment rev.3)', () => {
     it('rejects an empty collection (user directive 2026-07-17: at least one row required)', () => {
       const schema = buildCreateOpportunitySchema(i18n.t)
@@ -216,6 +233,19 @@ describe('buildCreateOpportunitySchema', () => {
     const schema = buildCreateOpportunitySchema(i18n.t)
     const result = schema.safeParse(baseValues({ manager_slots: [1, 2, 3, 4, 5] }))
     expect(result.success).toBe(false)
+  })
+})
+
+/** Spec 0056: facoltativa, never submit-blocking. */
+describe('operational_site_id (spec 0056)', () => {
+  it('accepts a null operational_site_id', () => {
+    const schema = buildCreateOpportunitySchema(i18n.t)
+    expect(schema.safeParse(baseValues({ operational_site_id: null })).success).toBe(true)
+  })
+
+  it('accepts a set operational_site_id', () => {
+    const schema = buildCreateOpportunitySchema(i18n.t)
+    expect(schema.safeParse(baseValues({ operational_site_id: 8 })).success).toBe(true)
   })
 })
 

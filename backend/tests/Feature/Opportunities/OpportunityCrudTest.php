@@ -4,6 +4,7 @@ use App\Models\BusinessFunction;
 use App\Models\Lead;
 use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
+use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Referent;
 use App\Models\Registry;
@@ -41,13 +42,18 @@ if (! function_exists('mandatoryOpportunityFks')) {
      * The mandatory create payload beyond `name`: `registry_id` (D-4),
      * `opportunity_status_id` (spec 0043, D-3), `supervisor_id`, plus a valid
      * one-row `product_lines` collection (user directive 2026-07-17: at least
-     * one row is required to create). Each a freshly created row. Tests
+     * one row is required to create) and a one-product `products_of_interest`
+     * collection FROM THAT ROW'S CATEGORY (user directive 2026-07-23: at least
+     * one product is required too — from the row's own category, so the
+     * mandatory payload never triggers OpportunityProductInterestWriter's
+     * cross-category product-line addition). Each a freshly created row. Tests
      * asserting a specific `product_lines` payload merge this helper FIRST
      * so their own value overrides it. User directive 2026-07-17:
-     * `company_id`/`company_site_id`/`operational_site_id` are REMOVED
-     * entirely, no longer part of this payload.
+     * `company_id`/`company_site_id` are REMOVED entirely; `operational_site_id`
+     * (spec 0056) is reintroduced but stays OPTIONAL, so it is still not part
+     * of this mandatory payload.
      *
-     * @return array{registry_id: int, opportunity_status_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{registry_id: int, opportunity_status_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>, products_of_interest: array<int, int>}
      */
     function mandatoryOpportunityFks(): array
     {
@@ -61,6 +67,7 @@ if (! function_exists('mandatoryOpportunityFks')) {
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],
+            'products_of_interest' => [Product::factory()->create(['category_id' => $category->id])->id],
         ];
     }
 }
@@ -68,23 +75,25 @@ if (! function_exists('mandatoryOpportunityFks')) {
 // ---------------------------------------------------------------------------
 // create (AC-012/AC-013/AC-014/AC-016/AC-017/AC-082 — mandatory fields are
 // name + registry_id + opportunity_status_id (spec 0043, D-3) + supervisor_id +
-// product_lines; company_id/company_site_id/operational_site_id were removed
-// by user directive 2026-07-17)
+// product_lines; company_id/company_site_id were removed by user directive
+// 2026-07-17; operational_site_id (spec 0056) is reintroduced, optional)
 // ---------------------------------------------------------------------------
 
 it('create: with the mandatory fields only -> 201, every optional scalar null (AC-082)', function () {
     $actor = opportunityUserWith(['create']);
     $fks = mandatoryOpportunityFks();
-    // product_lines is a to-many relation, not an `opportunities` column: it
-    // is asserted on the response/pivot, not via assertDatabaseHas.
-    $scalarFks = Arr::except($fks, 'product_lines');
+    // product_lines/products_of_interest are to-many relations, not
+    // `opportunities` columns: asserted on the response/pivot, never via
+    // assertDatabaseHas.
+    $scalarFks = Arr::except($fks, ['product_lines', 'products_of_interest']);
     Sanctum::actingAs($actor);
 
-    $response = $this->postJson('/api/opportunities', array_merge(['name' => 'Deal Alpha'], $fks))
+    $response = $this->postJson('/api/opportunities', $fks)
         ->assertCreated();
 
     $opportunityId = $response->json('data.id');
-    $this->assertDatabaseHas('opportunities', array_merge(['id' => $opportunityId, 'name' => 'Deal Alpha'], $scalarFks, [
+    // Spec 0057, D-5: name is derived (OPP_{id}), never a client input.
+    $this->assertDatabaseHas('opportunities', array_merge(['id' => $opportunityId, 'name' => 'OPP_'.$opportunityId], $scalarFks, [
         'referent_id' => null,
         'commercial_id' => null,
         'reporter_id' => null,
@@ -103,8 +112,7 @@ it('create: 201, response shape matches the frozen contract', function () {
     $supervisor = User::factory()->create(['name' => 'Sara Supervisor']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/opportunities', array_merge($fks, [
-        'name' => 'Deal Beta',
+    $response = $this->postJson('/api/opportunities', array_merge($fks, [
         'referent_id' => $referent->id,
         'supervisor_id' => $supervisor->id,
         'start_date' => '2026-02-01',
@@ -112,7 +120,6 @@ it('create: 201, response shape matches the frozen contract', function () {
         'expected_close_date' => '2026-06-01',
         'success_probability' => 60,
     ]))->assertCreated()
-        ->assertJsonPath('data.name', 'Deal Beta')
         ->assertJsonPath('data.registry', ['id' => $registry->id, 'name' => 'Acme Spa'])
         ->assertJsonPath('data.referent', ['id' => $referent->id, 'name' => 'Ada Contact'])
         ->assertJsonPath('data.supervisor', ['id' => $supervisor->id, 'name' => 'Sara Supervisor'])
@@ -123,18 +130,26 @@ it('create: 201, response shape matches the frozen contract', function () {
         ->assertJsonPath('data.locked_fields', []);
 
     $opportunity = Opportunity::sole();
+    // Spec 0057, D-5: name is derived (OPP_{id}), never the submitted value.
+    expect($response->json('data.name'))->toBe('OPP_'.$opportunity->id);
+    expect($opportunity->name)->toBe('OPP_'.$opportunity->id);
     expect($opportunity->start_date->format('Y-m-d'))->toBe('2026-02-01');
     expect($opportunity->expected_close_date->format('Y-m-d'))->toBe('2026-06-01');
 });
 
-it('create: missing name -> 422 on that field, no row created', function () {
+// Spec 0057, D-5: `name` is no longer a client input — it is always derived
+// as `OPP_{id}`, so a create payload carrying no `name` at all now succeeds
+// (requirement changed: this used to 422 on the missing field).
+it('create: name is derived as OPP_{id}, ignoring any submitted name', function () {
     $actor = opportunityUserWith(['create']);
     Sanctum::actingAs($actor);
 
-    $this->postJson('/api/opportunities', mandatoryOpportunityFks())
-        ->assertStatus(422)->assertJsonValidationErrors('name');
+    $response = $this->postJson('/api/opportunities', array_merge(['name' => 'Ignored'], mandatoryOpportunityFks()))
+        ->assertCreated();
 
-    expect(Opportunity::count())->toBe(0);
+    $opportunity = Opportunity::sole();
+    expect($opportunity->name)->toBe('OPP_'.$opportunity->id);
+    expect($response->json('data.name'))->toBe('OPP_'.$opportunity->id);
 });
 
 it('create: missing registry_id -> 422 on that field, no row created', function () {
@@ -375,6 +390,10 @@ it('exposes source/product_lines summaries', function () {
         'product_lines' => [
             ['business_function_id' => $businessFunction->id, 'product_category_id' => $productCategory->id],
         ],
+        // Overridden too: the helper's product belongs to the helper's own
+        // category, which this payload no longer declares — it would add a
+        // second product line.
+        'products_of_interest' => [Product::factory()->create(['category_id' => $productCategory->id])->id],
     ]))->assertCreated()
         ->assertJsonPath('data.source', ['id' => $source->id, 'name' => 'Fiera']);
 

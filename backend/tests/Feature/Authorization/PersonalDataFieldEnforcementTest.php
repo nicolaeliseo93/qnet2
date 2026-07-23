@@ -71,27 +71,27 @@ function lockedFieldPayload(array $overrides = []): array
 it('AC-006: locked personal_data.tax_code — a DIFFERENT submitted value is rejected (422), no write', function () {
     $actor = actorWithLockedField(['view', 'update'], 'personal_data.tax_code');
     $target = User::factory()->create();
-    PersonalData::factory()->individual()->for($target, 'personable')->create(['tax_code' => 'AAABBB11C22D333E']);
+    PersonalData::factory()->individual()->for($target, 'personable')->create(['tax_code' => 'LVLDAA80A01H501V']);
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/users/{$target->id}", [
-        'personal_data' => lockedFieldPayload(['tax_code' => 'ZZZYYY99X88W777V']),
+        'personal_data' => lockedFieldPayload(['tax_code' => 'LVLDAA85A01H501A']),
     ])->assertStatus(422)->assertJsonValidationErrors('personal_data.tax_code');
 
-    $this->assertDatabaseHas('personal_data', ['personable_id' => $target->id, 'tax_code' => 'AAABBB11C22D333E']);
+    $this->assertDatabaseHas('personal_data', ['personable_id' => $target->id, 'tax_code' => 'LVLDAA80A01H501V']);
 });
 
 it('AC-006: locked personal_data.tax_code — resubmitting the IDENTICAL value is a no-op (200)', function () {
     $actor = actorWithLockedField(['view', 'update'], 'personal_data.tax_code');
     $target = User::factory()->create();
-    PersonalData::factory()->individual()->for($target, 'personable')->create(['tax_code' => 'AAABBB11C22D333E']);
+    PersonalData::factory()->individual()->for($target, 'personable')->create(['tax_code' => 'LVLDAA80A01H501V']);
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/users/{$target->id}", [
-        'personal_data' => lockedFieldPayload(['tax_code' => 'AAABBB11C22D333E']),
+        'personal_data' => lockedFieldPayload(['tax_code' => 'LVLDAA80A01H501V']),
     ])->assertOk();
 
-    $this->assertDatabaseHas('personal_data', ['personable_id' => $target->id, 'tax_code' => 'AAABBB11C22D333E']);
+    $this->assertDatabaseHas('personal_data', ['personable_id' => $target->id, 'tax_code' => 'LVLDAA80A01H501V']);
 });
 
 it('AC-006: locked personal_data.birth_date (date cast) — a DIFFERENT date is rejected, the IDENTICAL date is a no-op', function () {
@@ -175,7 +175,7 @@ it('AC-006 (create): locked personal_data.tax_code — a non-empty submitted val
         'locale' => 'en',
         'password' => 'Str0ng-P4ssw0rd!',
         'password_confirmation' => 'Str0ng-P4ssw0rd!',
-        'personal_data' => lockedFieldPayload(['tax_code' => 'AAABBB11C22D333E']),
+        'personal_data' => lockedFieldPayload(['tax_code' => 'LVLDAA80A01H501V']),
     ])->assertStatus(422)->assertJsonValidationErrors('personal_data.tax_code');
 
     expect(User::where('email', 'new.person@example.com')->exists())->toBeFalse();

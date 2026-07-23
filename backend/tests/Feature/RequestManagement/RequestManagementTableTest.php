@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Note;
+use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\OpportunityWorkflowStatus;
 use App\Models\Registry;
@@ -106,12 +107,14 @@ it('403 without request-management.viewAny on rows/columns/values (AC-012)', fun
     $this->postJson('/api/tables/request-management/values', ['columnId' => 'workflow_status'])->assertForbidden();
 });
 
-it('the action catalogue never declares edit/delete, only view + notes + activity (AC-012)', function () {
-    // Requirement changed twice: spec 0052 B4b added `notes` (gated by
-    // request-management.view, D-6), then the D-7 amendment added `activity`
-    // (gated by request-management.viewActivity) — updated here rather than
-    // left asserting a stale exact list. `edit`/`delete` stay out: CRUD
-    // remains on `opportunities.*`.
+it('the action catalogue never declares edit, and hides delete from an actor without request-management.delete (AC-012)', function () {
+    // Requirement changed three times: spec 0052 B4b added `notes` (gated by
+    // request-management.view, D-6), the D-7 amendment added `activity`
+    // (gated by request-management.viewActivity), and the user directive
+    // 2026-07-23 added `delete` (gated by request-management.delete — this
+    // actor holds none of it, hence still absent here; the permitted case is
+    // covered in RequestManagementBulkActionsTest). `edit` stays out for
+    // good: create/edit remain on `opportunities.*`.
     $actor = requestManagementUserWith(['viewAny', 'view', 'viewActivity']);
     Sanctum::actingAs($actor);
 
@@ -256,6 +259,81 @@ it('rows: workflow_status carries color; operator_ga2 + client anagraphic column
         ->and($row['last_name'])->toBe('Rossi')
         ->and($row['tax_code'])->toBe('RSSMRA80A01H501U')
         ->and($row['phone'])->toBe('+39 02 1234567');
+});
+
+// ---------------------------------------------------------------------------
+// AC-012 (spec 0056) — operational_site sorts/filters (set + advanced) by
+// the site's PRIMARY address line1, "allo stesso modo" as the opportunities
+// grid (AC-009/010)
+// ---------------------------------------------------------------------------
+
+it('rows: sorting by operational_site orders requests by the site\'s primary address line1 (AC-012)', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    $siteA = OperationalSite::factory()->create();
+    $siteA->addresses()->create(['line1' => 'Alpha Street', 'is_primary' => true]);
+    $siteB = OperationalSite::factory()->create();
+    $siteB->addresses()->create(['line1' => 'Zulu Street', 'is_primary' => true]);
+    $opportunityZulu = Opportunity::factory()->create(['operational_site_id' => $siteB->id]);
+    $opportunityAlpha = Opportunity::factory()->create(['operational_site_id' => $siteA->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'sortModel' => [['colId' => 'operational_site', 'sort' => 'asc']],
+    ])->assertOk();
+
+    $ids = collect($response->json('items'))->pluck('id');
+    expect($ids->all())->toBe([$opportunityAlpha->id, $opportunityZulu->id]);
+});
+
+it('rows: a set filter on operational_site matches the site\'s primary address line1, bound (AC-012)', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    $site = OperationalSite::factory()->create();
+    $site->addresses()->create(['line1' => 'Via Roma 1', 'is_primary' => true]);
+    $matching = Opportunity::factory()->create(['operational_site_id' => $site->id]);
+    Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'filterModel' => ['operational_site' => ['filterType' => 'set', 'values' => ['Via Roma 1']]],
+    ])->assertOk();
+
+    expect(collect($response->json('items'))->pluck('id')->all())->toBe([$matching->id]);
+});
+
+it('rows: the operational_site advanced (text) filter matches a substring of the primary address line1 (AC-012)', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    $site = OperationalSite::factory()->create();
+    $site->addresses()->create(['line1' => 'Corso Milano 10', 'is_primary' => true]);
+    $matching = Opportunity::factory()->create(['operational_site_id' => $site->id]);
+    Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', [
+        'startRow' => 0,
+        'endRow' => 25,
+        'advancedFilters' => ['operational_site' => 'Milano'],
+    ])->assertOk();
+
+    expect(collect($response->json('items'))->pluck('id')->all())->toBe([$matching->id]);
+});
+
+it('rows: operational_site is the composed "{line1} - {city}" label (AC-015), no "[object Object]"', function () {
+    $actor = requestManagementUserWith(['viewAny', 'viewAll']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    $site->addresses()->first()->update(['line1' => 'Via Roma 1']);
+    $opportunity = Opportunity::factory()->create(['operational_site_id' => $site->id]);
+    Sanctum::actingAs($actor);
+
+    $response = $this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])->assertOk();
+    $row = collect($response->json('items'))->firstWhere('id', $opportunity->id);
+
+    expect($row['operational_site'])->toBeArray()
+        ->and($row['operational_site']['id'])->toBe($site->id)
+        ->and($row['operational_site']['label'])->toStartWith('Via Roma 1 - ');
 });
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 use App\Models\BusinessFunction;
 use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
+use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Registry;
 use App\Models\User;
@@ -88,6 +89,9 @@ it('create: multiple product_lines rows persist, same business function with dif
             ['business_function_id' => $businessFunction->id, 'product_category_id' => $categoryOne->id],
             ['business_function_id' => $businessFunction->id, 'product_category_id' => $categoryTwo->id],
         ],
+        // Mandatory since 2026-07-23; taken from a submitted category so it
+        // adds no product line of its own.
+        'products_of_interest' => [Product::factory()->create(['category_id' => $categoryOne->id])->id],
     ]))->assertCreated();
 
     $opportunityId = $response->json('data.id');
@@ -160,6 +164,7 @@ it('update: product_lines is a full-replace sync (AC-099)', function () {
         'product_lines' => [
             ['business_function_id' => $businessFunction->id, 'product_category_id' => $categoryOne->id],
         ],
+        'products_of_interest' => [Product::factory()->create(['category_id' => $categoryOne->id])->id],
     ]))->assertCreated();
     $opportunityId = $created->json('data.id');
 
@@ -187,6 +192,7 @@ it('update: product_lines: [] -> 422, the existing rows are kept (user directive
         'product_lines' => [
             ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
         ],
+        'products_of_interest' => [Product::factory()->create(['category_id' => $category->id])->id],
     ]))->assertCreated();
     $opportunityId = $created->json('data.id');
 
@@ -210,6 +216,7 @@ it('update: omitting product_lines leaves the existing rows untouched (partial P
         'product_lines' => [
             ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
         ],
+        'products_of_interest' => [Product::factory()->create(['category_id' => $category->id])->id],
     ]))->assertCreated();
     $opportunityId = $created->json('data.id');
 
@@ -232,6 +239,7 @@ it('delete: cascades the opportunity\'s own product line rows', function () {
         'product_lines' => [
             ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
         ],
+        'products_of_interest' => [Product::factory()->create(['category_id' => $category->id])->id],
     ]))->assertCreated();
     $opportunityId = $created->json('data.id');
 

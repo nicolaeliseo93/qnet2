@@ -121,12 +121,22 @@ export interface TableColumn {
    * Overrides the `type`-driven cell editor lookup (spec 0054 D-7, extended by
    * 0055 D-1): `relation` is a `/for-select`-fed picker, `select` a dropdown
    * over the column's own backend-resolved `options`, `datetime` a date+time
-   * picker. Declared per column by the backend; a column without it keeps
-   * resolving its editor from `type`, unchanged.
+   * picker, `multiselect` (user directive 2026-07-23) the to-many `/for-select`
+   * picker whose value is the whole id collection. Declared per column by the
+   * backend; a column without it keeps resolving its editor from `type`,
+   * unchanged.
    */
-  editor?: 'relation' | 'select' | 'datetime'
-  /** The `/for-select` resource backing a `relation` editor (spec 0054 D-1). */
-  relation?: { resource: string }
+  editor?: 'relation' | 'select' | 'datetime' | 'multiselect'
+  /**
+   * The `/for-select` resource backing a `relation` editor (spec 0054 D-1),
+   * plus the OPTIONAL row-scoped narrowing of its option list (user directive
+   * 2026-07-23): `scope` maps a `/for-select` param name to the id of the
+   * column whose value on the EDITED ROW supplies it — e.g. `{
+   * operational_site_id: 'operational_site' }` makes the operator picker offer
+   * only the users of that row's own site. Absent (or a row whose scope column
+   * is empty) ⇒ the unfiltered list, unchanged.
+   */
+  relation?: { resource: string; scope?: Record<string, string> }
   /**
    * Whether the column supports a Set Filter value list (POST /values). `false`
    * for computed/derived columns without a queryable value list (e.g. a

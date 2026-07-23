@@ -51,6 +51,13 @@ export const personalData = {
     lastNameRequired: 'Last name is required.',
     companyNameRequired: 'Company name is required.',
     birthDateFuture: 'The date of birth cannot be in the future.',
+    taxCodeInvalid: 'The tax code is not valid.',
+    companyTaxCodeInvalid: "A company's tax code must be 11 valid digits.",
+    taxCodeLastNameMismatch: 'The tax code does not match the last name.',
+    taxCodeFirstNameMismatch: 'The tax code does not match the first name.',
+    taxCodeBirthDateMismatch: 'The tax code does not match the date of birth.',
+    taxCodeGenderMismatch: 'The tax code does not match the gender.',
+    vatNumberInvalid: 'The VAT number is not valid.',
   },
   contacts: {
     title: 'Contacts',

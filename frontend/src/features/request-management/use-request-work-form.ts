@@ -90,6 +90,7 @@ function buildDefaultValues(panel: RequestWorkPanelWithPermissions): RequestWork
     source_id: panel.source_id,
     reporter_id: panel.reporter_id,
     operator_id: panel.operator_id,
+    operational_site_id: panel.operational_site_id,
   }
 }
 
@@ -127,6 +128,7 @@ export function useRequestWorkForm(panel: RequestWorkPanelWithPermissions) {
     'source_id' as Path<RequestWorkFormValues>,
     'reporter_id' as Path<RequestWorkFormValues>,
     'operator_id' as Path<RequestWorkFormValues>,
+    'operational_site_id' as Path<RequestWorkFormValues>,
     ...panel.applicable_attributes.map(
       (attribute) => `attribute_values.${attribute.code}` as Path<RequestWorkFormValues>,
     ),

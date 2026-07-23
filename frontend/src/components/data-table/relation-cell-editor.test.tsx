@@ -135,6 +135,65 @@ describe('RelationCellEditor', () => {
     expect(props.stopEditing).toHaveBeenCalledTimes(1)
   })
 
+  // Row-scoped narrowing (user directive 2026-07-23): the operator picker of a
+  // request must offer only the users of THAT request's operational site.
+  describe('row-scoped option list (`scope`)', () => {
+    const SCOPE = { operational_site_id: 'operational_site' }
+
+    it('sends the scope column value of the edited row as a /for-select param', async () => {
+      fetchForSelectMock.mockResolvedValue(page([{ id: 1, label: 'Mario Rossi' }]))
+      renderEditor({
+        scope: SCOPE,
+        data: { id: 7, actions: [], operational_site: { id: 42, label: 'Via Roma 1 - Milano' } },
+      } as Partial<CustomCellEditorProps<TableRow, RelationCellValue | null>>)
+
+      await waitFor(() =>
+        expect(fetchForSelectMock).toHaveBeenCalledWith(
+          'users',
+          expect.objectContaining({ params: { operational_site_id: 42 } }),
+        ),
+      )
+    })
+
+    it('accepts a bare id in the scope column', async () => {
+      fetchForSelectMock.mockResolvedValue(page([{ id: 1, label: 'Mario Rossi' }]))
+      renderEditor({
+        scope: SCOPE,
+        data: { id: 7, actions: [], operational_site: 42 },
+      } as Partial<CustomCellEditorProps<TableRow, RelationCellValue | null>>)
+
+      await waitFor(() =>
+        expect(fetchForSelectMock).toHaveBeenCalledWith(
+          'users',
+          expect.objectContaining({ params: { operational_site_id: 42 } }),
+        ),
+      )
+    })
+
+    it('sends NO param when the row has no value for the scope column — full list, never a junk filter', async () => {
+      fetchForSelectMock.mockResolvedValue(page([{ id: 1, label: 'Mario Rossi' }]))
+      renderEditor({
+        scope: SCOPE,
+        data: { id: 7, actions: [], operational_site: null },
+      } as Partial<CustomCellEditorProps<TableRow, RelationCellValue | null>>)
+
+      await waitFor(() =>
+        expect(fetchForSelectMock).toHaveBeenCalledWith('users', expect.objectContaining({ params: undefined })),
+      )
+    })
+
+    it('sends no param when the column declares no scope at all', async () => {
+      fetchForSelectMock.mockResolvedValue(page([{ id: 1, label: 'Mario Rossi' }]))
+      renderEditor({
+        data: { id: 7, actions: [], operational_site: { id: 42, label: 'Via Roma 1 - Milano' } },
+      } as Partial<CustomCellEditorProps<TableRow, RelationCellValue | null>>)
+
+      await waitFor(() =>
+        expect(fetchForSelectMock).toHaveBeenCalledWith('users', expect.objectContaining({ params: undefined })),
+      )
+    })
+  })
+
   it('never commits or stops editing on its own on Escape — the component wires no handler for it, leaving AG Grid\'s own cancel path untouched', () => {
     fetchForSelectMock.mockResolvedValue(page([{ id: 1, label: 'Mario Rossi' }]))
     const props = renderEditor()

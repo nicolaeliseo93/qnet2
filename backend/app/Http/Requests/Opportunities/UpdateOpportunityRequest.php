@@ -18,9 +18,9 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates the payload for PUT/PATCH /api/opportunities/{opportunity}
- * (spec 0040). Every field is `sometimes` (partial PATCH), never null once
- * touched for `name` (mandatory) — `opportunity_status_id` (spec 0043, D-3)
- * joins that never-null set: `sometimes|required`, the FK cannot be cleared.
+ * (spec 0040). Every field is `sometimes` (partial PATCH) —
+ * `opportunity_status_id` (spec 0043, D-3) is never null once touched:
+ * `sometimes|required`, the FK cannot be cleared.
  * `lead_id` is ALWAYS `prohibited` (BR-2,
  * immutable once set). When $opportunity carries a `lead_id`, its 2
  * BR-1-derivable fields are re-resolved against the CURRENT lead/campaign
@@ -43,7 +43,13 @@ use Illuminate\Validation\Rule;
  * 2026-07-17: `product_lines` may be OMITTED (partial PATCH, rows untouched)
  * but may NOT be cleared to `[]` (`min:1`) — an opportunity always keeps at
  * least one {business_function_id, product_category_id} row.
- * `company_id`/`company_site_id`/`operational_site_id` are REMOVED entirely.
+ * `company_id`/`company_site_id` are REMOVED entirely. Spec 0056: unlike
+ * those two, `operational_site_id` is reintroduced as a plain, optional,
+ * `sometimes|nullable` FK, clearable to null like every other unlocked
+ * scalar (AC-004).
+ *
+ * Spec 0057, D-5: `name` is REMOVED entirely — immutable once derived at
+ * create (`OPP_{id}`), never part of a PATCH payload.
  */
 class UpdateOpportunityRequest extends FormRequest
 {
@@ -68,13 +74,14 @@ class UpdateOpportunityRequest extends FormRequest
         $locked = $this->currentLockedValues($opportunity);
 
         return array_merge([
-            'name' => ['sometimes', 'required', 'string', 'max:255'],
             'registry_id' => $this->lockableRule($locked, 'registry_id', 'registries'),
             'referent_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
             'commercial_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
             'reporter_id' => ['sometimes', 'nullable', 'integer', Rule::exists('referents', 'id')],
             'supervisor_id' => ['sometimes', 'nullable', 'integer', Rule::exists('users', 'id')],
             'source_id' => $this->lockableRule($locked, 'source_id', 'sources'),
+            // Spec 0056: a plain, optional relation — never derivable/locked.
+            'operational_site_id' => ['sometimes', 'nullable', 'integer', Rule::exists('operational_sites', 'id')],
             'opportunity_status_id' => ['sometimes', 'required', 'integer', Rule::exists('opportunity_statuses', 'id')],
             'lead_id' => ['prohibited'],
             'start_date' => ['sometimes', 'nullable', 'date'],
@@ -87,13 +94,14 @@ class UpdateOpportunityRequest extends FormRequest
             // in withValidator, against the RESOLVED (possibly changed) set.
             'state_id' => ['sometimes', 'nullable', 'integer', Rule::exists('states', 'id')],
             'opportunity_workflow_status_id' => ['sometimes', 'nullable', 'integer', Rule::exists('opportunity_workflow_statuses', 'id')],
-            // "Prodotti di interesse" (user directive 2026-07-22): the whole
-            // collection is replaced when submitted (`[]` clears it). A product
+            // "Prodotti di interesse": MANDATORY (user directive 2026-07-23),
+            // mirroring `product_lines`' own partial-PATCH shape — the key may
+            // be omitted (untouched), but never cleared to `[]`. A product
             // outside the opportunity's product-line categories is ACCEPTED on
             // purpose — OpportunityProductInterestWriter adds the matching row
             // to `product_lines`, which is what the form warns about before
             // unlocking the picker.
-            'products_of_interest' => ['sometimes', 'array'],
+            'products_of_interest' => ['sometimes', 'array', 'min:1'],
             'products_of_interest.*' => ['integer', Rule::exists('products', 'id')],
         ], $this->managerSlotsRules(), $this->productLinesRules(required: false));
     }

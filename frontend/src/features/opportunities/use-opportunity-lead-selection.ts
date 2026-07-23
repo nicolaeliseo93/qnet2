@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { UseFormGetValues, UseFormSetValue } from 'react-hook-form'
 import type { RelationFieldRef } from '@/components/form/relation-select-field'
+import { toRelationFieldRef } from '@/components/form/relation-field-ref'
 import { fetchOpportunityDefaultsOnce } from '@/features/opportunities/opportunity-defaults-api'
-import { composeProductLinesName } from '@/features/opportunities/opportunity-product-line-name'
-import type { OpportunityNameAutofill } from '@/features/opportunities/use-opportunity-name-autofill'
 import type { OpportunityProductLine } from '@/features/opportunities/types'
 import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
 
@@ -14,8 +13,7 @@ import type { OpportunityFormValues } from '@/features/opportunities/use-opportu
  * anagrafica-scoped pick (BR-4 spec 0040), never derived/locked by the lead.
  * `business_function_id`/`product_category_id` are NOT single fields anymore
  * (spec 0040 amendment rev.3): the lead's derived function+category, when
- * both exist, seeds `product_lines` instead (handled separately below,
- * alongside the name auto-fill).
+ * both exist, seeds `product_lines` instead (handled separately below).
  */
 const DERIVED_FIELDS = ['source_id', 'registry_id'] as const
 
@@ -28,6 +26,12 @@ export interface OpportunityLeadSelectionState {
   /** The lead's anagrafica (its identity, spec 0041 D-3): the single source for both the Lead select's own trigger label and the registry picker's. */
   registry: RelationFieldRef | null
   /**
+   * Directive 2026-07-23: the Sede operativa inherited from the lead, set on
+   * a successful selection so the site picker's trigger shows its label the
+   * same way `registry` does — `setValue` alone writes the id, not the label.
+   */
+  operationalSite: RelationFieldRef | null
+  /**
    * Directive 2026-07-21: the lead's Operator, set ONLY when this selection
    * just appended it as a new "Gestore Account" slot — `null` otherwise (the
    * Operator was already among the slots, or the lead has none). Feeds the
@@ -39,8 +43,8 @@ export interface OpportunityLeadSelectionState {
    * The lead's derived product line (spec 0040 amendment rev.3, AC-102/103),
    * 0 or 1 row: seeded into `product_lines` on a successful selection,
    * editable and removable like any other row. Kept here (not just written
-   * to the form) so `OpportunityProductLinesField` can resolve its label
-   * without a redundant fetch.
+   * to the form) so the shared `ProductLinesField` (spec 0057) can resolve
+   * its label without a redundant fetch.
    */
   derivedProductLines: OpportunityProductLine[]
   /** True while the one-shot defaults fetch triggered by a fresh selection is in flight. */
@@ -54,6 +58,7 @@ const EMPTY_STATE: OpportunityLeadSelectionState = {
   lockedFields: [],
   existingOpportunityId: null,
   registry: null,
+  operationalSite: null,
   managers: null,
   derivedProductLines: [],
   isApplying: false,
@@ -92,7 +97,6 @@ export function useOpportunityLeadSelection(
   initial: OpportunityLeadSelectionInitial | null,
   setValue: UseFormSetValue<OpportunityFormValues>,
   getValues: UseFormGetValues<OpportunityFormValues>,
-  nameAutofill: OpportunityNameAutofill,
 ) {
   const queryClient = useQueryClient()
   const [state, setState] = useState<OpportunityLeadSelectionState>(() =>
@@ -115,17 +119,16 @@ export function useOpportunityLeadSelection(
       })),
       { shouldDirty: true },
     )
-    if (nameAutofill.isAuto()) {
-      setValue('name', composeProductLinesName(lines.map((line) => line.product_category.name)), {
-        shouldDirty: true,
-      })
-    }
   }
 
   const clearDerivedFields = () => {
     for (const field of DERIVED_FIELDS) {
       setValue(field, null, { shouldDirty: true })
     }
+    // Directive 2026-07-23: the inherited Sede operativa follows the same
+    // whole-field reset as the other lead-seeded values when the selection is
+    // cleared, even though it is never locked.
+    setValue('operational_site_id', null, { shouldDirty: true })
     applyProductLines([])
   }
 
@@ -152,6 +155,9 @@ export function useOpportunityLeadSelection(
 
       setValue('source_id', defaults.values.source_id, { shouldDirty: true })
       setValue('registry_id', defaults.values.registry_id, { shouldDirty: true })
+      // Directive 2026-07-23: the Sede operativa is inherited from the lead,
+      // editable afterwards like any plain field.
+      setValue('operational_site_id', defaults.values.operational_site_id, { shouldDirty: true })
       applyProductLines(defaults.product_lines)
 
       // Directive 2026-07-22: append the lead's Operator as a new "Gestore
@@ -173,6 +179,7 @@ export function useOpportunityLeadSelection(
         lockedFields: defaults.locked_fields,
         existingOpportunityId: null,
         registry: defaults.references.registry,
+        operationalSite: toRelationFieldRef(defaults.references.operational_site),
         managers,
         derivedProductLines: defaults.product_lines,
         isApplying: false,

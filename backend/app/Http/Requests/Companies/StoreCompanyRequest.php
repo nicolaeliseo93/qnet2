@@ -4,6 +4,8 @@ namespace App\Http\Requests\Companies;
 
 use App\DataObjects\Companies\CreateCompanyData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
+use App\Rules\VatNumber;
+use App\Support\InputFormat;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
@@ -30,13 +32,25 @@ class StoreCompanyRequest extends FormRequest
     }
 
     /**
+     * Canonicalize the typed VAT number before the rules run (user directive
+     * 2026-07-23): the same code typed `IT 12345678901` or `12345678901`
+     * is stored identically here and on the personal-data card.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('vat_number'))) {
+            $this->merge(['vat_number' => InputFormat::vatNumber($this->string('vat_number')->toString())]);
+        }
+    }
+
+    /**
      * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
         return [
             'denomination' => ['required', 'string', 'max:255'],
-            'vat_number' => ['nullable', 'string', 'max:50'],
+            'vat_number' => ['nullable', 'string', 'max:50', new VatNumber],
 
             // Address: present key (even empty) is authoritative.
             'address' => ['sometimes', 'nullable', 'array'],

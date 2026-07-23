@@ -22,6 +22,7 @@ import { projects } from './it-projects'
 import { campaigns } from './it-campaigns'
 import { leads } from './it-leads'
 import { opportunities } from './it-opportunities'
+import { productLines } from './it-product-lines'
 import { opportunityStatuses } from './it-opportunity-statuses'
 import { opportunityWorkflows } from './it-opportunity-workflows'
 import { requestManagement } from './it-request-management'
@@ -463,6 +464,7 @@ export const it: TranslationResources = {
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
   opportunities: { ...opportunities, stats: moduleStats.opportunities },
+  productLines,
   opportunityStatuses,
   opportunityWorkflows,
   requestManagement,

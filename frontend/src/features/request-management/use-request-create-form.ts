@@ -1,0 +1,160 @@
+import { useMemo, useState } from 'react'
+import { useForm, useWatch } from 'react-hook-form'
+import type { Path } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslation } from 'react-i18next'
+import axios from 'axios'
+import { toast } from 'sonner'
+import { applyServerValidationErrors } from '@/features/auth/form-errors'
+import { areCreateContactsValid, isCreateAddressValid } from '@/features/personal-data/create-validation'
+import { emptyPersonalDataDraft } from '@/features/personal-data/drafts'
+import { buildPersonalDataSchema } from '@/features/personal-data/personal-data-schema'
+import type { AddressDraft, ContactDraft, PersonalDataDraft } from '@/features/personal-data/types'
+import { createRequest } from '@/features/request-management/api'
+import { buildRequestCreatePayload } from '@/features/request-management/request-create-payload'
+import {
+  buildRequestCreateSchema,
+  type RequestCreateFormValues,
+} from '@/features/request-management/request-create-schema'
+
+interface UseRequestCreateFormArgs {
+  /** Called after a successful create with the new request's (Opportunity) id. */
+  onSuccess: (id: number) => void
+}
+
+/** Server-side field names mapped directly onto an RHF field. */
+const SCALAR_ERROR_FIELDS: Path<RequestCreateFormValues>[] = ['registry_id']
+
+/** 422 error groups whose sections live OUTSIDE this form's RHF tree (see below). */
+const CLIENT_ERROR_PREFIXES = ['client_identity', 'client_contacts', 'client_address']
+const PRODUCT_LINES_ERROR_PREFIXES = ['product_lines']
+
+/**
+ * Collects every 422 message whose key is one of `prefixes` (exact) or starts
+ * with `${prefix}.` (nested/indexed), joined into a single banner string —
+ * mirrors `personalDataServerErrorMessage` (`use-registry-form.ts`): the
+ * reused anagraphic/product-lines components are not RHF-connected to this
+ * form's `client_*`/`product_lines.<index>` paths, so their server errors
+ * cannot be routed inline field-by-field and surface as a block banner
+ * instead (AC-016 — mapped, not silently dropped).
+ */
+function collectPrefixedServerErrors(error: unknown, prefixes: string[]): string | null {
+  if (!axios.isAxiosError(error) || error.response?.status !== 422) {
+    return null
+  }
+  const errors = error.response.data?.errors as Record<string, string[]> | undefined
+  if (!errors) {
+    return null
+  }
+  const messages = Object.entries(errors)
+    .filter(([key]) => prefixes.some((prefix) => key === prefix || key.startsWith(`${prefix}.`)))
+    .flatMap(([, fieldMessages]) => fieldMessages)
+  return messages.length > 0 ? messages.join(' ') : null
+}
+
+/**
+ * Owns the create form's RHF/Zod wiring (`registry_id`/`product_lines`) plus
+ * the buffered client-identity/contacts/address draft (D-2, mirrors
+ * `useRegistryForm`'s `profileDraft`): the two anagrafica sources are
+ * mutually exclusive, so picking a registry makes the buffer irrelevant
+ * without needing to clear it. Submitting builds the frozen
+ * `POST /api/request-management` payload (`buildRequestCreatePayload`) and
+ * maps the response back onto the caller's `onSuccess(id)` — table refresh /
+ * navigation is the caller's concern (mirrors every other `ModuleFormScreen`).
+ */
+export function useRequestCreateForm({ onSuccess }: UseRequestCreateFormArgs) {
+  const { t } = useTranslation()
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [clientBlockError, setClientBlockError] = useState<string | null>(null)
+  const [productLinesError, setProductLinesError] = useState<string | null>(null)
+  const [identityDraft, setIdentityDraft] = useState<PersonalDataDraft>(() => emptyPersonalDataDraft())
+  const [contactsDraft, setContactsDraft] = useState<ContactDraft[]>([])
+  const [addressDraft, setAddressDraft] = useState<AddressDraft[]>([])
+
+  const schema = useMemo(() => buildRequestCreateSchema(t), [t])
+  const form = useForm<RequestCreateFormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { registry_id: null, product_lines: [] },
+  })
+
+  const registryId = useWatch({ control: form.control, name: 'registry_id' })
+  const usingExistingRegistry = registryId !== null
+
+  // The card is mandatory only on the "new client" branch (D-2): block the
+  // save until its required-by-type fields validate, mirroring the
+  // registries create form's own `profileValid` gate.
+  const identityValid = useMemo(
+    () =>
+      usingExistingRegistry ||
+      buildPersonalDataSchema(t).safeParse({
+        type: identityDraft.type,
+        first_name: identityDraft.first_name ?? undefined,
+        last_name: identityDraft.last_name ?? undefined,
+        company_name: identityDraft.company_name ?? undefined,
+        tax_code: identityDraft.tax_code ?? undefined,
+        vat_number: identityDraft.vat_number ?? undefined,
+        birth_date: identityDraft.birth_date ?? undefined,
+      }).success,
+    [usingExistingRegistry, identityDraft, t],
+  )
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setServerError(null)
+    setClientBlockError(null)
+    setProductLinesError(null)
+
+    if (!usingExistingRegistry) {
+      if (!identityValid) {
+        setClientBlockError(t('requestManagement.form.create.errors.identityIncomplete'))
+        return
+      }
+      if (!isCreateAddressValid(addressDraft)) {
+        setClientBlockError(t('requestManagement.form.create.errors.addressIncomplete'))
+        return
+      }
+      if (!areCreateContactsValid(contactsDraft, t)) {
+        setClientBlockError(t('requestManagement.form.create.errors.contactsInvalid'))
+        return
+      }
+    }
+
+    const payload = buildRequestCreatePayload({
+      registryId: values.registry_id,
+      identity: identityDraft,
+      contacts: contactsDraft,
+      address: addressDraft[0] ?? null,
+      productLines: values.product_lines,
+    })
+
+    try {
+      const created = await createRequest(payload)
+      toast.success(t('requestManagement.form.create.success'))
+      onSuccess(created.id)
+    } catch (error) {
+      const mappedScalar = applyServerValidationErrors(error, form.setError, SCALAR_ERROR_FIELDS)
+      const clientMessage = collectPrefixedServerErrors(error, CLIENT_ERROR_PREFIXES)
+      const productLinesMessage = collectPrefixedServerErrors(error, PRODUCT_LINES_ERROR_PREFIXES)
+      setClientBlockError(clientMessage)
+      setProductLinesError(productLinesMessage)
+      if (!mappedScalar && !clientMessage && !productLinesMessage) {
+        setServerError(t('requestManagement.form.create.errors.generic'))
+      }
+    }
+  })
+
+  return {
+    form,
+    onSubmit,
+    isSubmitting: form.formState.isSubmitting,
+    usingExistingRegistry,
+    identityDraft,
+    setIdentityDraft,
+    contactsDraft,
+    setContactsDraft,
+    addressDraft,
+    setAddressDraft,
+    serverError,
+    clientBlockError,
+    productLinesError,
+  }
+}

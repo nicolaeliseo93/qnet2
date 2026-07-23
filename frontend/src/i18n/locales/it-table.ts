@@ -86,6 +86,22 @@ export const table = {
     retry: 'Riprova',
     loadMore: 'Carica altri',
   },
+  multiSelectEditor: {
+    list: 'Scegli uno o più valori',
+    searchPlaceholder: 'Cerca…',
+    empty: 'Nessun risultato.',
+    error: 'Impossibile caricare le opzioni.',
+    retry: 'Riprova',
+    loadMore: 'Carica altri',
+    noScope: 'Questa riga non ha ancora un ambito: sblocca il catalogo completo per scegliere.',
+    hintScoped: 'Solo le opzioni dell\'ambito di questa riga.',
+    hintUnlocked: "Catalogo completo: una scelta fuori ambito estenderà l'ambito della riga.",
+    unlock: 'Mostra tutto',
+    relock: "Limita all'ambito della riga",
+    unlockTitle: 'Mostrare tutto il catalogo?',
+    unlockDescription:
+      "Scegliendo un elemento fuori dall'ambito di questa riga, quell'ambito verrà esteso automaticamente per includerlo.",
+  },
   selectEditor: {
     list: 'Scegli un valore',
     empty: 'Nessun valore disponibile per questa riga.',

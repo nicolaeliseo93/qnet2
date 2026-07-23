@@ -47,7 +47,7 @@ export type { CellRenderer }
 // Register enterprise modules + license once, at module load.
 setupAgGrid()
 
-/** Column id of the synthetic, right-pinned row-actions column. */
+/** Column id of the synthetic, left-pinned row-actions column. */
 export const ACTIONS_COLUMN_ID = '__actions'
 
 /** Default minimum width for data columns without an explicit backend width. */
@@ -94,7 +94,7 @@ const SIDE_BAR: SideBarDef = {
  * Per-cell loading placeholder shown while an SSRM block streams in. Because AG
  * Grid renders it once per cell of every loading row, the skeleton naturally
  * follows the column layout (one bar per column) without us knowing the data.
- * The trailing actions column gets a narrower bar so the row reads as content.
+ * The leading actions column gets a narrower bar so the row reads as content.
  */
 export function SkeletonLoadingCell({ colDef }: ICellRendererParams) {
   const width = colDef?.colId === ACTIONS_COLUMN_ID ? 'w-12' : 'w-[70%]'
@@ -123,7 +123,7 @@ export function TableEmptyOverlay() {
   )
 }
 
-/** Renders the per-row actions cell (right-most column). */
+/** Renders the per-row actions cell (left-most column). */
 export type RowActionsRenderer = (params: ICellRendererParams) => React.ReactNode
 
 interface DataTableProps {
@@ -142,7 +142,7 @@ interface DataTableProps {
   blockSize: number
   /** Optional map columnId → custom cell renderer (badges, links, formatting). */
   cellRenderers?: Record<string, CellRenderer>
-  /** Optional renderer for the trailing row-actions column. */
+  /** Optional renderer for the leading row-actions column. */
   renderRowActions?: RowActionsRenderer
   /** i18n key for the action column header. */
   actionsHeaderLabel?: string
@@ -302,13 +302,15 @@ export function DataTable({
       const actionsWidth = actionsColumnHasOverflow
         ? ACTIONS_COLUMN_WIDTH_WITH_OVERFLOW
         : ACTIONS_COLUMN_WIDTH
-      mapped.push({
+      // Leading column: pinned left and placed before every data column so the
+      // row actions stay reachable without scrolling to the end of a wide table.
+      mapped.unshift({
         colId: ACTIONS_COLUMN_ID,
         headerName: actionsHeaderLabel ? t(actionsHeaderLabel) : '',
         sortable: false,
         filter: false,
         resizable: false,
-        pinned: 'right',
+        pinned: 'left',
         width: actionsWidth,
         minWidth: actionsWidth,
         flex: 0,
@@ -458,6 +460,11 @@ export function DataTable({
       // reloads; only wired when selection is actually enabled.
       getRowId: enableSelection ? getRowId : undefined,
       rowSelection,
+      // The checkbox column defaults to unpinned: with the actions column pinned
+      // left it would otherwise land to its RIGHT, in the scrollable section.
+      // Pinning it keeps it first (its `lockPosition: 'left'` orders it before
+      // the actions column inside the pinned-left section).
+      selectionColumnDef: { pinned: 'left' },
       // Inline cell editing (spec 0053, D-9): single click, Enter/blur commits.
       singleClickEdit: true,
       stopEditingWhenCellsLoseFocus: true,

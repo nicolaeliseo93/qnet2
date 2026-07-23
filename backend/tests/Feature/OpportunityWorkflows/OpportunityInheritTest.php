@@ -8,6 +8,7 @@ use App\Models\Opportunity;
 use App\Models\OpportunityStatus;
 use App\Models\OpportunityWorkflow;
 use App\Models\OpportunityWorkflowStatus;
+use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Registry;
 use App\Models\Source;
@@ -51,7 +52,7 @@ if (! function_exists('baseOpportunityWorkflowFks')) {
      * mandatoryOpportunityFks, redeclared here to keep this file self-contained
      * and independent of that file's load order).
      *
-     * @return array{registry_id: int, opportunity_status_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>}
+     * @return array{registry_id: int, opportunity_status_id: int, supervisor_id: int, product_lines: array<int, array{business_function_id: int, product_category_id: int}>, products_of_interest: array<int, int>}
      */
     function baseOpportunityWorkflowFks(): array
     {
@@ -65,6 +66,10 @@ if (! function_exists('baseOpportunityWorkflowFks')) {
             'product_lines' => [
                 ['business_function_id' => $businessFunction->id, 'product_category_id' => $category->id],
             ],
+            // User directive 2026-07-23: products_of_interest is mandatory too;
+            // the product belongs to the row's OWN category, so this payload
+            // never triggers a cross-category product-line addition.
+            'products_of_interest' => [Product::factory()->create(['category_id' => $category->id])->id],
         ];
     }
 }

@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\OperationalSite;
 use App\Models\Opportunity;
 use App\Models\Referent;
+use App\Models\Role;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -14,7 +16,8 @@ use Spatie\Permission\Models\Permission;
  * "Operatore" (`operator_id`, the `opportunity_user` row at pivot position
  * Opportunity::OPERATOR_MANAGER_POSITION) are readable AND writable from
  * GET/PATCH /api/request-management/{opportunity}, sparse like every other
- * key of that endpoint.
+ * key of that endpoint. Spec 0056 joins the same block with "Sede operativa"
+ * (`operational_site_id`), AC-011/013/014.
  */
 uses(RefreshDatabase::class);
 
@@ -224,4 +227,114 @@ it('denies the attribution write to an actor outside the D-3 scope', function ()
         ->assertStatus(403);
 
     expect($opportunity->fresh()->source_id)->toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// Sede operativa (spec 0056, AC-011/013/014) — same attribution block
+// ---------------------------------------------------------------------------
+
+it('GET exposes the Sede operativa {id, label}, and null when unset (AC-011)', function () {
+    $actor = attributionActor();
+    $actor->givePermissionTo(Permission::findOrCreate('operational-sites.viewAny'));
+    $site = OperationalSite::factory()->withAddress()->create();
+    $opportunity = attributionOpportunity($actor);
+    $opportunity->update(['operational_site_id' => $site->id]);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/request-management/{$opportunity->id}")
+        ->assertOk()
+        ->assertJsonPath('data.operational_site_id', $site->id)
+        ->assertJsonPath('data.operational_site.id', $site->id);
+});
+
+it('PATCH persists the Sede operativa and echoes it back (AC-011)', function () {
+    $actor = attributionActor();
+    $actor->givePermissionTo(Permission::findOrCreate('operational-sites.viewAny'));
+    $opportunity = attributionOpportunity($actor);
+    $site = OperationalSite::factory()->withAddress()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", ['operational_site_id' => $site->id])
+        ->assertOk()
+        ->assertJsonPath('data.operational_site.id', $site->id);
+
+    $this->assertDatabaseHas('opportunities', ['id' => $opportunity->id, 'operational_site_id' => $site->id]);
+});
+
+it('PATCH clears the Sede operativa with an explicit null', function () {
+    $actor = attributionActor();
+    $actor->givePermissionTo(Permission::findOrCreate('operational-sites.viewAny'));
+    $site = OperationalSite::factory()->withAddress()->create();
+    $opportunity = attributionOpportunity($actor);
+    $opportunity->update(['operational_site_id' => $site->id]);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", ['operational_site_id' => null])
+        ->assertOk()
+        ->assertJsonPath('data.operational_site', null);
+
+    $this->assertDatabaseHas('opportunities', ['id' => $opportunity->id, 'operational_site_id' => null]);
+});
+
+it('PATCH rejects a non-existent operational_site_id -> 422', function () {
+    $actor = attributionActor();
+    $actor->givePermissionTo(Permission::findOrCreate('operational-sites.viewAny'));
+    $opportunity = attributionOpportunity($actor);
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", ['operational_site_id' => 999999])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('operational_site_id');
+});
+
+it('permissions.fields.operational_site_id is READ-ONLY for an actor without operational-sites.viewAny (AC-013)', function () {
+    $actor = attributionActor();
+    $opportunity = attributionOpportunity($actor);
+    Sanctum::actingAs($actor);
+
+    $this->getJson("/api/request-management/{$opportunity->id}")
+        ->assertOk()
+        ->assertJsonPath('permissions.fields.operational_site_id.editable', false)
+        ->assertJsonPath('permissions.fields.operational_site_id.readonly', true);
+});
+
+it('PATCH operational_site_id 422s for an actor without operational-sites.viewAny (AC-013)', function () {
+    $actor = attributionActor();
+    $opportunity = attributionOpportunity($actor);
+    $site = OperationalSite::factory()->withAddress()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", ['operational_site_id' => $site->id])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('operational_site_id');
+
+    expect($opportunity->fresh()->operational_site_id)->toBeNull();
+});
+
+it('update: a role whose field-permission on operational_site_id is readonly -> 422, no write (AC-014)', function () {
+    $role = Role::create(['name' => 'request-management-site-locked']);
+    foreach (['viewAny', 'view', 'update'] as $ability) {
+        Permission::findOrCreate("request-management.{$ability}");
+    }
+    Permission::findOrCreate('operational-sites.viewAny');
+    $role->givePermissionTo(['request-management.viewAny', 'request-management.view', 'request-management.update', 'operational-sites.viewAny']);
+    $role->fieldPermissions()->create([
+        'resource' => 'request-management',
+        'field' => 'operational_site_id',
+        'visible' => true,
+        'editable' => false,
+        'required' => false,
+    ]);
+
+    $actor = User::factory()->create();
+    $actor->assignRole($role);
+    $opportunity = attributionOpportunity($actor);
+    $site = OperationalSite::factory()->withAddress()->create();
+    Sanctum::actingAs($actor);
+
+    $this->patchJson("/api/request-management/{$opportunity->id}", ['operational_site_id' => $site->id])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('operational_site_id');
+
+    expect($opportunity->fresh()->operational_site_id)->toBeNull();
 });

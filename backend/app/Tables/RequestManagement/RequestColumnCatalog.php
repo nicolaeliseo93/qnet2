@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tables\RequestManagement;
 
+use App\Rules\TaxCode;
+use App\Tables\Shared\ProductsOfInterestColumn;
+
 /**
  * Declarative column/filter/action catalogue for the `request-management`
  * domain (spec 0049): an OPERATIVE view over the same `opportunities` rows
@@ -21,6 +24,11 @@ namespace App\Tables\RequestManagement;
  *  - `next_callback_at` ("Prossimo richiamo", spec 0052 D-1/D-5) — a real
  *    `opportunities` column, sortable + date-filterable via the generic
  *    engine, mirroring `OpportunityColumnCatalog`'s `created_at`.
+ *  - `operational_site` ("Sede operativa", spec 0056) — SPECIALLY-derived
+ *    (the site has no own name), sortable + set-filterable via the shared
+ *    App\Tables\Shared\OperationalSiteColumn, and inline-editable (user
+ *    directive 2026-07-23) since it is what scopes the operator picker of the
+ *    column right after it.
  * All derived/anagraphic values are resolved by
  * RequestManagementTableDefinition::mapRow() from eager-loaded relations. A
  * hidden `updated_at` column exists solely to back the default sort.
@@ -44,6 +52,25 @@ final class RequestColumnCatalog
             // would mean creating/deleting `opportunity_product_lines` rows,
             // which is a work-panel concern, not a cell one.
             self::aggregatedColumn('product_categories', 'requestManagement.columns.productCategory'),
+            // User directive 2026-07-23: the SAME "Prodotti di interesse"
+            // column the opportunities grid declares (shared declaration), and
+            // — unlike `product_categories` above — inline-editable: the
+            // collection is a first-class operative field here, written through
+            // updateWork() like every other cell of this domain.
+            ProductsOfInterestColumn::declaration('requestManagement.columns.productsOfInterest'),
+            // Inline-editable (user directive 2026-07-23): the site is picked
+            // in-cell so the operator column right after it can be narrowed to
+            // that site's own operators without leaving the grid. Same shape
+            // LeadColumnCatalog already declares for its own `operational_site`
+            // — a `/for-select` picker writing the real FK, nullable (clearing
+            // the cell un-sets the site).
+            [
+                ...self::derivedColumn('operational_site', 'requestManagement.columns.operationalSite'),
+                'editable' => true,
+                'editableField' => 'operational_site_id',
+                'relation' => ['resource' => 'operational-sites'],
+                'nullable' => true,
+            ],
             [
                 // Inline cell-editing (spec 0055, D-6): the same relation
                 // column LeadColumnCatalog already declares for its operator —
@@ -51,6 +78,12 @@ final class RequestColumnCatalog
                 // the GA2 pivot row (`operator_id`), never a column on
                 // `opportunities`. Nullable: clearing the cell un-assigns the
                 // request (updateWork's applyOperator detaches).
+                //
+                // `relation.scope` (user directive 2026-07-23): the picker is
+                // narrowed to the operators of the row's OWN operational site,
+                // the in-grid twin of the work panel's site-filtered operator
+                // field — `users/for-select?operational_site_id=<the row's
+                // site>`. A row with no site keeps the full list.
                 'id' => 'operator_ga2',
                 'label' => 'requestManagement.columns.operator',
                 'type' => 'text',
@@ -59,7 +92,10 @@ final class RequestColumnCatalog
                 'filterable' => false,
                 'editable' => true,
                 'editableField' => 'operator_id',
-                'relation' => ['resource' => 'users'],
+                'relation' => [
+                    'resource' => 'users',
+                    'scope' => ['operational_site_id' => 'operational_site'],
+                ],
                 'nullable' => true,
             ],
             [
@@ -93,10 +129,16 @@ final class RequestColumnCatalog
                 'editableField' => 'opportunity_workflow_status_id',
                 'notable' => true,
             ],
-            self::clientColumn('first_name', 'requestManagement.columns.firstName', 'client_first_name'),
-            self::clientColumn('last_name', 'requestManagement.columns.lastName', 'client_last_name'),
-            self::clientColumn('tax_code', 'requestManagement.columns.taxCode', 'client_tax_code'),
-            self::clientColumn('phone', 'requestManagement.columns.phone', 'client_phone'),
+            // `format` (user directive 2026-07-23): an inline edit stores the
+            // value in the SAME canonical shape the card form does — the
+            // engine applies it before the rules run (CellValueValidator).
+            self::clientColumn('first_name', 'requestManagement.columns.firstName', 'client_first_name', format: 'person_name'),
+            self::clientColumn('last_name', 'requestManagement.columns.lastName', 'client_last_name', format: 'person_name'),
+            // The inline editor sends the cell alone, so TaxCode can only check
+            // format + control character here: the anagraphic-consistency check
+            // needs the whole card and lives in ValidatesRequestClientProfile.
+            self::clientColumn('tax_code', 'requestManagement.columns.taxCode', 'client_tax_code', [new TaxCode], 'tax_code'),
+            self::clientColumn('phone', 'requestManagement.columns.phone', 'client_phone', format: 'phone'),
             [
                 // Real DB column (spec 0052 D-1/D-5): the operator's planned
                 // next contact, sortable/filterable via the generic engine
@@ -217,14 +259,19 @@ final class RequestColumnCatalog
      *
      * @return array<string, mixed>
      */
-    private static function clientColumn(string $id, string $label, string $editableField): array
+    /**
+     * @param  array<int, mixed>  $rules  extra rules on top of the shared length cap
+     * @param  string|null  $format  canonical shape the inline editor stores the value in (see InputFormat)
+     */
+    private static function clientColumn(string $id, string $label, string $editableField, array $rules = [], ?string $format = null): array
     {
         return [
             ...self::textColumn($id, $label, searchable: true),
             'editable' => true,
             'editableField' => $editableField,
             'nullable' => true,
-            'rules' => ['max:'.self::CLIENT_FIELD_MAX_LENGTH],
+            'rules' => ['max:'.self::CLIENT_FIELD_MAX_LENGTH, ...$rules],
+            ...($format === null ? [] : ['format' => $format]),
         ];
     }
 
@@ -300,6 +347,14 @@ final class RequestColumnCatalog
                 'confirm' => false,
                 'permission' => 'request-management.view',
                 'count_field' => 'notes_count',
+            ],
+            [
+                'key' => 'delete',
+                'label' => 'actions.delete',
+                'icon' => 'trash',
+                'type' => 'danger',
+                'confirm' => true,
+                'permission' => 'request-management.delete',
             ],
             [
                 'key' => 'activity',

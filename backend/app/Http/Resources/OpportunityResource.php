@@ -8,6 +8,7 @@ use App\RequestManagement\ApplicableAttribute;
 use App\RequestManagement\ApplicableAttributesResolver;
 use App\Services\Opportunities\LeadOpportunityDefaultsResolver;
 use App\Services\Opportunities\OpportunityWorkflowResolver;
+use App\Support\OperationalSiteLabel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -25,10 +26,17 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * Amendment rev.3: `business_function_id`/`business_function`/
  * `product_category_id`/`product_category` are REPLACED by `product_lines`
  * (one row per funzione-aziendale + categoria-prodotto pair). User directive
- * 2026-07-17: `company_id`/`company`/`company_site_id`/`company_site`/
- * `operational_site_id`/`operational_site` are REMOVED entirely.
+ * 2026-07-17: `company_id`/`company`/`company_site_id`/`company_site` are
+ * REMOVED entirely.
  * `opportunity_status_id`/`opportunity_status` (spec 0043, D-3) is the
  * mandatory working-state FK — NEVER null.
+ *
+ * Spec 0056: `operational_site_id`/`operational_site` are reintroduced — the
+ * site has no own `name` (only `id`/`old_id`/`alias`), so `operational_site`
+ * is `{id, label}` (OperationalSiteLabel, NOT summarizeByName()), the label
+ * composed server-side "{line1} - {city}". Relies on
+ * OpportunityService::DETAIL_RELATIONS eager-loading
+ * `operationalSite.addresses.city`.
  *
  * Spec 0047: `state`/`state_id` is the Regione (D1); `workflow_status`/
  * `opportunity_workflow_status_id` is the currently resolved working-state
@@ -69,6 +77,8 @@ class OpportunityResource extends JsonResource
             'supervisor' => $this->summarizeByName($this->supervisor),
             'source_id' => $this->source_id,
             'source' => $this->summarizeByName($this->source),
+            'operational_site_id' => $this->operational_site_id,
+            'operational_site' => OperationalSiteLabel::summarize($this->operationalSite),
             'opportunity_status_id' => $this->opportunity_status_id,
             'opportunity_status' => $this->summarizeStatus($this->opportunityStatus),
             'state_id' => $this->state_id,

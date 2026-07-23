@@ -18,6 +18,18 @@ export interface RequestRelationRef {
   name: string
 }
 
+/**
+ * Spec 0056: the linked operational site's identity, as exposed by
+ * `RequestManagementResource.operational_site`. `operational_sites` has no
+ * `name` column: the identity is a server-composed "{line1} - {city}" label
+ * (mirrors `OpportunityOperationalSiteRef`, kept local for the same
+ * module-decoupling reason).
+ */
+export interface RequestOperationalSiteRef {
+  id: number
+  label: string
+}
+
 /** The linked opportunity status's identity, read-only in this module. */
 export interface RequestOpportunityStatusRef {
   id: number
@@ -154,6 +166,9 @@ export interface RequestWorkPanel {
   /** The GA2 "Operatore": the manager at pivot position 2, not a column of its own. */
   operator_id: number | null
   operator: RequestRelationRef | null
+  /** Spec 0056: the operational site, facoltativa, editable from the attribution section like Fonte/Segnalatore/Operatore. */
+  operational_site_id: number | null
+  operational_site: RequestOperationalSiteRef | null
   /** Sales-pipeline status: read-only in this module. */
   opportunity_status: RequestOpportunityStatusRef | null
   workflow_status: RequestWorkflowStatusRef | null
@@ -249,7 +264,50 @@ export interface UpdateRequestWorkPayload {
   source_id?: number | null
   reporter_id?: number | null
   operator_id?: number | null
+  /** Spec 0056: facoltativa, sent on its own like every other attribution field. */
+  operational_site_id?: number | null
   client_identity?: RequestClientIdentityPayload
   client_contacts?: RequestClientContactPayload[]
   client_address?: RequestClientAddressPayload
+}
+
+/** One `product_lines` row of the create payload: both ids are mandatory on the wire (D-3), unlike the form's in-progress rows. */
+export interface CreateRequestProductLinePayload {
+  business_function_id: number
+  product_category_id: number
+}
+
+/**
+ * Body of POST /request-management (spec 0057, frozen contract): exactly one
+ * anagrafica source — `registry_id` XOR the `client_*` blocks (D-2, the
+ * server rejects both together and neither) — plus the mandatory
+ * `product_lines` (D-3). Reuses the same `RequestClient*Payload` shapes the
+ * update endpoint already defines: a create-time contact/address never
+ * carries an `id`, but the type stays optional there so both endpoints share
+ * one definition.
+ */
+export interface CreateRequestPayload {
+  registry_id?: number
+  client_identity?: RequestClientIdentityPayload
+  client_contacts?: RequestClientContactPayload[]
+  client_address?: RequestClientAddressPayload
+  product_lines: CreateRequestProductLinePayload[]
+}
+
+/**
+ * Body of POST /request-management/assign-operators (user directive
+ * 2026-07-23): the same two-mode contract the shared AssignOperatorsDialog
+ * collects, keyed on requests instead of leads. `operator_id` is sent only in
+ * `single` mode.
+ */
+export interface AssignRequestOperatorsPayload {
+  request_ids: number[]
+  operational_site_id: number
+  mode: 'single' | 'balanced'
+  operator_id?: number
+}
+
+/** Response of the same endpoint: how many requests were actually written. */
+export interface AssignRequestOperatorsResult {
+  assigned: number
 }

@@ -13,6 +13,7 @@ import type { CustomCellEditorProps } from 'ag-grid-react'
 import type { RichCellEditorValuesCallbackParams } from 'ag-grid-community'
 import { enumLabelOf } from '@/features/config/enum-label'
 import { DateTimeCellEditor } from '@/components/data-table/datetime-cell-editor'
+import { MultiSelectCellEditor } from '@/components/data-table/multi-select-cell-editor'
 import { RelationCellEditor } from '@/components/data-table/relation-cell-editor'
 import { SelectCellEditor } from '@/components/data-table/select-cell-editor'
 import { scalarColumnOptions, selectColumnOptions } from '@/features/table/column-options'
@@ -20,7 +21,7 @@ import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
 import type { ColumnType, TableColumn, TableRow } from '@/features/table/types'
 
 /** The lookup key: a column's declared `editor` when present, else its `type` (spec 0054 D-1, 0055 D-1). */
-export type CellEditorKind = ColumnType | 'relation' | 'select'
+export type CellEditorKind = ColumnType | 'relation' | 'select' | 'multiselect'
 
 /** cellEditor (a built-in name, or a custom React component) + optional per-column params, resolved once per colDef. */
 export interface CellEditorSpec {
@@ -97,6 +98,18 @@ export const CELL_EDITOR_REGISTRY: Record<CellEditorKind, CellEditorSpec> = {
     }),
     cellEditorPopup: true,
   },
+  // User directive 2026-07-23: a to-many `/for-select` picker — the in-grid
+  // twin of the form's multi-select field, scope lock and warning included.
+  // Same `relation` metadata as the single-value editor: `resource` names the
+  // endpoint, `scope` the row column narrowing it (an array of ids here).
+  multiselect: {
+    cellEditor: MultiSelectCellEditor as ComponentType<CustomCellEditorProps>,
+    cellEditorParams: (column) => ({
+      resource: column.relation?.resource ?? '',
+      scope: column.relation?.scope,
+    }),
+    cellEditorPopup: true,
+  },
   relation: {
     // AG Grid itself types `ColDef.cellEditor` as `any` (the shape differs by
     // wrapper/framework); this cast is the same interop boundary, confined to
@@ -108,7 +121,15 @@ export const CELL_EDITOR_REGISTRY: Record<CellEditorKind, CellEditorSpec> = {
       // Same opt-in the form selects make at their call site: only the people
       // resource shows avatars, and it shows one for EVERY option (initials
       // when the user has no image).
-      return { resource, showAvatar: resource === USERS_FOR_SELECT_RESOURCE }
+      //
+      // `scope` is passed through unresolved on purpose: it names the column
+      // to read, and only the editor holds the ROW (`props.data`) — this
+      // callback runs once per colDef, not per row.
+      return {
+        resource,
+        showAvatar: resource === USERS_FOR_SELECT_RESOURCE,
+        scope: column.relation?.scope,
+      }
     },
     cellEditorPopup: true,
   },

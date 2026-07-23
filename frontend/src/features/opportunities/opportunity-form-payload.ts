@@ -15,16 +15,17 @@ export interface CreatePayloadFromLead {
 }
 
 /**
- * Builds the create payload. `name`/`registry_id`/`supervisor_id` are
- * validated non-null by the create schema before submit. `registry_id` is
- * sent as-is UNLESS locked (`fromLead`, BR-1) — either way the RHF value is
- * always present at submit time, just not always sent. `product_lines` (amendment
+ * Builds the create payload. `registry_id`/`supervisor_id` are validated
+ * non-null by the create schema before submit. `registry_id` is sent as-is
+ * UNLESS locked (`fromLead`, BR-1) — either way the RHF value is always
+ * present at submit time, just not always sent. `product_lines` (amendment
  * rev.3) is NEVER locked — even the row derived from a linked Lead is a
  * normal, editable/removable row (AC-102/103) — so it is always sent as-is,
  * in full (the server replaces the entire collection, AC-099). When creating
  * from a Lead (spec 0040 MT-6/A-1), every field named in
  * `fromLead.lockedFields` is OMITTED entirely (not merely repeated) and
- * `lead_id` is appended.
+ * `lead_id` is appended. Spec 0057 (D-5): `name` is never sent — it is
+ * derived server-side as `OPP_{id}`.
  */
 export function buildCreatePayload(
   values: OpportunityFormValues,
@@ -33,13 +34,14 @@ export function buildCreatePayload(
   const locked = new Set(fromLead?.lockedFields ?? [])
 
   const payload: CreateOpportunityPayload = {
-    name: values.name.trim(),
     opportunity_status_id: values.opportunity_status_id as number,
     commercial_id: values.commercial_id,
     reporter_id: values.reporter_id,
     // The create schema guarantees this value before the payload builder runs;
     // the shared RHF value remains nullable because edit permits clearing it.
     supervisor_id: values.supervisor_id as number,
+    // Spec 0056: facoltativa, never lead-derived — always sent as-is, like `state_id` below.
+    operational_site_id: values.operational_site_id,
     // Spec 0047 (D1): never BR-2-locked (an opportunity's Regione stays
     // editable even when it originates from a lead) — always sent as-is,
     // unlike the `locked.has(...)`-gated fields below.
@@ -85,10 +87,6 @@ export function buildUpdatePayload(
 ): UpdateOpportunityPayload {
   const payload: UpdateOpportunityPayload = {}
 
-  const trimmedName = values.name.trim()
-  if (trimmedName !== original.name) {
-    payload.name = trimmedName
-  }
   if (values.registry_id !== original.registry_id) {
     payload.registry_id = values.registry_id as number
   }
@@ -110,6 +108,9 @@ export function buildUpdatePayload(
   if (values.source_id !== original.source_id) {
     payload.source_id = values.source_id
   }
+  if (values.operational_site_id !== (original.operational_site_id ?? null)) {
+    payload.operational_site_id = values.operational_site_id
+  }
   if (values.state_id !== (original.state_id ?? null)) {
     payload.state_id = values.state_id
   }
@@ -118,7 +119,7 @@ export function buildUpdatePayload(
   }
   // Amendment rev.3: the server replaces the entire row SET (AC-099) — diff
   // as an unordered collection of pairs, never positionally (row order in
-  // the form carries no meaning beyond the auto-computed name, AC-107).
+  // the form carries no meaning).
   const originalProductLines = original.product_lines.map((line) => ({
     business_function_id: line.business_function.id,
     product_category_id: line.product_category.id,

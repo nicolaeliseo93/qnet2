@@ -12,6 +12,8 @@ use App\DataObjects\Users\ContactInput;
 use App\Enums\ContactTypeEnum;
 use App\Enums\GenderEnum;
 use App\Enums\PersonalDataTypeEnum;
+use App\Rules\TaxCode;
+use App\Rules\VatNumber;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -41,6 +43,20 @@ use Illuminate\Validation\Rule;
  */
 trait ValidatesRequestClientProfile
 {
+    use FormatsPersonalDataInput;
+
+    /**
+     * Canonicalize the typed identity/contact values before the rules run
+     * (user directive 2026-07-23) — see FormatsPersonalDataInput. A host class
+     * defining its own prepareForValidation() would take over, so it must call
+     * this one.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->formatIdentityInput('client_identity');
+        $this->formatContactRowsInput('client_contacts');
+    }
+
     /**
      * @return array<string, array<int, mixed>>
      */
@@ -107,8 +123,8 @@ trait ValidatesRequestClientProfile
                 'string',
                 'max:255',
             ],
-            'client_identity.tax_code' => ['nullable', 'string', 'max:32'],
-            'client_identity.vat_number' => ['nullable', 'string', 'max:32'],
+            'client_identity.tax_code' => ['nullable', 'string', 'max:32', new TaxCode('client_identity.')],
+            'client_identity.vat_number' => ['nullable', 'string', 'max:32', new VatNumber],
             'client_identity.sdi_code' => ['nullable', 'string', 'max:32'],
             'client_identity.birth_date' => ['nullable', 'date', 'before:today'],
             'client_identity.gender' => ['nullable', Rule::enum(GenderEnum::class)],

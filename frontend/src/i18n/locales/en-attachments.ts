@@ -7,11 +7,11 @@
 export const attachments = {
   title: 'Documents',
   dialogSubtitle: 'Files linked to this opportunity',
-  dropzoneHint: 'Drop a file here or click to browse',
-  dropzoneSubhint: 'PDF, images, spreadsheets and documents',
+  dropzoneHint: 'Drop one or more files here or click to browse',
+  dropzoneSubhint: 'PDF, images, spreadsheets and documents — multiple selection',
   uploading: 'Uploading…',
   empty: 'No documents yet.',
-  emptyHint: 'Drop a file into the area above to add the first one.',
+  emptyHint: 'Drop one or more files into the area above to add the first ones.',
   preview: 'Preview',
   download: 'Download',
   deleteAction: 'Delete document',
@@ -19,6 +19,8 @@ export const attachments = {
   errors: {
     load: 'Unable to load the documents. Please try again.',
     upload: 'Unable to upload the file. Please try again.',
+    uploadSome_one: 'Unable to upload 1 file: {{names}}. The others were uploaded.',
+    uploadSome_other: 'Unable to upload {{count}} files: {{names}}. The others were uploaded.',
     delete: 'Unable to delete the document. Please try again.',
   },
 }

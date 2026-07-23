@@ -12,6 +12,8 @@ use App\Enums\ContactTypeEnum;
 use App\Enums\GenderEnum;
 use App\Enums\PersonalDataTypeEnum;
 use App\Enums\SiteTypeEnum;
+use App\Rules\TaxCode;
+use App\Rules\VatNumber;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -31,6 +33,22 @@ use Illuminate\Validation\Rule;
  */
 trait ValidatesUserProfile
 {
+    use FormatsPersonalDataInput;
+
+    /**
+     * Canonicalize the typed identity/contact values before the rules run
+     * (user directive 2026-07-23) — see FormatsPersonalDataInput.
+     *
+     * Lives on the trait so all eight requests that compose it inherit it; a
+     * host class defining its own prepareForValidation() would silently take
+     * over, so it must call this one.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->formatIdentityInput('personal_data');
+        $this->formatContactRowsInput('personal_data.contacts');
+    }
+
     /**
      * Whether the nested `personal_data` object is mandatory on this request.
      *
@@ -101,8 +119,8 @@ trait ValidatesUserProfile
                 'max:255',
             ],
 
-            'personal_data.tax_code' => ['nullable', 'string', 'max:32'],
-            'personal_data.vat_number' => ['nullable', 'string', 'max:32'],
+            'personal_data.tax_code' => ['nullable', 'string', 'max:32', new TaxCode('personal_data.')],
+            'personal_data.vat_number' => ['nullable', 'string', 'max:32', new VatNumber],
             'personal_data.sdi_code' => ['nullable', 'string', 'max:32'],
             'personal_data.birth_date' => ['nullable', 'date', 'before:today'],
             'personal_data.gender' => ['nullable', Rule::enum(GenderEnum::class)],

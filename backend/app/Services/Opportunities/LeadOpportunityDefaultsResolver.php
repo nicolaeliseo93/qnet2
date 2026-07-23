@@ -7,6 +7,7 @@ namespace App\Services\Opportunities;
 use App\DataObjects\Opportunities\LeadOpportunityDefaults;
 use App\Models\Campaign;
 use App\Models\Lead;
+use App\Support\OperationalSiteLabel;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -31,8 +32,14 @@ use Illuminate\Database\Eloquent\Model;
  * — the exact `project !== null ? project->x : campaign->x` merge
  * CampaignResource already uses for the same 2 columns, spec 0023 BR-2, no
  * second implementation) as a single EDITABLE/removable row, only when BOTH
- * are present. User directive 2026-07-17: `operational_site_id` is REMOVED
- * from the derivable set entirely.
+ * are present.
+ *
+ * User directive 2026-07-23: the lead's `operational_site_id` (the Sede
+ * operativa) is inherited by the opportunity again — but as a PLAIN default,
+ * deliberately OUT of `DERIVED_FIELDS`/`lockedFields()` like `state_id`: the
+ * conversion prefills it, the user stays free to change or clear it. The
+ * 2026-07-17 directive that removed it from the derivable set is superseded
+ * only in that sense — it is NOT re-added to the BR-2 lock.
  *
  * User directive 2026-07-21/2026-07-22: the lead's Operator carries
  * `managerSlots`/`managerRefs` (the "Gestore Account 2" prefill, with an empty
@@ -64,6 +71,7 @@ final class LeadOpportunityDefaultsResolver
         'registry',
         'source',
         'operator',
+        'operationalSite.addresses.city',
         'opportunity',
         'campaign.businessFunction',
         'campaign.productCategory',
@@ -87,11 +95,19 @@ final class LeadOpportunityDefaultsResolver
             // never BR-2-locked (an opportunity's Regione stays editable even
             // when it originates from a lead).
             'state_id' => $lead->state_id,
+            // User directive 2026-07-23: the Sede operativa is inherited on
+            // conversion. NOT in DERIVED_FIELDS — a plain editable default,
+            // never BR-2-locked.
+            'operational_site_id' => $lead->operational_site_id,
         ];
 
         $references = [
             'source' => $this->summarizeByName($effectiveSource),
             'registry' => $this->summarizeByName($lead->registry),
+            // The site has no `name` column: its identity is the composed
+            // "{line1} - {city}" label (OperationalSiteLabel), so this entry
+            // is a {id,label} summary, not a {id,name} one.
+            'operational_site' => OperationalSiteLabel::summarize($lead->operationalSite),
         ];
 
         // User directive 2026-07-22: the lead's Operator seeds the SECOND

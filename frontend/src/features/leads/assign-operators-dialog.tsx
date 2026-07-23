@@ -25,6 +25,16 @@ export interface AssignOperatorsDialogSite {
 
 type AssignmentMode = 'single' | 'balanced'
 
+/**
+ * Copy that names the assigned entity ("… lead selezionati", "Distribuisce i
+ * lead selezionati…"). Everything else in the dialog is entity-neutral and
+ * stays on the shared strings.
+ */
+export interface AssignOperatorsDialogCopy {
+  description: string
+  modeHints: Record<AssignmentMode, string>
+}
+
 /** Input handed to `onAssign`, mirroring the `POST /leads/assign-operators` request body. */
 export interface AssignOperatorsDialogInput {
   operational_site_id: number
@@ -75,6 +85,12 @@ export interface AssignOperatorsDialogProps {
   defaultSiteId?: number | null
   defaultSite?: AssignOperatorsDialogSite | null
   /**
+   * The two entity-specific sentences, resolved by the consumer (the dialog
+   * itself stays domain-agnostic). Omitted, both fall back to the Lead
+   * wording, so the leads/import call sites read exactly as before.
+   */
+  copy?: AssignOperatorsDialogCopy
+  /**
    * Wired by the consumer to its own endpoint (the Lead table via
    * `useAssignOperators`, the import review bar via its own PATCH). The
    * dialog never calls the API itself: it only collects the input, shows a
@@ -99,6 +115,7 @@ export function AssignOperatorsDialog({
   selectionCount,
   defaultSiteId,
   defaultSite,
+  copy,
   onAssign,
 }: AssignOperatorsDialogProps) {
   return (
@@ -108,6 +125,7 @@ export function AssignOperatorsDialog({
           selectionCount={selectionCount}
           defaultSiteId={defaultSiteId}
           defaultSite={defaultSite}
+          copy={copy}
           onAssign={onAssign}
           onClose={() => onOpenChange(false)}
         />
@@ -120,6 +138,7 @@ interface AssignOperatorsDialogBodyProps {
   selectionCount: number
   defaultSiteId?: number | null
   defaultSite?: AssignOperatorsDialogSite | null
+  copy?: AssignOperatorsDialogCopy
   onAssign: AssignOperatorsDialogProps['onAssign']
   onClose: () => void
 }
@@ -134,6 +153,7 @@ function AssignOperatorsDialogBody({
   selectionCount,
   defaultSiteId,
   defaultSite,
+  copy,
   onAssign,
   onClose,
 }: AssignOperatorsDialogBodyProps) {
@@ -187,7 +207,7 @@ function AssignOperatorsDialogBody({
         <DialogHeader className="flex-1 gap-1">
           <DialogTitle className="text-sm">{t('leads.assign.title')}</DialogTitle>
           <DialogDescription className="text-xs">
-            {t('leads.assign.description', { count: selectionCount })}
+            {copy?.description ?? t('leads.assign.description', { count: selectionCount })}
           </DialogDescription>
         </DialogHeader>
       </div>
@@ -234,7 +254,7 @@ function AssignOperatorsDialogBody({
                       {t(`leads.assign.actions.${value}`)}
                     </span>
                     <span className="block text-[11px] leading-snug text-muted-foreground">
-                      {t(`leads.assign.actions.${value}Hint`)}
+                      {copy?.modeHints[value] ?? t(`leads.assign.actions.${value}Hint`)}
                     </span>
                   </span>
                   {selected && (

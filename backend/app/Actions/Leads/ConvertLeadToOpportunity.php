@@ -24,18 +24,11 @@ use Illuminate\Validation\ValidationException;
  * Reuses LeadOpportunityDefaultsResolver (the single BR-1 derivation point,
  * spec 0040) for registry_id/source_id/product lines, and
  * OpportunityService::create() for the actual persistence (product lines
- * sync), rather than re-implementing either.
+ * sync, and — spec 0057, D-5 — the `OPP_{id}` name derivation), rather than
+ * re-implementing either.
  */
 final class ConvertLeadToOpportunity
 {
-    /**
-     * Joins the derived product categories' names into the opportunity's
-     * auto-computed name (spec 0044's internal_contract), mirroring the
-     * frontend's PRODUCT_LINE_NAME_SEPARATOR
-     * (opportunity-product-line-name.ts).
-     */
-    private const string PRODUCT_LINE_NAME_SEPARATOR = ' + ';
-
     public function __construct(
         private readonly LeadOpportunityDefaultsResolver $defaultsResolver,
         private readonly SystemStatusGuard $systemStatusGuard,
@@ -58,9 +51,9 @@ final class ConvertLeadToOpportunity
         }
 
         // Step 3: persist through OpportunityService::create(), so product
-        // line sync stays the single implementation.
+        // line sync (and the `OPP_{id}` name derivation, spec 0057 D-5) stay
+        // the single implementation.
         return $this->opportunityService->create(new CreateOpportunityData(
-            name: $this->composeName($defaults->productLines),
             registryId: $defaults->values['registry_id'],
             referentId: null,
             commercialId: null,
@@ -83,18 +76,10 @@ final class ConvertLeadToOpportunity
             // spec 0047 (AC-002, D1): the Regione inherited from the lead.
             stateId: $defaults->values['state_id'],
             workflowStatusId: null,
+            // User directive 2026-07-23: the opportunity inherits the lead's
+            // Sede operativa (plain default, never BR-2-locked).
+            operationalSiteId: $defaults->values['operational_site_id'],
         ));
-    }
-
-    /**
-     * @param  array<int, array{business_function: array{id: int, name: string}, product_category: array{id: int, name: string}}>  $productLines
-     */
-    private function composeName(array $productLines): string
-    {
-        return implode(
-            self::PRODUCT_LINE_NAME_SEPARATOR,
-            array_map(static fn (array $line): string => $line['product_category']['name'], $productLines),
-        );
     }
 
     /**

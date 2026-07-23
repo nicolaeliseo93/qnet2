@@ -8,6 +8,7 @@ use App\DataObjects\Shared\ForSelectQuery;
 use App\Models\User;
 use App\Services\CampaignService;
 use App\Services\OperationalSiteService;
+use App\Services\ProductService;
 use App\Services\RegistryService;
 use App\Services\SourceService;
 use App\Services\UserService;
@@ -40,6 +41,7 @@ final class RelationValueScopeChecker
         private readonly OperationalSiteService $operationalSites,
         private readonly SourceService $sources,
         private readonly UserService $users,
+        private readonly ProductService $products,
     ) {}
 
     /**
@@ -62,6 +64,10 @@ final class RelationValueScopeChecker
             'operational-sites' => $this->operationalSites->forSelect($query)->items,
             'sources' => $this->sources->forSelect($query)->items,
             'users' => $this->users->forSelect($query)->items,
+            // User directive 2026-07-23: the `products_of_interest` MULTISELECT
+            // column checks every submitted id through this same gate, one id
+            // at a time (CellValueValidator::validateIdListValue).
+            'products' => $this->products->forSelect($query)->items,
             default => null,
         };
 

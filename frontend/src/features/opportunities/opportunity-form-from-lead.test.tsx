@@ -106,10 +106,12 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
               referent_id: null,
               source_id: 20,
               registry_id: 30,
+              operational_site_id: null,
             },
             references: {
               source: { id: 20, name: 'Web' },
               registry: { id: 30, name: 'Acme S.p.A.' },
+              operational_site: null,
             },
             lockedFields: ['registry_id', 'source_id'],
             productLines: [
@@ -144,13 +146,11 @@ describe('OpportunityFormBody — create from lead (BR-1/BR-2, AC-075)', () => {
     expect(screen.getByTestId('value-Source')).toHaveTextContent('20')
     expect(screen.getByTestId('disabled-Source')).toHaveTextContent('true')
 
-    // Amendment rev.3 (AC-102/103): the seeded row is editable/removable —
-    // never disabled — and its category already auto-fills the name.
+    // Amendment rev.3 (AC-102/103): the seeded row is editable/removable — never disabled.
     expect(screen.getByTestId('value-Business function 1')).toHaveTextContent('40')
     expect(screen.getByTestId('disabled-Business function 1')).toHaveTextContent('false')
     expect(screen.getByTestId('value-Product category 1')).toHaveTextContent('50')
     expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('false')
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Consulting')
     expect(screen.getByRole('button', { name: 'Remove product line' })).toBeInTheDocument()
   })
 

@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Models\Opportunity;
 use App\Models\OpportunityWorkflowStatus;
 use App\RequestManagement\ApplicableAttribute;
+use App\Support\OperationalSiteLabel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -60,6 +61,11 @@ class RequestManagementResource extends JsonResource
             'source' => $this->summarizeByName($opportunity->source),
             'reporter_id' => $opportunity->reporter_id,
             'reporter' => $this->summarizeByName($opportunity->reporter),
+            // Spec 0056: the Sede operativa, editable from this same
+            // attribution block — the site has no own name, so its ref is
+            // {id, label} (OperationalSiteLabel), NOT summarizeByName().
+            'operational_site_id' => $opportunity->operational_site_id,
+            'operational_site' => OperationalSiteLabel::summarize($opportunity->operationalSite),
             'operator_id' => $opportunity->operatorManager()?->id,
             'operator' => $this->summarizeByName($opportunity->operatorManager()),
             'opportunity_status' => $this->summarizeStatus($opportunity->opportunityStatus),

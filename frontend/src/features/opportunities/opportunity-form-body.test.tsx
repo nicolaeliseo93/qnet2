@@ -13,7 +13,7 @@ import type { OpportunityDetailWithPermissions } from '@/features/opportunities/
  * without a registry, scoped by `registry_id` once chosen and reset on registry
  * change; commercial/reporter are free and, per user directive 2026-07-17, are
  * never auto-filled from the anagrafica), AC-074 (field permissions: hidden vs
- * disabled), AC-107 (amendment rev.3: the name auto-fill override).
+ * disabled). Spec 0057 (D-5): the name is no longer a form input.
  *
  * The `?lead_id=N` deep-link create-from-lead mode (AC-075) and the in-form
  * "Lead" select (AC-086/087/088, spec 0044 supervisor prefill AC-025/034) are
@@ -77,6 +77,8 @@ function editOpportunity(): OpportunityDetailWithPermissions {
     supervisor: null,
     source_id: null,
     source: null,
+    operational_site_id: null,
+    operational_site: null,
     state_id: null,
     state: null,
     opportunity_workflow_status_id: 100,
@@ -240,18 +242,19 @@ beforeEach(() => {
 })
 
 describe('OpportunityFormBody — fields render (AC-071)', () => {
-  it('renders the name input and every relational select', async () => {
+  it('renders every relational select, with no name input (spec 0057 D-5)', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
     })
 
     await waitFor(() => expect(screen.getByTestId('select-Registry')).toBeInTheDocument())
-    expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument()
     expect(screen.getByTestId('select-Opportunity Status')).toBeInTheDocument()
     expect(screen.getByTestId('select-Contact')).toBeInTheDocument()
     expect(screen.getByTestId('select-Sales rep')).toBeInTheDocument()
     expect(screen.getByTestId('select-Reporter')).toBeInTheDocument()
     expect(screen.getByTestId('select-Source')).toBeInTheDocument()
+    expect(screen.getByTestId('select-Operational site')).toBeInTheDocument()
     expect(screen.getByTestId('select-Supervisor')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add account manager' })).toBeInTheDocument()
     // Amendment rev.3: no product-line row renders until "Add" is clicked (mirrors manager slots).
@@ -376,7 +379,7 @@ describe('OpportunityFormBody — referent scoping + free commercial/reporter (A
   })
 })
 
-describe('OpportunityFormBody — product lines + name auto-fill (AC-106/107)', () => {
+describe('OpportunityFormBody — product lines (AC-106)', () => {
   it('scopes the row category by the row own business function', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
@@ -394,24 +397,6 @@ describe('OpportunityFormBody — product lines + name auto-fill (AC-106/107)', 
     )
   })
 
-  it('auto-fills the name from the added row, then keeps the manual override after a hand-edit', async () => {
-    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Add product line' })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'Add product line' }))
-    screen.getByRole('button', { name: `select Business function 1 ${TEST_BUSINESS_FUNCTION}` }).click()
-    await waitFor(() => expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('false'))
-    screen.getByRole('button', { name: `select Product category 1 ${TEST_PRODUCT_CATEGORY}` }).click()
-
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Consulting'))
-
-    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'My own name' } })
-
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('My own name')
-  })
-
   it('blocks the submit and shows an error when a row is left incomplete', async () => {
     render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
       wrapper: wrapper(),
@@ -423,7 +408,6 @@ describe('OpportunityFormBody — product lines + name auto-fill (AC-106/107)', 
     await waitFor(() => expect(screen.getByTestId('disabled-Product category 1')).toHaveTextContent('false'))
     // The row's category is left unset on purpose.
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Enterprise deal' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>

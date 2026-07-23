@@ -51,6 +51,13 @@ export const personalData = {
     lastNameRequired: 'Il cognome è obbligatorio.',
     companyNameRequired: 'La ragione sociale è obbligatoria.',
     birthDateFuture: 'La data di nascita non può essere nel futuro.',
+    taxCodeInvalid: 'Il codice fiscale non è valido.',
+    companyTaxCodeInvalid: 'Il codice fiscale di un ente deve essere di 11 cifre valide.',
+    taxCodeLastNameMismatch: 'Il codice fiscale non corrisponde al cognome.',
+    taxCodeFirstNameMismatch: 'Il codice fiscale non corrisponde al nome.',
+    taxCodeBirthDateMismatch: 'Il codice fiscale non corrisponde alla data di nascita.',
+    taxCodeGenderMismatch: 'Il codice fiscale non corrisponde al sesso.',
+    vatNumberInvalid: 'La partita IVA non è valida.',
   },
   contacts: {
     title: 'Contatti',

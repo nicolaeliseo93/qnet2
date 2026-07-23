@@ -92,12 +92,12 @@ it('update: submitting the SAME (unchanged) value for a locked field is a no-op,
     $actor = User::factory()->create();
     $actor->assignRole($role);
 
-    $target = Company::factory()->create(['vat_number' => 'IT111', 'denomination' => 'Before']);
+    $target = Company::factory()->create(['vat_number' => 'IT11111111115', 'denomination' => 'Before']);
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/companies/{$target->id}", [
         'denomination' => 'After',
-        'vat_number' => 'IT111',
+        'vat_number' => 'IT11111111115',
     ])->assertOk()->assertJsonPath('data.denomination', 'After');
 });
 

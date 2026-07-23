@@ -116,14 +116,15 @@ it('create: 201 + persists the company with a single primary address', function 
 
     $response = $this->postJson('/api/companies', [
         'denomination' => 'Beta Spa',
-        'vat_number' => 'IT99988877766',
+        'vat_number' => 'IT99988877769',
         'address' => ['line1' => 'Via Milano 5', 'postal_code' => '10100'],
     ])->assertCreated()
         ->assertJsonPath('data.denomination', 'Beta Spa')
         ->assertJsonPath('data.address.line1', 'Via Milano 5')
         ->assertJsonPath('data.address.is_primary', true);
 
-    $this->assertDatabaseHas('companies', ['denomination' => 'Beta Spa', 'vat_number' => 'IT99988877766']);
+    // Stored canonical (user directive 2026-07-23): the optional IT prefix is dropped.
+    $this->assertDatabaseHas('companies', ['denomination' => 'Beta Spa', 'vat_number' => '99988877769']);
     $this->assertDatabaseHas('addresses', [
         'addressable_type' => 'company',
         'addressable_id' => $response->json('data.id'),

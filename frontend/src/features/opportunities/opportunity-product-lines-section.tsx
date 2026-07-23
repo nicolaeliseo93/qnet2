@@ -1,24 +1,21 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Boxes } from 'lucide-react'
-import { useWatch, type Control, type UseFormSetValue } from 'react-hook-form'
+import { useWatch, type Control } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
 import { MetaField } from '@/features/authorization/MetaField'
 import type { ForSelectItem } from '@/features/for-select/types'
-import { OpportunityProductLinesField } from '@/features/opportunities/opportunity-product-lines-field'
+import { ProductLinesField } from '@/features/product-lines/product-lines-field'
 import { ProductsOfInterestField } from '@/features/products/products-of-interest-field'
-import type { OpportunityNameAutofill } from '@/features/opportunities/use-opportunity-name-autofill'
 import type { OpportunityFormValues } from '@/features/opportunities/use-opportunity-form'
 import type { OpportunityProductLine, OpportunityProductOfInterest } from '@/features/opportunities/types'
 
 interface OpportunityProductLinesSectionProps {
   control: Control<OpportunityFormValues>
-  setValue: UseFormSetValue<OpportunityFormValues>
   /** Product-line rows whose labels are already known without a fetch (edit load, from-lead prefill, in-form Lead picker). */
   knownProductLines: OpportunityProductLine[]
   /** Products already on the loaded opportunity (edit), for badge-label hydration. */
   knownProductsOfInterest: OpportunityProductOfInterest[]
-  nameAutofill: OpportunityNameAutofill
   className?: string
 }
 
@@ -26,18 +23,17 @@ interface OpportunityProductLinesSectionProps {
  * Standalone section (spec 0040 amendment rev.3, AC-106) for the opportunity's
  * function+category product-line rows: its own titled card, separate from the
  * site/classification relations, as the pairs are the module's primary
- * classification axis and drive the auto-composed name (AC-107). Wrapped in
- * `MetaField` (mirrors `manager_slots` in `OpportunityTeamSection`) so a
- * future server-driven field permission and the row-completeness error
- * (`superRefine` in `opportunity-schema.ts`) both surface through the same
- * mechanism as every other field.
+ * classification axis. Wrapped in `MetaField` (mirrors `manager_slots` in
+ * `OpportunityTeamSection`) so a future server-driven field permission and the
+ * row-completeness error (`superRefine` in `opportunity-schema.ts`) both
+ * surface through the same mechanism as every other field. The row editor
+ * itself (spec 0057) is the shared `ProductLinesField`, also consumed by the
+ * request-management create form.
  */
 export function OpportunityProductLinesSection({
   control,
-  setValue,
   knownProductLines,
   knownProductsOfInterest,
-  nameAutofill,
   className,
 }: OpportunityProductLinesSectionProps) {
   const { t } = useTranslation()
@@ -80,12 +76,10 @@ export function OpportunityProductLinesSection({
         label={t('opportunities.form.productLines.fieldLabel')}
       >
         {({ field, disabled }) => (
-          <OpportunityProductLinesField
+          <ProductLinesField
             value={field.value}
             onChange={field.onChange}
-            setValue={setValue}
             knownLines={knownProductLines}
-            nameAutofill={nameAutofill}
             disabled={disabled}
           />
         )}

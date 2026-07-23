@@ -8,6 +8,7 @@ import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { RequestManagementTable } from '@/features/request-management/request-management-table'
 import type { RowActionHandler } from '@/features/table/row-actions'
 import type { TableActionDefinition, TableRow } from '@/features/table/types'
+import type { BulkAction } from '@/features/table/use-bulk-actions-slot'
 import type { OpenMode } from '@/features/modules/types'
 import type { RequestWorkPanelWithPermissions } from '@/features/request-management/types'
 
@@ -15,8 +16,10 @@ import type { RequestWorkPanelWithPermissions } from '@/features/request-managem
  * Spec 0049 AC-060: the `request-management` adapter mounts `<TableView>`,
  * wires the "Lavora" (`view`) row action through `useModuleOpener`
  * (resolved open-mode: modal Sheet vs `/request-management/:id` page), and
- * exposes no delete/edit affordance — the record IS the Opportunity (D-9/
- * D-10), no CRUD lives on this module. The generic `<TableView>` (AG Grid +
+ * exposes no create/edit affordance — the record IS the Opportunity (D-9),
+ * that CRUD lives on `opportunities.*`. The `delete` row action and the two
+ * bulk flows (delete + operator assignment) were added by the user directive
+ * 2026-07-23 and are asserted here too. The generic `<TableView>` (AG Grid +
  * SSRM) is stubbed with buttons that fire `onAction` for a fixed row,
  * mirroring the other Sheet-based adapters' suites (e.g. `LeadsTable`). The
  * adapter's other row action (`documents`) has its own suite,
@@ -49,12 +52,22 @@ function action(key: string): TableActionDefinition {
 }
 
 let capturedOnAction: RowActionHandler | null = null
+let capturedBulkActions:
+  | ((selection: { ids: number[]; rows: TableRow[] }) => BulkAction[])
+  | null = null
 
 vi.mock('@/features/table/table-view', () => ({
-  TableView: forwardRef<{ refresh: () => void }, { domain: string; onAction: RowActionHandler }>(
-    function TableViewStub({ domain, onAction }, ref) {
-      useImperativeHandle(ref, () => ({ refresh: () => {} }))
+  TableView: forwardRef<
+    { refresh: () => void; clearSelection: () => void },
+    {
+      domain: string
+      onAction: RowActionHandler
+      getBulkActions?: (selection: { ids: number[]; rows: TableRow[] }) => BulkAction[]
+    }
+  >(function TableViewStub({ domain, onAction, getBulkActions }, ref) {
+      useImperativeHandle(ref, () => ({ refresh: () => {}, clearSelection: () => {} }))
       capturedOnAction = onAction
+      capturedBulkActions = getBulkActions ?? null
       return (
         <div role="region" aria-label={`table-${domain}`}>
           <button type="button" onClick={() => onAction(action('view'), ROW)}>
@@ -66,10 +79,15 @@ vi.mock('@/features/table/table-view', () => ({
           <button type="button" onClick={() => onAction(action('delete'), ROW)}>
             trigger-delete
           </button>
+          <button
+            type="button"
+            onClick={() => getBulkActions?.({ ids: [ROW.id], rows: [ROW] })[0]?.onSelect()}
+          >
+            trigger-bulk-assign
+          </button>
         </div>
       )
-    },
-  ),
+  }),
 }))
 
 function panel(): RequestWorkPanelWithPermissions {
@@ -85,6 +103,8 @@ function panel(): RequestWorkPanelWithPermissions {
     reporter: null,
     operator_id: null,
     operator: null,
+    operational_site_id: null,
+    operational_site: null,
     opportunity_status: { id: 5, name: 'New', color: 'slate' },
     workflow_status: { id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false },
     workflow_statuses: [{ id: 100, name: 'Open', color: 'blue', system_key: 'open', description: null, requires_note: false }],
@@ -107,9 +127,13 @@ function panel(): RequestWorkPanelWithPermissions {
 }
 
 const fetchRequestWorkPanelMock = vi.fn()
+const deleteRequestMock = vi.fn()
+const assignRequestOperatorsMock = vi.fn()
 vi.mock('@/features/request-management/api', () => ({
   fetchRequestWorkPanel: (...args: unknown[]) => fetchRequestWorkPanelMock(...args),
   updateRequestWork: vi.fn(),
+  deleteRequest: (...args: unknown[]) => deleteRequestMock(...args),
+  assignRequestOperators: (...args: unknown[]) => assignRequestOperatorsMock(...args),
 }))
 
 function renderTable() {
@@ -135,6 +159,11 @@ beforeEach(() => {
   requestManagementOpenMode = 'page'
   navigateMock.mockReset()
   capturedOnAction = null
+  capturedBulkActions = null
+  deleteRequestMock.mockReset()
+  deleteRequestMock.mockResolvedValue(undefined)
+  assignRequestOperatorsMock.mockReset()
+  assignRequestOperatorsMock.mockResolvedValue({ assigned: 1 })
   fetchRequestWorkPanelMock.mockReset()
   fetchRequestWorkPanelMock.mockResolvedValue(panel())
 })
@@ -164,19 +193,37 @@ describe('RequestManagementTable (spec 0049 AC-060)', () => {
     fireEvent.click(screen.getByText('trigger-view'))
 
     await waitFor(() => expect(fetchRequestWorkPanelMock).toHaveBeenCalledWith(7))
-    expect(await screen.findAllByText('Enterprise deal')).not.toHaveLength(0)
+    expect(await screen.findAllByRole('heading', { name: 'Preliminary information' })).not.toHaveLength(0)
     expect(navigateMock).not.toHaveBeenCalled()
   })
 
-  it('ignores non-view action keys: no edit/delete affordance', () => {
+  it('ignores the edit action key: still no create/edit affordance', () => {
     renderTable()
 
     fireEvent.click(screen.getByText('trigger-edit'))
-    fireEvent.click(screen.getByText('trigger-delete'))
 
     expect(navigateMock).not.toHaveBeenCalled()
     expect(fetchRequestWorkPanelMock).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument()
+  })
+
+  // Requirement changed (user directive 2026-07-23): `delete` used to be an
+  // ignored key, it now runs the delete flow against its own endpoint.
+  it('deletes the row through the request-management endpoint on the delete action', async () => {
+    renderTable()
+
+    fireEvent.click(screen.getByText('trigger-delete'))
+
+    await waitFor(() => expect(deleteRequestMock).toHaveBeenCalledWith(7))
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('offers the bulk "assign operators" action, which opens the shared popup', async () => {
+    renderTable()
+
+    expect(capturedBulkActions).not.toBeNull()
+    fireEvent.click(screen.getByText('trigger-bulk-assign'))
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Assign operators')
   })
 })

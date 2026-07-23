@@ -6,10 +6,9 @@ import { FormSection } from '@/components/form-section'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Form, FormControl } from '@/components/ui/form'
+import { Form } from '@/components/ui/form'
 import { RelationSelectField } from '@/components/form/relation-select-field'
 import { cn } from '@/lib/utils'
-import { MetaField } from '@/features/authorization/MetaField'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { OpportunityRegistryField } from '@/features/opportunities/opportunity-registry-field'
 import { OpportunityClassificationSection } from '@/features/opportunities/opportunity-classification-section'
@@ -27,7 +26,6 @@ import {
 } from '@/features/opportunities/use-opportunity-form'
 import { useOpportunityLeadSelection } from '@/features/opportunities/use-opportunity-lead-selection'
 import { useOpportunitySelectedItems } from '@/features/opportunities/use-opportunity-selected-items'
-import { useOpportunityNameAutofill } from '@/features/opportunities/use-opportunity-name-autofill'
 import type { OpportunityDetail, OpportunityFormMode, OpportunityProductLine } from '@/features/opportunities/types'
 
 interface OpportunityFormBodyProps {
@@ -48,11 +46,13 @@ function sectionRevealClassName(index: number): string {
 /**
  * The opportunity create/edit form UI (spec 0040 + amendment rev.1): an
  * optional in-form "Lead" picker in create (A-1) or its read-only equivalent
- * in edit (D-2), identity (name, the required anagrafica and its 3 BR-4
- * scoped relations), classification (source), team (supervisor + managers)
- * and planning (dates/value/probability) — all wrapped in `MetaField`. All
- * non-render logic lives in `useOpportunityForm`/`useOpportunityFormSubmit`
- * and `useOpportunityLeadSelection`. BR-2 field locking (from a linked Lead)
+ * in edit (D-2), identity (the required anagrafica and its 3 BR-4 scoped
+ * relations — spec 0057 D-5: the name is no longer an input, it is derived
+ * server-side as `OPP_{id}`), classification (source), team (supervisor +
+ * managers) and planning (dates/value/probability) — all wrapped in
+ * `MetaField`. All non-render logic lives in
+ * `useOpportunityForm`/`useOpportunityFormSubmit` and
+ * `useOpportunityLeadSelection`. BR-2 field locking (from a linked Lead)
  * applies uniformly whether the lead came from the `?lead_id=N` deep-link or
  * from picking one in the select (`useOpportunityLeadSelection` unifies
  * both).
@@ -61,11 +61,6 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
   const { t } = useTranslation()
 
   const { form } = useOpportunityForm({ mode })
-
-  // AC-107: CREATE starts with the name auto-computed from the chosen
-  // product categories; EDIT starts already disabled — the loaded name is
-  // authoritative and must never be silently overwritten.
-  const nameAutofill = useOpportunityNameAutofill(mode.type === 'edit')
 
   // `useOpportunityLeadSelection` needs `form.setValue`, so it can only run
   // AFTER `useOpportunityForm` — and `leadSubmission` (below) can only be
@@ -83,7 +78,6 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
       : null,
     form.setValue,
     form.getValues,
-    nameAutofill,
   )
 
   const leadIsBlocked = leadSelection.state.existingOpportunityId !== null
@@ -164,24 +158,6 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
               <OpportunityFromLeadBanner registryName={leadSelection.state.registry?.name ?? null} />
             ) : null}
 
-            <MetaField control={form.control} name="name" metaKey="name" label={t('opportunities.form.name')}>
-              {({ field, disabled, readOnly }) => (
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    disabled={disabled}
-                    readOnly={readOnly}
-                    {...field}
-                    onChange={(event) => {
-                      // AC-107: a hand-edit permanently disables the name auto-fill.
-                      nameAutofill.disable()
-                      field.onChange(event)
-                    }}
-                  />
-                </FormControl>
-              )}
-            </MetaField>
-
             <OpportunityRegistryField
               control={form.control}
               setValue={form.setValue}
@@ -258,10 +234,8 @@ export function OpportunityFormBody({ mode, onSuccess, onCancel }: OpportunityFo
 
           <OpportunityProductLinesSection
             control={form.control}
-            setValue={form.setValue}
             knownProductLines={knownProductLines}
             knownProductsOfInterest={knownProductsOfInterest}
-            nameAutofill={nameAutofill}
             className={sectionRevealClassName(2)}
           />
 

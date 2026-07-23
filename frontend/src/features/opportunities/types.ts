@@ -8,6 +8,7 @@
 
 import type { ResourcePermissions } from '@/features/authorization/types'
 import type { WorkflowStatusGroupValue } from '@/features/opportunity-workflows/types'
+import type { ProductLine } from '@/features/product-lines/types'
 
 /** A hydrated `{id, name}` relation projection, shared by every plain single-relation field. */
 export interface OpportunityRelationRef {
@@ -105,13 +106,12 @@ export interface ApplicableAttributeSummary {
 /**
  * A confirmed business-function + product-category pair (spec 0040 amendment
  * rev.3, AC-097/098/101): replaces the former single `business_function_id`/
- * `product_category_id` columns with a one-to-many collection of rows.
+ * `product_category_id` columns with a one-to-many collection of rows. Spec
+ * 0057 generalized the shape into the shared `ProductLine` (identical fields)
+ * so it can be reused outside the opportunity form; kept as a local alias so
+ * every existing consumer in this feature stays unchanged.
  */
-export interface OpportunityProductLine {
-  id: number
-  business_function: OpportunityRelationRef
-  product_category: OpportunityRelationRef
-}
+export type OpportunityProductLine = ProductLine
 
 /**
  * A product recorded as "di interesse" (user directive 2026-07-22), with its
@@ -236,7 +236,6 @@ export interface OpportunityDetailWithPermissions extends OpportunityDetail {
  * send a value for a field whose derivation is non-null (422 `prohibited`).
  */
 export interface CreateOpportunityPayload {
-  name: string
   /**
    * Required for a manual create (D-4, enforced by the Zod schema); OMITTED
    * entirely (not merely repeated) when creating from a Lead and the value is
@@ -309,6 +308,12 @@ export interface OpportunityDefaultValues {
   referent_id: number | null
   source_id: number | null
   registry_id: number | null
+  /**
+   * User directive 2026-07-23: the lead's Sede operativa, inherited on
+   * conversion as a PLAIN default — never part of `locked_fields`, freely
+   * editable/clearable in the form.
+   */
+  operational_site_id: number | null
 }
 
 /**
@@ -319,6 +324,8 @@ export interface OpportunityDefaultValues {
 export interface OpportunityDefaultReferences {
   source: OpportunityRelationRef | null
   registry: OpportunityRelationRef | null
+  /** The inherited Sede operativa's `{id,label}` ref (no `name` column server-side), for the picker's trigger label. */
+  operational_site: OpportunityOperationalSiteRef | null
 }
 
 /** Response of `GET /leads/{lead}/opportunity-defaults` (spec 0040 MT-6, amendment rev.3), already unwrapped from the envelope. */

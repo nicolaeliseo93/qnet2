@@ -22,6 +22,7 @@ const EMPTY_SELECTED_ITEMS = {
   commercial: null,
   reporter: null,
   source: null,
+  operationalSite: null,
   state: null,
   supervisor: null,
   managers: [],
@@ -30,7 +31,6 @@ const EMPTY_SELECTED_ITEMS = {
 function TeamSectionHarness({ supervisorRequired }: { supervisorRequired: boolean }) {
   const form = useForm<OpportunityFormValues>({
     defaultValues: {
-      name: '',
       registry_id: null,
       opportunity_status_id: null,
       referent_id: null,

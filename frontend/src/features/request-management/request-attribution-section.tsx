@@ -1,20 +1,29 @@
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Route } from 'lucide-react'
-import type { Control } from 'react-hook-form'
+import { useWatch, type UseFormReturn } from 'react-hook-form'
 import { FormSection } from '@/components/form-section'
-import { RelationSelectField } from '@/components/form/relation-select-field'
+import { RelationSelectField, type RelationFieldRef } from '@/components/form/relation-select-field'
+import type { ForSelectItem } from '@/features/for-select/types'
 import { REFERENTS_FOR_SELECT_RESOURCE } from '@/features/referents/for-select-api'
 import { SOURCES_FOR_SELECT_RESOURCE } from '@/features/sources/for-select-api'
-import { USERS_FOR_SELECT_RESOURCE } from '@/features/users/for-select-api'
+import { USERS_FOR_SELECT_RESOURCE, type UserForSelectItem } from '@/features/users/for-select-api'
+import { OPERATIONAL_SITES_FOR_SELECT_RESOURCE } from '@/features/operational-sites/for-select-api'
 import type { RequestWorkFormValues } from '@/features/request-management/request-work-schema'
 import type { RequestRelationRef } from '@/features/request-management/types'
 
 interface RequestAttributionSectionProps {
-  control: Control<RequestWorkFormValues>
+  /**
+   * The whole form, not just its `control`: the Sede <-> Operatore link below
+   * writes the other field through `setValue`.
+   */
+  form: UseFormReturn<RequestWorkFormValues>
   /** The panel's hydrated `{id, name}` projections, for the pickers' labels. */
   source: RequestRelationRef | null
   reporter: RequestRelationRef | null
   operator: RequestRelationRef | null
+  /** Spec 0056: the operational site's `{id,label}` ref, converted to `{id,name}` by the caller (`toRelationFieldRef`). */
+  operationalSite: RequestRelationRef | null
 }
 
 /**
@@ -27,14 +36,58 @@ interface RequestAttributionSectionProps {
  * Changing the operator REASSIGNS the request: an actor without
  * `request-management.viewAll` loses access to it on the next read (D-3
  * scope), which is the intended semantics of handing a request over.
+ *
+ * Sede <-> Operatore are reciprocally linked exactly as in the Lead form
+ * (`lead-form-body.tsx`, spec 0048 AC-060..062), user directive 2026-07-23:
+ * the operator list is scoped to the chosen Sede, picking an operator first
+ * hydrates its own Sede from `meta`, and a real Sede change clears a now
+ * out-of-scope operator.
  */
 export function RequestAttributionSection({
-  control,
+  form,
   source,
   reporter,
   operator,
+  operationalSite,
 }: RequestAttributionSectionProps) {
   const { t } = useTranslation()
+  const control = form.control
+
+  // Baseline every auto-fill/clear below reasons against: it starts at the
+  // panel's persisted Sede and only ever moves inside an event handler (never
+  // read/written during render), so a REAL Sede pick is told apart from the
+  // programmatic auto-fill (which never goes through the Sede field's own
+  // `onItemChange`).
+  const previousSiteIdRef = useRef<number | null>(operationalSite?.id ?? null)
+  const siteId = useWatch({ control, name: 'operational_site_id' })
+  const [autoFilledSite, setAutoFilledSite] = useState<RelationFieldRef | null>(null)
+
+  // Operatore -> Sede: picking an operator hydrates its own Sede from `meta`
+  // (no extra fetch). An operator with no Sede leaves the current value alone.
+  const handleOperatorItemChange = (item: ForSelectItem | null) => {
+    const site = (item as UserForSelectItem | null)?.meta
+    if (site?.operational_site_id == null) return
+    form.setValue('operational_site_id', site.operational_site_id, {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
+    setAutoFilledSite({
+      id: site.operational_site_id,
+      name: site.operational_site_label ?? `#${site.operational_site_id}`,
+    })
+    previousSiteIdRef.current = site.operational_site_id
+  }
+
+  // Sede -> Operatore: a real pick/clear re-scopes the operator list, so an
+  // operator from another Sede can no longer be assumed valid and is cleared
+  // — only on an ACTUAL change, never on the programmatic auto-fill above.
+  const handleSiteItemChange = (item: ForSelectItem | null) => {
+    const nextSiteId = item?.id ?? null
+    if (nextSiteId !== previousSiteIdRef.current) {
+      form.setValue('operator_id', null, { shouldDirty: true })
+    }
+    previousSiteIdRef.current = nextSiteId
+  }
 
   const selectLabels = {
     placeholder: t('requestManagement.workPanel.attribution.selectPlaceholder', {
@@ -87,17 +140,43 @@ export function RequestAttributionSection({
 
         <RelationSelectField
           control={control}
-          name="operator_id"
-          metaKey="operator_id"
-          label={t('requestManagement.workPanel.attribution.operator', { defaultValue: 'Operator' })}
-          resource={USERS_FOR_SELECT_RESOURCE}
-          searchPlaceholder={t('requestManagement.workPanel.attribution.operatorSearch', {
-            defaultValue: 'Search an operator',
+          name="operational_site_id"
+          metaKey="operational_site_id"
+          label={t('requestManagement.workPanel.attribution.operationalSite', { defaultValue: 'Operational site' })}
+          resource={OPERATIONAL_SITES_FOR_SELECT_RESOURCE}
+          searchPlaceholder={t('requestManagement.workPanel.attribution.operationalSiteSearch', {
+            defaultValue: 'Search a site',
           })}
-          selected={operator}
-          showAvatar
+          selected={autoFilledSite ?? operationalSite}
+          onItemChange={handleSiteItemChange}
           {...selectLabels}
         />
+
+        {/* After the Sede on purpose: the Sede is what scopes this list. */}
+        <div className="space-y-1.5">
+          <RelationSelectField
+            control={control}
+            name="operator_id"
+            metaKey="operator_id"
+            label={t('requestManagement.workPanel.attribution.operator', { defaultValue: 'Operator' })}
+            resource={USERS_FOR_SELECT_RESOURCE}
+            searchPlaceholder={t('requestManagement.workPanel.attribution.operatorSearch', {
+              defaultValue: 'Search an operator',
+            })}
+            selected={operator}
+            onItemChange={handleOperatorItemChange}
+            params={siteId != null ? { operational_site_id: siteId } : undefined}
+            showAvatar
+            {...selectLabels}
+          />
+          {siteId != null && (
+            <p className="text-xs text-muted-foreground">
+              {t('requestManagement.workPanel.attribution.operatorFilteredBySite', {
+                defaultValue: 'Only the operators of the selected site.',
+              })}
+            </p>
+          )}
+        </div>
       </div>
     </FormSection>
   )

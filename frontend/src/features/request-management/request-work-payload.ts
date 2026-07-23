@@ -173,6 +173,10 @@ export function buildRequestWorkPayload(
     payload.operator_id = values.operator_id
   }
 
+  if (values.operational_site_id !== panel.operational_site_id) {
+    payload.operational_site_id = values.operational_site_id
+  }
+
   // Sent only when a row exists: clearing every field of the inline address
   // leaves the persisted one untouched — this panel has no delete affordance
   // for it, and the write path never deletes an address.

@@ -5,6 +5,8 @@ namespace App\Http\Requests\Companies;
 use App\DataObjects\Companies\UpdateCompanyData;
 use App\Http\Requests\Concerns\EnforcesFieldPermissions;
 use App\Models\Company;
+use App\Rules\VatNumber;
+use App\Support\InputFormat;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
@@ -32,13 +34,25 @@ class UpdateCompanyRequest extends FormRequest
     }
 
     /**
+     * Canonicalize the typed VAT number before the rules run, exactly as
+     * StoreCompanyRequest does (user directive 2026-07-23). Sparse-safe: an
+     * absent key is never introduced, so `sometimes` keeps its meaning.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('vat_number'))) {
+            $this->merge(['vat_number' => InputFormat::vatNumber($this->string('vat_number')->toString())]);
+        }
+    }
+
+    /**
      * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
         return [
             'denomination' => ['sometimes', 'required', 'string', 'max:255'],
-            'vat_number' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'vat_number' => ['sometimes', 'nullable', 'string', 'max:50', new VatNumber],
 
             'address' => ['sometimes', 'nullable', 'array'],
             'address.line1' => ['required_with:address', 'string', 'max:255'],

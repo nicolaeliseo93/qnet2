@@ -210,4 +210,3 @@ it('update: 404 for a non-existent site', function () {
 
     $this->patchJson('/api/company-sites/999999', ['name' => 'Ghost'])->assertNotFound();
 });
-

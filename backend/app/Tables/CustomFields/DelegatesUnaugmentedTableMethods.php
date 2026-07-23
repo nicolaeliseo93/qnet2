@@ -94,6 +94,11 @@ trait DelegatesUnaugmentedTableMethods
         return $this->inner->updateCell($row, $columnId, $value);
     }
 
+    public function authorizeDelete(User $actor, Model $row): bool
+    {
+        return $this->inner->authorizeDelete($actor, $row);
+    }
+
     /**
      * Advanced filters (spec 0032) are a native-column/relation concern the
      * wrapped $inner definition owns entirely — a custom field is not (yet)

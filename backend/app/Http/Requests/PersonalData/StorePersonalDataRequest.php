@@ -5,7 +5,10 @@ namespace App\Http\Requests\PersonalData;
 use App\DataObjects\PersonalData\CreatePersonalData;
 use App\Enums\GenderEnum;
 use App\Enums\PersonalDataTypeEnum;
+use App\Http\Requests\Concerns\FormatsPersonalDataInput;
 use App\Http\Requests\Concerns\ResolvesOwner;
+use App\Rules\TaxCode;
+use App\Rules\VatNumber;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -21,12 +24,22 @@ use Illuminate\Validation\Rule;
  */
 class StorePersonalDataRequest extends FormRequest
 {
-    use ResolvesOwner;
+    use FormatsPersonalDataInput, ResolvesOwner;
 
     public function authorize(): bool
     {
         // Authorization handled in the controller via the PersonalDataPolicy.
         return true;
+    }
+
+    /**
+     * Canonicalize the typed identity values before the rules run (user
+     * directive 2026-07-23) — see FormatsPersonalDataInput. Inherited by
+     * UpdatePersonalDataRequest, so both write paths store the same shape.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->formatIdentityInput();
     }
 
     /**
@@ -56,8 +69,8 @@ class StorePersonalDataRequest extends FormRequest
             'last_name' => [$isIndividual ? 'required' : 'nullable', 'string', 'max:255'],
             'company_name' => [$isCompany ? 'required' : 'nullable', 'string', 'max:255'],
 
-            'tax_code' => ['nullable', 'string', 'max:32'],
-            'vat_number' => ['nullable', 'string', 'max:32'],
+            'tax_code' => ['nullable', 'string', 'max:32', new TaxCode],
+            'vat_number' => ['nullable', 'string', 'max:32', new VatNumber],
             'sdi_code' => ['nullable', 'string', 'max:32'],
             'birth_date' => ['nullable', 'date', 'before:today'],
             'gender' => ['nullable', Rule::enum(GenderEnum::class)],

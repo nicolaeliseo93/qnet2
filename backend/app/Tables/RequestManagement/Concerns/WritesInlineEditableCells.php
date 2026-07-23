@@ -31,7 +31,7 @@ trait WritesInlineEditableCells
     private const string WORKFLOW_STATUS_FIELD = 'opportunity_workflow_status_id';
 
     /**
-     * Both of this domain's editable columns (`next_callback_at`, D-4;
+     * Every editable column of this domain (`next_callback_at`, D-4;
      * `opportunity_workflow_status_id`, D-5) write through
      * RequestManagementService::updateWork() rather than a plain
      * `$row->update([...])`: `next_callback_at` is OUTSIDE
@@ -41,7 +41,9 @@ trait WritesInlineEditableCells
      * for a `requires_note` target (D-5) — both live in updateWork(), the
      * ONE choke point both write channels (this override and the work
      * panel's `UpdateRequestRequest`) pass through, so they can never
-     * diverge. Neither `$actor` nor `note` are part of this contract
+     * diverge — including `products_of_interest` (user directive
+     * 2026-07-23), whose cross-category rule lives in
+     * OpportunityProductInterestWriter behind that same call. Neither `$actor` nor `note` are part of this contract
      * method's signature (spec 0053): `$actor` is read from the auth guard,
      * same precedent as baseQuery()'s `Auth::user()` call; `note` is read
      * from the ambient request the same way, since every caller of the

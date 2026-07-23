@@ -29,6 +29,7 @@ import { projects } from './en-projects'
 import { campaigns } from './en-campaigns'
 import { leads } from './en-leads'
 import { opportunities } from './en-opportunities'
+import { productLines } from './en-product-lines'
 import { opportunityStatuses } from './en-opportunity-statuses'
 import { opportunityWorkflows } from './en-opportunity-workflows'
 import { requestManagement } from './en-request-management'
@@ -479,6 +480,7 @@ export const en = {
   leadImports,
   leads: { ...leads, stats: moduleStats.leads },
   opportunities: { ...opportunities, stats: moduleStats.opportunities },
+  productLines,
   opportunityStatuses,
   opportunityWorkflows,
   requestManagement,

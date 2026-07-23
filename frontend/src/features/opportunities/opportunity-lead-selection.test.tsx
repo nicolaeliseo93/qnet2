@@ -64,6 +64,8 @@ const TEST_LEAD_NO_OPERATOR_ID = 902
 const TEST_OPPORTUNITY_STATUS_ID = 5
 /** Directive 2026-07-21: the Operator derived onto `TEST_LEAD_ID`, seeding the first Gestore Account slot. */
 const TEST_OPERATOR_ID = 300
+/** Directive 2026-07-23: the Sede operativa inherited from `TEST_LEAD_ID` on conversion. */
+const TEST_OPERATIONAL_SITE_ID = 400
 
 /** Fixed selection ids exposed per field (by accessible trigger label), mirrors `opportunity-form-body.test.tsx`. */
 const SELECT_IDS: Record<string, number[]> = {
@@ -94,6 +96,32 @@ vi.mock('@/components/ui/async-paginated-select', () => ({
         </button>
       ))}
       <button type="button" onClick={() => onChange(null)}>{`clear ${labels.triggerLabel}`}</button>
+    </div>
+  ),
+}))
+
+/**
+ * The products-of-interest picker (mandatory since the user directive
+ * 2026-07-23, so no create can submit without it): stubbed like the single
+ * selects above, one button per selectable product.
+ */
+const TEST_PRODUCT_ID = 700
+
+vi.mock('@/components/ui/async-paginated-multi-select', () => ({
+  AsyncPaginatedMultiSelect: ({
+    value,
+    onChange,
+    labels,
+  }: {
+    value: number[]
+    onChange: (value: number[]) => void
+    labels: { triggerLabel: string }
+  }) => (
+    <div data-testid={`multi-${labels.triggerLabel}`}>
+      <span data-testid={`value-multi-${labels.triggerLabel}`}>{value.join(',')}</span>
+      <button type="button" onClick={() => onChange([...value, TEST_PRODUCT_ID])}>
+        {`select ${labels.triggerLabel} ${TEST_PRODUCT_ID}`}
+      </button>
     </div>
   ),
 }))
@@ -167,6 +195,7 @@ function editOpportunity(
         product_category: { id: 50, name: 'Consulting' },
       },
     ],
+    products_of_interest: [{ id: 700, name: 'Fibra 1000', product_category: { id: 50, name: 'Consulting' } }],
     lead_id: 900,
     lead: { id: 900, label: 'Mario Rossi' },
     managers: [],
@@ -203,8 +232,8 @@ beforeEach(() => {
       return {
         lead_id: leadId,
         existing_opportunity_id: 777,
-        values: { referent_id: null, source_id: null, registry_id: null },
-        references: { source: null, registry: null },
+        values: { referent_id: null, source_id: null, registry_id: null, operational_site_id: null },
+        references: { source: null, registry: null, operational_site: null },
         locked_fields: [],
         product_lines: [],
         manager_slots: [],
@@ -219,10 +248,13 @@ beforeEach(() => {
         referent_id: null,
         source_id: 20,
         registry_id: TEST_REGISTRY_ID,
+        // Directive 2026-07-23: inherited on conversion, never locked.
+        operational_site_id: TEST_OPERATIONAL_SITE_ID,
       },
       references: {
         source: { id: 20, name: 'Web' },
         registry: { id: TEST_REGISTRY_ID, name: 'Acme S.p.A.' },
+        operational_site: { id: TEST_OPERATIONAL_SITE_ID, label: 'Via Roma 1 - Milano' },
       },
       locked_fields: ['source_id', 'registry_id'],
       // Amendment rev.3 (AC-102/103): editable/removable seed row, never locked.
@@ -266,10 +298,43 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     // normal, editable/removable product-line row — never a locked field.
     expect(screen.getByText('Sales')).toBeInTheDocument()
     expect(screen.getByText(/Consulting/)).toBeInTheDocument()
-    // AC-107: the name auto-computes from the seeded row's category.
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Consulting')
     // AC-051: the origin banner also sources its name from the registry now.
     expect(screen.getByRole('status')).toHaveTextContent('Acme S.p.A.')
+  })
+
+  it('inherits the lead operational site, unlocked, with its composed label (directive 2026-07-23)', async () => {
+    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
+    screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
+
+    await waitFor(() =>
+      expect(screen.getByTestId('value-Operational site')).toHaveTextContent(
+        String(TEST_OPERATIONAL_SITE_ID),
+      ),
+    )
+    expect(screen.getByTestId('disabled-Operational site')).toHaveTextContent('false')
+    expect(screen.getByTestId('label-Operational site')).toHaveTextContent('Via Roma 1 - Milano')
+  })
+
+  it('clears the inherited operational site when the lead selection is cleared', async () => {
+    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
+      wrapper: wrapper(),
+    })
+
+    await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
+    screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
+    await waitFor(() =>
+      expect(screen.getByTestId('value-Operational site')).toHaveTextContent(
+        String(TEST_OPERATIONAL_SITE_ID),
+      ),
+    )
+
+    screen.getByRole('button', { name: 'clear Lead' }).click()
+
+    await waitFor(() => expect(screen.getByTestId('value-Operational site')).toHaveTextContent(''))
   })
 
   it('resets and unlocks the derived fields when the lead selection is cleared', async () => {
@@ -290,7 +355,6 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     expect(screen.getByTestId('value-Contact')).toHaveTextContent('')
     // The derived product-line row is cleared away too (rev.3, "least surprising" whole-field reset).
     expect(screen.queryByText('Sales')).not.toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -312,6 +376,9 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
       ),
     )
     fireEvent.click(screen.getByRole('button', { name: 'select Supervisor 1' }))
+    // Mandatory since the user directive 2026-07-23: without a product the
+    // form would not submit at all.
+    fireEvent.click(screen.getByRole('button', { name: `select Products of interest ${TEST_PRODUCT_ID}` }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -326,6 +393,7 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
     expect(payload).not.toHaveProperty('source_id')
     // Amendment rev.3: product_lines is NEVER locked — always sent, in full.
     expect(payload.product_lines).toEqual([{ business_function_id: 40, product_category_id: 50 }])
+    expect(payload.products_of_interest).toEqual([TEST_PRODUCT_ID])
   })
 
   it('blocks the submit and shows a message when the picked lead already has an opportunity (AC-087)', async () => {
@@ -349,63 +417,6 @@ describe('OpportunityFormBody — in-form Lead select (AC-086/087)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(createOpportunityMock).not.toHaveBeenCalled()
-  })
-
-  it('appends the lead Operator as the second Gestore Account slot on selection, G.A. 1 left empty, still editable, Supervisor left empty', async () => {
-    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
-    // No slot yet: `manager_slots` starts empty, so no G.A. row is rendered.
-    expect(screen.queryByTestId('value-Account manager 1')).not.toBeInTheDocument()
-
-    screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
-
-    await waitFor(() =>
-      expect(screen.getByTestId('value-Account manager 2')).toHaveTextContent(String(TEST_OPERATOR_ID)),
-    )
-    // G.A. 1 is materialized but empty.
-    expect(screen.getByTestId('value-Account manager 1')).toHaveTextContent('')
-    // Precompiled, never locked: the user can still change it (unlike Registry/Source above).
-    expect(screen.getByTestId('disabled-Account manager 2')).toHaveTextContent('false')
-    // The trigger label is hydrated too — `setValue` alone writes the id, not the name.
-    expect(screen.getByTestId('label-Account manager 2')).toHaveTextContent('Giulia Bianchi')
-    // The Supervisor is no longer prefilled from the lead.
-    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('')
-  })
-
-  it('leaves the Gestori account empty when the picked lead has no Operator', async () => {
-    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
-    screen.getByRole('button', { name: `select Lead ${TEST_LEAD_NO_OPERATOR_ID}` }).click()
-
-    await waitFor(() => expect(screen.getByTestId('value-Registry')).toHaveTextContent(String(TEST_REGISTRY_ID)))
-    // No Operator -> no slot seeded, Supervisor stays empty.
-    expect(screen.queryByTestId('value-Account manager 1')).not.toBeInTheDocument()
-    expect(screen.getByTestId('value-Supervisor')).toHaveTextContent('')
-  })
-
-  it('appends the Operator alongside a manager the user already picked, never overwriting it', async () => {
-    render(<OpportunityForm mode={{ type: 'create' }} onSuccess={vi.fn()} onCancel={vi.fn()} />, {
-      wrapper: wrapper(),
-    })
-
-    await waitFor(() => expect(screen.getByTestId('select-Lead')).toBeInTheDocument())
-    // Manually add a first G.A. slot and pick a user (mock id 1) into it.
-    fireEvent.click(screen.getByRole('button', { name: 'Add account manager' }))
-    fireEvent.click(screen.getByRole('button', { name: 'select Account manager 1 1' }))
-    expect(screen.getByTestId('value-Account manager 1')).toHaveTextContent('1')
-
-    screen.getByRole('button', { name: `select Lead ${TEST_LEAD_ID}` }).click()
-
-    await waitFor(() => expect(screen.getByTestId('value-Registry')).toHaveTextContent(String(TEST_REGISTRY_ID)))
-    // The user's own manager is kept in slot 1; the Operator is appended as slot 2.
-    expect(screen.getByTestId('value-Account manager 1')).toHaveTextContent('1')
-    expect(screen.getByTestId('value-Account manager 2')).toHaveTextContent(String(TEST_OPERATOR_ID))
   })
 })
 

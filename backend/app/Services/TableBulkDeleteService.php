@@ -7,7 +7,6 @@ use App\Models\User;
 use App\Tables\TableDefinition;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
@@ -20,7 +19,10 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * others already committed. Domain-specific delete guards (e.g. the
  * last-super-admin guard, a protected system row) are respected because the
  * actual delete is delegated to the definition's deleteModel() — the exact
- * same guard the single-row DELETE endpoint enforces.
+ * same guard the single-row DELETE endpoint enforces. The per-row ability
+ * likewise goes through the definition (authorizeDelete), so a domain whose
+ * permission prefix differs from its model's Policy (request-management over
+ * Opportunity, D-2) is gated by its OWN permission, never a foreign one.
  */
 class TableBulkDeleteService
 {
@@ -43,11 +45,11 @@ class TableBulkDeleteService
         // Step 2: ids absent from the loaded set are not_found.
         $failed = $this->notFoundEntries($ids, $models);
 
-        // Step 3: per loaded model, Gate check then best-effort delete.
+        // Step 3: per loaded model, ability check then best-effort delete.
         $deleted = 0;
 
         foreach ($models as $id => $model) {
-            if (! Gate::forUser($actor)->allows('delete', $model)) {
+            if (! $definition->authorizeDelete($actor, $model)) {
                 $failed[] = ['id' => $id, 'reason' => self::REASON_FORBIDDEN];
 
                 continue;
@@ -97,7 +99,7 @@ class TableBulkDeleteService
     }
 
     /**
-     * Best-effort delete of a single, already Gate-authorized model. A
+     * Best-effort delete of a single, already authorized model. A
      * domain guard rejecting THIS row (AuthorizationException, or an HTTP
      * exception raised via `abort()`, e.g. the last-super-admin guard) is
      * caught here and never propagates to abort the rest of the batch.

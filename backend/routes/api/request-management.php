@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Route;
 | Request Management work panel (spec 0049)
 |--------------------------------------------------------------------------
 |
-| Dedicated show/update endpoints for the operative "Gestione Richieste"
+| Dedicated create/show/update/delete plus bulk-assign endpoints for the
+| operative "Gestione Richieste"
 | panel: the record IS an Opportunity (D-1), but authorization/scoping run
 | through `request-management.*` (RequestManagementPolicy/Scope), never the
 | opportunities.* CRUD (PATCH /api/opportunities/{id}). Required from routes/api.php
@@ -16,5 +17,13 @@ use Illuminate\Support\Facades\Route;
 | middleware/prefix context. No list/export/activity route here: those are
 | served by the generic tables/exports/activity-log framework (ADR 0002).
 */
+// Declared BEFORE the {opportunity} routes: a POST to the literal segment
+// must never be swallowed by the wildcard.
+Route::post('request-management/assign-operators', [RequestManagementController::class, 'assignOperators']);
+// Spec 0057: the bare POST, gated by `request-management.create` — no
+// {opportunity} to conflict with (creation), but declared here too for
+// consistency with the file's own convention.
+Route::post('request-management', [RequestManagementController::class, 'store']);
 Route::get('request-management/{opportunity}', [RequestManagementController::class, 'show']);
+Route::delete('request-management/{opportunity}', [RequestManagementController::class, 'destroy']);
 Route::match(['put', 'patch'], 'request-management/{opportunity}', [RequestManagementController::class, 'update']);

@@ -119,7 +119,6 @@ class DemoOpportunitySeeder extends Seeder
         array $productLineCandidates,
     ): void {
         $data = new CreateOpportunityData(
-            name: $faker->catchPhrase(),
             registryId: $registries[$index % $registries->count()]->id,
             referentId: $this->maybePick($referents, $index + 4, $faker, 60)?->id,
             commercialId: $this->maybePick($referents, $index + 5, $faker, 40)?->id,
@@ -155,7 +154,6 @@ class DemoOpportunitySeeder extends Seeder
 
         foreach ($leads as $index => $lead) {
             $data = new CreateOpportunityData(
-                name: $faker->catchPhrase(),
                 registryId: null,
                 referentId: null,
                 commercialId: null,

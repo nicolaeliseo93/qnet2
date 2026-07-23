@@ -46,11 +46,12 @@ class RequestManagementAuthorization extends AbstractResourceAuthorization
             // D-2); this catalogue entry only closes a gap in the per-field
             // permission system, it grants nothing new.
             new FieldDefinition('next_callback_at', 'date'),
-            // "Prodotti di interesse" (user directive 2026-07-22): written by
+            // "Prodotti di interesse": written by
             // RequestManagementService::updateWork() through
-            // OpportunityProductInterestWriter; this entry only closes the
-            // per-field permission gap, it grants nothing new.
-            new FieldDefinition('products_of_interest', 'multiselect'),
+            // OpportunityProductInterestWriter. MANDATORY (user directive
+            // 2026-07-23) exactly like in OpportunitiesAuthorization — the two
+            // channels write the same collection, so the rule cannot differ.
+            new FieldDefinition('products_of_interest', 'multiselect', mandatory: true),
             // Attribution block (user directive 2026-07-22): "Fonte",
             // "Segnalatore" and the GA2 "Operatore" — the same three
             // dimensions the opportunities form owns, made editable from the
@@ -61,6 +62,10 @@ class RequestManagementAuthorization extends AbstractResourceAuthorization
             new FieldDefinition('source_id', 'select'),
             new FieldDefinition('reporter_id', 'select'),
             new FieldDefinition('operator_id', 'select'),
+            // Spec 0056: the Sede operativa, editable from this same
+            // attribution block (see OpportunitiesAuthorization's docblock for
+            // the operational-sites.viewAny ceiling rule this field shares).
+            new FieldDefinition('operational_site_id', 'select'),
             // Client anagraphic block (spec 0055, D-8, user decision): FOUR
             // separate keys rather than one `client_identity`, so the
             // role_field_permissions matrix can make the phone editable
@@ -94,10 +99,13 @@ class RequestManagementAuthorization extends AbstractResourceAuthorization
             'opportunity_workflow_status_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'attribute_values' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'next_callback_at' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
-            'products_of_interest' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            'products_of_interest' => $mayWrite ? FieldPermission::visibleEditable(required: true) : FieldPermission::visibleReadonly(),
             'source_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'reporter_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'operator_id' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
+            // Spec 0056: readonly unless the actor ALSO holds
+            // operational-sites.viewAny (mirrors OpportunitiesAuthorization).
+            'operational_site_id' => $mayWrite && $actor->can('operational-sites.viewAny') ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'client_first_name' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'client_last_name' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),
             'client_tax_code' => $mayWrite ? FieldPermission::visibleEditable() : FieldPermission::visibleReadonly(),

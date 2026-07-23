@@ -6,8 +6,8 @@ namespace App\DataObjects\Opportunities;
 
 /**
  * Validated payload for creating an opportunity (POST /api/opportunities,
- * spec 0040). `name`/`registryId` are the only mandatory scalars (D-4);
- * every other relation is optional. `managerSlots` is ORDERED and gap-aware,
+ * spec 0040). `registryId` is the only mandatory scalar (D-4); every other
+ * relation is optional. `managerSlots` is ORDERED and gap-aware,
  * mirroring CreateRegistryData verbatim: index+1 is the manager's static
  * "G.A. n" position, a null entry an intentionally empty slot — synced by
  * OpportunityService post-create via `->sync()`, so it is NOT a mass-
@@ -21,9 +21,15 @@ namespace App\DataObjects\Opportunities;
  * `productLines` — a to-many collection, delete-all + insert synced
  * separately by OpportunityService (like `managerSlots`), so it also stays
  * out of attributes(). User directive 2026-07-17: `companyId`/
- * `companySiteId`/`operationalSiteId` are REMOVED entirely.
+ * `companySiteId` are REMOVED entirely.
  * `opportunityStatusId` (spec 0043, D-3) is REQUIRED at the FormRequest
  * layer — never null once validated.
+ *
+ * Spec 0056: `operationalSiteId` is reintroduced as a plain, optional scalar
+ * — appended AT THE END with a default (never inserted positionally: this
+ * constructor mixes required params with no default and later ones that
+ * have one, so a middle insertion would be an ArgumentCountError trap, the
+ * same one already paid on the projects/campaigns precedent).
  *
  * Spec 0047: `stateId` (Regione, D1) is a plain editable scalar — inherited
  * from the lead (LeadOpportunityDefaultsResolver/ConvertLeadToOpportunity)
@@ -33,6 +39,11 @@ namespace App\DataObjects\Opportunities;
  * resolved set); when null, OpportunityService resolves it via
  * OpportunityWorkflowResolver instead — it is NEVER part of attributes()
  * (never mass-assigned, always written by the resolver).
+ *
+ * Spec 0057, D-5: `name` is REMOVED entirely — it is no longer a client
+ * input anywhere (form or request-management create). OpportunityService
+ * derives it as `OPP_{id}` right after the insert, mirroring
+ * RegistryService's own placeholder-then-derive pattern for `registries.name`.
  */
 final readonly class CreateOpportunityData
 {
@@ -42,7 +53,6 @@ final readonly class CreateOpportunityData
      * @param  array<int, int>|null  $productsOfInterest  "prodotti di interesse" (user directive 2026-07-22): a to-many reference synced by OpportunityProductInterestWriter, never mass-assigned — out of attributes() like the two collections above
      */
     public function __construct(
-        public string $name,
         public ?int $registryId,
         public ?int $referentId,
         public ?int $commercialId,
@@ -60,6 +70,7 @@ final readonly class CreateOpportunityData
         public ?int $stateId = null,
         public ?int $workflowStatusId = null,
         public ?array $productsOfInterest = null,
+        public ?int $operationalSiteId = null,
     ) {}
 
     /**
@@ -70,7 +81,6 @@ final readonly class CreateOpportunityData
     public static function fromValidated(array $data): self
     {
         return new self(
-            name: (string) $data['name'],
             registryId: isset($data['registry_id']) ? (int) $data['registry_id'] : null,
             referentId: isset($data['referent_id']) ? (int) $data['referent_id'] : null,
             commercialId: isset($data['commercial_id']) ? (int) $data['commercial_id'] : null,
@@ -90,6 +100,7 @@ final readonly class CreateOpportunityData
             stateId: isset($data['state_id']) ? (int) $data['state_id'] : null,
             workflowStatusId: isset($data['opportunity_workflow_status_id']) ? (int) $data['opportunity_workflow_status_id'] : null,
             productsOfInterest: array_key_exists('products_of_interest', $data) ? self::normalizeIds($data['products_of_interest']) : null,
+            operationalSiteId: isset($data['operational_site_id']) ? (int) $data['operational_site_id'] : null,
         );
     }
 
@@ -134,20 +145,21 @@ final readonly class CreateOpportunityData
      * The opportunity's own scalar attributes for a mass-assignment create
      * (framework array boundary). `managerSlots`/`productLines` are NOT
      * included: they are to-many references synced separately by
-     * OpportunityService.
+     * OpportunityService. `name` is NOT included either (spec 0057, D-5): it
+     * is derived post-insert by OpportunityService, never mass-assigned here.
      *
      * @return array<string, mixed>
      */
     public function attributes(): array
     {
         return [
-            'name' => $this->name,
             'registry_id' => $this->registryId,
             'referent_id' => $this->referentId,
             'commercial_id' => $this->commercialId,
             'reporter_id' => $this->reporterId,
             'supervisor_id' => $this->supervisorId,
             'source_id' => $this->sourceId,
+            'operational_site_id' => $this->operationalSiteId,
             'lead_id' => $this->leadId,
             'opportunity_status_id' => $this->opportunityStatusId,
             'start_date' => $this->startDate,

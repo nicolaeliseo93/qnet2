@@ -1,0 +1,297 @@
+<?php
+
+use App\Models\EmploymentProfile;
+use App\Models\OperationalSite;
+use App\Models\Opportunity;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Permission;
+
+uses(RefreshDatabase::class);
+
+/**
+ * User directive 2026-07-23: the request-management grid gets the selection
+ * checkbox column, which the generic table only shows when a bulk action is
+ * reachable — bulk delete and bulk operator assignment, "come nei lead".
+ *
+ * The load-bearing rule under test is D-2: both flows are gated by this
+ * module's OWN `request-management.*` permissions, never `opportunities.*`,
+ * and both respect the D-3 GA2 scope.
+ */
+if (! function_exists('bulkActionsActor')) {
+    /**
+     * @param  array<int, string>  $abilities
+     */
+    function bulkActionsActor(array $abilities): User
+    {
+        foreach (['viewAny', 'view', 'update', 'delete', 'viewAll'] as $ability) {
+            Permission::findOrCreate("request-management.{$ability}");
+        }
+
+        $user = User::factory()->create();
+
+        foreach ($abilities as $ability) {
+            $user->givePermissionTo("request-management.{$ability}");
+        }
+
+        return $user;
+    }
+}
+
+if (! function_exists('bulkActionsOperatorAtSite')) {
+    function bulkActionsOperatorAtSite(OperationalSite $site): User
+    {
+        $operator = User::factory()->create();
+        EmploymentProfile::factory()->create(['user_id' => $operator->id, 'operational_site_id' => $site->id]);
+
+        return $operator;
+    }
+}
+
+if (! function_exists('bulkActionsRequestManagedBy')) {
+    function bulkActionsRequestManagedBy(User $operator): Opportunity
+    {
+        $opportunity = Opportunity::factory()->create();
+        $opportunity->managers()->attach($operator->id, ['position' => Opportunity::OPERATOR_MANAGER_POSITION]);
+
+        return $opportunity;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The `delete` action: what switches the checkbox column on
+// ---------------------------------------------------------------------------
+
+it('the action catalogue exposes `delete` to an actor holding request-management.delete', function () {
+    Sanctum::actingAs(bulkActionsActor(['viewAny', 'view', 'delete']));
+
+    $keys = collect($this->getJson('/api/tables/request-management/columns')->assertOk()->json('data.actions'))
+        ->pluck('key');
+
+    expect($keys)->toContain('delete')
+        ->and($keys)->not->toContain('edit');
+});
+
+it('the `delete` action is hidden from an actor without request-management.delete', function () {
+    Sanctum::actingAs(bulkActionsActor(['viewAny', 'view']));
+
+    $keys = collect($this->getJson('/api/tables/request-management/columns')->assertOk()->json('data.actions'))
+        ->pluck('key');
+
+    expect($keys)->not->toContain('delete');
+});
+
+it('row.actions carries `delete` only for an actor holding request-management.delete', function () {
+    $opportunity = Opportunity::factory()->create();
+
+    Sanctum::actingAs(bulkActionsActor(['viewAny', 'viewAll', 'view']));
+    $items = collect($this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+    expect($items->firstWhere('id', $opportunity->id)['actions'])->not->toContain('delete');
+
+    Sanctum::actingAs(bulkActionsActor(['viewAny', 'viewAll', 'view', 'delete']));
+    $items = collect($this->postJson('/api/tables/request-management/rows', ['startRow' => 0, 'endRow' => 25])
+        ->assertOk()->json('items'));
+    expect($items->firstWhere('id', $opportunity->id)['actions'])->toContain('delete');
+});
+
+// ---------------------------------------------------------------------------
+// Bulk delete
+// ---------------------------------------------------------------------------
+
+it('bulk-delete removes every selected request for an actor holding request-management.delete', function () {
+    $first = Opportunity::factory()->create();
+    $second = Opportunity::factory()->create();
+    Sanctum::actingAs(bulkActionsActor(['viewAny', 'viewAll', 'delete']));
+
+    $this->postJson('/api/tables/request-management/bulk-delete', ['ids' => [$first->id, $second->id]])
+        ->assertOk()
+        ->assertJsonPath('data.deleted', 2)
+        ->assertJsonPath('data.failed', []);
+
+    expect(Opportunity::query()->whereIn('id', [$first->id, $second->id])->count())->toBe(0);
+});
+
+it('bulk-delete is gated by request-management.delete, NOT opportunities.delete (D-2)', function () {
+    $opportunity = Opportunity::factory()->create();
+    $actor = bulkActionsActor(['viewAny', 'viewAll']);
+    // The FOREIGN permission the default Gate check would have resolved.
+    Permission::findOrCreate('opportunities.delete');
+    $actor->givePermissionTo('opportunities.delete');
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/tables/request-management/bulk-delete', ['ids' => [$opportunity->id]])
+        ->assertOk()
+        ->assertJsonPath('data.deleted', 0)
+        ->assertJsonPath('data.failed.0.reason', 'forbidden');
+
+    expect(Opportunity::query()->whereKey($opportunity->id)->exists())->toBeTrue();
+});
+
+it('bulk-delete never reaches a request outside the actor GA2 scope (D-3)', function () {
+    $someoneElse = User::factory()->create();
+    $outOfScope = bulkActionsRequestManagedBy($someoneElse);
+    $actor = bulkActionsActor(['viewAny', 'delete']);
+    $ownRequest = bulkActionsRequestManagedBy($actor);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/tables/request-management/bulk-delete', ['ids' => [$ownRequest->id, $outOfScope->id]])
+        ->assertOk()
+        ->assertJsonPath('data.deleted', 1)
+        ->assertJsonPath('data.failed.0.reason', 'not_found');
+
+    expect(Opportunity::query()->whereKey($outOfScope->id)->exists())->toBeTrue()
+        ->and(Opportunity::query()->whereKey($ownRequest->id)->exists())->toBeFalse();
+});
+
+// ---------------------------------------------------------------------------
+// Single-row delete (the row action behind the same permission)
+// ---------------------------------------------------------------------------
+
+it('DELETE /request-management/{id} removes the request for a permitted, in-scope actor', function () {
+    $actor = bulkActionsActor(['viewAny', 'viewAll', 'delete']);
+    $opportunity = Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->deleteJson("/api/request-management/{$opportunity->id}")->assertNoContent();
+
+    expect(Opportunity::query()->whereKey($opportunity->id)->exists())->toBeFalse();
+});
+
+it('DELETE /request-management/{id} is 403 without request-management.delete', function () {
+    $actor = bulkActionsActor(['viewAny', 'viewAll', 'view']);
+    $opportunity = Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->deleteJson("/api/request-management/{$opportunity->id}")->assertForbidden();
+
+    expect(Opportunity::query()->whereKey($opportunity->id)->exists())->toBeTrue();
+});
+
+it('DELETE /request-management/{id} is 403 on a request the actor does not manage (D-3)', function () {
+    $actor = bulkActionsActor(['viewAny', 'delete']);
+    $opportunity = bulkActionsRequestManagedBy(User::factory()->create());
+    Sanctum::actingAs($actor);
+
+    $this->deleteJson("/api/request-management/{$opportunity->id}")->assertForbidden();
+
+    expect(Opportunity::query()->whereKey($opportunity->id)->exists())->toBeTrue();
+});
+
+// ---------------------------------------------------------------------------
+// Bulk operator assignment
+// ---------------------------------------------------------------------------
+
+it('mode=single assigns the Sede and the GA2 operator to every selected request', function () {
+    $actor = bulkActionsActor(['viewAny', 'viewAll', 'update']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    $operator = bulkActionsOperatorAtSite($site);
+    $first = Opportunity::factory()->create();
+    $second = Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/request-management/assign-operators', [
+        'request_ids' => [$first->id, $second->id],
+        'operational_site_id' => $site->id,
+        'mode' => 'single',
+        'operator_id' => $operator->id,
+    ])->assertOk()->assertJsonPath('data.assigned', 2);
+
+    expect($first->fresh()->operational_site_id)->toBe($site->id)
+        ->and($first->fresh()->operatorManager()?->id)->toBe($operator->id)
+        ->and($second->fresh()->operatorManager()?->id)->toBe($operator->id);
+});
+
+it('the assignment replaces the previous GA2 without touching the other manager slots', function () {
+    $actor = bulkActionsActor(['viewAny', 'viewAll', 'update']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    $nextOperator = bulkActionsOperatorAtSite($site);
+    $accountManager = User::factory()->create();
+    $request = bulkActionsRequestManagedBy(User::factory()->create());
+    $request->managers()->attach($accountManager->id, ['position' => 1]);
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/request-management/assign-operators', [
+        'request_ids' => [$request->id],
+        'operational_site_id' => $site->id,
+        'mode' => 'single',
+        'operator_id' => $nextOperator->id,
+    ])->assertOk()->assertJsonPath('data.assigned', 1);
+
+    $request->refresh();
+    expect($request->operatorManager()?->id)->toBe($nextOperator->id)
+        ->and($request->managers()->wherePivot('position', 1)->first()?->id)->toBe($accountManager->id);
+});
+
+it('mode=balanced spreads the selected requests across the Sede operators', function () {
+    $actor = bulkActionsActor(['viewAny', 'viewAll', 'update']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    $firstOperator = bulkActionsOperatorAtSite($site);
+    $secondOperator = bulkActionsOperatorAtSite($site);
+    $requests = Opportunity::factory()->count(4)->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/request-management/assign-operators', [
+        'request_ids' => $requests->modelKeys(),
+        'operational_site_id' => $site->id,
+        'mode' => 'balanced',
+    ])->assertOk()->assertJsonPath('data.assigned', 4);
+
+    $loads = $requests->map(fn (Opportunity $request): ?int => $request->fresh()->operatorManager()?->id)
+        ->countBy()
+        ->all();
+
+    expect($loads)->toBe([$firstOperator->id => 2, $secondOperator->id => 2]);
+});
+
+it('mode=balanced is 422 when the chosen Sede has no operators', function () {
+    $actor = bulkActionsActor(['viewAny', 'viewAll', 'update']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    $request = Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/request-management/assign-operators', [
+        'request_ids' => [$request->id],
+        'operational_site_id' => $site->id,
+        'mode' => 'balanced',
+    ])->assertStatus(422);
+
+    expect($request->fresh()->operational_site_id)->toBeNull();
+});
+
+it('the assignment skips a request outside the actor GA2 scope (D-3)', function () {
+    $actor = bulkActionsActor(['viewAny', 'update']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    $operator = bulkActionsOperatorAtSite($site);
+    $ownRequest = bulkActionsRequestManagedBy($actor);
+    $outOfScope = bulkActionsRequestManagedBy(User::factory()->create());
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/request-management/assign-operators', [
+        'request_ids' => [$ownRequest->id, $outOfScope->id],
+        'operational_site_id' => $site->id,
+        'mode' => 'single',
+        'operator_id' => $operator->id,
+    ])->assertOk()->assertJsonPath('data.assigned', 1);
+
+    expect($ownRequest->fresh()->operatorManager()?->id)->toBe($operator->id)
+        ->and($outOfScope->fresh()->operational_site_id)->toBeNull();
+});
+
+it('the assignment endpoint is 403 without request-management.update', function () {
+    $actor = bulkActionsActor(['viewAny', 'viewAll', 'view']);
+    $site = OperationalSite::factory()->withAddress()->create();
+    $operator = bulkActionsOperatorAtSite($site);
+    $request = Opportunity::factory()->create();
+    Sanctum::actingAs($actor);
+
+    $this->postJson('/api/request-management/assign-operators', [
+        'request_ids' => [$request->id],
+        'operational_site_id' => $site->id,
+        'mode' => 'single',
+        'operator_id' => $operator->id,
+    ])->assertForbidden();
+
+    expect($request->fresh()->operational_site_id)->toBeNull();
+});

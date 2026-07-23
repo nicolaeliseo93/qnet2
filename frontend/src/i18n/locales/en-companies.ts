@@ -46,6 +46,7 @@ export const companies = {
     denominationRequired: 'Denomination is required.',
     denominationMax: 'Denomination must be at most 255 characters.',
     line1Required: 'Address is required when an address is provided.',
+    vatNumberInvalid: 'The VAT number is not valid.',
     genericError: 'Something went wrong. Please try again.',
     deleteError: 'Unable to delete the company. Please try again.',
     deleteForbidden: 'You cannot delete this company.',

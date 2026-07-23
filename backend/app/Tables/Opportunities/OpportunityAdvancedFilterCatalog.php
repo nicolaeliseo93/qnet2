@@ -15,6 +15,11 @@ use App\Enums\AdvancedFilterType;
  * dot-path (`productLines.productCategory`/`productLines.businessFunction`)
  * — AdvancedFilterApplier's `whereHas($target, ...)` call needs no change:
  * Eloquent's own `whereHas()` already supports dot-path nested relations.
+ * `operational_site` (spec 0056) has no relation-by-id equivalent (the site
+ * has no own name) — it is a `text` search delegated to the shared
+ * OperationalSiteColumn via OpportunitiesTableDefinition's
+ * applyAdvancedFilter() override, mirroring LeadAdvancedFilterCatalog's own
+ * `operational_site` entry.
  */
 final class OpportunityAdvancedFilterCatalog
 {
@@ -98,10 +103,24 @@ final class OpportunityAdvancedFilterCatalog
                 'target' => 'source',
             ],
             [
+                'name' => 'operational_site',
+                'label' => 'opportunities.advancedFilters.operationalSite',
+                'type' => AdvancedFilterType::Text,
+                'order' => 7,
+                'required' => false,
+                'visible' => true,
+                'width' => 'md',
+                'multiple' => false,
+                // Internal only: no real column/relation-by-id (the site has
+                // no own name) — the domain override searches the site's
+                // primary address line1.
+                'target' => 'operational_site',
+            ],
+            [
                 'name' => 'product_category',
                 'label' => 'opportunities.advancedFilters.productCategory',
                 'type' => AdvancedFilterType::Relation,
-                'order' => 7,
+                'order' => 8,
                 'required' => false,
                 'visible' => true,
                 'width' => 'md',
@@ -113,7 +132,7 @@ final class OpportunityAdvancedFilterCatalog
                 'name' => 'business_function',
                 'label' => 'opportunities.advancedFilters.businessFunction',
                 'type' => AdvancedFilterType::Relation,
-                'order' => 8,
+                'order' => 9,
                 'required' => false,
                 'visible' => true,
                 'width' => 'md',
@@ -125,7 +144,7 @@ final class OpportunityAdvancedFilterCatalog
                 'name' => 'value_range',
                 'label' => 'opportunities.advancedFilters.valueRange',
                 'type' => AdvancedFilterType::NumberRange,
-                'order' => 9,
+                'order' => 10,
                 'required' => false,
                 'visible' => true,
                 'width' => 'sm',
@@ -136,7 +155,7 @@ final class OpportunityAdvancedFilterCatalog
                 'name' => 'created_range',
                 'label' => 'opportunities.advancedFilters.createdRange',
                 'type' => AdvancedFilterType::DateRange,
-                'order' => 10,
+                'order' => 11,
                 'required' => false,
                 'visible' => true,
                 'width' => 'md',

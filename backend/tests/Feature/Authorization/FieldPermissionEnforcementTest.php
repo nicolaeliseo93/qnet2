@@ -192,14 +192,14 @@ it('spec 0006: users.personal_data.tax_code editable:false for the actor\'s role
     $actor->assignRole($role);
 
     $target = User::factory()->create();
-    PersonalData::factory()->individual()->for($target, 'personable')->create(['tax_code' => 'AAABBB11C22D333E']);
+    PersonalData::factory()->individual()->for($target, 'personable')->create(['tax_code' => 'LVLDAA80A01H501V']);
     Sanctum::actingAs($actor);
 
     $this->patchJson("/api/users/{$target->id}", [
-        'personal_data' => ['type' => 'individual', 'first_name' => 'Ada', 'last_name' => 'Lovelace', 'tax_code' => 'ZZZYYY99X88W777V'],
+        'personal_data' => ['type' => 'individual', 'first_name' => 'Ada', 'last_name' => 'Lovelace', 'tax_code' => 'LVLDAA85A01H501A'],
     ])
         ->assertStatus(422)
         ->assertJsonValidationErrors('personal_data.tax_code');
 
-    $this->assertDatabaseHas('personal_data', ['personable_id' => $target->id, 'tax_code' => 'AAABBB11C22D333E']);
+    $this->assertDatabaseHas('personal_data', ['personable_id' => $target->id, 'tax_code' => 'LVLDAA80A01H501V']);
 });

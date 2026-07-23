@@ -86,6 +86,22 @@ export const table = {
     retry: 'Retry',
     loadMore: 'Load more',
   },
+  multiSelectEditor: {
+    list: 'Pick one or more values',
+    searchPlaceholder: 'Search…',
+    empty: 'No results.',
+    error: 'Could not load the options.',
+    retry: 'Retry',
+    loadMore: 'Load more',
+    noScope: 'This row has no scope yet: unlock the whole catalogue to pick.',
+    hintScoped: "Only the options within this row's scope.",
+    hintUnlocked: "Whole catalogue: a pick outside the scope will extend this row's scope.",
+    unlock: 'Show all',
+    relock: "Limit to the row's scope",
+    unlockTitle: 'Show the whole catalogue?',
+    unlockDescription:
+      "Picking an item outside this row's scope will automatically extend that scope to include it.",
+  },
   selectEditor: {
     list: 'Pick a value',
     empty: 'No value available for this row.',

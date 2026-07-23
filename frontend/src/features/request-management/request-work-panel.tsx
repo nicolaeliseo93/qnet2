@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Form } from '@/components/ui/form'
 import { useEntityDetail } from '@/hooks/use-entity-detail'
+import { toRelationFieldRef } from '@/components/form/relation-field-ref'
 import { ResourcePermissionsProvider, useResourcePermissions } from '@/features/authorization/permissions'
 import { fetchRequestWorkPanel } from '@/features/request-management/api'
 import { requestManagementKeys } from '@/features/request-management/query-keys'
@@ -159,10 +160,11 @@ function RequestWorkPanelBody({ panel }: RequestWorkPanelBodyProps) {
                   2026-07-22), right after the two levers acted on at every
                   touch and before the request's own content. */}
               <RequestAttributionSection
-                control={form.control}
+                form={form}
                 source={panel.source}
                 reporter={panel.reporter}
                 operator={panel.operator}
+                operationalSite={toRelationFieldRef(panel.operational_site)}
               />
 
               <RequestDynamicFields control={form.control} attributes={panel.applicable_attributes} />

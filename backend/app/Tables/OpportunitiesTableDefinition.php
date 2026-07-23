@@ -4,12 +4,15 @@ namespace App\Tables;
 
 use App\Models\Opportunity;
 use App\Models\User;
+use App\Services\Opportunities\OpportunityProductInterestWriter;
 use App\Tables\Opportunities\OpportunityAdvancedFilterCatalog;
 use App\Tables\Opportunities\OpportunityColumnCatalog;
+use App\Tables\Opportunities\OpportunityRelationColumns;
+use App\Tables\Shared\OperationalSiteColumn;
+use App\Tables\Shared\ProductsOfInterestColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -18,54 +21,54 @@ use Illuminate\Support\Facades\Gate;
  * `name`/`estimated_value`/`success_probability`/`start_date`/
  * `expected_close_date`/`created_at` are real columns handled entirely by the
  * generic engine. `registry`/`referent`/`commercial`/`supervisor`/`source`/
- * `opportunity_status` (spec 0043, D-3) are simple relation-name derived
- * columns (own FK on the opportunity), resolved generically via
- * DERIVED_RELATIONS — a `whereHas` set filter
- * (allow-listed columns only, never orderByRaw/whereRaw on raw input —
- * backend.md §8) and a correlated subquery sort, mirroring
- * LeadsTableDefinition. Amendment rev.3: `product_category`/
- * `business_function` are AGGREGATED to-many columns (via `productLines`,
- * resolved via AGGREGATED_RELATIONS) — filterable but not sortable.
+ * `opportunity_status`/`managers`/`product_category`/`business_function` are
+ * all relation-derived columns delegated to OpportunityRelationColumns (file-
+ * size split, engineering.md §6): own-FK simple relations, the `managers`
+ * pivot and the 2 AGGREGATED (to-many, via `productLines`) columns.
+ *
+ * Spec 0056: `operational_site` is a SPECIALLY-derived column (the site has
+ * no own name — the generic name-based whereIn/subquery machinery above
+ * would be SQL-invalid against it), delegated instead to the shared
+ * App\Tables\Shared\OperationalSiteColumn, mirroring LeadsTableDefinition's
+ * own `operational_site` handling.
  */
 class OpportunitiesTableDefinition extends AbstractTableDefinition
 {
-    /**
-     * Maximum number of names honoured in a derived-column set filter. Caps
-     * the WHERE IN cardinality (defence in depth); excess values ignored.
-     */
-    private const int MAX_FILTER_VALUES = 200;
+    private const string OPERATIONAL_SITE_COLUMN = 'operational_site';
+
+    private const string OPERATIONAL_SITE_RELATION = 'operationalSite';
+
+    private const string OPPORTUNITIES_TABLE = 'opportunities';
+
+    private const string OPERATIONAL_SITE_FK = 'operational_site_id';
+
+    public function __construct(
+        private readonly OperationalSiteColumn $operationalSiteColumn,
+        private readonly OpportunityRelationColumns $relationColumns,
+        private readonly OpportunityProductInterestWriter $productInterestWriter,
+    ) {}
 
     /**
-     * Simple (single-hop) relation-name derived columns: relation accessor,
-     * related table and owning FK column, keyed by the derived column id.
-     * `commercial`/`supervisor` both resolve to their own FK — never the
-     * plain `referent_id`/`source_id` used by other columns.
-     *
-     * @var array<string, array{relation: string, table: string, fk: string}>
+     * `products_of_interest` (user directive 2026-07-23) is a to-many
+     * collection, not a column: the generic mass-assignment default would
+     * fail, and a bare `sync()` would break the invariant that every selected
+     * product's category is covered by a product line. It writes through the
+     * SAME OpportunityProductInterestWriter both other channels use (the CRUD
+     * service and the work panel), so the cross-category rule can never
+     * diverge between them. Every other editable column keeps the default.
      */
-    private const array DERIVED_RELATIONS = [
-        'registry' => ['relation' => 'registry', 'table' => 'registries', 'fk' => 'registry_id'],
-        'referent' => ['relation' => 'referent', 'table' => 'referents', 'fk' => 'referent_id'],
-        'commercial' => ['relation' => 'commercial', 'table' => 'referents', 'fk' => 'commercial_id'],
-        'supervisor' => ['relation' => 'supervisor', 'table' => 'users', 'fk' => 'supervisor_id'],
-        'source' => ['relation' => 'source', 'table' => 'sources', 'fk' => 'source_id'],
-        // spec 0043: the mandatory working-state classification.
-        'opportunity_status' => ['relation' => 'opportunityStatus', 'table' => 'opportunity_statuses', 'fk' => 'opportunity_status_id'],
-    ];
+    public function updateCell(Model $row, string $columnId, mixed $value): Model
+    {
+        if ($columnId !== ProductsOfInterestColumn::COLUMN_ID) {
+            return parent::updateCell($row, $columnId, $value);
+        }
 
-    /**
-     * Aggregated (to-many, via `productLines`) derived columns: the nested
-     * relation path, the related table and the FK column on
-     * `opportunity_product_lines` pointing to it (amendment rev.3 — the
-     * former single `business_function_id`/`product_category_id` columns on
-     * `opportunities` no longer exist).
-     *
-     * @var array<string, array{relation: string, table: string, fk: string}>
-     */
-    private const array AGGREGATED_RELATIONS = [
-        'product_category' => ['relation' => 'productLines.productCategory', 'table' => 'product_categories', 'fk' => 'product_category_id'],
-        'business_function' => ['relation' => 'productLines.businessFunction', 'table' => 'business_functions', 'fk' => 'business_function_id'],
-    ];
+        /** @var Opportunity $row */
+        /** @var array<int, int> $value */
+        $this->productInterestWriter->sync($row, $value);
+
+        return $row->fresh() ?? $row;
+    }
 
     public function domain(): string
     {
@@ -96,6 +99,13 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
             ->with([
                 'registry', 'referent', 'commercial', 'supervisor.avatar', 'source', 'opportunityStatus',
                 'managers.avatar', 'productLines.businessFunction', 'productLines.productCategory',
+                // User directive 2026-07-23: the "Prodotti di interesse"
+                // column projects its own `{id, name}` refs (the cell AND the
+                // multiselect editor's current selection).
+                'productsOfInterest',
+                // Spec 0056: operationalSite's address+city for the composed
+                // label (site has no own name, mirrors LeadsTableDefinition).
+                'operationalSite.addresses.city',
             ])
             // Per-row count for the `documents` action badge (HasAttachments),
             // scoped to the 'documents' collection only — never other collections.
@@ -170,9 +180,11 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
             'supervisor' => $this->userSummary($row->supervisor),
             'managers' => $row->managers->map(fn (User $user): array => $this->userSummary($user))->all(),
             'source' => $this->summarize($row->source),
+            'operational_site' => $this->operationalSiteColumn->summarize($row->operationalSite),
             'opportunity_status' => $this->summarize($row->opportunityStatus),
             'product_category' => $this->summarizeNames($row->productLines->pluck('productCategory')),
             'business_function' => $this->summarizeNames($row->productLines->pluck('businessFunction')),
+            ...ProductsOfInterestColumn::project($row),
             'estimated_value' => $row->estimated_value,
             'success_probability' => $row->success_probability,
             'start_date' => $row->start_date,
@@ -260,12 +272,33 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
     }
 
     /**
-     * Handle the `registry`/`referent`/`commercial`/`supervisor`/`source`
-     * simple-relation set filters AND the `product_category`/
-     * `business_function` AGGREGATED (to-many) set filters, both via
-     * `whereHas` on the related row's name (nested dot-path relation for the
-     * latter — Eloquent's own `whereHas` support, no raw SQL). Every real
-     * column falls through to the generic engine.
+     * `operational_site` (spec 0056) has no relation-by-id equivalent (the
+     * site has no own name) — the generic default (which delegates a
+     * `relation` type to a plain whereHas-by-id) cannot express it. Every
+     * other advanced filter declared in OpportunityAdvancedFilterCatalog is a
+     * standard relation-by-id, handled by the generic default.
+     *
+     * @param  Builder<Opportunity>  $query
+     * @param  array<string, mixed>  $descriptor
+     */
+    public function applyAdvancedFilter(Builder $query, string $name, array $descriptor, mixed $value): bool
+    {
+        if ($name === self::OPERATIONAL_SITE_COLUMN) {
+            if (is_string($value) && $value !== '') {
+                $this->operationalSiteColumn->applyAdvancedFilter($query, self::OPERATIONAL_SITE_RELATION, $value);
+            }
+
+            return true;
+        }
+
+        return parent::applyAdvancedFilter($query, $name, $descriptor, $value);
+    }
+
+    /**
+     * `operational_site` (spec 0056) is delegated to the shared
+     * OperationalSiteColumn (bound `line1` match, never the name-based
+     * whereIn OpportunityRelationColumns applies); every other derived column
+     * falls through to it.
      *
      * @param  Builder<Opportunity>  $query
      * @param  array<string, mixed>  $columnConfig
@@ -273,35 +306,19 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
      */
     public function applyDerivedFilter(Builder $query, string $columnId, array $columnConfig, array $filter): bool
     {
-        // The `managers` (opportunity_user pivot, to-many) set filter: whereHas
-        // on the manager's name, mirroring the simple-relation filters below.
-        if ($columnId === 'managers') {
-            $values = $this->filterValues($filter);
-
-            if ($values !== []) {
-                $query->whereHas('managers', static function (Builder $relatedQuery) use ($values): void {
-                    $relatedQuery->whereIn('name', $values);
-                });
-            }
+        if ($columnId === self::OPERATIONAL_SITE_COLUMN) {
+            $this->operationalSiteColumn->applyFilter($query, self::OPERATIONAL_SITE_RELATION, $this->filterValues($filter));
 
             return true;
         }
 
-        $config = self::DERIVED_RELATIONS[$columnId] ?? self::AGGREGATED_RELATIONS[$columnId] ?? null;
+        if ($columnId === ProductsOfInterestColumn::COLUMN_ID) {
+            ProductsOfInterestColumn::applyFilter($query, $this->filterValues($filter));
 
-        if ($config === null) {
-            return false;
+            return true;
         }
 
-        $values = $this->filterValues($filter);
-
-        if ($values !== []) {
-            $query->whereHas($config['relation'], static function (Builder $relatedQuery) use ($values): void {
-                $relatedQuery->whereIn('name', $values);
-            });
-        }
-
-        return true;
+        return $this->relationColumns->applyFilter($query, $columnId, $filter);
     }
 
     /**
@@ -312,47 +329,34 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
     {
         $values = $filter['values'] ?? null;
 
-        if (! is_array($values)) {
-            return [];
-        }
-
-        return array_slice(array_values(array_filter(
+        return is_array($values) ? array_values(array_filter(
             $values,
             static fn ($value): bool => is_string($value) && $value !== '',
-        )), 0, self::MAX_FILTER_VALUES);
+        )) : [];
     }
 
     /**
-     * ORDER BY the related row's name via a correlated subquery for every one
-     * of the 5 simple-relation derived columns. The 2 AGGREGATED (to-many)
-     * columns are NOT sortable (falls through, returns false — no single
-     * related row to order by).
+     * `operational_site` (spec 0056) is delegated to the shared
+     * OperationalSiteColumn; every other simple-relation column falls
+     * through to OpportunityRelationColumns' correlated subquery sort.
      *
      * @param  Builder<Opportunity>  $query
      */
     public function applyDerivedSort(Builder $query, string $columnId, string $direction): bool
     {
-        $config = self::DERIVED_RELATIONS[$columnId] ?? null;
+        if ($columnId === self::OPERATIONAL_SITE_COLUMN) {
+            $this->operationalSiteColumn->applySort($query, self::OPPORTUNITIES_TABLE, self::OPERATIONAL_SITE_FK, $direction);
 
-        if ($config === null) {
-            return false;
+            return true;
         }
 
-        $subquery = DB::table($config['table'])
-            ->select('name')
-            ->whereColumn("{$config['table']}.id", "opportunities.{$config['fk']}")
-            ->limit(1);
-
-        $query->orderBy($subquery, $direction);
-
-        return true;
+        return $this->relationColumns->applySort($query, $columnId, $direction);
     }
 
     /**
-     * Excel-like distinct values (spec 0004/0005): the related row's name for
-     * each of the 5 simple-relation derived columns, plus the 2 AGGREGATED
-     * (to-many) columns via a join through `opportunity_product_lines` —
-     * scoped to the rows matching $query.
+     * Excel-like distinct values (spec 0004/0005). `operational_site` (spec
+     * 0056) is delegated to the shared OperationalSiteColumn; every other
+     * derived column falls through to OpportunityRelationColumns.
      *
      * @param  Builder<Opportunity>  $query
      * @param  array<string, mixed>  $columnConfig
@@ -360,89 +364,14 @@ class OpportunitiesTableDefinition extends AbstractTableDefinition
      */
     public function distinctValues(User $actor, string $columnId, array $columnConfig, ?string $search, Builder $query, int $limit): ?array
     {
-        if ($columnId === 'managers') {
-            return $this->distinctManagerNames($search, $query, $limit);
+        if ($columnId === self::OPERATIONAL_SITE_COLUMN) {
+            return $this->operationalSiteColumn->distinctValues($query, self::OPERATIONAL_SITE_FK, $search, $limit);
         }
 
-        if (array_key_exists($columnId, self::AGGREGATED_RELATIONS)) {
-            return $this->distinctAggregatedValues(self::AGGREGATED_RELATIONS[$columnId], $search, $query, $limit);
+        if ($columnId === ProductsOfInterestColumn::COLUMN_ID) {
+            return ProductsOfInterestColumn::distinctValues($query, $search, $limit);
         }
 
-        $config = self::DERIVED_RELATIONS[$columnId] ?? null;
-
-        if ($config === null) {
-            return null;
-        }
-
-        $relatedIds = (clone $query)->whereNotNull($config['fk'])->select($config['fk']);
-
-        return DB::table($config['table'])
-            ->whereIn('id', $relatedIds)
-            ->when($search !== null && $search !== '', function ($builder) use ($search): void {
-                $builder->where('name', 'like', '%'.$this->escapeLike($search).'%');
-            })
-            ->distinct()
-            ->orderBy('name')
-            ->limit($limit)
-            ->pluck('name')
-            ->map(static fn (mixed $name): string => (string) $name)
-            ->all();
-    }
-
-    /**
-     * Distinct account-manager names among the opportunities matching $query,
-     * via a join through the `opportunity_user` pivot — scoped by every OTHER
-     * active filter (Excel-like distinct values, spec 0004/0005).
-     *
-     * @param  Builder<Opportunity>  $query
-     * @return array<int, string>
-     */
-    private function distinctManagerNames(?string $search, Builder $query, int $limit): array
-    {
-        $opportunityIds = (clone $query)->select('opportunities.id');
-
-        return DB::table('users')
-            ->join('opportunity_user', 'opportunity_user.user_id', '=', 'users.id')
-            ->whereIn('opportunity_user.opportunity_id', $opportunityIds)
-            ->when($search !== null && $search !== '', function ($builder) use ($search): void {
-                $builder->where('users.name', 'like', '%'.$this->escapeLike($search).'%');
-            })
-            ->distinct()
-            ->orderBy('users.name')
-            ->limit($limit)
-            ->pluck('users.name')
-            ->map(static fn (mixed $name): string => (string) $name)
-            ->all();
-    }
-
-    /**
-     * @param  array{relation: string, table: string, fk: string}  $config
-     * @param  Builder<Opportunity>  $query
-     * @return array<int, string>
-     */
-    private function distinctAggregatedValues(array $config, ?string $search, Builder $query, int $limit): array
-    {
-        $opportunityIds = (clone $query)->select('id');
-
-        return DB::table('opportunity_product_lines')
-            ->join($config['table'], "{$config['table']}.id", '=', "opportunity_product_lines.{$config['fk']}")
-            ->whereIn('opportunity_product_lines.opportunity_id', $opportunityIds)
-            ->when($search !== null && $search !== '', function ($builder) use ($config, $search): void {
-                $builder->where("{$config['table']}.name", 'like', '%'.$this->escapeLike($search).'%');
-            })
-            ->distinct()
-            ->orderBy("{$config['table']}.name")
-            ->limit($limit)
-            ->pluck("{$config['table']}.name")
-            ->map(static fn (mixed $name): string => (string) $name)
-            ->all();
-    }
-
-    /**
-     * Escape LIKE wildcards in user input so they are treated literally.
-     */
-    private function escapeLike(string $value): string
-    {
-        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+        return $this->relationColumns->distinctValues($columnId, $search, $query, $limit);
     }
 }

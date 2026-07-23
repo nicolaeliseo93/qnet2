@@ -46,6 +46,7 @@ export const companies = {
     denominationRequired: 'La denominazione è obbligatoria.',
     denominationMax: 'La denominazione può contenere al massimo 255 caratteri.',
     line1Required: "L'indirizzo è obbligatorio se si inserisce un indirizzo.",
+    vatNumberInvalid: 'La partita IVA non è valida.',
     genericError: 'Si è verificato un errore. Riprova.',
     deleteError: 'Impossibile eliminare la società. Riprova.',
     deleteForbidden: 'Non puoi eliminare questa società.',

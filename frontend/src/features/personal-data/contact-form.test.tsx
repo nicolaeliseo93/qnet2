@@ -98,6 +98,28 @@ describe('ContactForm (controlled)', () => {
     expect(onSubmit.mock.calls[0][0].id).toBe(42)
   })
 
+  it('formats the value for its channel when the field loses focus', async () => {
+    const onSubmit = vi.fn()
+    render(
+      <ContactForm
+        contact={contact({ type: 'phone', value: '' })}
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    )
+
+    const input = screen.getByLabelText(/^Value/)
+    fireEvent.change(input, { target: { value: '333 12 34 567' } })
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(input).toHaveValue('3331234567'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit.mock.calls[0][0].value).toBe('3331234567')
+  })
+
   it('cancels without submitting', () => {
     const onCancel = vi.fn()
     const onSubmit = vi.fn()

@@ -20,7 +20,6 @@ import {
   normalizeDecimal,
   type CreatePayloadFromLead,
 } from '@/features/opportunities/opportunity-form-payload'
-import { composeProductLinesName } from '@/features/opportunities/opportunity-product-line-name'
 import {
   buildCreateOpportunitySchema,
   buildUpdateOpportunitySchema,
@@ -32,7 +31,6 @@ import type { OpportunityDetail, OpportunityFormMode } from '@/features/opportun
 
 /** Server-side field names mapped onto the form for 422 handling. `lead_id` is never an RHF field (spec 0040 MT-6 handles it separately). */
 const SERVER_ERROR_FIELDS = [
-  'name',
   'registry_id',
   'opportunity_status_id',
   'referent_id',
@@ -100,7 +98,6 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
     if (mode.type === 'edit') {
       const { opportunity } = mode
       return {
-        name: opportunity.name,
         registry_id: opportunity.registry_id,
         opportunity_status_id: opportunity.opportunity_status_id,
         referent_id: opportunity.referent_id,
@@ -126,7 +123,6 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
       }
     }
     const empty: OpportunityFormValues = {
-      name: '',
       registry_id: null,
       opportunity_status_id: null,
       referent_id: null,
@@ -152,10 +148,7 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
     // create form, whether locked (BR-2) or left free by a null derivation.
     // Amendment rev.3 (AC-102/103): the lead's 0/1 product line seeds
     // `product_lines` instead of a locked business_function_id/
-    // product_category_id pair — editable/removable like any other row. The
-    // name (still empty at this point, CREATE starts in auto mode) is
-    // computed eagerly here, once, from that same seed: no later event fires
-    // to trigger the usual imperative auto-fill for this initial mount.
+    // product_category_id pair — editable/removable like any other row.
     return {
       ...empty,
       ...mode.fromLead.values,
@@ -167,7 +160,6 @@ export function useOpportunityForm({ mode }: UseOpportunityFormArgs) {
         business_function_id: line.business_function.id,
         product_category_id: line.product_category.id,
       })),
-      name: composeProductLinesName(mode.fromLead.productLines.map((line) => line.product_category.name)),
     }
   }, [mode])
 

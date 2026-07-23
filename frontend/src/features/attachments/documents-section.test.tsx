@@ -14,6 +14,8 @@ import type { Attachment } from '@/features/attachments/types'
  * backend-provided `view_url`/`download_url` untouched.
  */
 
+const DROPZONE_LABEL = 'Drop one or more files here or click to browse'
+
 const listAttachmentsMock = vi.fn()
 const uploadAttachmentMock = vi.fn()
 const deleteAttachmentMock = vi.fn()
@@ -133,7 +135,7 @@ describe('DocumentsSection', () => {
     await waitFor(() => expect(screen.getByText('No documents yet.')).toBeInTheDocument())
 
     const file = new File(['%PDF-1.4'], 'contract.pdf', { type: 'application/pdf' })
-    fireEvent.change(screen.getByLabelText('Drop a file here or click to browse'), {
+    fireEvent.change(screen.getByLabelText(DROPZONE_LABEL), {
       target: { files: [file] },
     })
 
@@ -148,6 +150,58 @@ describe('DocumentsSection', () => {
     await waitFor(() => expect(listAttachmentsMock).toHaveBeenCalledTimes(2))
   })
 
+  it('accepts a multiple selection and uploads every file once', async () => {
+    listAttachmentsMock.mockResolvedValue([])
+    uploadAttachmentMock.mockResolvedValue(attachment())
+
+    renderSection(
+      <DocumentsSection resource="opportunity" id={42} canUpload canDelete={false} />,
+    )
+
+    await waitFor(() => expect(screen.getByText('No documents yet.')).toBeInTheDocument())
+
+    const input = screen.getByLabelText(DROPZONE_LABEL)
+    expect(input).toHaveAttribute('multiple')
+
+    const first = new File(['%PDF-1.4'], 'contract.pdf', { type: 'application/pdf' })
+    const second = new File(['data'], 'photo.png', { type: 'image/png' })
+    fireEvent.change(input, { target: { files: [first, second] } })
+
+    await waitFor(() => expect(uploadAttachmentMock).toHaveBeenCalledTimes(2))
+    expect(uploadAttachmentMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ file: first }))
+    expect(uploadAttachmentMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ file: second }))
+    await waitFor(() => expect(listAttachmentsMock).toHaveBeenCalledTimes(2))
+  })
+
+  it('keeps the successful uploads and reports only the failed files of a batch', async () => {
+    listAttachmentsMock.mockResolvedValue([])
+    uploadAttachmentMock
+      .mockResolvedValueOnce(attachment())
+      .mockRejectedValueOnce(new Error('too large'))
+
+    renderSection(
+      <DocumentsSection resource="opportunity" id={42} canUpload canDelete={false} />,
+    )
+
+    await waitFor(() => expect(screen.getByText('No documents yet.')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText(DROPZONE_LABEL), {
+      target: {
+        files: [
+          new File(['%PDF-1.4'], 'contract.pdf', { type: 'application/pdf' }),
+          new File(['data'], 'huge.zip', { type: 'application/zip' }),
+        ],
+      },
+    })
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Unable to upload 1 file: huge.zip. The others were uploaded.',
+      ),
+    )
+    expect(listAttachmentsMock).toHaveBeenCalledTimes(2)
+  })
+
   it('does not render the dropzone when the caller has no upload permission', async () => {
     listAttachmentsMock.mockResolvedValue([])
 
@@ -156,7 +210,7 @@ describe('DocumentsSection', () => {
     )
 
     await waitFor(() => expect(screen.getByText('No documents yet.')).toBeInTheDocument())
-    expect(screen.queryByLabelText('Drop a file here or click to browse')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(DROPZONE_LABEL)).not.toBeInTheDocument()
   })
 
   it('deletes a document after the confirm dialog is accepted', async () => {

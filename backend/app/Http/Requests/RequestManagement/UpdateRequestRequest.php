@@ -67,13 +67,14 @@ class UpdateRequestRequest extends FormRequest
             'note' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'attribute_values' => ['sometimes', 'array'],
             'next_callback_at' => ['sometimes', 'nullable', 'date'],
-            // "Prodotti di interesse" (user directive 2026-07-22): the whole
-            // collection is replaced when submitted (`[]` clears it). A
+            // "Prodotti di interesse": MANDATORY (user directive 2026-07-23),
+            // same rule as the opportunities form — sparse like every other key
+            // here (absent means untouched), but never clearable to `[]`. A
             // product outside the opportunity's product-line categories is
             // ACCEPTED on purpose — OpportunityProductInterestWriter adds the
             // matching product line, which is exactly what the panel warns
             // about before unlocking the picker.
-            'products_of_interest' => ['sometimes', 'array'],
+            'products_of_interest' => ['sometimes', 'array', 'min:1'],
             'products_of_interest.*' => ['integer', 'exists:products,id'],
             // Attribution (user directive 2026-07-22): "Fonte",
             // "Segnalatore" and the GA2 "Operatore". Sparse like every other
@@ -81,6 +82,9 @@ class UpdateRequestRequest extends FormRequest
             'source_id' => ['sometimes', 'nullable', 'integer', 'exists:sources,id'],
             'reporter_id' => ['sometimes', 'nullable', 'integer', 'exists:referents,id'],
             'operator_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            // Spec 0056: the Sede operativa, same attribution block, same
+            // sparse rule — absent means untouched, `null` clears it.
+            'operational_site_id' => ['sometimes', 'nullable', 'integer', 'exists:operational_sites,id'],
             ...$this->clientProfileRules(),
         ];
     }

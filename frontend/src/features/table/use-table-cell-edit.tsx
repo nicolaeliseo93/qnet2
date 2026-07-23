@@ -11,11 +11,14 @@ import { CellNoteDialog } from '@/components/data-table/cell-note-dialog'
 import { updateTableCell } from '@/features/table/api'
 import type { TableColumn, TableRow } from '@/features/table/types'
 
+/** A cell PATCH's value: a scalar, or — for a `multiselect` column — the whole id collection. */
+type CellPatchValue = string | number | boolean | null | number[]
+
 /** Body of a single cell PATCH, already resolved to the wire shape (spec 0053/0054). */
 interface CellPatchArgs {
   rowId: number
   column: string
-  value: string | number | boolean | null
+  value: CellPatchValue
   note?: string
 }
 
@@ -31,13 +34,38 @@ function resolveCellUpdateErrorMessage(error: unknown, t: TFunction): string {
  * A relation column's cell value is the related row's `{id, name}`
  * projection (backend `mapRow`), not the id the PATCH contract expects
  * (spec 0054 D-3): unwrap it here, once, so every other column's plain
- * scalar value passes through untouched.
+ * scalar value passes through untouched. A MULTISELECT column's value (user
+ * directive 2026-07-23) is the ARRAY of those projections and unwraps the same
+ * way, element by element, into the id collection the endpoint replaces.
  */
-function resolveCellPatchValue(value: unknown): string | number | boolean | null {
+function resolveCellPatchValue(value: unknown): CellPatchValue {
+  if (Array.isArray(value)) {
+    return value.map((entry) =>
+      entry !== null && typeof entry === 'object' && 'id' in entry ? (entry as { id: number }).id : Number(entry),
+    )
+  }
   if (value !== null && typeof value === 'object' && 'id' in value) {
     return (value as { id: number }).id
   }
-  return value as string | number | boolean | null
+  return value as CellPatchValue
+}
+
+/**
+ * Whether a commit actually changed anything. Identity is enough for a scalar
+ * (and for the object-valued editors, which deliberately re-emit the SAME
+ * reference on a no-op pick), but never for a multiselect: its editor rebuilds
+ * the array on every toggle, so two equal selections are always different
+ * references — compared by their id sets instead.
+ */
+function isUnchangedCellValue(newValue: unknown, oldValue: unknown): boolean {
+  if (Array.isArray(newValue) && Array.isArray(oldValue)) {
+    const newIds = resolveCellPatchValue(newValue) as number[]
+    const oldIds = resolveCellPatchValue(oldValue) as number[]
+
+    return newIds.length === oldIds.length && newIds.every((id, index) => id === oldIds[index])
+  }
+
+  return newValue === oldValue
 }
 
 /**
@@ -77,7 +105,7 @@ function resolveRequiresNote(columns: TableColumn[], columnId: string, patchValu
 /** A cell edit awaiting its note before it can PATCH (spec 0054 D-5). */
 interface PendingNoteEdit {
   event: CellValueChangedEvent<TableRow>
-  patchValue: string | number | boolean | null
+  patchValue: CellPatchValue
   revertedData: TableRow
 }
 
@@ -130,7 +158,7 @@ export function useTableCellEdit(domain: string, columns: TableColumn[]) {
   // 0053.
   const handleCellValueChanged = useCallback(
     (event: CellValueChangedEvent<TableRow>) => {
-      if (!event.data || event.newValue === event.oldValue) {
+      if (!event.data || isUnchangedCellValue(event.newValue, event.oldValue)) {
         return
       }
 

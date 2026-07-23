@@ -209,10 +209,17 @@ export const router = createBrowserRouter([
             path: 'request-management',
             element: <RequestManagementPage />,
           },
-          // `request-management` declares `generateRoutes: false` (spec 0049
-          // D-9: no create/edit form for this module), so its `:id` deep-link
-          // is NOT part of `buildModuleRoutes()` below and is declared here by
-          // hand instead, same as every module not (yet) in the registry.
+          // `request-management` no longer sets `generateRoutes: false` (spec
+          // 0057 D-6: the module now has a real `/new` create form), so
+          // `buildModuleRoutes()` below ALSO generates a generic `:id` route
+          // for this domain. This manual declaration is kept and stays FIRST
+          // in the array on purpose: react-router ranks equal-specificity
+          // static routes by declaration order, so this bespoke page (no
+          // `bg-card` frame around the panel's own background, no dead-end
+          // "Edit" button — see its own comment) always wins the match and the
+          // generic `ModuleDetailPage` entry for the same path is never
+          // reached. `:id/edit`/`:id/duplicate`/`new` are NOT declared here:
+          // those three are genuinely new and come from the generated set.
           {
             path: 'request-management/:id',
             element: <RequestManagementDetailPage />,
